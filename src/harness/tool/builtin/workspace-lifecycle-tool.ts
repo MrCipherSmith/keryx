@@ -33,7 +33,7 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createHarnessProposalLifecycleService, localWorkspaceAuthorizationServer, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
+import { createHarnessProposalLifecycleService, listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
 import { writeSlate } from "../../../session/slate";
 import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";
@@ -119,7 +119,7 @@ export function workspaceListTool(cwd: string): InteractiveTool {
     definition: {
       name: "workspace_list",
       description:
-        "List Shared Agent Context (SAC) workspaces visible to this session. Call this FIRST — before workspace_create — to judge whether an existing workspace already covers the current topic.  Input: { includeArchived?: boolean }.",
+        "List Shared Agent Context (SAC) workspaces visible to this session. Call this FIRST — before workspace_create — to judge whether an existing workspace already covers the current topic. Each entry carries a `references` report: a workspace whose referenced target was deleted is still listed, with the failing reference named under `references.unresolvable`, rather than dropped — an absent entry means \"no such workspace\", never \"a damaged one\". Input: { includeArchived?: boolean }.",
       inputSchema: {
         type: "object",
         properties: { includeArchived: { type: "boolean" } },
@@ -130,8 +130,15 @@ export function workspaceListTool(cwd: string): InteractiveTool {
     invoke: async (input) => {
       const includeArchived = input.includeArchived === true;
       try {
-        const workspaces = await service(cwd).list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived });
-        return { output: JSON.stringify(workspaces, null, 2), isError: false };
+        // The SAME helper `keryx workspace list` and MCP `sac.workspaceList`
+        // call. This tool used to call `service().list()` directly and print
+        // bare manifests, so the agent-tool boundary was a THIRD answer to the
+        // same question at the same moment: no `references` report at all, and
+        // therefore no way to tell a workspace with a deleted target from an
+        // intact one. Flow 242 AC5 requires the three answers to be
+        // distinguishable on every surface, not only on the CLI.
+        const views = await listWorkspaceViews(service(cwd), includeArchived);
+        return { output: JSON.stringify(views.map((view) => ({ ...view.manifest, references: view.references })), null, 2), isError: false };
       } catch (cause) {
         return errorOutput("workspace_list failed", cause);
       }
@@ -144,7 +151,7 @@ export function workspaceShowTool(cwd: string): InteractiveTool {
     definition: {
       name: "workspace_show",
       description:
-        "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via workspace_list. Input: { workspaceId: string }.",
+        "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via workspace_list, together with a `references` report saying which of its references still resolve and which changed since they were added. A workspace that cannot be shown is a NAMED outcome, not a bare failure: `{ outcome: \"not-found\" | \"access-denied\" | \"unreadable\" | \"guard-denied\", workspaceId, detail }` — \"it never existed\", \"it is not yours\" and \"I cannot read it\" are three different answers, so branch on `outcome` before reading the manifest. Input: { workspaceId: string }.",
       inputSchema: {
         type: "object",
         properties: { workspaceId: { type: "string" } },
@@ -157,8 +164,17 @@ export function workspaceShowTool(cwd: string): InteractiveTool {
       const workspaceId = typeof input.workspaceId === "string" ? input.workspaceId : "";
       if (workspaceId.length === 0) return { output: "workspace_show requires a non-empty 'workspaceId'", isError: true };
       try {
-        const workspace = await service(cwd).show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
-        return { output: JSON.stringify(workspace, null, 2), isError: false };
+        // The SAME helper `keryx workspace show` and MCP `sac.workspaceShow`
+        // call, and it never throws. This tool used to call `service().show()`
+        // and flatten every failure into one `workspace_show failed: <message>`
+        // string — "never existed", "not yours" and "cannot be parsed" arrived
+        // as the same shape, which is exactly the collapse flow 242 exists to
+        // undo. Each is now its own named `outcome`.
+        const found = await lookupWorkspace(service(cwd), workspaceId);
+        if (found.outcome !== "workspace") {
+          return { output: JSON.stringify({ outcome: found.outcome, workspaceId: found.workspaceId, detail: found.detail }, null, 2), isError: true };
+        }
+        return { output: JSON.stringify({ ...found.manifest, references: found.references }, null, 2), isError: false };
       } catch (cause) {
         return errorOutput("workspace_show failed", cause);
       }

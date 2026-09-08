@@ -544,8 +544,8 @@ export type WorkspaceLookup =
 const LOOKUP_OUTCOME: Record<WorkspaceServiceError["code"], Exclude<WorkspaceLookup["outcome"], "workspace">> = {
   not_found: "not-found",
   access_denied: "access-denied",
-  invalid_manifest: "not-found",
-  invalid_reference: "not-found",
+  invalid_manifest: "unreadable",
+  invalid_reference: "unreadable",
   guard_denied: "guard-denied",
   write_failed: "unreadable",
   conflict: "unreadable",

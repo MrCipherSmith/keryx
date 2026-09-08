@@ -1,7 +1,7 @@
 import { optionValue } from "../lib/args";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
-import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
+import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { formatFwkExplain } from "../sac/fwk-explain";
 import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, readProposalSecurityGate } from "../sac/proposal-lifecycle";
@@ -37,15 +37,27 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const workspace = await service().create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
       console.log(JSON.stringify(workspace, null, 2)); return;
     }
+    // `list` and `show` go through `listWorkspaceViews`/`lookupWorkspace` —
+    // the same two helpers MCP's `sac.workspaceList`/`sac.workspaceShow` call —
+    // so the CLI and the tool boundary cannot answer the same question
+    // differently at the same moment. Both emit the manifest with a
+    // `references` report beside it: a workspace whose target was deleted is
+    // still listed and still shown, with the failing reference named, because
+    // disappearing is indistinguishable from never having existed.
     if (subcommand === "list") {
       rejectUnknownOptions(args.slice(1), new Set(["--include-archived"]));
       const includeArchived = booleanFlag(args, "--include-archived");
-      console.log(JSON.stringify(await service().list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived }), null, 2)); return;
+      const views = await listWorkspaceViews(service(), includeArchived);
+      console.log(JSON.stringify(views.map((view) => ({ ...view.manifest, references: view.references })), null, 2)); return;
     }
     if (subcommand === "show") {
       rejectUnknownOptions(args.slice(2), new Set());
       const id = args[1]; if (!id) throw new Error("Usage: keryx workspace show <workspace-id>");
-      console.log(JSON.stringify(await service().show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId: id }), null, 2)); return;
+      const found = await lookupWorkspace(service(), id);
+      // The three non-workspace outcomes stay distinguishable in the text a
+      // human reads, not just in an exit code they all share.
+      if (found.outcome !== "workspace") throw new Error(`${found.outcome}: ${found.detail}`);
+      console.log(JSON.stringify({ ...found.manifest, references: found.references }, null, 2)); return;
     }
     if (subcommand === "add-resource") {
       rejectUnknownOptions(args.slice(2), new Set(["--kind", "--uri", "--revision"]));

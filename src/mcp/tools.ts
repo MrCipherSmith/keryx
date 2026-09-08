@@ -20,9 +20,36 @@ import { runValidate } from "../standard/service";
 import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
+
+/**
+ * The one `WorkspaceService` construction every `sac.workspace*` tool uses —
+ * identical to `src/commands/workspace.ts`'s `service()` factory (same
+ * authorization server, same offline strict-guard literal), so the CLI and MCP
+ * read the same store under the same policy.
+ */
+function sacWorkspaceService(cwd: string): WorkspaceService {
+  return new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+  });
+}
+
+/**
+ * Named, branchable results for the workspace lookups that do not return a
+ * workspace. Each names a DIFFERENT answer — "no such workspace", "not yours",
+ * "cannot be parsed", "the guard refused" — and none of them is an empty
+ * result or a thrown stack trace.
+ */
+const SAC_WORKSPACE_LOOKUP_CODE: Record<Exclude<WorkspaceLookup["outcome"], "workspace">, string> = {
+  "not-found": "sac_workspace_not_found",
+  "access-denied": "sac_workspace_access_denied",
+  unreadable: "sac_workspace_unreadable",
+  "guard-denied": "sac_workspace_guard_denied",
+};
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];
@@ -299,24 +326,34 @@ export function buildToolRegistry(): ToolEntry[] {
     // `sac.propose`/`sac.review` already are — local-stdio only, since v1 SAC has no
     // verified HTTP principal policy.
     {
-      name: "sac.workspaceList", module: "sac", description: "List Shared Agent Context (SAC) workspaces visible to this actor — call this before sac.workspaceCreate to check whether an existing workspace already fits.",
+      name: "sac.workspaceList", module: "sac", description: "List Shared Agent Context (SAC) workspaces visible to this actor — call this before sac.workspaceCreate to check whether an existing workspace already fits. Each entry carries a `references` report: a workspace whose referenced target has been deleted is still listed, with the failing reference named under `references.unresolvable`, rather than silently dropped — an absent entry means \"no such workspace\", never \"a workspace that is damaged\".",
       inputSchema: OBJECT_SCHEMA({ includeArchived: { type: "boolean" } }, []),
       mutating: false,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const includeArchived = params.includeArchived === true;
-        const workspaces = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived });
-        return workspaces;
+        // Same helper `keryx workspace list` calls (src/commands/workspace.ts),
+        // so the two surfaces cannot report different workspaces for the same
+        // project at the same moment.
+        const views = await listWorkspaceViews(sacWorkspaceService(cwd), includeArchived);
+        return views.map((view) => ({ ...view.manifest, references: view.references }));
       },
     },
     {
-      name: "sac.workspaceShow", module: "sac", description: "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via sac.workspaceList.",
+      name: "sac.workspaceShow", module: "sac", description: "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via sac.workspaceList, together with a `references` report saying which of its references still resolve and which changed since they were added. A workspace this actor cannot be shown is a named result, not an error: `{ code: \"sac_workspace_not_found\" | \"sac_workspace_access_denied\" | \"sac_workspace_unreadable\" | \"sac_workspace_guard_denied\" }` — branch on `code` before reading the manifest.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]),
       mutating: false,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const workspaceId = stringParam(params, "workspaceId") ?? "";
-        return await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+        // `lookupWorkspace` is the same call `keryx workspace show` makes, and
+        // it never throws. It used to: an id that never existed threw out of
+        // this tool, and the answer the caller got was a stack trace carrying
+        // absolute source paths of this machine. "There is no such workspace"
+        // is an ordinary outcome and now says so by name.
+        const found = await lookupWorkspace(sacWorkspaceService(cwd), workspaceId);
+        if (found.outcome === "workspace") return { ...found.manifest, references: found.references };
+        return { code: SAC_WORKSPACE_LOOKUP_CODE[found.outcome], workspaceId: found.workspaceId, detail: found.detail };
       },
     },
     {
@@ -328,7 +365,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const title = stringParam(params, "title")?.trim() ?? "";
         if (title.length === 0) throw new Error("sac.workspaceCreate requires a non-empty 'title'");
         const component = stringParam(params, "component");
-        const workspace = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
+        const workspace = await sacWorkspaceService(cwd).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
         return workspace;
       },
     },
