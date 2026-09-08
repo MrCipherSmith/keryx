@@ -67,7 +67,7 @@
         "sync",
         "contracts"
       ],
-      "profile": "recommended",
+      "profile": "full",
       "skills": ".metaproject/skills/gdskills",
       "catalog": ".metaproject/skills/catalog.md",
       "projectSkills": ".metaproject/project-skills",
