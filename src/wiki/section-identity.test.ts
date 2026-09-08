@@ -22,7 +22,11 @@ import {
   SECTION_MARKER_VERSION,
   stripSectionMarkers,
 } from "./section-marker";
-import { readSectionRegistry, resolveSectionIdentity, syncSectionRegistry } from "./section-tombstone";
+import {
+  readSectionRegistryState,
+  resolveSectionIdentity,
+  syncSectionRegistry,
+} from "./section-tombstone";
 
 let root: string;
 
@@ -361,9 +365,13 @@ Something completely different.
 
   const second = await indexFor(root);
   const synced = await syncSectionRegistry(root, second, { now: "2026-09-08T00:00:00.000Z" });
+  expect(synced.status).toBe("synced");
+  if (synced.status !== "synced") {
+    throw new Error(synced.reason);
+  }
   expect(synced.tombstoned.map((t) => t.ref)).toContain(deletedRef as string);
 
-  const registry = await readSectionRegistry(root);
+  const registry = await readSectionRegistryState(root);
   const resolution = resolveSectionIdentity(second, registry, deletedRef as string);
   expect(resolution.kind).toBe("tombstoned");
   if (resolution.kind === "tombstoned") {
@@ -377,7 +385,7 @@ Something completely different.
 
 test("AC7: an unknown section id resolves to unknown, never to a title match", async () => {
   const index = await indexFor(root);
-  const registry = await readSectionRegistry(root);
+  const registry = await readSectionRegistryState(root);
   const resolution = resolveSectionIdentity(index, registry, "keryx:page/os-sandbox#never-existed");
   expect(resolution.kind).toBe("unknown");
 });
@@ -431,7 +439,7 @@ test("AC7: a version-bound locator taken against an older body does not resolve 
     "# Legacy\n\nVersion: 0.2.0\nType: architecture\nStatus: accepted\n\n## Summary\n\nFirst body.\n\n## Details\n\nCompletely rewritten text.\n",
   );
   const after = await indexFor(root);
-  const registry = await readSectionRegistry(root);
+  const registry = await readSectionRegistryState(root);
   const resolution = resolveSectionIdentity(after, registry, staleRef as string);
   expect(resolution.kind).toBe("stale-locator");
 });

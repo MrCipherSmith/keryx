@@ -7,7 +7,9 @@ import type { GraphData } from "../gdgraph/types";
 import { recordProvenance } from "../sync/provenance";
 import {
   computePageNodeHash,
+  describeHead,
   isPageUnchangedSinceLastEnrich,
+  HEAD_NOT_REQUESTED,
   resolveWikiSourceGate,
 } from "./staleness";
 
@@ -134,7 +136,7 @@ test("T8/resolveWikiSourceGate — a graph built at HEAD may stamp that head", a
     // provenance for that same commit ⇒ the source saw this revision ⇒ a
     // generator may stamp it.
     const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
-    const gate = await resolveWikiSourceGate(cwd, head);
+    const gate = await resolveWikiSourceGate(cwd, { kind: "resolved", commit: head });
     expect(gate.status).toBe("fresh");
     expect(gate.stampableHead).toBe(head);
     expect(gate.preserveGenerated).toBe(false);
@@ -154,7 +156,7 @@ test("T8/resolveWikiSourceGate — a head the graph never saw is not stampable",
     git(cwd, ["commit", "-q", "-m", "a new commit after the graph was built"]);
 
     const head = execFileSync("git", ["rev-parse", "HEAD"], { cwd, encoding: "utf8" }).trim();
-    const gate = await resolveWikiSourceGate(cwd, head);
+    const gate = await resolveWikiSourceGate(cwd, { kind: "resolved", commit: head });
     expect(gate.status).toBe("stale");
     expect(gate.stampableHead).toBeNull();
     // Stale is not an error: the block may still be regenerated.
@@ -165,19 +167,65 @@ test("T8/resolveWikiSourceGate — a head the graph never saw is not stampable",
   }
 });
 
-test("T8/resolveWikiSourceGate — a git failure is unknown, and preserves only when a head exists", async () => {
+test("T8/resolveWikiSourceGate — a git failure is unknown, and preserves only where git is actually present", async () => {
   const broken = async () => ({ status: "unknown" as const, reasons: ["git status failed"] });
 
   // A project with no git at all: `unknown` is the expected steady state and
   // there is no revision to over-claim, so generation proceeds as before.
-  const noGit = await resolveWikiSourceGate("/nonexistent", undefined, broken);
+  const noGit = await resolveWikiSourceGate("/nonexistent", { kind: "no-repository", detail: "not a git repository" }, broken);
   expect(noGit.status).toBe("unknown");
   expect(noGit.stampableHead).toBeNull();
   expect(noGit.preserveGenerated).toBe(false);
 
   // A head that resolves while the staleness check's git calls fail is a
   // genuinely broken repository — preserve the existing block.
-  const partial = await resolveWikiSourceGate("/nonexistent", "f".repeat(40), broken);
+  const partial = await resolveWikiSourceGate("/nonexistent", { kind: "resolved", commit: "f".repeat(40) }, broken);
   expect(partial.preserveGenerated).toBe(true);
   expect(partial.stampableHead).toBeNull();
+});
+
+// AFC-22 (flow 236 T13, F236-02). `preserveGenerated` used to be conditioned
+// on `head !== undefined`, which is not the question it meant to ask: a
+// repository whose git BROKE also yields no head, so the one case the flag
+// exists for — a source that could not be interrogated — was the case that
+// switched it off. These two pin the corrected discrimination.
+test("T13/resolveWikiSourceGate — a PRESENT but broken git preserves the generated block; an absent git does not", async () => {
+  const broken = async () => ({ status: "unknown" as const, reasons: ["git rev-parse HEAD failed"] });
+
+  const gitBroke = await resolveWikiSourceGate("/nonexistent", { kind: "failed", detail: "`git rev-parse HEAD` exited 128" }, broken);
+  expect(gitBroke.preserveGenerated).toBe(true);
+  expect(gitBroke.stampableHead).toBeNull();
+
+  // A repository with no commits yet has git, but no revision to over-claim —
+  // the same benign situation as a git-free project, and treated as such.
+  const unborn = await resolveWikiSourceGate("/nonexistent", { kind: "unborn", detail: "no commits yet" }, broken);
+  expect(unborn.preserveGenerated).toBe(false);
+
+  // A caller that never stamps anything states so rather than passing a bare
+  // `undefined` that used to mean three different things.
+  const notRequested = await resolveWikiSourceGate("/nonexistent", HEAD_NOT_REQUESTED, broken);
+  expect(notRequested.preserveGenerated).toBe(false);
+});
+
+// The printed half of F236-02: `keryx wiki verify` reported "baselined 1
+// page(s) (no git; scope hash only)" from inside a working git repository.
+// That sentence was produced by a bare `head ? … : "(no git; scope hash
+// only)"` at the command layer; `describeHead` is what replaced it, and the
+// property that matters is that the git-free wording belongs to exactly one
+// outcome — the one where an absence of git was actually established.
+test("T13/describeHead — only a genuinely absent repository is described as having no git", () => {
+  expect(describeHead({ kind: "resolved", commit: "a".repeat(40) })).toBe(`at ${"a".repeat(8)}`);
+  expect(describeHead({ kind: "no-repository", detail: "not a git repository" })).toBe("(no git; scope hash only)");
+
+  // Every other outcome says something else, and says what it actually knows.
+  const failed = describeHead({ kind: "failed", detail: "`git rev-parse HEAD` exited 128" });
+  expect(failed).not.toContain("no git");
+  expect(failed).toContain("git is present but could not answer");
+  expect(failed).toContain("exited 128");
+
+  const unborn = describeHead({ kind: "unborn", detail: "no commits yet" });
+  expect(unborn).not.toBe("(no git; scope hash only)");
+  expect(unborn).toContain("no commits yet");
+
+  expect(describeHead(HEAD_NOT_REQUESTED)).not.toContain("no git");
 });

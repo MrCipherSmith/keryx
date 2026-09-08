@@ -164,7 +164,7 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
   // `VerifiedScope` comparison — see `evaluatePageFreshness`'s `gitAvailable`
   // parameter. Pages with no `VerifiedAt` at all never depended on git and
   // are unaffected either way.
-  const gitAvailable = input.gitAvailable ?? (await input.git(input.cwd, ["rev-parse", "HEAD"])) !== null;
+  const gitAvailable = input.gitAvailable ?? (await input.git(input.cwd, ["rev-parse", "HEAD"])).kind === "ok";
   if (!gitAvailable) {
     limitations.push({
       code: "not-a-git-repository",

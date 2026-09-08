@@ -46,6 +46,13 @@ export function formatFwkExplain(result: FwkReadResult): string {
     ...(knowHowLines.length > 0 ? knowHowLines : ["    - (none accepted/visible in this budget)"]),
     "  Not written here: graph nodes/edges (navigation only), session transcripts, hidden reasoning.",
   ];
-  if (result.partial) lines.push(`  partial: omitted optional ${result.omittedOptional.join(", ") || "(none)"}`);
+  if (result.partial) {
+    lines.push(`  partial: omitted optional ${result.omittedOptional.join(", ") || "(none)"}`);
+    // The ids above name nothing an operator can look at — an omitted item is
+    // absent from the manifest by construction. `withheld` is what they
+    // resolve to: the reference, and why it is not here.
+    for (const entry of result.withheld) lines.push(`    - ${entry.id} (${entry.kind} ${entry.uri}): ${entry.reason}`);
+    if (result.omittedOptional.length > 0 && result.withheld.length === 0) lines.push("    - (denied: nothing from this workspace was disclosed, so no reference can be named)");
+  }
   return lines.join("\n");
 }

@@ -28,7 +28,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { findSession, exportSessionMarkdown, readSessionSlate, TranscriptUnreadableError } from "../session/store";
-import { applyEvidenceRedactionFloor, courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, gitDiff, REDACTION_NOTICE_KIND } from "./wrap-up-evidence";
+import { applyEvidenceRedactionFloor, courseStatusLine, describeSource, dedupedAttributedSeeds, diffStatLine, DIFF_UNAVAILABLE_KIND, gitDiff, REDACTION_NOTICE_KIND, unmeasurableDiffBody } from "./wrap-up-evidence";
 import { readCourse } from "../session/slate-course";
 import type { TrustedWrapUpResolution, WrapUpEvidence } from "./trusted-wrap-up";
 
@@ -110,7 +110,14 @@ export async function resolveSessionWrapUp(input: {
   // ordinary chat with no Slate engagement still gets a valid, if sparse,
   // wrap-up rather than failing.
   const slate = await readSessionSlate(input.cwd, summary.id);
-  const diffText = await gitDiff(input.cwd);
+  // AFC-22 (flow 236 T13, F236-03): tri-state. A session wrapped up outside a
+  // git repository, or in a broken one, records an explicit not-measured
+  // marker under its own evidence kind — never a zero-byte `.diff.txt` and a
+  // "no working-tree changes" line, which asserted a clean tree nobody
+  // measured and hashed to the same `e3b0c442…` as a genuinely clean one.
+  const diff = await gitDiff(input.cwd);
+  const diffBody = diff.kind === "measured" ? diff.text : unmeasurableDiffBody(diff.detail);
+  const diffKind = diff.kind === "measured" ? "diff" : DIFF_UNAVAILABLE_KIND;
   const course = await readCourse(input.cwd, slate?.course.flowRef);
   const seeds = slate ? dedupedAttributedSeeds(slate) : [];
   const seedLines = seeds.length > 0
@@ -126,7 +133,7 @@ export async function resolveSessionWrapUp(input: {
     ...seedLines,
     "",
     "## Working-tree diff",
-    diffStatLine(diffText),
+    diffStatLine(diff),
     "",
   ].join("\n");
   const wrapUpRelPath = path.join(evidenceDir, `${summary.id}.wrap-up.md`);
@@ -141,7 +148,7 @@ export async function resolveSessionWrapUp(input: {
   const floor = await applyEvidenceRedactionFloor(input.cwd, [
     { name: path.basename(relPath), content: markdown, path: relPath, source: "generated" },
     { name: path.basename(wrapUpRelPath), content: wrapUpMarkdown, path: wrapUpRelPath, source: "generated" },
-    { name: path.basename(diffRelPath), content: diffText, path: diffRelPath, source: "tool-output" },
+    { name: path.basename(diffRelPath), content: diffBody, path: diffRelPath, source: "tool-output" },
   ]);
   if (!floor.ok) throw new SessionWrapUpError("security_denied", floor.reason);
   const [safeSession, safeWrapUp, safeDiff] = floor.bodies as [
@@ -159,7 +166,7 @@ export async function resolveSessionWrapUp(input: {
   const observedAt = now().toISOString();
   const evidence: WrapUpEvidence[] = [
     { kind: "wrap-up", uri: `./${wrapUpRelPath}`, revision: createHash("sha256").update(safeWrapUp.content).digest("hex"), observedAt },
-    { kind: "diff", uri: `./${diffRelPath}`, revision: createHash("sha256").update(safeDiff.content).digest("hex"), observedAt },
+    { kind: diffKind, uri: `./${diffRelPath}`, revision: createHash("sha256").update(safeDiff.content).digest("hex"), observedAt },
     // Reference/attachment, deliberately last (never evidence[0], which
     // readVerifiedProposalEvidence hands to every owner writer as THE
     // content) — the full transcript, still hash-verified. "Verbatim" only

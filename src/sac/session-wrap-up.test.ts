@@ -65,7 +65,13 @@ describe("resolveSessionWrapUp", () => {
     // hands every owner writer) is the compact wrap-up doc, never the raw
     // transcript — the full transcript is still exported and hash-verified,
     // but only as the LAST, reference/attachment evidence item.
-    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff", "session"]);
+    //
+    // `diff-unavailable`, not `diff` (AFC-22, flow 236 T13): this fixture's
+    // cwd is a bare temp directory with no git in it, so no working-tree diff
+    // was ever taken. Recording `diff` here — as this did — put a zero-byte
+    // file under a kind that asserts a measurement, hashing to the same
+    // `e3b0c442…` a genuinely clean tree produces.
+    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff-unavailable", "session"]);
 
     const wrapUp = resolution.evidence[0]!;
     expect(wrapUp.uri.startsWith("./.metaproject/workspaces/workspace-a/session-evidence/")).toBe(true);
@@ -157,6 +163,61 @@ describe("resolveSessionWrapUp", () => {
   test("a wrap-up the floor did not touch carries no redaction notice", async () => {
     const handle = realSession("Nothing sensitive here");
     const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
-    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff", "session"]);
+    expect(resolution.evidence.map((item) => item.kind)).toEqual(["wrap-up", "diff-unavailable", "session"]);
+  });
+
+  // --- AFC-22 (flow 236 T13, F236-03) --------------------------------------
+  //
+  // Measured before this fix, with the real `gitDiff`:
+  //
+  //   cwd=<not a git repo>                     bytes=0 "no working-tree changes" sha256=e3b0c442…
+  //   cwd=<.git/HEAD replaced with "corrupt">  bytes=0 "no working-tree changes" sha256=e3b0c442…
+  //   cwd=<a genuinely CLEAN git tree>         bytes=0 "no working-tree changes" sha256=e3b0c442…
+  //
+  // Three different facts, one byte-identical record — and `revision` was the
+  // sha256 of "", so `readVerifiedProposalEvidence`/`validateEvidence` then
+  // confirmed an intact record of a measurement that never happened. These two
+  // tests induce the corruption for real and pin that the corrupt case and the
+  // clean case are no longer the same record.
+  test("a CORRUPT repository records an explicit not-measured marker, never an empty diff", async () => {
+    execFileSync("git", ["init", "-q"], { cwd });
+    await writeFile(path.join(cwd, ".git", "HEAD"), "corrupt", "utf8");
+
+    const handle = realSession("Wrap up over a broken repo");
+    const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
+
+    const item = resolution.evidence[1]!;
+    expect(item.kind).toBe("diff-unavailable");
+    const body = await readFile(path.join(cwd, item.uri.slice(2)), "utf8");
+    expect(body).toContain("NOT MEASURED");
+    expect(body.length).toBeGreaterThan(0);
+    // The hash verifies the marker, so nothing downstream can verify a
+    // measurement: it is not the hash of the empty string.
+    expect(item.revision).toBe(createHash("sha256").update(body).digest("hex"));
+    expect(item.revision).not.toBe(createHash("sha256").update("").digest("hex"));
+
+    // And the wrap-up doc a reviewer reads says so in words rather than
+    // reporting a clean tree.
+    const wrapUp = await readFile(path.join(cwd, resolution.evidence[0]!.uri.slice(2)), "utf8");
+    expect(wrapUp).toContain("NOT MEASURED");
+    expect(wrapUp).not.toContain("no working-tree changes");
+  });
+
+  test("a genuinely CLEAN git tree still records a real, measured, empty diff", async () => {
+    execFileSync("git", ["init", "-q"], { cwd });
+    execFileSync("git", ["config", "user.email", "test@example.com"], { cwd });
+    execFileSync("git", ["config", "user.name", "Test"], { cwd });
+    await writeFile(path.join(cwd, "README.md"), "seed content\n", "utf8");
+    execFileSync("git", ["add", "."], { cwd });
+    execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd });
+
+    const handle = realSession("Wrap up over a clean tree");
+    const resolution = await resolveSessionWrapUp({ cwd, workspaceId: "workspace-a", sourceRef: sessionEvidenceRef("workspace-a", handle.summary.id) });
+
+    expect(resolution.evidence[1]!.kind).toBe("diff");
+    const body = await readFile(path.join(cwd, resolution.evidence[1]!.uri.slice(2)), "utf8");
+    expect(body).toBe("");
+    const wrapUp = await readFile(path.join(cwd, resolution.evidence[0]!.uri.slice(2)), "utf8");
+    expect(wrapUp).toContain("no working-tree changes");
   });
 });

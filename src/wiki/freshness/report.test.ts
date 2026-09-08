@@ -8,16 +8,25 @@ import type { GraphData } from "../../gdgraph/types";
 import type { ClassifiedChange } from "./classify-change";
 import { buildFreshnessReport } from "./report";
 import type { GitRunner } from "./page-freshness";
+import type { GitCmdResult } from "../../sync/provenance";
 
 const SHA = "a".repeat(40);
-const noGit: GitRunner = async () => null;
+
+// AFC-22 (flow 236 T13): `GitRunner` now carries `GitCmdResult`, so a fixture
+// must say which of the three events it means — a refusal git ANSWERED, or a
+// failure that could not be run. `null` said neither.
+const ok = (stdout: string): GitCmdResult => ({ kind: "ok", stdout });
+const refused = (stderr = "fatal: Not a valid object name"): GitCmdResult => ({ kind: "exit-error", code: 128, stderr });
+const cannotRun = (): GitCmdResult => ({ kind: "spawn-error", message: "spawn git ENOENT" });
+
+const noGit: GitRunner = async () => cannotRun();
 
 /** git that reports two commits touching everything since VerifiedAt. */
 const busyGit: GitRunner = async (_cwd, args) => {
-  if (args[0] === "cat-file") return "";
-  if (args[0] === "log") return "c1\nc2";
-  if (args[0] === "diff") return "src/core.ts";
-  return null;
+  if (args[0] === "cat-file") return ok("");
+  if (args[0] === "log") return ok("c1\nc2");
+  if (args[0] === "diff") return ok("src/core.ts");
+  return ok("");
 };
 
 async function project(options: {
@@ -271,9 +280,9 @@ describe("limitations and totals (AC7)", () => {
     // is genuinely fresh. With `noGit` this would assert "no provenance"
     // instead of "cosmetic produced nothing" — a different fact.
     const quietGit: GitRunner = async (_cwd, args) => {
-      if (args[0] === "cat-file") return "";
-      if (args[0] === "log") return "";
-      return null;
+      if (args[0] === "cat-file") return ok("");
+      if (args[0] === "log") return ok("");
+      return ok("");
     };
     const report = await buildFreshnessReport({
       cwd,
@@ -297,7 +306,7 @@ describe("limitations and totals (AC7)", () => {
 // `not-a-git-repository` limitation, no per-page signal at all. A reader
 // could not tell a working repository from a completely broken one.
 describe("a git failure yields unknown at the report level (AFC-22 clause 2 / AFC-W05 clause 3)", () => {
-  const alwaysFailingGit: GitRunner = async () => null;
+  const alwaysFailingGit: GitRunner = async () => cannotRun();
 
   test("a wholly broken git declares `not-a-git-repository` and reports a VerifiedAt page as `unknown`, not a silent scope-hash verdict", async () => {
     const { cwd, graph } = await project({ pages: { "components/src-core.md": CORE_PAGE } });
@@ -356,12 +365,12 @@ describe("a git failure yields unknown at the report level (AFC-22 clause 2 / AF
     // both pages (both revisions resolve); `log` fails ONLY for src/core.ts's
     // describe-set, succeeds (empty, confirmed-unchanged) for src/b.ts's.
     const partiallyFailingGit: GitRunner = async (_cwd, args) => {
-      if (args[0] === "rev-parse") return SHA;
-      if (args[0] === "cat-file") return "";
+      if (args[0] === "rev-parse") return ok(SHA);
+      if (args[0] === "cat-file") return ok("");
       if (args[0] === "log") {
-        return args.includes("src/core.ts") ? null : "";
+        return args.includes("src/core.ts") ? refused("fatal: bad object") : ok("");
       }
-      return "";
+      return ok("");
     };
 
     const report = await buildFreshnessReport({
@@ -407,10 +416,10 @@ describe("ordering (AC13)", () => {
     });
 
     const git: GitRunner = async (_cwd, args) => {
-      if (args[0] === "cat-file") return "";
-      if (args[0] === "log") return args.includes("src/b.ts") ? "c1\nc2\nc3" : "c1";
-      if (args[0] === "diff") return "";
-      return null;
+      if (args[0] === "cat-file") return ok("");
+      if (args[0] === "log") return ok(args.includes("src/b.ts") ? "c1\nc2\nc3" : "c1");
+      if (args[0] === "diff") return ok("");
+      return ok("");
     };
 
     const report = await buildFreshnessReport({
@@ -452,9 +461,9 @@ describe("read-only guarantee (AC5)", () => {
 
 describe("provenance outranks propagation", () => {
   const stampedAtHead: GitRunner = async (_cwd, args) => {
-    if (args[0] === "cat-file") return "";
-    if (args[0] === "log") return ""; // nothing since VerifiedAt
-    return null;
+    if (args[0] === "cat-file") return ok("");
+    if (args[0] === "log") return ok(""); // nothing since VerifiedAt
+    return ok("");
   };
 
   test("a page verified after the change is fresh, not must-refresh", async () => {

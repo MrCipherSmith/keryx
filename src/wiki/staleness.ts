@@ -44,6 +44,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { checkGraphStaleness, type StalenessCheck, type StalenessStatus } from "../gdgraph/staleness";
+import type { GitHeadResolution } from "../sync/provenance";
 import type { GraphData } from "../gdgraph/types";
 import type { ResumeState } from "./resume-state";
 
@@ -130,6 +131,54 @@ export type { StalenessStatus } from "../gdgraph/staleness";
 /** Injection seam for tests; defaults to the real tri-state check. */
 export type StalenessProbe = (cwd: string) => Promise<StalenessCheck>;
 
+/**
+ * What a wiki generator knows about the revision it might stamp.
+ *
+ * AFC-22 (flow 236 T13, F236-02): this used to be `string | undefined`, and
+ * `undefined` carried two opposite meanings — "this project has no git" and
+ * "git is here and could not answer" — plus a third, "this caller never
+ * stamps a revision at all". The gate below and `verifyPages` both branch on
+ * it, so collapsing those three switched the stale-graph refusal OFF whenever
+ * git broke: measured, `keryx wiki verify --baseline` on a repository with a
+ * dangling `.git/HEAD` printed "baselined 1 page(s) (no git; scope hash
+ * only)" where the same, equally stale graph with healthy git refused to
+ * stamp at all. `not-requested` is the explicit form of "I do not care":
+ * `wiki/service.ts` and `commands/sync.ts` consult the gate for the graph's
+ * age only and never write `VerifiedAt`, and they now say so.
+ */
+export type WikiHeadInput = GitHeadResolution | { kind: "not-requested" };
+
+/** For a caller that consults the gate but never stamps a revision. */
+export const HEAD_NOT_REQUESTED: WikiHeadInput = { kind: "not-requested" };
+
+/**
+ * Whether git is present and functioning enough that "unknown" is evidence of
+ * a PROBLEM rather than of an absence. `no-repository` (a supported git-free
+ * project) and `unborn` (a real repository with no commits) both have no
+ * revision to over-claim, so an `unknown` gate there is expected and benign —
+ * exactly the case the old `head !== undefined` condition was protecting, and
+ * the only part of it that was right.
+ */
+function headImpliesWorkingGit(head: WikiHeadInput): boolean {
+  return head.kind === "resolved" || head.kind === "failed";
+}
+
+/** One line naming what the caller's git could tell us about HEAD. */
+export function describeHead(head: WikiHeadInput): string {
+  switch (head.kind) {
+    case "resolved":
+      return `at ${head.commit.slice(0, 8)}`;
+    case "unborn":
+      return "(the git repository has no commits yet; scope hash only)";
+    case "no-repository":
+      return "(no git; scope hash only)";
+    case "failed":
+      return `(git is present but could not answer: ${head.detail})`;
+    default:
+      return "(no revision requested; scope hash only)";
+  }
+}
+
 export interface WikiSourceGate {
   status: StalenessStatus;
   /** Why the source is not fresh. Empty only when `status === "fresh"`. */
@@ -144,15 +193,19 @@ export interface WikiSourceGate {
    * True when the source is in ERROR and an existing generated block must be
    * preserved rather than regenerated.
    *
-   * Conditioned on a head being available on purpose. A project with no git at
+   * Conditioned on git being PRESENT on purpose. A project with no git at
    * all is a supported configuration (`src/commands/init.no-git.test.ts` pins
    * it, and `wiki/provenance.ts` is built around it): there, every git call
    * fails and `checkGraphStaleness` can only ever answer `unknown`, but there
-   * is also no revision to over-claim — `head` is undefined, so nothing is
-   * stamped either way and refresh behaves exactly as it did before this gate
-   * existed. A head that resolves while the staleness check's own git calls
-   * fail is the genuinely broken case (corrupt object, index lock, permission,
-   * a shallow clone), and that is what this flags.
+   * is also no revision to over-claim, so nothing is stamped either way and
+   * refresh behaves exactly as it did before this gate existed.
+   *
+   * AFC-22 (flow 236 T13): the condition used to be `head !== undefined`,
+   * which is not the same question. A repository whose git BROKE also
+   * produces no head — so the genuinely broken case, the one this flag exists
+   * for, was the case that switched it off. `headImpliesWorkingGit` asks the
+   * question that was meant: is there a repository here whose failure to
+   * answer is a fault rather than an absence?
    */
   preserveGenerated: boolean;
 }
@@ -167,18 +220,23 @@ export interface WikiSourceGate {
  */
 export async function resolveWikiSourceGate(
   cwd: string,
-  head: string | undefined,
+  head: WikiHeadInput,
   probe: StalenessProbe = checkGraphStaleness,
 ): Promise<WikiSourceGate> {
   const check = await probe(cwd);
   if (check.status === "fresh") {
-    return { status: "fresh", reasons: [], stampableHead: head ?? null, preserveGenerated: false };
+    return {
+      status: "fresh",
+      reasons: [],
+      stampableHead: head.kind === "resolved" ? head.commit : null,
+      preserveGenerated: false,
+    };
   }
   return {
     status: check.status,
     reasons: check.reasons,
     stampableHead: null,
-    preserveGenerated: check.status === "unknown" && head !== undefined,
+    preserveGenerated: check.status === "unknown" && headImpliesWorkingGit(head),
   };
 }
 

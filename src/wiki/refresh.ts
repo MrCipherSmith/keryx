@@ -31,6 +31,7 @@ import {
   resolveWikiSourceGate,
   type StalenessProbe,
   type StalenessStatus,
+  type WikiHeadInput,
   type WikiSourceGate,
 } from "./staleness";
 import type { WikiPage } from "./types";
@@ -184,11 +185,13 @@ export interface RefreshInput {
   force?: boolean | undefined;
   dryRun?: boolean | undefined;
   /**
-   * Revision the caller would like stamped as `VerifiedAt`; omitted when git
-   * is unavailable. It is stamped only if the source graph demonstrably saw
-   * it — see `resolveWikiSourceGate`.
+   * What the caller's git could tell it about HEAD. A revision is stamped
+   * only when this is `resolved` AND the source graph demonstrably saw it —
+   * see `resolveWikiSourceGate`. `failed` (git present, could not answer) is
+   * carried through as its own fact rather than flattened into "no head",
+   * because the two lead to opposite behaviour here (AFC-22, flow 236 T13).
    */
-  head?: string | undefined;
+  head: WikiHeadInput;
   now?: () => Date;
   /** Injection seam for tests; defaults to the real `checkGraphStaleness`. */
   checkStaleness?: StalenessProbe | undefined;
@@ -373,7 +376,8 @@ async function refreshOne(input: {
 export async function verifyPages(input: {
   cwd: string;
   page?: string | undefined;
-  head?: string | undefined;
+  /** See `RefreshInput.head`. `failed` is refused outright, below. */
+  head: WikiHeadInput;
   /** Injection seam for tests; defaults to the real `checkGraphStaleness`. */
   checkStaleness?: StalenessProbe | undefined;
   /**
@@ -391,14 +395,30 @@ export async function verifyPages(input: {
     );
   }
 
+  // AFC-22 (flow 236 T13, F236-02). This refusal comes FIRST and does not
+  // consult the gate, because when git breaks the gate itself goes `unknown`
+  // for the same reason — and the old condition below then read that as the
+  // supported git-free project and stamped anyway. Measured: a repository
+  // whose `.git/HEAD` pointed at a missing ref reported "baselined 1 page(s)
+  // (no git; scope hash only)" — asserting an absence of git from inside a
+  // working git repository, on the same stale graph a healthy git refused.
+  if (input.head.kind === "failed") {
+    throw new Error(
+      `wiki verify: refusing to stamp — this is a git repository, but git could not answer: ${input.head.detail}. ` +
+        "A verification stamped now would be recorded as if the project simply had no git, which is a different " +
+        "and much weaker claim than the one this command makes. Repair the repository, then verify.",
+    );
+  }
+
   const gate = await resolveWikiSourceGate(input.cwd, input.head, input.checkStaleness);
-  if (gate.status !== "fresh" && input.head !== undefined) {
-    // `input.head !== undefined` because a project with no git at all is
-    // supported (`init.no-git.test.ts`): there the gate can only ever say
-    // `unknown`, no `VerifiedAt` was ever going to be written, and refusing
-    // would remove the scope-hash stamping such projects rely on. The refusal
-    // is for the case where a revision WOULD have been stamped on a source
-    // that cannot support it.
+  if (gate.status !== "fresh" && input.head.kind === "resolved") {
+    // Conditioned on a revision actually being stampable, because a project
+    // with no git at all is supported (`init.no-git.test.ts`): there the gate
+    // can only ever say `unknown`, no `VerifiedAt` was ever going to be
+    // written, and refusing would remove the scope-hash stamping such
+    // projects rely on. A repository with no commits yet (`unborn`) is the
+    // same situation for the same reason. The refusal is for the case where a
+    // revision WOULD have been stamped on a source that cannot support it.
     throw new Error(
       `wiki verify: refusing to stamp — ${describeSourceGate(gate)}. ` +
         "Stamping VerifiedAt now would record a verification against a revision the code graph never read, " +
@@ -413,6 +433,7 @@ export async function verifyPages(input: {
     graph.nodes.filter((node) => node.kind === "file").map((node) => node.path),
   );
 
+  const stampableHead = input.head.kind === "resolved" ? input.head.commit : null;
   const stamped: Array<{ path: string; verifiedAt: string | null; verifiedScope: string }> = [];
   for (const page of await collectPages(input.cwd)) {
     if (input.page !== undefined && page.relativePath !== input.page) {
@@ -431,13 +452,13 @@ export async function verifyPages(input: {
     }
     const scope = await computeVerifiedScope(input.cwd, describeSet.paths, graph);
     const next = writeProvenance(content, {
-      ...(input.head ? { verifiedAt: input.head } : {}),
+      ...(stampableHead ? { verifiedAt: stampableHead } : {}),
       verifiedScope: scope,
     });
     if (next !== content) {
       await writeFile(page.absolutePath, next, "utf8");
     }
-    stamped.push({ path: page.relativePath, verifiedAt: input.head ?? null, verifiedScope: scope });
+    stamped.push({ path: page.relativePath, verifiedAt: stampableHead, verifiedScope: scope });
   }
   return stamped;
 }

@@ -19,6 +19,7 @@ import path from "node:path";
 import { afterEach, describe, expect, test } from "bun:test";
 import { migrateMarkers, refreshPages, verifyPages } from "./refresh";
 import type { StalenessCheck } from "../gdgraph/staleness";
+import type { WikiHeadInput } from "./staleness";
 
 const PAGE = "components/src-mod.md";
 
@@ -115,6 +116,9 @@ async function fixture(graphBuiltAt: "head" | "older"): Promise<{ cwd: string; p
   return { cwd, pagePath, head };
 }
 
+/** A resolved head, said explicitly (AFC-22, T13): `WikiHeadInput`, not a bare sha. */
+const at = (commit: string): WikiHeadInput => ({ kind: "resolved", commit });
+
 const probe = (status: StalenessCheck["status"], reason: string) => async (): Promise<StalenessCheck> => ({
   status,
   reasons: status === "fresh" ? [] : [reason],
@@ -124,7 +128,7 @@ describe("AC1: a generator run does not make an old source fresh", () => {
   test("control — a graph built at HEAD still stamps VerifiedAt at HEAD", async () => {
     const { cwd, pagePath, head } = await fixture("head");
 
-    const result = await refreshPages({ cwd, head });
+    const result = await refreshPages({ cwd, head: at(head) });
 
     expect(result.refreshed).toBe(1);
     expect(result.source.status).toBe("fresh");
@@ -134,7 +138,7 @@ describe("AC1: a generator run does not make an old source fresh", () => {
   test("a graph built at an older commit never stamps the current HEAD", async () => {
     const { cwd, pagePath, head } = await fixture("older");
 
-    const result = await refreshPages({ cwd, head });
+    const result = await refreshPages({ cwd, head: at(head) });
 
     // The block is still repaired — the content genuinely is what that graph
     // says — but nothing claims the page was verified at a revision the source
@@ -161,7 +165,7 @@ describe("AC1: a generator run does not make an old source fresh", () => {
     );
     await writeFile(pagePath, seeded);
 
-    await refreshPages({ cwd, head });
+    await refreshPages({ cwd, head: at(head) });
 
     const after = await readFile(pagePath, "utf8");
     expect(after).toContain(`VerifiedAt: ${older}`);
@@ -174,7 +178,7 @@ describe("AC1: a generator run does not make an old source fresh", () => {
 
     const result = await refreshPages({
       cwd,
-      head,
+      head: at(head),
       checkStaleness: probe("unknown", "git status failed"),
     });
 
@@ -189,10 +193,10 @@ describe("AC1: a generator run does not make an old source fresh", () => {
 
   test("a repeated refresh over a stale source still produces no diff", async () => {
     const { cwd, pagePath, head } = await fixture("older");
-    await refreshPages({ cwd, head });
+    await refreshPages({ cwd, head: at(head) });
     const afterFirst = await readFile(pagePath, "utf8");
 
-    const second = await refreshPages({ cwd, head });
+    const second = await refreshPages({ cwd, head: at(head) });
 
     expect(second.unchanged).toBe(1);
     expect(second.refreshed).toBe(0);
@@ -205,7 +209,7 @@ describe("AC1: verify does not record a verification its source cannot support",
     const { cwd, pagePath, head } = await fixture("older");
     const before = await readFile(pagePath, "utf8");
 
-    await expect(verifyPages({ cwd, page: PAGE, head })).rejects.toThrow(/stale|gdgraph build/i);
+    await expect(verifyPages({ cwd, page: PAGE, head: at(head) })).rejects.toThrow(/stale|gdgraph build/i);
     expect(await readFile(pagePath, "utf8")).toBe(before);
   });
 
@@ -214,7 +218,7 @@ describe("AC1: verify does not record a verification its source cannot support",
     const before = await readFile(pagePath, "utf8");
 
     await expect(
-      verifyPages({ cwd, page: PAGE, head, checkStaleness: probe("unknown", "git status failed") }),
+      verifyPages({ cwd, page: PAGE, head: at(head), checkStaleness: probe("unknown", "git status failed") }),
     ).rejects.toThrow(/could not be determined|unknown/i);
     expect(await readFile(pagePath, "utf8")).toBe(before);
   });
@@ -222,7 +226,7 @@ describe("AC1: verify does not record a verification its source cannot support",
   test("a fresh graph still stamps", async () => {
     const { cwd, pagePath, head } = await fixture("head");
 
-    const stamped = await verifyPages({ cwd, page: PAGE, head });
+    const stamped = await verifyPages({ cwd, page: PAGE, head: at(head) });
 
     expect(stamped).toHaveLength(1);
     expect(await readFile(pagePath, "utf8")).toContain(`VerifiedAt: ${head}`);

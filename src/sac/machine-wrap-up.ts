@@ -54,7 +54,7 @@ import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
-import { applyEvidenceRedactionFloor, courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, REDACTION_NOTICE_KIND, type AttributedSeed } from "./wrap-up-evidence";
+import { applyEvidenceRedactionFloor, courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, DIFF_UNAVAILABLE_KIND, gitDiff, REDACTION_NOTICE_KIND, unmeasurableDiffBody, type AttributedSeed, type WorkingTreeDiff } from "./wrap-up-evidence";
 // AFC-19 (flow 239, phase 7): the model turn used to arrive as a static
 // `runModelTurn` import from `../harness/provider/single-turn`, which put the
 // entire provider registry into the public SAC facade's shipped graph. It is
@@ -68,8 +68,8 @@ import {
   type ModelTurnPort,
 } from "./model-turn-port";
 
-export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff } from "./wrap-up-evidence";
-export type { AttributedSeed } from "./wrap-up-evidence";
+export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, DIFF_UNAVAILABLE_KIND, gitDiff, unmeasurableDiffBody } from "./wrap-up-evidence";
+export type { AttributedSeed, WorkingTreeDiff } from "./wrap-up-evidence";
 
 /**
  * Same TTL `session-wrap-up.ts` uses for its own `TrustedWrapUpResolution`.
@@ -170,8 +170,8 @@ function sha256(value: string): string {
  * reuses this exact best-effort git-diff primitive for its own evidence. */
 /** Bounded-timeout fallback template — "git diff stat + flow status line"
  * per plan.md, never a hang and never an invented fact. */
-function mechanicalSummary(diffText: string, course: CourseProjection): string {
-  return `Mechanical wrap-up summary (model turn unavailable or timed out):\n${diffStatLine(diffText)}\n${courseStatusLine(course)}`;
+function mechanicalSummary(diff: WorkingTreeDiff, course: CourseProjection): string {
+  return `Mechanical wrap-up summary (model turn unavailable or timed out):\n${diffStatLine(diff)}\n${courseStatusLine(course)}`;
 }
 
 /**
@@ -189,7 +189,15 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const now = input.now ?? (() => new Date());
 
   // 1. Pure, local evidence content — no model call, no disk write yet.
-  const diffText = await gitDiff(input.cwd);
+  //
+  //    AFC-22 (flow 236 T13, F236-03): `diff` is tri-state at this seam. When
+  //    no diff could be taken, the body persisted is an explicit
+  //    not-measured marker and the evidence item's `kind` says so, so nothing
+  //    downstream — reader, hash check, or model — can read an unmeasurable
+  //    tree as a clean one.
+  const diff = await gitDiff(input.cwd);
+  const diffBody = diff.kind === "measured" ? diff.text : unmeasurableDiffBody(diff.detail);
+  const diffKind = diff.kind === "measured" ? "diff" : DIFF_UNAVAILABLE_KIND;
   const course = await readCourse(input.cwd, input.slate.course.flowRef);
   const seedsForKind = dedupedAttributedSeeds(input.slate).filter((seed) => seed.kind === input.kind);
   const flowSnapshotJson = `${JSON.stringify(course, null, 2)}\n`;
@@ -214,7 +222,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   //    content, and a path hint is not worth an ordering cycle.
   const evidenceRelBase = path.posix.join(".metaproject", "workspaces", input.workspaceId, "machine-evidence");
   const floor = await applyEvidenceRedactionFloor(input.cwd, [
-    { name: `${input.kind}.diff.txt`, content: diffText, path: path.posix.join(evidenceRelBase, `${input.kind}.diff.txt`), source: "tool-output" },
+    { name: `${input.kind}.diff.txt`, content: diffBody, path: path.posix.join(evidenceRelBase, `${input.kind}.diff.txt`), source: "tool-output" },
     { name: `${input.kind}.flow.json`, content: flowSnapshotJson, path: path.posix.join(evidenceRelBase, `${input.kind}.flow.json`), source: "generated" },
     { name: `${input.kind}.seeds.json`, content: seedsJson, path: path.posix.join(evidenceRelBase, `${input.kind}.seeds.json`), source: "generated" },
   ]);
@@ -241,6 +249,11 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const sourceRevision = sha256([safeDiff.content, safeFlow.content, safeSeeds.content].join("\u0000"));
   const shortHash = sourceRevision.slice(0, 16);
 
+  // The stat line the mechanical fallback prints describes the FLOORED bytes
+  // (what was actually recorded), and stays unmeasurable when no diff was
+  // taken — the floor cannot turn a missing measurement into a clean tree.
+  const summaryDiff: WorkingTreeDiff = diff.kind === "measured" ? { kind: "measured", text: safeDiff.content } : diff;
+
   // 4. Model summary, raced against a bounded timeout — mirrors
   //    spawn-subagent-tool.ts's own child-deadline `Promise.race` exactly,
   //    including safely ignoring the abandoned promise on timeout (`void
@@ -253,6 +266,9 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     "Summarize ONLY the machine evidence provided below — a git diff, a Flow snapshot, and the Seeds captured " +
     "this session for one proposal kind. Never invent facts that are not present in the evidence.";
   // The floored bodies, not the raw ones: this prompt leaves the machine.
+  // The unmeasurable case reaches the model as the marker body itself, never
+  // as "(no working-tree changes)" — a summariser told the tree was clean
+  // will say so, and that sentence then travels as the wrap-up's own summary.
   const user =
     `--- git diff ---\n${safeDiff.content.length > 0 ? safeDiff.content : "(no working-tree changes)"}\n\n` +
     `--- flow snapshot ---\n${safeFlow.content}\n` +
@@ -297,7 +313,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     // Abandoned model-turn promise — safely ignored, never an unhandled
     // rejection (mirrors spawn-subagent-tool.ts's `void turn.catch(...)`).
     void turn.catch(() => {});
-    summary = mechanicalSummary(safeDiff.content, course);
+    summary = mechanicalSummary(summaryDiff, course);
   } else {
     const result = modelResult!;
     if (result.text.trim().length === 0 && !result.credentialAvailable) {
@@ -306,7 +322,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
       // proceed with an empty or fabricated summary.
       return { ok: false, code: "no_credential" };
     }
-    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(safeDiff.content, course);
+    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(summaryDiff, course);
   }
 
   // 5. Only now — with a real summary in hand — persist evidence under the
@@ -329,7 +345,10 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const observedAt = now().toISOString();
   const relBase = `./.metaproject/workspaces/${input.workspaceId}/machine-evidence`;
   const evidence: WrapUpEvidence[] = [
-    { kind: "diff", uri: `${relBase}/${diffFile}`, revision: sha256(safeDiff.content), observedAt },
+    // `diffKind`, not a literal "diff": an item labelled `diff` asserts a
+    // measurement, and a verifier confirming its hash would then be
+    // confirming one that never happened (AFC-22, T13, F236-03).
+    { kind: diffKind, uri: `${relBase}/${diffFile}`, revision: sha256(safeDiff.content), observedAt },
     { kind: "flow", uri: `${relBase}/${flowFile}`, revision: sha256(safeFlow.content), observedAt },
     { kind: "seeds", uri: `${relBase}/${seedsFile}`, revision: sha256(safeSeeds.content), observedAt },
   ];

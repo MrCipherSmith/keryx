@@ -22,6 +22,7 @@ test("explain labels Facts, Work, and Know-how owners without mixing layers", ()
   const result: FwkResult = {
     partial: false,
     omittedOptional: [],
+    withheld: [],
     manifest: {
       facts: [{ statement: "Evidence reference ./notes.md", evidence: [{ uri: "./notes.md", revision: "abc" }], freshness: "fresh" }],
       work: { state: "bound", flowRef: { uri: "./.metaproject/flows/153/flow.json", snapshot: "in-progress", revision: "2026-08-14T20:00:00.000Z" }, completed: ["T1"], next: ["T2"], blocked: [] },

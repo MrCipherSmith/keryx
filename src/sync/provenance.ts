@@ -83,6 +83,14 @@ export function gitCmdResult(cwd: string, args: string[]): Promise<GitCmdResult>
 // error OR non-zero exit", and a genuinely empty successful result still
 // comes back as `""` (not `null`) exactly as before — verified against
 // `gitCmdResult` directly in `provenance.test.ts` so this stays true.
+//
+// AFC-22 (flow 236 T13): this is the DISCARDING wrapper, and calling it is a
+// statement — "for this command, I do not need to tell a failure from a
+// negative answer". That statement belongs at the call site, not in the type.
+// Any caller whose output claims something about git's state (a freshness
+// basis, a stamped revision, a recorded diff) must call `gitCmdResult` and
+// branch on `kind`; a discriminating primitive that the next line flattens is
+// the same as not having one, which is exactly the defect this closes.
 export async function gitCmd(cwd: string, args: string[]): Promise<string | null> {
   const result = await gitCmdResult(cwd, args);
   return result.kind === "ok" ? result.stdout : null;
@@ -93,6 +101,72 @@ export async function gitHead(cwd: string): Promise<{ commit: string; branch: st
   if (!commit) return null;
   const branch = (await gitCmd(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])) ?? "HEAD";
   return { commit, branch };
+}
+
+// AFC-22 (flow 236 T13, F236-02): "there is no git here" and "git is here and
+// could not answer" are opposite facts, and `rev-parse HEAD` fails identically
+// for both. Every caller that only ever saw `string | undefined` therefore
+// printed, and acted on, the FIRST for the second — measured on a repository
+// whose `.git/HEAD` pointed at a missing ref: `keryx wiki verify --baseline`
+// dropped its stale-graph refusal and reported "(no git; scope hash only)"
+// inside a working git repository. `resolveGitHead` is the separated answer.
+//
+// Four outcomes, each established from a real signal rather than inferred:
+//
+//   resolved       `rev-parse HEAD` answered a 40-hex sha.
+//   unborn         a repository exists but has no commits yet (`git init`,
+//                  nothing committed). No revision exists to stamp — a
+//                  legitimate absence, not a failure.
+//   no-repository  git ran and reported this is not a repository (or git
+//                  itself is unavailable). The supported git-free project
+//                  (`src/commands/init.no-git.test.ts`) lands here.
+//   failed         a repository is present but git could not answer. NEVER
+//                  reportable as "no git".
+export type GitHeadResolution =
+  | { kind: "resolved"; commit: string }
+  | { kind: "unborn"; detail: string }
+  | { kind: "no-repository"; detail: string }
+  | { kind: "failed"; detail: string };
+
+const SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+function failureDetail(result: GitCmdResult, command: string): string {
+  if (result.kind === "spawn-error") return `\`git ${command}\` could not be started: ${result.message}`;
+  if (result.kind === "exit-error") {
+    const stderr = result.stderr.split("\n")[0] ?? "";
+    return `\`git ${command}\` exited ${result.code ?? "with a signal"}${stderr ? `: ${stderr}` : ""}`;
+  }
+  return `\`git ${command}\` returned an unusable value`;
+}
+
+export async function resolveGitHead(cwd: string): Promise<GitHeadResolution> {
+  const head = await gitCmdResult(cwd, ["rev-parse", "HEAD"]);
+  if (head.kind === "ok" && SHA_PATTERN.test(head.stdout)) {
+    return { kind: "resolved", commit: head.stdout };
+  }
+  const headDetail = head.kind === "ok" ? `\`git rev-parse HEAD\` answered "${head.stdout}", which is not a sha` : failureDetail(head, "rev-parse HEAD");
+
+  // Is a repository present at all? Two independent signals, because neither
+  // alone covers every real breakage measured for this task: `--is-inside-
+  // work-tree` answers cleanly for a corrupt-HEAD repository but reports
+  // "not a git repository" when the object store is unreadable (a permission
+  // change), while a `.git` entry on disk still proves a repository is there.
+  const insideWorkTree = await gitCmdResult(cwd, ["rev-parse", "--is-inside-work-tree"]);
+  const hasGitEntry = await pathExists(path.join(cwd, ".git"));
+  if (insideWorkTree.kind !== "ok" && !hasGitEntry) {
+    return { kind: "no-repository", detail: headDetail };
+  }
+
+  // A repository IS present. Distinguish "no commits yet" from "broken":
+  // `rev-list -n 1 --all` succeeds with empty output on a genuinely unborn
+  // repository, succeeds with a sha when history exists (so an unresolvable
+  // HEAD over real history is corruption), and fails outright when git cannot
+  // read the repository at all.
+  const anyCommit = await gitCmdResult(cwd, ["rev-list", "-n", "1", "--all"]);
+  if (anyCommit.kind === "ok" && anyCommit.stdout.length === 0) {
+    return { kind: "unborn", detail: "the git repository has no commits yet" };
+  }
+  return { kind: "failed", detail: headDetail };
 }
 
 // Stamp `<module>` with the current HEAD. No-op (silent) outside a git repo.

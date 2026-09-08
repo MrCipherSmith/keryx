@@ -9,8 +9,10 @@ import {
 import { wikiAsk } from "../wiki/ask";
 import { renderMarkdown, runFreshness } from "../wiki/freshness/run";
 import { migrateMarkers, refreshPages, verifyPages } from "../wiki/refresh";
-import { gitCmd } from "../sync/provenance";
+import { resolveGitHead } from "../sync/provenance";
+import { describeHead } from "../wiki/staleness";
 import { optionValue } from "../lib/args";
+import type { RemovalHistory } from "../wiki/section-tombstone";
 import { TemporalValidationError } from "../memory/temporal";
 
 export async function wikiCommand(args: string[]): Promise<void> {
@@ -337,7 +339,40 @@ function printWikiValidationError(error: TemporalValidationError, json: boolean)
  *             performs it, because a pure search must not write history.
  *   migrate   insert identity markers, preview first, CAS-guarded, and
  *             byte-for-byte content preserving.
+ *
+ * Flow 242 (forgetting), lane B — the three answers this surface used to
+ * collapse into the others, and how each exits.
+ *
+ *   registry-unreadable  exit 2. Not 1: 1 says "this identity is not live",
+ *                        which is a claim, and an unreadable history supports
+ *                        no claim at all. `sync` refuses outright rather than
+ *                        writing an empty history over the one it could not
+ *                        read.
+ *   reoccupied           exit 1 from both `resolve` and `sync`. A tombstone and
+ *                        a live document claiming one address is a
+ *                        contradiction on disk, not a completed sync.
+ *   pending-tombstone    exit 1. The identity is registered and gone from the
+ *                        index; the deletion happened and `sync` has not.
  */
+/**
+ * A live identity that was once removed says so.
+ *
+ * Printed on `found` rather than folded away, because "this section has always
+ * been here" and "this section was deleted and came back" are different facts
+ * and the second is the one a reader needs when the content surprises them.
+ */
+function printRemovalHistory(history: RemovalHistory | null): void {
+  if (!history) {
+    return;
+  }
+  console.log(
+    `  history: removed ${history.removedAt} — ${history.reason}\n` +
+      (history.restoredAt === null
+        ? "  restored with byte-identical content; the tombstone is still on disk (run `keryx wiki sections sync`)."
+        : `  restored ${history.restoredAt}; the tombstone is retained in the registry's lifted record.`),
+  );
+}
+
 async function runSections(args: string[]): Promise<void> {
   const cwd = process.cwd();
   const json = args.includes("--json");
@@ -346,7 +381,7 @@ async function runSections(args: string[]): Promise<void> {
   const { collectPages } = await import("../wiki/collect");
   const { buildSectionIndex } = await import("../wiki/section-index");
   const { migrateSectionMarkers } = await import("../wiki/section-marker");
-  const { readSectionRegistry, resolveSectionIdentity, syncSectionRegistry } = await import(
+  const { readSectionRegistryState, resolveSectionIdentity, syncSectionRegistry } = await import(
     "../wiki/section-tombstone"
   );
   const { wikiPageIdFor } = await import("../gdgraph/wiki-layer");
@@ -388,18 +423,41 @@ async function runSections(args: string[]): Promise<void> {
   );
 
   if (sub === "sync") {
-    const sync = await syncSectionRegistry(cwd, index, { dryRun: args.includes("--dry-run") });
+    const accepted = optionValue(args, "--accept-reoccupation");
+    const sync = await syncSectionRegistry(cwd, index, {
+      dryRun: args.includes("--dry-run"),
+      ...(accepted ? { acceptReoccupation: accepted.split(",").map((ref) => ref.trim()) } : {}),
+    });
     if (json) {
       console.log(JSON.stringify(sync, null, 2));
+      // A refusal must not exit 0 next to a completed sync: a caller that only
+      // checks the status code would otherwise read "the history was destroyed"
+      // as "the history is up to date".
+      process.exitCode = sync.status === "refused" ? 1 : 0;
       return;
     }
+    if (sync.status === "refused") {
+      console.error(`REFUSED: ${sync.reason}`);
+      console.error("Nothing was written.");
+      process.exitCode = 1;
+      return;
+    }
+    const dry = sync.dryRun ? " (dry run — nothing written)" : "";
     console.log(
       `registered ${sync.next.entries.length}, added ${sync.added.length}, ` +
-        `tombstoned ${sync.tombstoned.length}, revived ${sync.revived.length}`,
+        `tombstoned ${sync.tombstoned.length}, revived ${sync.revived.length}, ` +
+        `reoccupied ${sync.reoccupied.length}${dry}`,
     );
     for (const entry of sync.tombstoned) {
       console.log(`  TOMBSTONE ${entry.ref}: ${entry.reason}`);
     }
+    for (const entry of sync.reoccupied) {
+      console.log(`  REOCCUPIED ${entry.ref} [${entry.evidence}]: ${entry.reason}`);
+    }
+    // A reoccupied identity is an unresolved contradiction on disk — the
+    // tombstone and a live document claim the same address — so it is not
+    // reported as a clean sync.
+    process.exitCode = sync.reoccupied.length > 0 ? 1 : 0;
     return;
   }
 
@@ -410,7 +468,7 @@ async function runSections(args: string[]): Promise<void> {
       process.exitCode = 1;
       return;
     }
-    const registry = await readSectionRegistry(cwd);
+    const registry = await readSectionRegistryState(cwd);
     const resolution = resolveSectionIdentity(index, registry, ref);
     if (json) {
       console.log(JSON.stringify({ ref, resolution }, null, 2));
@@ -420,20 +478,36 @@ async function runSections(args: string[]): Promise<void> {
           `(lines ${resolution.section.bodyRange.startLine}-${resolution.section.bodyRange.endLine}, ` +
           `${resolution.section.stability})`,
       );
+      printRemovalHistory(resolution.history);
     } else if (resolution.kind === "page-found") {
       console.log(`found page: ${resolution.page}`);
+      printRemovalHistory(resolution.history);
     } else if (resolution.kind === "tombstoned") {
       console.log(
         `tombstoned: removed ${resolution.tombstone.removedAt} — ${resolution.tombstone.reason}\n` +
           "  There is no redirect. A section with the same heading elsewhere is NOT this one.",
       );
+    } else if (resolution.kind === "reoccupied") {
+      console.log(`reoccupied [${resolution.evidence}]: ${resolution.reason}`);
+    } else if (resolution.kind === "pending-tombstone") {
+      console.log(`pending-tombstone: ${resolution.reason}`);
+    } else if (resolution.kind === "registry-unreadable") {
+      console.error(`registry-unreadable: ${resolution.reason}`);
     } else if (resolution.kind === "stale-locator") {
       console.log(`stale-locator: ${resolution.reason}`);
     } else {
       console.log(`unknown: ${resolution.reason}`);
     }
-    // A dead address must not exit 0 alongside a live one.
-    process.exitCode = resolution.kind === "found" || resolution.kind === "page-found" ? 0 : 1;
+    // A dead address must not exit 0 alongside a live one — and "I cannot tell"
+    // must not exit alongside either. 2 is reserved for the answer that is
+    // neither a live identity nor a claim about a dead one: a script that treats
+    // 1 as "gone" would otherwise read an unreadable registry as a deletion.
+    process.exitCode =
+      resolution.kind === "found" || resolution.kind === "page-found"
+        ? 0
+        : resolution.kind === "registry-unreadable"
+          ? 2
+          : 1;
     return;
   }
 
@@ -766,11 +840,18 @@ async function runFreshnessCommand(args: string[]): Promise<void> {
   process.stdout.write(renderMarkdown(report, { all: args.includes("--all") }));
 }
 
-/** HEAD, or undefined outside a git repository — never a fabricated sha. */
-async function currentHead(cwd: string): Promise<string | undefined> {
-  const head = await gitCmd(cwd, ["rev-parse", "HEAD"]);
-  return head && /^[0-9a-f]{40}$/.test(head) ? head : undefined;
-}
+/**
+ * What git can say about HEAD — never a fabricated sha, and never "no git"
+ * for a repository that is present but broken.
+ *
+ * AFC-22 (flow 236 T13, F236-02): this returned `string | undefined`, and
+ * `undefined` was printed downstream as "(no git; scope hash only)" and read
+ * by `verifyPages`/`refreshPages` as "the supported git-free project". Both
+ * were wrong for a repository whose git had failed, which is the case where
+ * the freshness guards matter most. `resolveGitHead` separates the four
+ * outcomes; this command layer only forwards them.
+ */
+const currentHead = resolveGitHead;
 
 /**
  * `keryx wiki refresh` (LWG-11) — deterministic, model-free regeneration of
@@ -785,7 +866,7 @@ async function runRefreshCommand(args: string[]): Promise<void> {
     ...(page ? { page } : {}),
     force: args.includes("--force"),
     dryRun: args.includes("--dry-run"),
-    ...(head ? { head } : {}),
+    head,
   });
 
   if (args.includes("--json")) {
@@ -816,6 +897,12 @@ async function runRefreshCommand(args: string[]): Promise<void> {
   // A refresh over a stale graph is legitimate work — the block it writes is
   // what that graph says — but the operator has to be told, because the only
   // other trace of it is a `VerifiedAt` line that did NOT appear.
+  if (head.kind === "failed") {
+    // Never silently reported as "no git": a repository is present here and
+    // could not answer, which is a fault to repair rather than a project
+    // configuration to accommodate (AFC-22, flow 236 T13).
+    process.stdout.write(`\ngit: this is a git repository, but git could not answer — ${head.detail}\n`);
+  }
   if (result.source.status !== "fresh") {
     process.stdout.write(
       `\nsource: ${result.source.status} — VerifiedAt was not stamped on any page.\n`,
@@ -842,7 +929,7 @@ async function runVerifyCommand(args: string[]): Promise<void> {
     stamped = await verifyPages({
       cwd,
       ...(page ? { page } : {}),
-      ...(head ? { head } : {}),
+      head,
       baseline: args.includes("--baseline"),
     });
   } catch (error) {
@@ -855,7 +942,9 @@ async function runVerifyCommand(args: string[]): Promise<void> {
     return;
   }
   const what = args.includes("--baseline") ? "baselined" : "verified";
-  process.stdout.write(`${what} ${stamped.length} page(s)${head ? ` at ${head.slice(0, 8)}` : " (no git; scope hash only)"}\n`);
+  // `describeHead` — never a bare `head ? ... : "(no git; scope hash only)"`,
+  // which printed an absence of git that had not been established.
+  process.stdout.write(`${what} ${stamped.length} page(s) ${describeHead(head)}\n`);
   if (args.includes("--baseline")) {
     process.stdout.write(
       "  (a baseline is a measurement starting line, not a claim that these pages were read)\n",

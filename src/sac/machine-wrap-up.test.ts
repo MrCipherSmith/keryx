@@ -800,6 +800,101 @@ test("a secret in the working-tree diff never reaches the evidence file OR the m
   expect(diffItem.revision).toBe(createHash("sha256").update(files.get(diffName)!).digest("hex"));
 });
 
+// AFC-22 (flow 236 T13, F236-03). This producer is the one that mattered
+// most: its `gitDiff` bytes become `evidence[0]` — the item every owner writer
+// is handed as THE content — with `revision` = sha256 of them, AND the same
+// bytes go into the model prompt below. Before the fix a corrupt repository
+// produced "" for both, so the evidence read as a clean tree, the hash check
+// confirmed it, and the summariser was told the tree was clean.
+//
+// The failure is induced on disk with the real git binary after the workspace
+// exists, so everything else about the run is a normal, passing wrap-up.
+// Revert the tri-state (`gitDiff` back to `catch { return "" }`, or `diffKind`
+// back to a literal "diff") and both tests below go red.
+test("a working-tree diff that could not be taken is recorded as diff-unavailable, never as a clean tree", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  // A real, uncommitted change exists — and is then made unreadable. The worst
+  // case: a diff that genuinely exists and cannot be measured.
+  await writeFile(path.join(cwd, "README.md"), "seed content\nand an unrecorded change\n", "utf8");
+  await writeFile(path.join(cwd, ".git", "HEAD"), "corrupt", "utf8");
+
+  let promptSentToProvider = "";
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: async (request) => {
+      promptSentToProvider = request.user;
+      return { credentialAvailable: true, text: "summary" };
+    },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+
+  // `evidence[0]` is still the diff slot, but it no longer CLAIMS a diff.
+  expect(result.resolution.evidence[0]!.kind).toBe("diff-unavailable");
+  expect(result.resolution.evidence.map((item) => item.kind)).toEqual(["diff-unavailable", "flow", "seeds"]);
+
+  const files = await machineEvidence(cwd, "workspace-a");
+  const diffName = [...files.keys()].find((name) => name.endsWith(".diff.txt"))!;
+  const body = files.get(diffName)!;
+  expect(body).toContain("NOT MEASURED");
+  expect(body).not.toBe("");
+  // A verifier confirms the marker — and so can never confirm a measurement.
+  expect(result.resolution.evidence[0]!.revision).toBe(createHash("sha256").update(body).digest("hex"));
+  expect(result.resolution.evidence[0]!.revision).not.toBe(createHash("sha256").update("").digest("hex"));
+
+  // Egress: the summariser is never told the tree was clean.
+  expect(promptSentToProvider).toContain("NOT MEASURED");
+  expect(promptSentToProvider).not.toContain("(no working-tree changes)");
+});
+
+test("the mechanical fallback summary says NOT MEASURED rather than describing a clean tree", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFile(path.join(cwd, ".git", "HEAD"), "corrupt", "utf8");
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    // Empty text with a credential present ⇒ the mechanical summary is used.
+    modelTurn: async () => ({ credentialAvailable: true, text: "" }),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.resolution.summary).toContain("NOT MEASURED");
+  expect(result.resolution.summary).not.toContain("no working-tree changes");
+});
+
+test("a genuinely clean git tree is still recorded as a measured diff — the marker is not collateral damage", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  // Nothing edited: the tree really is clean.
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.resolution.evidence[0]!.kind).toBe("diff");
+  const files = await machineEvidence(cwd, "workspace-a");
+  expect(files.get([...files.keys()].find((name) => name.endsWith(".diff.txt"))!)).toBe("");
+});
+
 test("redacted evidence is announced: a redaction-notice item names the rewritten file, and is itself hash-verified", async () => {
   const cwd = await tempGitCwd();
   await createWorkspace(cwd, "workspace-a");

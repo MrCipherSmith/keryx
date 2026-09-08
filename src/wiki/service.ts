@@ -14,8 +14,8 @@ import {
   type EvidenceSeed,
 } from "./evidence";
 import { buildSectionIndex } from "./section-index";
-import { readSectionRegistry } from "./section-tombstone";
-import { resolveWikiSourceGate } from "./staleness";
+import { readSectionRegistryState } from "./section-tombstone";
+import { HEAD_NOT_REQUESTED, resolveWikiSourceGate } from "./staleness";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -302,7 +302,10 @@ export async function wikiCollect(input: WikiCollectInput): Promise<WikiCollectR
   // skipped, so the previous (older, or absent) provenance stands and sync
   // under-claims instead of over-claiming — the failure direction that leads
   // someone to rebuild rather than to trust.
-  const sourceGate = await resolveWikiSourceGate(input.cwd, undefined);
+  // `HEAD_NOT_REQUESTED`, said explicitly: this path reads the graph's age to
+  // decide whether to record gdwiki provenance and never writes `VerifiedAt`
+  // on a page, so it has no revision at stake either way (AFC-22, T13).
+  const sourceGate = await resolveWikiSourceGate(input.cwd, HEAD_NOT_REQUESTED);
   if (sourceGate.status === "fresh") {
     const { recordProvenance } = await import("../sync/provenance");
     await recordProvenance(input.cwd, "gdwiki", generatedAt);
@@ -464,7 +467,7 @@ export async function wikiEvidence(input: WikiEvidenceInput): Promise<EvidencePa
       })),
     ),
   );
-  const registry = await readSectionRegistry(input.cwd);
+  const registry = await readSectionRegistryState(input.cwd);
 
   const pageStatus: Record<string, string | null> = {};
   for (const page of pages) {

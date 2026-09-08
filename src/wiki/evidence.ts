@@ -59,7 +59,7 @@ import type { RetrievalCode } from "../lib/retrieval-codes";
 import type { SectionIndex, WikiSectionRecord } from "./section-index";
 import {
   resolveSectionIdentity,
-  type SectionRegistry,
+  type SectionRegistryRead,
 } from "./section-tombstone";
 
 /** The `const` the schema pins. Bumping it is a contract change, not a tweak. */
@@ -439,7 +439,7 @@ function bindingsFor(declarations: EvidenceDeclarations): EvidenceBinding[] {
 
 export type EvidenceBuildInput = {
   index: SectionIndex;
-  registry: SectionRegistry;
+  registry: SectionRegistryRead;
   scope: EvidenceScope;
   record: WikiSectionRecord;
   /** `Status:` of the owner page. */
@@ -498,11 +498,32 @@ export function buildEvidenceItem(input: EvidenceBuildInput): EvidenceBuild {
           "fragment it qualifies is not returned without it.",
       );
     }
-    if (resolution.kind === "stale-locator") {
+    // Flow 242 lane B: three refusals that used to share the generic one below.
+    // A caveat is mandatory, so all three withhold the fragment — but a caller
+    // reading the refusal has to be able to act, and "the registry is
+    // unreadable" and "this address now holds a different document" call for
+    // completely different repairs.
+    if (resolution.kind === "reoccupied") {
       return refuse(
-        `the mandatory caveat source "${ref}" is a version-bound locator whose page body has changed ` +
-          `(recorded ${resolution.recordedPageVersion ?? "unknown"}, current ` +
-          `${resolution.currentPageVersion ?? "unknown"}); it is not read at the old offsets.`,
+        `the mandatory caveat source "${ref}" was removed (${resolution.tombstone.reason}; recorded ` +
+          `${resolution.tombstone.removedAt}) and its address is now held by another document in ` +
+          `${resolution.occupantPage} (${resolution.evidence}). The occupant is NOT read as the caveat, and the ` +
+          "fragment it qualifies is not returned without it.",
+      );
+    }
+    if (resolution.kind === "pending-tombstone") {
+      return refuse(
+        `the mandatory caveat source "${ref}" is registered and no longer present in the wiki: it was removed and ` +
+          "`keryx wiki sections sync` has not run since, so no tombstone has been written yet. The fragment it " +
+          "qualifies is withheld rather than returned as though the caveat had never existed.",
+      );
+    }
+    if (resolution.kind === "registry-unreadable") {
+      return refuse(
+        `the mandatory caveat source "${ref}" cannot be checked: the section registry at ` +
+          `${resolution.registryPath} is unreadable, so whether this caveat is live, removed, or was never ` +
+          "written cannot be determined. The fragment it qualifies is withheld rather than returned on an " +
+          "unverified caveat.",
       );
     }
     return refuse(
@@ -535,6 +556,17 @@ export function buildEvidenceItem(input: EvidenceBuildInput): EvidenceBuild {
         ref: resolution.tombstone.ref.split("#")[0] ?? resolution.tombstone.ref,
         version: "removed",
         fragment: `section:${ref.split("#")[1] ?? ref}#removed=${resolution.tombstone.removedAt}`,
+      });
+      continue;
+    }
+    if (resolution.kind === "reoccupied") {
+      // The disagreement was with the REMOVED section, not with whatever moved
+      // into its address; citing the occupant here would attribute a position to
+      // a document that never took it.
+      conflictSources.push({
+        ref: resolution.tombstone.ref.split("#")[0] ?? resolution.tombstone.ref,
+        version: "reoccupied",
+        fragment: `section:${ref.split("#")[1] ?? ref}#removed=${resolution.tombstone.removedAt}&occupied-by=${resolution.occupantPage}`,
       });
       continue;
     }
@@ -606,7 +638,7 @@ export type EvidenceSeed = {
 
 export type EvidenceAssembleInput = {
   index: SectionIndex;
-  registry: SectionRegistry;
+  registry: SectionRegistryRead;
   scope: EvidenceScope;
   seeds: readonly EvidenceSeed[];
   /** wiki-relative page path → the page's `Status:` field. */

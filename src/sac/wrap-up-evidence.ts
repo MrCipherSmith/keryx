@@ -29,14 +29,68 @@ export function dedupedAttributedSeeds(slate: Slate): AttributedSeed[] {
   return result;
 }
 
-export async function gitDiff(cwd: string): Promise<string> {
-  try { return (await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 })).stdout; }
-  catch { return ""; }
+// AFC-22 (flow 236 T13, F236-03): a working-tree diff that could not be taken
+// is NOT an empty one.
+//
+// `gitDiff` was `try { … } catch { return ""; }`, and `diffStatLine` renders
+// an empty string as "no working-tree changes". Measured on three cwds:
+//
+//   <not a git repo>                     bytes=0     "no working-tree changes"
+//   <.git/HEAD replaced with "corrupt">  bytes=0     "no working-tree changes"
+//   <a genuinely clean git tree>         bytes=0     "no working-tree changes"
+//   <the real repo, dirty>               bytes=29635 "working-tree diff: +187/-32 line(s)"
+//
+// The first three are byte-identical — sha256 `e3b0c442…`, the hash of the
+// empty string — so a corrupt repository was recorded as evidence of a clean
+// tree. Those bytes become `<kind>.diff.txt`, `evidence[0]` (the item every
+// owner writer is handed as THE content), with `revision` = sha256("") — and
+// every downstream verifier then confirms an intact record of a measurement
+// that never happened. The same string went into the model prompt.
+//
+// So the primitive answers the question it was actually asked: was a diff
+// MEASURED, or not? An unmeasurable one is recorded under its own evidence
+// kind, with a body that says so in words, so a hash check verifies a marker
+// and can never verify a measurement that did not occur.
+export type WorkingTreeDiff =
+  | { kind: "measured"; text: string }
+  | { kind: "unmeasurable"; detail: string };
+
+export async function gitDiff(cwd: string): Promise<WorkingTreeDiff> {
+  try {
+    return { kind: "measured", text: (await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 })).stdout };
+  } catch (error) {
+    const stderr = typeof (error as { stderr?: unknown }).stderr === "string" ? (error as { stderr: string }).stderr.trim().split("\n")[0] ?? "" : "";
+    const message = error instanceof Error ? error.message.split("\n")[0] ?? "" : String(error);
+    return { kind: "unmeasurable", detail: stderr.length > 0 ? stderr : message };
+  }
 }
 
-export function diffStatLine(diffText: string): string {
-  if (diffText.trim().length === 0) return "no working-tree changes";
-  return `working-tree diff: +${(diffText.match(/^\+(?!\+\+)/gm) ?? []).length}/-${(diffText.match(/^-(?!--)/gm) ?? []).length} line(s)`;
+/** The `WrapUpEvidence.kind` recorded in place of `diff` when none was taken. */
+export const DIFF_UNAVAILABLE_KIND = "diff-unavailable";
+
+/**
+ * The body persisted in place of a diff. Deliberately prose, deliberately not
+ * empty: the file itself has to refuse the reading "the tree was clean", both
+ * for a human opening it and for anything that only checks the hash.
+ */
+export function unmeasurableDiffBody(detail: string): string {
+  return [
+    "# Working-tree diff NOT MEASURED",
+    "",
+    "`git diff` could not be run for this workspace, so no working-tree diff",
+    "was taken. This file is not a diff, and it is NOT evidence that the tree",
+    "was clean — an unmeasured tree and a clean tree are different facts, and",
+    "this record deliberately cannot be mistaken for the second.",
+    "",
+    `reason: ${detail.length > 0 ? detail : "git exited non-zero and gave no reason"}`,
+    "",
+  ].join("\n");
+}
+
+export function diffStatLine(diff: WorkingTreeDiff): string {
+  if (diff.kind === "unmeasurable") return `working-tree diff NOT MEASURED (${diff.detail})`;
+  if (diff.text.trim().length === 0) return "no working-tree changes";
+  return `working-tree diff: +${(diff.text.match(/^\+(?!\+\+)/gm) ?? []).length}/-${(diff.text.match(/^-(?!--)/gm) ?? []).length} line(s)`;
 }
 
 export function courseStatusLine(course: CourseProjection): string {

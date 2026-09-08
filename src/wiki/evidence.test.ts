@@ -12,7 +12,7 @@
 // (`src/contracts/agent-first-core.fixtures.test.ts`) already runs it under —
 // so "matches the schema" is measured, not asserted by eye.
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { validateAgainstSchema } from "../contracts/validator";
@@ -240,6 +240,133 @@ test("AC9 clause 1, negative — a caveat whose section was REMOVED resolves to 
     const refusal = result.refused.find((entry) => entry.sectionRef.endsWith("#update-agreed"));
     expect(refusal?.reason).toContain("removed");
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- flow 242 (forgetting), lane B, on the agent/MCP surface ----------------
+//
+// AC5 asks for "никогда не существовало", "существовало и удалено" and "не могу
+// сказать" to be three different answers on EVERY surface where knowledge is
+// asked for — CLI, the agent tool boundary, and MCP — and the tombstoned case
+// above is the only one this file had. `./evidence.ts` grew three more refusals
+// for the states `resolveSectionIdentity` learned to tell apart; without these
+// tests all three could collapse back into the generic "cannot be resolved" and
+// the suite stayed green, which is the exact defect class (a distinction the
+// types make and the output does not).
+//
+// `service.evidence` is the same object `src/mcp/tools.ts`'s `wiki.evidence`
+// builds, so these run the boundary rather than the helper.
+
+const CAVEAT_REF = "keryx:page/dependency-policy#implementation-deferred";
+const POLICY_PATH = "business-rules/dependency-policy.md";
+const POLICY_WITHOUT_CAVEAT = DEPENDENCY_POLICY.replace(
+  /<!-- keryx:section id="implementation-deferred" v=1 -->[\s\S]*<!-- \/keryx:section -->\n$/,
+  "",
+);
+
+function registryFile(root: string): string {
+  return path.join(root, ".metaproject", "wiki", ".sections.json");
+}
+
+async function writeRegistry(root: string, registry: Record<string, unknown>): Promise<void> {
+  await writeFile(registryFile(root), `${JSON.stringify(registry)}\n`, "utf8");
+}
+
+async function refusalFor(root: string): Promise<{ code?: string; reason?: string } | undefined> {
+  const result = await createGdWikiService().evidence({
+    cwd: root,
+    question: "quarterly dependency update",
+  });
+  expect(result.status).toBe("insufficient-evidence");
+  expect(JSON.stringify(result)).not.toContain("agreed for every platform service");
+  return result.refused.find((entry) => entry.sectionRef.endsWith("#update-agreed"));
+}
+
+test("AC5 (agent/MCP) — a caveat source whose address was REOCCUPIED is refused as reoccupied, not as an ordinary miss", async () => {
+  // The caveat section IS present, and a tombstone records that this address
+  // once held something else. Read as `found`, the rule would be released
+  // qualified by whatever now sits at the caveat's address.
+  const root = await makeWiki("gd-wiki-evidence-reoccupied-", {
+    [POLICY_PATH]: DEPENDENCY_POLICY,
+  });
+  try {
+    await writeRegistry(root, {
+      version: 2,
+      entries: [],
+      tombstones: [
+        {
+          kind: "section",
+          ref: CAVEAT_REF,
+          page: POLICY_PATH,
+          title: "Rollout deferred",
+          digest: "0".repeat(64),
+          registeredAt: "2026-08-01T00:00:00.000Z",
+          removedAt: "2026-09-01T00:00:00.000Z",
+          reason: `section "Rollout deferred" is no longer present in ${POLICY_PATH}`,
+        },
+      ],
+      lifted: [],
+    });
+
+    const refusal = await refusalFor(root);
+    expect(refusal?.reason).toContain("address is now held by another document");
+    expect(refusal?.reason).toContain("different-content");
+    expect(refusal?.reason).toContain("NOT read as the caveat");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC5 (agent/MCP) — a caveat source deleted but not yet synced is refused as pending, not as never-declared", async () => {
+  const root = await makeWiki("gd-wiki-evidence-pending-", {
+    [POLICY_PATH]: POLICY_WITHOUT_CAVEAT,
+  });
+  try {
+    // The interruption window: the registry still carries the identity as live,
+    // the wiki no longer does, and `sync` has not run to write the tombstone.
+    await writeRegistry(root, {
+      version: 2,
+      entries: [
+        {
+          kind: "section",
+          ref: CAVEAT_REF,
+          page: POLICY_PATH,
+          title: "Rollout deferred",
+          digest: "1".repeat(64),
+          registeredAt: "2026-08-01T00:00:00.000Z",
+        },
+      ],
+      tombstones: [],
+      lifted: [],
+    });
+
+    const refusal = await refusalFor(root);
+    expect(refusal?.reason).toContain("registered and no longer present");
+    expect(refusal?.reason).toContain("sync` has not run");
+    // Not the wording of the never-declared case, and not the tombstoned one.
+    expect(refusal?.reason).not.toContain("cannot be resolved");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("AC5 (agent/MCP) — an unreadable registry is refused as undeterminable, not as a missing caveat", async () => {
+  const root = await makeWiki("gd-wiki-evidence-unreadable-", {
+    [POLICY_PATH]: DEPENDENCY_POLICY,
+  });
+  try {
+    await writeRegistry(root, { version: 2, entries: [], tombstones: [], lifted: [] });
+    // A real EACCES, not an injected error: AC3 of the flow requires the
+    // storage to be genuinely unreadable.
+    await chmod(registryFile(root), 0o000);
+
+    const refusal = await refusalFor(root);
+    expect(refusal?.reason).toContain("is unreadable");
+    expect(refusal?.reason).toContain("live, removed, or was never");
+    expect(refusal?.reason).toContain("withheld");
+  } finally {
+    await chmod(registryFile(root), 0o644).catch(() => undefined);
     await rm(root, { recursive: true, force: true });
   }
 });

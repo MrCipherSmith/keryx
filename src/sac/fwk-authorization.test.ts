@@ -108,7 +108,20 @@ test("target access re-authorizes and re-resolves changed resources before discl
   const changed = JSON.parse(await readFile(manifestPath, "utf8")) as { resources: Array<{ kind: string; uri: string }> };
   changed.resources = [{ kind: "evidence", uri: "./evidence/escape" }];
   await writeFile(manifestPath, `${JSON.stringify(changed)}\n`);
-  await expect(workspaces.resolveResourceForActor({ actorContext, workspaceId: "workspace-alpha", resource: evidence })).rejects.toMatchObject({ code: "invalid_reference" });
+  // Flow 242 lane D: the handle the caller still holds (`./evidence/fact.md`)
+  // is no longer in the manifest at all, so the refusal is `not_found` — "that
+  // resource is no longer available" — rather than `invalid_reference`.
+  // `invalid_reference` used to fire here only as a side effect of
+  // `readManifest` re-resolving EVERY declared reference on every read, which
+  // is the behaviour this lane removed (a deleted target must not make the
+  // whole workspace unreadable). The containment property itself is unchanged
+  // and is now asserted directly on the escaping resource below, instead of
+  // being inferred from an error raised about a different one.
+  await expect(workspaces.resolveResourceForActor({ actorContext, workspaceId: "workspace-alpha", resource: evidence })).rejects.toMatchObject({ code: "not_found" });
+  const escaping = (await workspaces.showForActor({ actorContext, workspaceId: "workspace-alpha" })).resources[0]!;
+  expect(escaping.uri).toBe("./evidence/escape");
+  await expect(workspaces.resolveResourceForActor({ actorContext, workspaceId: "workspace-alpha", resource: escaping })).rejects.toMatchObject({ code: "invalid_reference" });
+  expect(await readFile(path.join(outside, "secret.md"), "utf8")).toBe("outside secret");
 
   const service = new FwkReadService({
     guard, authorizationServer,
