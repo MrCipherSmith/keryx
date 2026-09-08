@@ -48,7 +48,6 @@ function httpOf(input: DeviceLoginInput): DeviceCodeHttp {
 }
 
 function present(challenge: Pick<DeviceCodeChallenge, "userCode" | "verificationUri" | "verificationUriComplete">, provider: string): LoginChallenge {
-  const uri = challenge.verificationUriComplete ?? challenge.verificationUri;
   return {
     userCode: challenge.userCode,
     verificationUri: challenge.verificationUri,
