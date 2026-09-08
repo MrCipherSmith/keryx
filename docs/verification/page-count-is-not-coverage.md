@@ -13,7 +13,7 @@ count of files.
 
 ## The fourteen sites, each with a verdict
 
-| # | Site | Prints | Verdict | Owner |
+| # | Site | Prints | Verdict | State |
 |---|---|---|---|---|
 | 1 | `src/commands/wiki.ts` (`wiki status`) | `total pages: N` | Presented as completeness — the headline line, with nothing naming what is missing | open |
 | 2 | `src/wiki/service.ts` `WikiStatusResult.totalPages` | the value behind #1 | Value is fine; needs a sibling field so a consumer *can* state absence | open |
@@ -32,9 +32,16 @@ count of files.
 
 ## Status
 
-Five fixed (6, 7, 13, 14, and the templates/validator work behind them), five
-open with owners named above, four deliberately left because they are honest
-about what they measure.
+Four fixed (6, 7, 13, 14), five open (1, 2, 5, 8, 9), five deliberately left
+(3, 4, 10, 11, 12) because they are honest about what they measure.
+
+Counted from the table above rather than asserted beside it. The first version
+of this paragraph said "five fixed … four left" and disagreed with its own
+fourteen rows — in the one document whose entire purpose is that a claimed
+enumeration matches what is on the page. The `Owner` column also repeated the
+verdict instead of naming anyone, so the commit that introduced this file
+claiming "a verdict and an owner for each" was still not literally true; the
+column is now named for what it holds.
 
 The open ones are open. This document exists so that stays visible instead of
 living in a commit message that claimed the work was already done.

@@ -163,12 +163,21 @@ test("fan-in is a tie-break and is never added into the score", () => {
   // higher-fan-in file with a lower score climbs over a lower-fan-in file with
   // a higher one, and this sequence stops being monotonic.
   //
-  // Measured honestly: the review's `score += dependents * 0.01` does NOT fail
-  // this, because in a corpus where a discriminating term scores ~30 and a
-  // corpus-wide one ~0.7, four points of fan-in bonus flip no pair — the
-  // mutation changes no observable output. Rather than reshape the fixture
-  // until an inert mutation fails, this pins the property that matters: any
-  // fan-in leakage large enough to reorder anything reorders this list.
+  // What this does and does not catch, corrected after an independent verifier
+  // measured it. It catches a comparator whose PRIMARY key is not the score —
+  // fan-in first, or matched-count first — because then the emitted scores stop
+  // running downhill. It does NOT catch fan-in folded into the score itself, at
+  // any coefficient: there the emitted score IS the sort key, so the sequence is
+  // monotonic by construction. Measured at a coefficient of 5, with the
+  // irrelevant global celebrity promoted to first place, this assertion still
+  // passes.
+  //
+  // The equality assertion above is what carries that case, and it carries it
+  // at every coefficient down to 0.0001. An earlier commit message of mine said
+  // `score += dependents * 0.01` "does not fail the new assertions either" —
+  // that was wrong, and wrong in the fixture's favour: it does fail, on the
+  // line above. Both halves are named here so a later reader cannot delete the
+  // equality assertion believing this one covers it.
   const scores = results.map((r) => r.score);
   expect(scores).toEqual([...scores].sort((a, b) => b - a));
 });

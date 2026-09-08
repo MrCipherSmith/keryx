@@ -551,8 +551,23 @@ const WIKI_PAGE_PRODUCERS = [
   {
     source: "sac-proposal",
     pageType: "decision",
-    /** The path it mints into: `decisions/sac-proposal-<id>.md`. */
-    path: /^decisions\/sac-proposal-[0-9a-f]+\.md$/,
+    /**
+     * The path it mints into. `wiki-owner-writer.ts` builds
+     * `decisions/sac-<proposalId>.md` and passes the id through untouched, and
+     * the id's prefix depends on which call site created the proposal:
+     * `proposal-<16 hex>` from the three interactive ones, `wrapup-<32 hex>`
+     * from the automated wrap-up. The first version of this pattern hard-coded
+     * `sac-proposal-`, so pages written by the automated path — the only fully
+     * unattended producer, and the one whose output most needs the exemption —
+     * were accused of failing a Decision template they never claimed. Seven
+     * fabricated findings per page, on a validation gate.
+     *
+     * So the shape is the producer's naming convention rather than one call
+     * site's prefix: a lowercase kind and a hex id. The exemption stays narrow
+     * because the page type and the hash-identified evidence link are checked
+     * alongside it.
+     */
+    path: /^decisions\/sac-[a-z]+-[0-9a-f]+\.md$/,
   },
 ] as const;
 

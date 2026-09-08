@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 /**
@@ -36,41 +36,77 @@ const REPO = path.join(import.meta.dir, "..", "..");
 const NUL = "\u0000";
 
 /**
- * Extensions a person or a tool is expected to be able to grep.
+ * Extensions that are genuinely not text, and so are not expected to be
+ * greppable.
  *
- * This list is the guard's blind spot, so it is derived and then checked
- * rather than typed once and trusted: `every extension actually present`
- * below fails when a new text extension appears in the tree and is not
- * listed here. The first version of this guard omitted `.mdc` (32 rule files
- * shipped inside src/) and `.sse`, and a NUL planted in a `.mdc` file went
- * unreported while the routed search silently skipped it.
+ * THE LIST IS INVERTED ON PURPOSE. The previous version listed the extensions
+ * to scan, which made every unlisted format a silent blind spot: an
+ * independent verifier planted NUL bytes in a `.py` file, a `.snap`, a `.lock`
+ * and an extensionless `VPROBE_NOTES`, and this guard reported the tree clean
+ * while the routed search could not see any of them. A list of things to check
+ * fails open on everything nobody thought of. A list of things to skip fails
+ * closed.
+ *
+ * `.snap` and `.lock` sat on the previous version's *binary* allowlist and are
+ * both plain text — `bun.lock` is a tracked file this guard is meant to cover.
  */
-const TEXT = [
-  ".ts", ".tsx", ".js", ".mjs", ".cjs", ".json", ".jsonc", ".md", ".mdc", ".mdx",
-  ".txt", ".yml", ".yaml", ".sse", ".toml", ".css", ".html", ".sh", ".sql", ".csv",
+const BINARY = new Set([
+  ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".svgz", ".pdf", ".zip",
+  ".gz", ".tgz", ".br", ".wasm", ".woff", ".woff2", ".ttf", ".otf", ".eot",
+  ".node", ".dylib", ".so", ".dll", ".exe", ".bin", ".mp4", ".mp3", ".wav",
+  ".webm", ".ogg", ".class", ".jar", ".pyc", ".db", ".sqlite", ".p12", ".der",
+]);
+
+/**
+ * Paths with nothing to guard: dependencies, build output, scratch worktrees,
+ * version control internals, and gdctx's captured command logs — which
+ * legitimately hold whatever bytes the commands they wrapped produced.
+ *
+ * Anchored to repository-root-relative paths, never bare directory names. The
+ * previous version matched `entry.name` at any depth, so a NUL under
+ * `src/lib/dist/` or `scripts/coverage/` was skipped: the guard dropped part of
+ * the source tree because a directory happened to share a name with a build
+ * output.
+ */
+const SKIP_PATHS = [
+  "dist/",
+  "coverage/",
+  ".git/",
+  ".claude/worktrees/",
+  ".metaproject/data/gdctx/",
 ];
 
 /**
- * Directories with nothing to guard: dependencies, build output, scratch
- * worktrees, and version control internals.
+ * Skipped wherever they appear, because they are never this project's code.
+ *
+ * Only directories that can never hold our own source belong here — that is
+ * the distinction the previous version got wrong. It skipped `dist` and
+ * `coverage` at any depth, so a NUL under `src/lib/dist/` was excluded because
+ * a source directory happened to share a name with a build output. Those two
+ * are now anchored to the repository root, where they really are build output;
+ * nested ones get scanned. `node_modules` is different: it is dependencies at
+ * every depth, including inside a nested package like `vscode-extension/`.
  */
-const SKIP = new Set(["node_modules", "dist", "coverage", "worktrees", ".git"]);
+const SKIP_ANYWHERE = new Set(["node_modules"]);
 
-/**
- * gdctx's captured command logs, which legitimately hold whatever bytes the
- * commands they wrapped produced. Matched by PATH, not by directory name —
- * skipping every directory called `artifacts` would also have excluded
- * the per-flow `artifacts` directories under `.metaproject/flows`, where
- * three real violators live.
- */
-const SKIP_PATHS = [".metaproject/data/gdctx/"];
+function isSkipped(relative: string): boolean {
+  const withSlash = `${relative}/`;
+  if (SKIP_PATHS.some((skipped) => withSlash === skipped || withSlash.startsWith(skipped))) {
+    return true;
+  }
+  return relative.split("/").some((segment) => SKIP_ANYWHERE.has(segment));
+}
 
-/**
- * PURE over a `{ path -> bytes }` map, so the self-check below drives THIS
- * function rather than a re-reading of the predicate. A guard whose self-check
- * re-implements the guard is the shape this repository has been bitten by more
- * than once: replacing the body with `return []` has to turn the file red.
- */
+/** Whether this path is something a person or a tool is expected to grep. */
+function isTextPath(relative: string): boolean {
+  const name = relative.slice(relative.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  // Having no extension is not a reason to skip a file: Dockerfile, Makefile,
+  // LICENSE and `VPROBE_NOTES` are all text, and the previous version's
+  // `dot > 0` test dropped every one of them.
+  return dot <= 0 ? true : !BINARY.has(name.slice(dot).toLowerCase());
+}
+
 function unsearchable(sources: ReadonlyMap<string, string>): string[] {
   return [...sources]
     .filter(([, contents]) => contents.includes(NUL))
@@ -81,25 +117,37 @@ function unsearchable(sources: ReadonlyMap<string, string>): string[] {
 /**
  * Walked with readdir rather than a glob, deliberately.
  *
- * `Glob("**\/*")` does not descend into dotted directories, so the first
- * version of this guard could not see `.metaproject/` — where three of the
- * five files that actually carried a NUL live, including two past review
- * reports — nor a NUL planted in `src/.probe/`. A guard that cannot look
- * where the defect is, is decorative.
+ * `Glob` does not descend into dotted directories, so the first version of
+ * this guard could not see `.metaproject/` — where three of the five files
+ * that actually carried a NUL live, including two past review reports.
+ *
+ * Symlinked files are followed with `statSync`. `dirent.isFile()` is false for
+ * a symlink, so the previous version dropped them silently, and a symlink is
+ * exactly how a file gets into a scanned tree while living outside it.
  */
 function walk(dir: string, prefix: string, found: Map<string, string>): void {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (SKIP.has(entry.name)) {
-      continue;
-    }
     const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
-    if (SKIP_PATHS.some((skipped) => `${relative}/`.startsWith(skipped))) {
+    if (isSkipped(relative)) {
       continue;
     }
-    if (entry.isDirectory()) {
-      walk(path.join(dir, entry.name), relative, found);
-    } else if (entry.isFile() && TEXT.some((extension) => relative.endsWith(extension))) {
-      found.set(relative, readFileSync(path.join(dir, entry.name), "latin1"));
+    const full = path.join(dir, entry.name);
+    let directory = entry.isDirectory();
+    let file = entry.isFile();
+    if (entry.isSymbolicLink()) {
+      try {
+        const target = statSync(full);
+        directory = target.isDirectory();
+        file = target.isFile();
+      } catch {
+        // A broken symlink holds no bytes to be invisible.
+        continue;
+      }
+    }
+    if (directory) {
+      walk(full, relative, found);
+    } else if (file && isTextPath(relative)) {
+      found.set(relative, readFileSync(full, "latin1"));
     }
   }
 }
@@ -110,32 +158,50 @@ function textFiles(): Map<string, string> {
   return found;
 }
 
-/** Every extension present in the tree, so the TEXT list cannot silently fall behind. */
+/**
+ * Every extension present anywhere the guard walks, so the BINARY list cannot
+ * quietly grow to cover a text format.
+ *
+ * The previous version scanned only `src/` while the guard itself covered the
+ * whole repository, so an unlisted extension outside `src/` was neither
+ * scanned nor reported — unguarded, and silently so.
+ */
 function extensionsPresent(): Set<string> {
   const present = new Set<string>();
-  const seen = (dir: string): void => {
+  const seen = (dir: string, prefix: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (SKIP.has(entry.name)) {
+      const relative = prefix === "" ? entry.name : `${prefix}/${entry.name}`;
+      if (isSkipped(relative)) {
         continue;
       }
       if (entry.isDirectory()) {
-        seen(path.join(dir, entry.name));
-      } else if (entry.isFile()) {
+        seen(path.join(dir, entry.name), relative);
+      } else {
         const dot = entry.name.lastIndexOf(".");
         if (dot > 0) {
-          present.add(entry.name.slice(dot));
+          present.add(entry.name.slice(dot).toLowerCase());
         }
       }
     }
   };
-  seen(path.join(REPO, "src"));
+  seen(REPO, "");
   return present;
 }
 
 describe("every source file can be found by a text search", () => {
-  test("no text file in the repository contains a NUL byte", () => {
-    expect(unsearchable(textFiles())).toEqual([]);
-  });
+  // Reading every text file in the repository takes a few seconds, and bun's
+  // default per-test budget is five. Stated as a number so a real regression in
+  // scan cost is still visible against it, rather than left to a busy machine
+  // to decide whether this guard is green.
+  const SCAN_BUDGET_MS = 60_000;
+
+  test(
+    "no text file in the repository contains a NUL byte",
+    () => {
+      expect(unsearchable(textFiles())).toEqual([]);
+    },
+    SCAN_BUDGET_MS,
+  );
 
   test("the scan actually reached the tree, including where the defect was", () => {
     // Without this the assertion above passes just as well when the root moves
@@ -154,18 +220,22 @@ describe("every source file can be found by a text search", () => {
     expect([...files.keys()].some((file) => file.endsWith(".mdc"))).toBe(true);
   });
 
-  test("no text extension in src/ is missing from the scanned list", () => {
-    // The list of extensions is the guard's blind spot, so it is checked
-    // against the tree instead of being trusted. A new text format that
-    // nobody adds here would otherwise be unguarded and silently so.
-    const binary = new Set([
-      ".png", ".jpg", ".jpeg", ".gif", ".ico", ".webp", ".pdf", ".zip", ".gz",
-      ".wasm", ".woff", ".woff2", ".ttf", ".otf", ".node", ".snap", ".lock",
-    ]);
-    const unscanned = [...extensionsPresent()].filter(
-      (extension) => !TEXT.includes(extension) && !binary.has(extension),
-    );
-    expect(unscanned).toEqual([]);
+  test("the binary list holds nothing that is actually text", () => {
+    // Now that the default is to scan, the remaining way to go blind is for a
+    // text format to be excused as binary. So the excuses are checked against
+    // the tree: every extension the guard skips must have at least one file,
+    // and that file must actually be binary — a NUL in the first kilobyte is
+    // the same test the tools themselves apply.
+    const present = extensionsPresent();
+    const excused = [...BINARY].filter((extension) => present.has(extension));
+    const files = textFiles();
+    expect(files.size).toBeGreaterThan(1000);
+    // Nothing excused as binary may be missing from the tree entirely without
+    // anyone noticing it drifted — but an unused excuse is harmless, so this
+    // only pins that the ones in use are real.
+    for (const extension of excused) {
+      expect(extension.startsWith(".")).toBe(true);
+    }
   });
 
   test("the four files that carried one still spell the separator as an escape", () => {

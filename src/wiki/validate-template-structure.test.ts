@@ -345,6 +345,44 @@ Recorded via a Shared Agent Context proposal, accepted by a reviewer.
   }
 });
 
+test("both id shapes the producer actually mints are exempt, not just one", async () => {
+  // The exemption pattern was written against `sac-proposal-<id>.md` and the
+  // automated wrap-up mints `wrapup-<32 hex>`, so genuine pages from the one
+  // fully unattended producer drew seven fabricated findings each. The id
+  // shapes below are the ones the four proposal-creating call sites emit:
+  // `proposal-<16 hex>` from src/commands/workspace.ts, src/mcp/tools.ts and
+  // the workspace-lifecycle tool, and `wrapup-<32 hex>` from
+  // src/sac/machine-wrap-up.ts and src/sac/trusted-wrap-up.ts.
+  const record = (title: string): string => `# ${title}
+
+Version: 0.1.0
+Type: decision
+Status: draft
+Describes: none
+
+## Summary
+
+Recorded from an accepted proposal.
+
+## Provenance
+
+- Source: sac-proposal
+- Link: ./evidence.md (sha256 aad88101313f79c3306cfc9be51c66c94686e5dedadb4c704af7bf56f80dc60e)
+
+## Changelog
+
+- 0.1.0 - Written by the SAC wiki owner-writer.
+`;
+  for (const id of ["proposal-0123456789abcdef", "wrapup-26049748902faa8c4c8029847f0c5f89"]) {
+    const root = await wikiWith({ [`decisions/sac-${id}.md`]: record(id) });
+    try {
+      expect(await templateIssues(root)).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
 test("machine provenance without an evidence link does not earn the exemption", async () => {
   // The producer always writes a hash-identified link beside the source name.
   // A page claiming machine provenance while pointing at no evidence is
