@@ -95,6 +95,21 @@ export type TombstoneEntry = RegistryEntry & {
 };
 
 /**
+ * WHY a tombstone was lifted, as a value rather than as prose.
+ *
+ * A sentence in `restoredReason` can say "the content at this address is NOT the
+ * content that was removed" and still be rendered by a caller that only prints
+ * `removedAt` and `restoredAt` — which is exactly what happened: an
+ * operator-accepted substitution of a wholly different document read, on every
+ * surface, byte for byte like a genuine restoration. A discriminator that a
+ * reader has to branch on cannot be dropped by accident the way a paragraph can.
+ *
+ * `unrecorded` is for a lifted record written before this field existed: the
+ * basis is genuinely not on disk, and "byte-identical" must not be assumed.
+ */
+export type RestorationEvidence = "byte-identical" | "accepted-substitution" | "unrecorded";
+
+/**
  * A tombstone that was lifted, kept rather than deleted.
  *
  * AC6 of flow 242: the record of a removal is not destroyed by the same call
@@ -105,6 +120,7 @@ export type TombstoneEntry = RegistryEntry & {
 export type LiftedTombstone = TombstoneEntry & {
   restoredAt: string;
   restoredReason: string;
+  restoredEvidence: RestorationEvidence;
 };
 
 export type SectionRegistry = {
@@ -204,12 +220,20 @@ function parseLifted(value: unknown): ParsedEntry<LiftedTombstone> {
   if (typeof restoredAt !== "string" || restoredAt.length === 0) {
     return { ok: false };
   }
+  const evidence = value["restoredEvidence"];
   return {
     ok: true,
     value: {
       ...base.value,
       restoredAt,
       restoredReason: stringOr(value["restoredReason"], "no reason was recorded"),
+      // A record written before this field existed does not get the benefit of
+      // the doubt: the basis was not recorded, and saying so is the only honest
+      // rendering of a lifted tombstone whose grounds are unknown.
+      restoredEvidence:
+        evidence === "byte-identical" || evidence === "accepted-substitution"
+          ? evidence
+          : "unrecorded",
     },
   };
 }
@@ -350,8 +374,31 @@ function stableEntries(index: SectionIndex, now: string): RegistryEntry[] {
   return entries.sort((a, b) => a.ref.localeCompare(b.ref));
 }
 
-/** Why a returning identity was judged the way it was. Never a guess. */
-export type ReoccupationEvidence = "different-content" | "unverifiable";
+/**
+ * Why a returning identity was judged the way it was. Never a guess.
+ *
+ * `page-reoccupied` is the flow-236 addition, and it exists because a section
+ * digest covers the section BODY and nothing else, while `keryx wiki new` ships
+ * every page with the same boilerplate bodies ("One paragraph summary.", "Main
+ * content.", "- `src/...`"). Delete a page and create an unrelated one at the
+ * same path with the same command and the page id is correctly reported
+ * `reoccupied` while four of its five section ids answer `found` — a
+ * substitution laundered by the template, reachable with nothing but shipped
+ * commands. An identical body inside a page that is itself a substitution is not
+ * evidence of anything, so it is not read as evidence of a restoration.
+ */
+export type ReoccupationEvidence = "different-content" | "unverifiable" | "page-reoccupied";
+
+/**
+ * The page half of a section ref. `keryx:page/<id>#<section>` → `keryx:page/<id>`.
+ *
+ * Section ids are minted as `${pageId}#${sectionId}` by the index, so this is
+ * the same join read backwards rather than a second naming rule that can drift.
+ */
+export function pageRefForSectionRef(ref: string): string {
+  const hash = ref.indexOf("#");
+  return hash > 0 ? ref.slice(0, hash) : ref;
+}
 
 export type ReoccupiedIdentity = {
   ref: string;
@@ -378,6 +425,55 @@ export type RegistryDiff = {
    */
   reoccupied: ReoccupiedIdentity[];
 };
+
+/**
+ * Byte-identical AND provably so.
+ *
+ * A null digest on either side is NOT a match: a tombstone written before
+ * digests were recorded knows nothing about what came back, and reading that
+ * silence as agreement is the guess this module refuses to make.
+ */
+function sameRecordedContent(tombstone: TombstoneEntry, back: RegistryEntry): boolean {
+  return tombstone.digest !== null && back.digest !== null && tombstone.digest === back.digest;
+}
+
+function acceptedSubstitutionReason(
+  via: "ref" | "page",
+  sameContent: boolean,
+  substitutedPage: TombstoneEntry | undefined,
+): string {
+  if (via === "ref") {
+    return (
+      "an operator accepted this reoccupation explicitly (`--accept-reoccupation`); the content at this address " +
+      "is NOT the content that was removed."
+    );
+  }
+  const page = substitutedPage?.ref ?? "the containing page";
+  return (
+    `an operator accepted the reoccupation of ${page} (\`--accept-reoccupation\`), the page that contains this ` +
+    `section. ${
+      sameContent
+        ? "This section's own body is byte-identical to what was removed, but an identical body proves nothing here: the page template ships the same boilerplate everywhere, and the document this section now lives in is NOT the document that was removed."
+        : "The content at this address is NOT the content that was removed."
+    }`
+  );
+}
+
+function pageReoccupiedReason(
+  tombstone: TombstoneEntry,
+  occupantPage: string,
+  substitutedPage: TombstoneEntry | undefined,
+): string {
+  const page = substitutedPage?.ref ?? pageRefForSectionRef(tombstone.ref);
+  return (
+    `this section was removed on ${tombstone.removedAt} and a section with a byte-identical body is present again ` +
+    `in ${occupantPage} — but the PAGE that contains it (${page}) was itself removed and its address is now held ` +
+    "by a different document. An identical body is not evidence of a restoration here: `keryx wiki new` writes the " +
+    "same boilerplate into every page, so unrelated documents share these bodies exactly. A section cannot be a " +
+    "restoration inside a page that is a substitution, so the tombstone is kept. Accept the page's reoccupation " +
+    "with `keryx wiki sections sync --accept-reoccupation <page-ref>` if the substitution is intended."
+  );
+}
 
 export type DiffOptions = {
   now: string;
@@ -442,33 +538,72 @@ export function diffSectionRegistry(
   const reoccupied: ReoccupiedIdentity[] = [];
   const newlyLifted: LiftedTombstone[] = [];
 
+  // Pass 1: which PAGE identities came back holding something that is not what
+  // was removed. This has to be known before any section in those pages is
+  // judged, because a section's own digest cannot answer the question — the
+  // template's boilerplate bodies are identical across unrelated pages, so
+  // "the body matches" is true of a substitution as often as of a restoration.
+  const substitutedPages = new Map<string, TombstoneEntry>();
+  for (const tombstone of previous.tombstones) {
+    if (tombstone.kind !== "page") {
+      continue;
+    }
+    const back = currentByRef.get(tombstone.ref);
+    if (!back || sameRecordedContent(tombstone, back)) {
+      continue;
+    }
+    substitutedPages.set(tombstone.ref, tombstone);
+  }
+
   for (const tombstone of previous.tombstones) {
     const back = currentByRef.get(tombstone.ref);
     if (!back) {
       continue;
     }
-    if (accepted.has(tombstone.ref)) {
+    const sameContent = sameRecordedContent(tombstone, back);
+    const substitutedPage =
+      tombstone.kind === "section"
+        ? substitutedPages.get(pageRefForSectionRef(tombstone.ref))
+        : undefined;
+
+    if (sameContent && !substitutedPage) {
       revived.push(back);
       newlyLifted.push({
         ...tombstone,
         restoredAt: now,
-        restoredReason:
-          "an operator accepted this reoccupation explicitly (`--accept-reoccupation`); the content at this address is NOT the content that was removed.",
-      });
-      continue;
-    }
-    if (tombstone.digest !== null && back.digest !== null && tombstone.digest === back.digest) {
-      revived.push(back);
-      newlyLifted.push({
-        ...tombstone,
-        restoredAt: now,
+        restoredEvidence: "byte-identical",
         restoredReason:
           "the identity is present again and its content is byte-identical to what was removed — a restoration, not a substitution.",
       });
       continue;
     }
-    const evidence: ReoccupationEvidence =
-      tombstone.digest === null || back.digest === null ? "unverifiable" : "different-content";
+
+    // Accepting a PAGE accepts the document that occupies that address, and a
+    // section ref is a sub-address of that same document — so the acceptance
+    // carries to its sections rather than forcing an operator who has already
+    // accepted a whole file to enumerate its headings (the alternative exit
+    // being `rm .sections.json`, which is not an exit).
+    const acceptedVia = accepted.has(tombstone.ref)
+      ? "ref"
+      : substitutedPage && accepted.has(substitutedPage.ref)
+        ? "page"
+        : null;
+    if (acceptedVia) {
+      revived.push(back);
+      newlyLifted.push({
+        ...tombstone,
+        restoredAt: now,
+        restoredEvidence: "accepted-substitution",
+        restoredReason: acceptedSubstitutionReason(acceptedVia, sameContent, substitutedPage),
+      });
+      continue;
+    }
+
+    const evidence: ReoccupationEvidence = !sameContent
+      ? tombstone.digest === null || back.digest === null
+        ? "unverifiable"
+        : "different-content"
+      : "page-reoccupied";
     reoccupied.push({
       ref: tombstone.ref,
       tombstone,
@@ -477,7 +612,9 @@ export function diffSectionRegistry(
       reason:
         evidence === "different-content"
           ? `this identity was removed on ${tombstone.removedAt} and is present again in ${back.page} holding DIFFERENT content. The id was re-minted at the same address; the tombstone is kept and this is not reported as a revival.`
-          : `this identity was removed on ${tombstone.removedAt} and is present again in ${back.page}, but the tombstone predates content recording, so restoration and substitution cannot be told apart here. The tombstone is kept rather than guessed away.`,
+          : evidence === "unverifiable"
+            ? `this identity was removed on ${tombstone.removedAt} and is present again in ${back.page}, but the tombstone predates content recording, so restoration and substitution cannot be told apart here. The tombstone is kept rather than guessed away.`
+            : pageReoccupiedReason(tombstone, back.page, substitutedPage),
     });
   }
 
@@ -572,12 +709,25 @@ export async function syncSectionRegistry(
   return { status: "synced", dryRun, registryPath: read.path, ...diff };
 }
 
-/** How an identity that is present today relates to a removal on record. */
+/**
+ * How an identity that is present today relates to a removal on record.
+ *
+ * `restoredEvidence` and `restoredReason` are here because they were not: the
+ * registry recorded, correctly, that an operator had accepted a substitution,
+ * and this type carried only the REMOVAL reason, so a swapped document and a
+ * genuine restoration printed the same two lines and serialised to the same
+ * three JSON fields on every surface. The honest record existed and no reader
+ * could reach it.
+ */
 export type RemovalHistory = {
   removedAt: string;
   reason: string;
   /** When the tombstone was lifted, or `null` when the sync has not run yet. */
   restoredAt: string | null;
+  /** On what basis the tombstone was lifted. `null` before the sync runs. */
+  restoredEvidence: RestorationEvidence | null;
+  /** The lifting sync's own words, or `null` before the sync runs. */
+  restoredReason: string | null;
 };
 
 export type SectionResolution =
@@ -624,13 +774,28 @@ function historyFor(
   if (tombstone && digest !== null && tombstone.digest === digest) {
     // Present again with the content it was removed with, and `sync` has not
     // been run since — a restoration in the interruption window.
-    return { removedAt: tombstone.removedAt, reason: tombstone.reason, restoredAt: null };
+    return {
+      removedAt: tombstone.removedAt,
+      reason: tombstone.reason,
+      restoredAt: null,
+      restoredEvidence: null,
+      restoredReason: null,
+    };
   }
   const lifted = [...registry.lifted]
     .filter((entry) => entry.ref === ref)
     .sort((a, b) => b.restoredAt.localeCompare(a.restoredAt))[0];
   if (lifted) {
-    return { removedAt: lifted.removedAt, reason: lifted.reason, restoredAt: lifted.restoredAt };
+    return {
+      removedAt: lifted.removedAt,
+      // `reason` is the REMOVAL reason and always was; the basis on which the
+      // tombstone was lifted is a different fact and now travels beside it
+      // instead of being dropped at this boundary.
+      reason: lifted.reason,
+      restoredAt: lifted.restoredAt,
+      restoredEvidence: lifted.restoredEvidence,
+      restoredReason: lifted.restoredReason,
+    };
   }
   return null;
 }
@@ -689,6 +854,30 @@ export function resolveSectionIdentity(
         evidence: tombstone.digest === null ? "unverifiable" : "different-content",
         reason: reoccupationReason(tombstone, exact.pageRelativePath),
       };
+    }
+    // The section body matched. That is not the end of the question, because a
+    // section digest covers the body and nothing else: the page that contains
+    // it may be a substitution, and `keryx wiki new` gives every page the same
+    // boilerplate bodies, so matching them is the normal case for two unrelated
+    // documents. The page-level answer is computed from the same registry in the
+    // same call — not consulting it was how four of six identities on one
+    // deleted-and-recreated page answered `found` while the page itself
+    // answered `reoccupied`.
+    if (tombstone) {
+      const pageTombstone = history.tombstones.find(
+        (entry) => entry.kind === "page" && entry.ref === exact.pageId,
+      );
+      const pageDigest = index.pages.get(exact.pageRelativePath)?.contentDigest ?? null;
+      if (pageTombstone && pageTombstone.digest !== pageDigest) {
+        return {
+          kind: "reoccupied",
+          tombstone,
+          section: exact,
+          occupantPage: exact.pageRelativePath,
+          evidence: "page-reoccupied",
+          reason: pageReoccupiedReason(tombstone, exact.pageRelativePath, pageTombstone),
+        };
+      }
     }
     return { kind: "found", section: exact, history: historyFor(history, ref, exact.digest) };
   }

@@ -468,7 +468,7 @@ async function runCoverageMap(args: string[]): Promise<void> {
   if (sub === "status" || !sub) {
     const map = await loadCoverageMap(cwd, config);
     const enabled = await isTestingCapabilityEnabled(cwd, "coverageMap");
-    const currentRef = await gitRefOf(cwd);
+    const currentRef = await resolveGitRef(cwd);
     console.log("# testing coverage-map status");
     console.log("");
     console.log(`capability: ${enabled ? "enabled" : "disabled"}`);
@@ -478,8 +478,7 @@ async function runCoverageMap(args: string[]): Promise<void> {
       console.log(`entries: ${Object.keys(map.map).length}`);
       console.log(`generatedAt: ${map.generatedAt}`);
       console.log(`gitRef: ${map.gitRef ?? "n/a"}`);
-      const stale = map.gitRef && currentRef && map.gitRef !== currentRef;
-      console.log(`stale: ${stale ? "yes (falls back to static selection)" : "no"}`);
+      console.log(`stale: ${describeCoverageMapStaleness(map.gitRef, currentRef)}`);
     }
     return;
   }
@@ -488,13 +487,75 @@ async function runCoverageMap(args: string[]): Promise<void> {
   process.exitCode = 1;
 }
 
-async function gitRefOf(cwd: string): Promise<string | null> {
+/**
+ * What git can say about the current short ref — with "it answered" kept apart
+ * from "it could not answer".
+ *
+ * V237-01 (flow 237 T13): `gitRefOf` below answers `null` for BOTH "there is no
+ * repository here" and "git ran and refused", and the coverage-map staleness
+ * line read that `null` through `map.gitRef && currentRef && ...`, so a
+ * genuinely stale map flipped to `stale: no` the moment git broke. Measured on
+ * one map and one repository:
+ *
+ *   matching ref            → stale: no
+ *   HEAD genuinely moved    → stale: yes (falls back to static selection)
+ *   same map, .git removed  → stale: no        ← the defect
+ *
+ * That is the same falsy-`null` collapse `describeReportFreshness` (one
+ * function above) already had fixed for the report, in the very computation its
+ * comment says it mirrors. A comparison that cannot be made is `unknown`; it is
+ * never evidence the two sides agree.
+ */
+type GitRefResolution =
+  | { kind: "resolved"; ref: string }
+  | { kind: "unavailable"; detail: string };
+
+async function resolveGitRef(cwd: string): Promise<GitRefResolution> {
   if (!Bun.which("git")) {
-    return null;
+    return { kind: "unavailable", detail: "git is not on PATH" };
   }
   const proc = Bun.spawn(["git", "rev-parse", "--short", "HEAD"], { cwd, stdout: "pipe", stderr: "pipe" });
-  const [out, code] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
-  return code === 0 ? out.trim() : null;
+  const [out, err, code] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  const ref = out.trim();
+  if (code !== 0 || ref.length === 0) {
+    const first = err.trim().split("\n")[0] ?? "";
+    return {
+      kind: "unavailable",
+      detail: first || `\`git rev-parse --short HEAD\` exited ${code}`,
+    };
+  }
+  return { kind: "resolved", ref };
+}
+
+/**
+ * The `stale:` line for `keryx test coverage-map status`. Three answers, never
+ * two: a map whose ref cannot be compared is `unknown`, and the line says so
+ * rather than printing the same "no" a confirmed match prints.
+ */
+export function describeCoverageMapStaleness(
+  mapGitRef: string | null,
+  current: GitRefResolution,
+): string {
+  if (!mapGitRef) {
+    return "unknown (this map was built without a gitRef, so it cannot be compared to the current checkout) — this is NOT evidence the map is current";
+  }
+  if (current.kind !== "resolved") {
+    return `unknown (the current gitRef could not be determined: ${current.detail}) — this is NOT evidence the map is current`;
+  }
+  return mapGitRef === current.ref ? "no" : "yes (falls back to static selection)";
+}
+
+/** The discarding wrapper, for the two callers that already treat `null` as
+ * "undetermined" in their own output (`describeReportFreshness`) or as "record
+ * no ref" (`coverage-map build`). Anything that COMPARES refs must use
+ * `resolveGitRef` and branch on `kind` — see V237-01 above. */
+async function gitRefOf(cwd: string): Promise<string | null> {
+  const result = await resolveGitRef(cwd);
+  return result.kind === "resolved" ? result.ref : null;
 }
 
 function printHelp(): void {

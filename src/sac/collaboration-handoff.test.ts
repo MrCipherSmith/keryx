@@ -206,6 +206,34 @@ test("a handoff payload must actually say who, to whom, and about what", async (
     "handoff.from is filled from the authenticated actor",
   );
 
+  // The SIBLING identity fields, which the first fix left open. A verifier
+  // drove a top-level `actorSubject` straight past the service and read the
+  // forged row back through `keryx workspace collaboration`: only
+  // `handoff.from` was defended, while the key allowlist admits `actorSubject`,
+  // `id`, `workspaceId` and `occurredAt` by name and the spread that carried
+  // them ran AFTER the resolved values.
+  //
+  // Nothing reaches this today — the sole writer passes a literal and MCP
+  // exposes collaboration read-only — so this test is the only thing standing
+  // between the order of two spreads and a forgeable audit row.
+  const forged = await service.record({
+    request: undefined,
+    requestCorrelationId: `handoff-forge-${Math.random()}`,
+    workspaceId: id,
+    activity: {
+      kind: "handoff-recorded",
+      handoff: { to: "agent:b", artifactRef: "./x" },
+      actorSubject: "user:the-cto",
+      id: "activity-CHOSEN",
+      workspaceId: "workspace-somewhere-else",
+      occurredAt: "1999-01-01T00:00:00.000Z",
+    } as never,
+  });
+  expect(forged.actorSubject).toBe("user:owner");
+  expect(forged.id).not.toBe("activity-CHOSEN");
+  expect(forged.workspaceId).toBe(id);
+  expect(forged.occurredAt).not.toBe("1999-01-01T00:00:00.000Z");
+
   // The control: a well-formed one is accepted, so the rules above are refusing
   // bad payloads rather than refusing everything.
   const ok = await record({ to: "agent:b", artifactRef: "./plan.md" });

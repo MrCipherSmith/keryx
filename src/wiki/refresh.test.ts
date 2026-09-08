@@ -1,7 +1,7 @@
 // LWG-11 refresh / migrate / verify (flow 227): AC1, AC2, AC3, AC4, AC6, AC8, AC9.
 
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -22,9 +22,13 @@ const SHA = "c".repeat(40);
 // against real git fixtures in `source-gate.test.ts`.
 const FRESH = async () => ({ status: "fresh" as const, reasons: [] });
 
-/** A project whose graph really produces a `src/mod` component page. */
-async function project(pageBody?: string): Promise<{ cwd: string; pagePath: string }> {
-  const cwd = await mkdtemp(path.join(tmpdir(), "lwg-refresh-"));
+/** A project whose graph really produces a `src/mod` component page.
+ *
+ * `root` places that project somewhere other than a fresh temp directory —
+ * used by the monorepo fixture below, where the project root deliberately sits
+ * BELOW the git root. */
+async function project(pageBody?: string, root?: string): Promise<{ cwd: string; pagePath: string }> {
+  const cwd = root ?? (await mkdtemp(path.join(tmpdir(), "lwg-refresh-")));
   const storage = path.join(cwd, ".metaproject", "data", "gdgraph", "storage");
   await mkdir(storage, { recursive: true });
   await mkdir(path.join(cwd, "src", "mod"), { recursive: true });
@@ -304,6 +308,74 @@ describe("verifyPages refuses to stamp when git is present but broken (F236-02)"
     const stamped = await verifyPages({ cwd, head, baseline: true });
     expect(stamped).toHaveLength(1);
     expect(stamped[0]!.verifiedAt).toBeNull();
+  });
+});
+
+// V236-01 (flow 236 T15). The refusals above were armed by `resolveGitHead`
+// answering `failed`, and that answer depended on a probe of `<cwd>/.git` —
+// only at `cwd`, never at an ancestor. `cwd` is the PROJECT root, which
+// `src/gdgraph/staleness.ts` documents may sit below the git root. So the same
+// breakage classified differently depending on where `.metaproject` lives, and
+// in the monorepo layout BOTH refusals were bypassed: the `failed` refusal
+// never fired, and the stale-graph refusal is gated on `head.kind ===
+// "resolved"`, so a stale graph was stamped too.
+//
+// The breakage is induced for real (`chmod 000` on the object store, which is
+// what makes `git rev-parse` fail while `.git` is still on disk), and the two
+// layouts are asserted as a PAIR — the defect was never visible from one alone.
+describe("V236-01: the repository search is not confined to the project root", () => {
+  async function brokenRepo(nested: boolean): Promise<{ gitRoot: string; cwd: string; pagePath: string }> {
+    const gitRoot = await mkdtemp(path.join(tmpdir(), "lwg-monorepo-"));
+    const cwd = nested ? path.join(gitRoot, "packages", "app") : gitRoot;
+    if (nested) await mkdir(cwd, { recursive: true });
+    const made = await project(undefined, cwd);
+    execFileSync("git", ["init", "-q"], { cwd: gitRoot, stdio: "ignore" });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: gitRoot, stdio: "ignore" });
+    execFileSync("git", ["config", "user.name", "test"], { cwd: gitRoot, stdio: "ignore" });
+    execFileSync("git", ["add", "-A"], { cwd: gitRoot, stdio: "ignore" });
+    execFileSync("git", ["commit", "-q", "-m", "initial"], { cwd: gitRoot, stdio: "ignore" });
+    // An unreadable object store: `git rev-parse` (and `--is-inside-work-tree`,
+    // and `--git-dir`, and `--show-toplevel`) all exit 128 with "not a git
+    // repository", at the git root and in a subdirectory alike — so git itself
+    // cannot be the witness here, and the `.git` entry on disk is all that is
+    // left to tell "broken" from "absent".
+    await chmod(path.join(gitRoot, ".git", "objects"), 0o000);
+    return { gitRoot, cwd: made.cwd, pagePath: made.pagePath };
+  }
+
+  test("a present-but-broken repository is `failed` whether the project root IS the git root or sits below it", async () => {
+    const atRoot = await brokenRepo(false);
+    const below = await brokenRepo(true);
+    try {
+      expect((await resolveGitHead(atRoot.cwd)).kind).toBe("failed");
+      // Was `no-repository` before this fix, for the identical breakage.
+      expect((await resolveGitHead(below.cwd)).kind).toBe("failed");
+    } finally {
+      await chmod(path.join(atRoot.gitRoot, ".git", "objects"), 0o700);
+      await chmod(path.join(below.gitRoot, ".git", "objects"), 0o700);
+    }
+  });
+
+  test("wiki verify refuses from a project below the git root, and writes nothing", async () => {
+    const below = await brokenRepo(true);
+    try {
+      await expect(
+        verifyPages({ cwd: below.cwd, head: await resolveGitHead(below.cwd), baseline: true }),
+      ).rejects.toThrow(/this is a git repository, but git could not answer/);
+      // Before the fix this printed "baselined 1 page(s) (no git; scope hash
+      // only)" and stamped the page.
+      expect(await readFile(below.pagePath, "utf8")).not.toContain("VerifiedScope:");
+    } finally {
+      await chmod(path.join(below.gitRoot, ".git", "objects"), 0o700);
+    }
+  });
+
+  test("a genuinely git-free project with no repository above it is still `no-repository`", async () => {
+    // The ancestor walk must not turn the supported git-free configuration
+    // into a phantom repository: it is consulted only after
+    // `--is-inside-work-tree` has already failed, and it finds nothing here.
+    const { cwd } = await project();
+    expect((await resolveGitHead(cwd)).kind).toBe("no-repository");
   });
 });
 

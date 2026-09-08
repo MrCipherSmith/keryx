@@ -44,7 +44,25 @@ export class CollaborationService {
       // is the difference between "your attribution was ignored" and "your
       // attribution was recorded", which a silent overwrite leaves ambiguous.
       if (suppliedHandoff && "from" in suppliedHandoff) throw new CollaborationServiceError("invalid_activity", "handoff.from is filled from the authenticated actor and cannot be supplied by a caller");
-      const activity = this.validate({ schemaVersion: "1.0", id: `activity-${randomUUID()}`, workspaceId: manifest.id, actorSubject: actor.subject, occurredAt: (this.input.now ?? (() => new Date()))().toISOString(), ...supplied, ...(suppliedHandoff ? { handoff: { ...suppliedHandoff, from: actor.subject } } : {}) });
+      // The caller's fields go FIRST and the resolved identity LAST, so the
+      // resolved values win. The other order — resolved first, `...supplied`
+      // after — left `actorSubject`, `id`, `workspaceId` and `occurredAt`
+      // caller-settable while only `handoff.from` was defended, and the key
+      // allowlist admits all four by name. A verifier drove it: a top-level
+      // `actorSubject: "user:the-cto"` was accepted and read back through
+      // `keryx workspace collaboration`. Nothing reaches this today — the sole
+      // writer passes a literal and MCP exposes collaboration read-only — but
+      // the stated posture of this fix is enforcement AT THE SERVICE, and a
+      // guard that holds only because nobody calls it is not one.
+      const activity = this.validate({
+        ...supplied,
+        schemaVersion: "1.0",
+        id: `activity-${randomUUID()}`,
+        workspaceId: manifest.id,
+        actorSubject: actor.subject,
+        occurredAt: (this.input.now ?? (() => new Date()))().toISOString(),
+        ...(suppliedHandoff ? { handoff: { ...suppliedHandoff, from: actor.subject } } : {}),
+      });
       await mkdir(path.dirname(this.file(manifest.id)), { recursive: true, mode: 0o700 });
       await appendFile(this.file(manifest.id), `${JSON.stringify(activity)}\n`, { mode: 0o600 });
       return normalizeCollaborationResult(activity);

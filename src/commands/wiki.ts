@@ -360,17 +360,40 @@ function printWikiValidationError(error: TemporalValidationError, json: boolean)
  * Printed on `found` rather than folded away, because "this section has always
  * been here" and "this section was deleted and came back" are different facts
  * and the second is the one a reader needs when the content surprises them.
+ *
+ * And "it came back" is itself two facts. A byte-identical restoration and an
+ * operator-accepted substitution of a wholly different document both end here,
+ * and before this they printed the same two lines: removed at T, restored at T'.
+ * The registry knew the difference and this renderer discarded it. The basis is
+ * now printed, and a substitution is labelled as one on the first line rather
+ * than left to be inferred from a paragraph a reader may not reach.
  */
 function printRemovalHistory(history: RemovalHistory | null): void {
   if (!history) {
     return;
   }
-  console.log(
-    `  history: removed ${history.removedAt} — ${history.reason}\n` +
-      (history.restoredAt === null
-        ? "  restored with byte-identical content; the tombstone is still on disk (run `keryx wiki sections sync`)."
-        : `  restored ${history.restoredAt}; the tombstone is retained in the registry's lifted record.`),
-  );
+  const lines = [`  history: removed ${history.removedAt} — ${history.reason}`];
+  if (history.restoredAt === null) {
+    lines.push(
+      "  restored with byte-identical content; the tombstone is still on disk (run `keryx wiki sections sync`).",
+    );
+  } else {
+    const evidence = history.restoredEvidence ?? "unrecorded";
+    const label =
+      evidence === "byte-identical"
+        ? "restoration — the content that came back IS the content that was removed"
+        : evidence === "accepted-substitution"
+          ? "SUBSTITUTION accepted by an operator — this is NOT the content that was removed"
+          : "basis NOT RECORDED — whether this is the same content cannot be told from the registry";
+    lines.push(
+      `  restored ${history.restoredAt} [${evidence}]: ${label}; ` +
+        "the tombstone is retained in the registry's lifted record.",
+    );
+  }
+  if (history.restoredReason) {
+    lines.push(`  basis: ${history.restoredReason}`);
+  }
+  console.log(lines.join("\n"));
 }
 
 async function runSections(args: string[]): Promise<void> {
@@ -769,7 +792,7 @@ Usage:
                          # before the run; enrich can never itself accept a page (issue #391)
   keryx wiki sections [--json]
   keryx wiki sections resolve "<pageId>#<sectionId>" [--json]
-  keryx wiki sections sync [--dry-run] [--json]
+  keryx wiki sections sync [--dry-run] [--accept-reoccupation <ref>[,<ref>…]] [--json]
   keryx wiki sections migrate [--page <path>] [--dry-run] [--json]
                          # sections are the retrieval unit: a term in Details,
                          # Main flows or Constraints is findable, and each one
@@ -777,6 +800,13 @@ Usage:
                          # id to a same-named section; 'sync' is the only write.
                          # 'migrate' inserts identity markers and changes
                          # nothing else, byte for byte.
+                         # --accept-reoccupation is the ONLY exit from a
+                         # reoccupied identity (a removed id whose address now
+                         # holds a different document). It lifts those
+                         # tombstones and records, permanently, that the
+                         # content was SUBSTITUTED and not restored — which
+                         # 'sections resolve' then prints on every read.
+                         # Accepting a page ref accepts its sections too.
   keryx wiki context
   keryx wiki backlinks <wiki-page-or-code-file>
   keryx wiki freshness [--since <rev>] [--all] [--json]

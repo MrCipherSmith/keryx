@@ -139,6 +139,57 @@ function failureDetail(result: GitCmdResult, command: string): string {
   return `\`git ${command}\` returned an unusable value`;
 }
 
+/**
+ * The nearest `.git` entry at `cwd` or any ancestor, or `null` when there is
+ * none all the way to the filesystem root.
+ *
+ * V236-01 (flow 236 T15): the probe this replaces asked only
+ * `pathExists(path.join(cwd, ".git"))`. `cwd` here is the PROJECT root, which
+ * `src/gdgraph/staleness.ts` documents may sit below the git root in a
+ * monorepo — the same fact that made `git status --porcelain` paths need
+ * `--show-prefix` there. So with `.metaproject` one directory below the git
+ * root, a repository whose object store had been made unreadable was
+ * classified `no-repository` rather than `failed`, and BOTH of the refusals
+ * this file exists to arm were bypassed. Measured, same breakage both times:
+ *
+ *   .metaproject AT the git root         → {"kind":"failed"}
+ *   .metaproject ONE LEVEL BELOW it      → {"kind":"no-repository"}
+ *
+ * `git rev-parse --git-dir` / `--show-toplevel` cannot stand in for this: with
+ * the object store unreadable BOTH exit 128 with "not a git repository", at the
+ * root and in a subdirectory alike — measured. When git cannot answer, the
+ * filesystem is the only remaining witness that a repository is there, and the
+ * ancestor walk is git's own discovery rule rather than a probe of one
+ * directory. A `.git` FILE (a linked worktree or submodule gitlink) counts, the
+ * same as a directory.
+ *
+ * This walk is consulted ONLY after `--is-inside-work-tree` has already failed:
+ * a genuinely git-free project nested somewhere under an unrelated repository
+ * has a working git that answers for the outer repository, so it never reaches
+ * here and is unaffected.
+ */
+export async function findGitEntry(cwd: string): Promise<string | null> {
+  let dir = path.resolve(cwd);
+  // A `cwd` that does not exist gets no repository credited to it. Climbing out
+  // of a path that is not there would answer a question about some ancestor
+  // directory the caller never named — and "this directory does not exist" is
+  // not evidence that a repository is present and broken.
+  if (!(await pathExists(dir))) {
+    return null;
+  }
+  for (;;) {
+    const candidate = path.join(dir, ".git");
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
 export async function resolveGitHead(cwd: string): Promise<GitHeadResolution> {
   const head = await gitCmdResult(cwd, ["rev-parse", "HEAD"]);
   if (head.kind === "ok" && SHA_PATTERN.test(head.stdout)) {
@@ -151,8 +202,10 @@ export async function resolveGitHead(cwd: string): Promise<GitHeadResolution> {
   // work-tree` answers cleanly for a corrupt-HEAD repository but reports
   // "not a git repository" when the object store is unreadable (a permission
   // change), while a `.git` entry on disk still proves a repository is there.
+  // That second signal searches `cwd` AND its ancestors — see `findGitEntry`,
+  // and V236-01 for what a cwd-only probe did to a monorepo layout.
   const insideWorkTree = await gitCmdResult(cwd, ["rev-parse", "--is-inside-work-tree"]);
-  const hasGitEntry = await pathExists(path.join(cwd, ".git"));
+  const hasGitEntry = insideWorkTree.kind === "ok" || (await findGitEntry(cwd)) !== null;
   if (insideWorkTree.kind !== "ok" && !hasGitEntry) {
     return { kind: "no-repository", detail: headDetail };
   }
