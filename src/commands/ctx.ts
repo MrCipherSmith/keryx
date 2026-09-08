@@ -18,6 +18,8 @@ import {
 } from "../ctx/lines";
 import type { OmittedRange } from "../ctx/lines";
 import { buildLossManifest, renderLossManifest } from "../ctx/manifest";
+import { cappedHeaderNote, completenessLine, rgSearchScope, scopeLine } from "../ctx/search-scope";
+import type { SearchScope, SearchTotals } from "../ctx/search-scope";
 import { maybeAutoSweepGdctx } from "../retention/auto-sweep";
 import { latestRawTarget, reserveArtifact } from "../ctx/artifact-id";
 import type { ArtifactReservation } from "../ctx/artifact-id";
@@ -211,14 +213,25 @@ async function diffAndSummarize(args: string[], config: CtxConfig): Promise<void
 async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> {
   // `--json` is OUR structured-output flag (a token-aware summary), consumed
   // here and NOT forwarded to rg (whose native `--json` emits a different,
-  // verbose stream). Strip it before building the rg command.
+  // verbose stream). `--all` is likewise ours: it asks for every match/file
+  // this run found, rendered in the same human-readable summary, in one step
+  // — the direct answer to "I need to prove this list is complete" that used
+  // to require re-reading the raw log. Both are stripped before building the
+  // rg command.
   const wantsJson = args.includes("--json");
-  const rgArgs = args.filter((arg) => arg !== "--json");
+  const wantsAll = args.includes("--all");
+  const rgArgs = args.filter((arg) => arg !== "--json" && arg !== "--all");
   if (rgArgs.length === 0) {
-    console.error('Usage: keryx ctx rg "<pattern>" [path] [--json]');
+    console.error('Usage: keryx ctx rg "<pattern>" [path] [--json] [--all]');
     process.exitCode = 1;
     return;
   }
+
+  // What this run did not look at (hidden paths, ignore files, and whether
+  // `-m`/`--max-count` makes ripgrep's own counts unreliable) — computed from
+  // the caller's own args, the same ones `buildRgCommand` forwards, so the
+  // scope reported below can never drift from what was actually run.
+  const scope = rgSearchScope(rgArgs);
 
   // `--files-with-matches`/`--files`/`--count` make rg emit bare paths (or
   // `path:count`), not the `file:line:col:text` the match parser expects — so
@@ -256,8 +269,8 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
     return;
   }
   const summary = listMode
-    ? summarizeRgFileList(command.join(" "), result, config, listMode)
-    : summarizeRg(command.join(" "), result, config);
+    ? summarizeRgFileList(command.join(" "), result, config, listMode, { scope, all: wantsAll })
+    : summarizeRg(command.join(" "), result, config, { scope, all: wantsAll });
   const artifact = await writeArtifact({
     kind: "rg",
     command: command.join(" "),
@@ -1020,6 +1033,17 @@ export function rgListMode(args: string[]): "files" | "count" | null {
   return null;
 }
 
+/** No flag lifted anything: the default a caller gets from a bare summariser call. */
+const NO_SCOPE: SearchScope = { hidden: false, ignored: false, capped: false };
+
+/** Summariser options shared by `summarizeRg` and `summarizeRgFileList`. */
+type RgSummaryOptions = {
+  /** What this run did not look at. Defaults to "nothing was lifted". */
+  scope?: SearchScope;
+  /** `--all`: render every match/file this run found, not the capped default. */
+  all?: boolean;
+};
+
 // Summarize `rg --files-with-matches` / `--files` / `--count` output, whose lines
 // are bare paths (or `path:count`), not `file:line:col:text`.
 export function summarizeRgFileList(
@@ -1027,16 +1051,22 @@ export function summarizeRgFileList(
   result: CommandResult,
   config: CtxConfig,
   mode: "files" | "count",
+  options: RgSummaryOptions = {},
 ): string {
+  const scope = options.scope ?? NO_SCOPE;
   const lines = nonEmptyLines(result.raw);
-  const shown = lines.slice(0, config.maxOutputLines);
+  const limit = options.all ? lines.length : config.maxOutputLines;
+  const shown = lines.slice(0, limit);
   const note = omissionNote(shown.length, lines.length, "files");
+  const totals: SearchTotals = { shown: shown.length, total: lines.length, unit: "files" };
 
   return `# gdctx rg (file list)
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`${shownSuffix(shown.length, lines.length)}
+${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`${shownSuffix(shown.length, lines.length)}${cappedHeaderNote(scope)}
+${scopeLine(scope)}
+${completenessLine(totals, scope)}
 
 ## Files
 
@@ -1056,7 +1086,9 @@ export function summarizeRg(
   command: string,
   result: CommandResult,
   config: CtxConfig,
+  options: RgSummaryOptions = {},
 ): string {
+  const scope = options.scope ?? NO_SCOPE;
   const lines = nonEmptyLines(result.raw);
   const matches = parseRgMatches(lines);
   const grouped = groupBy(matches, (match) => match.file);
@@ -1064,20 +1096,34 @@ export function summarizeRg(
     .map(([file, fileMatches]) => ({ file, matches: fileMatches }))
     .sort((a, b) => b.matches.length - a.matches.length);
 
-  const shownFiles = files.slice(0, config.maxGroupItems);
+  // `--all` lifts both render budgets for THIS call only — every file is
+  // listed, and every match within it — rather than raising the defaults
+  // that protect every other call. See the module comment on `--all` above.
+  const groupLimit = options.all ? files.length : config.maxGroupItems;
+  const perFileLimit = options.all ? Number.POSITIVE_INFINITY : RG_EXAMPLES_PER_FILE;
+
+  const shownFiles = files.slice(0, groupLimit);
   const shownMatches = shownFiles.reduce(
-    (total, item) => total + Math.min(item.matches.length, RG_EXAMPLES_PER_FILE),
+    (total, item) => total + Math.min(item.matches.length, perFileLimit),
     0,
   );
   const topFilesNote = omissionNote(shownFiles.length, files.length, "files");
+  const totals: SearchTotals = {
+    shown: shownMatches,
+    total: matches.length,
+    unit: "matches",
+    files: { shown: shownFiles.length, total: files.length },
+  };
 
   return `# gdctx rg summary
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-Matches: \`${matches.length}\`${shownSuffix(shownMatches, matches.length)}
+Matches: \`${matches.length}\`${shownSuffix(shownMatches, matches.length)}${cappedHeaderNote(scope)}
 Files: \`${files.length}\`${shownSuffix(shownFiles.length, files.length)}
 Raw lines: \`${lines.length}\`
+${scopeLine(scope)}
+${completenessLine(totals, scope)}
 
 ## Top Files
 
@@ -1085,7 +1131,7 @@ ${files.length > 0 ? [...shownFiles.map((item) => `- ${item.file}: ${item.matche
 
 ## Matches
 
-${renderRgMatches(files, config)}
+${renderRgMatches(files, groupLimit, perFileLimit)}
 
 ${result.stderr.trim() ? renderStderr(result.stderr, config) : ""}
 `;
@@ -1472,14 +1518,15 @@ const RG_EXAMPLES_PER_FILE = 4;
 
 function renderRgMatches(
   files: Array<{ file: string; matches: Array<{ line: string; column: string; text: string }> }>,
-  config: CtxConfig,
+  groupLimit: number,
+  perFileLimit: number,
 ): string {
   if (files.length === 0) {
     return "- none";
   }
 
-  const rendered = files.slice(0, config.maxGroupItems).map((item) => {
-    const shown = item.matches.slice(0, RG_EXAMPLES_PER_FILE);
+  const rendered = files.slice(0, groupLimit).map((item) => {
+    const shown = item.matches.slice(0, perFileLimit);
     const note = omissionNote(shown.length, item.matches.length, "matches in this file");
     return [
       `- ${item.file}`,
@@ -1619,7 +1666,7 @@ function printHelp(): void {
 Usage:
   keryx ctx status
   keryx ctx diff [--staged|--stat|<revision>]   # no args: staged + unstaged (git diff HEAD) + untracked list
-  keryx ctx rg "<pattern>"
+  keryx ctx rg "<pattern>" [path] [--json] [--all]
   keryx ctx read <file> [--mode outline|compact|full] [--base <ref>]
   keryx ctx run -- <command...>
   keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]
@@ -1634,5 +1681,12 @@ Notes:
   src/commands/ctx.ts for what building it would require.
   --lines recovers one range named by a summary's "## Omitted" manifest,
   addressed by the "raw:" line that same summary printed.
+  Every "ctx rg" summary carries a "Scope:" line (what was not searched — dot
+  paths, .gitignore'd files, binaries — so a nil result there reads as "not
+  looked at", not "not present") and a "Completeness:" line ("complete" or
+  "partial", never silent). Pass --all to render every match/file in one step
+  instead of re-reading the raw log; pass --json for the full machine-readable
+  set. -m/--max-count makes ripgrep's own counts unreliable, which the
+  Completeness line reports as "unknown" rather than trusting them.
 `);
 }
