@@ -483,13 +483,63 @@ export async function reachableModules(options: {
 }
 
 /**
- * Modules the bundler reached from `entry` that the direct scan's edges never
- * named — this module's resolver blind spot, made visible by a different tool.
+ * Every module reachable from `entry` by walking `edges` as a directed graph,
+ * entry included.
+ *
+ * `edges` ordinarily comes from scanning the WHOLE tree (`checkImportPolicy`
+ * has no notion of "this run is about one entry"), so it names every module
+ * anything anywhere in the scan imports — not only what `entry` itself
+ * reaches. Diffing the bundler's reach against that whole-scan name set was
+ * the bug this closure exists to fix: an import statement written in a file
+ * that has nothing to do with `entry` (a sibling command, an orphan barrel,
+ * dead code nothing calls) was enough to mark a module "named", which made a
+ * real resolver blind spot at `entry` disappear the moment ANY file anywhere
+ * under `root` happened to spell that specifier out literally. Measured on
+ * three fixtures while fixing this: a leaf reached only through a computed
+ * specifier was correctly reported as a gap when nothing else named it, and
+ * silently reported as NOT a gap the moment one unrelated file elsewhere in
+ * the tree imported the same leaf directly — even though `entry` still could
+ * not reach it by any edge this scan recorded. Walking the closure from
+ * `entry` alone removes that dependence on what else happens to exist in the
+ * scan.
+ */
+function closureFrom(entry: string, edges: readonly ImportEdge[]): Set<string> {
+  const outEdges = new Map<string, string[]>();
+  for (const edge of edges) {
+    const targets = outEdges.get(edge.from);
+    if (targets === undefined) {
+      outEdges.set(edge.from, [edge.to]);
+    } else {
+      targets.push(edge.to);
+    }
+  }
+  const reached = new Set<string>([entry]);
+  const queue = [entry];
+  while (queue.length > 0) {
+    const current = queue.pop() as string;
+    for (const next of outEdges.get(current) ?? []) {
+      if (!reached.has(next)) {
+        reached.add(next);
+        queue.push(next);
+      }
+    }
+  }
+  return reached;
+}
+
+/**
+ * Modules the bundler reached from `entry` that a direct-edge walk starting
+ * at `entry` never named — this module's resolver blind spot, made visible by
+ * a different tool.
  *
  * A non-empty result does NOT mean a policy violation. It means the direct
  * graph is incomplete there, and the reason is worth knowing: a computed
  * specifier, a resolution convention `resolveSpecifier()` does not implement,
  * or a `tsconfig` path alias added after this was written.
+ *
+ * `named` is deliberately the closure OVER `edges` STARTING FROM `entry`, not
+ * "every module any edge in `edges` mentions" — see `closureFrom()` for why
+ * that distinction is load-bearing rather than cosmetic.
  *
  * Only modules under `root` are considered — a reached `node_modules` file is
  * outside the policy's scope, not a gap in it.
@@ -500,11 +550,7 @@ export async function resolutionGaps(options: {
   readonly edges: readonly ImportEdge[];
 }): Promise<string[]> {
   const { entry, root, edges } = options;
-  const named = new Set<string>([entry]);
-  for (const edge of edges) {
-    named.add(edge.from);
-    named.add(edge.to);
-  }
+  const named = closureFrom(entry, edges);
   const reached = await reachableModules({ entry, root });
   return reached.filter((module) => module.startsWith(root) && !named.has(module)).sort();
 }

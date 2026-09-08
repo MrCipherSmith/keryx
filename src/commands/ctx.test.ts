@@ -795,3 +795,117 @@ test("a denied read and a missing read are indistinguishable and leak no path", 
     await rm(root, { recursive: true, force: true });
   }
 }, 60_000);
+
+// ---------------------------------------------------------------------------
+// Flow 238 / T13 — completeness at the point of use. Three reviews refused to
+// use `keryx ctx rg` for a defect enumeration and fell back to raw search:
+// eliding matches is fine for finding something and useless for proving a
+// list of sites is complete. `Scope:`/`Completeness:` close that gap.
+
+test("summarizeRg carries Scope and Completeness lines on every run, capped or not", () => {
+  const raw = Array.from({ length: 50 }, (_, i) => `src/a.ts:${i + 1}:1:hit ${i + 1}`).join("\n");
+
+  const partial = summarizeRg("rg -- x src/a.ts", result(raw), CONFIG);
+  expect(partial).toContain("Scope: `ripgrep defaults`");
+  expect(partial).toContain("Completeness: `partial`");
+
+  // The realistic failure named by this task: a caller tests a two-hit query,
+  // sees no marker, and trusts the same tool on a fifty-hit one. Both runs
+  // must carry the same two lines, even the small one that elides nothing.
+  const complete = summarizeRg("rg -- x src/a.ts", result("src/a.ts:1:1:only hit"), CONFIG);
+  expect(complete).toContain("Scope: `ripgrep defaults`");
+  expect(complete).toContain("Completeness: `complete`");
+});
+
+test("summarizeRg reports the header count as unreliable when -m capped ripgrep itself", () => {
+  // Measured: `keryx ctx rg -m 1 "omitted" src/ctx/lines.ts` printed
+  // `Matches: 1` for a file holding 19, with no marker anywhere — the header
+  // count is not always a true total, and this is the one case where it is
+  // not: `-m` makes ripgrep stop counting, not just keryx stop rendering.
+  const out = summarizeRg("rg -m 1 -- x src/a.ts", result("src/a.ts:1:1:hit"), CONFIG, {
+    scope: { hidden: false, ignored: false, capped: true },
+  });
+  expect(out).toContain("Matches: `1` (capped by -m/--max-count — not a total)");
+  expect(out).toContain("Completeness: `unknown`");
+  expect(out).not.toContain("Completeness: `complete`");
+});
+
+test("summarizeRg --all renders every match and every file, not the default caps", () => {
+  // 20 files x 3 hits: more than maxGroupItems (12) files and more than
+  // RG_EXAMPLES_PER_FILE (4) hits per file — both defaults would cut this.
+  const raw = Array.from({ length: 20 }, (_, f) =>
+    Array.from({ length: 3 }, (_, h) => `src/f${f}.ts:${h + 1}:1:hit ${h + 1}`).join("\n"),
+  ).join("\n");
+  const out = summarizeRg("rg -- x src", result(raw), CONFIG, { all: true });
+
+  expect(out).toContain("Matches: `60`");
+  expect(out).toContain("Completeness: `complete`");
+  expect(out).not.toContain("omitted");
+  // Every file's third hit is present, not just the capped four.
+  for (let f = 0; f < 20; f += 1) {
+    expect(out).toContain(`- src/f${f}.ts`);
+    expect(out).toContain(`3:1 hit 3`);
+  }
+});
+
+test("summarizeRgFileList also carries Scope and Completeness, and --all lifts its cap", () => {
+  const many = Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`).join("\n");
+  const capped = summarizeRgFileList("rg --files-with-matches foo", result(many), CONFIG, "files");
+  expect(capped).toContain("Scope: `ripgrep defaults`");
+  expect(capped).toContain("Completeness: `partial`");
+
+  const all = summarizeRgFileList("rg --files-with-matches foo", result(many), CONFIG, "files", {
+    all: true,
+  });
+  expect(all).toContain("Completeness: `complete`");
+  expect(all).toContain("- src/f199.ts");
+});
+
+// End-to-end: `.metaproject/` is unreachable by default not through a keryx
+// exclusion or `.gitignore`, but through ripgrep's own hidden-path skip — and
+// a caller must be told which, not shown an empty result indistinguishable
+// from "nothing there".
+test("ctx rg: a nil result under .metaproject/ reads as excluded, not as absent", async () => {
+  const root = await initTinyProject();
+  try {
+    await writeFile(path.join(root, ".metaproject", "secret-needle-9f3a.md"), "found me\n", "utf8");
+    // A visible sibling file, so the directory is not ENTIRELY hidden content
+    // — otherwise ripgrep refuses to search at all ("No files were searched")
+    // rather than reporting a clean zero, which would test a different rg
+    // behaviour than the one this case exists to cover.
+    await writeFile(path.join(root, "visible.txt"), "nothing to find here\n", "utf8");
+
+    const bare = await runCtx(root, ["rg", "found me"]);
+    expect(bare.exitCode).not.toBe(0); // ripgrep's own no-match exit code
+    expect(bare.stdout).toContain("Matches: `0`");
+    // The scope line is what turns that zero from a false-clean into an
+    // honest "not searched here" — present even on a run that found nothing.
+    expect(bare.stdout).toContain(".metaproject/");
+    expect(bare.stdout).toContain('"not looked at", not "not present"');
+
+    const hidden = await runCtx(root, ["rg", "--hidden", "found me"]);
+    expect(hidden.exitCode).toBe(0);
+    expect(hidden.stdout).toContain("secret-needle-9f3a.md");
+    expect(hidden.stdout).toContain("Completeness: `complete`");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);
+
+test("ctx rg --all renders a full result at the real CLI, not just in the summariser", async () => {
+  const root = await initTinyProject();
+  try {
+    const many = Array.from({ length: 30 }, (_, i) => `line ${i}: unique-token-c7d1`).join("\n");
+    await writeFile(path.join(root, "many.txt"), `${many}\n`, "utf8");
+
+    const capped = await runCtx(root, ["rg", "unique-token-c7d1", "many.txt"]);
+    expect(capped.stdout).toContain("Completeness: `partial`");
+    expect(capped.stdout).not.toContain("line 29:");
+
+    const all = await runCtx(root, ["rg", "unique-token-c7d1", "many.txt", "--all"]);
+    expect(all.stdout).toContain("Completeness: `complete`");
+    expect(all.stdout).toContain("line 29:");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 60_000);

@@ -158,6 +158,18 @@ jobs:
       # this contract cannot drift out from under CI silently. No verdict line
       # (or a verdict line disagreeing with the exit code) means the command did
       # not run: `unknown`, which is neither a pass nor a red baseline.
+      #
+      # Both greps below are FIXED STRINGS (`-F`), matching the pass side's
+      # discipline exactly (flow 240 T9). The fail side used to be
+      # `grep -Eq 'FAIL .*[0-9]+ error\(s\)'` — a regex loose enough that ANY
+      # line anywhere in the log containing the word FAIL and, somewhere later,
+      # a number followed by `error(s)` would classify as `fail`, whether or not
+      # it was the verdict line at all (e.g. a foreign line like
+      # `FAIL src/x.test.ts had 3 error(s) reported` at exit 1). `FAIL — ` (with
+      # the em dash `handleValidate` actually emits) is the fixed prefix of the
+      # real verdict line and nothing else in this command's output can produce
+      # it, the same way the pass side's full sentence can't be produced by
+      # accident.
       - name: Validate main and publish provenance
         id: baseline
         run: |
@@ -168,7 +180,7 @@ jobs:
           cat validate.log
           if [ "$code" -eq 0 ] && grep -Fq 'workspace is Metaproject Standard compliant' validate.log; then
             verdict=pass
-          elif [ "$code" -ne 0 ] && grep -Eq 'FAIL .*[0-9]+ error\(s\)' validate.log; then
+          elif [ "$code" -ne 0 ] && grep -Fq 'FAIL — ' validate.log; then
             verdict=fail
           else
             verdict=unknown
@@ -211,7 +223,7 @@ jobs:
           cat validate.log
           if [ "$code" -eq 0 ] && grep -Fq 'workspace is Metaproject Standard compliant' validate.log; then
             verdict=pass
-          elif [ "$code" -ne 0 ] && grep -Eq 'FAIL .*[0-9]+ error\(s\)' validate.log; then
+          elif [ "$code" -ne 0 ] && grep -Fq 'FAIL — ' validate.log; then
             verdict=fail
           else
             verdict=unknown

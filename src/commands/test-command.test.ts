@@ -221,6 +221,66 @@ test("keryx test coverage-map build says whether the file set behind the map was
 });
 
 // ---------------------------------------------------------------------------
+// V237-01 (flow 237 T13). `keryx test coverage-map status` computed staleness
+// as `map.gitRef && currentRef && map.gitRef !== currentRef` — and `gitRefOf`
+// answered `null` for BOTH "no repository" and "git ran and refused", so a
+// genuinely stale map printed `stale: no` the moment git broke. The three
+// states are asserted together, against ONE map, because the defect is only
+// visible as the third disagreeing with the second.
+// ---------------------------------------------------------------------------
+
+test("keryx test coverage-map status says `unknown`, not `no`, when the current gitRef cannot be determined (V237-01)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 1;\n");
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+  const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd, encoding: "utf8" }).trim();
+
+  const artifact = path.join(cwd, ".metaproject", "data", "testing", "coverage-map.json");
+  mkdirSync(path.dirname(artifact), { recursive: true });
+  writeFileSync(
+    artifact,
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      gitRef: head,
+      map: { "src/a.test.ts": { coveredFiles: ["src/a.ts"] } },
+    }),
+  );
+
+  const statusLine = async (): Promise<string> => {
+    captured = [];
+    await testCommand(["coverage-map", "status"]);
+    return captured.find((line) => line.startsWith("stale:")) ?? "(no stale line)";
+  };
+
+  // 1. The refs match — a confirmed "no".
+  expect(await statusLine()).toBe("stale: no");
+
+  // 2. HEAD genuinely moves — a confirmed "yes".
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "second"]);
+  expect(await statusLine()).toContain("yes (falls back to static selection)");
+
+  // 3. The SAME map, still stale, with git genuinely broken on disk: the
+  //    comparison cannot be made, so it must not be reported as agreement.
+  rmSync(path.join(cwd, ".git"), { recursive: true, force: true });
+  const broken = await statusLine();
+  expect(broken).toContain("unknown");
+  expect(broken).toContain("NOT evidence the map is current");
+  expect(broken).not.toBe("stale: no");
+});
+
+// ---------------------------------------------------------------------------
 // Flow 237 T6 defect 3 (AFC-28/AC-28, "a different checkout or consumer sees
 // changed grounds before it acts"): `keryx test status` (runStatus, ./test.ts)
 // printed `latest status: pass` with no qualifier at all saying whether that

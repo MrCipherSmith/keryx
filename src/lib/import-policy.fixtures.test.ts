@@ -244,6 +244,60 @@ test("resolutionGaps reports a module the bundler reached that the direct scan m
   expect(gaps).toContain(facade);
 });
 
+/**
+ * THE MASKING REGRESSION (flow 239 T10).
+ *
+ * `resolutionGaps()` used to build its "named" set from EVERY edge the scan
+ * produced across the whole `root`, not from edges reachable from `entry`. So
+ * a module `entry` reaches only through a computed specifier — invisible to
+ * the direct scan, but foldable by the real bundler — was correctly reported
+ * as a gap only when NOTHING ELSE anywhere under `root` happened to name it.
+ * One unrelated file in another zone spelling out the same specifier
+ * literally was enough to erase the gap, even though `entry` still could not
+ * reach that module by any edge this scan recorded.
+ *
+ * This asserts the gap survives an unrelated import elsewhere in the tree —
+ * it must fail if `resolutionGaps()` goes back to diffing against "every edge
+ * in the scan" instead of the closure starting at `entry`.
+ */
+test("resolutionGaps still reports a gap at entry even when an unrelated file elsewhere names the same leaf", async () => {
+  const root = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-gaps-masking-")));
+  try {
+    const { mkdir, writeFile } = await import("node:fs/promises");
+    await mkdir(path.join(root, "harness"), { recursive: true });
+    await mkdir(path.join(root, "commands"), { recursive: true });
+    await writeFile(path.join(root, "harness", "leaf.ts"), `export const CLIENT = "leaf";\n`);
+    await writeFile(
+      path.join(root, "harness", "entry.ts"),
+      // A concat specifier: invisible to the direct scan, but the real
+      // bundler folds the two literals and resolves it — the same shape as
+      // `resolutionGaps reports a module the bundler reached` above, just
+      // produced by a computed specifier instead of a withheld edge.
+      `export async function load() { return import("./le" + "af"); }\n`,
+    );
+    // The unrelated import that used to mask the gap: nothing to do with
+    // `entry`, in a different zone entirely, but it names `leaf.ts` directly.
+    await writeFile(
+      path.join(root, "commands", "unrelated.ts"),
+      `import { CLIENT } from "../harness/leaf";\nexport const x = CLIENT;\n`,
+    );
+
+    const entry = path.join(root, "harness", "entry.ts");
+    const report = await checkImportPolicy({ root });
+    const leaf = path.join(root, "harness", "leaf.ts");
+
+    // The direct scan itself already proves `entry` has no edge to `leaf`:
+    // the only edge naming `leaf` comes from the unrelated file.
+    expect(report.edges.some((e) => e.to === leaf)).toBe(true);
+    expect(report.edges.some((e) => e.from === entry && e.to === leaf)).toBe(false);
+
+    const gaps = await resolutionGaps({ entry, root, edges: report.edges });
+    expect(gaps).toContain(leaf);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 // ── Anti-vacuous ─────────────────────────────────────────────────────────────
 
 test("the bundler half also refuses an entry that is not there", async () => {

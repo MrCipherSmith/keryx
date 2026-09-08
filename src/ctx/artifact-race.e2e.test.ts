@@ -30,6 +30,23 @@ const CLI = path.join(REPO_ROOT, "src", "cli.ts");
 /** How many real CLI processes race for an artifact name. */
 const RUNS = 24;
 
+/**
+ * Every test below spawns `RUNS` (or more) REAL `bun` processes and waits for
+ * every one of them to exit — not a fixed amount of work, but `RUNS` full
+ * runtime start-ups competing for the scheduler. `120_000` was the previous
+ * budget and it was already load-bearing, not comfortable: reproduced by
+ * running this file 20-30x concurrently alongside a full `bun test` in the
+ * background, "concurrent ctx runs on the real clock each keep their own
+ * evidence" failed at `[120125.85ms] this test timed out after 120000ms` —
+ * 125ms over a 120-SECOND budget, with the one process that had not finished
+ * printing nothing (`MARKER-0 printed no raw: pointer`) once bun tore the test
+ * down. The 24 real spawns were still doing real work; the budget was simply
+ * too tight for the contention this file is deliberately built to survive.
+ * Doubled here, not because the mechanism changed, but because the margin
+ * measured was effectively zero.
+ */
+const REAL_PROCESS_RACE_TIMEOUT_MS = 240_000;
+
 let projectRoot: string;
 
 beforeEach(async () => {
@@ -151,7 +168,7 @@ test(
 
     await expectEveryRunKeptItsOwnEvidence(results);
   },
-  120_000,
+  REAL_PROCESS_RACE_TIMEOUT_MS,
 );
 
 test(
@@ -159,7 +176,7 @@ test(
   async () => {
     await expectEveryRunKeptItsOwnEvidence(await raceCtxRuns(RUNS));
   },
-  120_000,
+  REAL_PROCESS_RACE_TIMEOUT_MS,
 );
 
 test(
@@ -188,5 +205,5 @@ test(
     expect(command, "latest.md did not name a command").toBeDefined();
     expect(raw.trim()).toBe(command as string);
   },
-  120_000,
+  REAL_PROCESS_RACE_TIMEOUT_MS,
 );

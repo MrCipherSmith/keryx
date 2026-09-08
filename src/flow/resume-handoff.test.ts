@@ -48,6 +48,43 @@ afterEach(async () => {
 
 type Run = { code: number | null; stdout: string; stderr: string };
 
+/**
+ * Every test below drives the REAL CLI as a child process — several spawns of
+ * `keryx` per test through `startedFlow`/`keryx`, plus `interruptAWorker`'s own
+ * up-to-20s wait for a real worker process to open its attempt before it can be
+ * SIGKILLed. None of that is bounded by anything smaller than this budget, so
+ * bun's 5s default was already too tight even before counting load: measured on
+ * this repository, a run of this file alone takes low seconds, but under full
+ * parallel `bun test` — dozens of files each spawning their own child
+ * processes — process scheduling alone can push a single test past 5s with no
+ * change to the code under test. That surfaced as `keryx` children killed
+ * mid-spawn (SIGTERM, exit 143) when bun tore down a "timed out" test, which is
+ * a false failure about scheduler contention, not about resume/handoff
+ * behavior. Sized well above the 20s worst case inside `interruptAWorker` plus
+ * room for the surrounding `keryx()` calls, matching the convention used for
+ * other CLI-spawning tests in this repository (e.g. `src/commands/ctx.test.ts`).
+ *
+ * `60_000` (this constant's previous value) turned out to be the same failure
+ * one order of magnitude up, not a fix of it: reproduced by running 4 copies of
+ * this file concurrently alongside unrelated stress load (20+ copies of
+ * `src/ctx/hook-native-search.test.ts` plus a full `bun test` in the
+ * background). Every copy failed on the FIRST test, "a SIGKILLed worker leaves
+ * an attempt no later process can mistake for 'never started'", at
+ * `[60005-60021ms] this test timed out after 60000ms` — 5-21ms over a
+ * 60-SECOND budget — and bun's teardown then killed the NEXT test's
+ * freshly-spawned `keryx flow init` mid-flight (`Received: 143`), the exact
+ * "torn down mid-spawn" collateral failure the paragraph above already names,
+ * just no longer prevented once the ceiling itself is this close. "`flow
+ * status` separates an open attempt from a closed one, not just by count" does
+ * MORE real `keryx()` round-trips than that first test (`interruptAWorker` up
+ * to 20s, then THREE sequential real CLI calls rather than one or two), so it
+ * is the test most exposed to the same near-zero margin under load. Tripled
+ * here for the same reason `src/ctx/artifact-race.e2e.test.ts`'s own
+ * real-process budget was doubled after an equivalent measured near-miss: the
+ * margin was effectively zero, not comfortable.
+ */
+const REAL_PROCESS_TEST_TIMEOUT_MS = 180_000;
+
 /** One fresh `keryx` process in `cwd`. Shares no state with any other run. */
 async function keryx(cwd: string, args: string[]): Promise<Run> {
   const child = Bun.spawn([process.execPath, CLI, ...args], {
@@ -174,7 +211,7 @@ test("a SIGKILLed worker leaves an attempt no later process can mistake for 'nev
 
   expect(fresh.stdout).toContain("no recorded attempt");
   expect(fresh.stdout).not.toContain("UNKNOWN");
-});
+}, REAL_PROCESS_TEST_TIMEOUT_MS);
 
 test("the resume state reaches a programmatic consumer, not only the human line", async () => {
   const root = await startedFlow();
@@ -189,7 +226,7 @@ test("the resume state reaches a programmatic consumer, not only the human line"
   expect(decision.resume.kind).toBe("unresolved");
   expect(decision.resume.reason).toBe("attempt-not-closed");
   expect(decision.unresolved.map((entry) => entry.task.id)).toEqual(["T1"]);
-});
+}, REAL_PROCESS_TEST_TIMEOUT_MS);
 
 test("`flow status` separates an open attempt from a closed one, not just by count", async () => {
   const root = await startedFlow();
@@ -206,7 +243,7 @@ test("`flow status` separates an open attempt from a closed one, not just by cou
   const closed = await keryx(root, ["flow", "status", "001"]);
   expect(closed.stdout).toContain("2 attempt(s)");
   expect(closed.stdout).not.toContain("UNKNOWN");
-});
+}, REAL_PROCESS_TEST_TIMEOUT_MS);
 
 test("an open attempt behind the next task is reported, not hidden behind it", async () => {
   const root = await startedFlow();
@@ -221,7 +258,7 @@ test("an open attempt behind the next task is reported, not hidden behind it", a
   expect(next.stdout).toContain("T2");
   expect(next.stdout).toContain("T3 has an attempt opened");
   expect(next.stdout).toContain("other task(s) carry an attempt with no recorded end");
-});
+}, REAL_PROCESS_TEST_TIMEOUT_MS);
 
 test("a completed task is 'already happened', even though its log ends open", async () => {
   const root = await startedFlow();
@@ -244,7 +281,7 @@ test("a completed task is 'already happened', even though its log ends open", as
   expect(t1?.status).toBe("done");
   expect(t1?.attempts?.log.at(-1)?.outcome).toBe("started");
   expect(taskResumeState(t1 as FlowTask).kind).toBe("done");
-});
+}, REAL_PROCESS_TEST_TIMEOUT_MS);
 
 // ---------------------------------------------------------------------------
 // The shapes a crash cannot produce, but a hand-edit or a truncated file can.
