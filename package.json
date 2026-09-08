@@ -45,7 +45,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc --project tsconfig.scripts.json --noEmit",
     "test": "bun test",
-    "test:core": "bun test src/cli src/core src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/",
+    "test:core": "bun test src/cli src/core src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/",
     "test:client:terminal": "bun test src/tui/ src/commands/shell",
     "test:client:streaming": "bun test src/harness/provider/",
     "test:client:cancel-resume": "bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/commands/sessions",

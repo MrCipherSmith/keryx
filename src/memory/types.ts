@@ -344,7 +344,14 @@ export type MemoryTransitionResult = {
 export type MemoryCheckInput = { cwd: string };
 export type MemoryCheckIssue = {
   path: string;
-  kind: "metadata" | "version" | "link" | "dedup" | "conflict" | "index";
+  // `cross-layer` (flow 242, lane E): a reference from this entry into another
+  // knowledge layer — a wiki page link or a `keryx:page/...` section identity —
+  // that no longer resolves. Kept apart from `link`, which is the
+  // `Related Scopes` → `Files:` filesystem check and answers a different
+  // question: `link` says a source file is missing, `cross-layer` says the
+  // KNOWLEDGE this entry is built on was removed, is being removed, or cannot
+  // be decided. See `./cross-layer.ts`.
+  kind: "metadata" | "version" | "link" | "dedup" | "conflict" | "index" | "cross-layer";
   message: string;
 };
 export type MemoryCheckResult = { ok: boolean; issues: MemoryCheckIssue[] };

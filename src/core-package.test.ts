@@ -409,7 +409,14 @@ test("npm pack ships no test file — asked of npm, not of the manifest", () => 
   expect(files.some((f) => f.startsWith("src/gdgraph/"))).toBe(true);
 
   expect(files.filter((f) => /\.(test|spec)\.[cm]?[jt]sx?$/.test(f))).toEqual([]);
-});
+  // Spawning npm and letting it walk the tree takes a couple of seconds idle
+  // and crossed bun's five-second default under a full parallel run — it was
+  // measured failing at 5052ms while passing alone. A guard that is only green
+  // when the machine is quiet is not evidence, and every acceptance gate here
+  // rests on the full run being green. Stated as a number, following the
+  // budget the compile-spawning test in this same file already carries, so a
+  // real regression in pack cost stays visible against it.
+}, 120_000);
 
 test("the gates package.json declares are the gates CI actually runs", () => {
   // Defect class this repository keeps recording: a capability that lives in a

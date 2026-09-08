@@ -42,6 +42,16 @@ export async function syncCommand(args: string[]): Promise<void> {
   console.log(`HEAD: ${head.commit.slice(0, 8)} (${head.branch})`);
   console.log("");
 
+  // The deletion window, captured BEFORE the module loop.
+  //
+  // `applyModule` advances gdgraph's provenance to HEAD, so a window computed
+  // after the loop is always empty and every unresolved import comes back
+  // unattributable — measured on the fixture, where `src/billing.ts` had
+  // demonstrably just been deleted and the stage still reported "the deletion
+  // window was checked and is EMPTY". The window belongs to the state sync
+  // FOUND, not the state it leaves.
+  const deletedFiles = await deletedCodeFiles(cwd);
+
   let anyStale = false;
   for (const module of SYNCED_MODULES) {
     const provenance = await readProvenance(cwd, module);
@@ -122,8 +132,186 @@ export async function syncCommand(args: string[]): Promise<void> {
     console.log("");
   }
 
+  await runForgettingStage(cwd, { apply, at, args, deletedFiles });
+
   if (!apply && anyStale) {
     process.exitCode = 0; // advisory; hooks decide what to do with the report
+  }
+}
+
+// --- forgetting (flow 242, lane E) -------------------------------------------
+//
+// `keryx sync` is the project's FULL RECONCILE — the thing the post-merge and
+// post-checkout hooks run so the derived layers keep step with the code. It
+// reconciled exactly one kind of change: code. Measured on a scratch project
+// where a wiki page, a memory entry and a graph node all described the same
+// thing and the page and its source file were deleted:
+//
+//     $ keryx sync --apply
+//     ## gdgraph
+//       since da61a595: +0 added · ~0 changed · -1 deleted
+//         - src/billing.ts
+//     ## gdwiki
+//       → updated + provenance advanced
+//       - pruned orphan page (module removed): …/components/src.md
+//     ## memory
+//       → updated + provenance advanced
+//
+// Not one word about the deleted wiki page. `diffSince` is filtered through
+// `codeOnly`, so a deletion under `.metaproject/` is invisible to every module
+// branch above; and nothing here has ever called `syncSectionRegistry`, so the
+// one mechanism in the codebase that records a removal did not run. After a
+// FULL reconcile, `wiki sections resolve` on the deleted identity still
+// answered `pending-tombstone` — the deletion was unrecorded, and the reconcile
+// that was supposed to notice it reported success.
+//
+// This stage is the answer, and it always runs — with and without `--apply`.
+// Without it, the report is the whole output. With it, the identity layer is
+// synced (the tombstone is written) and the deletion is journalled.
+//
+// Why the report is the answer rather than a cascade, and why the journal is a
+// separate file: `../forgetting/propagation.ts` and `../forgetting/journal.ts`
+// carry the reasoning at length.
+//
+// This function DECIDES nothing. It parses two flags, reads the local git
+// identity (a property of the invocation, which is the transport's to know),
+// hands all of it to `../forgetting/service.ts`, and prints. The reconcile —
+// which layer is written, what each layer is asked, what goes in the trail —
+// lives in the owner, reached through its one facade. That is the import-policy
+// rule (`src/lib/import-policy.ts`) and it is also the right shape: what the
+// system answers for a reference into deleted knowledge must not be a property
+// of the CLI that happened to ask.
+async function runForgettingStage(
+  cwd: string,
+  options: { apply: boolean; at: string; args: string[]; deletedFiles: string[] },
+): Promise<void> {
+  const { reconcileForgetting, deletionJournalPath } = await import("../forgetting/service");
+
+  console.log("## forgetting");
+
+  const { identity, report, trail } = await reconcileForgetting({
+    cwd,
+    apply: options.apply,
+    at: options.at,
+    observedBy: "keryx sync --apply",
+    reason: flagValue(options.args, "--reason"),
+    actor: flagValue(options.args, "--actor"),
+    envActor: process.env["KERYX_ACTOR"],
+    gitIdentity: await gitUserEmail(cwd),
+    // The deletion window, captured by the caller before the module loop
+    // advanced any provenance. Without it no unresolved import is attributed to
+    // a deletion at all: the graph cannot tell an import whose target was
+    // removed from one that never resolved.
+    deletedFiles: options.deletedFiles,
+  });
+
+  if (identity.refusal) {
+    console.log(`  ! the identity layer REFUSED to record the removal — ${identity.refusal}`);
+  }
+
+  // The short form is only taken when there is genuinely nothing to say. A
+  // layer holding unclassified references has something to say — suppressing
+  // that behind a "nothing to report" line is the same silence in a new place.
+  const anyUnclassified = report.layers.some((layer) => layer.unclassified !== null);
+  if (report.removed.length === 0 && report.status === "clean" && !anyUnclassified) {
+    console.log("  no removed knowledge on record, and no layer holds a reference into removed knowledge.");
+    console.log(`  not examined: ${report.notExamined.join(", ") || "none"}`);
+    console.log("");
+    return;
+  }
+
+  console.log(`  status: ${report.status} (over the examined layers)`);
+  console.log(`  not examined: ${report.notExamined.join(", ") || "none"}`);
+
+  for (const identityRecord of report.removed) {
+    console.log(`  - removed: ${identityRecord.ref}${identityRecord.page ? ` (${identityRecord.page})` : ""}`);
+    // The observed response, not an inventory line. AC7: a confirmation has to
+    // show what the system ANSWERS for a reference into deleted knowledge.
+    console.log(`      looked up now, it ${identityRecord.observedResponse}`);
+  }
+
+  for (const layer of report.layers) {
+    const verb = layer.propagated ? "propagated" : "NOT propagated";
+    console.log(`  · ${layer.layer}: ${verb} [${layer.inspection}]`);
+    console.log(`      ${layer.cause}`);
+    for (const dangling of layer.dangling) {
+      console.log(`      ! ${dangling.holder} → ${dangling.reference} [${dangling.verdict}]`);
+      console.log(`        ${dangling.detail}`);
+    }
+    if (layer.unclassified) {
+      // Counted, not listed, and never dropped: these are real unresolved
+      // references that this run cannot attribute to a deletion. Listing them
+      // would bury the ones it can; omitting them would be the silence.
+      console.log(`      ? ${layer.unclassified.count} unclassified — ${layer.unclassified.cause}`);
+    }
+  }
+
+  if (trail === null) {
+    console.log("");
+    return;
+  }
+
+  const { append, requestedBy, grounds } = trail;
+  if (append.status === "appended") {
+    console.log(`  trail: appended to ${deletionJournalPath(cwd)}`);
+    console.log(
+      `      requested by: ${requestedBy.value ?? "unknown"} [${requestedBy.basis}] — ${requestedBy.detail}`,
+    );
+    console.log(`      on the basis: ${grounds.value ?? "none recorded"} [${grounds.basis}] — ${grounds.detail}`);
+  } else {
+    // The removal may well have happened. Saying it was recorded when the
+    // record did not land is the one thing this stage must never do.
+    console.log(`  ! trail NOT recorded — ${append.reason}`);
+  }
+  console.log("");
+}
+
+/**
+ * Code files git says were deleted since the graph was built.
+ *
+ * Reuses the diff the module loop above already runs, against gdgraph's own
+ * provenance — the graph is what the unresolved edges live in, so its baseline
+ * is the right window to judge them against. Every failure here (no provenance,
+ * a baseline commit this repository no longer has) yields an EMPTY window, and
+ * an empty window attributes nothing: the report then says so rather than
+ * guessing which unresolved imports were once resolvable.
+ */
+async function deletedCodeFiles(cwd: string): Promise<string[]> {
+  const provenance = await readProvenance(cwd, "gdgraph");
+  if (!provenance) {
+    return [];
+  }
+  const diff = await diffSince(cwd, provenance.commit);
+  return diff === null ? [] : codeOnly(diff).deleted;
+}
+
+/** `--flag value` (and `--flag=value`). Returns undefined when absent. */
+function flagValue(args: string[], flag: string): string | undefined {
+  const index = args.indexOf(flag);
+  if (index >= 0) {
+    const next = args[index + 1];
+    return next !== undefined && !next.startsWith("--") ? next : undefined;
+  }
+  const inline = args.find((arg) => arg.startsWith(`${flag}=`));
+  return inline ? inline.slice(flag.length + 1) : undefined;
+}
+
+/**
+ * The local git identity, or undefined.
+ *
+ * Undefined is a real answer here and is passed through as such: it becomes an
+ * `unknown` requester, never a blank one and never a fabricated one.
+ */
+async function gitUserEmail(cwd: string): Promise<string | undefined> {
+  try {
+    const proc = Bun.spawn(["git", "config", "user.email"], { cwd, stdout: "pipe", stderr: "ignore" });
+    if ((await proc.exited) !== 0) {
+      return undefined;
+    }
+    const value = (await new Response(proc.stdout).text()).trim();
+    return value.length > 0 ? value : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -205,8 +393,23 @@ Usage:
   keryx sync install-hooks    # run sync on git pull (post-merge) + branch switch (post-checkout)
   keryx sync uninstall-hooks
 
+Options for the forgetting stage (with --apply):
+  --reason <text>   why the knowledge was removed. Recorded on the tombstone and
+                    in the deletion journal as a STATED basis. Without it the
+                    journal records a machine-derived basis, marked as derived.
+  --actor <who>     at whose request. Also read from KERYX_ACTOR. Without either,
+                    the journal records the requester as unknown — it is never
+                    filled in from the local git identity, which says who ran the
+                    command, not who asked.
+
 Each artifact records the commit it was built from; sync diffs it against HEAD.
 Wired to post-merge / post-checkout git hooks so pull/fetch/branch-switch keep
 the derived layers in step.
+
+The forgetting stage runs every time. It reports every knowledge identity the
+wiki no longer carries, what the system now ANSWERS when that identity is looked
+up, and — for every layer — whether the removal propagated there, with a cause
+either way. It does not cascade: a removal in one layer never deletes authored
+content in another.
 `);
 }
