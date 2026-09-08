@@ -449,7 +449,14 @@ describe("startup preconditions", () => {
   test("no non-test file supplies a weakening seam", () => {
     // Held by reading the source rather than by the comment on each field.
     expect(baselineSuppliers(treeSources(SRC_ROOT))).toEqual([]);
-  });
+  }  // A whole-tree scan, and bun's default per-test budget is five seconds.
+  // `src/` crossed 1,221 files and 15 MB during this programme and a serial
+  // read now takes about nineteen, so this timed out DETERMINISTICALLY — in
+  // isolation, not only under load. A timeout reads as a failing test, but the
+  // real consequence is worse: the property below was not being checked at
+  // all. A guard that stops running as the codebase grows is the shape this
+  // repository keeps finding, and it arrives silently.
+, 120_000);
 
   test("every sanctioned supplier names a file that exists", () => {
     // An exemption pointing at a moved file is an exemption that excuses
@@ -488,7 +495,14 @@ describe("startup preconditions", () => {
     // share the prefix. Both are read, and neither supplies the seam.
     expect(mentions).toEqual(["harness/policy/profiles.ts", "lib/serve-server.ts"]);
     expect(baselineSuppliers(tree)).toEqual([]);
-  });
+  }  // A whole-tree scan, and bun's default per-test budget is five seconds.
+  // `src/` crossed 1,221 files and 15 MB during this programme and a serial
+  // read now takes about nineteen, so this timed out DETERMINISTICALLY — in
+  // isolation, not only under load. A timeout reads as a failing test, but the
+  // real consequence is worse: the property below was not being checked at
+  // all. A guard that stops running as the codebase grows is the shape this
+  // repository keeps finding, and it arrives silently.
+, 120_000);
 
   test("the detector fires on a planted caller, through baselineSuppliers() itself", () => {
     // Through the seam. The version this replaces tested the regex against a

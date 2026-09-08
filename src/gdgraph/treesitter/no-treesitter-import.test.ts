@@ -42,7 +42,14 @@ test("no static import of web-tree-sitter anywhere in src/", async () => {
     }
   }
   expect(violations).toEqual([]);
-});
+}  // A whole-tree scan, and bun's default per-test budget is five seconds.
+  // `src/` crossed 1,221 files and 15 MB during this programme and a serial
+  // read now takes about nineteen, so this timed out DETERMINISTICALLY — in
+  // isolation, not only under load. A timeout reads as a failing test, but the
+  // real consequence is worse: the property below was not being checked at
+  // all. A guard that stops running as the codebase grows is the shape this
+  // repository keeps finding, and it arrives silently.
+, 120_000);
 
 test("adapter declares web-tree-sitter as a lazy optionalDependency, never a static import", async () => {
   const content = await readFile(ADAPTER, "utf8");

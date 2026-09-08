@@ -70,7 +70,14 @@ test("no top-level import of any optionalDependencies package exists in src/", a
   }
 
   expect(violations).toEqual([]);
-});
+}  // A whole-tree scan, and bun's default per-test budget is five seconds.
+  // `src/` crossed 1,221 files and 15 MB during this programme and a serial
+  // read now takes about nineteen, so this timed out DETERMINISTICALLY — in
+  // isolation, not only under load. A timeout reads as a failing test, but the
+  // real consequence is worse: the property below was not being checked at
+  // all. A guard that stops running as the codebase grows is the shape this
+  // repository keeps finding, and it arrives silently.
+, 120_000);
 
 // Block C (C0-2, AC-C0): `@xenova/transformers` — the memory embedding runtime —
 // must be imported ONLY via the seam's lazy `await import()`, never statically,
@@ -110,7 +117,14 @@ test("@xenova/transformers is never statically imported (embedding runtime guard
   );
   expect(/from\s*['"]@xenova\/transformers['"]/.test(adapter)).toBe(false);
   expect(/require\s*\(\s*['"]@xenova\/transformers['"]/.test(adapter)).toBe(false);
-});
+}  // A whole-tree scan, and bun's default per-test budget is five seconds.
+  // `src/` crossed 1,221 files and 15 MB during this programme and a serial
+  // read now takes about nineteen, so this timed out DETERMINISTICALLY — in
+  // isolation, not only under load. A timeout reads as a failing test, but the
+  // real consequence is worse: the property below was not being checked at
+  // all. A guard that stops running as the codebase grows is the shape this
+  // repository keeps finding, and it arrives silently.
+, 120_000);
 
 // Block E (E1 / E4-NER): the security model adapters reuse the same optional
 // transformers runtime — imported ONLY via the seam's lazy `await import()`.
