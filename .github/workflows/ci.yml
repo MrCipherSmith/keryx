@@ -137,16 +137,45 @@ jobs:
 
       # A red baseline is DATA (baseline-red), not a job failure: it tells
       # `standard-pr` that a PR failure is diagnostic, not an isolated regression.
-      # So capture pass/fail into a job output and never let a non-zero
+      # So capture the status into a job output and never let a non-zero
       # `standard validate` exit fail this job.
+      #
+      # THREE outcomes, not two (F-240-04, flow 240 T7). `standard validate`
+      # exits 1 when the workspace fails validation — and `bun` also exits 1 when
+      # it cannot load `./src/cli.ts` at all, when an install left the tree
+      # broken, or when the process dies before reaching a verdict. The exit code
+      # alone cannot separate those, and this step used to fold every non-zero
+      # exit into `status=fail`: a run in which NO validation happened, published
+      # as a validation result. `standard baseline` then read it as
+      # `baseline-red`, and a red baseline excuses every PR failure — so a main
+      # branch that merely stopped booting silently disabled the PR gate. It was
+      # reproduced by running this block in a directory without `./src/cli.ts`:
+      # `error: Module not found "./src/cli.ts"`, and `status=fail` recorded.
+      #
+      # `handleValidate` (src/commands/standard.ts) prints one of exactly two
+      # verdict lines when, and only when, it reached a verdict. Those two
+      # strings are pinned by `src/commands/standard-verdict-markers.test.ts`, so
+      # this contract cannot drift out from under CI silently. No verdict line
+      # (or a verdict line disagreeing with the exit code) means the command did
+      # not run: `unknown`, which is neither a pass nor a red baseline.
       - name: Validate main and publish provenance
         id: baseline
         run: |
-          if bun ./src/cli.ts standard validate; then
-            echo "status=pass" >> "$GITHUB_OUTPUT"
+          set +e
+          bun ./src/cli.ts standard validate > validate.log 2>&1
+          code=$?
+          set -e
+          cat validate.log
+          if [ "$code" -eq 0 ] && grep -Fq 'workspace is Metaproject Standard compliant' validate.log; then
+            verdict=pass
+          elif [ "$code" -ne 0 ] && grep -Eq 'FAIL .*[0-9]+ error\(s\)' validate.log; then
+            verdict=fail
           else
-            echo "status=fail" >> "$GITHUB_OUTPUT"
+            verdict=unknown
+            echo "::error::standard validate produced no verdict on main (exit ${code}). This is NOT a red baseline: no validation ran, so nothing here excuses a PR failure."
           fi
+          echo "baseline verdict: ${verdict}"
+          echo "status=${verdict}" >> "$GITHUB_OUTPUT"
 
   standard-pr:
     name: standard-pr
@@ -165,23 +194,120 @@ jobs:
 
       # Measure the PR status independently; the classification step below owns
       # this job's verdict, so do not hard-fail here.
+      #
+      # Same three-outcome classification as `standard-baseline` above, and for
+      # the same reason (F-240-04): a `bun` that cannot load the entry point
+      # exits 1 exactly like a workspace that fails validation, and folding both
+      # into `fail` publishes a non-run as a validation result. Kept verbatim in
+      # both jobs on purpose — the two statuses must be measured the same way for
+      # the comparison between them to mean anything.
       - name: Validate the PR
         id: pr
         run: |
-          if bun ./src/cli.ts standard validate; then
-            echo "status=pass" >> "$GITHUB_OUTPUT"
+          set +e
+          bun ./src/cli.ts standard validate > validate.log 2>&1
+          code=$?
+          set -e
+          cat validate.log
+          if [ "$code" -eq 0 ] && grep -Fq 'workspace is Metaproject Standard compliant' validate.log; then
+            verdict=pass
+          elif [ "$code" -ne 0 ] && grep -Eq 'FAIL .*[0-9]+ error\(s\)' validate.log; then
+            verdict=fail
           else
-            echo "status=fail" >> "$GITHUB_OUTPUT"
+            verdict=unknown
+            echo "::error::standard validate produced no verdict on this PR (exit ${code}). A check that did not run has not passed."
           fi
+          echo "pr verdict: ${verdict}"
+          echo "status=${verdict}" >> "$GITHUB_OUTPUT"
 
       # Classification-only. CI owns both independently measured statuses and
-      # passes them in. This step exits non-zero ONLY for baseline-green + pr-fail
-      # (an isolated PR regression); baseline-red / baseline-unknown exit zero.
+      # passes them in. `standard baseline` exits non-zero whenever the PR result
+      # is not a measured pass, EXCEPT when main was measured and found failing
+      # (`baseline-red`) — the one case where a PR failure is genuinely
+      # diagnostic. `--pr unknown` and `--baseline unknown --pr fail` both exit 1
+      # now (F-240-04); both used to exit 0, which is how a non-running check
+      # disabled this gate. The rule lives in `src/standard/baseline.ts`
+      # (`BaselineComparison.blocking`) and is covered by
+      # `src/standard/baseline.test.ts`, not restated in YAML.
       - name: Classify the PR against the main baseline
         run: |
           bun ./src/cli.ts standard baseline \
             --baseline "${{ needs.standard-baseline.outputs.status }}" \
             --pr "${{ steps.pr.outputs.status }}"
+
+  dependency-audit:
+    # F-240-03 (flow 240 T7). This phase reached zero dependency advisories and
+    # NOTHING guarded that state: `dependencyAudit` is an OPTIONAL health source
+    # (deliberately — see the reasoning on `DEFAULT_HEALTH_CONFIG.sources` in
+    # src/health/config.ts: it needs the network, and a gate that fails on a
+    # plane teaches people to bypass gates), and no workflow ran an audit on any
+    # schedule. So a new advisory could land and every check stay green.
+    #
+    # This is where the blocking dependency check belongs: one job, on a
+    # networked runner, that a human can act on — not on every local `keryx
+    # health` invocation.
+    #
+    # It drives the PRODUCTION adapter (`src/health/sources/dependency-audit.ts`)
+    # rather than calling `bun audit` by hand, so a defect in command selection,
+    # JSON decoding or severity mapping fails HERE instead of hiding behind a
+    # hand-rolled duplicate of the thing under test. (`keryx health run --source
+    # dependencyAudit` is deliberately not used: a source filter marks the
+    # omitted REQUIRED sources broken and the run exits incomplete by design —
+    # `health-truthful-gate.test.ts`, "a source filter ... cannot report a clean
+    # gate" — so the gate's verdict there is about the filter, not the audit.)
+    #
+    # NON-VACUITY IS THE POINT, and it is asserted in the only place that can
+    # carry it: `validate()` returns `valid: true` only for a payload that
+    # actually IS vulnerability data. `npm audit` with no lockfile exits 1 with
+    # ~240 bytes of `{"error":{"code":"ENOLOCK"}}` — an object whose severity
+    # totals are all zero, indistinguishable from a clean project unless someone
+    # checks. That is F-240-02's defect exactly, and this job refuses to report
+    # "0 advisories" until the payload has been recognised.
+    name: dependency-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Audit dependencies through the production health source
+        run: |
+          cat > audit-check.ts <<'TS'
+          import { dependencyAuditAdapter as adapter } from "./src/health/sources/dependency-audit";
+          import type { HealthContext } from "./src/health/types";
+
+          const ctx = { cwd: process.cwd() } as HealthContext;
+          const raw = await adapter.run(ctx);
+          const validation = adapter.validate?.(raw) ?? { valid: false, error: "adapter has no validate()" };
+          console.log(`command: ${raw.command}`);
+          console.log(`exit: ${raw.exitCode}`);
+          console.log(`payload recognised: ${validation.valid}${validation.valid ? "" : ` (${validation.error})`}`);
+
+          // The audit did not run, or ran and produced something that is not a
+          // vulnerability report. Either way it has found nothing BECAUSE IT
+          // COULD NOT LOOK, and reporting that as clean is the defect.
+          if (!validation.valid) {
+            console.log(raw.content.slice(0, 2000));
+            console.error("::error::dependency audit produced no recognisable result; this is NOT a clean audit");
+            process.exit(1);
+          }
+
+          // Only now is a count meaningful.
+          const findings = adapter.parse(raw, ctx);
+          for (const finding of findings) console.log(`::error::${finding.message}`);
+          if (findings.length > 0) {
+            console.error(`::error::${findings.length} dependency advisory/advisories`);
+            process.exit(1);
+          }
+          console.log("dependency-audit: RAN, 0 advisories");
+          TS
+          bun audit-check.ts
 
   metrics-contract:
     # Schema, provenance, latest-pointer, worktree-safe hook, and lightweight-mode

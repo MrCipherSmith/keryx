@@ -137,7 +137,13 @@ async function handleBaseline(args: string[]): Promise<void> {
   }
   const result = classifyBaselineStatuses(baseline, pr);
   console.log(JSON.stringify(result, null, 2));
-  process.exitCode = result.classification === "baseline-red" ? 0 : result.prIntroducedFailure ? 1 : 0;
+  // F-240-04: the verdict is `blocking`, computed and justified in
+  // `../standard/baseline.ts`. It used to be inlined here as
+  // `classification === "baseline-red" ? 0 : prIntroducedFailure ? 1 : 0`,
+  // which exited 0 for `--baseline unknown --pr fail` (an unmeasured baseline
+  // excusing a real PR failure) and for `--pr unknown` (a check that never ran,
+  // recorded as a pass).
+  process.exitCode = result.blocking ? 1 : 0;
 }
 
 // `standard emit llms` — generate the deterministic llms.txt (spec §10.1).

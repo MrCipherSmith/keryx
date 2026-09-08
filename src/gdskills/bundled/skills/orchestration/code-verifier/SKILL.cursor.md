@@ -68,7 +68,7 @@ Auto-detect the project stack and available verification tools.
 ```bash
 cd <codebase_path>
 
-if   [ -f bun.lockb ];         then PM=bun;    RUNNER="bun run"
+if   [ -f bun.lock ] || [ -f bun.lockb ]; then PM=bun;    RUNNER="bun run"
 elif [ -f pnpm-lock.yaml ];    then PM=pnpm;   RUNNER="pnpm run"
 elif [ -f yarn.lock ];         then PM=yarn;   RUNNER="yarn"
 elif [ -f package-lock.json ]; then PM=npm;    RUNNER="npm run"
