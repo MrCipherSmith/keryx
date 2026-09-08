@@ -185,7 +185,7 @@ export function renderTestingPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^tests/|^e2e/|^docs/|\\.test\\.|\\.spec\\.|package\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|vitest\\.config\\.|jest\\.config\\.|playwright\\.config\\.|cypress\\.config\\.|AGENTS\\.md$|CLAUDE\\.md$)' >/dev/null 2>&1; then
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^tests/|^e2e/|^docs/|\\.test\\.|\\.spec\\.|package\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|vitest\\.config\\.|jest\\.config\\.|playwright\\.config\\.|cypress\\.config\\.|AGENTS\\.md$|CLAUDE\\.md$)' >/dev/null 2>&1; then
     return 0
   fi
 

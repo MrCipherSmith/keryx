@@ -820,7 +820,7 @@ export function summarizeDiff(
   const shape = parseDiffOutput(lines);
   const count = diffFileCount(shape);
   const risky = shape.files.filter((file) =>
-    /(^|\/)(package\.json|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
+    /(^|\/)(package\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
   );
   const allHunks = lines.filter((line) => line.startsWith("@@"));
   const shownHunks = allHunks.slice(0, config.maxOutputLines);

@@ -19,8 +19,14 @@ was wrong; one number silently dropped a severity.
 `generatedAt: 2026-09-06T20:11:46Z`, `gitRef: 0bc6418`, produced by
 `bun audit --json` (bun 1.3.12), `execution: completed`, `parse: parsed`,
 `exitCode: 1`, `status: available`. It is the only snapshot of the pre-remediation
-state that survives: of 45 health snapshots carrying a `dependencyAudit` source,
-44 report zero findings and this one reports 28.
+state that survives: of the 44 health snapshots under `history/` carrying a
+`dependencyAudit` source, 43 report zero findings and this one reports 28.
+
+(An earlier version of this paragraph said 45 and 44. That count globbed
+recursively and so counted `latest.json`, which is a copy of the most recent
+history entry — the same snapshot twice. Corrected by an independent verifier;
+the substantive claim, that exactly one non-zero snapshot survives, is
+unaffected.)
 
 That single artifact is the whole of the surviving evidence, which is itself
 worth recording — the inventory was preserved by accident rather than by
