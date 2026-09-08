@@ -351,6 +351,14 @@ export interface FlowService {
    * `flow task add --depends`, migrated, typed, and consumed by nothing, while
    * `flow-orchestrator` documented "resume at the first task not done,
    * respecting `dependsOn` order" as if something enforced it.
+   *
+   * The decision also carries the RESUME state of the task it hands back, and
+   * of every other not-done task whose last attempt reported no end (flow 237).
+   * "Which task" alone was not an answer for an agent picking work up after a
+   * restart or from another agent: it read identically for a task nobody had
+   * touched and one an earlier attempt had opened and never closed, so redoing
+   * half-landed work and skipping work that never happened looked the same from
+   * here. See `TaskResumeState` in `./machine`.
    */
   next(input: { cwd: string; id: string }): Promise<NextTaskDecision>;
   acConfirm(input: {

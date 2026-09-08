@@ -79,6 +79,7 @@ export const MODULE_COMMANDS = {
     "propose",
     "confirm-review",
     "review",
+    "handoff",
     "collaboration",
     "policy-readiness",
     "catch-up",

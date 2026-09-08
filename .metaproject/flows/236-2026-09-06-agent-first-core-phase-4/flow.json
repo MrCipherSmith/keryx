@@ -9,7 +9,7 @@
   "title": "Agent-first core phase 4: Freshness and delivery: bindings managed sync and bootstrap",
   "status": "in-progress",
   "createdAt": "2026-09-06T10:44:09.088Z",
-  "updatedAt": "2026-09-07T19:56:16.082Z",
+  "updatedAt": "2026-09-07T22:19:15.248Z",
   "source": {
     "type": "description",
     "ref": null
@@ -84,7 +84,7 @@
       "id": "T5",
       "title": "Prevent concurrent ctx artifact ID collisions and lost evidence",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -92,13 +92,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Give evidence reads a path that does not pass through the redaction floor",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -106,7 +107,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -171,6 +173,21 @@
     {
       "id": "T11",
       "title": "L7: план установки и обновления — предпросмотр до применения, разрешение расхождения версий, возобновляемое частичное состояние",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "F4 (major): путь unbound-candidate в machine-wrap-up пишет исходный текст seed на диск мимо пола редактирования, который тот же производитель применяет тремя строками выше",
       "kind": "implement",
       "status": "done",
       "dependsOn": [],
@@ -257,6 +274,26 @@
       "at": "2026-09-07T19:56:16.082Z",
       "event": "task-done",
       "detail": "T11: L7: план установки и обновления — предпросмотр до применения, разрешение расхождения версий, возобновляемое частичное состояние"
+    },
+    {
+      "at": "2026-09-07T21:26:15.194Z",
+      "event": "task-done",
+      "detail": "T5: Prevent concurrent ctx artifact ID collisions and lost evidence"
+    },
+    {
+      "at": "2026-09-07T21:32:11.853Z",
+      "event": "task-done",
+      "detail": "T6: Give evidence reads a path that does not pass through the redaction floor"
+    },
+    {
+      "at": "2026-09-07T22:08:02.690Z",
+      "event": "task-added",
+      "detail": "T12: F4 (major): путь unbound-candidate в machine-wrap-up пишет исходный текст seed на диск мимо пола редактирования, который тот же производитель применяет тремя строками выше"
+    },
+    {
+      "at": "2026-09-07T22:19:15.248Z",
+      "event": "task-done",
+      "detail": "T12: F4 (major): путь unbound-candidate в machine-wrap-up пишет исходный текст seed на диск мимо пола редактирования, который тот же производитель применяет тремя строками выше"
     }
   ]
 }

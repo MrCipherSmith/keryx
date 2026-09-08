@@ -195,6 +195,31 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(result, null, 2));
       return;
     }
+    // `handoff` — the writer the reader below never had.
+    //
+    // `CollaborationActivity` has carried a `handoff-recorded` kind, and
+    // `CollaborationService.record()` has been able to write it, since the
+    // module was added. Nothing called `record()`: its only caller in the whole
+    // repository was its own test. So `keryx workspace collaboration` — which
+    // the sac skill file describes as showing "cross-session collaboration
+    // state" — returned `activity: []` for every workspace that has ever
+    // existed, and could not have returned anything else. An empty list read as
+    // "no handoffs happened" when what was true was "no handoff can be
+    // recorded", which is the same absence-as-result the resume path had.
+    if (subcommand === "handoff") {
+      rejectUnknownOptions(args.slice(2), new Set(["--to", "--artifact", "--from"]));
+      const workspaceId = args[1];
+      const to = optionValue(args, "--to");
+      const artifactRef = optionValue(args, "--artifact");
+      const from = optionValue(args, "--from");
+      if (!workspaceId || !to || !artifactRef) throw new Error("Usage: keryx workspace handoff <workspace-id> --to <subject> --artifact <ref> [--from <subject>]");
+      // `--from` is optional: omitted, the service fills it from the
+      // authenticated actor. An unattributed handoff is the shape this record
+      // exists to prevent, so there is no path that writes one.
+      const activity = await createLocalCollaborationService(process.cwd()).record({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, activity: { kind: "handoff-recorded", handoff: { ...(from ? { from } : {}), to, artifactRef } } });
+      console.log(JSON.stringify(activity, null, 2));
+      return;
+    }
     if (subcommand === "collaboration") {
       rejectUnknownOptions(args.slice(2), new Set()); const workspaceId = args[1];
       if (!workspaceId) throw new Error("Usage: keryx workspace collaboration <workspace-id>");
@@ -300,7 +325,7 @@ function booleanFlagDefaultTrue(args: string[], name: string): boolean {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace handoff <workspace-id> --to <subject> --artifact <ref> [--from <subject>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
 }
 
 /**
