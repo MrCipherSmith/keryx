@@ -30,6 +30,29 @@ function stringParam(params: Record<string, unknown>, key: string): string | und
 }
 
 /**
+ * A page-size argument: absent, or a positive integer. Anything else throws.
+ *
+ * `inputSchema` alone does not enforce this — a JSON Schema is a description
+ * MCP clients may or may not validate against, so the boundary has to check the
+ * value it actually received. Silently dropping the bad value would be worse
+ * than the schema: the caller asked for zero results, would get twenty, and
+ * would be told nothing about it.
+ */
+function pageLimitParam(params: Record<string, unknown>, key: string): number | undefined {
+  const value = params[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `${key} must be an integer of at least 1 — received ${JSON.stringify(value)}. ` +
+        "It is the maximum number of candidates to show; a zero or negative page size is not a query.",
+    );
+  }
+  return value;
+}
+
+/**
  * F-003 fix (flow 182 T7, review finding — count half; the length half is
  * `SEED_TEXT_MAX_LENGTH`, `../session/slate.ts`): a cap on how many Seeds one
  * external hand can accumulate on a single `ExternalSlate` before
@@ -824,16 +847,23 @@ export function buildToolRegistry(): ToolEntry[] {
       inputSchema: OBJECT_SCHEMA(
         {
           query: { type: "string", description: "Plain-language description of what you are looking for." },
-          fileLimit: { type: "number", description: "Max file candidates." },
-          symbolLimit: { type: "number", description: "Max symbol candidates." },
+          fileLimit: { type: "integer", minimum: 1, description: "Max file candidates (at least 1)." },
+          symbolLimit: { type: "integer", minimum: 1, description: "Max symbol candidates (at least 1)." },
         },
         ["query"],
       ),
       mutating: false,
       async invoke(cwd, params) {
         const query = stringParam(params, "query") ?? "";
-        const fileLimit = typeof params.fileLimit === "number" ? params.fileLimit : undefined;
-        const symbolLimit = typeof params.symbolLimit === "number" ? params.symbolLimit : undefined;
+        // Rejected, never silently coerced. Unbounded below, `fileLimit: 0`
+        // reached `Array.slice(0, 0)` and came back as `code: ok` with
+        // "0 files and 0 symbols matched." over a corpus holding forty — and
+        // `-1` as a confident list one short of the truth. The sibling boundary
+        // (`../harness/tool/metaproject-operations.ts`, `graph_find`) already
+        // declares `minimum: 1` and checks `> 0`; this one now does too. A
+        // nonsensical page size is a caller mistake and must read as one.
+        const fileLimit = pageLimitParam(params, "fileLimit");
+        const symbolLimit = pageLimitParam(params, "symbolLimit");
         const port = createMetaprojectAdapter(cwd);
         if (port.graphFind === undefined) {
           throw new Error("gdgraph.find is not backed by this MetaprojectPort");

@@ -238,6 +238,52 @@ function reasonFor(
   return parts.join("; ");
 }
 
+/**
+ * What is on the PAGE, when that differs from what the scan found.
+ *
+ * THE THIRD AND FOURTH INSTANCES (flow 235, T15)
+ *
+ * Separating matching from ranking (see the note below) stopped a display
+ * decision from choosing a `code`. It did not stop one from writing the PROSE.
+ * Reproduced on a 100-file corpus with 40 genuine matches:
+ *
+ *   code: ok
+ *   reason: "20 files and 0 symbols matched."      // 40 did
+ *
+ * and, through the MCP boundary, `fileLimit: 0` produced `"0 files and 0
+ * symbols matched."` — a page size rendered as a fact about the corpus, at
+ * `code: ok`. The same shape sat in `insufficient-evidence`, whose tail chose
+ * between "the ranking below is not evidence" and "Every match scored zero" by
+ * asking how long the PAGE was: at `fileLimit: 0` it asserted every match
+ * scored zero while sixty matches scored ~5.
+ *
+ * The rule that closes both: a reason may state what MATCHED only from the
+ * scan, and what is SHOWN only as a separate, explicitly-labelled clause. A
+ * reader must always be able to tell "40 matched, showing 20" from "20
+ * matched"; the two can never be collapsed into one number again.
+ */
+function displayNote(
+  matchedFiles: number,
+  matchedSymbols: number,
+  shownFiles: number,
+  shownSymbols: number,
+): string {
+  const cut: string[] = [];
+  if (shownFiles !== matchedFiles) {
+    cut.push(`${shownFiles} of ${matchedFiles} files`);
+  }
+  if (shownSymbols !== matchedSymbols) {
+    cut.push(`${shownSymbols} of ${matchedSymbols} symbols`);
+  }
+  if (cut.length === 0) {
+    return "";
+  }
+  return (
+    ` Showing ${cut.join(" and ")} — the rest are below the display limit or scored zero.` +
+    " That is a ranking decision about this page, not a claim about the corpus."
+  );
+}
+
 // MATCHING vs RANKING — WHY THESE ARE TWO STEPS (flow 235, T14)
 //
 // They used to be one loop, and that produced a false statement about the
@@ -431,6 +477,11 @@ export function findNodes(graph: GraphData, query: string, limit = 20): FindResu
  * are the ranked, ballast-free, `limit`-sliced page meant for a reader. A
  * display decision must never be able to turn a corpus that contains your terms
  * into a `no-match` that says it does not.
+ *
+ * T15 extends that from the conditions to the REASONS. `foundFiles`/
+ * `foundSymbols` may appear in a reason only through `displayNote`, which
+ * labels the number as a page size; every count a reason states as a fact about
+ * the corpus comes from the scan. `find-display-truth.test.ts` pins this.
  */
 export interface FindOutcome {
   readonly code: RetrievalCode;
@@ -494,24 +545,43 @@ export function findCandidates(
     );
   }
 
+  const note = displayNote(
+    scan.matches.length,
+    symbolMatches.length,
+    foundFiles.length,
+    foundSymbols.length,
+  );
+
   const anyDiscriminating =
     scan.matches.some((file) => file.discriminating.length > 0) ||
     symbolMatches.some((symbol) => symbol.discriminating.length > 0);
   if (!anyDiscriminating) {
     const noise = ubiquitousTerms.join(", ") || queryTerms.join(", ");
+    // "Did anything score?" is a question about the SCAN. Asking the page
+    // instead (`foundFiles.length + foundSymbols.length > 0`) let `fileLimit: 0`
+    // turn sixty scoring matches into "Every match scored zero" — see
+    // `displayNote`.
+    const anyScored =
+      scan.matches.some((file) => file.score > 0) ||
+      symbolMatches.some((symbol) => symbol.score > 0);
     return outcome(
       "insufficient-evidence",
       `${matchCount} candidates matched, every one of them only on ${noise} — ` +
         "a term that appears across this corpus and so narrows nothing" +
-        (foundFiles.length + foundSymbols.length > 0
+        (anyScored
           ? ", which is why the ranking below is not evidence for this question."
           : ". Every match scored zero, so no ranking is shown; this is not a claim " +
-            "that the corpus lacks your terms — it is that they cannot separate anything in it."),
+            "that the corpus lacks your terms — it is that they cannot separate anything in it.") +
+        note,
       found,
     );
   }
 
-  return outcome("ok", `${foundFiles.length} files and ${foundSymbols.length} symbols matched.`, found);
+  return outcome(
+    "ok",
+    `${scan.matches.length} files and ${symbolMatches.length} symbols matched.` + note,
+    found,
+  );
 }
 
 function outcome(

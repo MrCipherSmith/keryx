@@ -212,6 +212,57 @@ test("gdgraph.find returns the outcome CODE, so a client can branch instead of p
   ]);
 });
 
+test("gdgraph.find rejects a page size below 1 instead of answering confidently", async () => {
+  // MEASURED BEFORE THIS FIX (flow 235, T15). `fileLimit` was declared as a
+  // bare `number` with no `minimum`, and the invoke accepted any number:
+  //
+  //   fileLimit: 0   -> code "ok", reason "0 files and 0 symbols matched."
+  //   fileLimit: -1  -> code "ok", reason "39 files and 0 symbols matched."
+  //
+  // over a corpus that held forty. The scan half is now fixed in
+  // `../gdgraph/find.ts`, but a caller asking for zero results and silently
+  // getting twenty is still a lie of a different kind, so the boundary refuses.
+  for (const bad of [0, -1, -20, 1.5, "3", true]) {
+    await expect(
+      tool("gdgraph.find").invoke(REPO_ROOT, { query: "retrieval codes", fileLimit: bad }, undefined),
+    ).rejects.toThrow(/fileLimit must be an integer of at least 1/);
+    await expect(
+      tool("gdgraph.find").invoke(
+        REPO_ROOT,
+        { query: "retrieval codes", symbolLimit: bad },
+        undefined,
+      ),
+    ).rejects.toThrow(/symbolLimit must be an integer of at least 1/);
+  }
+
+  // Absent stays absent — the default page size, not an error.
+  const fine = (await tool("gdgraph.find").invoke(
+    REPO_ROOT,
+    { query: "retrieval codes vocabulary" },
+    undefined,
+  )) as Record<string, unknown>;
+  expect(fine.code).toBe("ok");
+});
+
+test("both find boundaries declare the same lower bound on their page sizes", async () => {
+  // The MCP entry drifted from its sibling: `metaproject-operations`'
+  // `graph_find` has declared `{ type: "integer", minimum: 1 }` and checked
+  // `> 0` since it was written; this one declared a bare `number`. Comparing
+  // the two schemas rather than restating one of them means the next drift
+  // fails here instead of being found by a third verifier.
+  const { METAPROJECT_OPERATIONS } = await import("../harness/tool/metaproject-operations");
+  const sibling = METAPROJECT_OPERATIONS.find((op) => op.name === "graph_find");
+  expect(sibling).toBeDefined();
+  const siblingProps = (sibling?.inputSchema as { properties: Record<string, unknown> }).properties;
+  const mcpProps = (tool("gdgraph.find").inputSchema as { properties: Record<string, unknown> })
+    .properties;
+
+  for (const key of ["fileLimit", "symbolLimit"]) {
+    expect(mcpProps[key]).toMatchObject({ type: "integer", minimum: 1 });
+    expect(siblingProps[key]).toMatchObject({ type: "integer", minimum: 1 });
+  }
+});
+
 test("gdgraph.find over a directory with no graph is index-incomplete, never no-match", async () => {
   const empty = await mkdtemp(path.join(tmpdir(), "gd-mcp-find-nograph-"));
   try {
