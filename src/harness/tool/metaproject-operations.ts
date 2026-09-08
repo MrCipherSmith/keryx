@@ -115,7 +115,19 @@ function withStaleness(
   return extra.length === 0 ? result : { ...result, output: [result.output, ...extra].join("\n") };
 }
 
-/** Render a structured `graphAffected` result as readable text for the model. */
+/**
+ * Render a structured `graphAffected` result as readable text for the model.
+ *
+ * `truncated` is a DISPLAY fact — "an output bound cut this list" — and it was
+ * declared on `GraphAffectedResult` and in `AFFECTED_OUTPUT_SCHEMA` while this
+ * renderer dropped it on the floor. A capped list therefore rendered
+ * byte-identically to a complete one, and a capped list that happened to come
+ * back empty rendered as the flat corpus claim "No dependents found for X".
+ * The reference adapter does not set the flag today, so this is the shape
+ * caught before it fired rather than after — but the field exists, a
+ * `MetaprojectPort` is an interface, and a renderer that silently discards a
+ * truncation marker is the same defect either way.
+ */
 export function formatAffected(result: GraphAffectedResult): InteractiveToolResult {
   if (result.error !== undefined) {
     return withStaleness({ output: `graph_affected failed: ${result.error}`, isError: true }, result.staleness);
@@ -128,13 +140,27 @@ export function formatAffected(result: GraphAffectedResult): InteractiveToolResu
     dependencies.length > 0
       ? [`Dependencies of ${result.target} (${dependencies.length}):`, ...dependencies.map((path) => `  - ${path}`), ""]
       : [];
+  const truncated = result.truncated === true;
   if (result.affected.length === 0) {
     return withStaleness(
-      { output: [...dependencyLines, `No dependents found for ${result.target}.`].join("\n"), isError: false },
+      {
+        output: [
+          ...dependencyLines,
+          truncated
+            ? `No dependents are SHOWN for ${result.target} — this result was capped by an output bound ` +
+              "(`truncated`). That is a display decision about this page, not a claim that the target has " +
+              "no dependents."
+            : `No dependents found for ${result.target}.`,
+        ].join("\n"),
+        isError: false,
+      },
       result.staleness,
     );
   }
-  const header = `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
+  const header = truncated
+    ? `Blast radius of ${result.target} (depth ${result.depth ?? 1}, showing ${result.affected.length} dependent(s) ` +
+      "— TRUNCATED by an output bound, so this is a page and not the whole set):"
+    : `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
   const lines = result.affected.map((node) => {
     const fanIn = node.fanIn !== undefined ? `, fanIn ${node.fanIn}` : "";
     return `  - ${node.path ?? node.id} (hop ${node.hop}${fanIn})`;
@@ -431,7 +457,21 @@ export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResul
   return { output: [`Flows (${result.flows.length}):`, ...lines].join("\n"), isError: false };
 }
 
-/** Render a `graphSymbol` result as readable text. */
+/**
+ * Render a `graphSymbol` result as readable text.
+ *
+ * `definitions` is a PAGE, not the match set: `querySymbol` resolves through
+ * `resolveSymbolCandidates` (`src/gdgraph/symbol.ts`), whose `limit` defaults to
+ * 25 and which `querySymbol` never overrides. Measured on a synthetic graph of
+ * sixty symbols whose names all contain `handle`, `graph_symbol` returns
+ * twenty-five of them — and this header used to read "Symbol handle (25
+ * definition(s)):", a page size stated as a count of what the graph holds.
+ *
+ * The count is therefore labelled as what it is. It cannot be stated against
+ * the corpus here, because `GraphSymbolResult` carries no total and this
+ * renderer must never invent one; that missing field is a named residual of
+ * this task, not something the wording is pretending to cover.
+ */
 export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.error !== undefined) {
     return withStaleness({ output: `graph_symbol failed: ${result.error}`, isError: true }, result.staleness);
@@ -445,7 +485,7 @@ export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   const defs = result.definitions.map(
     (def) => `  - ${def.name} (${def.kind}) at ${def.path}:${def.startLine}`,
   );
-  const lines = [`Symbol ${result.name} (${result.definitions.length} definition(s)):`, ...defs];
+  const lines = [`Symbol ${result.name} (${result.definitions.length} definition(s) shown):`, ...defs];
   if (result.callers.length > 0) {
     lines.push(`Callers (${result.callers.length}):`, ...result.callers.map((c) => `  - ${c}`));
   }
@@ -477,7 +517,40 @@ export function formatRepomap(result: RepomapResult): InteractiveToolResult {
       result.staleness,
     );
   }
+  const omittedOptional = result.omittedOptional ?? [];
   if (result.files.length === 0) {
+    // A budget that fits nothing is a DISPLAY decision. "no ranked files" is a
+    // claim about the graph, and it was being made from an empty page:
+    // measured on a five-file graph at `budget: 15`, `computeRepomap` returned
+    // `entries: []`, `omitted: 5`, `partial: true` and named all five paths in
+    // `omittedOptional` — and this branch printed "Repomap is empty (no ranked
+    // files)." and returned before the loss lines below could name any of them.
+    // The genuinely-empty sentence is kept for the case that is genuinely
+    // empty; it is not deleted wholesale.
+    if (result.omitted > 0 || omittedOptional.length > 0) {
+      return withStaleness(
+        {
+          output: [
+            `Repomap shows 0 entries: ${result.omitted} ranked entr${result.omitted === 1 ? "y" : "ies"} ` +
+              `did not fit the ${result.budget}-token budget. That is a budget decision about this map, ` +
+              "not a claim that the graph holds no ranked files.",
+            ...(omittedOptional.length > 0
+              ? [
+                  "",
+                  `Omitted for budget (${omittedOptional.length}):`,
+                  ...omittedOptional.slice(0, 40).map((path) => `  - ${path}`),
+                  ...(omittedOptional.length > 40
+                    ? [`  - … +${omittedOptional.length - 40} more`]
+                    : []),
+                ]
+              : []),
+            "Raise `budget`, or narrow `seed`, and retry.",
+          ].join("\n"),
+          isError: false,
+        },
+        result.staleness,
+      );
+    }
     return withStaleness({ output: "Repomap is empty (no ranked files).", isError: false }, result.staleness);
   }
   const partial = result.partial === true;
@@ -491,7 +564,6 @@ export function formatRepomap(result: RepomapResult): InteractiveToolResult {
     const marker = file.required === true ? " [required]" : "";
     return `  - ${file.path} (score ${file.score.toFixed(4)})${marker}${symbols}`;
   });
-  const omittedOptional = result.omittedOptional ?? [];
   const lossLines =
     omittedOptional.length > 0
       ? [
@@ -560,6 +632,40 @@ export function formatBacklinks(result: WikiBacklinksResult): InteractiveToolRes
 }
 
 /**
+ * The line that separates what MATCHED from what is SHOWN, in `formatFind`'s
+ * output.
+ *
+ * THE FIFTH INSTANCE (flow 235, T18)
+ *
+ * `src/gdgraph/find.ts` and `src/mcp/tools.ts` were fixed so a page size can
+ * never be printed as a fact about the corpus — inside the PAYLOAD. This
+ * renderer prints prose BESIDE that payload and had never been audited. It
+ * branched on the page:
+ *
+ *   result.files.length === 0 && result.symbols.length === 0
+ *     -> "No candidates. …"
+ *
+ * which is a claim about the corpus made from a display decision. Reproduced
+ * on 2026-09-08 through this function, on a 100-file corpus with 40 genuine
+ * matches at `fileLimit: 0`:
+ *
+ *   code: ok
+ *   reason: 40 files and 0 symbols matched. Showing 0 of 40 files — …
+ *   No candidates. The code above says whether that is an answer or a failure.
+ *
+ * — the payload and the prose one line apart, contradicting each other. The
+ * same line fired for the `insufficient-evidence` corpus where fourteen files
+ * matched and all scored zero.
+ *
+ * The rule, identical to the payload's: what MATCHED is stated only above this
+ * boundary, from `code`/`reason`; what is SHOWN is stated only below it, and
+ * every count below it is labelled `shown`.
+ */
+export const FIND_PAGE_BOUNDARY =
+  "Below this line is the PAGE — candidates ranked and cut to the display limit. " +
+  "Only `code` and `reason` above say what matched:";
+
+/**
  * Render a `graphFind` result — `keryx gdgraph find`, for an agent.
  *
  * The CODE comes first and on its own line, exactly as `formatRetrievalOutcome`
@@ -593,8 +699,15 @@ export function formatFind(result: GraphFindResult): InteractiveToolResult {
   if (result.nextActions.length > 0) {
     lines.push("next:", ...result.nextActions.map((action) => `  - ${action}`));
   }
+  // Everything from here down is the PAGE. Nothing above the boundary may be
+  // derived from `files`/`symbols`, and nothing below it may be read as a
+  // statement about the corpus — `find-display-truth.test.ts` pins the same
+  // split inside the payload, and `metaproject-display-truth.test.ts` pins it
+  // here by asserting the text ABOVE this line is byte-identical across page
+  // sizes for every retrieval code.
+  lines.push("", FIND_PAGE_BOUNDARY);
   if (result.files.length > 0) {
-    lines.push("", `Files (${result.files.length}):`);
+    lines.push(`Files shown (${result.files.length}):`);
     for (const file of result.files) {
       lines.push(
         `  - ${file.path} (${RANKING_SCORE_LABEL} ${formatRankingScore(file.score)})`,
@@ -603,7 +716,10 @@ export function formatFind(result: GraphFindResult): InteractiveToolResult {
     }
   }
   if (result.symbols.length > 0) {
-    lines.push("", `Symbols (${result.symbols.length}):`);
+    if (result.files.length > 0) {
+      lines.push("");
+    }
+    lines.push(`Symbols shown (${result.symbols.length}):`);
     for (const symbol of result.symbols) {
       lines.push(
         `  - ${symbol.name} (${symbol.kind}) at ${symbol.path}:${symbol.startLine} ` +
@@ -613,7 +729,10 @@ export function formatFind(result: GraphFindResult): InteractiveToolResult {
     }
   }
   if (result.files.length === 0 && result.symbols.length === 0) {
-    lines.push("", "No candidates. The code above says whether that is an answer or a failure.");
+    lines.push(
+      "Nothing is shown on this page. An empty page is a ranking-and-limit decision; " +
+        "`reason` above is the only statement here about what matched.",
+    );
   }
   return withStaleness(
     { output: lines.join("\n"), isError: retrievalStatus(code) === "error" },

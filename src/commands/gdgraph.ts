@@ -281,6 +281,15 @@ async function probeSymbolDiagnoses(cwd: string): Promise<GrammarDiagnosis[]> {
   }
 }
 
+/**
+ * How many symbol rows `keryx gdgraph symbol` prints. A DISPLAY limit and
+ * nothing else: it may never reach a count, a distinct-name tally, or an
+ * outcome code. Named rather than inlined so a reader can see that the 25 in
+ * the slice and the 25 in the "+N more" line are one decision, which is what
+ * made the old `matches.length > 25` check silently unreachable.
+ */
+const SYMBOL_PAGE_SIZE = 25;
+
 async function runSymbol(rest: string[]): Promise<void> {
   const name = rest.filter((a) => !a.startsWith("--")).join(" ").trim();
   const asJson = rest.includes("--json");
@@ -351,7 +360,32 @@ async function runSymbol(rest: string[]): Promise<void> {
     return;
   }
 
-  const candidates = resolveSymbolCandidates(graph.symbols, name);
+  // SCAN, not page (flow 235 T18 — the fifth instance of the shape T14/T15
+  // closed inside `gdgraph find`).
+  //
+  // `resolveSymbolCandidates`'s `limit` defaults to 25, and this command took
+  // that default. Every statement below was then computed from twenty-five
+  // rows: the count in the reason, the number of distinct names, and — the one
+  // that matters — the OUTCOME CODE. Reproduced on 2026-09-08 against a
+  // synthetic built graph of 30 symbols named `handleAlpha` followed by 10
+  // named `handleBeta`:
+  //
+  //   $ keryx gdgraph symbol "handle"
+  //   code: ok
+  //   ## Definitions (25, matched by name-contains-query)
+  //
+  // Forty symbols matched under two different names; the ambiguity guard
+  // (`insufficient-evidence`) never saw the second name because the slice had
+  // already removed it, so a query that cannot be answered was rendered as a
+  // confident one. The same slice made the loose-query reason say
+  // `"handle" matches 25 symbols across 25 different names` when sixty matched
+  // under sixty names — and made the `… +N more` truncation notice below
+  // structurally unable to fire, because `matches` had already been cut to 25
+  // and `matches.length > 25` is then never true.
+  //
+  // So the resolve is unlimited and drives the classification and every count;
+  // the 25 is applied HERE, once, purely to the rows printed, and is stated.
+  const candidates = resolveSymbolCandidates(graph.symbols, name, Number.MAX_SAFE_INTEGER);
   const matches = candidates.map((candidate) => candidate.symbol);
   if (matches.length === 0) {
     // AC5: a completed lookup that found nothing is `no-match` — a real
@@ -391,11 +425,13 @@ async function runSymbol(rest: string[]): Promise<void> {
       console.log(line);
     }
     console.log("");
-    for (const candidate of candidates.slice(0, 25)) {
+    for (const candidate of candidates.slice(0, SYMBOL_PAGE_SIZE)) {
       const m = candidate.symbol;
       console.log(`- ${m.name} (${m.kind}) — ${m.path}:${m.startLine}  [${candidate.tier}]`);
     }
-    if (matches.length > 25) console.log(`- … +${matches.length - 25} more`);
+    if (matches.length > SYMBOL_PAGE_SIZE) {
+      console.log(`- … +${matches.length - SYMBOL_PAGE_SIZE} more (a display limit, not the end of the matches)`);
+    }
     await printStaleNote();
     return;
   }
@@ -409,7 +445,23 @@ async function runSymbol(rest: string[]): Promise<void> {
   // AC6 (AFC-M04) — an explainable candidate. The tier is WHY this definition
   // is here: an exact name is an answer, a substring capture may be a
   // coincidence, and the two used to render identically.
-  console.log(`## Definitions (${result.definitions.length}, matched by ${result.matchTier})`);
+  // `querySymbol` resolves through the same 25-row default, so `definitions` is
+  // a page whenever one name has more than 25 definitions — measured at 40
+  // same-named functions, where this header read "## Definitions (25, matched
+  // by exact-name)" with nothing saying fifteen were cut. `matches` is the
+  // unlimited scan, so the two counts can be stated apart instead of collapsed.
+  const shownDefinitions = result.definitions.length;
+  console.log(
+    shownDefinitions < matches.length
+      ? `## Definitions (showing ${shownDefinitions} of ${matches.length} matched, matched by ${result.matchTier})`
+      : `## Definitions (${shownDefinitions}, matched by ${result.matchTier})`,
+  );
+  if (shownDefinitions < matches.length) {
+    console.log(
+      `Display limit: ${matches.length - shownDefinitions} further definition(s) of this name are not listed, ` +
+        "and the callers/callees below are those of the definitions shown.",
+    );
+  }
   for (const def of result.definitions) {
     const container = def.container ? ` in ${def.container}` : "";
     console.log(`- ${def.name} (${def.kind})${container} — ${def.path}:${def.startLine}`);
@@ -549,9 +601,14 @@ async function runFind(rest: string[]): Promise<void> {
     console.log(line);
   }
 
+  // `outcome.files` / `outcome.symbols` are the RANKED PAGE — ballast dropped
+  // and sliced to the default 20/15 limits — while `outcome.reason` states what
+  // matched and, when the two differ, carries `findCandidates`'s own labelled
+  // "Showing N of M" clause. These headers counted the page under a bare noun,
+  // so `## Files (20)` sat directly beneath a reason saying forty matched.
   if (outcome.symbols.length > 0) {
     console.log("");
-    console.log(`## Symbols (${outcome.symbols.length})`);
+    console.log(`## Symbols (${outcome.symbols.length} shown)`);
     for (const symbol of outcome.symbols) {
       console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
       console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(symbol.score)} · ${symbol.reason}`);
@@ -560,7 +617,7 @@ async function runFind(rest: string[]): Promise<void> {
 
   if (outcome.files.length > 0) {
     console.log("");
-    console.log(`## Files (${outcome.files.length})`);
+    console.log(`## Files (${outcome.files.length} shown)`);
     for (const result of outcome.files) {
       console.log(`- ${result.path}`);
       console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(result.score)} · ${result.reason}`);
@@ -773,9 +830,45 @@ async function runRepomap(rest: string[]): Promise<void> {
     ...(seed.length > 0 ? { seed } : {}),
   });
 
+  // AFC-12 already made `computeRepomap` refuse rather than truncate a required
+  // set, and `formatRepomap` (the agent boundary) already renders that refusal.
+  // This surface never got it: measured on 2026-09-08, a `--seed` whose
+  // required set did not fit printed
+  //
+  //   gdgraph repomap complete: 0 entries, ~0 tokens
+  //   omitted (over budget): 2
+  //
+  // at exit 0 — the word "complete" applied to a map that was refused, and the
+  // seed the caller explicitly asked to protect never named. Same vocabulary as
+  // the agent boundary so the two surfaces cannot drift.
+  if (result.overflow !== undefined) {
+    console.error(
+      `gdgraph repomap ${result.overflow.code}: the required entry "${result.overflow.requiredId}" does not fit ` +
+        "within the token budget.",
+    );
+    console.error("No entries were written: a partial required set is never reported as a map.");
+    console.error("Raise --budget, or narrow --seed, and retry.");
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`gdgraph repomap complete: ${result.entries.length} entries, ~${result.tokens} tokens`);
   if (result.omitted > 0) {
+    // `omitted` alone is a scalar a reader cannot check. `omittedOptional`
+    // names the paths and has always been on the result; only the agent
+    // boundary printed them.
     console.log(`omitted (over budget): ${result.omitted}`);
+    for (const path of result.omittedOptional.slice(0, 40)) {
+      console.log(`  - ${path}`);
+    }
+    if (result.omittedOptional.length > 40) {
+      console.log(`  - … +${result.omittedOptional.length - 40} more`);
+    }
+  }
+  if (result.entries.length === 0 && result.omitted > 0) {
+    console.log(
+      "0 entries is a budget decision about this map, not a claim that the graph holds no ranked files.",
+    );
   }
   console.log(`repomap: ${result.path}`);
 }
