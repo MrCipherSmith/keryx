@@ -328,6 +328,8 @@ export interface FlowService {
     // evidence refs / run link are set on the task. Existing callers that omit
     // these are unaffected. Only Task Manager writes these to flow.json (D-02).
     evidenceRefs?: string[] | undefined;
+    /** Acceptance-criterion ids this task addresses (v2 field, previously unwritable). */
+    acRefs?: string[] | undefined;
     runLink?: TaskRunLink | undefined;
   }): Promise<FlowState>;
   /**

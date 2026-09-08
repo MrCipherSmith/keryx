@@ -72,6 +72,28 @@ const VALID_DISPOSITIONS = ["completed", "blocked", "failed", "skipped"] as cons
  * afterwards through the schema enum, which is too late: the flow was already
  * `done`.
  */
+/**
+ * A comma-separated option as a trimmed, de-duplicated list.
+ *
+ * Returns `undefined` when the flag is absent, so an omitted flag leaves an
+ * existing value alone, while `--ac ""` clears it — the two are different
+ * intentions and collapsing them would make a field impossible to unset.
+ */
+function listOption(args: string[], flag: string): string[] | undefined {
+  const raw = optionValue(args, flag);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const value = part.trim();
+    if (value.length > 0) {
+      seen.add(value);
+    }
+  }
+  return [...seen];
+}
+
 function parseDisposition(raw: string | undefined): TaskDisposition | undefined {
   if (raw === undefined) {
     return undefined;
@@ -545,17 +567,26 @@ async function runTask(args: string[]): Promise<void> {
     const taskId = positional(args, 2);
     if (!id || !taskId) {
       throw new Error(
-        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
+        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...]',
       );
     }
     const disposition = parseDisposition(optionValue(args, "--disposition"));
     const reason = optionValue(args, "--reason");
+    // `acRefs` and `evidenceRefs` have been in the task schema since v2 with no
+    // way to set them from the command line, so every task in every flow of
+    // this programme carries two empty arrays where the trace from work to
+    // criterion was supposed to be. The fields were not missing; the writer
+    // was.
+    const acRefs = listOption(args, "--ac");
+    const evidenceRefs = listOption(args, "--evidence");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
       id,
       taskId,
       disposition,
       reason,
+      acRefs,
+      evidenceRefs,
     });
     const done = flow.tasks.filter((task) => task.status === "done").length;
     console.log(`  ${style.green(symbols.ok)} Task ${style.bold(taskId.toUpperCase())} done ${style.dim(`(${done}/${flow.tasks.length})`)}`);
