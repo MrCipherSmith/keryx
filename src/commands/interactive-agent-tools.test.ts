@@ -84,6 +84,10 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     // from its own test.
     "wiki_evidence",
     "wiki_freshness",
+    // Flow 242 (forgetting) lane C / AC5: the same named-outcome vocabulary
+    // `keryx wiki sections resolve` answers on, now reachable from the
+    // interactive agent (see `metaproject-operations.test.ts` EXPECTED_NAMES).
+    "wiki_resolve",
     "workspace_create",
     "workspace_list",
     "workspace_overview",

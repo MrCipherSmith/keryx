@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { pathExists } from "../lib/fs";
+import { isNotFound } from "../lib/fs";
 import type { GraphData } from "../gdgraph/types";
 import { parseProvenance } from "./provenance";
 import type { WikiPage, WikiPageType } from "./types";
@@ -10,22 +10,76 @@ function wikiRootPath(cwd: string): string {
   return path.join(cwd, ".metaproject", "wiki");
 }
 
+/**
+ * Flow 242 (forgetting), lane C: the wiki store failing to read must not read
+ * as "no pages". `code` is always `"store-unreadable"` today — a single
+ * member rather than a bare string so a caller can `instanceof` this without
+ * string-matching a message, the same shape `ContainedReadError`
+ * (`../lib/contained-read.ts`) uses for its own code.
+ */
+export class WikiCollectionError extends Error {
+  readonly code = "store-unreadable" as const;
+  constructor(readonly dir: string, message: string) {
+    super(message);
+    this.name = "WikiCollectionError";
+  }
+}
+
+/**
+ * List every wiki page under `.metaproject/wiki/`.
+ *
+ * `readdir` failing on a page-type folder used to be swallowed identically
+ * whether the folder simply did not exist (ENOENT — a legitimate empty
+ * project, or a project that has not authored, say, any `decisions/` pages
+ * yet) or the wiki store itself could not be read (EACCES, a stale/corrupt
+ * mount, …). Both produced the SAME empty page list, so `keryx wiki sections`
+ * and every caller built on it (`wiki status`, `wiki ask`, the section
+ * registry, the agent/MCP wiki surface) reported a clean, empty wiki over a
+ * store it never actually looked at — exit 0 next to a hard read failure.
+ * ENOENT alone is still "no folder of that type" and is skipped; anything
+ * else THROWS a `WikiCollectionError` naming the exact directory, so a caller
+ * that does not need this distinction still fails loudly instead of silently
+ * losing pages, and a caller that does (the section-tombstone registry, the
+ * agent-facing `wikiResolve` operation) can catch it and answer
+ * `store-unreadable` rather than "found nothing".
+ */
 export async function collectPages(cwd: string): Promise<WikiPage[]> {
   const root = wikiRootPath(cwd);
   const pages: WikiPage[] = [];
 
   for (const { type, folder } of WIKI_PAGE_TYPES) {
     const dir = path.join(root, folder);
-    if (!(await pathExists(dir))) {
-      continue;
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      throw new WikiCollectionError(
+        dir,
+        `the wiki store could not be read (${message}). This is not the same as "no pages": ` +
+          `${dir} may hold pages that could not be listed.`,
+      );
     }
 
-    for (const entry of await readdir(dir)) {
+    for (const entry of names) {
       if (!entry.endsWith(".md")) {
         continue;
       }
       const absolutePath = path.join(dir, entry);
-      const content = await readFile(absolutePath, "utf8");
+      let content: string;
+      try {
+        content = await readFile(absolutePath, "utf8");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new WikiCollectionError(
+          absolutePath,
+          `the wiki store could not be read (${message}). This is not the same as "no pages": ` +
+            `${absolutePath} exists but could not be read.`,
+        );
+      }
       pages.push(
         parsePage(absolutePath, `${folder}/${entry}`, type, content),
       );

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -841,5 +841,175 @@ test("loadSkill rejects a real on-disk path that the catalog walk never discover
     const result = await adapter.loadSkill?.({ name: strayPath });
     expect(result?.found).toBe(false);
     expect(result?.content).toBe("");
+  });
+});
+
+// --- flow 242 (forgetting) lane C: readWiki / memorySearch / wikiResolve ----
+// named outcomes (AC3 + AC5). Real filesystem, real `chmod` — a fake catching
+// a hand-picked error code would prove nothing about the actual EACCES this
+// was measured on.
+
+const SKIP_PERMISSION_TESTS = process.getuid?.() === 0 || process.platform === "win32";
+
+/** Build a temp project root with one real wiki page under architecture/. */
+async function withWikiFixture(fn: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-wiki-forgetting-"));
+  try {
+    const dir = path.join(root, ".metaproject", "wiki", "architecture");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "foo.md"), "<!-- keryx:page id=\"architecture-foo\" v=1 -->\n# Foo\n\nBody.\n", "utf8");
+    await fn(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+/** Register `architecture/foo.md`'s stable page identity in the section registry (mirrors `keryx wiki sections sync`). */
+async function syncWikiRegistry(root: string): Promise<void> {
+  const { collectPages } = await import("../../wiki/collect");
+  const { buildSectionIndex } = await import("../../wiki/section-index");
+  const { syncSectionRegistry } = await import("../../wiki/section-tombstone");
+  const pages = await collectPages(root);
+  const index = buildSectionIndex(
+    await Promise.all(pages.map(async (page) => ({ page, content: await Bun.file(page.absolutePath).text() }))),
+  );
+  const result = await syncSectionRegistry(root, index);
+  if (result.status !== "synced") {
+    throw new Error(`test setup: sync refused: ${result.reason}`);
+  }
+}
+
+test("readWiki: a page that never existed reports outcome absent", async () => {
+  await withWikiFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.readWiki({ path: "architecture/never-existed.md" });
+    expect(result.isError).toBe(true);
+    expect(result.outcome).toBe("absent");
+  });
+});
+
+test("readWiki: a registered page deleted but not yet synced reports outcome pending-tombstone, not absent", async () => {
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.readWiki({ path: "architecture/foo.md" });
+    expect(result.isError).toBe(true);
+    expect(result.outcome).toBe("pending-tombstone");
+  });
+});
+
+test("readWiki: a page removed AND synced reports outcome tombstoned, distinct from a page that never existed", async () => {
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    await syncWikiRegistry(root); // writes the tombstone
+    const adapter = createMetaprojectAdapter(root);
+
+    const removed = await adapter.readWiki({ path: "architecture/foo.md" });
+    expect(removed.isError).toBe(true);
+    expect(removed.outcome).toBe("tombstoned");
+
+    const neverExisted = await adapter.readWiki({ path: "architecture/never-existed.md" });
+    expect(neverExisted.isError).toBe(true);
+    expect(neverExisted.outcome).toBe("absent");
+
+    // The defect this lane exists to close: these must not be the same string.
+    expect(removed.error).not.toBe(neverExisted.error);
+  });
+});
+
+test("readWiki: a genuinely unreadable wiki store reports outcome store-unreadable, exit-code-equivalent to \"cannot tell\" (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    const wikiDir = path.join(root, ".metaproject", "wiki");
+    await chmod(wikiDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      const result = await adapter.readWiki({ path: "architecture/foo.md" });
+      expect(result.isError).toBe(true);
+      expect(result.outcome).toBe("store-unreadable");
+      expect(result.content).toBe("");
+    } finally {
+      await chmod(wikiDir, 0o755);
+    }
+  });
+});
+
+test("readWiki: an unreadable PAGE FOLDER (registry elsewhere still readable) is store-unreadable, not absent — isolates the direct stat guard from the registry-unreadable fallback", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root); // .sections.json lives at the wiki ROOT, untouched below.
+    const archDir = path.join(root, ".metaproject", "wiki", "architecture");
+    await chmod(archDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      const result = await adapter.readWiki({ path: "architecture/foo.md" });
+      expect(result.isError).toBe(true);
+      expect(result.outcome).toBe("store-unreadable");
+    } finally {
+      await chmod(archDir, 0o755);
+    }
+  });
+});
+
+test("memorySearch: a genuinely unreadable memory store reports a distinguishable error and never calls the backing service (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-memory-forgetting-"));
+  try {
+    const lessonsDir = path.join(root, ".metaproject", "memory", "lessons");
+    await mkdir(lessonsDir, { recursive: true });
+    await writeFile(path.join(lessonsDir, "kept.md"), "# Kept\nStatus: accepted\n", "utf8");
+    await chmod(lessonsDir, 0o000);
+    try {
+      const { deps, calls } = fakeDeps({});
+      const port = createMetaprojectAdapter(root, deps);
+      const result = await port.memorySearch({ query: "kept" });
+      expect(result.hits).toEqual([]);
+      expect(result.error).toBeDefined();
+      expect(result.error).toMatch(/memory store could not be read/);
+      // Before this fix, the backing service silently swallowed the same
+      // EACCES as "no entries" — proving the fix means proving the probe
+      // short-circuits BEFORE the (fake, would-have-lied) service is called.
+      expect(calls.search).toEqual([]);
+    } finally {
+      await chmod(lessonsDir, 0o755);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("wikiResolve: matches the SAME kinds `resolveSectionIdentity` (keryx wiki sections resolve) produces — tombstoned vs unknown vs store-unreadable", async () => {
+  await withWikiFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+
+    // Never registered at all -> unknown (never existed).
+    const neverExisted = await adapter.wikiResolve?.({ ref: "keryx:page/does-not-exist" });
+    expect(neverExisted?.resolution.kind).toBe("unknown");
+
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    await syncWikiRegistry(root);
+
+    const removed = await adapter.wikiResolve?.({ ref: "keryx:page/architecture-foo" });
+    expect(removed?.resolution.kind).toBe("tombstoned");
+  });
+});
+
+test("wikiResolve: a genuinely unreadable wiki store reports store-unreadable rather than throwing across the port (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    const wikiDir = path.join(root, ".metaproject", "wiki");
+    await chmod(wikiDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      // Never throws across the port — a read-only MCP-facing operation must
+      // return a structured refusal, not a stack trace crossing the transport.
+      const result = await adapter.wikiResolve?.({ ref: "keryx:page/architecture-foo" });
+      expect(result?.resolution.kind).toBe("store-unreadable");
+    } finally {
+      await chmod(wikiDir, 0o755);
+    }
   });
 });

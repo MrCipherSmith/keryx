@@ -9,7 +9,7 @@
 // the renderer in isolation -- now shows what AC6 requires.
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { memoryCommand } from "./memory";
@@ -276,5 +276,87 @@ Keep canary rollout current for the release pipeline.
 
     const current = payload.results.find((r) => r.path === "decisions/current-canary.md");
     expect(current?.historical).toBeUndefined();
+  });
+});
+
+// Flow 242 (forgetting) lane C / AC3: measured on this repo — `chmod 000
+// .metaproject/memory` then `keryx memory search <query> --json` printed
+// `{"query":"...","results":[]}` and exited 0. `collectEntries`
+// (`../memory/store.ts`) treats a folder it cannot list the same as a folder
+// that does not exist, so a hard read failure read as a clean, empty,
+// successful search. Real `chmod`, not an injected error — a fake catching a
+// hand-picked error code proves nothing about the actual EACCES this was
+// measured on.
+describe("keryx memory search — a genuinely unreadable memory store (real chmod)", () => {
+  let root = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let loggedErr: string[] = [];
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+  let lessonsDir = "";
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-memory-store-unreadable-"));
+    cwd = process.cwd();
+    process.chdir(root);
+    lessonsDir = path.join(root, ".metaproject", "memory", "lessons");
+    await mkdir(lessonsDir, { recursive: true });
+    await writeFile(path.join(lessonsDir, "kept.md"), "# Kept\nStatus: accepted\n\n## Summary\n\nKept.\n", "utf8");
+
+    loggedOut = [];
+    loggedErr = [];
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    console.error = (...parts: unknown[]) => {
+      loggedErr.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    console.error = originalError;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    // Restore permissions before recursive rm, or cleanup itself fails EACCES.
+    await chmod(lessonsDir, 0o755).catch(() => {});
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const skip = process.getuid?.() === 0 || process.platform === "win32";
+
+  test("exits 2 (not 0) and reports store-unreadable, --json", async () => {
+    if (skip) return;
+    await chmod(lessonsDir, 0o000);
+
+    await memoryCommand(["search", "kept", "--json"]);
+
+    expect(process.exitCode).toBe(2);
+    const payload = JSON.parse(loggedOut.join("\n")) as { outcome?: string; error?: string };
+    expect(payload.outcome).toBe("store-unreadable");
+    expect(payload.error).toMatch(/memory store could not be read/);
+  });
+
+  test("exits 2 (not 0) and reports store-unreadable, human text on stderr", async () => {
+    if (skip) return;
+    await chmod(lessonsDir, 0o000);
+
+    await memoryCommand(["search", "kept"]);
+
+    expect(process.exitCode).toBe(2);
+    expect(loggedOut.join("\n")).toBe("");
+    expect(loggedErr.join("\n")).toContain("store-unreadable");
+  });
+
+  test("a readable store is unaffected (control case)", async () => {
+    await memoryCommand(["search", "kept", "--json"]);
+
+    expect(process.exitCode).toBe(0);
+    const payload = JSON.parse(loggedOut.join("\n")) as { results: Array<{ path: string }> };
+    expect(payload.results.map((r) => r.path)).toContain("lessons/kept.md");
   });
 });

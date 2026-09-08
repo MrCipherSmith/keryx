@@ -855,6 +855,8 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     // from its own test.
     "wiki_evidence",
     "wiki_freshness",
+    // Flow 242 (forgetting) lane C / AC5.
+    "wiki_resolve",
     "workspace_create",
     "workspace_list",
     "workspace_overview",

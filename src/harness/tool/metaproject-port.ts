@@ -23,6 +23,7 @@
 
 import type { RetrievalCode } from "../../lib/retrieval-codes";
 import type { EvidencePackage } from "../../wiki/evidence";
+import type { SectionResolution } from "../../wiki/section-tombstone";
 
 /**
  * Tri-state graph freshness, carried to the agent-facing boundary.
@@ -161,7 +162,20 @@ export interface SearchCodeResult {
   truncated?: boolean;
 }
 
-/** Structured result of `readWiki`. */
+/**
+ * Structured result of `readWiki`.
+ *
+ * `outcome` is flow 242 (forgetting) lane C's named-outcome vocabulary,
+ * additive on an interface that has shipped since flow 037 — every existing
+ * `isError`/`error` consumer is unaffected. Before this, a page that never
+ * existed, one that was deleted (tombstoned or pending a
+ * `keryx wiki sections sync`), and one the wiki store itself could not read
+ * (EACCES, a stale mount) all produced the SAME literal error string, so
+ * "never existed", "existed and was removed" and "cannot tell" — AC5's three
+ * required answers — collapsed into one at this boundary. `found` is set on
+ * every successful read for symmetry, even though `isError` already implies
+ * it; a caller should still branch on `isError` first.
+ */
 export interface WikiPageResult {
   /** The requested wiki path (relative to .metaproject/wiki/). */
   path: string;
@@ -171,6 +185,43 @@ export interface WikiPageResult {
   isError: boolean;
   /** Set with a human-readable reason when `isError` is true. */
   error?: string;
+  /**
+   * `found` | `absent` (never existed) | `tombstoned` (removed, on record) |
+   * `pending-tombstone` (removed; `keryx wiki sections sync` has not run) |
+   * `store-unreadable` (the wiki store or its removal registry could not be
+   * read — "found"/"absent"/"tombstoned" cannot be told apart) |
+   * `outside-root` (the path escaped the wiki root; a security refusal, not
+   * a knowledge-removal answer). Optional so a `MetaprojectPort`
+   * implementation predating this field still type-checks; the reference
+   * adapter always sets it.
+   */
+  outcome?: "found" | "absent" | "tombstoned" | "pending-tombstone" | "store-unreadable" | "outside-root";
+}
+
+/**
+ * Structured result of `wikiResolve` — reference resolution over the
+ * section-tombstone registry (`src/wiki/section-tombstone.ts`,
+ * `resolveSectionIdentity`), projected for a caller asking "why can I not
+ * give you this knowledge" (flow 242, lane C). This is the SAME computation
+ * `keryx wiki sections resolve` runs — not a re-derivation of its
+ * vocabulary — so an agent/MCP caller and a human running the CLI on the
+ * same ref get the same answer by construction.
+ *
+ * `resolution.kind` is `SectionResolution`'s own union verbatim (`found` |
+ * `page-found` | `tombstoned` | `reoccupied` | `pending-tombstone` |
+ * `stale-locator` | `registry-unreadable` | `unknown`), plus ONE addition —
+ * `store-unreadable` — for the case `SectionResolution` cannot represent at
+ * all: the wiki page tree itself (not just the `.sections.json` registry)
+ * could not be listed, so no index could be built to resolve against. Never
+ * thrown: a `collectPages` failure (`WikiCollectionError`,
+ * `src/wiki/collect.ts`) is caught and turned into this outcome, because an
+ * MCP/agent caller of a read-only operation must get a structured refusal,
+ * not a stack trace crossing the transport.
+ */
+export interface WikiResolveResult {
+  /** The requested identity (`keryx:page/<id>` or `keryx:page/<id>#<sectionId>`). */
+  ref: string;
+  resolution: SectionResolution | { kind: "store-unreadable"; reason: string };
 }
 
 /** Structured result of `graphPath` — the connection between two graph endpoints. */
@@ -711,4 +762,20 @@ export interface MetaprojectPort {
   skillsCatalog?(input: Record<string, never>): Promise<SkillsCatalogResult>;
   /** One skill's full SKILL.md body, by name or exact path (gdskills). */
   loadSkill?(input: { name: string }): Promise<SkillLoadResult>;
+
+  // --- additive OPTIONAL read operation: flow 242 (forgetting) lane C -------
+  // Same OPTIONAL contract as every batch above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw. Before this
+  // the CLI's `keryx wiki sections resolve` had no agent or MCP equivalent at
+  // all — the one place this project could answer "never existed" vs
+  // "existed and was removed" vs "cannot tell" for a wiki identity existed on
+  // one surface only, and AC5 of flow 242 requires the same three answers on
+  // all three (CLI, agent tool boundary, MCP).
+
+  /**
+   * Resolve a wiki page/section identity to what it IS, not what merely
+   * occupies its address: live, tombstoned, pending a sync, reoccupied by a
+   * different document, or never registered at all (gdwiki).
+   */
+  wikiResolve?(input: { ref: string }): Promise<WikiResolveResult>;
 }

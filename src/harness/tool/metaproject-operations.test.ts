@@ -55,6 +55,12 @@ const EXPECTED_NAMES = [
   // own test. See `wiki-evidence-projection.test.ts`.
   "wiki_evidence",
   "wiki_freshness",
+  // Flow 242 (forgetting) lane C / AC5: `keryx wiki sections resolve`'s
+  // named-outcome vocabulary (found/tombstoned/pending-tombstone/reoccupied/
+  // unknown/registry-unreadable, plus store-unreadable) had no agent or MCP
+  // equivalent — this closes that gap. See `metaproject-adapter.test.ts` and
+  // `mcp.test.ts` for the store-unreadable proof (a real `chmod`, not a fake).
+  "wiki_resolve",
 ];
 
 interface PortCalls {

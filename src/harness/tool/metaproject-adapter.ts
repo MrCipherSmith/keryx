@@ -17,8 +17,17 @@ import { freshnessReportPath, readWikiFreshnessMetric } from "../../health/metri
 import type { Dirent } from "node:fs";
 import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
-import { isPathInside } from "../../lib/fs";
+import { isNotFound, isPathInside, toPosix } from "../../lib/fs";
 import { readContainedFile } from "../../lib/contained-read";
+import { collectPages, WikiCollectionError } from "../../wiki/collect";
+import { buildSectionIndex } from "../../wiki/section-index";
+import {
+  emptySectionRegistry,
+  readSectionRegistryState,
+  resolveSectionIdentity,
+} from "../../wiki/section-tombstone";
+import { memoryRoot } from "../../memory/store";
+import { MEMORY_TYPES } from "../../memory/types";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
 import { findCandidates, type FindOutcome, type FindOptions } from "../../gdgraph/find";
 import { normalizeRetrievalCode, RETRIEVAL_NEXT_ACTIONS } from "../../lib/retrieval-codes";
@@ -70,6 +79,7 @@ import type {
   WikiBacklinksResult,
   WikiEvidenceResult,
   WikiPageResult,
+  WikiResolveResult,
 } from "./metaproject-port";
 
 /** Injectable backing factories (default: the real in-process service facades). */
@@ -267,6 +277,38 @@ function confineToWiki(cwd: string, candidate: string): string | null {
     return null; // escapes the wiki root
   }
   return target;
+}
+
+/**
+ * Flow 242 (forgetting) lane C: `readdir` failing on a memory type-folder used
+ * to be swallowed identically whether the folder simply did not exist yet
+ * (ENOENT — a legitimate empty project) or the memory store itself could not
+ * be read (EACCES, a stale mount) — `collectEntries`
+ * (`../../memory/store.ts`, not owned by this lane) uses the same
+ * `pathExists`-then-`readdir` shape `collectPages` used to. That store is not
+ * this lane's to change, so this checks the SAME folders it walks — every
+ * `MEMORY_TYPES` folder under `memoryRoot(cwd)` — independently, before
+ * trusting an empty/short result from it. Only a non-ENOENT failure is
+ * reported: a folder that legitimately does not exist is not "unreadable".
+ */
+async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> {
+  const root = memoryRoot(cwd);
+  for (const { folder } of MEMORY_TYPES) {
+    const dir = join(root, folder);
+    try {
+      await readdir(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue;
+      }
+      const message = errorMessage(error);
+      return (
+        `the memory store could not be read (${message}). This is not the same as "no memory": ` +
+        `${dir} may hold entries that could not be listed.`
+      );
+    }
+  }
+  return null;
 }
 
 /**
@@ -570,6 +612,23 @@ export function createMetaprojectAdapter(
         status: filters.status ?? "accepted",
         ...(input.class !== undefined ? { class: input.class } : {}),
       };
+      // Flow 242 (forgetting) lane C / AC3: `memory.search`'s backing
+      // (`collectEntries`, `../../memory/store.ts`) treats a folder it cannot
+      // list the SAME as a folder that does not exist — an EACCES store reads
+      // as "nothing accepted matched" with `hits: []` and no `error` at all,
+      // which is a worse version of the exact defect this lane exists to
+      // close: a hard read failure rendered as a clean empty success. Checked
+      // BEFORE calling the service, because the service itself never throws
+      // for this case — there would be nothing to catch.
+      const storeError = await detectMemoryStoreUnreadable(cwd);
+      if (storeError !== null) {
+        return {
+          query: input.query,
+          ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),
+          hits: [],
+          error: storeError,
+        };
+      }
       try {
         const result = await memory.search({ cwd, query: input.query, filters });
         const hits = result.results
@@ -672,17 +731,139 @@ export function createMetaprojectAdapter(
           content: "",
           isError: true,
           error: "wiki path is outside its root",
+          outcome: "outside-root",
         };
       }
+
+      // Flow 242 (forgetting) lane C / AC3 + AC5: a direct `stat` BEFORE the
+      // containment-checked read, so ENOENT (no page at this path) and every
+      // other failure (EACCES, a stale mount) are told apart here. Below,
+      // `readContainedFile`'s OWN preliminary probe collapses every failure —
+      // a page that never existed and a wiki store that could not even be
+      // listed alike — into one generic "not found"; that hardening stays in
+      // place for the actual read (this adds one extra syscall on the ENOENT
+      // path, not a second read path with its own containment bugs).
+      let exists: boolean;
+      try {
+        await stat(target);
+        exists = true;
+      } catch (error) {
+        if (!isNotFound(error)) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              "the wiki store could not be read right now; \"present\" and \"absent\" cannot be told apart.",
+            outcome: "store-unreadable",
+          };
+        }
+        exists = false;
+      }
+
+      if (!exists) {
+        const relativePath = toPosix(relative(join(cwd, ".metaproject", "wiki"), target));
+        const registry = await readSectionRegistryState(cwd);
+        if (registry.state === "unreadable") {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              `this page's removal history could not be read (${registry.reason}) "never existed" and ` +
+              `"existed and was removed" cannot be told apart right now.`,
+            outcome: "store-unreadable",
+          };
+        }
+        const history = registry.state === "present" ? registry.registry : emptySectionRegistry();
+        const tombstone = history.tombstones.find(
+          (entry) => entry.kind === "page" && entry.page === relativePath,
+        );
+        if (tombstone) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              `this page was removed on ${tombstone.removedAt} (${tombstone.reason}). There is no redirect ` +
+              "— a page with the same name elsewhere is NOT this one.",
+            outcome: "tombstoned",
+          };
+        }
+        const pending = history.entries.find(
+          (entry) => entry.kind === "page" && entry.page === relativePath,
+        );
+        if (pending) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              "this page is recorded in the section registry and is gone from the wiki, but " +
+              "`keryx wiki sections sync` has not run since — it was REMOVED, not \"never existed\".",
+            outcome: "pending-tombstone",
+          };
+        }
+        return {
+          path: input.path,
+          content: "",
+          isError: true,
+          error: "no wiki page exists at this path, and nothing records it as ever having existed.",
+          outcome: "absent",
+        };
+      }
+
       try {
         const content = (await readContainedFile(join(cwd, ".metaproject", "wiki"), target, {
           maxBytes: 8 * 1024 * 1024,
           requireRegularFile: true,
         })).toString("utf8");
-        return { path: input.path, content, isError: false };
+        return { path: input.path, content, isError: false, outcome: "found" };
       } catch {
-        return { path: input.path, content: "", isError: true, error: "wiki page is unavailable" };
+        return {
+          path: input.path,
+          content: "",
+          isError: true,
+          error: "wiki page could not be read.",
+          outcome: "store-unreadable",
+        };
       }
+    },
+
+    async wikiResolve(input): Promise<WikiResolveResult> {
+      // Flow 242 (forgetting) lane C / AC5: the SAME computation
+      // `keryx wiki sections resolve` runs (`resolveSectionIdentity` over
+      // `collectPages` + `buildSectionIndex` + the section-tombstone
+      // registry, all from `src/wiki/section-tombstone.ts` and
+      // `src/wiki/collect.ts` — untouched here), so an agent/MCP caller and a
+      // human running the CLI on the same ref get the same answer, not a
+      // second hand-derived one. This was the missing capability: the CLI's
+      // only correct answer for "was this deleted or did it never exist" had
+      // no agent or MCP equivalent at all.
+      let pages;
+      try {
+        pages = await collectPages(cwd);
+      } catch (error) {
+        // `collectPages` now throws `WikiCollectionError` on a genuinely
+        // unreadable store (flow 242 lane C) instead of silently returning an
+        // empty page list. A read-only operation crossing the MCP transport
+        // must never throw — this is the ONE place that failure is caught and
+        // turned into a structured, named outcome rather than a stack trace.
+        const message =
+          error instanceof WikiCollectionError ? error.message : errorMessage(error);
+        return { ref: input.ref, resolution: { kind: "store-unreadable", reason: message } };
+      }
+      const index = buildSectionIndex(
+        await Promise.all(
+          pages.map(async (page) => ({
+            page,
+            content: await readFile(page.absolutePath, "utf8").catch(() => ""),
+          })),
+        ),
+      );
+      const registry = await readSectionRegistryState(cwd);
+      const resolution = resolveSectionIdentity(index, registry, input.ref);
+      return { ref: input.ref, resolution };
     },
 
     async describeContext(): Promise<ContextSummaryResult> {

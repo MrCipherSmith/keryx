@@ -43,7 +43,8 @@ import type {
   WikiBacklinksResult,
   WikiEvidenceResult,
   WikiPageResult,
-  WikiFreshnessResult,} from "./metaproject-port";
+  WikiFreshnessResult,
+  WikiResolveResult,} from "./metaproject-port";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -234,12 +235,78 @@ export function formatMemory(result: MemorySearchResult): InteractiveToolResult 
   return { output: [header, ...lines].join("\n"), isError: false };
 }
 
-/** Render a structured `readWiki` result as readable text for the model. */
+/**
+ * Render a structured `readWiki` result as readable text for the model.
+ *
+ * Flow 242 (forgetting) lane C / AC5: `outcome` is printed as a bracketed tag
+ * so "never existed" (`absent`), "existed and was removed" (`tombstoned` /
+ * `pending-tombstone`) and "cannot tell" (`store-unreadable`) read as three
+ * visibly different answers here, not one generic failure string with the
+ * reason varying underneath.
+ */
 export function formatWiki(result: WikiPageResult): InteractiveToolResult {
   if (result.isError) {
-    return { output: result.error ?? `read_wiki failed for ${result.path}`, isError: true };
+    const tag = result.outcome !== undefined ? `[${result.outcome}] ` : "";
+    return { output: `${tag}${result.error ?? `read_wiki failed for ${result.path}`}`, isError: true };
   }
   return { output: result.content.length > 0 ? result.content : "(empty page)", isError: false };
+}
+
+/**
+ * Render a structured `wikiResolve` result as readable text for the model.
+ *
+ * Flow 242 (forgetting) lane C / AC2 + AC5: NEVER a same-name substitute — a
+ * `reoccupied` identity is printed with its evidence and BOTH the tombstone
+ * and whatever now occupies the address, never folded into an ordinary
+ * "found".
+ */
+function formatWikiResolve(result: WikiResolveResult): InteractiveToolResult {
+  const { resolution } = result;
+  const prefix = `wiki_resolve ${result.ref}: `;
+  switch (resolution.kind) {
+    case "found":
+      return {
+        output:
+          `${prefix}[found] ${resolution.section.pageRelativePath} "${resolution.section.title}" ` +
+          `(lines ${resolution.section.bodyRange.startLine}-${resolution.section.bodyRange.endLine})` +
+          (resolution.history
+            ? `\n  history: removed ${resolution.history.removedAt} — ${resolution.history.reason}` +
+              (resolution.history.restoredAt === null
+                ? " (restored with byte-identical content; the tombstone is still on disk)."
+                : ` (restored ${resolution.history.restoredAt}; the tombstone is retained).`)
+            : ""),
+        isError: false,
+      };
+    case "page-found":
+      return {
+        output:
+          `${prefix}[page-found] ${resolution.page}` +
+          (resolution.history ? `\n  history: removed ${resolution.history.removedAt} — ${resolution.history.reason}` : ""),
+        isError: false,
+      };
+    case "tombstoned":
+      return {
+        output:
+          `${prefix}[tombstoned] removed ${resolution.tombstone.removedAt} — ${resolution.tombstone.reason}. ` +
+          "There is no redirect: a section with the same heading elsewhere is NOT this one.",
+        isError: true,
+      };
+    case "reoccupied":
+      return {
+        output: `${prefix}[reoccupied, ${resolution.evidence}] ${resolution.reason}`,
+        isError: true,
+      };
+    case "pending-tombstone":
+      return { output: `${prefix}[pending-tombstone] ${resolution.reason}`, isError: true };
+    case "stale-locator":
+      return { output: `${prefix}[stale-locator] ${resolution.reason}`, isError: true };
+    case "registry-unreadable":
+      return { output: `${prefix}[registry-unreadable] ${resolution.reason}`, isError: true };
+    case "store-unreadable":
+      return { output: `${prefix}[store-unreadable] ${resolution.reason}`, isError: true };
+    default:
+      return { output: `${prefix}[unknown] ${resolution.reason}`, isError: true };
+  }
 }
 
 /** Render a structured `skillsCatalog` result as readable text for the model. */
@@ -348,8 +415,19 @@ const WIKI_OUTPUT_SCHEMA: Record<string, unknown> = {
     content: { type: "string" },
     isError: { type: "boolean" },
     error: { type: "string" },
+    outcome: { type: "string" },
   },
   required: ["path", "content", "isError"],
+};
+
+/** Flow 242 (forgetting) lane C: `wiki_resolve`'s output — `WikiResolveResult` verbatim. */
+const WIKI_RESOLVE_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    ref: { type: "string" },
+    resolution: { type: "object" },
+  },
+  required: ["ref", "resolution"],
 };
 
 const SEARCH_OUTPUT_SCHEMA: Record<string, unknown> = {
@@ -1762,6 +1840,48 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return name.error;
       }
       return formatSkillLoad(await port.loadSkill({ name: name.value }));
+    },
+  },
+  // --- flow 242 (forgetting) lane C: additive OPTIONAL read operation --------
+  // Same OPTIONAL contract as every batch above: an absent method reports
+  // "not available", never a throw and never an invented clean result. Before
+  // this, `keryx wiki sections resolve` — the CLI's ONLY correct answer to
+  // "was this deleted or did it never exist" — had no agent or MCP
+  // equivalent at all: AC5 of flow 242 requires the same three answers
+  // (never existed / existed and was removed / cannot say) on the CLI, the
+  // agent tool boundary, and MCP, and this was the missing surface.
+  {
+    name: "wiki_resolve",
+    risk: "read",
+    module: "wiki",
+    description:
+      "Resolve a wiki page/section identity (`keryx:page/<id>` or `keryx:page/<id>#<sectionId>`, " +
+      "as printed by wiki_ask/wiki_evidence citations or `keryx wiki sections list`) to what it " +
+      "actually is right now — NOT what merely occupies its address. Input: { ref: string }. " +
+      "Answers, distinctly: found/page-found (live), tombstoned (removed, with when and why), " +
+      "pending-tombstone (removed but `keryx wiki sections sync` has not run yet), reoccupied " +
+      "(a DIFFERENT document now sits at this address — never returned as an ordinary found), " +
+      "stale-locator (a version-bound locator whose page body has since changed), " +
+      "registry-unreadable / store-unreadable (the removal history or the wiki store itself could " +
+      "not be read — \"live\", \"removed\" and \"never existed\" cannot be told apart), or unknown " +
+      "(nothing records this identity at all). Use this before treating read_wiki returning empty " +
+      "as proof a page never existed — it may instead be gone and tombstoned.",
+    inputSchema: {
+      type: "object",
+      properties: { ref: { type: "string" } },
+      required: ["ref"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_RESOLVE_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiResolve === undefined) {
+        return { output: "wiki_resolve is not available in this session.", isError: true };
+      }
+      const ref = requireString(input, "ref", "wiki_resolve");
+      if ("error" in ref) {
+        return ref.error;
+      }
+      return formatWikiResolve(await port.wikiResolve({ ref: ref.value }));
     },
   },
 ];
