@@ -110,6 +110,7 @@ import {
   providerByName,
   resolveModelsForPicker,
 } from "../commands/providers";
+import { loadSessionLimits } from "../commands/model-limits";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
@@ -3421,12 +3422,18 @@ export async function launchTuiAgentShell(opts: {
       void (async () => {
         const cwd = inspectorCwd();
         const [workspaces, flows] = await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
+        const limits = await loadSessionLimits({
+          provider: currentSel.provider,
+          model: currentSel.model,
+          ...(currentSel.baseUrl !== undefined ? { baseUrl: currentSel.baseUrl } : {}),
+        });
         const snapshot = buildSessionInfoSnapshot({
           summary: liveSession.summary,
           selection: currentSel,
           version: packageJson.version,
           usage: lastUsage,
           estimateTokens: estimateContextTokens(history),
+          limits,
           sessionText: history.map((message) => message.content).join("\n"),
           workspaces,
           flows,

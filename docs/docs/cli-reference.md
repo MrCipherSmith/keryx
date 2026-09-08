@@ -149,12 +149,15 @@ holds and what forking copies.
 - `/help` lists every slash command available in the current mode
   (`agent` vs `chat`). The registry is `AGENT_SLASH_COMMANDS`.
 - `/status` (chat and agent) opens a read-only inspector. The TUI modal
-  always has **Status** and **Context** (last-turn tokens plus a labelled
-  estimate — never a guessed window). **Workspaces** and **Flow** tabs
-  appear only when the session actually referenced a SAC workspace or a
-  flow (`runLink.sessionId` or an explicit `flow 154` / `/flows 154`
-  mention). `c` copies the session id. Readline / `--no-tui` prints the
-  same rows. `/session-info` and `/info` are **not** aliases.
+  always has **Status** and **Context**: last-turn tokens, a labelled
+  estimate, and — when the provider reported one — the model context
+  window, optional rate-limit headers, and DeepSeek/OpenRouter balance.
+  A missing figure stays `—`; the bar never invents a 128k window.
+  **Workspaces** and **Flow** tabs appear only when the session actually
+  referenced a SAC workspace or a flow (`runLink.sessionId` or an
+  explicit `flow 154` / `/flows 154` mention). `c` copies the session id.
+  Readline / `--no-tui` prints the same rows. `/session-info` and `/info`
+  are **not** aliases.
 - `/flows` lists project flows, newest first (highest id, then `updatedAt`).
   In the TUI, the List tab uses `↑/↓` to move the selection; Enter or `→`
   opens Detail. On Detail, `↑/↓` scroll the body instead — `[`/`]` (or

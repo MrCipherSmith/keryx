@@ -126,7 +126,7 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
   { name: "/sessions", description: "Open the session list and switch to one", modes: AGENT_ONLY },
   {
     name: "/status",
-    description: "Show session identity, context, workspaces, and flows",
+    description: "Show session identity, context window, limits, workspaces, and flows",
     modes: BOTH,
   },
   { name: "/flows", description: "Browse project flows and inspect one", modes: BOTH },

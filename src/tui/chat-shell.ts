@@ -37,6 +37,7 @@
 import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
+import { loadSessionLimits } from "../commands/model-limits";
 import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
@@ -526,11 +527,17 @@ export async function mountChatShell(
           return;
         }
         const summary = cwd !== undefined ? latestSession(cwd) : undefined;
+        const limits = await loadSessionLimits({
+          provider: selection.provider,
+          model: selection.model,
+          ...(selection.baseUrl !== undefined ? { baseUrl: selection.baseUrl } : {}),
+        });
         const snapshot = buildSessionInfoSnapshot({
           summary,
           selection,
           version: packageJson.version,
           estimateTokens: estimateContextTokens(seen),
+          limits,
           sessionText: seen.map((message) => message.content).join("\n"),
           workspaces,
           flows,

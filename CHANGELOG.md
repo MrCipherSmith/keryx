@@ -3,6 +3,24 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.83] — 2026-09-08
+
+One commit. `/status` already showed last-turn tokens and a labelled
+estimate, and refused to invent a 128k window. It still could not show
+the model's actual limit, so the bar was always relative to used tokens.
+
+### Added
+
+- **`/status` reports provider-reported context window, rate limits, and
+  balance when the provider actually sends them.** OpenAI-compatible
+  `/models` (including nested OpenRouter shapes) and Ollama `/api/show`
+  supply the window; rate-limit headers and DeepSeek/OpenRouter balance
+  endpoints fill the rest. Anthropic, Gemini, and any fetch that does not
+  answer stay `—`. The context bar fills against that window when it is
+  known, otherwise it keeps the old relative bar. Wired through the TUI
+  inspector and both readline surfaces. Missing is missing — never a
+  guessed limit.
+
 ## [0.2.82] — 2026-09-08
 
 One commit. SuperGrok login in the TUI spawned `xdg-open` without an
