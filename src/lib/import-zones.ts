@@ -120,6 +120,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "eval", zone: "core" },
   { segment: "retention", zone: "core" },
   { segment: "sync", zone: "core" },
+  // Cross-layer deletion propagation. Core for the same reason as the three
+  // above: deterministic bookkeeping over wiki, memory and graph state with no
+  // provider registry and no model call. It was added while this guard was
+  // being built and the guard caught it the same day — which is what
+  // `unclassifiedSegments()` is for, and worth leaving on the record here
+  // rather than quietly registering it as if it had always been named.
+  { segment: "forgetting", zone: "core" },
   // The published package's one public door (`exports["."]`), which re-exports
   // the ten declared owner facades and nothing else. It is core BY
   // CONSTRUCTION, and `src/core-package.test.ts` is what proves it stays so.

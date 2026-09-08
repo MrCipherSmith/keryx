@@ -12,7 +12,7 @@
 // delete) is the safer contract.
 
 import { optionValue } from "../lib/args";
-import { AUTO_SWEEP_ENV, lastAutoSweepAt } from "../retention/auto-sweep";
+import { AUTO_SWEEP_ENV, readAutoSweepStamp } from "../retention/auto-sweep";
 import { defaultFsDeps, type RetentionFsDeps } from "../retention/fs-deps";
 import { sweepProject, type SweepReport, type TargetSweepResult } from "../retention/sweep";
 
@@ -109,17 +109,30 @@ async function runStatus(cwd: string, fsDeps: RetentionFsDeps, now: number | und
   // silent by design, so this read-only surface is where it becomes visible:
   // "eligible: 0" means something different when a sweep ran an hour ago than
   // when none has ever run.
-  const autoSweptAt = await lastAutoSweepAt(cwd);
+  // V237-04 (flow 237 T13): the stamp used to be written BEFORE the sweep and
+  // read back here as "Last automatic sweep", so a process killed mid-sweep
+  // left this surface asserting a sweep that never happened. The stamp now
+  // separates started from completed, and so does this line — an unfinished
+  // sweep is named as unfinished rather than reported as the last one.
+  const autoSweep = await readAutoSweepStamp(cwd);
+  const autoSweptAt = autoSweep?.completedAtMs ?? null;
   if (json) {
-    console.log(JSON.stringify({ ...report, lastAutomaticSweepAt: autoSweptAt === null ? null : new Date(autoSweptAt).toISOString() }, null, 2));
+    console.log(JSON.stringify({
+      ...report,
+      lastAutomaticSweepAt: autoSweptAt === null ? null : new Date(autoSweptAt).toISOString(),
+      automaticSweepStartedAt: autoSweep === null ? null : new Date(autoSweep.startedAtMs).toISOString(),
+      automaticSweepCompleted: autoSweep === null ? null : autoSweep.completedAtMs !== null,
+    }, null, 2));
     return;
   }
   console.log(renderReport(report, { statusOnly: true }));
   console.log("");
   console.log(
-    autoSweptAt === null
+    autoSweep === null
       ? `Last automatic sweep: never (keryx ctx sweeps these gdctx stores at most once a day after writing an artifact; ${AUTO_SWEEP_ENV}=0 disables it)`
-      : `Last automatic sweep: ${new Date(autoSweptAt).toISOString()}`,
+      : autoSweptAt === null
+        ? `Last automatic sweep: none completed — one started at ${new Date(autoSweep.startedAtMs).toISOString()} and never recorded a result (interrupted, or written by an older keryx). Run \`keryx retention sweep --apply\` if these stores look unswept.`
+        : `Last automatic sweep: ${new Date(autoSweptAt).toISOString()}`,
   );
   if (report.status === "incomplete") process.exitCode = 1;
 }

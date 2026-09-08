@@ -12,7 +12,15 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, readdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { AUTO_SWEEP_ENV, autoSweepStampPath, lastAutoSweepAt, maybeAutoSweepGdctx } from "./auto-sweep";
+import {
+  AUTO_SWEEP_ENV,
+  autoSweepClaimPath,
+  autoSweepStampPath,
+  lastAutoSweepAt,
+  maybeAutoSweepGdctx,
+  readAutoSweepStamp,
+} from "./auto-sweep";
+import { pathExists } from "../lib/fs";
 import { defaultFsDeps } from "./fs-deps";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -125,29 +133,96 @@ describe("maybeAutoSweepGdctx throttling", () => {
     }
   });
 
-  test("the interval is claimed before the sweep runs, so a concurrent writer skips", async () => {
+  // V237-02 (flow 237 T13). The test this replaces asserted the stamp was on
+  // disk while the sweep ran, and read that as serialization. It is not: the
+  // stamp was written by a plain `writeFile` after a separate read, so two
+  // processes that both got past the interval check both swept. What has to be
+  // asserted is the OUTCOME — a caller arriving mid-sweep does not sweep — and
+  // that is what this asserts, re-entrantly (a genuine second call, in flight,
+  // through the public function) and across real processes below.
+  test("a call arriving while a sweep is in flight does not sweep", async () => {
     const root = await project();
     try {
       await writeAged(path.join(root, ".metaproject", "data", "gdctx", "raw", "old.log"), 400);
+      await writeAged(path.join(root, ".metaproject", "data", "gdctx", "raw", "older.log"), 400);
       const now = Date.now();
-      const observed: Array<number | null> = [];
+      const concurrent: unknown[] = [];
       const deps = {
         ...defaultFsDeps,
         remove: async (entryPath: string, unit: "file" | "directory") => {
-          observed.push(await lastAutoSweepAt(root));
+          concurrent.push(await maybeAutoSweepGdctx(root, { deps: defaultFsDeps, now, env: {} }));
           await defaultFsDeps.remove(entryPath, unit);
         },
       };
 
-      await maybeAutoSweepGdctx(root, { deps, now, env: {} });
-      // The stamp was already on disk while the removal was in flight — a
-      // concurrent ctx write at that moment reads it and skips instead of
-      // sweeping the same directories at the same time.
-      expect(observed).toEqual([now]);
+      const outcome = await maybeAutoSweepGdctx(root, { deps, now, env: {} });
+      expect(outcome.ran).toBe(true);
+      // Every one of them skipped: none swept the store the holder was sweeping.
+      expect(concurrent).toEqual(concurrent.map(() => ({ ran: false, reason: "in-progress" })));
+      expect(concurrent.length).toBeGreaterThan(0);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  // The in-process test above cannot see a lost update across an fs boundary,
+  // which is where the measured 8-ran-of-8 lived. These are real OS processes,
+  // released together on a filesystem barrier so that process-start skew — the
+  // thing that made the old code LOOK correct — cannot do the work.
+  test("processes released together on a barrier: exactly one sweeps", async () => {
+    const root = await project();
+    const workers = 6;
+    try {
+      for (let i = 0; i < 60; i += 1) {
+        await writeAged(path.join(root, ".metaproject", "data", "gdctx", "raw", `e-${i}.log`), 400);
+        await writeAged(path.join(root, ".metaproject", "data", "gdctx", "artifacts", `e-${i}.md`), 400);
+      }
+      const barrier = path.join(root, "_barrier");
+      await mkdir(barrier, { recursive: true });
+      const workerPath = path.join(root, "worker.ts");
+      await writeFile(
+        workerPath,
+        [
+          `import { existsSync, writeFileSync } from "node:fs";`,
+          `import { maybeAutoSweepGdctx } from ${JSON.stringify(path.join(import.meta.dir, "auto-sweep.ts"))};`,
+          `const [root, barrier, id] = process.argv.slice(2);`,
+          `writeFileSync(barrier + "/ready-" + id, "1");`,
+          `while (!existsSync(barrier + "/go")) Bun.sleepSync(1);`,
+          `const outcome = await maybeAutoSweepGdctx(root, { env: {} });`,
+          `const removed = outcome.ran ? outcome.report.targets.reduce((n, t) => n + t.entriesRemoved, 0) : 0;`,
+          `console.log(JSON.stringify({ ran: outcome.ran, reason: outcome.ran ? null : outcome.reason, removed }));`,
+        ].join("\n"),
+        "utf8",
+      );
+
+      const running = Array.from({ length: workers }, (_, i) =>
+        Bun.spawn([process.execPath, workerPath, root, barrier, String(i)], { stdout: "pipe", stderr: "pipe" }),
+      );
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        if ((await readdir(barrier)).filter((f) => f.startsWith("ready-")).length >= workers) break;
+        await Bun.sleep(5);
+      }
+      await writeFile(path.join(barrier, "go"), "1", "utf8");
+
+      const outcomes = await Promise.all(
+        running.map(async (child) => {
+          const [out] = await Promise.all([new Response(child.stdout).text(), child.exited]);
+          return JSON.parse(out.trim()) as { ran: boolean; reason: string | null; removed: number };
+        }),
+      );
+      // Was `ran=6 skipped=0` before the atomic claim.
+      expect(outcomes.filter((o) => o.ran)).toHaveLength(1);
+      expect(outcomes.filter((o) => !o.ran).map((o) => o.reason)).toEqual(
+        Array.from({ length: workers - 1 }, () => "in-progress"),
+      );
+      // And the one that ran did all the work; nobody double-swept.
+      expect(outcomes.find((o) => o.ran)?.removed).toBe(120);
+      expect(await readdir(path.join(root, ".metaproject", "data", "gdctx", "raw"))).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 90_000);
 
   test("a corrupt stamp reads as `never swept` rather than freezing the policy forever", async () => {
     const root = await project();
@@ -160,6 +235,84 @@ describe("maybeAutoSweepGdctx throttling", () => {
       expect(result.ran).toBe(true);
       expect(await readdir(path.join(root, ".metaproject", "data", "gdctx", "raw"))).toEqual([]);
       expect(JSON.parse(await readFile(autoSweepStampPath(root), "utf8")).lastRunAtMs).toBeGreaterThan(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  // V237-04 (flow 237 T13): the stamp used to carry only `lastRunAtMs`, written
+  // before the sweep, so a process that died mid-sweep left a mark asserting a
+  // sweep that never happened — and `keryx retention status` read it back as
+  // "Last automatic sweep". The kill here is a real SIGKILL of a real process;
+  // the injected `remove` only holds that process at a known point so the kill
+  // lands mid-sweep every time instead of by luck.
+  test("a process killed mid-sweep leaves a stamp that does not claim a sweep completed", async () => {
+    const root = await project();
+    try {
+      await writeAged(path.join(root, ".metaproject", "data", "gdctx", "raw", "old.log"), 400);
+      const marker = path.join(root, "sweeping");
+      const workerPath = path.join(root, "hang.ts");
+      await writeFile(
+        workerPath,
+        [
+          `import { writeFileSync } from "node:fs";`,
+          `import { maybeAutoSweepGdctx } from ${JSON.stringify(path.join(import.meta.dir, "auto-sweep.ts"))};`,
+          `import { defaultFsDeps } from ${JSON.stringify(path.join(import.meta.dir, "fs-deps.ts"))};`,
+          `const [root, marker] = process.argv.slice(2);`,
+          `await maybeAutoSweepGdctx(root, { env: {}, deps: { ...defaultFsDeps, remove: async () => {`,
+          `  writeFileSync(marker, "1");`,
+          `  await new Promise(() => {});`,
+          `} } });`,
+        ].join("\n"),
+        "utf8",
+      );
+
+      const child = Bun.spawn([process.execPath, workerPath, root, marker], { stdout: "ignore", stderr: "ignore" });
+      const deadline = Date.now() + 30_000;
+      while (Date.now() < deadline && !(await pathExists(marker))) await Bun.sleep(5);
+      expect(await pathExists(marker)).toBe(true);
+      child.kill("SIGKILL");
+      await child.exited;
+
+      const stamp = await readAutoSweepStamp(root);
+      expect(stamp?.startedAtMs).toBeGreaterThan(0);
+      // The whole point: started is recorded, completed is not.
+      expect(stamp?.completedAtMs).toBeNull();
+      expect(await lastAutoSweepAt(root)).toBeNull();
+      // The store really was not swept.
+      expect(await readdir(path.join(root, ".metaproject", "data", "gdctx", "raw"))).toEqual(["old.log"]);
+
+      // The crash does not turn the throttle off: an unbounded sweep on every
+      // ctx write is a worse outcome than one deferred day.
+      const soon = await maybeAutoSweepGdctx(root, { deps: defaultFsDeps, now: Date.now(), env: {} });
+      expect(soon).toEqual({ ran: false, reason: "throttled" });
+
+      // And the claim the dead process left behind is breakable once abandoned,
+      // so the policy resumes rather than wedging on it forever.
+      const later = await maybeAutoSweepGdctx(root, {
+        deps: defaultFsDeps,
+        now: Date.now() + DAY_MS + 1,
+        env: {},
+        claimStaleMs: 0,
+      });
+      expect(later.ran).toBe(true);
+      expect(await readdir(path.join(root, ".metaproject", "data", "gdctx", "raw"))).toEqual([]);
+      expect((await readAutoSweepStamp(root))?.completedAtMs).toBeGreaterThan(0);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  test("a live claim is NOT broken before the stale window, even past the interval", async () => {
+    const root = await project();
+    try {
+      await writeAged(path.join(root, ".metaproject", "data", "gdctx", "raw", "old.log"), 400);
+      await mkdir(path.dirname(autoSweepClaimPath(root)), { recursive: true });
+      await writeFile(autoSweepClaimPath(root), "someone-else", "utf8");
+
+      const result = await maybeAutoSweepGdctx(root, { deps: defaultFsDeps, now: Date.now(), env: {} });
+      expect(result).toEqual({ ran: false, reason: "in-progress" });
+      expect(await readdir(path.join(root, ".metaproject", "data", "gdctx", "raw"))).toEqual(["old.log"]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
