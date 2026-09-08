@@ -123,6 +123,10 @@ function moduleStems(module: string): string[] {
     health: ["health"],
     testing: ["test"],
     security: ["security"],
+    // `providers` owns both `providers *` (configured model families) and
+    // `auth *` (subscription OAuth grants). Collapsing that to one stem would
+    // force auth onto core, which is the worse answer.
+    providers: ["providers", "auth"],
   };
   return map[module] ?? [module];
 }
