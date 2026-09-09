@@ -79,20 +79,52 @@ describe("buildClaudeEnv", () => {
     // Overriding the port in the CHILD's environment makes the hook's
     // `curl -sf … || true` fail and do nothing, without editing a settings file
     // that is not this benchmark's to edit. Nothing to restore afterwards.
-    expect(buildClaudeEnv({ PATH: "/usr/bin" }).PORT).toBe("1");
+    expect(buildClaudeEnv({ PATH: "/usr/bin" }, "/tmp/h").PORT).toBe("1");
   });
 
-  test("passes the rest of the environment through untouched", () => {
-    // The agent needs PATH to find the keryx binary, and credentials to run at
-    // all. This is a targeted override, not an isolated environment.
-    const env = buildClaudeEnv({ PATH: "/usr/bin", HOME: "/home/x", EMPTY: undefined });
+  test("HOME is the isolated one, never the operator's", () => {
+    // The whole point. The operator's ~/.claude/CLAUDE.md carries this
+    // project's own keryx routing block, so a context-off arm reading it is
+    // instructed to route through the system under test into a tree where
+    // .metaproject/ was just deleted — the control arm obstructed by the thing
+    // being measured.
+    const env = buildClaudeEnv({ PATH: "/usr/bin", HOME: "/Users/real" }, "/tmp/isolated");
+    expect(env.HOME).toBe("/tmp/isolated");
+  });
+
+  test("the environment is an allowlist, not a copy", () => {
+    const env = buildClaudeEnv(
+      { PATH: "/usr/bin", LANG: "en_US.UTF-8", SOME_TOOL_CONFIG: "x", EMPTY: undefined },
+      "/tmp/h",
+    );
     expect(env.PATH).toBe("/usr/bin");
-    expect(env.HOME).toBe("/home/x");
+    expect(env.LANG).toBe("en_US.UTF-8");
+    expect("SOME_TOOL_CONFIG" in env).toBe(false);
     expect("EMPTY" in env).toBe(false);
   });
 
+  test("credentials pass; configuration redirectors and answer-reaching tokens do not", () => {
+    // ANTHROPIC_API_KEY is the credential, not context. CLAUDE_CONFIG_DIR
+    // relocates the whole configuration and on its own defeats a temporary
+    // HOME. GH_TOKEN reaches a service that holds the answer.
+    const env = buildClaudeEnv(
+      {
+        PATH: "/usr/bin",
+        ANTHROPIC_API_KEY: "sk-test",
+        CLAUDE_CONFIG_DIR: "/Users/real/.claude",
+        GH_TOKEN: "ghp-test",
+        MCP_TIMEOUT: "5000",
+      },
+      "/tmp/h",
+    );
+    expect(env.ANTHROPIC_API_KEY).toBe("sk-test");
+    expect("CLAUDE_CONFIG_DIR" in env).toBe(false);
+    expect("GH_TOKEN" in env).toBe(false);
+    expect("MCP_TIMEOUT" in env).toBe(false);
+  });
+
   test("an existing PORT is overridden, not preserved", () => {
-    expect(buildClaudeEnv({ PORT: "3847" }).PORT).toBe("1");
+    expect(buildClaudeEnv({ PORT: "3847" }, "/tmp/h").PORT).toBe("1");
   });
 });
 

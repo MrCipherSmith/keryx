@@ -11,10 +11,15 @@
 // What differs is the environment, and it differs enough that this file is
 // mostly about that.
 
-import { mkdtempSync, rmSync, symlinkSync, mkdirSync, existsSync } from "node:fs";
-import { tmpdir, homedir } from "node:os";
+import { homedir } from "node:os";
 import path from "node:path";
 import { assertRoster, interpretRun, parseStream } from "./retrieval-agent-claude";
+import {
+  assertEnvIsolated,
+  buildIsolatedEnv,
+  createIsolatedHome as createSharedIsolatedHome,
+  type IsolatedHome,
+} from "./retrieval-isolation";
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
 
 export const GROK_HARNESS = "grok";
@@ -81,19 +86,36 @@ export function buildGrokArgs(prompt: string, model: string): string[] {
  * Sessions, memory and logs land in the temporary home and go with it, which
  * also keeps 126 throwaway sessions out of the operator's own grok history.
  */
-export function createIsolatedHome(realHome: string = homedir()): { home: string; dispose: () => void } {
-  const home = mkdtempSync(path.join(tmpdir(), "keryx-grok-home-"));
-  mkdirSync(path.join(home, ".grok"), { recursive: true });
-  const auth = path.join(realHome, ".grok", "auth.json");
-  if (!existsSync(auth)) {
-    rmSync(home, { recursive: true, force: true });
-    throw new Error(
-      `grok: no credentials at ${auth} — run \`grok login\` before the sweep; ` +
-        "an unauthenticated arm fails at the first call and would be recorded as a failure of the arm",
-    );
-  }
-  symlinkSync(auth, path.join(home, ".grok", "auth.json"));
-  return { home, dispose: () => rmSync(home, { recursive: true, force: true }) };
+export function createIsolatedHome(realHome: string = homedir()): IsolatedHome {
+  return createSharedIsolatedHome({
+    prefix: "keryx-grok-home-",
+    realHome,
+    credentials: [
+      {
+        from: path.join(".grok", "auth.json"),
+        to: ".grok/auth.json",
+        required: true,
+        hint:
+          "run `grok login` before the sweep; an unauthenticated arm fails at the first call " +
+          "and would be recorded as a failure of the arm",
+      },
+    ],
+  });
+}
+
+/**
+ * The environment each grok arm is spawned with.
+ *
+ * The isolated HOME fixed what grok DISCOVERS; the environment was still a copy
+ * of the parent with HOME overridden, so `GROK_HOME`, `GH_TOKEN` and every
+ * `MCP_*` in the operator's shell still passed through. Same allowlist as the
+ * claude leg, so the two legs differ in wrapper rather than in what leaked into
+ * them.
+ */
+export function buildGrokEnv(parent: Record<string, string | undefined>, home: string): Record<string, string> {
+  const env = buildIsolatedEnv({ parent, home, allowExtra: ["XAI_API_KEY"] });
+  assertEnvIsolated(env, GROK_HARNESS);
+  return env;
 }
 
 export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
@@ -106,7 +128,7 @@ export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
       try {
         const proc = Bun.spawn(["grok", ...buildGrokArgs(prompt, model)], {
           cwd,
-          env: { ...process.env, HOME: isolated.home },
+          env: buildGrokEnv(process.env, isolated.home),
           stdout: "pipe",
           stderr: "pipe",
         });

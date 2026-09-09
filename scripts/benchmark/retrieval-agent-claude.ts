@@ -10,6 +10,15 @@
 // other arm does not have. The `keryx` binary is on PATH for both; in
 // `context-off` it simply has no workspace to read.
 
+import { homedir } from "node:os";
+import path from "node:path";
+import {
+  assertEnvIsolated,
+  assertNoManagedSettings,
+  buildIsolatedEnv,
+  createIsolatedHome,
+  type IsolatedHome,
+} from "./retrieval-isolation";
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
 import { LEGACY_HARNESS } from "./retrieval-scoring";
 
@@ -26,6 +35,8 @@ export interface ClaudeAgentOptions {
   /** Wall-clock ceiling per arm. A hung run must not stall a fifty-task sweep. */
   readonly timeoutMs?: number;
   readonly allowedTools?: readonly string[];
+  /** The home a credential is linked from. Overridable so a test never reads a real one. */
+  readonly realHome?: string;
 }
 
 interface StreamUsage {
@@ -296,19 +307,49 @@ export function buildClaudeArgs(
 const SESSION_HOOK_PORT_SINK = "1";
 
 /**
+ * A HOME holding nothing this operator configured.
+ *
+ * macOS Claude Code keeps its credential in the Keychain, which is scoped to
+ * the user rather than to HOME, so a temporary HOME authenticates normally and
+ * there is nothing to link. On Linux the same leg reads
+ * `~/.claude/.credentials.json`; the link is declared optional so one call
+ * covers both without branching on platform.
+ */
+export function createClaudeHome(realHome: string = homedir()): IsolatedHome {
+  return createIsolatedHome({
+    prefix: "keryx-claude-home-",
+    realHome,
+    credentials: [{ from: path.join(".claude", ".credentials.json"), to: ".claude/.credentials.json", required: false }],
+  });
+}
+
+/**
  * The environment each arm is spawned with.
  *
- * Exported so the override is asserted rather than assumed — the same reason
+ * Exported so the result is asserted rather than assumed — the same reason
  * `buildClaudeArgs` is. Both arms get exactly this, so it cannot favour either.
+ *
+ * This was a copy of the whole parent environment with one key overridden,
+ * which meant the operator's `~/.claude/CLAUDE.md` — carrying this project's
+ * own keryx routing block — reached the `context-off` arm, along with 79
+ * skills, six MCP servers and every `ANTHROPIC_*`, `CLAUDE_*` and `GH_TOKEN`
+ * in the shell. The published 2026-09-05 figures are from that leg. A copy
+ * cannot be repaired by excluding keys, because the dangerous ones are the
+ * ones nobody listed, so this is an allowlist instead.
+ *
+ * `ANTHROPIC_API_KEY` and `ANTHROPIC_AUTH_TOKEN` pass because they are the
+ * credential, not context. `ANTHROPIC_BASE_URL` and `CLAUDE_CONFIG_DIR` do
+ * not: the first changes which service answers, the second relocates the
+ * configuration a temporary HOME exists to hide.
  */
-export function buildClaudeEnv(
-  parent: Record<string, string | undefined>,
-): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(parent)) {
-    if (value !== undefined) env[key] = value;
-  }
-  env.PORT = SESSION_HOOK_PORT_SINK;
+export function buildClaudeEnv(parent: Record<string, string | undefined>, home: string): Record<string, string> {
+  const env = buildIsolatedEnv({
+    parent,
+    home,
+    allowExtra: ["ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"],
+    overrides: { PORT: SESSION_HOOK_PORT_SINK },
+  });
+  assertEnvIsolated(env, CLAUDE_HARNESS);
   return env;
 }
 
@@ -319,33 +360,38 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
     harness: CLAUDE_HARNESS,
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
-
-      const proc = Bun.spawn(["claude", ...args], {
-        cwd,
-        env: buildClaudeEnv(process.env),
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      let timedOut = false;
-      const timer = setTimeout(() => {
-        timedOut = true;
-        proc.kill();
-      }, timeoutMs);
-      let stdout: string;
+      assertNoManagedSettings();
+      const isolated = createClaudeHome(options.realHome ?? homedir());
       try {
-        stdout = await new Response(proc.stdout).text();
-        await proc.exited;
-      } finally {
-        clearTimeout(timer);
-      }
+        const proc = Bun.spawn(["claude", ...args], {
+          cwd,
+          env: buildClaudeEnv(process.env, isolated.home),
+          stdout: "pipe",
+          stderr: "pipe",
+        });
+        let timedOut = false;
+        const timer = setTimeout(() => {
+          timedOut = true;
+          proc.kill();
+        }, timeoutMs);
+        let stdout: string;
+        try {
+          stdout = await new Response(proc.stdout).text();
+          await proc.exited;
+        } finally {
+          clearTimeout(timer);
+        }
 
-      const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
-      // interpretRun first, so a timeout is reported as a timeout rather than
-      // as "no init event" — a killed process can lose the transcript entirely,
-      // and the less specific message would hide the real cause.
-      const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
-      assertRoster(parsed, CLAUDE_HARNESS);
-      return answer;
+        const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
+        // interpretRun first, so a timeout is reported as a timeout rather than
+        // as "no init event" — a killed process can lose the transcript entirely,
+        // and the less specific message would hide the real cause.
+        const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
+        assertRoster(parsed, CLAUDE_HARNESS);
+        return answer;
+      } finally {
+        isolated.dispose();
+      }
     },
   };
 }
