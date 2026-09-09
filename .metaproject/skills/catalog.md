@@ -8,10 +8,11 @@ This catalog lists project-local working skills installed by `keryx`.
 Resolution order:
 
 1. `.metaproject/index.md`
-2. `.metaproject/skills/catalog.md`
-3. `.metaproject/project-skills/**`
-4. `.metaproject/skills/gdskills/**`
-5. Explicitly allowed global fallback skills
+2. `.metaproject/routing.md` when the compact index does not answer the intent
+3. `.metaproject/skills/catalog.md`
+4. `.metaproject/project-skills/**`
+5. `.metaproject/skills/gdskills/**`
+6. Explicitly allowed global fallback skills
 
 ## Agent Shortcuts
 

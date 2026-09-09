@@ -11,7 +11,7 @@ If you create or switch to a git worktree, repeat the hard gate in that worktree
 
 The user does not need to know Metaproject command names. Treat natural-language requests as intents, route through `.metaproject/index.md`, then choose the right skill, rule, MCP tool/resource, or `keryx` CLI command yourself.
 
-Do not dispatch subagents until the Metaproject hard gate is complete. Every subagent prompt must include the exact project/worktree root and require reading `<project-root>/.metaproject/index.md` before searching or reading code.
+Do not dispatch subagents until the Metaproject hard gate is complete. Give every subagent prompt the exact project/worktree root, and inline the few routing pointers that subagent actually needs. Require it to read `<project-root>/.metaproject/index.md` only when it will navigate the codebase itself — a subagent doing narrow, bounded work would otherwise load the whole routing index and then re-read it on every one of its own turns, which is the cost the subagent was dispatched to avoid.
 
 If MCP tools/resources are available for this project, prefer them for Metaproject capabilities because they provide structured tool calls. If MCP is unavailable or lacks a needed capability, fall back to the corresponding project-local skill and CLI command.
 
