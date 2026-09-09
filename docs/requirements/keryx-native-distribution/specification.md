@@ -46,7 +46,7 @@ stdin. `@opentui/core` was not exercised (no TTY in the test environment).
 
 **Before implementation:** re-verify MCP with a real client round-trip
 (e.g. point a local MCP inspector or another keryx instance's client at
-`keryx mcp serve` run from the compiled binary) and verify the TUI shell
+`keryx serve-mcp` run from the compiled binary) and verify the TUI shell
 launches correctly from a real terminal. Do not carry forward this
 specification's partial verification as if it covered all three
 dependencies equally.

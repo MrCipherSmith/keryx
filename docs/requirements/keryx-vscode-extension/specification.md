@@ -24,7 +24,7 @@ resumable via `Last-Event-ID`). **Explicit non-goal by design**
 arbitrary tools, write anything, or accept a secret outside these routes —
 `init`/`gdgraph build`/`health run` are not servable here.
 
-**Finding 3 — `keryx mcp serve`.** `src/mcp/server.ts:136-159`, official
+**Finding 3 — `keryx serve-mcp`.** `src/mcp/server.ts:136-159`, official
 `@modelcontextprotocol/sdk` (optional dep, lazily loaded). Stdio (default)
 and HTTP/SSE (opt-in) transports. 21 tools (`src/mcp/tools.ts:70-384`):
 `sac.*` (8), `gdgraph.affected/cycles/orphans`, `security.check/scan/
@@ -62,7 +62,7 @@ is visible without the user searching for it (PRD Requirement 2).
 
 Add a `vscode` entry to `src/mcp/client-config.ts`'s runtime list (keryx
 core change, not extension-side config alone — the extension's `keryx
-init`/`keryx mcp install --runtime vscode` invocation depends on this
+init`/`keryx integrate vscode` invocation depends on this
 entry existing). Writes VS Code's MCP server registration format (exact
 file/schema TBD at implementation — VS Code's MCP config location has
 evolved across versions; verify current shape live against the installed
@@ -138,7 +138,7 @@ show a non-blocking warning, not a refusal to activate.
   flow (not-initialized and incomplete both prompt; ready does not).
 - AC2: Tree view auto-reveals within one activation cycle of a successful
   `keryx init --yes` run triggered by the extension.
-- AC3: `keryx mcp serve` is reachable by VS Code's native MCP client after
+- AC3: `keryx serve-mcp` is reachable by VS Code's native MCP client after
   the `vscode` runtime target is registered — verified end to end with a
   real Copilot Chat tool call, not just config-file presence.
 - AC4: Status bar click-through names the specific failing check when the

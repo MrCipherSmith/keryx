@@ -253,7 +253,7 @@ completeness of the catalog and to name the ones still open.)*
 ## 9. Slate v3 — external MCP surface
 
 *(Rows 01–03 already exercised live — see prior report §2, real MCP SDK
-client against a freshly-spawned `keryx mcp serve`.)*
+client against a freshly-spawned `keryx serve-mcp`.)*
 
 | ID | Test | Expected |
 |---|---|---|

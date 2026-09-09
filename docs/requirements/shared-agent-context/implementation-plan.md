@@ -216,7 +216,7 @@ real protocol serialization) against a real session and workspace:
 `tools/list` returns all 5 `sac.*` tools, `sac.propose`/`sac.review` land a
 real file over the wire. New `src/mcp/sac-tools.test.ts` (3 tests — zero
 prior coverage). Also connected this repo for real
-(`keryx mcp install --runtime claude`) — confirmed safe first, since
+(`keryx integrate claude`) — confirmed safe first, since
 `enableMcpModule` is a surgical patch of just `modules.mcp`, unlike
 `keryx modules enable <name>`'s full-reconciliation `initCommand()` path
 that regressed real content earlier in this session when run from this dev

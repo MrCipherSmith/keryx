@@ -147,8 +147,25 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // The installer view under the name that says what it does: it wires this
+    // project into an editor, the TUI half of `keryx integrate`.
+    name: "/integrations",
+    description: "Wire this project into an editor over MCP (keryx integrate)",
+    modes: AGENT_ONLY,
+  },
+  {
+    // Kept as a working alias of /integrations, deprecated rather than moved.
+    //
+    // It is NOT repointed at the MCP-server consumer yet, because that surface
+    // does not exist — a slash command aimed at nothing is worse than one
+    // aimed at the old thing. The consumer flow flips it and drops this entry.
+    //
+    // `/mcps` is deliberately absent and cannot be added: it would differ from
+    // `/mcp` by one trailing character while meaning the opposite, and a slash
+    // command carries no flags to say which you invoked. Guarded by
+    // agent-commands.confusable.test.ts.
     name: "/mcp",
-    description: "Show available tools and MCP client connect status",
+    description: "Deprecated alias of /integrations",
     // TUI-only, same reasoning as /review: the sidebar click and the
     // Tools/MCP modal (with its [c]/[d]/[y] connect/disconnect) both need
     // the OpenTUI surface.

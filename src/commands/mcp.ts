@@ -1,20 +1,23 @@
-// `keryx mcp` command (specification.md §3, §9; T1, T5; Flow 012).
+// retired-spellings-ok: file — this file IS the retired spelling. It exists only to translate the old verbs to the new ones and announce the rename, so naming them is its whole job
+// `keryx mcp` — the RETIRED spelling of the MCP publisher surface (Flow 243 /
+// D-04). It is an alias and nothing else:
 //
-// Thin handler: parses `serve` / `--http` and calls `src/mcp/server.ts`, plus the
-// `install` / `uninstall` client-config subcommands (Flow 012) that wire the
-// server into an editor/agent's project-local MCP config. It does NOT import the
-// MCP SDK — `serveMcp` loads it lazily and `install` only PROBES it.
+//   keryx mcp [serve]                     → keryx serve-mcp
+//   keryx mcp install   --runtime <ed>    → keryx integrate <ed>
+//   keryx mcp uninstall --runtime <ed>    → keryx integrate --remove <ed>
+//
+// The verb is being freed to mean "the MCP servers keryx CONNECTS TO" rather
+// than "keryx IS an MCP server". Nothing here re-implements anything: the real
+// commands live in `./serve-mcp` and `./integrate`, and this file only
+// translates the old argument shape and prints one deprecation line. An alias
+// that carried its own copy of the behaviour would be two implementations free
+// to drift, which is the failure the rename exists to end.
 
-import path from "node:path";
 import { optionValue } from "../lib/args";
-import { helpOptions, helpTitle, helpUsage, heading, note, style, symbols } from "../lib/ui";
-import { serveMcp } from "../mcp/server";
-import { resolveServeRoot } from "./mcp-serve-root";
-import {
-  installMcpClient,
-  mcpRuntimeIds,
-  uninstallMcpClient,
-} from "../mcp/client-config";
+import { helpOptions, helpTitle, helpUsage, heading, style } from "../lib/ui";
+import { mcpRuntimeIds } from "../mcp/client-config";
+import { EDITOR_USAGE, integrateCommand } from "./integrate";
+import { serveMcpCommand } from "./serve-mcp";
 
 export async function mcpCommand(
   args: string[] = [],
@@ -28,27 +31,25 @@ export async function mcpCommand(
   }
 
   if (subcommand === "install") {
-    await handleInstall(cwd, args.slice(1));
+    announceRename("`keryx mcp install --runtime <editor>`", "`keryx integrate <editor>`");
+    await integrateCommand(toIntegrateArgs(args.slice(1)), cwd, "keryx mcp install");
     return;
   }
 
   if (subcommand === "uninstall") {
-    await handleUninstall(cwd, args.slice(1));
+    announceRename(
+      "`keryx mcp uninstall --runtime <editor>`",
+      "`keryx integrate --remove <editor>`",
+    );
+    await integrateCommand(["--remove", ...toIntegrateArgs(args.slice(1))], cwd, "keryx mcp uninstall");
     return;
   }
 
-  // `mcp` (no subcommand) is an alias for `mcp serve`.
+  // `mcp` (no subcommand) is an alias for `mcp serve`, which is now an alias in
+  // turn — so a bare `keryx mcp` in a client config keeps serving.
   if (!subcommand || subcommand === "serve") {
-    const http = args.includes("--http");
-    const projectRoot = path.resolve(resolveServeRoot(optionValue(args, "--cwd"), cwd, process.env));
-    try {
-      await serveMcp({ cwd: projectRoot, http });
-    } catch (error) {
-      // AC10: the single opt-in command allowed to hard-fail. Print the
-      // actionable message and exit non-zero.
-      console.error(error instanceof Error ? error.message : String(error));
-      process.exitCode = 1;
-    }
+    announceRename("`keryx mcp serve`", "`keryx serve-mcp`");
+    await serveMcpCommand(args.slice(1), cwd);
     return;
   }
 
@@ -57,117 +58,60 @@ export async function mcpCommand(
   process.exitCode = 1;
 }
 
-const RUNTIME_USAGE = `<cursor|claude|opencode|vscode|generic|all>`;
-
-function parseRequestedRuntimes(args: string[], fallback: string): string[] {
-  const runtimeArg = optionValue(args, "--runtime") ?? fallback;
-  return runtimeArg
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+/**
+ * One line, on stderr, once per invocation.
+ *
+ * stderr because a bare `keryx mcp` IS the stdio MCP server: stdout carries
+ * JSON-RPC frames there, and a notice written to it corrupts every client
+ * session rather than informing anyone.
+ *
+ * Once per invocation because `--runtime all` performs three writes. A line a
+ * reader sees three times in one command is a line they learn to skip, which is
+ * how deprecation notices stop working at all — so it is printed here, beside
+ * the routing decision, and never inside the per-editor loop.
+ */
+function announceRename(retired: string, replacement: string): void {
+  console.error(`${retired} is deprecated — use ${replacement} instead.`);
 }
 
-// `mcp install [--runtime <cursor|claude|opencode|generic|all>] [--dry-run]`. Default
-// runtime is `all` (cursor + claude), mirroring `security hooks`. `--dry-run`
-// prints the planned change and writes NOTHING.
-async function handleInstall(cwd: string, args: string[]): Promise<void> {
-  const dryRun = args.includes("--dry-run");
-  const requested = parseRequestedRuntimes(args, "all");
-  const report = await installMcpClient(cwd, requested, { dryRun });
-
-  if (report.unknown.length > 0) {
-    console.error(`Unknown runtime(s): ${report.unknown.join(", ")}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  heading(`keryx mcp install${dryRun ? " (dry run)" : ""}`);
-  for (const outcome of report.outcomes) {
-    if (outcome.filePath === null) {
-      // generic: print the ready snippet, write no file.
-      console.log(`  ${style.cyan(symbols.arrow)} ${outcome.id} — paste this into your MCP client config:`);
-      console.log(outcome.snippet ?? "");
-      continue;
-    }
-    const rel = path.relative(cwd, outcome.filePath);
-    if (outcome.errors.length > 0) {
-      for (const e of outcome.errors) {
-        console.log(`  ${style.red(symbols.cross)} ${e}`);
-      }
-      process.exitCode = 1;
-      continue;
-    }
-    if (dryRun) {
-      console.log(`  ${style.cyan(symbols.arrow)} ${outcome.id} → would write ${rel}:`);
-      console.log(outcome.snippet ?? "");
-    } else {
-      console.log(`  ${style.green(symbols.ok)} ${outcome.id} → ${rel}`);
-    }
-  }
-
-  // Manifest enable.
-  if (report.manifest.message) {
-    note(report.manifest.message);
-  } else if (dryRun && report.manifest.changed) {
-    note("would set modules.mcp.enabled=true in .metaproject/metaproject.json");
-  } else if (report.manifest.changed) {
-    note("set modules.mcp.enabled=true in .metaproject/metaproject.json");
-  }
-
-  // SDK hint (never auto-installs, never connects).
-  if (!report.sdk.available) {
-    note(`Optional MCP SDK not found — install it to run \`keryx mcp serve\`: ${report.sdk.hint}`);
-  }
-}
-
-// `mcp uninstall [--runtime <cursor|claude|opencode|generic|all>]`. Removes ONLY the
-// managed keryx entry, leaving other servers + user content intact.
-async function handleUninstall(cwd: string, args: string[]): Promise<void> {
-  const requested = parseRequestedRuntimes(args, "all");
-  const report = await uninstallMcpClient(cwd, requested);
-
-  if (report.unknown.length > 0) {
-    console.error(`Unknown runtime(s): ${report.unknown.join(", ")}`);
-    process.exitCode = 1;
-    return;
-  }
-
-  heading("keryx mcp uninstall");
-  for (const outcome of report.outcomes) {
-    if (outcome.filePath === null) {
-      console.log(`  ${style.gray(symbols.off)} ${outcome.id} ${style.dim("no file to change")}`);
-      continue;
-    }
-    const rel = path.relative(cwd, outcome.filePath);
-    console.log(
-      `  ${outcome.removed ? style.green(symbols.ok) : style.gray(symbols.off)} ${outcome.id} ${style.dim(outcome.removed ? `removed from ${rel}` : "nothing to remove")}`,
-    );
-  }
+/**
+ * Translate the retired flag form into the positional form `integrate` takes.
+ *
+ * `--runtime a,b` becomes the editors; every other flag rides along unchanged so
+ * `--dry-run` and `--help` keep meaning what they meant. Bare positionals are
+ * dropped because `mcp install` never had any.
+ */
+function toIntegrateArgs(rest: string[]): string[] {
+  const runtimeArg = optionValue(rest, "--runtime");
+  const editors = runtimeArg === undefined ? ["all"] : [runtimeArg];
+  const flags = rest.filter(
+    (argument) =>
+      argument.startsWith("-") && argument !== "--runtime" && !argument.startsWith("--runtime="),
+  );
+  return [...editors, ...flags];
 }
 
 export function printMcpHelp(): void {
-  helpTitle("keryx mcp", "expose Metaproject services over the Model Context Protocol");
+  helpTitle("keryx mcp", "retired spelling of the MCP publisher surface — see the replacements below");
   helpUsage([
-    "keryx mcp serve [--cwd <project-root>]          # stdio JSON-RPC MCP server (default)",
-    "keryx mcp serve --http [--cwd <project-root>]   # HTTP/SSE opt-in (requires capabilities.http.enabled)",
-    "keryx mcp                  # alias for `mcp serve`",
-    `keryx mcp install --runtime ${RUNTIME_USAGE}   # wire this project into an editor/agent`,
-    `keryx mcp uninstall --runtime ${RUNTIME_USAGE} # remove the managed keryx server`,
+    "keryx serve-mcp [--http] [--cwd <project-root>]   # replaces `keryx mcp serve`",
+    `keryx integrate ${EDITOR_USAGE}          # replaces \`keryx mcp install --runtime\``,
+    `keryx integrate --remove ${EDITOR_USAGE} # replaces \`keryx mcp uninstall --runtime\``,
   ]);
   helpOptions([
-    { flag: "--http", desc: "Use the isolated HTTP/SSE transport (localhost only) instead of stdio." },
-    { flag: "--cwd", desc: "Project root whose .metaproject workspace should be exposed. Defaults to the process cwd." },
+    { flag: "--http", desc: "serve only: use the isolated HTTP/SSE transport (localhost only) instead of stdio." },
+    { flag: "--cwd", desc: "serve only: project root whose .metaproject workspace should be exposed. Defaults to the process cwd." },
     {
       flag: "--runtime",
-      desc: `Target client(s) for install/uninstall: ${mcpRuntimeIds().join(", ")}, or all (=cursor,claude,opencode). Comma-separated. Default: all.`,
+      desc: `install/uninstall only: target client(s) — ${mcpRuntimeIds().join(", ")}, or all (=cursor,claude,opencode). Comma-separated. Default: all.`,
     },
     { flag: "--dry-run", desc: "install only: print the planned change and write nothing." },
   ]);
   heading("Notes");
   console.log(
-    `  ${style.dim("`install` writes a project-local MCP client config (cursor → .cursor/mcp.json, claude → .mcp.json, opencode → opencode.json, vscode → .vscode/mcp.json), sets modules.mcp.enabled=true, and prints a snippet for `generic`. `vscode` is opt-in only — not included in `all`.")}`,
+    `  ${style.dim("Every `keryx mcp …` invocation still works and still behaves identically; each prints one deprecation line on stderr naming its replacement.")}`,
   );
   console.log(
-    `  ${style.dim("Requires the optional @modelcontextprotocol/sdk to serve. Disabled by default (modules.mcp.enabled=false). `install` only probes the SDK — it never installs it or opens a network connection.")}`,
+    `  ${style.dim("Run `keryx serve-mcp --help` or `keryx integrate --help` for the current surface.")}`,
   );
 }

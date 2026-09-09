@@ -103,8 +103,11 @@ Grok's consumer modal being `/mcps` is not a reason for keryx: Grok has only
 the consumer side, so `/mcp` was free and `/mcps` was a stylistic choice. Keryx
 has both sides and must say which is which.
 
-**Cost, counted not estimated.** 414 references across `docs/`, `README.md`,
-`src/` and `.metaproject/` — `serve` 266, `install` 132, `uninstall` 16. Full
+**Cost, corrected 2026-09-09.** 116 references across `docs/`, `README.md`,
+`src/` and `.metaproject/` — `serve` 65, `install` 39, `uninstall` 12, measured
+with `git grep` against `HEAD`. An earlier figure of 414 was wrong: it counted
+the gitignored `.metaproject/data/gdctx/` search log, which the counting itself
+was writing into. Full
 analysis, including a cheaper variant that was considered and not taken, is in
 [naming-collision.md](naming-collision.md).
 

@@ -56,7 +56,7 @@ test("mcp install --runtime cursor writes the config, enables the module, valida
     await readFile(path.join(root, ".cursor", "mcp.json"), "utf8"),
   ) as { mcpServers: Record<string, { command: string; args: string[] }> };
   expect(config.mcpServers["keryx"]?.command).toBe("keryx");
-  expect(config.mcpServers["keryx"]?.args).toEqual(["mcp", "serve", "--cwd", root]);
+  expect(config.mcpServers["keryx"]?.args).toEqual(["serve-mcp", "--cwd", root]);
   expect((await manifestModules()).mcp?.enabled).toBe(true);
 
   // Standard validation stays green with the enabled mcp module scaffolded.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://keryx.dev/schemas/mcp-servers-config.json",
   "title": "Keryx MCP servers native config",
-  "description": "User-global or project-scoped MCP servers consumed by keryx shell. Not the inbound keryx mcp serve config.",
+  "description": "User-global or project-scoped MCP servers consumed by keryx shell. Not the inbound keryx serve-mcp config.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "servers"],

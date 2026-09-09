@@ -1,3 +1,5 @@
+<!-- retired-spellings-ok: file — this document is the analysis OF the old names; every occurrence below is the subject under discussion, not an instruction to run anything -->
+
 # The `mcp` name collides: keryx is on both sides of the protocol
 
 Version: 0.1.0
@@ -57,6 +59,27 @@ arrive with that expectation. Refusing it costs discoverability permanently, and
 `keryx mcp add` will be typed by people who have never read our docs.
 
 **keryx's history says the old surface is entrenched.** Counted on this branch:
+
+**Correction, 2026-09-09.** The 414 figure below is wrong and is kept only so
+the error is visible. It was measured with `keryx ctx rg`, which transcribes
+every routed search verbatim into `.metaproject/data/gdctx/` — a gitignored log
+directory. 62 files there now contain `keryx mcp serve`, put there by the very
+searches that produced the count, so the number grew each time it was taken and
+was never reproducible on the same commit.
+
+Re-measured with `git grep` against `HEAD`, tracked files only:
+
+| spelling | docs + README + .metaproject | src | total |
+|---|---|---|---|
+| `keryx mcp serve` | 52 | 13 | 65 |
+| `keryx mcp install` | 32 | 7 | 39 |
+| `keryx mcp uninstall` | 9 | 3 | 12 |
+| **total** | **93** | **23** | **116** |
+
+The cheaper-variant argument below rested on `serve` carrying 266 references.
+At 65 that argument is weaker, though the conclusion — rename it — is
+unchanged, since the reason was never the count.
+
 
 | spelling | references in `docs/`, `README.md`, `src/`, `.metaproject/` |
 |---|---|

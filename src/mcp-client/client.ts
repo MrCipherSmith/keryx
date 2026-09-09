@@ -79,7 +79,7 @@ export class McpClientSdkMissingError extends Error {
         "Install it (it is an optional dependency):",
         "  bun add @modelcontextprotocol/sdk",
         "",
-        "keryx's own MCP server (`keryx mcp serve`) and every other command run without it.",
+        "keryx's own MCP server (`keryx serve-mcp`) and every other command run without it.",
       ].join("\n"),
     );
     this.name = "McpClientSdkMissingError";

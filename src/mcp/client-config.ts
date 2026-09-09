@@ -1,3 +1,4 @@
+// retired-spellings-ok: file — two comments describing what the code did before the rename; history, not instruction
 // MCP client-config installer (Flow 012). A sibling of the E5 multi-runtime
 // security hook installer (`src/security/agent-hooks/runtimes.ts`) — it wires
 // the Block A `keryx mcp serve` server into an editor/agent's project-local
@@ -28,7 +29,12 @@ export const MCP_MANAGED_SENTINEL = "mcp-client-config";
 // The managed server entry written into every client config.
 export const MCP_SERVER_NAME = "keryx";
 export const MCP_SERVER_COMMAND = "keryx";
-export const MCP_SERVER_ARGS: readonly string[] = ["mcp", "serve"];
+export const MCP_SERVER_ARGS: readonly string[] = ["serve-mcp"];
+// Not ["mcp", "serve"]. That spelling is retired and prints a deprecation line
+// on stderr, so every editor session started from a config we generated would
+// carry the notice — we would be shipping our own deprecation warning into
+// other people's tools, permanently. The retired spelling still works for
+// anyone who typed it themselves; it must not be what we write for them.
 
 // Actionable hint printed when the optional MCP SDK is not importable. The
 // installer NEVER auto-installs and NEVER opens a network connection.
@@ -523,12 +529,12 @@ protocol adapter — it defines no new module logic.
 
 ## Commands
 
-- \`keryx mcp serve\` — stdio JSON-RPC MCP server (default transport).
-- \`keryx mcp serve --http\` — isolated HTTP/SSE opt-in (localhost only;
+- \`keryx serve-mcp\` — stdio JSON-RPC MCP server (default transport).
+- \`keryx serve-mcp --http\` — isolated HTTP/SSE opt-in (localhost only;
   requires \`http.enabled=true\` in this module's manifest entry).
-- \`keryx mcp serve --cwd <project-root>\` — expose a specific project,
+- \`keryx serve-mcp --cwd <project-root>\` — expose a specific project,
   independent of the MCP client's launch directory.
-- \`keryx mcp install --runtime <cursor|claude|opencode|vscode|generic|all> [--dry-run]\` —
+- \`keryx integrate <cursor|claude|opencode|vscode|generic|all> [--dry-run]\` —
   wire this project into an editor/agent: writes a project-local client
   config (cursor → \`.cursor/mcp.json\`, claude → \`.mcp.json\`, opencode →
   \`opencode.json\`, vscode → \`.vscode/mcp.json\`) and sets
@@ -538,17 +544,17 @@ protocol adapter — it defines no new module logic.
   step; hand-editing a client config file directly is unnecessary and skips
   setting \`modules.mcp.enabled\`. \`all\` expands to cursor + claude +
   opencode; \`vscode\` is opt-in only (not bundled into \`all\`) — request it
-  explicitly with \`--runtime vscode\`.
-- \`keryx mcp uninstall --runtime <cursor|claude|opencode|vscode|generic|all>\` —
+  explicitly as \`keryx integrate vscode\`.
+- \`keryx integrate --remove <cursor|claude|opencode|vscode|generic|all>\` —
   remove the managed client config again.
 - **codex CLI**: not a \`--runtime\` here — codex's client config is a single
   GLOBAL \`~/.codex/config.toml\`, not a project-local file, and it already
   ships its own safe, native installer for it. Run
-  \`codex mcp add keryx -- keryx mcp serve --cwd <project-root>\` once
+  \`codex mcp add keryx -- keryx serve-mcp --cwd <project-root>\` once
   (verified live: codex successfully discovers and calls this server's
   tools headlessly with \`codex exec --approve-for-me\`); \`codex mcp remove
   keryx\` to undo. \`modules.mcp.enabled=true\` still needs
-  \`keryx mcp install --runtime generic\` (or any other runtime) run once,
+  \`keryx integrate generic\` (or any other editor) run once,
   since codex's own installer has no notion of the keryx manifest.
 
 ## Notes

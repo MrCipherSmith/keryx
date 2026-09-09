@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// retired-spellings-ok: file — help text still lists the retired usage lines because those invocations still work; removing them would hide a working command
 
 import { runModelTurn } from "./harness/provider/single-turn";
 import { setModelTurnPort } from "./sac/model-turn-port";
@@ -22,6 +23,8 @@ import { commandsCommand } from "./commands/commands";
 import { securityCommand } from "./commands/security";
 import { sandboxCommand } from "./commands/sandbox";
 import { mcpCommand } from "./commands/mcp";
+import { serveMcpCommand } from "./commands/serve-mcp";
+import { integrateCommand } from "./commands/integrate";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
 import { shellCommand } from "./commands/shell";
@@ -90,6 +93,9 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   commands: commandsCommand,
   security: securityCommand,
   sandbox: sandboxCommand,
+  "serve-mcp": serveMcpCommand,
+  integrate: integrateCommand,
+  // Retired spelling of the two verbs above; kept working, kept thin.
   mcp: mcpCommand,
   harness: harnessCommand,
   shell: shellCommand,
@@ -250,10 +256,12 @@ Usage:
   keryx security incidents [--limit <n>]
   keryx security hooks install --runtime <claude|cursor|windsurf|generic-mcp|all>
   keryx security eval [--corpus <name|all>] [--with-model]
-  keryx mcp serve [--http] [--cwd <project-root>]
+  keryx serve-mcp [--http] [--cwd <project-root>]
+  keryx integrate [--remove] <cursor|claude|opencode|vscode|generic|all> [--dry-run]
+  keryx mcp serve [--http] ...                  # retired: use keryx serve-mcp
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
-  keryx mcp install|uninstall --runtime <cursor|claude|opencode|generic|all> [--dry-run]
+  keryx mcp install|uninstall --runtime ...     # retired: use keryx integrate
   keryx retention status [--json]
   keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
                                                Bound gdctx raw/artifacts logs and owner write-conflict
@@ -298,7 +306,9 @@ Commands:
   commands  Agent-callable command registry (intents, args, output, model usage)
   security  Policy-based scanning, redaction, guardrails and audit reports
   sandbox   Report OS sandbox launcher availability and the per-capability containment matrix
-  mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
+  serve-mcp Expose Metaproject services over the Model Context Protocol (opt-in)
+  integrate Wire this project into an editor or agent as an MCP server
+  mcp       Retired spelling of serve-mcp / integrate; still works, names its replacement
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
