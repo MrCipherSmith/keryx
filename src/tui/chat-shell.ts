@@ -374,7 +374,7 @@ export async function mountChatShell(
   const sbModel = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(label())}` });
   sidebar.add(sbModel);
   // Balance under Model: live for the active provider, fetched on mount/click.
-  mountBalancePanel(sidebar, otui, r, {
+  const balancePanel = mountBalancePanel(sidebar, otui, r, {
     provider: selection.provider,
   });
   sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
@@ -403,6 +403,7 @@ export async function mountChatShell(
     chrome.setTitle(`keryx · chat · ${label()}`);
     chrome.setStatus(label());
     sbModel.content = otui.t`${otui.dim(label())}`;
+    void balancePanel.setProvider(selection.provider);
   };
 
   const bridge = createChatBridge({

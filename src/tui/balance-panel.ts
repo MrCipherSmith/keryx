@@ -1,5 +1,6 @@
 // Sidebar balance panel (flow 174 follow-up): shows the ACTIVE provider's
-// balance under the Model row, fetched live on mount and on click.
+// balance under the Model row, fetched live on mount, on click, and when
+// the operator switches provider mid-session (`setProvider`).
 //
 // Only providers with a real balance endpoint (DeepSeek /user/balance,
 // OpenRouter /api/v1/credits) get the row at all; for the rest the panel is
@@ -14,6 +15,7 @@ import { envWithSavedApiKeys } from "../lib/shell-config";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
+type Box = InstanceType<OpenTui["BoxRenderable"]>;
 type Text = InstanceType<OpenTui["TextRenderable"]>;
 
 /** Format a balance for the sidebar (e.g. "$6.19" / "€12.00"). */
@@ -47,23 +49,23 @@ export interface BalancePanelOptions {
 export interface BalancePanelHandle {
   /** Re-fetch the active provider's balance and repaint. */
   refresh(): Promise<void>;
+  /** Point the panel at a new provider (mid-session `/model` / `/provider`). */
+  setProvider(provider: string): Promise<void>;
   /** The last successfully fetched balance (undefined before/if none). */
   current(): ProviderBalance | undefined;
 }
 
 /**
  * Mount the Balance row into `sidebarTop` and start the initial fetch.
- * Returns a handle for re-fetching / reading the value.
+ * Returns a handle for re-fetching / retargeting / reading the value.
  *
- * A provider with NO balance endpoint mounts nothing at all. It used to mount
- * the pair anyway and render a permanent "—", which cost three sidebar rows
- * (label, value, separator) to say nothing — and the sidebar is a fixed-height
- * column, so those rows are taken from the panels below it. On an 80x24
- * terminal that pushed `Tools` and `Status` off the bottom of the screen
- * entirely (caught by `shell-pty-launch.smoke.test.ts`). Same idiom as the
- * Subagents/Background-Jobs boxes in `tui-shell.ts`: nothing to show ⇒ zero
- * height. Capability is a static property of the provider, so this is decided
- * once at mount rather than on every refresh.
+ * The panel lives in a hug-content box so a later `setProvider` can grow or
+ * shrink the row IN PLACE (under Usage) instead of appending at the bottom of
+ * `sidebarTop`. A provider with NO balance endpoint leaves the box empty —
+ * zero height, the same idiom as the Workspace/Subagents boxes in
+ * `tui-shell.ts`. A capable provider whose fetch fails still renders "—" —
+ * that is a live reading that did not arrive, not a provider that has no
+ * reading.
  */
 export function mountBalancePanel(
   sidebarTop: { add(child: unknown): void },
@@ -74,17 +76,33 @@ export function mountBalancePanel(
   const core = otui as OpenTui;
   const r = renderer as Renderer;
   const env = envWithSavedApiKeys(options.env ?? process.env);
+  let activeProvider = options.provider;
   let current: ProviderBalance | undefined;
   let textNode: Text | undefined;
-  const capable = balanceCapableProvider(options.provider) !== undefined;
+  const box = new core.BoxRenderable(r, {
+    id: "sb-balance",
+    flexDirection: "column",
+    flexShrink: 0,
+  }) as Box;
+  sidebarTop.add(box);
 
-  if (capable) {
+  const clearRow = (): void => {
+    for (const child of [...box.getChildren()]) {
+      box.remove(child);
+    }
+    textNode = undefined;
+  };
+
+  const mountRow = (): void => {
+    if (textNode !== undefined) {
+      return;
+    }
     const label = new core.TextRenderable(r, {
       id: "sb-balance-k",
       content: core.t`${core.dim("Balance")}`,
       marginTop: 1,
     });
-    sidebarTop.add(label);
+    box.add(label);
     const value = new core.TextRenderable(r, {
       id: "sb-balance-v",
       content: core.t`${core.dim("…")}`,
@@ -93,8 +111,8 @@ export function mountBalancePanel(
       },
     });
     textNode = value;
-    sidebarTop.add(value);
-  }
+    box.add(value);
+  };
 
   const paint = (balance: ProviderBalance | undefined): void => {
     current = balance;
@@ -104,7 +122,7 @@ export function mountBalancePanel(
   };
 
   const refresh = async (): Promise<void> => {
-    const provider = balanceCapableProvider(options.provider);
+    const provider = balanceCapableProvider(activeProvider);
     if (provider === undefined) {
       paint(undefined);
       return;
@@ -126,6 +144,20 @@ export function mountBalancePanel(
     paint(balance);
   };
 
+  const setProvider = async (provider: string): Promise<void> => {
+    activeProvider = provider;
+    if (balanceCapableProvider(provider) !== undefined) {
+      mountRow();
+    } else {
+      clearRow();
+      current = undefined;
+    }
+    await refresh();
+  };
+
+  if (balanceCapableProvider(activeProvider) !== undefined) {
+    mountRow();
+  }
   void refresh();
-  return { refresh, current: () => current };
+  return { refresh, setProvider, current: () => current };
 }
