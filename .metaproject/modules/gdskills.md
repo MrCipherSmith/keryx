@@ -111,6 +111,10 @@ Native bundled Metaproject working skills and orchestrators.
 - `keryx skills status`
 - `keryx skills catalog --profile full`
 - `keryx skills install --profile full`
+- `keryx skills import --from <dir|SKILL.md|https-url>`
+- `keryx skills update [<module>/<name>|--all]`
+- `keryx review import --from <dir>`
+- `keryx review import --from <dir>`
 
 ## Storage
 

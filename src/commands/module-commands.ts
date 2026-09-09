@@ -21,6 +21,8 @@ export const MODULE_COMMANDS = {
     "catalog",
     "install",
     "create",
+    "import",
+    "update",
     "verify",
     "learn",
     "export",

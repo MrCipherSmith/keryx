@@ -121,6 +121,11 @@ async function driftFor(
   if (!origin || !recordedHash) {
     return "none";
   }
+  // A remote Origin is re-checked by `keryx skills update`, not by listing.
+  // `review reviewers` must not open a socket.
+  if (/^https:\/\//i.test(origin)) {
+    return "clean";
+  }
   try {
     const content = await readFile(resolveOriginPath(origin, projectRoot), "utf8");
     return hashOriginContent(content) === recordedHash ? "clean" : "changed";
