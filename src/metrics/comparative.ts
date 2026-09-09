@@ -16,7 +16,7 @@
 // side by side, exactly like every prior ablation leg in this project ("reported
 // separately, never averaged").
 
-import { deriveRate, wilsonInterval, type PairedBenchmarkManifestV2, type PairedBenchmarkRunV2, type RateWithCI } from "./benchmark";
+import { deriveRate, isMeasuredRate, wilsonInterval, type PairedBenchmarkManifestV2, type PairedBenchmarkRunV2, type RateWithCI } from "./benchmark";
 
 /** Review status of a target's adapter (AC-6): was it built and reviewed against its own idiomatic interface? */
 export type AdapterReviewStatus = "native-reviewed" | "pending";
@@ -58,6 +58,10 @@ export type ComparativeCellResult = {
    * Per AC-6: false whenever the owning target's fairness status is not "met" (or its
    * adapter is not "native-reviewed") — computed by `buildComparativeReport`, never set
    * by hand, so a caller cannot silently mark a caveated result publishable.
+   *
+   * Also false when `successRate` carries no trials (AC-M08): a cell with nothing measured
+   * has no number to publish, whatever its adapter and fairness status say. Publishability
+   * is a claim about a value; there is no value here.
    */
   readonly publishable: boolean;
 };
@@ -70,12 +74,6 @@ export type ComparativeReport = {
   readonly cells: readonly ComparativeCellResult[];
 };
 
-function median(values: readonly number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2 : (sorted[mid] as number);
-}
 
 /** Recover a run's success count/n from its `rates.taskSuccess` (as ablation-runner.ts writes it). */
 function successRateFromRun(run: PairedBenchmarkRunV2): RateWithCI {
@@ -142,15 +140,16 @@ export function buildComparativeReport(legs: ComparativeLegs): ComparativeReport
     run: PairedBenchmarkRunV2 | undefined,
   ): ComparativeCellResult | undefined => {
     if (!run) return undefined;
+    const successRate = successRateFromRun(run);
     return {
       taskId,
       cell: cellKind,
       target,
       model: run.model,
-      successRate: successRateFromRun(run),
+      successRate,
       medianToolCalls: medianToolCallsFromRun(run),
       medianTokens: medianTokensFromRun(run),
-      publishable: publishableFor(target),
+      publishable: publishableFor(target) && isMeasuredRate(successRate),
     };
   };
 
@@ -187,21 +186,39 @@ export function validateComparativeReport(report: ComparativeReport): Comparativ
       errors.push(`cells[${index}] (${cellResult.taskId}/${cellResult.cell}): target "${cellResult.target}" has no status entry`);
       continue;
     }
-    const shouldBePublishable = status.adapter === "native-reviewed" && status.fairness === "met";
+    const rate = cellResult.successRate;
+    const measured = Boolean(rate) && isMeasuredRate(rate);
+    // A cell is publishable only when its target passed review AND it actually has a
+    // measured rate. The second conjunct is AC-M08's: an unmeasured cell may appear in the
+    // report (honestly, as INCOMPLETE), but it may never be presented as a number.
+    const shouldBePublishable = status.adapter === "native-reviewed" && status.fairness === "met" && measured;
     if (cellResult.publishable !== shouldBePublishable) {
       errors.push(
         `cells[${index}] (${cellResult.taskId}/${cellResult.cell}): publishable=${cellResult.publishable} ` +
-          `inconsistent with target "${cellResult.target}" status (adapter=${status.adapter}, fairness=${status.fairness}) — AC-6`,
+          `inconsistent with target "${cellResult.target}" status (adapter=${status.adapter}, fairness=${status.fairness}) ` +
+          `and successRate (${measured ? "measured" : "no trials"}) — AC-6 / AC-M08`,
       );
     }
-    const rate = cellResult.successRate;
-    if (!rate || rate.n <= 0) {
+    if (!rate) {
+      errors.push(`cells[${index}]: successRate missing`);
+      continue;
+    }
+    if (!isMeasuredRate(rate)) {
+      // Not an error: an explicitly-unmeasured cell is the honest rendering of "no trials".
+      // It is already excluded from publication by the invariant above.
+      continue;
+    }
+    if (rate.n <= 0) {
       errors.push(`cells[${index}]: successRate reported without an explicit n`);
-    } else {
-      const expected = wilsonInterval(rate.successes, rate.n);
-      if (Math.abs(rate.ci95.lower - expected.lower) > 1e-6 || Math.abs(rate.ci95.upper - expected.upper) > 1e-6) {
-        errors.push(`cells[${index}]: successRate confidence interval does not match the 95% Wilson interval`);
-      }
+      continue;
+    }
+    const expected = wilsonInterval(rate.successes, rate.n);
+    if (!expected) {
+      errors.push(`cells[${index}]: successRate reported without an explicit n`);
+      continue;
+    }
+    if (Math.abs(rate.ci95.lower - expected.lower) > 1e-6 || Math.abs(rate.ci95.upper - expected.upper) > 1e-6) {
+      errors.push(`cells[${index}]: successRate confidence interval does not match the 95% Wilson interval`);
     }
   }
 

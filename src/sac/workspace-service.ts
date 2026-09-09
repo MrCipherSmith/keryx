@@ -1,5 +1,5 @@
 import { mkdir, readdir, readFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { readWorkspaceFileNoFollow } from "./secure-resource-read";
@@ -29,6 +29,47 @@ export type WorkspaceManifest = {
   createdAt: string;
   updatedAt: string;
 };
+
+/**
+ * What one declared reference answers RIGHT NOW, as opposed to what the
+ * manifest claims it points at.
+ *
+ * `unverifiable` is deliberately its own state and is never folded into either
+ * `resolved` or `changed`: "the target is there and is byte-identical to what
+ * was pinned", "the target is there and is NOT what was pinned", and "the
+ * target is there but nothing was pinned, so I cannot tell" are three different
+ * answers, and collapsing the third into the first is exactly the substitution
+ * hole this report exists to expose.
+ */
+export type WorkspaceReferenceState = "resolved" | "unresolvable" | "changed" | "unverifiable";
+export type WorkspaceReferenceStatus = Readonly<{
+  kind: WorkspaceResource["kind"];
+  uri: string;
+  state: WorkspaceReferenceState;
+  detail: string;
+  /** The revision recorded on the manifest resource, when it has one. */
+  pinnedRevision?: string;
+  /** sha256 of the target's current bytes, when they could be read. */
+  observedRevision?: string;
+}>;
+/**
+ * Every reference's current answer, computed at read time and reported
+ * alongside the manifest instead of deciding whether the manifest is disclosed
+ * at all. A workspace with a dangling reference is still a workspace; hiding it
+ * makes it indistinguishable from one that never existed.
+ */
+export type WorkspaceReferenceReport = Readonly<{
+  /** True only when every reference resolved AND matched its pinned revision. */
+  ok: boolean;
+  resources: readonly WorkspaceReferenceStatus[];
+  unresolvable: readonly string[];
+  changed: readonly string[];
+  unverifiable: readonly string[];
+}>;
+export type WorkspaceView = Readonly<{ manifest: WorkspaceManifest; references: WorkspaceReferenceReport }>;
+
+/** A revision that is a sha256 content digest — the only kind that can prove a target did not change. */
+const CONTENT_DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 
 type WorkspaceServiceOptions = {
   workspaceRoot: string;
@@ -66,7 +107,15 @@ export class WorkspaceService {
       members: [{ subject: actor.subject, role: "owner" }], resources: input.component ? [input.component] : [],
       createdAt: this.timestamp(), updatedAt: this.timestamp(),
     };
+    // Shape first (an escaping/malformed uri is `invalid_manifest`), then the
+    // component reference is RESOLVED and pinned here rather than inside
+    // `validateManifest`: `validateManifest` no longer resolves every declared
+    // reference, because a workspace whose target was deleted after the fact
+    // must still be readable and writable — see `readManifest`. Add-time
+    // resolution is a real guard and stays; read-time resolution was a
+    // disclosure decision, and it is gone.
     await this.validateManifest(manifest);
+    if (input.component) manifest.resources = [await this.pinResource(input.component)];
     const dir = this.workspaceDir(manifest.id);
     await mkdir(this.storageRoot, { recursive: true, mode: 0o700 });
     await withFileLock(this.lockPath(manifest.id), async () => {
@@ -240,6 +289,13 @@ export class WorkspaceService {
     const actor = await this.requireActor(input.request, input.requestCorrelationId);
     await this.requireStrict("write");
     await this.validateResource(input.resource);
+    // A reference with no revision cannot tell later that its target was
+    // swapped for something else at the same path, so one is captured now, from
+    // the bytes the caller is actually pointing at. Same content-digest pinning
+    // `proposal-lifecycle.ts` uses for owner-write evidence (`hash(content)`
+    // compared in `isEvidenceFresh`), and the same digest `fwk-service.ts`
+    // already recomputes to decide `fresh` vs `stale` — not a second mechanism.
+    const resource = await this.pinResource(input.resource);
     const initial = await this.readManifest(input.workspaceId);
     const authorization = await this.requireAuthorization(actor, initial.id, "write");
     let result: WorkspaceManifest | undefined;
@@ -257,8 +313,8 @@ export class WorkspaceService {
       // proposal-lifecycle.ts's `create()` — any new write operation that
       // should reject on an archived workspace must add this check itself.
       if (manifest.status === "archived") throw new WorkspaceServiceError("guard_denied", "workspace is archived");
-      if (manifest.resources.some((resource) => resource.uri === input.resource.uri)) throw new WorkspaceServiceError("conflict", "resource already exists");
-      const next: WorkspaceManifest = { ...manifest, resources: [...manifest.resources, input.resource], updatedAt: this.timestamp() };
+      if (manifest.resources.some((candidate) => candidate.uri === input.resource.uri)) throw new WorkspaceServiceError("conflict", "resource already exists");
+      const next: WorkspaceManifest = { ...manifest, resources: [...manifest.resources, resource], updatedAt: this.timestamp() };
       await this.validateManifest(next);
       await writeFileAtomic(this.manifestPath(input.workspaceId), `${JSON.stringify(next, null, 2)}\n`);
       result = next;
@@ -359,10 +415,66 @@ export class WorkspaceService {
     return authorization;
   }
 
+  /**
+   * The current answer of every declared reference, reported NEXT TO the
+   * manifest rather than deciding whether the manifest is disclosed at all.
+   *
+   * Takes an already-obtained manifest on purpose: every path that can hand a
+   * caller one (`show`/`showForActor`/`list`/`listForActor`) has already run
+   * the ACL gate, so this adds no new disclosure — it only names, for a record
+   * the caller may already see, which of its references still answer.
+   */
+  async describeReferences(manifest: WorkspaceManifest): Promise<WorkspaceReferenceReport> {
+    const resources: WorkspaceReferenceStatus[] = [];
+    for (const resource of manifest.resources) resources.push(await this.describeReference(resource));
+    const withState = (state: WorkspaceReferenceState): string[] => resources.filter((entry) => entry.state === state).map((entry) => entry.uri);
+    const unresolvable = withState("unresolvable");
+    const changed = withState("changed");
+    return Object.freeze({
+      ok: unresolvable.length === 0 && changed.length === 0,
+      resources: Object.freeze(resources),
+      unresolvable: Object.freeze(unresolvable),
+      changed: Object.freeze(changed),
+      // Never folded into `ok`'s two lists: "I cannot tell" is its own answer.
+      unverifiable: Object.freeze(withState("unverifiable")),
+    });
+  }
+
+  private async describeReference(resource: WorkspaceResource): Promise<WorkspaceReferenceStatus> {
+    const base = { kind: resource.kind, uri: resource.uri, ...(resource.revision === undefined ? {} : { pinnedRevision: resource.revision }) };
+    let absolutePath: string;
+    try { absolutePath = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: resource.kind, uri: resource.uri }); }
+    catch (error) { return Object.freeze({ ...base, state: "unresolvable" as const, detail: error instanceof Error ? error.message : "workspace reference is not resolvable" }); }
+    const observedRevision = this.contentDigest(absolutePath);
+    if (observedRevision === undefined) return Object.freeze({ ...base, state: "unverifiable" as const, detail: "target resolves but its bytes cannot be read, so its content cannot be checked" });
+    if (resource.revision === undefined) return Object.freeze({ ...base, state: "unverifiable" as const, observedRevision, detail: "reference carries no pinned revision, so a substituted target cannot be detected" });
+    if (!CONTENT_DIGEST_PATTERN.test(resource.revision)) return Object.freeze({ ...base, state: "unverifiable" as const, observedRevision, detail: "pinned revision is a caller-supplied label, not a content digest, so it cannot prove the target is unchanged" });
+    if (resource.revision !== observedRevision) return Object.freeze({ ...base, state: "changed" as const, observedRevision, detail: "target content no longer matches the revision pinned when this reference was added" });
+    return Object.freeze({ ...base, state: "resolved" as const, observedRevision, detail: "target resolves and still matches its pinned revision" });
+  }
+
+  /** sha256 over the target's current bytes, or undefined when they cannot be read at all. */
+  private contentDigest(absolutePath: string): string | undefined {
+    try { return createHash("sha256").update(readWorkspaceFileNoFollow(this.root, absolutePath)).digest("hex"); }
+    catch { return undefined; }
+  }
+
+  /** Attaches a content digest to a reference that carries no revision of its own. */
+  private async pinResource(resource: WorkspaceResource): Promise<WorkspaceResource> {
+    if (resource.revision !== undefined) return resource;
+    let absolutePath: string;
+    try { absolutePath = await resolveWorkspaceReference({ workspaceRoot: this.root, kind: resource.kind, uri: resource.uri }); }
+    catch { return resource; }
+    const revision = this.contentDigest(absolutePath);
+    // A directory, an oversized file, or anything else unreadable stays
+    // unpinned rather than being pinned to a made-up value — `describeReferences`
+    // then reports it as `unverifiable`, which is the truth.
+    return revision === undefined ? resource : { ...resource, revision };
+  }
+
   private async validateManifest(manifest: WorkspaceManifest): Promise<void> {
     const contract = await validateSacContract({ schema: "workspace-manifest", document: manifest });
     if (!contract.valid) throw new WorkspaceServiceError("invalid_manifest", contract.errors.map((entry) => entry.code).join(", "));
-    for (const resource of manifest.resources) await this.validateResource(resource);
   }
 
   private async validateResource(resource: WorkspaceResource): Promise<void> {
@@ -370,6 +482,20 @@ export class WorkspaceService {
     catch (error) { throw new WorkspaceServiceError("invalid_reference", error instanceof Error ? error.message : "unsafe workspace reference"); }
   }
 
+  /**
+   * Reads the workspace RECORD. It no longer resolves the record's references.
+   *
+   * It used to: every read re-resolved every declared resource and threw
+   * `invalid_reference` if any target was gone. One deleted wiki page therefore
+   * removed the whole workspace from `list()` (swallowed by
+   * `enumerateVisible`'s catch) and turned `show()` into an error — a workspace
+   * that exists, is `active`, and has other readable resources became
+   * indistinguishable from one that never existed, and even
+   * `removeResource` could not be used to clear the dangling entry, because
+   * this read ran first. Reference resolution is now reported by
+   * `describeReferences`, next to the record, instead of deciding whether the
+   * record is disclosed at all.
+   */
   private async readManifest(id: string): Promise<WorkspaceManifest> {
     if (!/^[a-z][a-z0-9-]{2,63}$/.test(id)) throw new WorkspaceServiceError("not_found", "workspace not found");
     let parsed: unknown;
@@ -377,9 +503,7 @@ export class WorkspaceService {
     catch (error) { if (isNotFound(error)) throw new WorkspaceServiceError("not_found", "workspace not found"); throw new WorkspaceServiceError("invalid_manifest", "workspace manifest cannot be read"); }
     const contract = await validateSacContract({ schema: "workspace-manifest", document: parsed });
     if (!contract.valid) throw new WorkspaceServiceError("invalid_manifest", contract.errors.map((entry) => entry.code).join(", "));
-    const manifest = parsed as WorkspaceManifest;
-    for (const resource of manifest.resources) await this.validateResource(resource);
-    return manifest;
+    return parsed as WorkspaceManifest;
   }
 
   private workspaceDir(id: string): string { return path.join(this.storageRoot, id); }
@@ -402,6 +526,60 @@ export function localWorkspaceAuthorizationServer(subject = `user:local-${proces
 }
 
 export function newWorkspaceId(): string { return `workspace-${randomUUID().replace(/-/g, "").slice(0, 16)}`; }
+
+/**
+ * The named outcomes of asking one surface for one workspace.
+ *
+ * `not-found`, `access-denied` and `unreadable` are separate on purpose: "it
+ * never existed", "it exists and is not yours", and "it exists and I cannot
+ * parse it" are three different answers, and a surface that renders all three
+ * as an empty result is the defect this lane exists to close. Note that a
+ * DANGLING REFERENCE is not on this list at all — that is a `workspace`
+ * outcome whose `references` report names what failed.
+ */
+export type WorkspaceLookup =
+  | (WorkspaceView & { outcome: "workspace" })
+  | Readonly<{ outcome: "not-found" | "access-denied" | "unreadable" | "guard-denied"; workspaceId: string; detail: string }>;
+
+const LOOKUP_OUTCOME: Record<WorkspaceServiceError["code"], Exclude<WorkspaceLookup["outcome"], "workspace">> = {
+  not_found: "not-found",
+  access_denied: "access-denied",
+  invalid_manifest: "unreadable",
+  invalid_reference: "unreadable",
+  guard_denied: "guard-denied",
+  write_failed: "unreadable",
+  conflict: "unreadable",
+};
+
+/**
+ * The ONE lookup both `keryx workspace show` and MCP `sac.workspaceShow` run,
+ * so the two surfaces cannot answer the same question differently at the same
+ * moment. It never throws: a missing workspace is an ordinary named outcome,
+ * not an exception whose stack trace (absolute source paths included) becomes
+ * the answer a tool caller sees.
+ */
+export async function lookupWorkspace(service: WorkspaceService, workspaceId: string): Promise<WorkspaceLookup> {
+  try {
+    const manifest = await service.show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+    return Object.freeze({ outcome: "workspace" as const, manifest, references: await service.describeReferences(manifest) });
+  } catch (error) {
+    if (error instanceof WorkspaceServiceError) return Object.freeze({ outcome: LOOKUP_OUTCOME[error.code], workspaceId, detail: error.message });
+    return Object.freeze({ outcome: "unreadable" as const, workspaceId, detail: error instanceof Error ? error.message : "workspace could not be read" });
+  }
+}
+
+/**
+ * The ONE listing both `keryx workspace list` and MCP `sac.workspaceList` run.
+ * Each entry carries its own reference report, so a workspace with a dangling
+ * reference appears in the list — named as damaged — instead of vanishing from
+ * it.
+ */
+export async function listWorkspaceViews(service: WorkspaceService, includeArchived: boolean): Promise<WorkspaceView[]> {
+  const manifests = await service.list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived });
+  const views: WorkspaceView[] = [];
+  for (const manifest of manifests) views.push(Object.freeze({ manifest, references: await service.describeReferences(manifest) }));
+  return views;
+}
 
 /**
  * SLATE-15 shared fail-closed `--workspace` validation (AC1): the SAME helper

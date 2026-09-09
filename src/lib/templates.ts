@@ -2,6 +2,28 @@ import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-block
 import { renderMetaprojectGitignoreBlock as renderGeneratedGitignoreBlock } from "./metaproject-gitignore";
 import { CONTRACTS } from "../gdskills/contracts";
 
+export type RoutingModuleFlags = {
+  enableGdgraph: boolean;
+  enableGdctx: boolean;
+  enableGdwiki: boolean;
+  enableGdskills: boolean;
+  enableHealth: boolean;
+  enableTesting: boolean;
+  enableMemory: boolean;
+  enableTasks: boolean;
+  enableSecurity?: boolean;
+};
+
+export type RoutingEntrypointOptions = RoutingModuleFlags & {
+  ruleSources: string[];
+  hasDistilledEntrypoints?: boolean;
+};
+
+export type RoutingEntrypointPair = {
+  index: string;
+  routing: string;
+};
+
 export function renderIndexMarkdown({
   enableGdgraph,
   enableGdctx,
@@ -14,19 +36,7 @@ export function renderIndexMarkdown({
   enableSecurity = false,
   ruleSources,
   hasDistilledEntrypoints = false,
-}: {
-  enableGdgraph: boolean;
-  enableGdctx: boolean;
-  enableGdwiki: boolean;
-  enableGdskills: boolean;
-  enableHealth: boolean;
-  enableTesting: boolean;
-  enableMemory: boolean;
-  enableTasks: boolean;
-  enableSecurity?: boolean;
-  ruleSources: string[];
-  hasDistilledEntrypoints?: boolean;
-}): string {
+}: RoutingEntrypointOptions): string {
   const moduleRows = [
     enableGdgraph
       ? "| gdgraph | Code graph, dependencies, symbols, affected context | modules/gdgraph.md |"
@@ -371,17 +381,7 @@ export function renderIndexGateMarkdown({
   enableMemory,
   enableTasks,
   enableSecurity = false,
-}: {
-  enableGdgraph: boolean;
-  enableGdctx: boolean;
-  enableGdwiki: boolean;
-  enableGdskills: boolean;
-  enableHealth: boolean;
-  enableTesting: boolean;
-  enableMemory: boolean;
-  enableTasks: boolean;
-  enableSecurity?: boolean;
-}): string {
+}: RoutingModuleFlags): string {
   const rows = [
     enableGdgraph
       ? "| where is X, what depends on it, what breaks | `keryx gdgraph affected <file>` |"
@@ -422,6 +422,16 @@ ${binding}
 
 Treat requests as intents; the user does not need to know these command names.
 `;
+}
+
+/** Render the compact gate and full router from one immutable input. */
+export function renderRoutingEntrypointPair(
+  options: RoutingEntrypointOptions,
+): RoutingEntrypointPair {
+  return {
+    index: renderIndexGateMarkdown(options),
+    routing: renderIndexMarkdown(options),
+  };
 }
 
 export type MetaprojectDashboardData = {
@@ -489,6 +499,7 @@ export type MetaprojectDashboardData = {
   };
 };
 
+/* eslint-disable no-useless-escape -- This raw HTML/JavaScript template preserves regex escapes for the generated script. */
 export function renderMetaprojectDashboardHtml({
   enableGdgraph,
   enableGdctx,
@@ -712,8 +723,22 @@ export function renderMetaprojectDashboardHtml({
   const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
   const healthClass = health ? healthTone(health) : "";
   const healthScoreTone = health ? healthTone(health) : "";
-  const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
-  const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
+  // A count is not coverage, and this slot in particular said it was.
+  //
+  // The alternative value here is "needs content", so any non-zero count read
+  // as "does not need content" — while five of the wiki's page types hold no
+  // pages at all. The number and the judgement were the same field, so the
+  // number was doing the judging. They are separated now: the count says what
+  // it counts, and the phrase that means "nothing more is needed" is not one
+  // this slot is able to imply.
+  const wikiStatus =
+    wikiPages.length > 0 ? `${wikiPages.length} pages on file` : enableGdwiki ? "no pages yet" : "disabled";
+  const memoryStatus =
+    memoryEntries.length > 0
+      ? `${memoryEntries.length} entries on file`
+      : enableMemory
+        ? "no entries yet"
+        : "disabled";
   const healthSources = health?.sources.map((source) => `
             <tr class="health-row" data-search="${escapeHtml(`${source.source} ${source.status} ${source.findings}`)}">
               <td>${escapeHtml(source.source)}</td>
@@ -1062,8 +1087,12 @@ export function renderMetaprojectDashboardHtml({
           <div class="kpis">
             <div class="kpi ${health ? (health.findings === 0 ? "good" : "warn") : ""}"><b>${health?.findings ?? "—"}</b><span>findings</span></div>
             <div class="kpi"><b>${graph ? graph.files : "—"}</b><span>graph files</span></div>
-            <div class="kpi"><b>${wikiPages.length || "—"}</b><span>wiki pages</span></div>
-            <div class="kpi"><b>${memoryEntries.length || "—"}</b><span>memory entries</span></div>
+            <div class="kpi" title="A count of files, not a coverage measure — several wiki page types can hold none">
+              <b>${wikiPages.length || "—"}</b><span>wiki pages</span>
+            </div>
+            <div class="kpi" title="A count of files, not a coverage measure">
+              <b>${memoryEntries.length || "—"}</b><span>memory entries</span>
+            </div>
           </div>
         </div>
       </section>
@@ -1389,6 +1418,7 @@ ${cards || "          <p class=\"empty\">No modules enabled.</p>"}
 </html>
 `;
 }
+/* eslint-enable no-useless-escape */
 
 type DashboardAttentionItem = {
   tone: "good" | "warn" | "bad";
@@ -2011,7 +2041,7 @@ export function renderGdgraphPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
     return 0
   fi
 
@@ -2048,9 +2078,10 @@ export function renderSecurityPrePushHook(): string {
   return `keryx_security_pre_push() {
   # Run the Metaproject Security guard over the changed/committable content before
   # a push. Blocking is delegated to the CLI, which honors security.config.json
-  # mode: 'advisory' (default) always exits 0 (warn, never block); 'enforced'/'ci'
-  # exit non-zero on a blocking (secret/critical) finding. This hook never
-  # duplicates the mode->action mapping; it only propagates the CLI exit code.
+  # mode: 'advisory' (default) always exits 0 (warn, never block);
+  # 'enforced'/'ci'/'gateway' exit non-zero on a failing or needs-approval gate
+  # (not only a secret or critical finding). This hook never duplicates the
+  # mode->action mapping; it only propagates the CLI exit code.
 
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
@@ -2150,7 +2181,7 @@ $range_files"
       scan_out="$("$gdm" security scan "$file" --source trusted-project 2>&1)"
       scan_code=$?
       if [ "$scan_code" -ne 0 ]; then
-        # enforced/ci mode blocked on this file.
+        # enforced/ci/gateway mode blocked on this file.
         echo "keryx pre-push: security gate blocked on $file" >&2
         printf '%s\\n' "$scan_out" >&2
         blocked=1
@@ -2177,6 +2208,7 @@ keryx_security_pre_push || exit $?
 `;
 }
 
+/* eslint-disable no-useless-escape -- This shell template preserves escapes that must be emitted literally. */
 export function renderGdwikiPostCommitHook(): string {
   return `keryx_gdwiki_post_commit() {
   # LWG-9 (flow 226): append ONE line to the freshness queue, then stop.
@@ -2270,6 +2302,7 @@ KERYX_ENTRY
 keryx_gdwiki_post_commit
 `;
 }
+/* eslint-enable no-useless-escape */
 
 export function renderMetaprojectDashboardPostCommitHook(): string {
   return `keryx_dashboard_post_commit() {
@@ -2343,7 +2376,7 @@ export function renderHealthPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
     return 0
   fi
 
@@ -2432,6 +2465,23 @@ if (command === "affected") {
 
   const graph = await loadGraph(process.cwd());
   const affected = getAffected(graph, target);
+
+  // T19 finding 5 (flow 234 review): a target the graph never indexed (never
+  // built, or the path/symbol does not exist) resolves to itself unchanged
+  // with an empty blast radius — the same shape as a real, indexed target
+  // that legitimately has zero edges. Replicating the membership check
+  // locally against the already-loaded graph (same fix as
+  // \`src/commands/gdgraph.ts\`'s \`runAffected\` and \`src/mcp/tools.ts\`'s
+  // \`gdgraph.affected\`) is the minimal, faithful fix here too.
+  const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
+  if (!isKnownNode) {
+    console.error(
+      \`gdgraph: "\${target}" is not a node in the built graph (never indexed, or the \` +
+        \`path/symbol does not exist) — this is not the same as an indexed target with \` +
+        \`zero edges. Run \\\`keryx gdgraph build\\\` if the file is new, or double-check the path.\`,
+    );
+    process.exit(1);
+  }
 
   if (asJson) {
     console.log(JSON.stringify(affected, null, 2));

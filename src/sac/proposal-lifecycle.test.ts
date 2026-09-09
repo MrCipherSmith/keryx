@@ -12,7 +12,7 @@ import { createTrustedWrapUpAuthority, type TrustedWrapUpProvenance } from "./tr
 import { pathExists } from "../lib/fs";
 
 const time = "2026-08-12T00:00:00.000Z";
-async function setup(role = "owner", writer: { owner: string; write: (input: { correlationId: string }) => Promise<any>; recover?: () => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }) {
+async function setup(role = "owner", writer: { owner: string; write: (input: { correlationId: string; idempotencyKey?: string; proposalId?: string }) => Promise<any>; recover?: (intent?: any) => Promise<any>; recoverReceipt?: (intent: any) => Promise<any> } = { owner: "wiki", write: async ({ correlationId }) => ({ ok: true, owner: "wiki", receiptRef: "./receipts/target-write.json", targetRef: "./wiki/accepted.md", completedAt: time, correlationId }) }, extra: { beforeTransitionAppend?: () => Promise<void> | void; now?: () => Date } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-proposal-"));
   await mkdir(path.join(root, "evidence"), { recursive: true }); await mkdir(path.join(root, "wiki"), { recursive: true });
   await writeFile(path.join(root, "evidence", "e.md"), "evidence"); await writeFile(path.join(root, "wiki", "accepted.md"), "accepted");
@@ -34,8 +34,13 @@ async function setup(role = "owner", writer: { owner: string; write: (input: { c
   else if (role === "editor") manifest.members = [{ subject: "user:owner", role: "owner" }, { subject: "user:reviewer", role: "editor" }];
   await writeFile(manifestPath, JSON.stringify(manifest));
   const wrapUpAuthority = createTrustedWrapUpAuthority({ now: () => new Date(time), resolveExplicitWrapUp: async ({ sourceRef }) => ({ workspaceId: "workspace-a", sourceRevision: "wrapup-r1", summary: sourceRef.includes("flow") ? "separate explicit wrap-up" : "explicit wrap-up summary", evidence: [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }], expiresAt: "2026-08-12T01:00:00.000Z" }) });
-  const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", recover: async () => writer.recover ? writer.recover() : undefined, persist: (intent: { correlationId: string }) => writer.write({ correlationId: intent.correlationId }) };
-  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { [writer.owner]: createGuardedOwnerWriter({ owner: writer.owner as any, ...writerComposition }) } as any, wrapUpAuthority, now: () => new Date(time) });
+  const writerComposition = { authorize: async (intent: { reviewerAuthority: string }) => intent.reviewerAuthority === "owner" || intent.reviewerAuthority === "editor", recover: async (intent: any) => writer.recover ? writer.recover(intent) : undefined, persist: (intent: any) => writer.write(intent) };
+  const built = createGuardedOwnerWriter({ owner: writer.owner as any, ...writerComposition });
+  // `recoverReceipt` is the optional recovery-only capability SAC feature-detects
+  // (see `supportsOwnerWriteRecovery`); `createGuardedOwnerWriter` returns a frozen
+  // object, so it is composed on here rather than mutated in.
+  const targetWriter = writer.recoverReceipt ? Object.freeze({ ...built, recoverReceipt: writer.recoverReceipt }) : built;
+  const service = new ProposalLifecycleService({ workspaceRoot: root, workspaces, authorizationServer: server, guard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "policy-r1" }, policyRef: "./security/policy", policyRevision: "policy-r1", targetWriters: { [writer.owner]: targetWriter } as any, wrapUpAuthority, now: extra.now ?? (() => new Date(time)), ...(extra.beforeTransitionAppend ? { beforeTransitionAppend: extra.beforeTransitionAppend } : {}) });
   return { root, service, manifestPath, server, wrapUpAuthority, workspaces };
 }
 
@@ -45,7 +50,6 @@ async function wrapUp(service: ProposalLifecycleService, overrides: Partial<Trus
 }
 
 async function propose(service: ProposalLifecycleService, overrides: Record<string, unknown> = {}) {
-  const evidence = [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }];
   return service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0001", workspaceId: "workspace-a", id: "proposal-a", proposalRevision: "r1", kind: "wiki-update", wrapUp: await wrapUp(service), ...overrides } as any);
 }
 
@@ -87,7 +91,12 @@ test("crash recovery obtains a durable owner receipt without a duplicate mutatio
     ownerCalls += 1;
     if (ownerCalls === 1) { mutations += 1; durableReceipt = { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId }; throw new Error("simulated crash after owner commit"); }
     return { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: time, correlationId };
-  }, recover: async () => durableReceipt };
+  }, recover: async () => durableReceipt,
+    // Flow 237: SAC no longer re-enters the MUTATING `write()` on a replay of an
+    // already-started owner write, so this fixture now answers the non-mutating
+    // recovery question instead. The assertions below are unchanged: still one
+    // owner mutation, still one `write()` call.
+    recoverReceipt: async () => durableReceipt };
   const { root, service } = await setup("owner", writer as any); await propose(service);
   const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001", interactive: true, confirmToken: await acceptToken(service) };
   await expect(service.review(request)).rejects.toThrow("simulated crash");
@@ -114,7 +123,6 @@ test("rejection is terminal append-only and does not call a target writer", asyn
 test("a terminal transition in another proposal does not consume this proposal idempotency stream", async () => {
   const { service } = await setup();
   await propose(service);
-  const evidence = [{ kind: "evidence", uri: "./evidence/e.md", revision: createHash("sha256").update("evidence").digest("hex"), observedAt: time }];
   const actor = await (service as any).options.authorizationServer.actorContextFor(undefined, "proposal-create-correlation-0002");
   const wrapUp = await (service as any).options.wrapUpAuthority.issue({ actor, source: "flow", sourceRef: "./flows/wrap-up" });
   await service.create({ request: undefined, requestCorrelationId: "proposal-create-correlation-0002", workspaceId: "workspace-a", id: "proposal-b", proposalRevision: "r1", kind: "risk", wrapUp });
@@ -589,4 +597,151 @@ test("isEvidenceFresh: a plain VIEWER-role actor (not editor/owner) gets true fo
   const viewerActor = await viewerServer.actorContextFor(undefined, "finding-c-viewer-0001");
 
   await expect(service.isEvidenceFresh(proposal, viewerActor!)).resolves.toBe(true);
+});
+
+// --- Flow 237 AC1, last clause: "a restart returns the same receipt" ---------
+// The pre-existing "crash recovery obtains a durable owner receipt without a
+// duplicate mutation" test above models the owner's durable receipt as an
+// IN-PROCESS closure variable (`durableReceipt`), assigned BEFORE the simulated
+// crash. That variable survives the "crash" because the crash is a thrown error
+// inside one live process, so the retry's `recover()` finds a receipt a real
+// restart would never have found. The real owner writers (wiki/memory/skill
+// -owner-writer.ts) write the TARGET bytes first and the receipt file second,
+// and their `recover()` reads only that receipt file — so a stop between the
+// two leaves a written target with no receipt anywhere on disk, and the retry
+// re-enters `persist`.
+//
+// This fixture models the real thing: every piece of owner state lives on disk,
+// written in the same order the real writers use.
+function diskBackedOwnerWriter(rootRef: { root: string }, opts: { crashAfterTarget?: boolean; withRecoveryHook?: boolean } = {}) {
+  const counters = { targetWrites: 0, persistCalls: 0, recoveryHookCalls: 0 };
+  // Every minted receipt, in order. A receipt's `completedAt` is real wall-clock
+  // time (these tests run the service on a real clock too, so the ledger's own
+  // temporal-order validation holds); "the same receipt" is therefore asserted
+  // against the first minted one rather than a hardcoded literal.
+  const minted: Array<{ completedAt: string }> = [];
+  const targetFile = () => path.join(rootRef.root, "wiki", "sac-target.md");
+  const receiptFile = (key: string) => path.join(rootRef.root, "wiki-write-receipts", `${key}.json`);
+  const readReceipt = async (key: string) => {
+    try { return JSON.parse(await readFile(receiptFile(key), "utf8")); } catch { return undefined; }
+  };
+  const writer: Record<string, unknown> = {
+    owner: "wiki" as const,
+    // Mirrors createRealWikiOwnerWriter.persist: target bytes, THEN receipt.
+    write: async (intent: any) => {
+      counters.persistCalls += 1;
+      counters.targetWrites += 1;
+      await mkdir(path.dirname(targetFile()), { recursive: true });
+      await writeFile(targetFile(), `# target\nattempt ${counters.persistCalls}\n`);
+      if (opts.crashAfterTarget && counters.persistCalls === 1) throw new Error("process stopped between the target write and the receipt write");
+      const receipt = { ok: true as const, owner: "wiki" as const, receiptRef: "./receipts/a", targetRef: "./wiki/a", completedAt: new Date().toISOString() };
+      minted.push({ completedAt: receipt.completedAt });
+      await mkdir(path.dirname(receiptFile(intent.idempotencyKey)), { recursive: true });
+      await writeFile(receiptFile(intent.idempotencyKey), JSON.stringify(receipt));
+      return receipt;
+    },
+    // Mirrors createRealWikiOwnerWriter.recover: reads the receipt file only.
+    recover: async (intent: any) => readReceipt(intent.idempotencyKey),
+  };
+  if (opts.withRecoveryHook) {
+    // The recovery-only capability SAC feature-detects. A writer that exposes it
+    // promises: a receipt means the target write is complete; `undefined` means
+    // it can prove nothing was applied.
+    writer.recoverReceipt = async (intent: any) => { counters.recoveryHookCalls += 1; return readReceipt(intent.idempotencyKey); };
+  }
+  return { counters, minted, receiptFile, writer };
+}
+
+const acceptRequest = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "accepted" as const, idempotencyKey: "proposal-review-idempotency-0001", interactive: true };
+
+test("AC1 restart: a stop inside the owner's target/receipt window neither re-runs the mutation nor mints a new receipt", async () => {
+  const rootRef = { root: "" };
+  const fixture = diskBackedOwnerWriter(rootRef, { crashAfterTarget: true, withRecoveryHook: true });
+  const { root, service } = await setup("owner", fixture.writer as any, { now: () => new Date() });
+  rootRef.root = root;
+  await propose(service);
+  const request = { ...acceptRequest, confirmToken: await acceptToken(service) };
+  await expect(service.review(request)).rejects.toThrow("process stopped between the target write and the receipt write");
+  // Post-crash disk state: target written once, no owner receipt anywhere.
+  expect(fixture.counters.targetWrites).toBe(1);
+  expect(await pathExists(fixture.receiptFile("proposal-review-idempotency-0001"))).toBe(false);
+
+  // The owner cannot account for the attempt, so its mutation must not be
+  // re-driven: SAC refuses with a retryable, NON-terminal outcome.
+  await expect(service.review(request)).rejects.toMatchObject({ code: "owner_write_indeterminate" });
+  expect(fixture.counters.targetWrites).toBe(1);
+  expect(fixture.counters.recoveryHookCalls).toBe(1);
+
+  // The proposal is NOT wedged: no terminal transition was recorded, so a fresh
+  // accept attempt (new idempotency key, new confirm token) still completes.
+  const fresh = await service.review({ ...acceptRequest, idempotencyKey: "proposal-review-idempotency-0002", confirmToken: await acceptToken(service) });
+  expect(fresh.event.toStatus).toBe("accepted");
+});
+
+test("AC1 restart: once the owner can account for the attempt, the replay returns the ORIGINAL receipt and writes no second target", async () => {
+  const rootRef = { root: "" };
+  const fixture = diskBackedOwnerWriter(rootRef, { withRecoveryHook: true });
+  let stop = true;
+  const { root, service } = await setup("owner", fixture.writer as any, { now: () => new Date(), beforeTransitionAppend: () => { if (stop) { stop = false; throw new Error("process stopped after the durable owner receipt"); } } });
+  rootRef.root = root;
+  await propose(service);
+  const request = { ...acceptRequest, confirmToken: await acceptToken(service) };
+  await expect(service.review(request)).rejects.toThrow("process stopped after the durable owner receipt");
+
+  const recovered = await service.review(request);
+  expect(recovered.event.toStatus).toBe("accepted");
+  expect(fixture.counters.targetWrites).toBe(1);
+  expect(fixture.minted).toHaveLength(1);
+  expect((recovered.event as any).acceptance.targetWrite.completedAt).toBe(fixture.minted[0]!.completedAt);
+});
+
+test("AC1 restart: a stop between the durable review decision and the terminal transition does not wedge the proposal", async () => {
+  const rootRef = { root: "" };
+  const fixture = diskBackedOwnerWriter(rootRef, { withRecoveryHook: true });
+  let stop = true;
+  // Real time, not the frozen clock: the wedge is that a replay regenerates the
+  // review-decision record with a NEW random id and a NEW decidedAt, so the
+  // immutable byte-compare in `writeImmutable` rejects it forever.
+  const { root, service } = await setup("owner", fixture.writer as any, { now: () => new Date(), beforeTransitionAppend: () => { if (stop) { stop = false; throw new Error("process stopped after the decision record, before the ledger append"); } } });
+  rootRef.root = root;
+  await propose(service);
+  const request = { ...acceptRequest, confirmToken: await acceptToken(service) };
+  await expect(service.review(request)).rejects.toThrow("process stopped after the decision record");
+  const ledgerAfterCrash = (await readFile(path.join(root, ".metaproject", "workspaces", "workspace-a", "activity.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  expect(ledgerAfterCrash.map((record) => record.recordType)).toEqual(["proposal-write-intent"]);
+  const decisionFile = path.join(root, ".metaproject", "workspaces", "workspace-a", "proposals", `proposal-a.${createHash("sha256").update("proposal-review-idempotency-0001").digest("hex")}.decision.json`);
+  const originalDecision = await readFile(decisionFile, "utf8");
+
+  const recovered = await service.review(request);
+  expect(recovered.event.toStatus).toBe("accepted");
+  expect(fixture.counters.targetWrites).toBe(1);
+  // The durable decision record is the original one, byte for byte — the replay
+  // reused it instead of minting a second one that could never match.
+  expect(await readFile(decisionFile, "utf8")).toBe(originalDecision);
+});
+
+test("AC1 restart: a stop after a REJECTION's decision record replays to the same terminal outcome", async () => {
+  const rootRef = { root: "" };
+  const fixture = diskBackedOwnerWriter(rootRef);
+  let stop = true;
+  const { root, service } = await setup("owner", fixture.writer as any, { now: () => new Date(), beforeTransitionAppend: () => { if (stop) { stop = false; throw new Error("process stopped after the decision record, before the ledger append"); } } });
+  rootRef.root = root;
+  await propose(service);
+  const request = { request: undefined, requestCorrelationId: "proposal-review-correlation-0001", workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected" as const, reason: "not applicable", idempotencyKey: "proposal-review-idempotency-0001", interactive: true };
+  await expect(service.review(request)).rejects.toThrow("process stopped after the decision record");
+  const recovered = await service.review(request);
+  expect(recovered.event.toStatus).toBe("rejected");
+  expect(fixture.counters.targetWrites).toBe(0);
+});
+
+test("AC1 restart: a writer with NO recovery capability is refused, never re-driven, after a stop in the owner window", async () => {
+  const rootRef = { root: "" };
+  const fixture = diskBackedOwnerWriter(rootRef, { crashAfterTarget: true });
+  const { root, service } = await setup("owner", fixture.writer as any, { now: () => new Date() });
+  rootRef.root = root;
+  await propose(service);
+  const request = { ...acceptRequest, confirmToken: await acceptToken(service) };
+  await expect(service.review(request)).rejects.toThrow("process stopped between the target write and the receipt write");
+  await expect(service.review(request)).rejects.toMatchObject({ code: "owner_write_indeterminate" });
+  expect(fixture.counters.targetWrites).toBe(1);
 });

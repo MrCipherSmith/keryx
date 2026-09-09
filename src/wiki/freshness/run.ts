@@ -11,7 +11,7 @@ import { loadGraph } from "../../gdgraph/query";
 import { runCapabilityOrFallback } from "../../capability/seam";
 import { resolveTreesitterCapability } from "../../gdgraph/treesitter/adapter";
 import type { SymbolLayer } from "../../gdgraph/types";
-import { gitCmd } from "../../sync/provenance";
+import { gitCmdResult } from "../../sync/provenance";
 import { classifyChanges, type FileChange, type SymbolExtractor } from "./classify-change";
 import { clearQueue, drainQueue, earliestRev } from "./queue";
 import type { GitRunner } from "./page-freshness";
@@ -30,11 +30,12 @@ export function freshnessDir(cwd: string): string {
 }
 
 export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessReport> {
-  const git = input.git ?? gitCmd;
+  const git = input.git ?? gitCmdResult;
   const cwd = input.cwd;
 
-  const head = (await git(cwd, ["rev-parse", "HEAD"])) ?? "";
-  const gitAvailable = head.length > 0;
+  const headResult = await git(cwd, ["rev-parse", "HEAD"]);
+  const head = headResult.kind === "ok" ? headResult.stdout : "";
+  const gitAvailable = headResult.kind === "ok" && head.length > 0;
 
   // An explicit `--since` wins. Otherwise the queue supplies the base, which
   // is the whole point of accumulating it: nobody should have to remember
@@ -57,6 +58,16 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
     git,
     fromRev,
     toRev: gitAvailable ? head : "working-tree",
+    // `runFreshness` already had to probe `rev-parse HEAD` above to decide
+    // the revision range — pass the result straight through so
+    // `buildFreshnessReport` does not spend a second `rev-parse` reaching
+    // the same answer. It still declares the `not-a-git-repository`
+    // limitation and drives every page's `unknown`/`gitFailure` result
+    // itself (flow 236 T7) — this is an optimization, not a hand-off of that
+    // responsibility, and `buildFreshnessReport` still probes on its own
+    // when a caller does not supply this (e.g. a future direct caller that
+    // has not already checked).
+    gitAvailable,
     ...(drained ? { queueEntriesConsumed: drained.entries.length } : {}),
     ...(drained?.truncated ? { queueTruncated: true } : {}),
     ...(input.now ? { now: input.now } : {}),
@@ -71,17 +82,6 @@ export async function runFreshness(input: RunFreshnessInput): Promise<FreshnessR
       code: "queue-truncated",
       detail: `${drained.corruptLines} unreadable queue line(s) were skipped. Those revisions are missing from this range; re-run with an explicit --since to cover them.`,
       affectedCount: drained.corruptLines,
-    });
-  }
-
-  if (!gitAvailable) {
-    // Declared, not implied. A short report from a git-free project must not
-    // read as "little is stale" — the range simply could not be computed, and
-    // every page fell back to the coarser scope-hash path.
-    report.limitations.unshift({
-      code: "not-a-git-repository",
-      detail:
-        "No git history was available, so no revision range could be computed and freshness fell back to VerifiedScope comparison. Findings are capped at `review-suggested`.",
     });
   }
 
@@ -113,12 +113,15 @@ async function collectChanges(
   // says "fromRev → <sha>" — a range label that quietly does not describe
   // what was measured. The queue is commit-driven; the report matches it.
   const status = await git(cwd, ["diff", "--name-status", "-M", fromRev, "HEAD"]);
-  if (status === null) {
+  if (status.kind !== "ok") {
+    // A range that could not be read yields no changes. The report's own
+    // git-availability limitation (`report.ts`) is what says so; this
+    // function is only ever reached when the up-front probe succeeded.
     return [];
   }
 
   const changes: FileChange[] = [];
-  for (const line of status.split("\n")) {
+  for (const line of status.stdout.split("\n")) {
     const parts = line.split("\t");
     const code = parts[0];
     if (!code) continue;
@@ -156,14 +159,24 @@ async function showFile(
   rev: string,
   file: string,
 ): Promise<string | undefined> {
+  // Deliberately undiscriminating, stated here rather than left to the type:
+  // this content feeds `classifyChanges`, whose own contract already treats a
+  // missing side as "nothing to compare" and degrades the change class. A
+  // file genuinely absent at `rev` and a `git show` that failed produce the
+  // same, correct, weaker classification — no output of this function ever
+  // claims something about git's health.
   const content = await git(cwd, ["show", `${rev}:${file}`]);
-  return content ?? undefined;
+  return content.kind === "ok" ? content.stdout : undefined;
 }
 
 /**
  * Content at HEAD, falling back to the working tree only when git cannot
  * answer (no repository). Reading the worktree while the range says HEAD
  * would classify uncommitted edits into a range that excludes them.
+ *
+ * Also deliberately undiscriminating, for the same reason as `showFile`: a
+ * newly added file legitimately has no HEAD blob, and the fallback is the
+ * right answer for that case as well as for a failure.
  */
 async function readCurrent(
   cwd: string,
@@ -171,8 +184,8 @@ async function readCurrent(
   file: string,
 ): Promise<string | undefined> {
   const fromGit = await git(cwd, ["show", `HEAD:${file}`]);
-  if (fromGit !== null) {
-    return fromGit;
+  if (fromGit.kind === "ok") {
+    return fromGit.stdout;
   }
   try {
     return await readFile(path.join(cwd, file), "utf8");

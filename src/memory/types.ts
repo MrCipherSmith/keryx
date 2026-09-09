@@ -102,6 +102,13 @@ export type MemoryEntry = {
   recordedAt?: string | null | undefined; // ingestion-time
   supersedes?: string | null | undefined; // relativePath this entry replaces
   supersededBy?: string | null | undefined; // relativePath that replaced this
+  // --- AFC-25: knowledge provenance the compression/handoff stages must
+  // preserve (optional; absent ⇒ null everywhere, and unknown/absent
+  // explicitly at the compressed/handoff boundary rather than silently
+  // dropped). Parsed from disk by `store.ts` (Provenance-section bullets).
+  author?: string | null | undefined; // who wrote/proposed the claim
+  confirmedBy?: string | null | undefined; // confirming participant / acceptance basis
+  caveat?: string | null | undefined; // deferral/qualification attached to the claim
 };
 
 // The resolved class of an entry: its explicit `class` header when present,
@@ -245,10 +252,33 @@ export type MemorySearchReport = {
     path: string;
     title: string;
     type: string;
+    // AFC-25: carried verbatim from entry.type. Never derived from `score` or
+    // `confidence` — model confidence ranks results, it does not reclassify
+    // a hypothesis/observation as a decision or an instruction.
+    claimType: string;
     status: MemoryStatus;
     score: number;
     reason: string;
     summary: string;
+    // AC6 (flow 234) / policies.md "Lifecycle и freshness": the entry's
+    // scope (module/entity, rendered compactly). Absent upstream ⇒ the
+    // literal "unknown" sentinel string, same convention as the other
+    // provenance carriers below.
+    scope: string;
+    // AFC-25: exact source fragment/version. Absent upstream ⇒ the literal
+    // "unknown" sentinel string, never an omitted/empty field a reader could
+    // mistake for "nothing to report".
+    version: string;
+    confidence: Confidence;
+    provenance: { source: string; link: string };
+    // AC6 (flow 234) / AFC-25: who wrote/proposed the claim. Distinct from
+    // `confirmedBy` (the confirming participant / acceptance basis) below.
+    // Absent upstream ⇒ the literal "unknown" sentinel string.
+    author: string;
+    confirmedBy: string;
+    // AFC-25: a deferral/qualification attached to the claim. `null` ⇒ not
+    // captured upstream (distinct from a present-but-empty string).
+    caveat: string | null;
   }>;
 };
 export type MemoryReportInput = {
@@ -314,7 +344,14 @@ export type MemoryTransitionResult = {
 export type MemoryCheckInput = { cwd: string };
 export type MemoryCheckIssue = {
   path: string;
-  kind: "metadata" | "version" | "link" | "dedup" | "conflict" | "index";
+  // `cross-layer` (flow 242, lane E): a reference from this entry into another
+  // knowledge layer — a wiki page link or a `keryx:page/...` section identity —
+  // that no longer resolves. Kept apart from `link`, which is the
+  // `Related Scopes` → `Files:` filesystem check and answers a different
+  // question: `link` says a source file is missing, `cross-layer` says the
+  // KNOWLEDGE this entry is built on was removed, is being removed, or cannot
+  // be decided. See `./cross-layer.ts`.
+  kind: "metadata" | "version" | "link" | "dedup" | "conflict" | "index" | "cross-layer";
   message: string;
 };
 export type MemoryCheckResult = { ok: boolean; issues: MemoryCheckIssue[] };

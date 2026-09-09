@@ -204,6 +204,9 @@ async function main(): Promise<void> {
   process.exit(grandTotal === 0 ? 0 : 1);
 }
 
-await main();
-
-export {};
+if (import.meta.main) {
+  void main().catch((cause) => {
+    console.error(`concurrent-suite stress failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+    process.exit(1);
+  });
+}

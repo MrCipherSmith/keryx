@@ -1,0 +1,111 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16-recheck",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent T16 recheck confirms the original max_tool_calls blocker is fixed: the production child cap now limits actual invocations and maps the stop to BudgetExhausted. Stage 1 still fails because the newly exposed max_rounds contract is not a hard model-round bound. An offline child configured with max_rounds=1 made two tool-bearing model requests, invoked two tools, and made a third wrap-up model request while reporting rounds≤1. AC4 and AC5 focused checks pass. Per dispatch, Stage 2 acceptance stopped after the specification gap; no global quality claim is made.",
+  "summary_markdown": "T16 M10 recheck: **Stage 1 FAIL** with one remaining blocker. `max_tool_calls` is fixed, but `max_rounds: 1` permits two tool rounds plus a wrap-up request while reporting `rounds≤1`. Exact offline evidence is preserved in `T16-recheck.md` and `T16-recheck-round-budget-probe.ts`.",
+  "acceptance": [
+    {
+      "criterion": "AC3 actual configured invocation cap and truthful independent terminal reason are met.",
+      "status": "not_met",
+      "evidence": "The original invocation-cap defect is closed: max_tool_calls=1 now stops after one actual invocation and returns BudgetExhausted. The independent max_rounds=1 probe observed three provider requests and two actual tool invocations while prompt/output claimed at most one model round, so the configured round budget and its telemetry remain untruthful."
+    },
+    {
+      "criterion": "AC4/AC5 offline script fixtures and strict scripts project are valid and maintain compatibility.",
+      "status": "met",
+      "evidence": "Containment and offline stress tests passed 3/3. scripts/typecheck.test.ts passed 2/2 sequentially, including its injected strict error, and direct typecheck:scripts exited 0."
+    },
+    {
+      "criterion": "No blocker/major/minor logic defects in M10 scope; unsupported claims separated from measured behavior.",
+      "status": "not_met",
+      "evidence": "F-002 is a reproducible AC3 blocker. T16-recheck.md separates the model-facing schema promise from the legacy direct-agent N+1 threshold semantics and records the compatibility tradeoff."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent Stage 1 recheck closing the original call-cap defect and reporting the remaining strict round-cap blocker, compatibility tradeoff, focused evidence, and routing audit.",
+      "hash": "0016f4856805e3a1b2bdc05e2ecd1c6cc4514eaf2b480b481859319509fd59b2"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Exact offline reproduction showing max_rounds=1 permits two tool-bearing model rounds, two tool invocations, and a third wrap-up request.",
+      "hash": "9be925af4701a9fe3a3ee44185808c753966d5019a80dfaa175a1c7c112ef009"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck.md",
+      "change": "created separate independent M10 recheck report while retaining the initial failed T16 review"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts",
+      "change": "created exact offline strict round-budget reproduction"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-result.json",
+      "change": "created schema-valid independent recheck result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-002",
+      "global_id": "T16-recheck#F-002",
+      "reviewer": "review-logic",
+      "severity": "blocker",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 376,
+      "symbol": "createSpawnSubagentTool",
+      "problem": "The public max_rounds input is described and reported as a hard limit on model rounds, but the core checks roundState.round > maxRounds only after the provider response and all calls execute; the child then performs a tool-free wrap-up provider request.",
+      "impact": "With max_rounds=1, the offline child made three provider requests and two actual get_cwd invocations while the prompt and result promised one model turn and rounds≤1. Callers cannot rely on the configured round budget, and the terminal evidence contradicts measured execution.",
+      "suggested_fix": "Enforce the public child limit before issuing any provider request beyond it, including a wrap-up request, and add a child-path regression asserting total provider requests and actual tool invocations for max_rounds=1. Preserve legacy direct-agent N+1 semantics behind an explicit child adapter if global compatibility requires it.",
+      "evidence": "`bun src/cli.ts ctx run bun .metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-recheck-round-budget-probe.ts` exited 0 and logged configuredMaxRounds=1, providerRequests=3, actualToolInvocations=2, resultStatus=BudgetExhausted, and reservationLine='MAE reservation: rounds≤1 runtime≤300000ms children=1'. Raw log `.metaproject/data/gdctx/raw/2026-09-06T12-14-33-271Z_run.log`, SHA-256 d0bdeb15909e63b03d66ad24e005ba4f308cacb7337e86c6dcd18cea95378620. Probe SHA-256 9be925af4701a9fe3a3ee44185808c753966d5019a80dfaa175a1c7c112ef009.",
+      "confidence": "high",
+      "dedupe_key": "m10:spawn:strict-round-budget",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": false,
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:370",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:471",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:822",
+          "src/commands/agent.ts:1642",
+          "src/commands/agent.test.ts:850"
+        ],
+        "enumeration_method": "`bun src/cli.ts ctx rg 'maxRounds|roundLimitReached|max_rounds|model turns'` over the dispatched M10 source/tests enumerated the model-facing description/schema, validation/mapping, child instruction/deps, core stop condition, and existing legacy N+1 tests."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage_1": "FAIL",
+    "stage_2": "not-run-dispatch-stop-on-spec-gap",
+    "focused_budget_tests_passed": 36,
+    "focused_budget_tests_failed": 0,
+    "ac4_tests_passed": 3,
+    "ac4_tests_failed": 0,
+    "scripts_contract_tests_passed": 2,
+    "scripts_contract_tests_failed": 0,
+    "scripts_typecheck_exit": 0,
+    "offline_probes_passed": 1,
+    "offline_probes_failed": 1,
+    "blocker_findings": 1,
+    "major_findings": 0,
+    "minor_findings": 0,
+    "info_findings": 0,
+    "global_suite_run": false,
+    "quality_gate_claim": "none"
+  },
+  "timestamp_utc": "2026-09-06T12:17:05Z"
+}

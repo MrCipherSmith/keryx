@@ -1,0 +1,48 @@
+{
+  "task": {
+    "task_id": "task-12",
+    "task_name": "AFC-05 truthful health gates and supported audit parsing",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Implement health-spec.md and T11 RED cases. Cover every required source outcome, typed completeness vs findings, supported Bun/npm formats with strict parsing and accurate exit handling, CLI/service/report parity. Scope health only; no dependency updates. Preserve severity thresholds. Add meaningful missing edge tests; execute bounded checks. Read typed task T12-input.json.",
+    "target_files": [
+      "src/health",
+      "src/commands/health.ts"
+    ],
+    "acceptance_criteria": [
+      "Required missing/skipped/disabled/unparsed outcomes yield incomplete absent blocking findings; findings retained and FAIL dominates with coverage incomplete.",
+      "Synthetic Bun package-keyed arrays and npm modern/legacy formats parse; unknown/malformed output cannot report clean even rc0.",
+      "Strict health CLI/service reject incomplete; optional skips visible and source-filter coverage truthful."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
+    "existing_tests": [
+      "src/health/health-truthful-gate.test.ts",
+      "src/health/dependency-audit-format.test.ts",
+      "src/commands/health-incomplete.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Bun strict TypeScript; health adapters report normalized execution/parse/finding axes; synthetic runtime fixtures, no network.",
+    "test_case_specs": {
+      "test_files": [
+        "src/health/health-truthful-gate.test.ts",
+        "src/health/dependency-audit-format.test.ts",
+        "src/commands/health-incomplete.test.ts"
+      ],
+      "run_command": "bun test src/health/health-truthful-gate.test.ts src/health/dependency-audit-format.test.ts src/commands/health-incomplete.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

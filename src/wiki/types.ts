@@ -1,3 +1,14 @@
+// AFC-06 (flow 234) T22: `LifecycleState` is the shared vocabulary a
+// non-current wiki page or memory entry is labelled with in `wikiAsk`'s
+// historical mode (see `WikiAskInput.asOf`/`WikiAskCitation.historical`
+// below) -- carried verbatim from `computeLifecycle` (`../memory/lifecycle.ts`),
+// never a second wiki-local set of state names.
+import type { LifecycleState } from "../memory/lifecycle";
+// AFC-W02 (flow 235) AC8: the closed set of explanation-template findings,
+// carried verbatim into `WikiValidateIssue["kind"]` below. Type-only, so this
+// does not make `./template-structure.ts` a runtime dependency of this module.
+import type { TemplateStructureIssueKind } from "./template-structure";
+
 export type WikiPageType =
   | "architecture"
   | "domain-model"
@@ -78,6 +89,15 @@ export type WikiPage = {
   verifiedScope?: string | null;
   /** Raw `Describes:` patterns as written; resolution lives in `describes.ts`. */
   describes?: string[];
+  // AFC-06 (flow 234): the same event-time/supersession fields `MemoryEntry`
+  // carries (`src/memory/types.ts`), mirrored here for lifecycle parity.
+  // Populated by `collect.ts` (unhyphenated `ValidFrom`/`ValidTo`/
+  // `SupersededBy` frontmatter) and classified through the shared
+  // `computeLifecycle` (`../memory/lifecycle.ts`) so a page and a memory
+  // entry admit/reject the same six input classes identically.
+  validFrom?: string | null;
+  validTo?: string | null;
+  supersededBy?: string | null;
 };
 
 export type WikiStatusInput = { cwd: string };
@@ -136,7 +156,22 @@ export type WikiValidateIssue = {
   page: string;
   // `managed-block`, `describes` and `changelog` added by LWG-14 (flow 227):
   // structural rules the managed block makes checkable at all.
-  kind: "metadata" | "version" | "link" | "index" | "managed-block" | "describes" | "changelog";
+  //
+  // AFC-W02 (flow 235) AC8: the explanation-template kinds are carried in from
+  // `./template-structure.ts` rather than re-spelled here. `validate` is where
+  // that validator became reachable at all — until it was wired into
+  // `validateStructure` its only consumer was a test — and a second, hand-typed
+  // copy of its seven kinds would fork the moment one is renamed. The import is
+  // type-only, so nothing is added to this module's runtime graph.
+  kind:
+    | "metadata"
+    | "version"
+    | "link"
+    | "index"
+    | "managed-block"
+    | "describes"
+    | "changelog"
+    | TemplateStructureIssueKind;
   message: string;
 };
 export type WikiValidateResult = {
@@ -177,18 +212,87 @@ export type WikiAskInput = {
   // Opt into a C1 embedding rerank of the deterministic citation set (when the
   // memory.embedding capability resolves). Default false ⇒ pure lexical.
   rerank?: boolean | undefined;
+  // AFC-06 (flow 234) T22: wiki's explicit historical mode, spelled and
+  // validated exactly like memory's `--as-of` (`SearchFilters.asOf`,
+  // `../memory/types.ts`; `validateAsOf`, `../memory/temporal.ts`) rather than
+  // a second idiom. Absent ⇒ default retrieval, byte-for-byte unchanged: only
+  // current wiki pages/memory entries are admitted, exactly as before this
+  // field existed. Present ⇒ policy's "История ... доступна только по явному
+  // режиму" — both candidate sources also admit non-current items, classified
+  // against this date instead of "today", and every non-current citation
+  // carries its `historical`/`lifecycleState`/`lifecycleReasons` (see
+  // `WikiAskCitation` below) so a reader can never mistake it for current
+  // guidance.
+  asOf?: string | undefined;
 };
+/**
+ * AFC-07 / AFC-M03 (flow 235) T5. A retrieval outcome is a CODE, not a shape
+ * the caller has to infer from an empty array. Before this, a zero-information
+ * query, an unbuilt index and a genuine no-match all produced the same result
+ * — and a stop-word-only query produced ranked citations and confident prose,
+ * which is the same defect in its worse direction.
+ */
+export type WikiAskStatus = "ok" | "no-match" | "insufficient-evidence";
+
 export type WikiAskCitation = {
+  /** The owner page, wiki- or memory-relative. Unchanged by section indexing. */
   path: string;
+  /** `Page › Section` for a wiki section — what distinguishes two identically titled sections. */
   title: string;
   excerpt: string;
   score: number;
   source: "wiki" | "memory";
+  /** Which query terms hit. The reason, kept rather than computed and dropped. */
+  matched?: string[];
+  // AFC-W01 (flow 235) T5: present for a wiki citation, absent for a memory
+  // one. `sectionRef` is the address `resolveSectionIdentity`
+  // (`./section-tombstone.ts`) resolves — and refuses to substitute for.
+  // `sectionStability` says how far it can be trusted: `stable` survives a
+  // heading rename and a page-file rename; `version-bound` is the provisional
+  // `pageVersion + heading occurrence + range` locator the spec allows for a
+  // page that has not been migrated, and is explicitly not promised across an
+  // edit.
+  sectionId?: string;
+  sectionRef?: string;
+  sectionTitle?: string;
+  sectionStability?: "stable" | "version-bound";
+  contentClass?: "substantive" | "scaffold" | "reference";
+  /** The wiki page type that owns the section — the domain filter's key. */
+  domain?: string;
+  startLine?: number;
+  endLine?: number;
+  // AFC-06 (flow 234) T22: set only when `WikiAskInput.asOf` was supplied AND
+  // this citation is not current (`LifecycleResult.historical`,
+  // `../memory/lifecycle.ts`). `lifecycleState`/`lifecycleReasons` are that
+  // same call's `state`/`reasons`, carried verbatim -- the policy's "с полным
+  // status" requirement -- never re-derived or re-worded here.
+  historical?: boolean;
+  lifecycleState?: LifecycleState;
+  lifecycleReasons?: string[];
 };
 export type WikiAskResult = {
   question: string;
+  /**
+   * `ok` only when the citations below are evidence for the question asked.
+   *
+   * OPTIONAL only because this type is also the injection point for
+   * `MetaprojectPort`'s wiki dependency (`WikiAskFacadeResult`,
+   * `../harness/tool/metaproject-adapter.ts:46`), and a required field would
+   * break hand-written stubs in a file another lane owns during this phase.
+   * `wikiAsk` itself ALWAYS sets it; `undefined` means "a stub, not a real
+   * retrieval". The guarantee does not depend on this field: a non-`ok`
+   * outcome is rendered as a visible refusal carrying its code inside
+   * `answerMarkdown`, which every surface — CLI, MCP and the agent op, whose
+   * adapter narrows citations to five fields — passes through verbatim.
+   * See the residual note in this task's report: making it required is a
+   * one-line change once that stub gains `status: "ok"`.
+   */
+  status?: WikiAskStatus;
+  /** Why, when `status` is not `ok`. Bounded and specific — never a full layer tour. */
+  reason?: string;
   citations: WikiAskCitation[];
-  // Assembled deterministically from the citations (C-6, C-8).
+  // Assembled deterministically from the citations (C-6, C-8). When `status` is
+  // not `ok` this is a visible refusal carrying the code, not ordinary prose.
   answerMarkdown: string;
 };
 

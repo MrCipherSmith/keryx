@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T64",
+  "status": "DONE",
+  "summary": "Closed the legibility gap T59-implementation.md disclosed for loadHealthConfig's present-but-unusable branch: the gate was already forced to its strictest reachable verdict (T59), but nothing in the returned GateResult said why. Added an additive HealthConfig.configUnreadable?:boolean flag (types.ts), mirroring SecurityConfig.configUnreadable exactly, set only in config.ts's existing unusable branch; computeGate (gate.ts) turns the flag into one constant, non-interpolated, leak-safe reason pushed onto reasons, the same way guard.ts turns configUnreadable into POSTURE_UNAVAILABLE_REASON. The push never calls escalate, so status/coverage are provably unchanged -- verified directly by a same-inputs/with-and-without-flag regression. Also resolved the residual T59 disclosed but did not fix: metrics.coverageSoftFloor is the one metrics field computeGate reads for a gate decision, so leaving it at the plain default (60) for an unusable config silently reverted an operator's tightened coverage-warn threshold exactly like the bug T59 closed for gate/sources; it is now forced to 100, the ceiling of its percentage range and therefore at least as strict as any real config. One pre-existing test assertion (metrics full-equality to default) was corrected, not weakened, to reflect this deliberate one-field exception, with the reasoning recorded in T64-implementation.md section 5.",
+  "summary_markdown": "See T64-implementation.md for the full shape argument (flag-and-reason vs re-deriving from STRICTEST_GATE), the HealthConfig/computeGate consumer enumeration and its method, the coverage-soft-floor determination, the verdict-unchanged proof, and per-regression evidence.",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): fixtures, a corrupted payload, a skipped required check and an incomplete area each produce the expected outcome; violations are not lost when another check is unavailable.",
+      "status": "met",
+      "evidence": "Unchanged from T59 by design -- this task adds a reason, not new gate logic. config.test.ts's corrupted-payload fixtures (null, 42, unparseable JSON) still produce the strictest reachable HealthConfig, now additionally carrying configUnreadable:true and coverageSoftFloor:100. gate.test.ts's pre-existing 'missing required source is incomplete in strict and non-strict runs' and 'optional skipped source does not affect gate' tests pass unmodified, proving a skipped/incomplete area is still surfaced and a real violation is never dropped by the new reason line."
+    },
+    {
+      "criterion": "An operator reading the gate result can tell that the configuration was unusable, from a constant, leak-safe reason; the verdicts themselves are unchanged from what the previous repair established.",
+      "status": "met",
+      "evidence": "computeGate pushes a fixed, non-interpolated CONFIG_UNREADABLE_REASON string into GateResult.reasons whenever config.configUnreadable is true; that value reaches both keryx health run's persisted report (run.ts:152 -> HealthReport.gate) and keryx health gate's output (service.ts's gate(): reasons: latest.gate.reasons) through code read but not modified. gate.test.ts's new regression asserts identical status/coverage with and without the flag on identical other inputs, and asserts the reason string leaks no cwd path, no literal 'undefined', and no .metaproject/.json fragment."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/health/ src/commands stays green.",
+      "status": "met",
+      "evidence": "RED (before): 14 pass / 4 fail, 86 expect() -- .metaproject/data/gdctx/raw/2026-09-06T16-55-57-800Z_run.log. GREEN (after): 18 pass / 0 fail, 98 expect() -- .metaproject/data/gdctx/raw/2026-09-06T16-56-34-454Z_run.log. Required broad command 'bun src/cli.ts ctx run -- bun test src/health/ src/commands': 1088 pass / 6 skip / 0 fail, 4013 expect() across 97 files, run twice (before and after a comment-only follow-up fix) with byte-identical counts -- .metaproject/data/gdctx/raw/2026-09-06T16-57-19-415Z_run.log and .metaproject/data/gdctx/raw/2026-09-06T16-59-09-479Z_run.log. bun run typecheck: exit 0 both times. bunx eslint on every changed file: exit 0, no output, both times."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T64-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-implementation spec: the legibility gap precisely, the flag-and-reason shape decision and rejected alternative, the verdict-unchanged argument, the coverage-soft-floor determination, and the implementation/verification contract",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T64-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What changed, the full shape argument, the HealthConfig/computeGate consumer enumeration and its method, the coverage-soft-floor determination and justified test correction, per-regression evidence, verification counts and raw log paths, files changed, and routing audit",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/health/types.ts",
+      "change": "HealthConfig gains one additive optional field, configUnreadable?: boolean, documented as mirroring SecurityConfig.configUnreadable"
+    },
+    {
+      "path": "src/health/config.ts",
+      "change": "the existing (T59) present-but-unusable branch now also sets configUnreadable:true and forces metrics.coverageSoftFloor to 100; one stale comment corrected to name the coverageSoftFloor exception"
+    },
+    {
+      "path": "src/health/gate.ts",
+      "change": "computeGate pushes a new module-local constant, CONFIG_UNREADABLE_REASON, onto reasons when config.configUnreadable is true -- unconditional on any other gate condition, never calling escalate, so status/coverage are unchanged"
+    },
+    {
+      "path": "src/health/config.test.ts",
+      "change": "one existing assertion corrected (metrics/coverageSoftFloor split, justified in the implementation report section 5); one new test proving configUnreadable is set only for the unusable case, undefined for absent/well-formed"
+    },
+    {
+      "path": "src/health/gate.test.ts",
+      "change": "two new tests: the flag adds a reason without moving the verdict (same status/coverage, different reasons, leak-safety asserted), and the reason still appears on an otherwise-clean gate"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 4,
+    "tests_passed": 1088,
+    "tests_failed": 0,
+    "typecheck_exit_code": 0,
+    "lint_exit_code": 0,
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T17:00:00Z"
+}

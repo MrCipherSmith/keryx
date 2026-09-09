@@ -29,7 +29,7 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import { buildAblationManifest, computeAblationDelta, type AblationSeedSample, type AblationTaskInput, type AblationVariant } from "../../src/metrics/ablation-runner";
 import { checkGoldLeakage } from "../../src/metrics/leakage";
 // A real, reproduced finding (2026-08-14, see plan.md's mutating-ablation section):
@@ -39,6 +39,46 @@ import { checkGoldLeakage } from "../../src/metrics/leakage";
 // same WorktreePort shape as createGitWorktreePort, just backed by `git clone`.
 import { createGitClonePort } from "../../src/harness/child/git-clone-port";
 import { MUTATING_GOLD_ARTIFACT_PATH, MUTATING_TASKS, cliPrompt, type MutatingTask } from "./mutating-tasks";
+
+/** Injectable side effects for {@link finalizeMutatingOpencodeRun} — real I/O in `main`, spies in tests. */
+export type AblationEmissionIO = {
+  readonly writeResultsFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the mutating opencode leg, GATED on validation (same defect
+ * shape fixed across every scripts/benchmark/run-ablation*.ts producer). Choice recorded:
+ * on an invalid run, a previously-written GOOD fixture file is left ON DISK, UNTOUCHED
+ * (same reasoning as build-comparative-report.ts's finalizeComparativeReport). Returns
+ * the exit code the caller should use.
+ */
+export async function finalizeMutatingOpencodeRun(
+  resultsFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: AblationEmissionIO,
+): Promise<number> {
+  const resultsFilename = "ablation-mutating-results-opencode.json";
+  if (validation.valid) {
+    await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`\n# ladder=harness mutating-ablation (opencode leg) manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine(`wrote fixtures/benchmark/keryx/${resultsFilename}`);
+    return 0;
+  }
+  io.logLine(
+    `invalid manifest — nothing written to disk and nothing printed to stdout; ` +
+      `fixtures/benchmark/keryx/${resultsFilename} left unchanged (a previously-written valid fixture, if any, is preserved as-is)`,
+  );
+  return 1;
+}
 
 const SEEDS = [1, 2, 3] as const;
 const MODEL = "opencode/deepseek-v4-flash-free";
@@ -176,10 +216,6 @@ async function main(): Promise<void> {
       tasks: taskInputs,
     };
     const resultsUrl = new URL("../../fixtures/benchmark/keryx/ablation-mutating-results-opencode.json", import.meta.url);
-    await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
-
-    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL, leakageAssertion: "passed" });
-    console.log(JSON.stringify(manifest, null, 2));
 
     console.error("\n# deltas (context-on vs context-off, informational — not a speed claim)");
     for (const input of taskInputs) {
@@ -191,11 +227,16 @@ async function main(): Promise<void> {
       );
     }
 
+    const manifest = buildAblationManifest(taskInputs, { ladder: "harness", model: MODEL, leakageAssertion: "passed" });
     const result = validatePairedBenchmark(manifest);
-    console.error(`\n# ladder=harness mutating-ablation (opencode leg) manifest valid: ${result.valid ? "yes" : "no"}`);
-    for (const err of result.errors) console.error(`- ${err}`);
-    console.error("wrote fixtures/benchmark/keryx/ablation-mutating-results-opencode.json");
-    if (!result.valid) process.exit(1);
+    const code = await finalizeMutatingOpencodeRun(resultsFixture, manifest, result, {
+      writeResultsFixture: async (contents) => {
+        await Bun.write(resultsUrl, contents);
+      },
+      printManifest: (contents) => console.log(contents),
+      logLine: (line) => console.error(line),
+    });
+    if (code !== 0) process.exit(code);
   } finally {
     await rm(worktreesDir, { recursive: true, force: true }).catch(() => undefined);
   }

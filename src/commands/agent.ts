@@ -5,7 +5,9 @@
 // `provider.stream(request WITH tools)`, and on each `tool_call_end` it validates
 // the tool input, applies a read-only risk gate, invokes the content-returning
 // executor, appends the result as a `role:"tool"` message, and re-requests —
-// looping until a text-only finish or the `maxRounds` guard. `runShell`'s
+// looping until a text-only finish or the inclusive `maxRounds` guard.
+// Every `provider.stream()` request consumes one round; the guard never makes
+// a hidden summary request after the configured limit. `runShell`'s
 // chat core is untouched; this is a separate, opt-in path.
 //
 // Determinism: uses ONLY `deps.idSeq` (never `Date.now`/`Math.random`); all
@@ -28,7 +30,7 @@ import type {
   ProviderPort,
 } from "../harness/provider/types";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
-import { readSlate, writeSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { readSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
@@ -165,11 +167,13 @@ export interface AgentDeps {
   systemInstruction: string;
   idSeq: () => string;
   /**
-   * Max model round-trips per user turn (loop-safety guard). A round is one
-   * `provider.stream()` request/response cycle and may carry a batch of
+   * Inclusive maximum model round-trips per user turn (loop-safety guard).
+   * A round is one `provider.stream()` request/response cycle, including an
+   * optional no-progress summary request, and may carry a batch of
    * several tool calls, so this bounds runaway ROUNDS, not the number of
    * distinct legitimate actions a big task needs — a large task with many
-   * unique tool calls in few rounds is unaffected. Default
+   * unique tool calls in few rounds is unaffected. Zero permits no provider
+   * request. The driver never adds an uncounted wrap-up request. Default
    * {@link DEFAULT_MAX_ROUNDS} (overridable via {@link resolveAgentMaxRounds}
    * / `KERYX_AGENT_MAX_ROUNDS`). The same call (name + normalized input hash)
    * may still be retried only up to {@link MAX_ATTEMPTS_PER_HASH} times
@@ -177,13 +181,21 @@ export interface AgentDeps {
    */
   maxRounds?: number;
   /**
+   * Optional independent ceiling on real tool invocations in this turn.
+   * Unlike `maxRounds`, this counts only calls that pass lookup, schema
+   * validation, policy/approval gates, and reach `tool.invoke`. `undefined`
+   * preserves the existing round-only behavior; zero is a valid deny-all
+   * invocation budget. Supplied values must be non-negative safe integers.
+   */
+  maxToolCalls?: number;
+  /**
    * SLATE-11 (AC3): operator-set signal that this run has no human present
    * (mirrors `HarnessCommandDeps`'s `--unattended` flag, SLATE-8). Default
    * undefined/false — every existing interactive call site (`keryx shell`,
    * the TUI) is completely unaffected. When `true`:
    *  - budget exhaustion emits a `TerminalState` (`reason: "budget_exhausted"`)
-   *    instead of `finishWithBudgetSummary`'s free-text wrap-up round, and
-   *    pushes NOTHING additional into `history`.
+   *    instead of the interactive host's local stop notice, and pushes
+   *    NOTHING additional into `history`.
    *  - an `ask_user` tool call is intercepted BEFORE the real callback runs;
    *    the whole turn stops immediately with a `TerminalState`
    *    (`reason: "ask_user_unanswerable"`).
@@ -225,12 +237,10 @@ export interface AgentDeps {
   maxSubagentConcurrency?: number;
   /**
    * Driver-triggered selector (not a model tool call) — same host-side picker
-   * the `ask_user` tool uses. Currently consulted ONLY when a per-turn budget
-   * (total/read/non-read) is exhausted: offers "increase limit and continue"
-   * vs "cancel" instead of unconditionally stopping. Absent, or a non-"reset"
-   * answer, keeps the pre-existing behavior (`finishWithBudgetSummary`'s
-   * silent wrap-up) — every existing call site that predates this is
-   * unaffected. Never consulted when `deps.unattended === true` (no human to
+   * the `ask_user` tool uses. Consulted when the inclusive per-turn model-round
+   * budget is exhausted: offers "increase limit and continue" vs "cancel".
+   * Absent, or a non-"reset" answer, stops locally without another provider
+   * request. Never consulted when `deps.unattended === true` (no human to
    * answer).
    */
   askUser?: AskUserFn;
@@ -318,9 +328,9 @@ export interface RunAgentTurnResult {
    * Why the tool-call loop stopped WITHOUT a clean model-driven finish, when
    * that happened. `undefined` on every other exit path (aborted, provider
    * error, text-only finish, `ask_user` denial, …) — this field only
-   * distinguishes the two specific "the loop itself cut the turn short"
-   * cases already detected below (`finishWithBudgetSummary`'s budget-
-   * exhausted branch and the no-progress branch), it adds no new detection.
+   * distinguishes the specific "the loop itself cut the turn short" cases
+   * detected below (model-round budget, tool-call budget, and no-progress),
+   * it adds no new detection.
    *
    * NEVER model-facing: this is a plain return value, never written into
    * `history`, never passed to any `io.on*` callback, and never appears in
@@ -328,7 +338,7 @@ export interface RunAgentTurnResult {
    * `spawn-subagent-tool.ts` (D2b) to compute `SubagentCompletionStatus` for
    * a child turn.
    */
-  finishReason?: "budget" | "no-progress";
+  finishReason?: "budget" | "tool-call-budget" | "no-progress";
 }
 
 /**
@@ -1080,6 +1090,8 @@ async function runAgentTurnCore(
   userLine: string,
   options: RunAgentTurnOptions = {},
 ): Promise<RunAgentTurnResult> {
+  const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
+  const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   history.push({ role: "user", content: userLine, provenance: "project" });
   io.onHistoryChange?.("user");
   const signal = options.signal;
@@ -1164,7 +1176,22 @@ async function runAgentTurnCore(
    * so `offerRoundLimitReset` can bump `maxRounds` in place and `continue`
    * the same loop.
    */
-  const roundState = { round: 0, maxRounds: deps.maxRounds ?? resolveAgentMaxRounds() };
+  const roundState = { round: 0, maxRounds };
+  const invocationBudget = { invoked: 0, maxCalls: maxToolCalls, blocked: false, reached: false };
+  const hasInvocationCapacity = (): boolean => {
+    const hasCapacity =
+      invocationBudget.maxCalls === undefined || invocationBudget.invoked < invocationBudget.maxCalls;
+    if (!hasCapacity) invocationBudget.blocked = true;
+    return hasCapacity;
+  };
+  const reserveInvocation = (): boolean => {
+    if (!hasInvocationCapacity()) return false;
+    invocationBudget.invoked += 1;
+    if (invocationBudget.maxCalls !== undefined && invocationBudget.invoked === invocationBudget.maxCalls) {
+      invocationBudget.reached = true;
+    }
+    return true;
+  };
   /** Short log of tool outcomes for the budget-exhausted wrap-up. */
   const toolLog: string[] = [];
   /**
@@ -1197,14 +1224,42 @@ async function runAgentTurnCore(
     }
   };
 
+  /**
+   * Stop before spending a provider request beyond the inclusive model-round
+   * ceiling. Interactive callers may raise the ceiling first; unattended
+   * callers receive the existing structured terminal state. No model-based
+   * wrap-up is possible here because it would itself be an excess round.
+   */
+  const stopAtRoundLimit = async (): Promise<"reset" | "stop"> => {
+    if (deps.unattended === true) {
+      await emitTerminalState(io, deps, options, "budget_exhausted");
+      return "stop";
+    }
+    const resolution = await offerRoundLimitReset(deps, roundState, system);
+    if (resolution === "reset") {
+      return "reset";
+    }
+    system(
+      `\n[budget] Model-round limit reached: ${roundState.round}/${roundState.maxRounds}. ` +
+        "Stopping without another model request.\n",
+    );
+    return "stop";
+  };
+
   // Loop: request → stream → (execute tool calls, re-request) until a text-only
-  // finish or the tool-call guard trips.
+  // finish or an independent model-round/tool-call guard trips.
   let toollessReprompts = 0;
   // The previous toolless reply, normalized. A model that answers the reprompt
   // with the SAME sentence is not going to produce a tool call on the next one,
   // so the remaining budget is abandoned rather than spent (see below).
   let lastToollessText: string | undefined;
   for (;;) {
+    if (roundState.round >= roundState.maxRounds) {
+      if ((await stopAtRoundLimit()) === "reset") {
+        continue;
+      }
+      return { finishReason: "budget" };
+    }
     roundState.round += 1;
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
@@ -1308,6 +1363,11 @@ async function runAgentTurnCore(
       const repeatedVerbatim = lastToollessText !== undefined && normalizedText === lastToollessText;
       lastToollessText = normalizedText;
       if (shouldReprompt && !repeatedVerbatim && toollessReprompts < MAX_TOOLLESS_REPROMPTS) {
+        if (roundState.round >= roundState.maxRounds) {
+          if ((await stopAtRoundLimit()) === "stop") {
+            return { finishReason: "budget" };
+          }
+        }
         toollessReprompts += 1;
         const hint =
           " [system] No tool calls were emitted. Re-run this request now and emit ONE tool call instead of a narrative sentence. " +
@@ -1408,8 +1468,15 @@ async function runAgentTurnCore(
     // which already gates them correctly one at a time.
     const untrustedGateBlocksSpawns = untrustedContentSeen || batchContainsUntrustedWeb;
     const concurrentSpawnResults: Map<string, InteractiveToolResult> | undefined =
-      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns
-        ? await runConcurrentSpawnBatch(spawnConcurrencyCandidates, toolByName, io, deps)
+      spawnConcurrencyCandidates.length >= 2 && !untrustedGateBlocksSpawns && maxToolCalls === undefined
+        ? await runConcurrentSpawnBatch(
+            spawnConcurrencyCandidates,
+            toolByName,
+            io,
+            deps,
+            hasInvocationCapacity,
+            reserveInvocation,
+          )
         : undefined;
 
     // SLATE-2a per-tool-call Anchors auto-inject: deferred until AFTER this
@@ -1501,7 +1568,16 @@ async function runAgentTurnCore(
       // executes exactly as before.
       const result =
         concurrentSpawnResults?.get(call.id) ??
-        (await executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved));
+        (await executeCall(
+          call,
+          toolByName,
+          io.requestApproval,
+          io.permissionMode,
+          io.onAutoApproved,
+          hasInvocationCapacity,
+          reserveInvocation,
+          invocationBudget.maxCalls,
+        ));
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
       // (F3): the local UI above sees the raw output, but the model/provider must
@@ -1584,59 +1660,63 @@ async function runAgentTurnCore(
       io.onHistoryChange?.("tool");
     }
 
-    // Reaching the limit exactly is not itself a stop: round `maxRounds` still
-    // runs its tool calls normally, same as the old per-signature budget let a
-    // call landing exactly on the ceiling through. Stop only once a round
-    // BEYOND the limit was needed, or every call this round only re-issued
-    // exhausted hashes.
-    const noProgress = !executedAny && calls.length > 0;
-    const roundLimitReached = roundState.round > roundState.maxRounds;
-    if (roundLimitReached || noProgress) {
-      // D2a (flow 171, Phase D): surface WHICH of the two conditions above
-      // stopped this turn, for `spawn-subagent-tool.ts` (D2b) to distinguish
-      // `BudgetExhausted` from `NoProgress` on a child's own turn. Both
-      // branches below (unattended terminal-state / interactive wrap-up) hit
-      // this same `if`, so `finishReason` is computed once and returned from
-      // either exit — this is not new detection, only labeling of the
-      // already-computed `roundLimitReached`/`noProgress` values above.
-      const finishReason: "budget" | "no-progress" = roundLimitReached ? "budget" : "no-progress";
+    if (
+      invocationBudget.maxCalls !== undefined &&
+      (invocationBudget.blocked || invocationBudget.reached)
+    ) {
       if (deps.unattended === true) {
-        // SLATE-11 (AC3): in place of `finishWithBudgetSummary`'s free-text
-        // "Do NOT call tools." push AND its text-only wrap-up model round,
-        // emit a structured stop record and return WITHOUT any further
-        // `deps.provider.stream(...)` call. `history` reflects only what the
-        // tool-execution loop itself already wrote before this branch.
-        await emitTerminalState(io, deps, options, "budget_exhausted");
-        return { finishReason };
+        await emitTerminalState(io, deps, options, "tool_call_budget_exhausted");
+      } else {
+        system(
+          `\n[budget] Tool-call limit reached: ${invocationBudget.invoked}/${invocationBudget.maxCalls} actual invocations. Stopping tools.\n`,
+        );
       }
-      if (roundLimitReached) {
-        const resolution = await offerRoundLimitReset(deps, roundState, system);
-        if (resolution === "reset") {
-          continue;
-        }
-      }
-      await finishWithBudgetSummary(io, deps, history, parentRunId, {
-        maxAttempts,
-        round: roundState.round,
-        maxRounds: roundState.maxRounds,
-        toolLog,
-        roundLimitReached,
-        noProgress,
-      });
-      return { finishReason };
+      return { finishReason: "tool-call-budget" };
     }
+
+    const noProgress = !executedAny && calls.length > 0;
+    if (noProgress) {
+      if (deps.unattended === true) {
+        // T20 F-001: this stop is caused by the per-signature attempt guard,
+        // not either budget — neither maxRounds nor maxToolCalls need be
+        // exhausted here. Report the cause that actually applies rather than
+        // reusing the round-budget reason.
+        await emitTerminalState(io, deps, options, "no_progress");
+        return { finishReason: "no-progress" };
+      }
+      if (roundState.round < roundState.maxRounds) {
+        roundState.round += 1;
+        await finishWithBudgetSummary(io, deps, history, parentRunId, { maxAttempts, toolLog });
+      } else {
+        system(
+          `\n[budget] Stopping tools: no progress (only repeated/exhausted tool signatures; ` +
+            `max ${maxAttempts} attempts each). No model rounds remain for a wrap-up.\n`,
+        );
+      }
+      return { finishReason: "no-progress" };
+    }
+
+    // T20 F-004: no trailing round-ceiling guard here. Falling off the end of
+    // a bare `for (;;)` body re-enters at the top, where the entry guard
+    // above (`roundState.round >= roundState.maxRounds`) already catches
+    // this exact case on the next iteration — a second, hand-synced copy of
+    // the same check added nothing but a place for the two to drift.
   }
 }
 
 /**
- * Offer the user a way out of a hit round-count ceiling INSTEAD of
- * unconditionally stopping: "increase limit and continue" vs "cancel", via
+ * Offer the user a way out before another request would exceed the inclusive
+ * round-count ceiling: "increase limit and continue" vs "cancel", via
  * the same host-side picker `ask_user` uses (`deps.askUser`). Mutates
  * `roundState` in place on "reset" — grants another full allotment of
  * rounds — and returns `"reset"` so the caller can `continue` the round loop.
  * Returns `"cancel"` for any other answer, a thrown/rejected picker, or when
  * no picker is wired (`deps.askUser === undefined`) — every one of those
- * falls through to the existing `finishWithBudgetSummary` wrap-up unchanged.
+ * stops locally with no further provider request: the caller, `stopAtRoundLimit`,
+ * prints the round-limit notice and returns `"stop"`, and the round-guard
+ * that invoked it returns `finishReason: "budget"` directly (T20 F-002).
+ * `finishWithBudgetSummary` is reached only from the no-progress branch
+ * above, and only when a round remains.
  */
 async function offerRoundLimitReset(
   deps: AgentDeps,
@@ -1676,7 +1756,7 @@ async function offerRoundLimitReset(
 }
 
 /**
- * Round limit reached (or no progress): one final model turn **without
+ * No progress with provider capacity remaining: one final model turn **without
  * tools** so the assistant explains what happened and suggests next steps.
  */
 async function finishWithBudgetSummary(
@@ -1686,11 +1766,7 @@ async function finishWithBudgetSummary(
   parentRunId: string,
   info: {
     maxAttempts?: number;
-    round: number;
-    maxRounds: number;
     toolLog: string[];
-    roundLimitReached: boolean;
-    noProgress?: boolean;
   },
 ): Promise<void> {
   const system = (text: string): void => {
@@ -1702,9 +1778,7 @@ async function finishWithBudgetSummary(
   };
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
-  const why = info.roundLimitReached
-    ? `round limit ${info.round}/${info.maxRounds} (same call may still retry up to ${maxAttempts}× as one signature)`
-    : `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
+  const why = `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
 
   system(`\n[budget] Stopping tools: ${why}. Asking the model for a short wrap-up…\n`);
 
@@ -1843,6 +1917,8 @@ async function runConcurrentSpawnBatch(
   toolByName: Map<string, InteractiveTool>,
   io: AgentIO,
   deps: AgentDeps,
+  hasInvocationCapacity: () => boolean,
+  reserveInvocation: () => boolean,
 ): Promise<Map<string, InteractiveToolResult>> {
   const maxConcurrency = deps.maxSubagentConcurrency ?? DEFAULT_MAX_SUBAGENT_CONCURRENCY;
   const perTaskRuntimeMs = NOMINAL_CONCURRENT_SPAWN_RUNTIME_MS;
@@ -1852,7 +1928,15 @@ async function runConcurrentSpawnBatch(
     budgetRequest: { reservationId: call.id, maxRuntimeMs: perTaskRuntimeMs },
   }));
   const runOne = (call: PendingCall): Promise<InteractiveToolResult> =>
-    executeCall(call, toolByName, io.requestApproval, io.permissionMode, io.onAutoApproved);
+    executeCall(
+      call,
+      toolByName,
+      io.requestApproval,
+      io.permissionMode,
+      io.onAutoApproved,
+      hasInvocationCapacity,
+      reserveInvocation,
+    );
 
   const plan = planWaves(tasks, {
     maxConcurrency,
@@ -1956,6 +2040,9 @@ async function executeCall(
   requestApproval: AgentIO["requestApproval"],
   permissionMode: AgentIO["permissionMode"],
   onAutoApproved: AgentIO["onAutoApproved"],
+  hasInvocationCapacity: () => boolean,
+  reserveInvocation: () => boolean,
+  maxToolCalls?: number,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -1970,6 +2057,13 @@ async function executeCall(
     const required = Array.isArray(requiredRaw) ? requiredRaw.filter((r): r is string => typeof r === "string") : [];
     const hint = required.length > 0 ? ` (required: ${required.join(", ")})` : "";
     return { output: `invalid input for ${call.name}: ${detail}${hint}`, isError: true };
+  }
+
+  // Capacity is checked after lookup/schema validation so malformed or
+  // unknown calls never masquerade as real budget use, but before approval
+  // so a call that cannot possibly run never asks the user for permission.
+  if (!hasInvocationCapacity()) {
+    return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
   }
 
   // Risk gate:
@@ -2059,5 +2153,23 @@ async function executeCall(
     return { output: `tool "${call.name}" (risk ${risk}) is not permitted`, isError: true };
   }
 
+  if (!reserveInvocation()) {
+    return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
+  }
   return tool.invoke(input);
+}
+
+function validateDirectBudget(name: "maxRounds" | "maxToolCalls", value: number | undefined, min: number): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < min) {
+    throw new RangeError(`${name} must be a non-negative safe integer`);
+  }
+  return value;
+}
+
+function toolCallBudgetResult(invoked: number, maxCalls: number): InteractiveToolResult {
+  return {
+    output: `tool-call budget exhausted after ${invoked}/${maxCalls} actual invocations; tool not executed`,
+    isError: true,
+  };
 }

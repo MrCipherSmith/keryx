@@ -336,7 +336,7 @@ shebang if the file is new, `chmod 0o755`). Every post-commit hook `return 0`s o
 every branch and so never fails a commit; most are staleness reminders, while the
 gdgraph and dashboard hooks regenerate their artifacts. The blocking exceptions are
 the opt-in testing pre-push gate (blocks on test failure) and the opt-in security
-pre-push gate (blocks in `enforced`/`ci` mode).
+pre-push gate (blocks in `enforced`/`ci`/`gateway` mode).
 
 | Hook | Trigger | Behavior | Default under `--yes` |
 |---|---|---|---|
@@ -347,7 +347,7 @@ pre-push gate (blocks in `enforced`/`ci` mode).
 | dashboard post-commit | post-commit | rebuild the dashboard (installed if any post-commit hook is enabled) | on (derived) |
 | testing post-commit | post-commit | reminder to re-run tests | on |
 | **testing pre-push** | pre-push | **blocking** test gate — fails the push on test failure | **off** (opt-in even under `--yes`) |
-| **security pre-push** | pre-push | scans changed files with `security scan`; **advisory (default) warns, enforced/ci block** the push | on (offered when `security` enabled; opt out `--no-security-hook`) |
+| **security pre-push** | pre-push | scans changed files with `security scan`; **advisory (default) warns, enforced/ci/gateway block** the push | on (offered when `security` enabled; opt out `--no-security-hook`) |
 
 The security pre-push block coexists with the testing pre-push block and any
 user-authored content in `.git/hooks/pre-push`. `--no-*-hook` flags force any hook

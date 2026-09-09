@@ -24,6 +24,7 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   "required",
   "properties",
   "additionalProperties",
+  "dependentRequired",
   // String assertions.
   "minLength",
   "maxLength",
@@ -44,6 +45,7 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   "if",
   "then",
   "else",
+  "not",
 ]);
 
 // Annotation / meta keywords that carry no validation semantics. They are

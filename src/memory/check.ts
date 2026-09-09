@@ -1,6 +1,7 @@
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import { collectEntries } from "./store";
+import { checkMemoryCrossLayer, isDangling } from "./cross-layer";
 import { findConflicts, findDuplicates, type Candidate } from "./dedup";
 import { MEMORY_TYPE_VALUES } from "./types";
 import type {
@@ -54,6 +55,40 @@ export async function checkMemory(
         issues.push({ path: entry.relativePath, kind: "conflict", message: `potential conflict with accepted ${conflict.path}` });
       }
     }
+  }
+
+  // Cross-layer references (flow 242, lane E).
+  //
+  // Until this, `checkMemory` validated exactly one outbound relation — the
+  // `Related Scopes` → `Files:` list above — and nothing an entry said in its
+  // prose. Measured: an entry linking a deleted wiki page and citing its
+  // section identity produced `All checks passed`. Memory had no cross-layer
+  // validation at all, so the layer could not answer a reference into deleted
+  // knowledge; it did not know it held one.
+  //
+  // Reported at the same severity as the existing `link` issues, and with the
+  // wiki's own verdict carried through verbatim — `removed` names when and why,
+  // `pending-removal` says the tombstone has not been written, `undecidable`
+  // says the registry could not be read. Flattening those into "broken link"
+  // would put this check back in the same position `wiki check-links` is still
+  // in one layer over, where a deleted page and a page that never existed read
+  // identically.
+  for (const finding of await checkMemoryCrossLayer(cwd, entries)) {
+    if (!isDangling(finding)) {
+      continue;
+    }
+    issues.push({
+      path: finding.reference.entry,
+      kind: "cross-layer",
+      // Line 0 is not a line: it is how `checkMemoryCrossLayer` reports a
+      // finding about the ENTRY rather than about a reference inside it (an
+      // entry it could not read at all). Printing "line 0" there would invite
+      // the reader to go look at a line that does not exist.
+      message:
+        finding.reference.line > 0
+          ? `line ${finding.reference.line} ${finding.detail}`
+          : finding.detail,
+    });
   }
 
   // The generated catalog is disposable and not an integrity prerequisite.

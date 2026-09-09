@@ -83,10 +83,10 @@ test("regression in warn band warns", () => {
   expect(g.status).toBe("warn");
 });
 
-test("missing required source: strict fails, non-strict warns", () => {
+test("missing required source is incomplete in strict and non-strict runs", () => {
   const sources = [source({ source: "typescript", required: true, status: "missing" })];
-  expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true }).status).toBe("fail");
-  expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: false }).status).toBe("warn");
+  expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true }).status).toBe("incomplete");
+  expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: false }).status).toBe("incomplete");
 });
 
 test("optional skipped source does not affect gate", () => {
@@ -94,7 +94,83 @@ test("optional skipped source does not affect gate", () => {
   expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true }).status).toBe("pass");
 });
 
+// Flow 237 T6 defect 2 (AFC-28/AC-28): an inventory measured that a MISSING
+// health source (SourceStatus "missing", e.g. tests and coverage both
+// absent) printed no reason line at all, even though a SKIPPED optional
+// source does get one (`OPTIONAL: <source> source skipped`, right above).
+// Whether a missing optional source should BLOCK is a separate policy
+// question the required/optional distinction already answers (see the
+// "missing required source is incomplete" test above) — this only asserts
+// its absence stops being invisible in the reasons a reader actually acts
+// on. The gate's pass/fail verdict must be unaffected (same as the
+// pre-existing skipped-source behavior right above).
+test("an optional missing source is named in reasons, the same way a skipped one already is (verdict unaffected)", () => {
+  const sources = [source({ source: "coverage", required: false, status: "missing" })];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+
+  expect(g.status).toBe("pass");
+  expect(g.reasons.some((r) => r.includes("coverage") && /missing/i.test(r))).toBe(true);
+});
+
+test("two optional missing sources (tests and coverage) are each named, not silently merged away", () => {
+  const sources = [
+    source({ source: "tests", required: false, status: "missing" }),
+    source({ source: "coverage", required: false, status: "missing" }),
+  ];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+
+  expect(g.status).toBe("pass");
+  expect(g.reasons.some((r) => r.includes("tests") && /missing/i.test(r))).toBe(true);
+  expect(g.reasons.some((r) => r.includes("coverage") && /missing/i.test(r))).toBe(true);
+});
+
 test("coverage below soft floor warns", () => {
   const g = computeGate({ findings: [], projectMetrics: project({ coverage: 50 }), sources: [], config: C, strict: false });
   expect(g.status).toBe("warn");
+});
+
+// T64: `loadHealthConfig` (T59) forces the strictest reachable gate when
+// `.metaproject/health.config.json` exists but is unusable, but nothing in
+// the returned `GateResult` said why -- an operator could not tell "the
+// config is unusable" from "there is a real broken required source" without
+// reading `config.ts`'s source. Mirrors `security/config.ts`'s
+// `configUnreadable` flag (T54), consumed here the same way `guard.ts`
+// consumes it: a constant, non-interpolated reason, never a status escalation
+// by itself.
+test("configUnreadable adds a discoverable, constant reason without changing the verdict", () => {
+  const withoutFlag = computeGate({
+    findings: [],
+    projectMetrics: project(),
+    sources: [],
+    config: C,
+    strict: false,
+  });
+  const withFlag = computeGate({
+    findings: [],
+    projectMetrics: project(),
+    sources: [],
+    config: { ...C, configUnreadable: true },
+    strict: false,
+  });
+  // Same inputs otherwise, same verdict: the flag alone never escalates.
+  expect(withFlag.status).toBe(withoutFlag.status);
+  expect(withFlag.coverage).toBe(withoutFlag.coverage);
+  expect(withFlag.reasons).not.toEqual(withoutFlag.reasons);
+  expect(withFlag.reasons.some((r) => /config/i.test(r) && /unreadable|unusable/i.test(r))).toBe(true);
+  // Leak-safe: no path, no raw error text, no interpolated value.
+  const joined = withFlag.reasons.join(" ");
+  expect(joined).not.toContain(process.cwd());
+  expect(joined).not.toContain("undefined");
+  expect(joined).not.toMatch(/\.metaproject|\.json/);
+});
+
+test("configUnreadable is reported even when it is the only gate condition (clean project)", () => {
+  const g = computeGate({
+    findings: [],
+    projectMetrics: project(),
+    sources: [],
+    config: { ...C, configUnreadable: true },
+    strict: false,
+  });
+  expect(g.reasons.some((r) => /unreadable|unusable/i.test(r))).toBe(true);
 });

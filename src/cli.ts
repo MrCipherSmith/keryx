@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 
+import { runModelTurn } from "./harness/provider/single-turn";
+import { setModelTurnPort } from "./sac/model-turn-port";
+
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
@@ -33,6 +36,9 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
+import { authCommand } from "./commands/auth";
+import { retentionCommand } from "./commands/retention";
+import { forgettingCommand } from "./commands/forgetting";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -59,6 +65,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   modules: modulesCommand,
   projects: projectsCommand,
   providers: providersCommand,
+  auth: authCommand,
   serve: serveCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
@@ -90,9 +97,25 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   session: sessionsCommand,
   version: versionCommand,
   workspace: workspaceCommand,
+  retention: retentionCommand,
+  forgetting: forgettingCommand,
 };
 
 export async function main(): Promise<void> {
+  // The client supplies the model turn that core refuses to import.
+  //
+  // `src/sac/**` declares a port and holds no provider: the norm forbids a
+  // provider registry, model selection, credentials and live model calls inside
+  // core, and a build-graph test fails if any of them reappear there. Without
+  // this registration the SAC paths that need a model turn refuse by name
+  // rather than pretending to have run one, which is correct but is not what a
+  // user with a key configured expects. The CLI is the client, so it registers.
+  //
+  // Inside `main`, not at module scope: a registration at import time changes
+  // the behaviour of every process that merely imports this file, which turned
+  // three tests asserting the unwired refusal green for the wrong reason.
+  setModelTurnPort(async (request) => runModelTurn(request));
+
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -154,6 +177,10 @@ Usage:
   keryx sync install-hooks | uninstall-hooks
   keryx providers list [--json]
   keryx providers cross-family [--opt-in] [--json]
+  keryx auth list [--json]
+  keryx auth login <provider>
+  keryx auth logout <provider>
+  keryx auth status <provider> [--json]
   keryx health run [--strict] [--changed [--since <ref>]] [--scope <s>] [--source a,b]
   keryx health status | gate [--strict-warn] | sources | trend
   keryx health explain <file-or-module> [--narrate] [--json]
@@ -227,6 +254,14 @@ Usage:
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
   keryx mcp install|uninstall --runtime <cursor|claude|opencode|generic|all> [--dry-run]
+  keryx retention status [--json]
+  keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+                                               Bound gdctx raw/artifacts logs and owner write-conflict
+                                               sidecars; dry run by default, --apply removes
+  keryx forgetting trail [--limit <n>] [--json]
+  keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+                                               Read the deletion trail: what was removed, when, at
+                                               whose request, on what basis
   keryx --version
 
 Commands:
@@ -246,6 +281,7 @@ Commands:
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
   providers Providers this operator has configured, and cross-family review eligibility
+  auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions
   gdgraph   Build and query code dependency graph
@@ -265,6 +301,8 @@ Commands:
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
+  retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  forgetting Read the deletion trail — was this removed, or did it never exist?
 `);
 }
 

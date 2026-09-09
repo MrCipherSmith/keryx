@@ -1,0 +1,9 @@
+ef029fe36b4f81f224b4b2de4d5ad21ae724ba06de47c67039a4912091efed8a  src/security/detect/exfil.ts
+7953c64ea57c470ebc1603897fb0e02c1f4821fed472ba6d7554584a84badd48  src/security/detect/exfil.test.ts
+a509312d76e7771ec5d9b059207019bde8736ebf26131bc82b595f838bd79c0d  src/security/detect/index.ts
+b8e9d9a5ca35f78127096bd7f1880669859b6d1ebd6e30151070a4d75bd44b86  src/security/redact.ts
+f1db21b0872c7bb46b4ac09819f9676ed0fd1609652f8caf978640497b6f6f18  src/mcp/dispatch.ts
+f00899ef34d08b7c3cf2cbe5f083a4cbfb09feac1b49855897ed27976f716ad1  src/security/persistence-sinks.test.ts
+024d1d039921c5e840d144b26ae994e85e8bfa8b59eefb9798ed8b45295beb97  docs/requirements/keryx-agent-first-core/policies.md
+2f131992fa84c7be3fd299641a0c36e48424c4bf678906b86052c338402eeb4f  fixtures/exfil/cases.json
+shasum: .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/acceptance-criteria.md: No such file or directory

@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T34",
+  "status": "DONE",
+  "summary": "Fixed the two coverage defects and the CLI gap the T28 review reproduced with an executable probe, regression first, by editing only src/security/path-scan.ts, src/commands/security.ts and src/commands/security-recursive-scan.test.ts. (1) F-004: the duplicate-by-canonical-identity skip row and the scanned row (path-scan.ts:168/227-229) now key on displayPath (the entry actually encountered) instead of the canonical target, while the visited Set keyed on device:inode identity still stops cycles and duplicate scanning unchanged. (2) F-003: a non-recursive directory scan (path-scan.ts:194-197) now calls incomplete('recursive traversal disabled') alongside its skip row, which service.ts's untouched pass->incomplete fold turns into a truthful incomplete/non-pass outcome instead of a clean pass over zero scanned files. (3) F-005: security.ts gained --no-recursive (recursiveScanFlag) forwarded into runScanPath, so the CLI flag and the exported API now agree; scanPathArgument and the usage/help text were updated to match. Three new regression tests (one per repair) were added to security-recursive-scan.test.ts; all 6 tests in that file pass (46 expect() calls), the combined guard/persistence-sinks/recursive-scan selection is 40 passed / 0 failed (130 expect() calls), typecheck and eslint are clean on every changed file, and T28-scan-probe.ts was run before and after: the diff is confined to the files[] rows F-004 fixes, every other section (EISDIR, leak-safety, limits, fail+incomplete fold, --recursive/default parity, single-file target) is byte-identical. src/security/service.ts was read for context only and not modified.",
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+      "status": "met",
+      "evidence": "Re-verified unmodified by this task via T28-scan-probe.ts after-run: stderrHasEISDIR false, mutual-directory cycle completes in 26ms via visited-set skips, --max-files/--max-bytes limits reflected with findings retained (P3), gate 'fail' + coverage 'incomplete' simultaneously (P2/P3). Raw .metaproject/data/gdctx/raw/2026-09-06T13-47-43-026Z_run.log."
+    },
+    {
+      "criterion": "Policy (policies.md, security scan): the report contains per-file scanned/skipped/failed outcomes with reasons that match what actually happened to each encountered entry, no contradictory duplicate rows, and no closed name exposed to an unauthorized caller; findings are preserved independently of coverage.",
+      "status": "met",
+      "evidence": "F-004 fix verified via T28-scan-probe.ts before/after diff: before, corpus/a/b/c/creds.env appeared twice (scanned+skipped) and corpus/dup-creds.env had no row (raw 2026-09-06T13-44-40-374Z_run.log lines 24-68); after, each appears exactly once under its own encountered path (raw 2026-09-06T13-47-43-026Z_run.log lines 24-69). Own regression test 'T34 F-004' asserts no path carries two statuses. Leak-safety re-verified negative in both runs (leaksOutside*/leaksTmpAbsolutePath/leaksOutsideContent all false, P2). Findings retained under --max-files truncation (P3, findingCount 1)."
+    },
+    {
+      "criterion": "A directory target scanned without recursion never reports a clean pass over zero scanned files; the CLI flag and the exported API agree on what recursion means; the three existing recursive-scan tests and the focused security selection stay green.",
+      "status": "met",
+      "evidence": "Own regression 'T34 F-003' (--no-recursive over a directory holding a detectable secret yields coverage.status incomplete, gate !== pass, 0 scanned files) and 'T34 F-005' (--recursive/omitted agree; --no-recursive actually changes scan behavior via runScanPath's recursive option). bun test src/commands/security-recursive-scan.test.ts: 6 passed / 0 failed / 46 expect() calls (raw .metaproject/data/gdctx/raw/2026-09-06T13-47-16-786Z_run.log) — the original 3 T20 tests plus the 3 new T34 tests, all green. Combined selection (guard.test.ts, persistence-sinks.test.ts, security-recursive-scan.test.ts): 40 passed / 0 failed / 130 expect() calls (raw .metaproject/data/gdctx/raw/2026-09-06T13-47-21-425Z_run.log)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-spec.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Pre-implementation spec: baseline probe findings, per-repair plan, regression test plan, non-goals."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T34-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full implementation report with per-defect before/after evidence, acceptance table, verification counts and raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent review that reproduced F-003/F-004/F-005 with an executable probe; the specification this task closes."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Executable probe run before and after this task's change, unmodified."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Trust/completeness/access policy: the security-scan coverage fold this task must satisfy."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/path-scan.ts",
+      "change": "F-004: the duplicate-identity skip row and the scanned row (+ the parallel contents.push) now key on displayPath (the encountered entry) instead of the canonical target; the canonical-identity visited Set is unchanged. F-003: a non-recursive directory's skip row now also calls incomplete('recursive traversal disabled'), so coverage never stays 'complete' over an unopened directory."
+    },
+    {
+      "path": "src/commands/security.ts",
+      "change": "F-005: added recursiveScanFlag(args) parsing --recursive/--no-recursive and forwarding an explicit choice into runScanPath; scanPathArgument now also skips --no-recursive; usage strings and the help option table updated to document --no-recursive."
+    },
+    {
+      "path": "src/commands/security-recursive-scan.test.ts",
+      "change": "Added three regression tests, one per repair: encountered-path row keying and no-contradictory-duplicates (F-004), non-recursive directory never reads as a clean pass (F-003), and --recursive/--no-recursive CLI parity with actual scan behavior (F-005)."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T13:50:00Z"
+}

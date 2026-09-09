@@ -2,7 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
 import type { GraphData, GraphEdge, GraphNode, ImportKind, TranspilerImportKind } from "./types";
-import { UNKNOWN_IMPORT_KIND } from "./types";
+import { TYPE_ONLY_IMPORT_KIND, UNKNOWN_IMPORT_KIND } from "./types";
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".java", ".py"];
 const SOURCE_RESOLUTION_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".d.ts", ".java", ".py"];
@@ -112,7 +112,7 @@ export async function buildGraph(projectRoot: string): Promise<BuildResult> {
     // dropped), so the resolution metric is honest. TS/JS keeps the exact
     // original guard (relative + tsconfig alias only) ⇒ byte-identical output.
     const isLanguageAware = language === "java" || language === "python";
-    const records = extractImportRecords(content, language);
+    const records = extractImportRecords(content, language, file);
 
     for (const { specifier, kind: importKind } of records) {
       const resolved = resolveImport(projectRoot, file, specifier, fileSet, resolver);
@@ -222,7 +222,7 @@ type ImportRecord = { specifier: string; kind: ImportKind };
 // loop reads `record.kind` straight onto the edge, so cycle detection can
 // later tell a load-order `import-statement` from a call-time `dynamic-import`
 // instead of the previous single "imports" bucket.
-function extractImportRecords(content: string, language: string): ImportRecord[] {
+function extractImportRecords(content: string, language: string, filePath: string): ImportRecord[] {
   // Java/Python are not TS/JS syntax — the tsx transpiler cannot scan them
   // (it throws today, which is why they already reach the fallback). Route them
   // explicitly to the regex fallback that carries the java/python patterns,
@@ -244,7 +244,8 @@ function extractImportRecords(content: string, language: string): ImportRecord[]
   // dependents and showed up as a false orphan. UNION the two extractors: the
   // transpiler contributes the specifiers a regex cannot see (dynamic/`require`,
   // odd formatting), the fallback contributes the type-only ones.
-  const scanned = scanImportsOrEmpty(content);
+  const scanResult = scanImportsOrEmpty(content, filePath);
+  const scanned = scanResult.imports;
   const fallback = extractImportSpecifiersFallback(content);
 
   const kindBySpecifier = new Map<string, ImportKind>();
@@ -259,13 +260,28 @@ function extractImportRecords(content: string, language: string): ImportRecord[]
       kindBySpecifier.set(specifier, kind);
     }
   }
-  // Fallback-only specifiers (not seen by the transpiler at all — e.g.
-  // type-only imports) get the explicit unknown/static marker, never a
-  // guessed kind (AC4). A specifier the transpiler DID see keeps its real
-  // kind; the fallback never overrides it.
+  // Fallback-only specifiers (not seen by the transpiler for THIS statement)
+  // split into two provenances (AFC-11, flow 234):
+  //   * the scan RAN and simply omitted the specifier — that only happens
+  //     because the statement carries no runtime binding (`import type`,
+  //     `export type … from`, or every named specifier is `type`-prefixed).
+  //     That is a KNOWN classification, `TYPE_ONLY_IMPORT_KIND`, never
+  //     "unknown" — it still becomes a real edge for impact analysis
+  //     (getOrphans/getAffected/computeAffected all read `edge.kind`, not
+  //     `importKind`, so they are unaffected), but `getCycles` excludes it
+  //     from load-order adjacency the same way it already excludes
+  //     `dynamic-import`.
+  //   * the scan did not run at all (unparseable source, or a
+  //     transpiler-unsupported language routed here) — genuinely unknown
+  //     provenance, so it keeps the pre-existing conservative default,
+  //     `UNKNOWN_IMPORT_KIND`, which `getCycles` still treats as load-order
+  //     (AC4 of flow 140 — never silently exclude a real cycle when we
+  //     cannot tell).
+  // A specifier the transpiler DID see keeps its real kind; the fallback
+  // never overrides it.
   for (const specifier of fallback) {
     if (!kindBySpecifier.has(specifier)) {
-      kindBySpecifier.set(specifier, UNKNOWN_IMPORT_KIND);
+      kindBySpecifier.set(specifier, scanResult.succeeded ? TYPE_ONLY_IMPORT_KIND : UNKNOWN_IMPORT_KIND);
     }
   }
 
@@ -276,19 +292,40 @@ function extractImportRecords(content: string, language: string): ImportRecord[]
 
 type ScannedImport = { specifier: string; kind: TranspilerImportKind };
 
-function scanImportsOrEmpty(content: string): ScannedImport[] {
+// `succeeded: false` means the transpiler could not even parse the file —
+// distinct from `succeeded: true, imports: []` (a parseable file with no
+// scannable imports, e.g. one containing only type-only imports). The caller
+// needs that distinction to tell "known type-only" apart from "genuinely
+// unknown provenance" (AFC-11, flow 234) when a specifier turns up only in
+// the regex fallback.
+type ScanResult = { succeeded: boolean; imports: ScannedImport[] };
+
+// T19 finding 2 (flow 234 review): the `tsx` loader was hardcoded for every
+// TS/JS file. Under `tsx`, ordinary valid `.ts` syntax that collides with JSX
+// grammar throws — a generic arrow function (`<T>(x: T): T => x`) and an
+// angle-bracket cast (`<string>value`) are both ambiguous with a JSX opening
+// tag. `.ts` (never `.tsx`) is the only extension that can carry that
+// syntax AND can never legally contain real JSX, so it is the only one safe
+// to parse with JSX grammar disabled. `.tsx`/`.jsx` (and plain `.js`, which
+// may itself contain JSX) keep the original `tsx` loader unchanged.
+function loaderForFile(filePath: string): "ts" | "tsx" {
+  return filePath.endsWith(".ts") ? "ts" : "tsx";
+}
+
+function scanImportsOrEmpty(content: string, filePath: string): ScanResult {
   try {
-    const scanner = new Bun.Transpiler({ loader: "tsx" });
-    return scanner
+    const scanner = new Bun.Transpiler({ loader: loaderForFile(filePath) });
+    const imports = scanner
       .scanImports(content)
       .filter(
         (entry): entry is { path: string; kind: TranspilerImportKind } =>
           typeof entry.path === "string" && entry.path.length > 0,
       )
       .map((entry) => ({ specifier: entry.path, kind: entry.kind }));
+    return { succeeded: true, imports };
   } catch {
     // Unparseable source ⇒ the regex fallback alone still yields the imports.
-    return [];
+    return { succeeded: false, imports: [] };
   }
 }
 
@@ -311,7 +348,7 @@ function extractImportSpecifiersFallback(content: string): string[] {
 
   // Java patterns (import com.example.Class;)
   const javaPatterns = [
-    /\bimport\s+(?:static\s+)?([a-zA-Z_][a-zA-Z0-9_\.]*(?:\.\*)?)\s*;/g,
+    /\bimport\s+(?:static\s+)?([a-zA-Z_][a-zA-Z0-9_.]*(?:.*)?)\s*;/g,
   ];
 
   // Python patterns (import module, from module import name).
@@ -321,9 +358,9 @@ function extractImportSpecifiersFallback(content: string): string[] {
   //   before because the module regex required a leading letter; the third
   //   pattern captures the leading-dot forms.
   const pythonPatterns = [
-    /^[ \t]*import\s+([a-zA-Z_][a-zA-Z0-9_\.]*)/gm,
-    /\bfrom\s+([a-zA-Z_][a-zA-Z0-9_\.]*)\s+import/g,
-    /\bfrom\s+(\.+[a-zA-Z0-9_\.]*)\s+import/g,
+    /^[ \t]*import\s+([a-zA-Z_][a-zA-Z0-9_.]*)/gm,
+    /\bfrom\s+([a-zA-Z_][a-zA-Z0-9_.]*)\s+import/g,
+    /\bfrom\s+(\.+[a-zA-Z0-9_.]*)\s+import/g,
   ];
 
   for (const pattern of [...jsPatterns, ...javaPatterns, ...pythonPatterns]) {

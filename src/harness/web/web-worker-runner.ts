@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { wrapWithSandbox } from "../process/sandbox/wrap";
 import type { SandboxProfile } from "../process/sandbox/profile";
 import { defaultReadDenyList } from "../process/sandbox/profile";

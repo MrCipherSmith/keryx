@@ -366,7 +366,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async taskDone({ cwd, id, taskId, disposition, reason, evidenceRefs, runLink }): Promise<FlowState> {
+    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
@@ -398,6 +398,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // on the task. Omitted args leave existing behavior untouched.
       if (evidenceRefs !== undefined) {
         task.evidenceRefs = evidenceRefs;
+      }
+      // `acRefs` has been in the task schema since v2 and, until now, NOTHING
+      // read it and nothing wrote it: 97 tasks across eight flows of this
+      // programme, every one of them `acRefs: []`. A field that records which
+      // criterion a task satisfies, which no code path can populate, is the
+      // same defect this programme keeps finding elsewhere — a capability whose
+      // only caller is its own test — sitting in the machinery that governs the
+      // programme. Every flow's AC8 asks for explicit evidence, and the
+      // machine-readable record could not carry any.
+      if (acRefs !== undefined) {
+        task.acRefs = acRefs;
       }
       if (runLink !== undefined) {
         task.runLink = runLink;
@@ -567,12 +578,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
                 detail: criteria.length === 0 ? "no criteria found" : `unconfirmed: ${missing.join(", ")}`,
               },
         );
-      } catch (error) {
-        gates.push({
-          name: "acceptance-criteria",
-          status: "fail",
-          detail: error instanceof Error ? error.message : String(error),
-        });
+      } catch {
+        // T45 already made this arm block (`status: "fail"`); T47 closes the
+        // remaining leak-safety gap by routing it through the same
+        // caught-value-free helper the health/security arms use below,
+        // instead of interpolating the caught error's message verbatim
+        // (which can carry a filesystem path or file content).
+        gates.push(unevaluableGate("acceptance-criteria"));
       }
 
       // Gate 2: pull request, or an explicit proof that the implementation
@@ -624,31 +636,21 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
             ...(mergedCommit ? { mergedCommit } : {}),
           }),
         );
-      } catch (error) {
+      } catch {
         // A gate that cannot run has not passed. `skipped` is reserved for "this
-        // package did not opt in" and for an explicit configuration opt-out;
-        // an unexpected error is a failure with the error in it.
-        gates.push({
-          name: "review",
-          status: "fail",
-          detail: `review gate could not be evaluated: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        // package did not opt in" and for an explicit configuration opt-out; an
+        // unexpected error is a failure — recorded via the same caught-value-free
+        // helper the health/security arms use, not by interpolating the caught
+        // error's message (which can carry a filesystem path or file content).
+        gates.push(unevaluableGate("review"));
       }
 
       // Gate 5: code health.
       try {
         const health = await deps.healthGate(cwd);
-        gates.push(
-          health.status === "fail"
-            ? { name: "health", status: "fail", detail: health.reasons.join("; ") || "health gate failed" }
-            : { name: "health", status: "pass", detail: `health gate: ${health.status}` },
-        );
-      } catch (error) {
-        gates.push({
-          name: "health",
-          status: "skipped",
-          detail: `health unavailable: ${error instanceof Error ? error.message : String(error)}`,
-        });
+        gates.push(healthGateOutcome(health));
+      } catch {
+        gates.push(unevaluableGate("health"));
       }
 
       // Gate 6: security (§11). Omitted entirely when the module is disabled
@@ -660,12 +662,8 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           if (security) {
             gates.push({ name: "security", status: security.status, detail: security.detail });
           }
-        } catch (error) {
-          gates.push({
-            name: "security",
-            status: "skipped",
-            detail: `security unavailable: ${error instanceof Error ? error.message : String(error)}`,
-          });
+        } catch {
+          gates.push(unevaluableGate("security"));
         }
       }
 
@@ -677,7 +675,19 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (mergedCommit) {
           flow.merged = { commit: mergedCommit, ref: "origin/main", at: now() };
         }
-        flow = await transition(cwd, dir, flow, "done", "done", "all gates passed");
+        // T57 F-001: a `warn` health gate folds to `status: "pass"` (T56,
+        // unchanged) but must stay distinguishable from a genuine pass in the
+        // record a reader actually sees. `healthWarnNote` is the only place
+        // that surfaces it, into the one durable event this branch writes.
+        const warnNote = healthWarnNote(gates);
+        flow = await transition(
+          cwd,
+          dir,
+          flow,
+          "done",
+          "done",
+          warnNote ? `all gates passed (${warnNote})` : "all gates passed",
+        );
         issueComment = buildIssueComment(flow, gates);
         if (comment && flow.source.type === "github-issue" && flow.source.ref && deps.tracker) {
           const ref = deps.tracker.parseRef(flow.source.ref);
@@ -906,6 +916,7 @@ async function appendIdMap(cwd: string, entry: FlowIdMapEntry): Promise<void> {
       entries = parsed as FlowIdMapEntry[];
     } catch (error) {
       // Never silently drop recorded history — the operator must fix the file.
+      // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
       throw new Error(
         `Cannot read ${path.relative(cwd, file)}: ${error instanceof Error ? error.message : String(error)}`,
       );
@@ -913,6 +924,150 @@ async function appendIdMap(cwd: string, entry: FlowIdMapEntry): Promise<void> {
   }
   entries.push(entry);
   await writeFileAtomic(file, `${JSON.stringify(entries, null, 2)}\n`);
+}
+
+/**
+ * A gate whose evaluation threw has not passed, and it was never a
+ * deliberate skip either (T35 F-005). `GateOutcome.status` has no separate
+ * INCOMPLETE value — `"skipped"` is reserved for a gate that intentionally
+ * did not run (module disabled, per-package opt-out); the only status that
+ * `complete()`'s fold (`gates.every((gate) => gate.status !== "fail")`)
+ * treats as blocking is `"fail"`, so an unevaluable gate must use that one.
+ * `policies.md`'s "Health и security gate" section states this ordering
+ * directly: an established violation is FAIL, a required check that is
+ * missing/skipped/unparsed/unfinished is INCOMPLETE, and strict acceptance
+ * is PASS-only — INCOMPLETE has no lower bar than FAIL here because this
+ * schema does not carry INCOMPLETE as its own value.
+ *
+ * The detail is a constant naming only the gate. The caught value is never
+ * interpolated: a thrown error can carry a filesystem path or file content
+ * (a stack frame naming an unreadable file, a parser echoing the bytes it
+ * choked on), and `policies.md`'s "Redaction и security scan" section
+ * forbids a secret or raw content surviving into an exception/error/detail
+ * — the same discipline `src/security/guard.ts`'s constant reason strings
+ * already apply one layer down. This detail is written into `flow.json`
+ * history and can reach `buildIssueComment`, which may be posted to an
+ * external issue tracker, so it gets no exception either.
+ *
+ * Shared by every gate whose evaluator can throw, so a gate added later
+ * reuses this instead of a new catch arm inventing its own (possibly
+ * leaking, possibly non-blocking) shape. T45 introduced this for the
+ * health/security catch arms; T47 folds the acceptance-criteria and review
+ * catch arms into it too — those two already recorded `status: "fail"` on a
+ * throw, so only their `detail` shape changes here, from an interpolated
+ * (and therefore potentially leaking) error message to this same constant.
+ */
+function unevaluableGate(
+  name: "acceptance-criteria" | "review" | "health" | "security",
+): GateOutcome {
+  return {
+    name,
+    status: "fail",
+    detail: `${name} gate could not be evaluated; treated as failed, not skipped`,
+  };
+}
+
+/**
+ * Fold the health module's `GateStatus` (`"pass" | "warn" | "incomplete" |
+ * "fail"`, `src/health/types.ts`) into `GateOutcome`'s narrower 3-valued
+ * status (`"pass" | "fail" | "skipped"` — no separate INCOMPLETE/WARN
+ * member, see `unevaluableGate`'s doc comment above). Exhaustive over the
+ * vocabulary, default arm on the blocking side, mirroring `gateExitCode`
+ * (`src/health/service.ts`), `runExitCode` (`src/commands/health.ts`),
+ * `isPassGate` (`src/commands/security.ts`) and `securityFlowGate`'s switch
+ * (`src/security/guard.ts`) in shape only — this stays health's own
+ * vocabulary, no cross-module import (T39 F-001).
+ *
+ * `incomplete` — a REQUIRED source unavailable, execution-failed or
+ * parse-failed (`computeGate`, `src/health/gate.ts:58-63`) — blocks
+ * unconditionally: it is ranked strictly above `warn` in `computeGate`'s own
+ * `RANK` table and in `policies.md`'s FAIL > INCOMPLETE > PASS ordering, and
+ * neither `gateExitCode` nor `runExitCode` ever exits 0 for it. This is the
+ * exact fallthrough F-001 named: the previous two-way fold treated anything
+ * that was not `"fail"` as passing, so `incomplete` (and `warn`, and any
+ * unrecognized value) was recorded `pass` and let completion succeed on
+ * evidence policies.md calls INCOMPLETE, not PASS.
+ *
+ * `warn` folds to `pass` — a deliberate decision, not a mechanical default.
+ * Both health CLI surfaces exit 0 for `warn` unless an explicit
+ * `--strict`/`--strict-warn` opt-in is passed, and `flow complete()` has no
+ * strict-mode flag of its own to opt into (`deps.healthGate`'s real wiring,
+ * `src/commands/flow.ts`, calls `.gate({ cwd })` with no `strictWarn`), so
+ * blocking on `warn` here would silently adopt the strictest sibling
+ * behavior for every flow with no way to opt out — stopping flows that
+ * legitimately complete today, which the dispatch that produced this fix
+ * named as worse than the defect being repaired. `policies.md`'s "Optional
+ * skip shows a warning and is not signed as passed" is about an optional
+ * source being skipped (a `reasons` entry `computeGate` already emits
+ * without escalating `status`), not about every `warn` blocking completion.
+ * `detail` keeps naming the underlying status (`"health gate: warn"`, not
+ * `"health gate: pass"`) so the two are not the same string — but this
+ * function only ever returns an in-memory `GateOutcome`. Neither `flow.json`
+ * history nor `buildIssueComment` reads `detail` on the passing path by
+ * itself (T57 F-001: before that fix, both wrote a fixed "pass" regardless
+ * of `detail`, and a warned completion's stored record and published comment
+ * were byte-identical to a genuine pass). `healthWarnNote`, defined below, is
+ * the thing that actually carries this `detail` into the `"done"` transition
+ * note and into `buildIssueComment`'s health line — read it, not this
+ * comment, for what a reader of `flow.json` or the published comment sees.
+ *
+ * An unrecognized value (a future `GateStatus` member, or a non-conforming
+ * dependency — this call site's own type, `{ status: string; reasons:
+ * string[] }`, is untyped on purpose, matching `FlowServiceDeps.healthGate`)
+ * reuses the shared `unevaluableGate("health")` constant rather than
+ * interpolating the unrecognized string into a detail that reaches
+ * `flow.json` history and `buildIssueComment`.
+ */
+function healthGateOutcome(health: { status: string; reasons: string[] }): GateOutcome {
+  switch (health.status) {
+    case "pass":
+    case "warn":
+      return { name: "health", status: "pass", detail: `health gate: ${health.status}` };
+    case "fail":
+      return { name: "health", status: "fail", detail: health.reasons.join("; ") || "health gate failed" };
+    case "incomplete":
+      return {
+        name: "health",
+        status: "fail",
+        detail: health.reasons.join("; ") || "health gate incomplete",
+      };
+    default:
+      return unevaluableGate("health");
+  }
+}
+
+/**
+ * T57 F-001's fix: the one place a `warn` completion's distinguishing detail
+ * actually reaches a reader of `flow.json` or the published issue comment.
+ * `healthGateOutcome`'s pass arm produces exactly two literal `detail`
+ * strings — `"health gate: pass"` (a clean pass) or `"health gate: warn"` (a
+ * folded warn) — so the `!==` comparison below is exact, not a text-pattern
+ * guess. Returns `null` for a clean pass (both call sites then fall back to
+ * their pre-fix, byte-identical behavior) and the health gate's own `detail`
+ * otherwise.
+ *
+ * Scoped to the `health` gate on purpose, not every gate's `detail`: it is
+ * the only gate whose vocabulary admits a passing-but-not-clean state today.
+ * `tasks`/`pull-request`/`main-merge`/`acceptance-criteria` have no such
+ * value, and `FlowServiceDeps.securityGate`'s declared return type is
+ * `"pass" | "fail" | "skipped"` — no `"warn"` equivalent. Joining every
+ * gate's `detail` into the passing path (mirroring the failing path's
+ * `failed.map((gate) => \`${gate.name}: ${gate.detail}\`)` at the `else`
+ * branch below) would also expose `review`'s `verdict.detail`, built in
+ * `review-gate.ts` — a file outside this module's ownership that a sibling
+ * task already flagged as carrying at least one accepted, unfixed path where
+ * a caught error's message can reach a gate's `detail` without going through
+ * a `throw` this file's own `try`/`catch` would guard
+ * (`review-gate.ts`'s `readReviewGateConfig`; see T47's implementation
+ * report, "Out of scope, flagged"). The failing path already accepts that
+ * risk for a *failed* gate's detail (unchanged by this task); widening a
+ * *passing* gate's detail into the published comment for every gate, not
+ * just the one gate this task actually needed to fix, would be new exposure
+ * this task was not scoped to audit.
+ */
+function healthWarnNote(gates: GateOutcome[]): string | null {
+  const health = gates.find((gate) => gate.name === "health");
+  return health && health.detail !== "health gate: pass" ? health.detail : null;
 }
 
 /**
@@ -996,7 +1151,16 @@ async function isPlaceholderAc(cwd: string, dir: string): Promise<boolean> {
 
 function buildIssueComment(flow: FlowState, gates: GateOutcome[]): string {
   const done = flow.tasks.filter((task) => task.status === "done");
-  const gateLine = gates.map((gate) => `${gate.name}: ${gate.status}`).join(", ");
+  // T57 F-001: every gate but `health` renders exactly as before
+  // (`name: status`). `health` renders its own distinguishing detail instead
+  // of `status` when it is not a clean pass, so a `warn` completion's
+  // published comment says so instead of the indistinguishable "health:
+  // pass" every completion used to publish. See `healthWarnNote`'s doc
+  // comment for why this stays scoped to `health` alone.
+  const warnNote = healthWarnNote(gates);
+  const gateLine = gates
+    .map((gate) => (gate.name === "health" && warnNote ? warnNote : `${gate.name}: ${gate.status}`))
+    .join(", ");
   return [
     `Flow ${flow.id} (${flow.title}) is complete.`,
     "",

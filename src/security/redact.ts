@@ -6,6 +6,7 @@ import { securityDataRoot } from "./config";
 import type { DetectorMatch, SecurityLocation } from "./types";
 import { detectSecrets } from "./detect/secrets";
 import { detectPii } from "./detect/pii";
+import { detectExfil } from "./detect/exfil";
 
 // Redaction and hashing safety (specification.md §10a).
 //
@@ -117,8 +118,9 @@ export function applyRedaction(content: string, matches: DetectorMatch[]): strin
   return out;
 }
 
-// Scrub secret and PII spans from free text using the deterministic detector
-// floor (regex only — no model, no config, no IO), then fixed-width redact. Used
+// Scrub secret, PII, and auto-fetch exfil spans from free text using the
+// deterministic detector floor (regex only — no model, no config, no IO), then
+// fixed-width redact. Used
 // to sanitise TOOL OUTPUT before it is appended to provider-bound agent history:
 // a contained shell command that reads a credential (`cat ~/.aws/credentials`,
 // `env`) must not leak the raw value into the model context and onward to the
@@ -127,7 +129,7 @@ export function redactSensitiveText(text: string): string {
   if (text.length === 0) {
     return text;
   }
-  const matches = [...detectSecrets(text), ...detectPii(text)];
+  const matches = [...detectSecrets(text), ...detectPii(text), ...detectExfil(text)];
   if (matches.length === 0) {
     return text;
   }

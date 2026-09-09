@@ -16,11 +16,21 @@
 // shapes). Descriptors validate against
 // docs/requirements/keryx-metaproject-native/schemas/metaproject-operation.schema.json.
 
+import { STALE_NOTE, UNKNOWN_NOTE } from "../../gdgraph/staleness";
+import {
+  RANKING_SCORE_LABEL,
+  formatRankingScore,
+  normalizeRetrievalCode,
+  retrievalStatus,
+} from "../../lib/retrieval-codes";
+import type { EvidenceItem, EvidencePackage } from "../../wiki/evidence";
 import type {
   FlowStatusResult,
   GraphAffectedResult,
+  GraphFindResult,
   GraphPathResult,
   GraphQueryResult,
+  GraphStaleness,
   GraphSymbolResult,
   HealthStatusResult,
   MemorySearchResult,
@@ -31,8 +41,10 @@ import type {
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
+  WikiEvidenceResult,
   WikiPageResult,
-  WikiFreshnessResult,} from "./metaproject-port";
+  WikiFreshnessResult,
+  WikiResolveResult,} from "./metaproject-port";
 import type { ToolDefinition } from "./types";
 import type { InteractiveTool, InteractiveToolResult } from "./builtin/interactive-tools";
 
@@ -77,41 +89,114 @@ function requireString(
   return { value };
 }
 
-/** Render a structured `graphAffected` result as readable text for the model. */
+/**
+ * Render the tri-state graph freshness exactly as the command line does
+ * (`printStaleNote`, `src/commands/gdgraph.ts`), reusing `STALE_NOTE` /
+ * `UNKNOWN_NOTE` verbatim rather than re-wording them here — an `unknown`
+ * check must never read as the confident "the repo moved" claim, and a fresh
+ * graph must add no noise at all.
+ */
+function stalenessLines(staleness: GraphStaleness | undefined): string[] {
+  if (staleness === undefined || staleness.status === "fresh") {
+    return [];
+  }
+  return [
+    "",
+    staleness.status === "unknown" ? UNKNOWN_NOTE : STALE_NOTE,
+    ...staleness.reasons.map((reason) => `  - ${reason}`),
+  ];
+}
+
+/** Append the freshness note (if any) to an already-rendered graph result. */
+function withStaleness(
+  result: InteractiveToolResult,
+  staleness: GraphStaleness | undefined,
+): InteractiveToolResult {
+  const extra = stalenessLines(staleness);
+  return extra.length === 0 ? result : { ...result, output: [result.output, ...extra].join("\n") };
+}
+
+/**
+ * Render a structured `graphAffected` result as readable text for the model.
+ *
+ * `truncated` is a DISPLAY fact — "an output bound cut this list" — and it was
+ * declared on `GraphAffectedResult` and in `AFFECTED_OUTPUT_SCHEMA` while this
+ * renderer dropped it on the floor. A capped list therefore rendered
+ * byte-identically to a complete one, and a capped list that happened to come
+ * back empty rendered as the flat corpus claim "No dependents found for X".
+ * The reference adapter does not set the flag today, so this is the shape
+ * caught before it fired rather than after — but the field exists, a
+ * `MetaprojectPort` is an interface, and a renderer that silently discards a
+ * truncation marker is the same defect either way.
+ */
 export function formatAffected(result: GraphAffectedResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_affected failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_affected failed: ${result.error}`, isError: true }, result.staleness);
   }
+  const dependencies = result.dependencies ?? [];
+  // The dependencies half is printed by the CLI and by MCP `gdgraph.affected`;
+  // this boundary used to return dependents only, so "no dependents" read as
+  // "nothing to see" even when the target imported a dozen files.
+  const dependencyLines =
+    dependencies.length > 0
+      ? [`Dependencies of ${result.target} (${dependencies.length}):`, ...dependencies.map((path) => `  - ${path}`), ""]
+      : [];
+  const truncated = result.truncated === true;
   if (result.affected.length === 0) {
-    return { output: `No dependents found for ${result.target}.`, isError: false };
+    return withStaleness(
+      {
+        output: [
+          ...dependencyLines,
+          truncated
+            ? `No dependents are SHOWN for ${result.target} — this result was capped by an output bound ` +
+              "(`truncated`). That is a display decision about this page, not a claim that the target has " +
+              "no dependents."
+            : `No dependents found for ${result.target}.`,
+        ].join("\n"),
+        isError: false,
+      },
+      result.staleness,
+    );
   }
-  const header = `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
+  const header = truncated
+    ? `Blast radius of ${result.target} (depth ${result.depth ?? 1}, showing ${result.affected.length} dependent(s) ` +
+      "— TRUNCATED by an output bound, so this is a page and not the whole set):"
+    : `Blast radius of ${result.target} (depth ${result.depth ?? 1}, ${result.affected.length} dependent(s)):`;
   const lines = result.affected.map((node) => {
     const fanIn = node.fanIn !== undefined ? `, fanIn ${node.fanIn}` : "";
     return `  - ${node.path ?? node.id} (hop ${node.hop}${fanIn})`;
   });
-  return { output: [header, ...lines].join("\n"), isError: false };
+  return withStaleness(
+    { output: [...dependencyLines, header, ...lines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a structured `graphQuery` (cycles or orphans) result as readable text. */
 export function formatQuery(result: GraphQueryResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_query failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_query failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.query === "orphans") {
     const orphans = result.orphans ?? [];
     if (orphans.length === 0) {
-      return { output: "No orphan files found.", isError: false };
+      return withStaleness({ output: "No orphan files found.", isError: false }, result.staleness);
     }
     const lines = orphans.map((path) => `  - ${path}`);
-    return { output: [`Orphan files (${orphans.length}):`, ...lines].join("\n"), isError: false };
+    return withStaleness(
+      { output: [`Orphan files (${orphans.length}):`, ...lines].join("\n"), isError: false },
+      result.staleness,
+    );
   }
   const cycles = result.cycles ?? [];
   if (cycles.length === 0) {
-    return { output: "No dependency cycles found.", isError: false };
+    return withStaleness({ output: "No dependency cycles found.", isError: false }, result.staleness);
   }
   const lines = cycles.map((cycle) => `  - ${cycle.join(" -> ")}`);
-  return { output: [`Dependency cycles (${cycles.length}):`, ...lines].join("\n"), isError: false };
+  return withStaleness(
+    { output: [`Dependency cycles (${cycles.length}):`, ...lines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a structured `memorySearch` result as readable text for the model. */
@@ -120,24 +205,139 @@ export function formatMemory(result: MemorySearchResult): InteractiveToolResult 
     return { output: `memory_search failed: ${result.error}`, isError: true };
   }
   if (result.hits.length === 0) {
-    return { output: `No memory entries matched "${result.query}".`, isError: false };
+    // Flow 242 T9/F3: this line was the whole answer both for a memory entry
+    // that had been deleted and for a phrase that never named anything — the
+    // same collapse `formatWiki`/`formatWikiResolve` already fixed for the wiki,
+    // fixed here with the same device: the verdict as a bracketed tag, so
+    // "removed, on record" and "nothing here records a removal" are visibly
+    // different answers rather than one string with different prose under it.
+    //
+    // `removalTrail` is absent when the port implementation predates the field;
+    // the line then reads exactly as it always did.
+    const trail = result.removalTrail;
+    if (trail === undefined) {
+      return { output: `No memory entries matched "${result.query}".`, isError: false };
+    }
+    const lines = [`No memory entries matched "${result.query}".`, `[${trail.verdict}] ${trail.summary}`];
+    for (const removal of trail.removals ?? []) {
+      const title = removal.title !== undefined ? ` "${removal.title}"` : "";
+      const page = removal.page !== undefined ? ` in ${removal.page}` : "";
+      lines.push(
+        `  - [${removal.layer}] ${removal.ref}${title}${page} — removed ${removal.removedAt}, observed by ` +
+          `\`${removal.observedBy}\` (matched on ${removal.matchedOn})`,
+        `      requested by: ${removal.requestedBy}`,
+        `      grounds: ${removal.grounds}`,
+      );
+    }
+    if (trail.totalRemovals !== undefined && trail.totalRemovals > (trail.removals ?? []).length) {
+      lines.push(
+        `  … ${trail.totalRemovals - (trail.removals ?? []).length} further recorded removal(s) not shown ` +
+          "(bounded output) — `keryx forgetting lookup --search` lists them all.",
+      );
+    }
+    // Not an error: the search completed, and "this was removed" is an answer.
+    return { output: lines.join("\n"), isError: false };
   }
   const header = `Memory hits for "${result.query}" (${result.hits.length}):`;
-  const lines = result.hits.map((hit) => {
+  const lines = result.hits.flatMap((hit) => {
     const meta = [hit.type, hit.status].filter((v) => v !== undefined && v.length > 0).join("/");
     const suffix = meta.length > 0 ? ` [${meta}]` : "";
     const excerpt = hit.excerpt !== undefined && hit.excerpt.length > 0 ? ` — ${hit.excerpt}` : "";
-    return `  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`;
+    const rows = [`  - ${hit.title} (${hit.path}, score ${hit.score.toFixed(3)})${suffix}${excerpt}`];
+    // F-002 (flow 234 review, BLOCKER) / AFC-25 / AC6: provenance always
+    // renders on its own line when the adapter populated it — mirroring
+    // memory/report.ts's renderMemorySearchReportMarkdown shape rather than
+    // inventing a second one — so a council-confirmed, sourced, versioned
+    // entry reads as visibly distinct from an unsourced one instead of
+    // arriving byte-identical. A hit built by a port implementation that
+    // predates this field (no `version`/`provenance`/`author`/`confirmedBy`
+    // at all) still renders as before — this is additive, not a new
+    // required shape.
+    if (hit.version !== undefined || hit.provenance !== undefined || hit.author !== undefined || hit.confirmedBy !== undefined) {
+      rows.push(
+        `    version: ${hit.version ?? "unknown"} | provenance: source=${hit.provenance?.source ?? "unknown"} link=${hit.provenance?.link ?? "unknown"} author=${hit.author ?? "unknown"} confirmedBy=${hit.confirmedBy ?? "unknown"}`,
+      );
+      if (hit.caveat) {
+        rows.push(`    caveat: ${hit.caveat}`);
+      }
+    }
+    return rows;
   });
   return { output: [header, ...lines].join("\n"), isError: false };
 }
 
-/** Render a structured `readWiki` result as readable text for the model. */
+/**
+ * Render a structured `readWiki` result as readable text for the model.
+ *
+ * Flow 242 (forgetting) lane C / AC5: `outcome` is printed as a bracketed tag
+ * so "never existed" (`absent`), "existed and was removed" (`tombstoned` /
+ * `pending-tombstone`) and "cannot tell" (`store-unreadable`) read as three
+ * visibly different answers here, not one generic failure string with the
+ * reason varying underneath.
+ */
 export function formatWiki(result: WikiPageResult): InteractiveToolResult {
   if (result.isError) {
-    return { output: result.error ?? `read_wiki failed for ${result.path}`, isError: true };
+    const tag = result.outcome !== undefined ? `[${result.outcome}] ` : "";
+    return { output: `${tag}${result.error ?? `read_wiki failed for ${result.path}`}`, isError: true };
   }
   return { output: result.content.length > 0 ? result.content : "(empty page)", isError: false };
+}
+
+/**
+ * Render a structured `wikiResolve` result as readable text for the model.
+ *
+ * Flow 242 (forgetting) lane C / AC2 + AC5: NEVER a same-name substitute — a
+ * `reoccupied` identity is printed with its evidence and BOTH the tombstone
+ * and whatever now occupies the address, never folded into an ordinary
+ * "found".
+ */
+function formatWikiResolve(result: WikiResolveResult): InteractiveToolResult {
+  const { resolution } = result;
+  const prefix = `wiki_resolve ${result.ref}: `;
+  switch (resolution.kind) {
+    case "found":
+      return {
+        output:
+          `${prefix}[found] ${resolution.section.pageRelativePath} "${resolution.section.title}" ` +
+          `(lines ${resolution.section.bodyRange.startLine}-${resolution.section.bodyRange.endLine})` +
+          (resolution.history
+            ? `\n  history: removed ${resolution.history.removedAt} — ${resolution.history.reason}` +
+              (resolution.history.restoredAt === null
+                ? " (restored with byte-identical content; the tombstone is still on disk)."
+                : ` (restored ${resolution.history.restoredAt}; the tombstone is retained).`)
+            : ""),
+        isError: false,
+      };
+    case "page-found":
+      return {
+        output:
+          `${prefix}[page-found] ${resolution.page}` +
+          (resolution.history ? `\n  history: removed ${resolution.history.removedAt} — ${resolution.history.reason}` : ""),
+        isError: false,
+      };
+    case "tombstoned":
+      return {
+        output:
+          `${prefix}[tombstoned] removed ${resolution.tombstone.removedAt} — ${resolution.tombstone.reason}. ` +
+          "There is no redirect: a section with the same heading elsewhere is NOT this one.",
+        isError: true,
+      };
+    case "reoccupied":
+      return {
+        output: `${prefix}[reoccupied, ${resolution.evidence}] ${resolution.reason}`,
+        isError: true,
+      };
+    case "pending-tombstone":
+      return { output: `${prefix}[pending-tombstone] ${resolution.reason}`, isError: true };
+    case "stale-locator":
+      return { output: `${prefix}[stale-locator] ${resolution.reason}`, isError: true };
+    case "registry-unreadable":
+      return { output: `${prefix}[registry-unreadable] ${resolution.reason}`, isError: true };
+    case "store-unreadable":
+      return { output: `${prefix}[store-unreadable] ${resolution.reason}`, isError: true };
+    default:
+      return { output: `${prefix}[unknown] ${resolution.reason}`, isError: true };
+  }
 }
 
 /** Render a structured `skillsCatalog` result as readable text for the model. */
@@ -162,6 +362,20 @@ export function formatSkillLoad(result: SkillLoadResult): InteractiveToolResult 
 
 // --- object result schemas (structured tool output) ---------------------------
 
+/**
+ * Tri-state graph freshness on every graph-backed result (flow 235 T8).
+ * Declared once and spread into each graph output schema, so a new graph
+ * operation cannot quietly ship without it.
+ */
+const STALENESS_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    status: { type: "string", enum: ["fresh", "stale", "unknown"] },
+    reasons: { type: "array", items: { type: "string" } },
+  },
+  required: ["status", "reasons"],
+};
+
 const AFFECTED_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -169,7 +383,9 @@ const AFFECTED_OUTPUT_SCHEMA: Record<string, unknown> = {
     depth: { type: "number" },
     ranked: { type: "boolean" },
     affected: { type: "array" },
+    dependencies: { type: "array", items: { type: "string" } },
     truncated: { type: "boolean" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["target", "affected"],
@@ -181,6 +397,7 @@ const QUERY_OUTPUT_SCHEMA: Record<string, unknown> = {
     query: { type: "string", enum: ["cycles", "orphans"] },
     orphans: { type: "array", items: { type: "string" } },
     cycles: { type: "array" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["query"],
@@ -191,7 +408,67 @@ const MEMORY_OUTPUT_SCHEMA: Record<string, unknown> = {
   properties: {
     query: { type: "string" },
     filters: { type: "object" },
-    hits: { type: "array" },
+    hits: {
+      type: "array",
+      // F-002 (flow 234 review, BLOCKER): widened alongside MemorySearchHit —
+      // provenance fields are additive and optional (a hit predating this fix
+      // still validates), never a second, divergent output shape.
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          title: { type: "string" },
+          type: { type: "string" },
+          status: { type: "string" },
+          score: { type: "number" },
+          excerpt: { type: "string" },
+          version: { type: "string" },
+          provenance: {
+            type: "object",
+            properties: { source: { type: "string" }, link: { type: "string" } },
+          },
+          author: { type: "string" },
+          confirmedBy: { type: "string" },
+          caveat: { type: ["string", "null"] },
+        },
+        required: ["path", "title", "score"],
+      },
+    },
+    // Flow 242 T9/F3: additive and optional, exactly like the provenance fields
+    // above — a result produced before this field still validates. `verdict` is
+    // enumerated because it is the field a consumer branches on, and the enum is
+    // the enforceable statement that `never-existed` is not among the answers
+    // this tool can give.
+    removalTrail: {
+      type: "object",
+      properties: {
+        verdict: {
+          type: "string",
+          enum: ["recorded-removed", "no-removal-recorded", "trail-absent", "trail-unreadable"],
+        },
+        summary: { type: "string" },
+        totalRemovals: { type: "integer" },
+        removals: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              layer: { type: "string" },
+              ref: { type: "string" },
+              title: { type: "string" },
+              page: { type: "string" },
+              removedAt: { type: "string" },
+              observedBy: { type: "string" },
+              requestedBy: { type: "string" },
+              grounds: { type: "string" },
+              matchedOn: { type: "string" },
+            },
+            required: ["layer", "ref", "removedAt", "requestedBy", "grounds"],
+          },
+        },
+      },
+      required: ["verdict", "summary"],
+    },
     error: { type: "string" },
   },
   required: ["query", "hits"],
@@ -204,8 +481,19 @@ const WIKI_OUTPUT_SCHEMA: Record<string, unknown> = {
     content: { type: "string" },
     isError: { type: "boolean" },
     error: { type: "string" },
+    outcome: { type: "string" },
   },
   required: ["path", "content", "isError"],
+};
+
+/** Flow 242 (forgetting) lane C: `wiki_resolve`'s output — `WikiResolveResult` verbatim. */
+const WIKI_RESOLVE_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    ref: { type: "string" },
+    resolution: { type: "object" },
+  },
+  required: ["ref", "resolution"],
 };
 
 const SEARCH_OUTPUT_SCHEMA: Record<string, unknown> = {
@@ -230,15 +518,24 @@ const SEARCH_OUTPUT_SCHEMA: Record<string, unknown> = {
 /** Render a `graphPath` result as readable text. */
 export function formatPath(result: GraphPathResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_path failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_path failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.unresolved === true) {
-    return { output: `graph_path: could not resolve ${result.from} or ${result.to}.`, isError: false };
+    return withStaleness(
+      { output: `graph_path: could not resolve ${result.from} or ${result.to}.`, isError: false },
+      result.staleness,
+    );
   }
   if (result.nodes.length === 0) {
-    return { output: `No path from ${result.from} to ${result.to}.`, isError: false };
+    return withStaleness(
+      { output: `No path from ${result.from} to ${result.to}.`, isError: false },
+      result.staleness,
+    );
   }
-  return { output: `Path (${result.nodes.length} node(s)): ${result.nodes.join(" -> ")}`, isError: false };
+  return withStaleness(
+    { output: `Path (${result.nodes.length} node(s)): ${result.nodes.join(" -> ")}`, isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a `testRelated` result as readable text. */
@@ -246,11 +543,26 @@ export function formatTestRelated(result: TestRelatedResult): InteractiveToolRes
   if (result.error !== undefined) {
     return { output: `test_related failed: ${result.error}`, isError: true };
   }
-  if (result.tests.length === 0) {
-    return { output: `No related tests found for ${result.file}.`, isError: false };
+  const lines: string[] = [];
+  // F-003 (flow 234 review, MAJOR) / AC2: branch on an incomplete
+  // testing-context refresh BEFORE the "no related tests" empty branch below.
+  // An agent asking which tests cover a file, over a subtree the walk could
+  // not read, must be told the answer may be missing tests — never handed a
+  // legitimate-looking empty result with no error and nothing to distinguish
+  // it from "this file genuinely has none".
+  if (result.context?.status === "incomplete") {
+    lines.push(
+      "INCOMPLETE: the testing context could not be fully refreshed — this answer may be missing tests:",
+      ...result.context.incompleteReasons.map((reason) => `  - ${reason}`),
+      "",
+    );
   }
-  const lines = result.tests.map((test) => `  - ${test}`);
-  return { output: [`Related tests for ${result.file} (${result.tests.length}):`, ...lines].join("\n"), isError: false };
+  if (result.tests.length === 0) {
+    lines.push(`No related tests found for ${result.file}.`);
+    return { output: lines.join("\n"), isError: false };
+  }
+  lines.push(`Related tests for ${result.file} (${result.tests.length}):`, ...result.tests.map((test) => `  - ${test}`));
+  return { output: lines.join("\n"), isError: false };
 }
 
 /** Render a `healthStatus` result as readable text. */
@@ -264,7 +576,10 @@ export function formatHealth(result: HealthStatusResult): InteractiveToolResult 
   const parts = [
     `gate: ${result.gate ?? "n/a"}`,
     `score: ${result.projectScore ?? "n/a"}`,
-    `regressions: ${result.regressions}`,
+    // `regressions` is the deprecated alias; print the two real counters
+    // alongside it rather than letting the alias stand in for both.
+    `declining scopes: ${result.decliningScopes ?? result.regressions}`,
+    `regressed scopes: ${result.regressedScopes ?? "n/a"}`,
     `last run: ${result.lastRunAt ?? "never"}`,
   ];
   return { output: `Code health — ${parts.join(", ")}.`, isError: false };
@@ -278,45 +593,134 @@ export function formatFlowStatus(result: FlowStatusResult): InteractiveToolResul
   if (result.flows.length === 0) {
     return { output: "No matching flows.", isError: false };
   }
-  const lines = result.flows.map((f) => `  - ${f.id} [${f.status}] ${f.title} (${f.tasksDone}/${f.tasksTotal} tasks)`);
+  const lines = result.flows.map(
+    (f) =>
+      `  - ${f.id}${f.slug !== undefined ? ` (${f.slug})` : ""} [${f.status}] ${f.title} ` +
+      `(${f.tasksDone}/${f.tasksTotal} tasks)`,
+  );
   return { output: [`Flows (${result.flows.length}):`, ...lines].join("\n"), isError: false };
 }
 
-/** Render a `graphSymbol` result as readable text. */
+/**
+ * Render a `graphSymbol` result as readable text.
+ *
+ * `definitions` is a PAGE, not the match set: `querySymbol` resolves through
+ * `resolveSymbolCandidates` (`src/gdgraph/symbol.ts`), whose `limit` defaults to
+ * 25 and which `querySymbol` never overrides. Measured on a synthetic graph of
+ * sixty symbols whose names all contain `handle`, `graph_symbol` returns
+ * twenty-five of them — and this header used to read "Symbol handle (25
+ * definition(s)):", a page size stated as a count of what the graph holds.
+ *
+ * The count is therefore labelled as what it is. It cannot be stated against
+ * the corpus here, because `GraphSymbolResult` carries no total and this
+ * renderer must never invent one; that missing field is a named residual of
+ * this task, not something the wording is pretending to cover.
+ */
 export function formatSymbol(result: GraphSymbolResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `graph_symbol failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `graph_symbol failed: ${result.error}`, isError: true }, result.staleness);
   }
   if (result.definitions.length === 0) {
-    return { output: `No symbol definition found for ${result.name}.`, isError: false };
+    return withStaleness(
+      { output: `No symbol definition found for ${result.name}.`, isError: false },
+      result.staleness,
+    );
   }
   const defs = result.definitions.map(
     (def) => `  - ${def.name} (${def.kind}) at ${def.path}:${def.startLine}`,
   );
-  const lines = [`Symbol ${result.name} (${result.definitions.length} definition(s)):`, ...defs];
+  const lines = [`Symbol ${result.name} (${result.definitions.length} definition(s) shown):`, ...defs];
   if (result.callers.length > 0) {
     lines.push(`Callers (${result.callers.length}):`, ...result.callers.map((c) => `  - ${c}`));
   }
   if (result.callees.length > 0) {
     lines.push(`Callees (${result.callees.length}):`, ...result.callees.map((c) => `  - ${c}`));
   }
-  return { output: lines.join("\n"), isError: false };
+  return withStaleness({ output: lines.join("\n"), isError: false }, result.staleness);
 }
 
 /** Render a `repomap` result as readable text. */
 export function formatRepomap(result: RepomapResult): InteractiveToolResult {
   if (result.error !== undefined) {
-    return { output: `repomap failed: ${result.error}`, isError: true };
+    return withStaleness({ output: `repomap failed: ${result.error}`, isError: true }, result.staleness);
   }
+  // AFC-12: a required entry that does not fit is `budget-exceeded`, NOT a
+  // success with a truncated required set. Before this branch existed the
+  // adapter dropped `overflow` entirely and an overflow rendered as the same
+  // "Repomap is empty (no ranked files)." text as a genuinely empty map.
+  if (result.overflow !== undefined) {
+    return withStaleness(
+      {
+        output: [
+          `repomap: ${result.overflow.code} — the required entry "${result.overflow.requiredId}" does not fit within the ${result.budget}-token budget.`,
+          "No entries were returned: a partial required set is never reported as a map.",
+          "Raise `budget`, or narrow `seed`, and retry.",
+        ].join("\n"),
+        isError: true,
+      },
+      result.staleness,
+    );
+  }
+  const omittedOptional = result.omittedOptional ?? [];
   if (result.files.length === 0) {
-    return { output: "Repomap is empty (no ranked files).", isError: false };
+    // A budget that fits nothing is a DISPLAY decision. "no ranked files" is a
+    // claim about the graph, and it was being made from an empty page:
+    // measured on a five-file graph at `budget: 15`, `computeRepomap` returned
+    // `entries: []`, `omitted: 5`, `partial: true` and named all five paths in
+    // `omittedOptional` — and this branch printed "Repomap is empty (no ranked
+    // files)." and returned before the loss lines below could name any of them.
+    // The genuinely-empty sentence is kept for the case that is genuinely
+    // empty; it is not deleted wholesale.
+    if (result.omitted > 0 || omittedOptional.length > 0) {
+      return withStaleness(
+        {
+          output: [
+            `Repomap shows 0 entries: ${result.omitted} ranked entr${result.omitted === 1 ? "y" : "ies"} ` +
+              `did not fit the ${result.budget}-token budget. That is a budget decision about this map, ` +
+              "not a claim that the graph holds no ranked files.",
+            ...(omittedOptional.length > 0
+              ? [
+                  "",
+                  `Omitted for budget (${omittedOptional.length}):`,
+                  ...omittedOptional.slice(0, 40).map((path) => `  - ${path}`),
+                  ...(omittedOptional.length > 40
+                    ? [`  - … +${omittedOptional.length - 40} more`]
+                    : []),
+                ]
+              : []),
+            "Raise `budget`, or narrow `seed`, and retry.",
+          ].join("\n"),
+          isError: false,
+        },
+        result.staleness,
+      );
+    }
+    return withStaleness({ output: "Repomap is empty (no ranked files).", isError: false }, result.staleness);
   }
-  const header = `Repomap (${result.files.length} file(s), ~${result.tokens} tokens, ${result.omitted} omitted):`;
+  const partial = result.partial === true;
+  const header =
+    `Repomap${partial ? " [PARTIAL]" : ""} (${result.files.length} file(s), ~${result.tokens} tokens, ` +
+    `${result.omitted} omitted):`;
   const lines = result.files.map((file) => {
     const symbols = file.symbols.length > 0 ? ` — ${file.symbols.join(", ")}` : "";
-    return `  - ${file.path} (score ${file.score.toFixed(4)})${symbols}`;
+    // `required` is why the entry survived; without it a protected seed and a
+    // high-scoring incidental file were indistinguishable.
+    const marker = file.required === true ? " [required]" : "";
+    return `  - ${file.path} (score ${file.score.toFixed(4)})${marker}${symbols}`;
   });
-  return { output: [header, ...lines].join("\n"), isError: false };
+  const lossLines =
+    omittedOptional.length > 0
+      ? [
+          "",
+          `PARTIAL — ${omittedOptional.length} optional entr${omittedOptional.length === 1 ? "y" : "ies"} omitted for budget:`,
+          ...omittedOptional.slice(0, 40).map((path) => `  - ${path}`),
+          ...(omittedOptional.length > 40 ? [`  - … +${omittedOptional.length - 40} more`] : []),
+        ]
+      : [];
+  return withStaleness(
+    { output: [header, ...lines, ...lossLines].join("\n"), isError: false },
+    result.staleness,
+  );
 }
 
 /** Render a `wikiAsk` result as readable text. */
@@ -324,7 +728,36 @@ export function formatWikiAsk(result: WikiAskResult): InteractiveToolResult {
   if (result.error !== undefined) {
     return { output: `wiki_ask failed: ${result.error}`, isError: true };
   }
-  return { output: result.answer.length > 0 ? result.answer : "(no answer)", isError: false };
+  const lines: string[] = [];
+  // AFC-M03: the retrieval outcome is a CODE, and it must be legible as one
+  // rather than only inferable from the prose. A stop-word-only query and a
+  // real answer used to be the same shape at this boundary.
+  if (result.status !== undefined && result.status !== "ok") {
+    lines.push(
+      `RETRIEVAL: ${result.status}${result.reason !== undefined ? ` — ${result.reason}` : ""}`,
+      "",
+    );
+  }
+  lines.push(result.answer.length > 0 ? result.answer : "(no answer)");
+  // AFC-06: the CLI marks a non-current citation `[HISTORICAL — not current]`.
+  // These fields used to be dropped by the adapter's five-field re-map, so the
+  // agent surface presented superseded guidance as current.
+  const historical = result.citations.filter((citation) => citation.historical === true);
+  if (historical.length > 0) {
+    lines.push(
+      "",
+      `NOT CURRENT — ${historical.length} of ${result.citations.length} citation(s) are historical and are not confirmed guidance:`,
+      ...historical.map((citation) => {
+        const state = citation.lifecycleState !== undefined ? ` [${citation.lifecycleState}]` : "";
+        const why =
+          citation.lifecycleReasons !== undefined && citation.lifecycleReasons.length > 0
+            ? ` — ${citation.lifecycleReasons.join("; ")}`
+            : "";
+        return `  - ${citation.sectionRef ?? citation.path}${state}${why}`;
+      }),
+    );
+  }
+  return { output: lines.join("\n"), isError: false };
 }
 
 /** Render a `wikiBacklinks` result as readable text. */
@@ -342,6 +775,331 @@ export function formatBacklinks(result: WikiBacklinksResult): InteractiveToolRes
   };
 }
 
+/**
+ * The line that separates what MATCHED from what is SHOWN, in `formatFind`'s
+ * output.
+ *
+ * THE FIFTH INSTANCE (flow 235, T18)
+ *
+ * `src/gdgraph/find.ts` and `src/mcp/tools.ts` were fixed so a page size can
+ * never be printed as a fact about the corpus — inside the PAYLOAD. This
+ * renderer prints prose BESIDE that payload and had never been audited. It
+ * branched on the page:
+ *
+ *   result.files.length === 0 && result.symbols.length === 0
+ *     -> "No candidates. …"
+ *
+ * which is a claim about the corpus made from a display decision. Reproduced
+ * on 2026-09-08 through this function, on a 100-file corpus with 40 genuine
+ * matches at `fileLimit: 0`:
+ *
+ *   code: ok
+ *   reason: 40 files and 0 symbols matched. Showing 0 of 40 files — …
+ *   No candidates. The code above says whether that is an answer or a failure.
+ *
+ * — the payload and the prose one line apart, contradicting each other. The
+ * same line fired for the `insufficient-evidence` corpus where fourteen files
+ * matched and all scored zero.
+ *
+ * The rule, identical to the payload's: what MATCHED is stated only above this
+ * boundary, from `code`/`reason`; what is SHOWN is stated only below it, and
+ * every count below it is labelled `shown`.
+ */
+export const FIND_PAGE_BOUNDARY =
+  "Below this line is the PAGE — candidates ranked and cut to the display limit. " +
+  "Only `code` and `reason` above say what matched:";
+
+/**
+ * Render a `graphFind` result — `keryx gdgraph find`, for an agent.
+ *
+ * The CODE comes first and on its own line, exactly as `formatRetrievalOutcome`
+ * (`../../lib/retrieval-codes.ts`) renders it for the command line, so the two
+ * surfaces cannot drift into different spellings of the same answer.
+ *
+ * `normalizeRetrievalCode` is applied HERE as well as in the adapter, and that
+ * is not belt-and-braces: this is the second transport hop (port result → the
+ * text a model reads), and `MetaprojectPort` is an interface — a stub, a
+ * recorded replay result, or a future non-reference implementation can put any
+ * string in `code`. A code outside the shared vocabulary collapses to
+ * `capability-unavailable` rather than being printed as if a caller could
+ * branch on it.
+ */
+export function formatFind(result: GraphFindResult): InteractiveToolResult {
+  const code = normalizeRetrievalCode(result.code);
+  const lines = [`code: ${code}`, `reason: ${result.reason}`];
+  if (result.error !== undefined) {
+    lines.push(`error: ${result.error}`);
+  }
+  if (result.queryTerms.length > 0) {
+    lines.push(`terms: ${result.queryTerms.join(", ")}`);
+  }
+  if (result.ubiquitousTerms.length > 0) {
+    // Named explicitly: these are the terms that made the ranking weak, and a
+    // reader who cannot see them will re-run the same useless query.
+    lines.push(
+      `corpus-wide terms (these narrow nothing): ${result.ubiquitousTerms.join(", ")}`,
+    );
+  }
+  if (result.nextActions.length > 0) {
+    lines.push("next:", ...result.nextActions.map((action) => `  - ${action}`));
+  }
+  // Everything from here down is the PAGE. Nothing above the boundary may be
+  // derived from `files`/`symbols`, and nothing below it may be read as a
+  // statement about the corpus — `find-display-truth.test.ts` pins the same
+  // split inside the payload, and `metaproject-display-truth.test.ts` pins it
+  // here by asserting the text ABOVE this line is byte-identical across page
+  // sizes for every retrieval code.
+  lines.push("", FIND_PAGE_BOUNDARY);
+  if (result.files.length > 0) {
+    lines.push(`Files shown (${result.files.length}):`);
+    for (const file of result.files) {
+      lines.push(
+        `  - ${file.path} (${RANKING_SCORE_LABEL} ${formatRankingScore(file.score)})`,
+        `      ${file.reason}`,
+      );
+    }
+  }
+  if (result.symbols.length > 0) {
+    if (result.files.length > 0) {
+      lines.push("");
+    }
+    lines.push(`Symbols shown (${result.symbols.length}):`);
+    for (const symbol of result.symbols) {
+      lines.push(
+        `  - ${symbol.name} (${symbol.kind}) at ${symbol.path}:${symbol.startLine} ` +
+          `(${RANKING_SCORE_LABEL} ${formatRankingScore(symbol.score)})`,
+        `      ${symbol.reason}`,
+      );
+    }
+  }
+  if (result.files.length === 0 && result.symbols.length === 0) {
+    lines.push(
+      "Nothing is shown on this page. An empty page is a ranking-and-limit decision; " +
+        "`reason` above is the only statement here about what matched.",
+    );
+  }
+  return withStaleness(
+    { output: lines.join("\n"), isError: retrievalStatus(code) === "error" },
+    result.staleness,
+  );
+}
+
+// --- the evidence field registry: the anti-drop guard --------------------------
+//
+// The measured defect this exists to stop: a previous lane measured this
+// boundary and found six unreported gaps, the largest dropping THIRTEEN fields
+// from a wiki answer, because the projection was a hand-written list of the
+// fields somebody remembered. So the projection here is not a hand-written
+// list. It is a registry that the compiler checks against the envelope type,
+// walked by a value-driven renderer.
+//
+// Two independent checks, both at compile time:
+//
+//   1. `satisfies readonly (keyof EvidenceItem)[]` — nothing in the registry
+//      may be a field the envelope does not have (catches a rename/removal).
+//   2. `EveryEvidenceItemFieldIsProjected` below — nothing in the envelope may
+//      be missing from the registry (catches an ADDITION, which is the
+//      direction that actually bit). A new field on `EvidenceItem` fails to
+//      compile here until it is listed.
+//
+// And nested values are never hand-listed at all: `renderValue` walks
+// `Object.entries` of whatever it is given, so a field added inside `scope`,
+// `provenance`, `lifecycle`, `freshness`, a caveat or a conflict ref is
+// rendered without any edit to this file.
+
+export const EVIDENCE_ITEM_FIELDS = [
+  "contractVersion",
+  "scope",
+  "pageRef",
+  "pageVersion",
+  "sectionId",
+  "sectionVersion",
+  "title",
+  "contentClass",
+  "excerpt",
+  "lifecycle",
+  "freshness",
+  "provenance",
+  "caveats",
+  "bindings",
+  "conflictRefs",
+] as const satisfies readonly (keyof EvidenceItem)[];
+
+export type EvidenceItemField = (typeof EVIDENCE_ITEM_FIELDS)[number];
+
+/** Fails to compile when `T` is anything but `never`. */
+type AssertNever<T extends never> = T;
+
+/**
+ * Exhaustiveness in the direction that matters: a field ADDED to `EvidenceItem`
+ * and not added to `EVIDENCE_ITEM_FIELDS` makes `Exclude<…>` a real key, which
+ * violates `T extends never` and fails the build. Exported so it is not pruned
+ * as an unused local.
+ */
+export type EveryEvidenceItemFieldIsProjected = AssertNever<
+  Exclude<keyof EvidenceItem, EvidenceItemField>
+>;
+
+/**
+ * Every key ANY `EvidencePackage` variant can carry.
+ *
+ * `keyof EvidencePackage` on the union directly yields only the keys COMMON to
+ * every variant, which silently loses `requiredRef` — it lives on the
+ * `budget-exceeded` branch alone, and that branch is the one a caller must not
+ * mistake for a short success. The naked type parameter is what makes the
+ * conditional distribute over the union; without it this guard would have been
+ * blind to exactly the field that matters most.
+ */
+type KeysOfUnion<T> = T extends unknown ? keyof T : never;
+export type EvidencePackageField = KeysOfUnion<EvidencePackage>;
+
+const EVIDENCE_PACKAGE_FIELDS = [
+  "status",
+  "reason",
+  "suggestion",
+  "partial",
+  "omittedOptional",
+  "refused",
+  "overflow",
+  "requiredRef",
+  "items",
+] as const satisfies readonly EvidencePackageField[];
+
+/** Same guard, for the envelope's own top level. */
+export type EveryEvidencePackageFieldIsProjected = AssertNever<
+  Exclude<EvidencePackageField, (typeof EVIDENCE_PACKAGE_FIELDS)[number]>
+>;
+
+/**
+ * Fields deliberately NOT projected, each with the reason.
+ *
+ * Empty on purpose: every field of the envelope reaches the model today. The
+ * record exists so that a future omission has to be a NAMED DECISION with a
+ * stated reason — the renderer prints the reason in place of the value, so an
+ * omission is visible to the reader rather than being an absence nobody can
+ * see. `wiki-evidence-projection.test.ts` asserts every field is either
+ * rendered or named here.
+ */
+export const EVIDENCE_FIELDS_NOT_PROJECTED: Readonly<
+  Partial<Record<EvidenceItemField | (typeof EVIDENCE_PACKAGE_FIELDS)[number], string>>
+> = {};
+
+/**
+ * Render any value as readable, indented text WITHOUT a per-field hand list.
+ *
+ * Objects are walked with `Object.entries`, so a nested field cannot be
+ * silently dropped: whatever the value carries at runtime is what is rendered.
+ * `undefined` renders as `(absent)` and `null` as `null` — the envelope uses
+ * `null` to mean "this was not claimed" (`confirmedBy`, `acceptanceBasisRef`,
+ * `snapshotVersion`), and collapsing that into a blank line would erase the
+ * distinction the envelope is built on.
+ */
+function renderValue(value: unknown, indent: string): string[] {
+  if (value === undefined) {
+    return [`${indent}(absent)`];
+  }
+  if (value === null) {
+    return [`${indent}null`];
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) {
+      return [`${indent}(none)`];
+    }
+    return value.flatMap((entry) => {
+      const [first = "", ...rest] = renderValue(entry, `${indent}  `);
+      return [`${indent}- ${first.trimStart()}`, ...rest];
+    });
+  }
+  if (typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) {
+      return [`${indent}(empty)`];
+    }
+    return entries.flatMap(([key, entryValue]) => {
+      const rendered = renderValue(entryValue, `${indent}  `);
+      const only = rendered.length === 1 ? rendered[0] : undefined;
+      return only !== undefined
+        ? [`${indent}${key}: ${only.trimStart()}`]
+        : [`${indent}${key}:`, ...rendered];
+    });
+  }
+  const text = String(value);
+  return text.includes("\n")
+    ? text.split("\n").map((line) => `${indent}${line}`)
+    : [`${indent}${text}`];
+}
+
+function renderField(name: string, value: unknown, indent: string): string[] {
+  const omissionReason = (
+    EVIDENCE_FIELDS_NOT_PROJECTED as Readonly<Record<string, string | undefined>>
+  )[name];
+  if (omissionReason !== undefined) {
+    // A named omission is PRINTED, not skipped. An absence a reader cannot see
+    // is the defect; an absence with a reason attached is a decision.
+    return [`${indent}${name}: (not projected — ${omissionReason})`];
+  }
+  const rendered = renderValue(value, `${indent}  `);
+  const only = rendered.length === 1 ? rendered[0] : undefined;
+  return only !== undefined
+    ? [`${indent}${name}: ${only.trimStart()}`]
+    : [`${indent}${name}:`, ...rendered];
+}
+
+/** Render one evidence item, every registry field, in registry order. */
+export function renderEvidenceItem(item: EvidenceItem, indent: string): string[] {
+  return EVIDENCE_ITEM_FIELDS.flatMap((field) => renderField(field, item[field], indent));
+}
+
+/**
+ * Render a `wikiEvidence` result.
+ *
+ * `budget-exceeded` is an ERROR result, not a shorter success: the whole point
+ * of the envelope's overflow branch is that a required item is delivered whole
+ * or not at all, and rendering it as an ordinary empty answer would reintroduce
+ * the "shortened rule" the contract forbids. `no-match` and
+ * `insufficient-evidence` are NOT errors — they are completed operations whose
+ * result is empty, which `retrievalStatus` already encodes.
+ */
+export function formatWikiEvidence(result: WikiEvidenceResult): InteractiveToolResult {
+  if (result.envelope === undefined) {
+    return {
+      output: `wiki_evidence failed: ${result.error ?? "no envelope was produced"}`,
+      isError: true,
+    };
+  }
+  const envelope = result.envelope;
+  const code = normalizeRetrievalCode(envelope.status);
+  const lines = [`Evidence for ${JSON.stringify(result.question)}`, `code: ${code}`];
+  const record = envelope as unknown as Record<string, unknown>;
+
+  for (const field of EVIDENCE_PACKAGE_FIELDS) {
+    if (field === "status") {
+      continue; // already printed above, as the code line
+    }
+    if (field === "items") {
+      const items = envelope.items;
+      lines.push(`items (${items.length}):`);
+      items.forEach((item, index) => {
+        lines.push(`  [${index + 1}] ${item.title}`);
+        lines.push(...renderEvidenceItem(item, "    "));
+      });
+      if (items.length === 0) {
+        lines.push("  (none)");
+      }
+      continue;
+    }
+    if (!(field in record)) {
+      // `requiredRef` exists only on the overflow variant. Absent by shape, not
+      // dropped by this renderer — and the test that walks a real overflow
+      // envelope proves it is rendered when it IS present.
+      continue;
+    }
+    lines.push(...renderField(field, record[field], ""));
+  }
+
+  return { output: lines.join("\n"), isError: retrievalStatus(code) === "error" };
+}
+
 const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -349,6 +1107,7 @@ const PATH_OUTPUT_SCHEMA: Record<string, unknown> = {
     to: { type: "string" },
     nodes: { type: "array", items: { type: "string" } },
     unresolved: { type: "boolean" },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["from", "to", "nodes"],
@@ -359,6 +1118,16 @@ const TEST_RELATED_OUTPUT_SCHEMA: Record<string, unknown> = {
   properties: {
     file: { type: "string" },
     tests: { type: "array", items: { type: "string" } },
+    // F-003 (flow 234 review, MAJOR): widened alongside TestRelatedResult —
+    // an incomplete testing-context refresh must be visible in the
+    // structured result, not just the rendered text.
+    context: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["complete", "incomplete"] },
+        incompleteReasons: { type: "array", items: { type: "string" } },
+      },
+    },
     error: { type: "string" },
   },
   required: ["file", "tests"],
@@ -373,6 +1142,8 @@ const HEALTH_OUTPUT_SCHEMA: Record<string, unknown> = {
     sources: { type: "array" },
     projectScore: { type: ["number", "null"] },
     regressions: { type: "integer" },
+    decliningScopes: { type: "integer" },
+    regressedScopes: { type: "integer" },
     error: { type: "string" },
   },
   required: ["enabled", "lastRunAt", "gate", "sources", "projectScore", "regressions"],
@@ -385,6 +1156,7 @@ const SYMBOL_OUTPUT_SCHEMA: Record<string, unknown> = {
     definitions: { type: "array" },
     callers: { type: "array", items: { type: "string" } },
     callees: { type: "array", items: { type: "string" } },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["name", "definitions", "callers", "callees"],
@@ -394,9 +1166,36 @@ const REPOMAP_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     budget: { type: "number" },
-    files: { type: "array" },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          score: { type: "number" },
+          symbols: { type: "array", items: { type: "string" } },
+          // AFC-12: protected from budget/rank eviction, not merely top-ranked.
+          required: { type: "boolean" },
+        },
+        required: ["path", "score", "symbols"],
+      },
+    },
     tokens: { type: "integer" },
     omitted: { type: "integer" },
+    seed: { type: "array", items: { type: "string" } },
+    // AFC-12 loss markers — named loss, the partial flag, and the mandatory
+    // overflow that must never render as an ordinary success.
+    omittedOptional: { type: "array", items: { type: "string" } },
+    partial: { type: "boolean" },
+    overflow: {
+      type: "object",
+      properties: {
+        code: { type: "string", enum: ["context_overflow"] },
+        requiredId: { type: "string" },
+      },
+      required: ["code", "requiredId"],
+    },
+    staleness: STALENESS_OUTPUT_SCHEMA,
     error: { type: "string" },
   },
   required: ["budget", "files", "tokens", "omitted"],
@@ -406,11 +1205,112 @@ const WIKI_ASK_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
     question: { type: "string" },
-    citations: { type: "array" },
+    // AFC-M03: the retrieval outcome as a code, not a shape to infer.
+    status: { type: "string", enum: ["ok", "no-match", "insufficient-evidence"] },
+    reason: { type: "string" },
+    citations: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          title: { type: "string" },
+          excerpt: { type: "string" },
+          score: { type: "number" },
+          source: { type: "string", enum: ["wiki", "memory"] },
+          matched: { type: "array", items: { type: "string" } },
+          sectionId: { type: "string" },
+          sectionRef: { type: "string" },
+          sectionTitle: { type: "string" },
+          sectionStability: { type: "string", enum: ["stable", "version-bound"] },
+          contentClass: { type: "string", enum: ["substantive", "scaffold", "reference"] },
+          domain: { type: "string" },
+          startLine: { type: "integer" },
+          endLine: { type: "integer" },
+          // AFC-06: the "not current" signal the CLI renders.
+          historical: { type: "boolean" },
+          lifecycleState: { type: "string" },
+          lifecycleReasons: { type: "array", items: { type: "string" } },
+        },
+        required: ["path", "title", "excerpt", "score", "source"],
+      },
+    },
     answer: { type: "string" },
     error: { type: "string" },
   },
   required: ["question", "citations", "answer"],
+};
+
+const GRAPH_FIND_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    query: { type: "string" },
+    // The closed AC5 vocabulary, not an open string: a caller branches on this.
+    code: { type: "string" },
+    reason: { type: "string" },
+    nextActions: { type: "array", items: { type: "string" }, maxItems: 3 },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          path: { type: "string" },
+          score: { type: "number" },
+          matched: { type: "array", items: { type: "string" } },
+          discriminating: { type: "array", items: { type: "string" } },
+          dependents: { type: "integer" },
+          reason: { type: "string" },
+        },
+        required: ["path", "score", "matched", "discriminating", "reason"],
+      },
+    },
+    symbols: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          id: { type: "string" },
+          name: { type: "string" },
+          kind: { type: "string" },
+          path: { type: "string" },
+          startLine: { type: "integer" },
+          score: { type: "number" },
+          matched: { type: "array", items: { type: "string" } },
+          discriminating: { type: "array", items: { type: "string" } },
+          reason: { type: "string" },
+        },
+        required: ["id", "name", "path", "score"],
+      },
+    },
+    queryTerms: { type: "array", items: { type: "string" } },
+    ubiquitousTerms: { type: "array", items: { type: "string" } },
+    staleness: STALENESS_OUTPUT_SCHEMA,
+    error: { type: "string" },
+  },
+  required: ["query", "code", "reason", "nextActions", "files", "symbols"],
+};
+
+// Deliberately NOT an exhaustive re-listing of the evidence envelope.
+//
+// `wiki-evidence.schema.json` is the contract for the envelope's shape, and a
+// second hand-maintained copy of it here is precisely the drift that dropped
+// thirteen fields at this boundary before. `additionalProperties: true` says
+// "the envelope is carried whole"; the anti-drop guarantee is enforced by
+// `EVIDENCE_ITEM_FIELDS` at compile time and by `wiki-evidence-projection.test.ts`
+// at runtime, not by re-typing field names into a JSON Schema literal.
+const WIKI_EVIDENCE_OUTPUT_SCHEMA: Record<string, unknown> = {
+  type: "object",
+  properties: {
+    question: { type: "string" },
+    envelope: {
+      type: "object",
+      properties: { status: { type: "string" } },
+      required: ["status"],
+      additionalProperties: true,
+    },
+    error: { type: "string" },
+  },
+  required: ["question"],
 };
 
 const WIKI_BACKLINKS_OUTPUT_SCHEMA: Record<string, unknown> = {
@@ -460,7 +1360,10 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdctx",
     description:
-      "Search the project's code/text (compact ripgrep via `keryx ctx rg`). Input: { pattern: string, path?: string } (path relative to the project root).",
+      "Search the project's code/text with ripgrep. Input: { pattern: string, path?: string } (path relative " +
+      "to the project root). A completed search with no hits comes back as a SUCCESS whose output says so — " +
+      "an `isError` result means the search could not run (bad regex, ripgrep missing, path outside the " +
+      "project), never that there was nothing to find.",
     inputSchema: {
       type: "object",
       properties: { pattern: { type: "string" }, path: { type: "string" } },
@@ -486,10 +1389,18 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Show the blast radius (dependents) of a file via the code graph (`keryx gdgraph affected`). Input: { file: string } relative to the project root.",
+      "Show the blast radius of a file via the code graph (`keryx gdgraph affected`): its dependents AND " +
+      "its dependencies. Input: { file: string } relative to the project root, plus the same knobs the CLI " +
+      "takes — { depth?: integer } to widen the transitive closure and { ranked?: boolean } to turn off the " +
+      "hop/fanIn ranking. The result carries the graph's freshness: read `staleness` before quoting it, and " +
+      "treat `unknown` as \"could not be determined\", never as fresh.",
     inputSchema: {
       type: "object",
-      properties: { file: { type: "string" } },
+      properties: {
+        file: { type: "string" },
+        depth: { type: "integer", minimum: 1 },
+        ranked: { type: "boolean" },
+      },
       required: ["file"],
       additionalProperties: false,
     },
@@ -499,7 +1410,17 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in file) {
         return file.error;
       }
-      return formatAffected(await port.graphAffected({ target: file.value }));
+      // `depth`/`ranked` have always been on the port and on the CLI; this
+      // dispatch used to drop them, so a caller could never widen the closure.
+      const depth = typeof input.depth === "number" && input.depth > 0 ? input.depth : undefined;
+      const ranked = typeof input.ranked === "boolean" ? input.ranked : undefined;
+      return formatAffected(
+        await port.graphAffected({
+          target: file.value,
+          ...(depth !== undefined ? { depth } : {}),
+          ...(ranked !== undefined ? { ranked } : {}),
+        }),
+      );
     },
   },
   {
@@ -528,10 +1449,20 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "memory",
     description:
-      "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: { query: string }.",
+      "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: " +
+      "{ query: string, module?: string, class?: \"semantic\"|\"episodic\"|\"procedural\", limit?: integer } — " +
+      "the same narrowing the CLI offers. Automatic recall is always bounded to accepted, current entries. " +
+      "An empty result is NOT proof the knowledge never existed: it carries the deletion trail's verdict — " +
+      "recorded-removed (with when, at whose request and on what basis) / no-removal-recorded / trail-absent / " +
+      "trail-unreadable. Read that tag before concluding anything from zero hits.",
     inputSchema: {
       type: "object",
-      properties: { query: { type: "string" } },
+      properties: {
+        query: { type: "string" },
+        module: { type: "string" },
+        class: { type: "string", enum: ["semantic", "episodic", "procedural"] },
+        limit: { type: "integer", minimum: 1 },
+      },
       required: ["query"],
       additionalProperties: false,
     },
@@ -541,7 +1472,21 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in query) {
         return query.error;
       }
-      return formatMemory(await port.memorySearch({ query: query.value }));
+      // The port has accepted module/class/limit since flow 037; only this
+      // dispatch's schema withheld them, so no agent could narrow a search.
+      // `status` is deliberately NOT exposed: the adapter admits `accepted`
+      // only, so a knob with one legal value would be a false affordance.
+      const module = typeof input.module === "string" && input.module.length > 0 ? input.module : undefined;
+      const cls = typeof input.class === "string" && input.class.length > 0 ? input.class : undefined;
+      const limit = typeof input.limit === "number" ? input.limit : undefined;
+      return formatMemory(
+        await port.memorySearch({
+          query: query.value,
+          ...(module !== undefined ? { module } : {}),
+          ...(cls !== undefined ? { class: cls } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        }),
+      );
     },
   },
   {
@@ -709,10 +1654,18 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "gdgraph",
     description:
-      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). Input: { budget?: number } token budget.",
+      "Produce a ranked, token-budgeted repo map (top files + symbols by PageRank, `keryx gdgraph repomap`). " +
+      "Input: { budget?: integer, seed?: string[] }. `seed` is what makes this useful for a change intent: " +
+      "a seeded file and its direct consumers/tests become REQUIRED and are protected from rank eviction, " +
+      "and each entry says whether it was `required`. If the required set does not fit, the result is a " +
+      "`context_overflow` refusal naming the entry that did not fit — not a shorter map. Optional entries " +
+      "dropped for budget are named in `omittedOptional` with `partial: true`.",
     inputSchema: {
       type: "object",
-      properties: { budget: { type: "integer", minimum: 1 } },
+      properties: {
+        budget: { type: "integer", minimum: 1 },
+        seed: { type: "array", items: { type: "string" } },
+      },
       additionalProperties: false,
     },
     outputSchema: REPOMAP_OUTPUT_SCHEMA,
@@ -721,7 +1674,15 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return { output: "repomap is not available in this session.", isError: true };
       }
       const budget = typeof input.budget === "number" && input.budget > 0 ? input.budget : undefined;
-      return formatRepomap(await port.repomap(budget !== undefined ? { budget } : {}));
+      const seed = Array.isArray(input.seed)
+        ? input.seed.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+        : undefined;
+      return formatRepomap(
+        await port.repomap({
+          ...(budget !== undefined ? { budget } : {}),
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+        }),
+      );
     },
   },
   {
@@ -729,10 +1690,14 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     risk: "read",
     module: "wiki",
     description:
-      "Ask a question answered deterministically from the project's own wiki + memory with citations (`keryx wiki ask`). Input: { question: string }.",
+      "Ask a question answered deterministically from the project's own wiki + memory with citations " +
+      "(`keryx wiki ask`). Input: { question: string, k?: integer } — `k` caps the citations, exactly as " +
+      "`--k` does. Read `status` before the prose: `no-match` and `insufficient-evidence` mean the answer " +
+      "is NOT evidence for the question. A citation marked `historical` is superseded/expired guidance and " +
+      "is not a current constraint.",
     inputSchema: {
       type: "object",
-      properties: { question: { type: "string" } },
+      properties: { question: { type: "string" }, k: { type: "integer", minimum: 1 } },
       required: ["question"],
       additionalProperties: false,
     },
@@ -745,7 +1710,113 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
       if ("error" in question) {
         return question.error;
       }
-      return formatWikiAsk(await port.wikiAsk({ question: question.value }));
+      const k = typeof input.k === "number" && input.k > 0 ? input.k : undefined;
+      return formatWikiAsk(
+        await port.wikiAsk({ question: question.value, ...(k !== undefined ? { k } : {}) }),
+      );
+    },
+  },
+  {
+    name: "graph_find",
+    risk: "read",
+    module: "gdgraph",
+    description:
+      "Find the files and symbols a plain-language question is about, over the code graph " +
+      "(`keryx gdgraph find`). Input: { query: string, fileLimit?: integer, symbolLimit?: integer }. " +
+      "This is the tool to reach for when you do NOT yet know a path — graph_affected and " +
+      "read_file both need one. READ `code` BEFORE the candidates: `ok` means the ranking is " +
+      "evidence; `no-match` means the search ran over the index and nothing contains your terms; " +
+      "`insufficient-evidence` means every candidate matched only on terms that appear across " +
+      "this whole corpus, so the list below is NOT evidence for your question; " +
+      "`index-incomplete` means the graph could not answer at all and says nothing about whether " +
+      "the code exists. Each candidate carries `matched` (which terms hit) and `discriminating` " +
+      "(which of those actually narrow the corpus) — a candidate with an empty `discriminating` " +
+      "matched only noise. Fan-in is a tie-break, never evidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        fileLimit: { type: "integer", minimum: 1 },
+        symbolLimit: { type: "integer", minimum: 1 },
+      },
+      required: ["query"],
+      additionalProperties: false,
+    },
+    outputSchema: GRAPH_FIND_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.graphFind === undefined) {
+        return { output: "graph_find is not available in this session.", isError: true };
+      }
+      const query = requireString(input, "query", "graph_find");
+      if ("error" in query) {
+        return query.error;
+      }
+      const fileLimit =
+        typeof input.fileLimit === "number" && input.fileLimit > 0 ? input.fileLimit : undefined;
+      const symbolLimit =
+        typeof input.symbolLimit === "number" && input.symbolLimit > 0
+          ? input.symbolLimit
+          : undefined;
+      return formatFind(
+        await port.graphFind({
+          query: query.value,
+          ...(fileLimit !== undefined ? { fileLimit } : {}),
+          ...(symbolLimit !== undefined ? { symbolLimit } : {}),
+        }),
+      );
+    },
+  },
+  {
+    name: "wiki_evidence",
+    risk: "read",
+    module: "wiki",
+    description:
+      "Ask the wiki for an EVIDENCE ENVELOPE rather than prose (`createGdWikiService().evidence`). " +
+      "Input: { question: string, k?: integer, budgetTokens?: integer, maxItems?: integer }. " +
+      "Use this instead of wiki_ask when you are about to ACT on what the wiki says: each item " +
+      "carries its section identity and version, the excerpt whole (never shortened), its " +
+      "lifecycle, its freshness with the reason it is not `fresh`, its provenance, and — the " +
+      "load-bearing parts — its mandatory `caveats` and its `conflictRefs`. A rule and its caveat " +
+      "are one indivisible unit: if a declared caveat cannot be resolved the item is REFUSED " +
+      "(listed under `refused`) rather than returned unqualified. Two disagreeing sections come " +
+      "back as two items pointing at each other, so a contested claim can never read as settled. " +
+      "READ `code` first: `budget-exceeded` means a REQUIRED item did not fit and NOTHING was " +
+      "returned — raise `budgetTokens` or narrow the question; it is never a shorter answer.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        question: { type: "string" },
+        k: { type: "integer", minimum: 1 },
+        budgetTokens: { type: "integer", minimum: 1 },
+        maxItems: { type: "integer", minimum: 1 },
+      },
+      required: ["question"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_EVIDENCE_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiEvidence === undefined) {
+        return { output: "wiki_evidence is not available in this session.", isError: true };
+      }
+      const question = requireString(input, "question", "wiki_evidence");
+      if ("error" in question) {
+        return question.error;
+      }
+      const k = typeof input.k === "number" && input.k > 0 ? input.k : undefined;
+      const budgetTokens =
+        typeof input.budgetTokens === "number" && input.budgetTokens > 0
+          ? input.budgetTokens
+          : undefined;
+      const maxItems =
+        typeof input.maxItems === "number" && input.maxItems > 0 ? input.maxItems : undefined;
+      return formatWikiEvidence(
+        await port.wikiEvidence({
+          question: question.value,
+          ...(k !== undefined ? { k } : {}),
+          ...(budgetTokens !== undefined ? { budgetTokens } : {}),
+          ...(maxItems !== undefined ? { maxItems } : {}),
+        }),
+      );
     },
   },
   {
@@ -838,6 +1909,48 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
         return name.error;
       }
       return formatSkillLoad(await port.loadSkill({ name: name.value }));
+    },
+  },
+  // --- flow 242 (forgetting) lane C: additive OPTIONAL read operation --------
+  // Same OPTIONAL contract as every batch above: an absent method reports
+  // "not available", never a throw and never an invented clean result. Before
+  // this, `keryx wiki sections resolve` — the CLI's ONLY correct answer to
+  // "was this deleted or did it never exist" — had no agent or MCP
+  // equivalent at all: AC5 of flow 242 requires the same three answers
+  // (never existed / existed and was removed / cannot say) on the CLI, the
+  // agent tool boundary, and MCP, and this was the missing surface.
+  {
+    name: "wiki_resolve",
+    risk: "read",
+    module: "wiki",
+    description:
+      "Resolve a wiki page/section identity (`keryx:page/<id>` or `keryx:page/<id>#<sectionId>`, " +
+      "as printed by wiki_ask/wiki_evidence citations or `keryx wiki sections list`) to what it " +
+      "actually is right now — NOT what merely occupies its address. Input: { ref: string }. " +
+      "Answers, distinctly: found/page-found (live), tombstoned (removed, with when and why), " +
+      "pending-tombstone (removed but `keryx wiki sections sync` has not run yet), reoccupied " +
+      "(a DIFFERENT document now sits at this address — never returned as an ordinary found), " +
+      "stale-locator (a version-bound locator whose page body has since changed), " +
+      "registry-unreadable / store-unreadable (the removal history or the wiki store itself could " +
+      "not be read — \"live\", \"removed\" and \"never existed\" cannot be told apart), or unknown " +
+      "(nothing records this identity at all). Use this before treating read_wiki returning empty " +
+      "as proof a page never existed — it may instead be gone and tombstoned.",
+    inputSchema: {
+      type: "object",
+      properties: { ref: { type: "string" } },
+      required: ["ref"],
+      additionalProperties: false,
+    },
+    outputSchema: WIKI_RESOLVE_OUTPUT_SCHEMA,
+    invoke: async (port, input) => {
+      if (port.wikiResolve === undefined) {
+        return { output: "wiki_resolve is not available in this session.", isError: true };
+      }
+      const ref = requireString(input, "ref", "wiki_resolve");
+      if ("error" in ref) {
+        return ref.error;
+      }
+      return formatWikiResolve(await port.wikiResolve({ ref: ref.value }));
     },
   },
 ];

@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T37",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Closed T35 F-001 (blocker: isSecurityEnabled dereferenced a parsed metaproject manifest without an object guard, so a null manifest threw and the flow gate silently disappeared as `skipped`), F-003 (major residual: a non-object security.config.json downgraded enforcement to advisory with no operator-visible signal even with a recorded prior strict mode), and F-004 (minor: the coverage-consistency fold was not shared between runGate/runReport and not exhaustive). All three are now blocking, posture-unavailable outcomes reusing the existing constant, leak-safe reasons -- never a disappearance or a silent downgrade. Reviewed all 9 class-scope sites F-001 named; fixed the one on the security posture path (guard.ts) inside this task's file ownership and left the other 8 documented (all already fail closed). Corrected the guard.ts header's stale advisory-never-blocks claim; left src/flow/service.ts's stale skipped/raw-text catch arms unfixed because that file is explicitly read-only in this dispatch's ownership.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS; a security gate that cannot establish its posture blocks rather than disappearing; advisory retains truthful diagnostics; partial acceptance is not full phase completion.",
+      "status": "met",
+      "evidence": "T37 D1/D1b (manifest) and T37 D2/D2b (config) in guard.test.ts assert guardOutput blocks and securityFlowGate returns a blocking fail entry, never null/non-blocking, for every non-object manifest and config shape tested. T35-probe-residual.ts D3 no longer throws (isSecurityEnabledThrew/guardOutputThrew now null); D1's 'the write is still ALLOWED' checks now correctly read ok:false (write is blocked) for both a fresh workspace and one with a recorded prior mode:'ci'. Raw .metaproject/data/gdctx/raw/2026-09-06T14-47-23-969Z_run.log."
+    },
+    {
+      "criterion": "Policy fold (policies.md): INCOMPLETE when a required check is missing, skipped, unparsed or unfinished; strict CI accepts only PASS; reasons and details are constant and leak-safe, with no raw error text, path or source bytes.",
+      "status": "met",
+      "evidence": "Every new branch reuses the existing POSTURE_UNAVAILABLE_REASON / INCOMPLETE_COVERAGE_REASON constants, no new string literals or interpolation. T37 D1 and T37 D2 assert the reason/detail contain neither the workspace root nor the sentinel/planted secret. eslint and typecheck clean on all changed files: .metaproject/data/gdctx/raw/2026-09-06T14-47-50-267Z_run.log, .metaproject/data/gdctx/raw/2026-09-06T14-47-52-690Z_run.log."
+    },
+    {
+      "criterion": "Each defect is closed by a regression that fails before and passes after: a manifest that parses but is not an object, a config that parses but is not an object with a recorded prior strict mode, and a stored report whose coverage status is neither complete nor incomplete. No previously passing case regresses.",
+      "status": "met",
+      "evidence": "guard.test.ts RED 25 pass/6 fail (.metaproject/data/gdctx/raw/2026-09-06T14-44-38-898Z_run.log) -> GREEN 31 pass/0 fail (.metaproject/data/gdctx/raw/2026-09-06T14-47-00-759Z_run.log). Required 4-file selection 59/0/271 -> 66/0/329 (.metaproject/data/gdctx/raw/2026-09-06T14-42-22-751Z_run.log, .metaproject/data/gdctx/raw/2026-09-06T14-47-06-790Z_run.log). Wider sweep 75 pass/0 fail (.metaproject/data/gdctx/raw/2026-09-06T14-47-22-236Z_run.log). Both reviewer probes ran before and after with raw logs cited in T37-implementation.md."
+    }
+  ],
+  "artifacts": [
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T37-spec.md", "kind": "plan", "exists": true, "summary": "Spec written before coding: defect-by-defect design decisions, deliberately-not-the-literal-reviewer-snippet rationale for F-001, and the verification plan." },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T37-implementation.md", "kind": "implementation-report", "exists": true, "summary": "Full per-defect evidence, the 9-site F-001 class-scope enumeration and disposition, the justified T33 test-expectation change, verification tables (before/after, raw log paths), acceptance mapping, concerns, and routing audit." },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-review.md", "kind": "review", "exists": true, "summary": "Source review: F-001 (blocker), F-003 (major residual), F-004 (minor) read in full, plus the judgement-call ruling that T37 must close before phase acceptance." },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-residual.ts", "kind": "custom", "exists": true, "summary": "Reviewer probe, read and run (not edited): D1 (config residual, with/without prior mode), D2 (posture-unavailable via mocked config break), D3 (manifest=null sibling-reader trigger)." },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T35-probe-flowfold.ts", "kind": "custom", "exists": true, "summary": "Reviewer probe, read and run (not edited): flow-completion gate-status fold, real securityFlowGate wiring." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-47-23-969Z_run.log", "kind": "custom", "exists": true, "summary": "T35-probe-residual.ts AFTER the fix: exit 0, 2 CHECK(S) FAILED (both are the D1 write-still-allowed inversion confirming the fix)." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-47-26-350Z_run.log", "kind": "custom", "exists": true, "summary": "T35-probe-flowfold.ts AFTER the fix: exit 0, 0 failures, ALL CASES OK (unchanged)." },
+    { "path": ".metaproject/data/gdctx/raw/2026-09-06T14-47-00-759Z_run.log", "kind": "custom", "exists": true, "summary": "guard.test.ts GREEN after implementation: 31 pass / 0 fail, 195 expect()." }
+  ],
+  "changed_files": [
+    { "path": "src/security/guard.ts", "change": "Guarded the metaproject manifest dereference (resolveManifestSecurityState), distinguishing absent-manifest (unchanged, non-blocking) from present-but-unreadable (new, blocking posture-unavailable). guardOutput and securityFlowGate consume it and also check config.configUnreadable through their existing posture-unavailable branches. Amended the stale header comment (advisory never blocks on a KNOWN posture)." },
+    { "path": "src/security/guard.test.ts", "change": "Added 7 regressions (T37 D1, D1b, D2, D2b, D2c, D3, D3b) covering the manifest, config, and coverage-fold defects. Updated one committed T33 test's expectation (findings.length>0 -> allowed:false) with an inline justification, since the corrected semantics block before analysis runs." },
+    { "path": "src/security/config.ts", "change": "loadSecurityConfig now distinguishes an absent config file (defaults, unchanged) from a present-but-unusable one (does not parse, or parses to a non-object) -- the latter now returns defaults with mode forced to enforced and configUnreadable:true, using a module-local Symbol sentinel to tell a parse failure apart from a legitimate {}." },
+    { "path": "src/security/service.ts", "change": "Extracted a shared, exhaustive hasIncompleteCoverage(coverage) predicate used by both runGate's pass arm and (newly) runReport, so the two surfaces agree about the same stored artifact; absent/null coverage still reads as complete." },
+    { "path": "src/security/types.ts", "change": "Additive configUnreadable?: boolean on SecurityConfig." }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_added": 7,
+    "tests_before": 59,
+    "tests_after": 66
+  },
+  "timestamp_utc": "2026-09-06T14:55:00Z"
+}

@@ -37,6 +37,7 @@
 import type { ShellDeps, ShellIO } from "../commands/shell-types";
 import type { DetectedProvider } from "../commands/select";
 import { commandsForMode, filterCommands } from "../commands/agent-commands";
+import { loadSessionLimits } from "../commands/model-limits";
 import { saveShellConfig } from "../lib/shell-config";
 import { summarizeSubmittedLine } from "../lib/md-blocks";
 import { latestSession } from "../session";
@@ -373,7 +374,7 @@ export async function mountChatShell(
   const sbModel = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(label())}` });
   sidebar.add(sbModel);
   // Balance under Model: live for the active provider, fetched on mount/click.
-  mountBalancePanel(sidebar, otui, r, {
+  const balancePanel = mountBalancePanel(sidebar, otui, r, {
     provider: selection.provider,
   });
   sidebar.add(new otui.TextRenderable(r, { id: "sb-ctx-k", content: otui.t`${otui.dim("Context")}`, marginTop: 1 }));
@@ -402,6 +403,7 @@ export async function mountChatShell(
     chrome.setTitle(`keryx · chat · ${label()}`);
     chrome.setStatus(label());
     sbModel.content = otui.t`${otui.dim(label())}`;
+    void balancePanel.setProvider(selection.provider);
   };
 
   const bridge = createChatBridge({
@@ -526,11 +528,17 @@ export async function mountChatShell(
           return;
         }
         const summary = cwd !== undefined ? latestSession(cwd) : undefined;
+        const limits = await loadSessionLimits({
+          provider: selection.provider,
+          model: selection.model,
+          ...(selection.baseUrl !== undefined ? { baseUrl: selection.baseUrl } : {}),
+        });
         const snapshot = buildSessionInfoSnapshot({
           summary,
           selection,
           version: packageJson.version,
           estimateTokens: estimateContextTokens(seen),
+          limits,
           sessionText: seen.map((message) => message.content).join("\n"),
           workspaces,
           flows,

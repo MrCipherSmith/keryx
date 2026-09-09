@@ -28,7 +28,7 @@
 import { mkdtempSync, rmSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import { goldTestImpact, type CoverageMap } from "../../src/metrics/gold";
 import { buildTestImpactManifest, type TestImpactScoreInput } from "../../src/metrics/oracle-runner";
 
@@ -59,13 +59,7 @@ const repoRoot = new URL("../../", import.meta.url).pathname;
 type SpawnResult = { stdout: string; stderr: string; ok: boolean };
 
 function run(cmd: string[], cwd?: string): SpawnResult {
-  const result = Bun.spawnSync(cmd, {
-    // Spread rather than `cwd` directly: under exactOptionalPropertyTypes an
-    // explicit `undefined` is not the same as an absent key.
-    ...(cwd === undefined ? {} : { cwd }),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const result = Bun.spawnSync(cmd, { ...(cwd !== undefined ? { cwd } : {}), stdout: "pipe", stderr: "pipe" });
   return {
     stdout: result.stdout.toString("utf8"),
     stderr: result.stderr.toString("utf8"),
@@ -129,6 +123,52 @@ function parseRelated(stdout: string): string[] {
   return [...new Set(ids)].sort();
 }
 
+/** Injectable side effects for {@link finalizeTestingOracleRun} — real I/O in `main`, spies in tests. */
+export type TestingOracleEmissionIO = {
+  readonly writeCoverageFixture: (contents: string) => Promise<void>;
+  readonly writeRelatedFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the testing/TIA-oracle run, GATED on validation (same defect
+ * shape fixed across every scripts/benchmark/run-*-oracle.ts producer: previously both
+ * captured fixtures were written to disk and the derived manifest printed to stdout FIRST,
+ * and only afterward validated). Choice recorded (same as run-ablation.ts's
+ * finalizeAblationRun): on an invalid run, previously-written GOOD fixture files are left
+ * ON DISK, UNTOUCHED.
+ */
+export async function finalizeTestingOracleRun(
+  coverageFixture: unknown,
+  relatedFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: TestingOracleEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    await io.writeCoverageFixture(`${JSON.stringify(coverageFixture, null, 2)}\n`);
+    await io.writeRelatedFixture(`${JSON.stringify(relatedFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`# layer=testing manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine("wrote fixtures/benchmark/keryx/{coverage-map,test-related}.json");
+    io.logLine("NOTE: revert the analyze side-effect with `git checkout -- .metaproject/data`");
+    return 0;
+  }
+  io.logLine(
+    "invalid manifest — nothing written to disk and nothing printed to stdout; " +
+      "fixtures/benchmark/keryx/{coverage-map,test-related}.json left unchanged " +
+      "(previously-written valid fixtures, if any, are preserved as-is)",
+  );
+  io.logLine("NOTE: revert the analyze side-effect with `git checkout -- .metaproject/data`");
+  return 1;
+}
+
 async function main(): Promise<void> {
   const cli = keryxCli();
 
@@ -146,7 +186,9 @@ async function main(): Promise<void> {
     system.set(target, parseRelated(related.stdout));
   }
 
-  // Persist both fixtures (same shapes the CLI's loaders read).
+  // Build both fixtures (same shapes the CLI's loaders read) — held in memory, not yet
+  // written; {@link finalizeTestingOracleRun} decides whether they reach disk, based on
+  // the manifest's own validation below.
   const coverageFixture = {
     note:
       "REAL per-test coverage map for a bounded keryx dogfood slice. Produced by " +
@@ -157,7 +199,6 @@ async function main(): Promise<void> {
     generated_by: "bun scripts/benchmark/run-testing-oracle.ts",
     coverageMap,
   };
-  await Bun.write(coverageMapUrl, `${JSON.stringify(coverageFixture, null, 2)}\n`);
 
   const relatedFixture = {
     note:
@@ -167,7 +208,6 @@ async function main(): Promise<void> {
     generated_by: "keryx test analyze && keryx test related <target>",
     targets: TARGET_FILES.map((target) => ({ target, affected: system.get(target) ?? [] })),
   };
-  await Bun.write(testRelatedUrl, `${JSON.stringify(relatedFixture, null, 2)}\n`);
 
   // Score: system test-impact set vs coverage-derived gold impacted-test set per target.
   const coverage: CoverageMap = coverageMap;
@@ -178,8 +218,6 @@ async function main(): Promise<void> {
   }));
 
   const manifest = buildTestImpactManifest(inputs, { ladder: "metastore" });
-  console.log("# layer: testing (test-impact analysis)");
-  console.log(JSON.stringify(manifest, null, 2));
   console.error("# oracle IR result — layer=testing (test-impact analysis)");
   for (const runRecord of manifest.runs) {
     const o = runRecord.oracle;
@@ -188,11 +226,20 @@ async function main(): Promise<void> {
     );
   }
   const result = validatePairedBenchmark(manifest);
-  console.error(`# layer=testing manifest valid: ${result.valid ? "yes" : "no"}`);
-  for (const err of result.errors) console.error(`- ${err}`);
-  console.error("wrote fixtures/benchmark/keryx/{coverage-map,test-related}.json");
-  console.error("NOTE: revert the analyze side-effect with `git checkout -- .metaproject/data`");
-  if (!result.valid) process.exit(1);
+  const code = await finalizeTestingOracleRun(coverageFixture, relatedFixture, manifest, result, {
+    writeCoverageFixture: async (contents) => {
+      await Bun.write(coverageMapUrl, contents);
+    },
+    writeRelatedFixture: async (contents) => {
+      await Bun.write(testRelatedUrl, contents);
+    },
+    printManifest: (contents) => {
+      console.log("# layer: testing (test-impact analysis)");
+      console.log(contents);
+    },
+    logLine: (line) => console.error(line),
+  });
+  if (code !== 0) process.exit(code);
 }
 
 if (import.meta.main) {

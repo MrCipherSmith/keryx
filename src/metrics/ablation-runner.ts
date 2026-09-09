@@ -115,10 +115,26 @@ function tokenCost(samples: readonly AblationSeedSample[], source: string): Benc
   return { tokens: { raw: measured(median(known) as number, source, note) } };
 }
 
-/** Task-success rate across a variant's seed samples, with a 95% Wilson CI. */
-function successRate(samples: readonly AblationSeedSample[]): RateWithCI {
+/** Task-success rate across a variant's seed samples, with a 95% Wilson CI. With no
+ * samples this is an `UnmeasuredRate` (null rate, null interval), never a 0% claim. */
+function successRate(samples: readonly { readonly success: boolean }[]): RateWithCI {
   const successes = samples.filter((s) => s.success).length;
   return deriveRate(successes, samples.length, ABLATION_RELIABILITY);
+}
+
+/**
+ * The stochastic-case floor, enforced identically for every variant that produces a
+ * scored run. `buildAblationManifest` has enforced this since it was written; the raw
+ * baseline leg did not, which is how a task with zero seed samples could reach a
+ * comparative report carrying a fabricated 0% success rate.
+ */
+function assertEnoughSamples(taskId: string, variantLabel: string, count: number): void {
+  if (count < STOCHASTIC_MIN_RUNS) {
+    throw new Error(
+      `ablation task "${taskId}" variant "${variantLabel}" has ${count} seed samples, ` +
+        `needs >= ${STOCHASTIC_MIN_RUNS}`,
+    );
+  }
 }
 
 export type AblationManifestOptions = {
@@ -171,12 +187,7 @@ export function buildAblationManifest(
   const runs: PairedBenchmarkRunV2[] = [];
   for (const input of inputs) {
     for (const variantRuns of [input.contextOn, input.contextOff]) {
-      if (variantRuns.samples.length < STOCHASTIC_MIN_RUNS) {
-        throw new Error(
-          `ablation task "${input.taskId}" variant "${variantRuns.variant}" has ` +
-            `${variantRuns.samples.length} seed samples, needs >= ${STOCHASTIC_MIN_RUNS}`,
-        );
-      }
+      assertEnoughSamples(input.taskId, variantRuns.variant, variantRuns.samples.length);
       runs.push(buildAblationRun(input.taskId, variantRuns, options));
     }
   }
@@ -206,6 +217,10 @@ export type RawBaselineSeedSample = {
  * otherwise).
  */
 export function buildRawBaselineRun(taskId: string, samples: readonly RawBaselineSeedSample[], options: AblationManifestOptions = {}): PairedBenchmarkRunV2 {
+  // Same stochastic floor as buildAblationRun's caller: a `baseline` leg is still an
+  // agent-free *stochastic* case, so a run with no seed samples has nothing to report and
+  // must be refused here rather than emitted with a 0% rate and a 0-wide interval.
+  assertEnoughSamples(taskId, "baseline", samples.length);
   const known = samples.map((s) => s.tokens).filter((t): t is number => t !== null);
   const run: PairedBenchmarkRunV2 = {
     task_id: taskId,
@@ -260,8 +275,14 @@ export function buildRawBaselineManifest(inputs: readonly RawBaselineTaskInput[]
  */
 export type AblationDelta = {
   readonly taskId: string;
-  readonly successRateOn: number;
-  readonly successRateOff: number;
+  /**
+   * `null` when the variant produced no seed samples at all. This path never builds a
+   * manifest, so no validator ever sees it — the honest null IS the guard here, and it is
+   * what the five producer scripts print. A 0 in this field means "measured, none
+   * succeeded"; a null means "nothing was run".
+   */
+  readonly successRateOn: number | null;
+  readonly successRateOff: number | null;
   readonly medianToolCallsOn: number | null;
   readonly medianToolCallsOff: number | null;
   readonly medianTokensOn: number | null;

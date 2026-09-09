@@ -14,8 +14,20 @@ import { estimateTokens } from "../gdgraph/repomap";
 import { redactSensitiveText } from "../security/redact";
 import { redactAndBoundTouched, type SlateAnchors, type SlateCourse } from "./slate";
 
-/** Why an unattended turn stopped. `"other"` is reserved for a future caller. */
-export type TerminalStateReason = "ask_user_unanswerable" | "budget_exhausted" | "other";
+/**
+ * Why an unattended turn stopped. `"no_progress"` (T20 F-001) is distinct
+ * from `"budget_exhausted"`: it fires when every tool call in a round is
+ * denied by the per-signature attempt guard (`MAX_ATTEMPTS_PER_HASH`) while
+ * neither the round budget nor the tool-call budget has been exhausted —
+ * reusing `"budget_exhausted"` there misattributed the stop to a budget that
+ * still had capacity. `"other"` is reserved for a future caller.
+ */
+export type TerminalStateReason =
+  | "ask_user_unanswerable"
+  | "budget_exhausted"
+  | "tool_call_budget_exhausted"
+  | "no_progress"
+  | "other";
 
 /**
  * A structured, machine-readable stop record (spec's "Data contracts"

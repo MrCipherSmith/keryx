@@ -27,10 +27,35 @@ export type TranspilerImportKind =
 // plain regex with no notion of "static" vs "dynamic". Never infer one;
 // `UNKNOWN_IMPORT_KIND` marks it explicitly and cycle detection treats it as
 // load-order (the pre-fix behavior), so fallback-only edges are never
-// silently excluded from a real cycle.
+// silently excluded from a real cycle. This is reserved for the case where
+// `scanImports` could not even run (unparseable source) or the language has
+// no transpiler support at all (Java/Python) — genuinely unknown provenance,
+// where "assume load-order" is the safe default.
 export const UNKNOWN_IMPORT_KIND = "unknown-static" as const;
 
-export type ImportKind = TranspilerImportKind | typeof UNKNOWN_IMPORT_KIND;
+// AFC-11 (flow 234): a specifier the transpiler DID successfully scan the
+// file for, but did not report for THIS statement, because the statement
+// carries no runtime binding — `import type {...}`, `export type {...} from`,
+// or an inline specifier list where every name is `type`-prefixed
+// (`import { type X } from "./m"`). `Bun.Transpiler#scanImports` erases these
+// (verified empirically: this repo's `tsconfig.json` sets neither
+// `importsNotUsedAsValues` nor `verbatimModuleSyntax`, so it runs on
+// TypeScript's defaults, which elide type-only imports/exports at compile
+// time), so they only reach the graph through the regex fallback below.
+// Unlike `UNKNOWN_IMPORT_KIND`, the provenance here is NOT unknown — it is
+// known to be type-only — so it gets its own kind rather than being folded
+// into "unknown-static": `getCycles` (query.ts) excludes it from the
+// load-order adjacency (a type-only cycle cannot deadlock a runtime module
+// graph — it does not exist once compiled away), while every consumer that
+// reads `edge.kind` (getOrphans, getAffected, computeAffected) is untouched
+// and keeps treating it as a real dependency edge for impact analysis, since
+// the edge is genuinely real for "what has to be re-checked".
+export const TYPE_ONLY_IMPORT_KIND = "type-only" as const;
+
+export type ImportKind =
+  | TranspilerImportKind
+  | typeof UNKNOWN_IMPORT_KIND
+  | typeof TYPE_ONLY_IMPORT_KIND;
 
 export type GraphEdge = {
   id: string;

@@ -106,14 +106,28 @@ describe("the service actually uses it", () => {
   // this mount does not update it per read. A control that fails is the control
   // working — the measurement was wrong, not the claim.
   //
-  // What is observable without ambiguity: the config decides whether PII is
-  // redacted. Change the file between two calls on ONE service and the memo is
-  // the difference between the old answer and the new one.
-  // `enabled` rather than `action`, and that is not arbitrary: measured, the
-  // action makes no difference to what `redact()` returns — `redact`, `warn` and
-  // even `allow` all mask the span — while disabling the policy drops the
-  // finding and leaves the content alone. The first version of this test used
-  // the action and its control failed, which is the control working.
+  // What is observable without ambiguity: the config decides whether a `pii`
+  // FINDING is reported. Change the file between two calls on ONE service and
+  // the memo is the difference between the old finding list and the new one.
+  // `enabled` rather than `action`, and that is not arbitrary: `enabled` gates
+  // whether `detectPii` runs at all inside `resolveDecision` (detect/index.ts),
+  // so disabling the policy makes the finding disappear outright, where the
+  // `action` a finding is built with never does — every action still produces
+  // a finding. The first version of this test used the action and its control
+  // failed, which is the control working.
+  //
+  // `redacted` itself is NOT that observable any more. The mandatory
+  // deterministic output floor (T19/T22, `validateSerializedOutput` inside
+  // `redact()`) runs its own independent `detectPii` over the content and masks
+  // recognized PII regardless of `pii.enabled` — the whole point of the floor
+  // is that an advisory policy can never bring back a raw secret or PII span.
+  // An earlier version of this test asserted a FRESH service (policy off)
+  // returned the email raw; that stopped being true the moment the floor
+  // started masking unconditionally, and reinstating it would assert the
+  // opposite of what the floor guarantees. So this test proves memoization
+  // through the findings array — the config-dependent signal the floor does
+  // not touch — while still checking `redacted` stays masked on every call,
+  // memoised config or not.
   //
   // (That `pii: { action: "allow" }` still redacts is a separate question about
   // the resolver, not about this memo. Noted rather than chased here.)
@@ -148,18 +162,26 @@ describe("the service actually uses it", () => {
       const service = createSecurityService(dir);
       const first = await service.redact(PII, { source: "generated" });
       expect(first.redacted).not.toContain("nobody@example.com");
+      expect(first.findings.some((f) => f.category === "pii")).toBe(true);
 
-      // The policy is now off. A service that reloads per call would stop
-      // redacting here; a memoised one does not.
+      // The policy is now off. A service that reloaded per call would stop
+      // reporting a pii finding here; a memoised one still reports it, because
+      // it is still working off the config it loaded on construction. The
+      // mandatory floor keeps masking the email either way — that half of the
+      // assertion is not the memoization signal, the finding is.
       writeConfig(dir, false);
       const second = await service.redact(PII, { source: "generated" });
       expect(second.redacted).not.toContain("nobody@example.com");
+      expect(second.findings.some((f) => f.category === "pii")).toBe(true);
 
-      // The control, and the reason the assertion above is about the memo rather
-      // than about the config change being ineffective: a FRESH service reads the
-      // new file and stops redacting.
+      // The control, and the reason the assertions above are about the memo
+      // rather than about the config change being ineffective: a FRESH service
+      // reads the new file, its PII detector never runs, and it reports NO pii
+      // finding. `redacted` still contains no raw email on this call too — the
+      // floor does not care which service, or which config, produced the text.
       const fresh = await createSecurityService(dir).redact(PII, { source: "generated" });
-      expect(fresh.redacted).toContain("nobody@example.com");
+      expect(fresh.redacted).not.toContain("nobody@example.com");
+      expect(fresh.findings.some((f) => f.category === "pii")).toBe(false);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

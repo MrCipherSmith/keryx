@@ -1,0 +1,73 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T68-2026-09-06T17-57-32Z",
+  "dispatch_id": "T68",
+  "status": "DONE",
+  "summary": "Closed T62 F-002 (MODE_RANK still ranked gateway strictly above enforced/ci, writing a false mode-downgrade incident for a transition that changes nothing), F-003 (the disabled-policy guard suppressed a true policy-disabled signal for the unrecognized-mode configUnreadable shape, which carries the operator's real policies), and F-004 (cli-reference.md and templates.ts still described gateway as unimplemented/non-blocking). All three reproduced exactly as described before any edit.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no durable record asserts something that did not happen, and no shipped guidance describes behaviour the code does not have.",
+      "status": "met",
+      "evidence": "gateway -> enforced/ci no longer writes a mode-downgrade incident or enforcement-weakened warning (T62-mode.ts M3, T62-state.ts MODE_MATRIX); cli-reference.md and templates.ts corrected to state gateway already blocks."
+    },
+    {
+      "criterion": "A genuine weakening is still detected from every mode, including to the advisory one; a genuinely disabled policy in a window with an unrecognized mode is still reported.",
+      "status": "met",
+      "evidence": "gateway/ci/enforced -> advisory all still downgradeDetected:true (T62-mode.ts M3, T62-state.ts MODE_MATRIX); T62-state.ts B1/B2 and security.test.ts T68 D1/D2 show the real disable is now detected during the unrecognized-mode window and on every subsequent run."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/security/ src/commands/ stays green.",
+      "status": "met",
+      "evidence": "RED confirmed by temporary revert for every new/corrected test (T58 D2, T68 B0/D1/D2/D3, templates.test.ts); suite 1243 pass/0 fail before, 1251 pass/0 fail after."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T68-spec.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T68-implementation.md",
+      "kind": "implementation-report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T68-T62-state-before.log",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T68-T62-state-after.log",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T68-T62-mode-before.log",
+      "kind": "report",
+      "exists": true
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T68-T62-mode-after.log",
+      "kind": "report",
+      "exists": true
+    }
+  ],
+  "changed_files": [
+    { "path": "src/security/self-protect.ts", "change": "modified" },
+    { "path": "src/security/security.test.ts", "change": "modified" },
+    { "path": "src/security/templates.ts", "change": "modified" },
+    { "path": "src/security/templates.test.ts", "change": "created" },
+    { "path": "docs/docs/cli-reference.md", "change": "modified" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T17:57:32Z"
+}

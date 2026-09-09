@@ -140,7 +140,7 @@ export const SECURITY_REPORT_SCHEMA: JsonSchema = {
     },
     gate: {
       type: "string",
-      enum: ["pass", "needs-approval", "fail"],
+      enum: ["pass", "needs-approval", "incomplete", "fail"],
     },
     rawRetention: {
       type: "string",
@@ -160,6 +160,50 @@ export const SECURITY_REPORT_SCHEMA: JsonSchema = {
     findings: {
       type: "array",
       items: { $ref: "security-finding.schema.json" },
+    },
+    coverage: {
+      type: "object",
+      additionalProperties: false,
+      required: ["status", "required", "reasons"],
+      properties: {
+        status: { type: "string", enum: ["complete", "incomplete"] },
+        required: { type: "boolean" },
+        reasons: { type: "array", items: { type: "string" } },
+      },
+    },
+    files: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["path", "status"],
+        properties: {
+          path: { type: "string", minLength: 1 },
+          status: { type: "string", enum: ["scanned", "skipped", "failed"] },
+          reason: { type: "string" },
+        },
+      },
+    },
+    scope: {
+      type: "object",
+      additionalProperties: false,
+      required: ["path", "recursive", "exclusions", "limits"],
+      properties: {
+        path: { type: "string", minLength: 1 },
+        recursive: { type: "boolean" },
+        exclusions: { type: "array", items: { type: "string" } },
+        limits: {
+          type: "object",
+          additionalProperties: false,
+          required: ["maxFiles", "maxBytes", "maxDirectories", "maxDepth"],
+          properties: {
+            maxFiles: { type: "integer", minimum: 1 },
+            maxBytes: { type: "integer", minimum: 1 },
+            maxDirectories: { type: "integer", minimum: 1 },
+            maxDepth: { type: "integer", minimum: 1 },
+          },
+        },
+      },
     },
     integrations: {
       type: "object",

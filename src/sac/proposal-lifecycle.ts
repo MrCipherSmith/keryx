@@ -5,7 +5,7 @@ import { isNotFound, withFileLock, writeFileAtomic } from "../lib/fs";
 import { evaluateStrictSacGuard, resolveWorkspaceReference, validateSacContract, type SacAuthorizationServer, type StrictSacGuard, type TrustedActorContext } from "./index";
 import { WorkspaceService, localWorkspaceAuthorizationServer, type WorkspaceManifest } from "./workspace-service";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpAuthority, type TrustedWrapUpProvenance, type WrapUpSource } from "./trusted-wrap-up";
-import { createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
+import { bindingHash, createGuardedOwnerWriter, receiptMatchesIntent, type GuardedOwnerWriter, type KnowledgeOwner, type OwnerReceipt, type OwnerWriteIntent, type OwnerWriteResult, type ReviewerAuthority } from "./guarded-owner-writer";
 import { resolveSessionWrapUp } from "./session-wrap-up";
 import { consumeConfirmToken } from "./review-confirm-token";
 import { computeDedupHint, type DecisionAnnotation, type DedupHint } from "./decision-dedup";
@@ -29,8 +29,63 @@ export type OwnerWriteAdapter = (input: OwnerWriteIntent & { owner: TargetOwner 
 type TargetWriteAttempt = Readonly<{ result: TargetWriteResult; freshnessVerifiedAt?: string }>;
 
 export class ProposalLifecycleError extends Error {
-  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "token_required" | "token_invalid" | "security_acknowledgement_required" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed", message: string) { super(message); }
+  constructor(readonly code: "access_denied" | "guard_denied" | "non_interactive_accept_denied" | "token_required" | "token_invalid" | "security_acknowledgement_required" | "invalid_proposal" | "trusted_wrap_up_required" | "not_found" | "conflict" | "stale" | "target_write_failed" | "owner_write_indeterminate", message: string) { super(message); }
 }
+
+/**
+ * AFC-27 / flow 237 AC1 ("a restart returns the same receipt").
+ *
+ * The optional recovery-only capability a `GuardedOwnerWriter` MAY expose in
+ * addition to `write()`. `write()` is a MUTATING entry point: its internal
+ * `recover()` short-circuit only fires when the owner already has a durable
+ * receipt, and it falls through to `persist()` otherwise. That is exactly wrong
+ * for a restart, because the owner writers apply the target bytes BEFORE the
+ * receipt is durable — so "no receipt on disk" does not mean "no target
+ * written", and calling `write()` again in that window applies the change a
+ * second time and mints a second receipt.
+ *
+ * `recoverReceipt` is the non-mutating question SAC needs to ask instead:
+ * *can you account for this exact intent?*
+ *
+ * Contract for the owning subsystem (wiki/memory/skill) that implements it:
+ * - Return the ORIGINAL receipt if this intent's target write is complete, or
+ *   if the owner can complete it from its own durable staging without re-doing
+ *   the caller-visible work. This is the answer that makes a restart return the
+ *   same receipt.
+ * - Return `undefined` ONLY as "I cannot account for this intent at all".
+ * - Never apply, re-apply, or partially apply a target change from here.
+ *
+ * A writer that does not expose it gets the safe answer instead: SAC refuses a
+ * replay of an already-started owner write with `owner_write_indeterminate`
+ * rather than silently re-driving the mutation.
+ */
+export type OwnerWriteRecovery = Readonly<{
+  recoverReceipt(intent: OwnerWriteIntent & { owner: KnowledgeOwner }): Promise<OwnerReceipt | undefined>;
+}>;
+
+/** Runtime feature-detect for {@link OwnerWriteRecovery}. */
+export function supportsOwnerWriteRecovery(writer: GuardedTargetWriter): writer is GuardedTargetWriter & OwnerWriteRecovery {
+  return typeof (writer as Partial<OwnerWriteRecovery>).recoverReceipt === "function";
+}
+
+/**
+ * SAC's durable "an owner mutation for this idempotency key may now be in
+ * flight" marker. It is the one record that has to be durable BEFORE the target
+ * bytes are written, precisely because the owner's own receipt is not.
+ */
+type OwnerWriteAttempt = Readonly<{
+  schemaVersion: "1.0";
+  recordType: "proposal-owner-write-attempt";
+  attemptId: string;
+  proposalId: string;
+  proposalRevision: string;
+  workspaceId: string;
+  correlationId: string;
+  idempotencyKey: string;
+  intentRef: string;
+  owner: TargetOwner;
+  startedAt: string;
+}>;
 
 /**
  * SAC owns immutable candidates and audit metadata only. Knowledge content is
@@ -67,6 +122,14 @@ export class ProposalLifecycleService {
      * unavailable safe-read bridge — without needing a real non-POSIX host.
      */
     readEvidenceFile?: (workspaceRoot: string, absolutePath: string) => Buffer;
+    /**
+     * Test seam: fires immediately AFTER the durable review-decision record is
+     * on disk and immediately BEFORE the terminal transition is appended to the
+     * ledger — the second of the two crash windows this accept path has. Lets a
+     * test (or an out-of-process probe) stop the process at exactly that point
+     * without guessing at `now()` call counts.
+     */
+    beforeTransitionAppend?: () => Promise<void> | void;
   }) { this.root = path.resolve(options.workspaceRoot); this.now = options.now ?? (() => new Date()); }
 
   async create(input: { request: unknown; requestCorrelationId: string; workspaceId: string; id: string; proposalRevision: string; kind: ProposalKind; wrapUp: TrustedWrapUpProvenance }): Promise<Proposal> {
@@ -221,10 +284,10 @@ export class ProposalLifecycleService {
         const targetAttempt = input.decision === "accepted" ? await this.targetWriteOrStale(proposal, actor, reviewerAuthority, input, approval!.approvalRef, intent!, policyRevision) : undefined;
         const targetWrite = targetAttempt?.result;
         const outcome: Terminal = input.decision === "accepted" ? (targetWrite?.ok ? "accepted" : "stale") : input.decision;
-        const decision = outcome === "stale" ? undefined : await this.reviewDecision(proposal, actor, reviewerAuthority, input, outcome, targetWrite, policyRevision);
-        if (decision) await this.writeImmutable(this.decisionPath(input.workspaceId, proposal.id, input.idempotencyKey), decision);
+        if (outcome !== "stale") await this.ensureReviewDecision(proposal, actor, reviewerAuthority, input, outcome, targetWrite, policyRevision);
         const event = await this.transition({ proposal, actor, input, records: await this.records(ledger).then((all) => all.filter((record) => record.proposalId === proposal.id)), outcome, ...(targetWrite ? { targetWrite } : {}), ...(intent ? { writeIntentRef: intent.intentRef } : {}), ...(targetAttempt?.freshnessVerifiedAt ? { freshnessVerifiedAt: targetAttempt.freshnessVerifiedAt } : {}), reviewerAuthority });
         await this.validateTransition(event);
+        await this.options.beforeTransitionAppend?.();
         await appendFile(ledger, `${JSON.stringify(event)}\n`, { mode: 0o600 });
         // RP-13 FR1+FR2: computed AFTER the accept has already committed
         // above — informational only, attached to this function's RETURN
@@ -342,21 +405,122 @@ export class ProposalLifecycleService {
 
   private async targetWriteOrStale(proposal: Proposal, actor: TrustedActorContext, reviewerAuthority: ReviewerAuthority, input: { requestCorrelationId: string; idempotencyKey: string }, approvalRef: string, writeIntent: { intentRef: string }, policyRevision: string): Promise<TargetWriteAttempt> {
     await this.options.beforeTargetWrite?.();
+    const owner = ownerFor(proposal.kind);
+    const intent: OwnerWriteIntent = { intentRef: writeIntent.intentRef, proposalId: proposal.id, proposalRevision: proposal.proposalRevision, workspaceId: proposal.workspaceId, correlationId: input.requestCorrelationId, idempotencyKey: input.idempotencyKey, reviewerSubject: actor.subject, reviewerAuthority, policyRevision };
+    // AFC-27 / flow 237 AC1 recovery path, checked before anything else that
+    // could re-enter the owner. `saved` (SAC's own durable write-result) means
+    // the previous attempt got all the way back out of the owner, so it is the
+    // cheap answer; the attempt marker below means it did NOT, and the owner may
+    // be holding a half-applied change. Neither may re-drive `write()`.
+    const recovered = await this.recoverOwnerWrite(proposal, input, intent, owner);
+    if (recovered) return recovered;
     // Evidence containment/existence and strict policy are rechecked immediately
     // before the owner write; a stale/removed reference can never be accepted.
     try { await this.strict(policyRevision); await this.validateEvidence(proposal.evidence, true, actor, proposal.workspaceId); }
     catch { return { result: { ok: false, code: "stale_evidence" } }; }
     const freshnessVerifiedAt = this.timestamp();
-    const owner = ownerFor(proposal.kind); const writer = this.options.targetWriters[owner];
+    const writer = this.options.targetWriters[owner];
     if (!writer || writer.owner !== owner) return { result: { ok: false, code: "owner_writer_required" } };
-    const intent: OwnerWriteIntent = { intentRef: writeIntent.intentRef, proposalId: proposal.id, proposalRevision: proposal.proposalRevision, workspaceId: proposal.workspaceId, correlationId: input.requestCorrelationId, idempotencyKey: input.idempotencyKey, reviewerSubject: actor.subject, reviewerAuthority, policyRevision };
-    const saved = await this.loadWriteResult(proposal.workspaceId, proposal.id, input.idempotencyKey);
-    if (saved) return { freshnessVerifiedAt, result: saved.ok && !receiptMatchesIntent({ owner, receipt: saved.receipt, intent }) ? { ok: false, code: "invalid_owner_receipt" } : saved };
+    // The LAST thing made durable before the process crosses into the owning
+    // subsystem. Ordering is the whole fix: the owner writers make the target
+    // bytes durable before their receipt, so if nothing on SAC's side records
+    // that the crossing happened, a restart cannot tell "never started" from
+    // "already applied" — and today's code guesses "never started" and applies
+    // the change twice. Cost: one extra atomically-renamed sidecar per accept,
+    // and a crash between this record and the owner doing anything at all is now
+    // also treated as indeterminate for that idempotency key. It inherits
+    // `writeFileAtomic`'s durability (write + rename, no explicit fsync) —
+    // the same guarantee every other record on this path already has, so it is
+    // ordered with respect to the owner write but not hardened against power
+    // loss beyond what the rest of the ledger offers.
+    await this.recordOwnerWriteAttempt(proposal, input, intent.intentRef, owner, freshnessVerifiedAt);
     const result = await writer.write(intent);
     if (result.ok && !receiptMatchesIntent({ owner, receipt: result.receipt, intent })) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     await this.writeImmutable(this.writeResultPath(proposal.workspaceId, proposal.id, input.idempotencyKey), result);
     if (result.ok && (!result.receipt.targetRef.startsWith(`${ownerTargetPrefix(owner)}/`) || result.owner !== owner)) return { freshnessVerifiedAt, result: { ok: false, code: "invalid_owner_receipt" } };
     return { freshnessVerifiedAt, result };
+  }
+
+  /**
+   * The AFC-27 restart answer: given a durable record that a previous process
+   * already crossed into the owner with this idempotency key, produce the
+   * ORIGINAL outcome — never a second mutation.
+   *
+   * Returns `undefined` only when no previous crossing is on record, i.e. this
+   * is a genuinely fresh attempt and the caller should proceed to write.
+   */
+  private async recoverOwnerWrite(proposal: Proposal, input: { idempotencyKey: string }, intent: OwnerWriteIntent, owner: TargetOwner): Promise<TargetWriteAttempt | undefined> {
+    const saved = await this.loadWriteResult(proposal.workspaceId, proposal.id, input.idempotencyKey);
+    const attempt = await this.loadOwnerWriteAttempt(proposal.workspaceId, proposal.id, input.idempotencyKey);
+    if (saved) return { ...(attempt ? { freshnessVerifiedAt: attempt.startedAt } : {}), result: saved.ok && !receiptMatchesIntent({ owner, receipt: saved.receipt, intent }) ? { ok: false, code: "invalid_owner_receipt" } : saved };
+    if (!attempt) return undefined;
+    if (attempt.proposalRevision !== proposal.proposalRevision || attempt.correlationId !== intent.correlationId || attempt.workspaceId !== proposal.workspaceId || attempt.owner !== owner) {
+      throw new ProposalLifecycleError("conflict", "owner write attempt does not match the recovery request");
+    }
+    const writer = this.options.targetWriters[owner];
+    if (!writer || writer.owner !== owner) return { freshnessVerifiedAt: attempt.startedAt, result: { ok: false, code: "owner_writer_required" } };
+    // Deliberately NOT `writer.write()`: that would fall through to the owner's
+    // mutating persist step when the owner has no receipt yet, which is the
+    // whole defect. A writer that cannot answer the non-mutating question gets
+    // a refusal, not a second mutation. The refusal is retryable and records no
+    // terminal transition, so the proposal stays acceptable — a fresh accept
+    // (new idempotency key) still completes, and this same key completes as
+    // soon as the owner can account for the attempt.
+    const receipt = supportsOwnerWriteRecovery(writer) ? await writer.recoverReceipt({ ...intent, owner }) : undefined;
+    if (!receipt) {
+      throw new ProposalLifecycleError(
+        "owner_write_indeterminate",
+        `a previous process already began the ${owner} write for idempotency key ${input.idempotencyKey} and the owner cannot produce its receipt — the target may or may not have been written, so this accept is not replayed and not re-applied; resolve the owner's state (or retry with a new idempotency key after confirming the target) rather than accepting again blindly`,
+      );
+    }
+    // Rebuild the same binding `createGuardedOwnerWriter` would have attached,
+    // so the recovered receipt is subject to the identical substitution check.
+    const result: TargetWriteResult = { ok: true, owner, receipt: { ...receipt, binding: Object.freeze({ ...intent, owner, bindingHash: bindingHash(owner, intent) }) } };
+    if (!receiptMatchesIntent({ owner, receipt: result.receipt, intent })) return { freshnessVerifiedAt: attempt.startedAt, result: { ok: false, code: "invalid_owner_receipt" } };
+    if (!result.receipt.targetRef.startsWith(`${ownerTargetPrefix(owner)}/`)) return { freshnessVerifiedAt: attempt.startedAt, result: { ok: false, code: "invalid_owner_receipt" } };
+    await this.writeImmutable(this.writeResultPath(proposal.workspaceId, proposal.id, input.idempotencyKey), result);
+    return { freshnessVerifiedAt: attempt.startedAt, result };
+  }
+
+  private async loadOwnerWriteAttempt(workspaceId: string, proposalId: string, key: string): Promise<OwnerWriteAttempt | undefined> {
+    try { return JSON.parse(await readFile(this.attemptPath(workspaceId, proposalId, key), "utf8")) as OwnerWriteAttempt; }
+    catch (error) { if (isNotFound(error)) return undefined; throw error; }
+  }
+
+  private async recordOwnerWriteAttempt(proposal: Proposal, input: { requestCorrelationId: string; idempotencyKey: string }, intentRef: string, owner: TargetOwner, startedAt: string): Promise<void> {
+    const attempt: OwnerWriteAttempt = { schemaVersion: "1.0", recordType: "proposal-owner-write-attempt", attemptId: `attempt-${randomUUID().replace(/-/g, "").slice(0, 16)}`, proposalId: proposal.id, proposalRevision: proposal.proposalRevision, workspaceId: proposal.workspaceId, correlationId: input.requestCorrelationId, idempotencyKey: input.idempotencyKey, intentRef, owner, startedAt };
+    await writeFileAtomic(this.attemptPath(proposal.workspaceId, proposal.id, input.idempotencyKey), `${JSON.stringify(attempt)}\n`);
+  }
+
+  /**
+   * Read-or-create for the durable review-decision record, mirroring
+   * `writeApproval`/`ensureWriteIntent`.
+   *
+   * This is the second half of the flow 237 defect. `reviewDecision` mints a
+   * fresh `randomUUID()` id and a fresh `decidedAt` on every call, so a replay
+   * after a stop between this record and the terminal ledger append used to
+   * hand `writeImmutable` a byte-different record for a file that already
+   * existed — a permanent `conflict: immutable lifecycle record already exists`
+   * with only a write intent in the ledger and no way to ever accept that key
+   * again. The record's immutability is not weakened to fix that: the replay
+   * reuses the ORIGINAL record instead of minting a second one, and a record
+   * that genuinely disagrees about this proposal/decision/receipt is still a
+   * conflict.
+   */
+  private async ensureReviewDecision(proposal: Proposal, actor: TrustedActorContext, reviewerAuthority: ReviewerAuthority, input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }, outcome: "accepted" | "rejected" | "dismissed", targetWrite: TargetWriteResult | undefined, policyRevision: string): Promise<void> {
+    const file = this.decisionPath(proposal.workspaceId, proposal.id, input.idempotencyKey);
+    try {
+      const existing = JSON.parse(await readFile(file, "utf8")) as Record<string, unknown>;
+      const existingWrite = existing.targetWrite as { receiptRef?: string; targetRef?: string; completedAt?: string } | undefined;
+      if (existing.proposalId !== proposal.id || existing.proposalRevision !== proposal.proposalRevision || existing.workspaceId !== proposal.workspaceId || existing.correlationId !== input.requestCorrelationId || existing.idempotencyKey !== input.idempotencyKey || existing.decision !== outcome) {
+        throw new ProposalLifecycleError("conflict", "review decision does not match the recovery request");
+      }
+      if (targetWrite?.ok && (existingWrite?.receiptRef !== targetWrite.receipt.receiptRef || existingWrite?.targetRef !== targetWrite.receipt.targetRef || existingWrite?.completedAt !== targetWrite.receipt.completedAt)) {
+        throw new ProposalLifecycleError("conflict", "review decision records a different owner receipt than this recovery produced");
+      }
+      return;
+    } catch (error) { if (error instanceof ProposalLifecycleError) throw error; if (!isNotFound(error)) throw error; }
+    await this.writeImmutable(file, await this.reviewDecision(proposal, actor, reviewerAuthority, input, outcome, targetWrite, policyRevision));
   }
 
   private async transition(input: { proposal: Proposal; actor: TrustedActorContext; input: { requestCorrelationId: string; idempotencyKey: string; reason?: string }; records: LedgerRecord[]; outcome: Terminal; targetWrite?: TargetWriteResult; writeIntentRef?: string; freshnessVerifiedAt?: string; reviewerAuthority: "owner" | "editor" }): Promise<Transition> {
@@ -515,6 +679,7 @@ export class ProposalLifecycleService {
   private writeResultPath(workspaceId: string, proposalId: string, key: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.${hash(key)}.write-result.json`); }
   private intentRef(proposalId: string, key: string): string { return `./proposals/${proposalId}.${hash(key)}.write-intent.json`; }
   private intentPath(workspaceId: string, proposalId: string, key: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.${hash(key)}.write-intent.json`); }
+  private attemptPath(workspaceId: string, proposalId: string, key: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "proposals", `${proposalId}.${hash(key)}.owner-write-attempt.json`); }
   private async loadWriteResult(workspaceId: string, proposalId: string, key: string): Promise<TargetWriteResult | undefined> { try { return JSON.parse(await readFile(this.writeResultPath(workspaceId, proposalId, key), "utf8")) as TargetWriteResult; } catch (error) { if (isNotFound(error)) return undefined; throw error; } }
   private async writeImmutable(file: string, record: unknown): Promise<void> { try { const existing = await readFile(file, "utf8"); if (existing !== `${JSON.stringify(record)}\n`) throw new ProposalLifecycleError("conflict", "immutable lifecycle record already exists"); } catch (error) { if (error instanceof ProposalLifecycleError) throw error; if (!isNotFound(error)) throw error; await writeFileAtomic(file, `${JSON.stringify(record)}\n`); } }
   private ledgerPath(workspaceId: string): string { return path.join(this.root, ".metaproject", "workspaces", workspaceId, "activity.jsonl"); }
@@ -522,7 +687,6 @@ export class ProposalLifecycleService {
 }
 
 function hash(value: string): string { return createHash("sha256").update(value).digest("hex"); }
-function eventHash(value: Transition): string { return hash(JSON.stringify(value)); }
 function recordHash(value: LedgerRecord): string { return hash(JSON.stringify(value)); }
 
 /**

@@ -4,6 +4,7 @@ import { pathExists } from "../lib/fs";
 import { loadMemoryConfig } from "../memory/config";
 import { renderProceduralMemoryForScope } from "../memory/inject";
 import { acceptedCurrentSearchFilters } from "../memory/relevant";
+import { renderMemorySearchReport, renderMemorySearchReportMarkdown } from "../memory/report";
 import { searchEntries } from "../memory/search";
 import { collectEntries } from "../memory/store";
 import type { TrackerAdapter, TrackerRef } from "./types";
@@ -44,18 +45,39 @@ export async function collectContext(input: {
   }
 
   // 2. Related memory (accepted first, deterministic ranking).
+  // AFC-25 / AC6: routed through the provenance-preserving report formatter
+  // (report.ts renderMemorySearchReport + renderMemorySearchReportMarkdown)
+  // instead of building inline markdown straight from scored entries. The
+  // report formatter carries claimType, scope, version, confidence,
+  // provenance, author, confirmedBy and caveat -- with the explicit
+  // "unknown" sentinel when a source is absent -- so the live handoff path
+  // preserves the same evidence the compression stage produces, rather than
+  // dropping it. This call is pure (no report is written to disk); only its
+  // Markdown rendering is used.
+  //
+  // T20 finding 4 (flow 234 review, MAJOR): rendered with
+  // `includeHeader: false` -- the full renderer's `# memory search report:
+  // ...` heading nested a top-level heading inside this section's own `##
+  // Related Memory`, its `runId` named a run that this pure/no-write call
+  // never actually persisted, its `generatedAt` duplicated the timestamp the
+  // outer context markdown already states three lines above, and its
+  // `query:` line just restated the flow title again. None of that preamble
+  // carries information a model reading this document doesn't already have;
+  // only the result payload below does.
   try {
     const config = await loadMemoryConfig(cwd);
     const entries = await collectEntries(cwd);
-    const results = searchEntries(entries, title, acceptedCurrentSearchFilters(now, { limit: 5 }), config, now);
+    const filters = acceptedCurrentSearchFilters(now, { limit: 5 });
+    const results = searchEntries(entries, title, filters, config, now);
     if (results.length > 0) {
+      const report = renderMemorySearchReport({
+        runId: "flow-context-related-memory",
+        generatedAt: now,
+        search: { schemaVersion: 1, query: title, results },
+        filters,
+      });
       sections.push(
-        `## Related Memory\n\n${results
-          .map(
-            (item) =>
-              `- [${item.entry.status}/${item.entry.type}] ${item.entry.title} - \`.metaproject/memory/${item.entry.relativePath}\``,
-          )
-          .join("\n")}`,
+        `## Related Memory\n\n${renderMemorySearchReportMarkdown(report, { includeHeader: false }).trimEnd()}`,
       );
       notes.push(`memory: ${results.length} related entries`);
     }

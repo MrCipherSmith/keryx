@@ -492,6 +492,7 @@ export function presentGame(
     paint();
   };
 
+  // eslint-disable-next-line prefer-const -- Assigned after modal setup so synchronously invoked callbacks safely observe undefined instead of a const TDZ.
   handle = openModalFn(otui, chrome, {
     title: "/game",
     tabs: [{ id: "game", label: "Tic-tac-toe" }],

@@ -39,9 +39,19 @@ describe("checkGoldLeakage", () => {
     expect(result.reachablePaths).toEqual(["scripts/benchmark/mutating-tasks.ts"]);
   });
 
-  test("an empty gold-artifact list always passes (nothing to leak)", () => {
+  // RESOLVED 2026-09-09, flow 238/T15: an empty gold-artifact list used to report
+  // "passed" — the same "I never looked" rendered as "I checked and it's clean" bug this
+  // repository keeps finding. "not-applicable" is the honest value (LeakageAssertion has
+  // no "unverified" member; see checkGoldLeakage's doc comment), never "passed".
+  test("an empty gold-artifact list is not-applicable, never a fabricated pass", () => {
     const result = checkGoldLeakage(root, []);
-    expect(result.assertion).toBe("passed");
+    expect(result.assertion).toBe("not-applicable");
+    expect(result.reachablePaths).toEqual([]);
+  });
+
+  test("a nonexistent agent root is not-applicable, never a fabricated pass", () => {
+    const result = checkGoldLeakage(path.join(root, "does-not-exist"), ["scripts/benchmark/ablation-tasks.ts"]);
+    expect(result.assertion).toBe("not-applicable");
     expect(result.reachablePaths).toEqual([]);
   });
 });

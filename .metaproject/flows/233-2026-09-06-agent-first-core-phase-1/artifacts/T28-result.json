@@ -1,0 +1,310 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T28",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Stage 1 (spec compliance) executed with independent bounded probes on synthetic mkdtemp fixtures; Stage 2 (code quality) intentionally NOT run because Stage 1 failed. AC1 (AFC-17/AC6) MET: no EISDIR on nested or single-file targets, mutual/self symlink cycles terminate in 20ms via dev:ino identity, unreadable entries and exhausted --max-files/--max-bytes are reflected as coverage incomplete, and a finding plus incomplete coverage are visible simultaneously with the gate staying fail. AC2 (policies.md security scan) NOT MET: scope/excludes/limits are fixed before traversal, canonical duplicates are visited once, external symlinks are refused with zero name/path/content leakage across five canaries in both the JSON report and latest.md, and findings survive limit truncation - but per-file rows name the canonical target instead of the encountered entry (F-004), and a non-recursive directory scan reports coverage complete with gate pass after scanning nothing (F-003). AC3 (runGate truthfulness) NOT MET: 8 of 13 executed artifact states return status pass where policies.md requires INCOMPLETE - absent latest.json, truncated JSON, empty file, non-report JSON, bogus gate string, missing gate field, JSON array, and gate needs-approval. The recognized-incomplete path works correctly. 2 blockers, 2 majors, 2 minors, 1 info. All six in-scope files had identical SHA-256 at review start and end (no concurrent-edit drift); the concurrently edited regions named in the dispatch are excluded from this verdict. Hash drift note: src/security/service.ts changed under review (95e7786e -> 5ddf3732, 318->320 lines) while the other five in-scope files stayed byte-identical; the edit is confined to the excluded validateSerializedOutput region and every statement cited by F-001/F-002/F-006 is textually unchanged, so line numbers were re-anchored to the post-drift file and the probe observations carry over.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC6 (AFC-17): a nested folder does not produce EISDIR; a symlink cycle does not loop; inaccessible entries and exhausted limits are reflected; a found violation and incomplete coverage are visible simultaneously.",
+      "status": "met",
+      "evidence": "Probes P1-P6 in T28-scan-probe.ts driving the real securityCommand CLI entry point. Raw .metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log (sha256 687f8e8cd335cdcd892640cd375c11fa5f4bad714e31bc5d0e0be69392aefa83): P1 3-level nesting + mutual dir cycle + self-link finished in 20ms with stderrHasEISDIR false; P2 chmod-000 file -> failed/unreadable + coverage incomplete + gate fail + 1 finding; P3 --max-files 1 -> coverage incomplete (file limit exceeded) + gate fail + finding retained; P4 clean tree + unreadable -> gate incomplete; P6 single-file target -> scanned, no EISDIR."
+    },
+    {
+      "criterion": "Policy (policies.md, security scan): scope/excludes/max size+count/required coverage fixed before run; internal symlinks and visited canonical identities recognized, external symlink denied; per-file scanned/skipped/failed with reasons but no hidden names for an unauthorized caller; findings preserved independently of coverage.",
+      "status": "not_met",
+      "evidence": "Verified MET: scope built at path-scan.ts:110-118 before the first visit() and echoed into the report; canonical duplicate scanned exactly once (findingCount 1, not 2); external file and directory symlinks refused under their in-scope names with leaksOutsideFileName/NestedName/DirName/TmpAbsolutePath/OutsideContent all false across the JSON report AND the committable latest.md; out-of-root exclusion echoed as [external exclusion omitted]; findings survive --max-files truncation. FAILS on two clauses: F-004 - per-file rows key on the canonical path so corpus/x is reported skipped though it was fully traversed and corpus/dup-creds.env gets no row while corpus/a/b/c/creds.env gets two contradictory ones (raw ...13-13-20-438Z_run.log lines 26-68); F-003 - a non-recursive directory scan returns coverage complete + gate pass with zero files scanned over a directory holding a detectable synthetic secret (raw ...13-14-50-693Z_run.log lines 239-261)."
+    },
+    {
+      "criterion": "runGate truthfulness: no report, malformed report and incomplete report are each classified without a false pass; the verdict is backed by an executed probe with a raw log reference.",
+      "status": "not_met",
+      "evidence": "T28-gate-probe.ts, 13 artifact states, runGate and createSecurityService().gate agreeing in every case. Raw .metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log (sha256 c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077), SUMMARY at line 155. pass returned for: (a) absent latest.json, (b) truncated JSON, (b2) empty file, (b3) non-report JSON object, (b4) gate banana, (b5) missing gate field, (b6) JSON array, (e) gate needs-approval. Correct for: (c) incomplete -> incomplete, (d) fail -> fail, (f) pass -> pass, (g) fail+coverage incomplete -> fail. End-to-end control: a real runScanPath producing gate incomplete is correctly read back as incomplete. runReport shares the defect, synthesizing a gate pass report for absent/malformed input (service.ts:203-208). Under policies.md (missing/skipped/unparsed/unfinished required check => INCOMPLETE; strict CI accepts only PASS) eight of thirteen states are false passes."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full Stage 1 review: scope hashes, severity counts, per-criterion verdict table, 7 findings with class_scope, confirmed clean areas, evidence table with raw log SHA-256, routing audit, keryx:findings JSON block."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe P1-P6: recursion/cycle, external+unreadable leak canaries, --max-files/--max-bytes exhaustion, clean+incomplete, flag behaviour, single-file target. Drives securityCommand with --json on mkdtemp fixtures."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Probe of runGate/runReport over 13 latest.json artifact states, plus an end-to-end scan(incomplete)->runGate control and the non-recursive directory scan case."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw scan-probe output.",
+      "hash": "687f8e8cd335cdcd892640cd375c11fa5f4bad714e31bc5d0e0be69392aefa83"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw gate-probe output.",
+      "hash": "c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-15-07-546Z_run.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "bun test src/commands/security-recursive-scan.test.ts -> 3 pass / 0 fail / 18 expect() calls.",
+      "hash": "396272a8f0c0cad7be8a151225a6c21c3211d249329a4d8bc9e23a1ce051457f"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T13-14-56-413Z_run.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Extracted gate-probe SUMMARY, E2E control and non-recursive case.",
+      "hash": "ef147b773268d9a2d892bebefed27eb217cfba72c1ee294a70f29ed899cd5576"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-review.md",
+      "change": "added (review artifact)"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json",
+      "change": "added (subagent-result artifact)"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-scan-probe.ts",
+      "change": "added (probe script)"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts",
+      "change": "added (probe script)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T28#F-001",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "blocker",
+      "file": "src/security/service.ts",
+      "line": 219,
+      "symbol": "runGate",
+      "problem": "readLatestReport returns null for both an absent latest.json (line 190) and a JSON.parse failure (line 195), and runGate maps that null to {status: \"pass\"}. A security gate that was never run, and a gate whose artifact is truncated or unreadable, are both reported as pass.",
+      "impact": "policies.md fixes the fold as: a required check that is missing, skipped, unparsed or unfinished yields INCOMPLETE, and strict CI accepts only PASS. Any consumer gating on SecurityService.gate().status === 'pass' is signed off as clean by never having scanned, or by a corrupted artifact. runReport shares the defect, emitting a synthesized report with gate 'pass' for the same inputs (service.ts:206-211).",
+      "suggested_fix": "Return a discriminated outcome from readLatestReport ({kind:'absent'} | {kind:'unparsed', reason} | {kind:'report', report}) and map absent and unparsed to status 'incomplete' in runGate, keeping the existing human-readable reason. 'incomplete' is already in runGate's return union, so no signature change is needed.",
+      "evidence": "Executed probe .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-gate-probe.ts cases a, b, b2 (absent / truncated / empty latest.json) -> runGate status 'pass' in all three. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log, SUMMARY block at line 155 (sha256 c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077).",
+      "confidence": "high",
+      "dedupe_key": "security-service-rungate-null-report-pass",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/service.ts:189-191",
+          "src/security/service.ts:193-196",
+          "src/security/service.ts:216-221",
+          "src/security/service.ts:206-211"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg \"runGate|\\.gate\\(|readLatestReport\" src : readLatestReport has exactly two callers (runReport, runGate), both in service.ts; runGate has exactly one wiring site (service.ts:315). grep -rn \"\\.gate(\" src/mcp src/commands src/lib returns only createCodeHealthService hits, so there is currently no in-repo consumer of the security gate and the class is closed inside service.ts."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T28#F-002",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "blocker",
+      "file": "src/security/service.ts",
+      "line": 229,
+      "symbol": "runGate",
+      "problem": "The gate fold is a two-value denylist (gate === 'fail' || gate === 'incomplete') followed by an unconditional return of status 'pass'. SecurityGate is a four-value union including 'needs-approval' (types.ts:68), so needs-approval returns pass. So do a missing gate field, an unknown gate string, and a latest.json that parsed as an array, because line 193 casts the parsed value with `as SecurityReport` without validating its shape. The missing-field case emits the reason string 'security gate: undefined' and still returns pass.",
+      "impact": "needs-approval is the value that stops an unattended write pending a human (workspace.ts:157 requires --acknowledge-security for it); routing it to pass lets an approval-gated decision be consumed as approved. The unvalidated-shape cases make a corrupted or attacker-planted artifact a clean bill of health, so the cheapest tampering is not forging a pass report but writing any malformed bytes to latest.json.",
+      "suggested_fix": "Invert to an allowlist over the validated union: pass->pass, fail->fail, incomplete->incomplete, needs-approval->incomplete (or fail), and any other value -> incomplete with reason 'unrecognized gate value'. Validate the parsed object against the existing report schema in schemas.ts before reading latest.gate.",
+      "evidence": "Executed probe T28-gate-probe.ts cases b3 ({\"unrelated\":true}), b4 (gate 'banana'), b5 (gate field missing), b6 ([]) and e (gate 'needs-approval') -> runGate status 'pass' in all five. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log lines 172-203 (sha256 c9090c265d97178fceca3f070bb1e5d144499448f2cdf298e7c899baf3ef4077).",
+      "confidence": "high",
+      "dedupe_key": "security-service-rungate-unrecognized-gate-pass",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/service.ts:223-229",
+          "src/security/service.ts:193"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg \"SecurityGate\" src/security/types.ts gives the complete four-value union at types.ts:68; grep -n \"latest.gate\\|\\.gate ===\" src/security/service.ts shows lines 220-226 are the only place in src/security that branches on a persisted report's gate for a gate decision. computeGate in resolve.ts produces the value and is not part of this class."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T28#F-003",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "major",
+      "file": "src/security/path-scan.ts",
+      "line": 194,
+      "symbol": "scanContainedPath.visit",
+      "problem": "With scope.recursive false and a directory target, visit pushes {status:'skipped', reason:'recursive traversal disabled'} and returns without scanning the directory's own direct children and without calling incomplete(). The traversal therefore declares coverage 'complete' for a directory in which it opened no file, and runScanPath leaves computeGate([])'s 'pass' untouched (service.ts:173-175).",
+      "impact": "runScanPath(cwd, {recursive:false, targetPath:<dir>}) is a silent total false pass — coverage complete, gate pass, zero findings — with a detectable secret sitting in the target. Latent rather than live: no in-repo caller passes recursive:false today, and the CLI cannot request it (see F-005). It is reachable by any consumer of the exported runScanPath, and `recursive` is part of the published option type.",
+      "suggested_fix": "Either (a) make non-recursive mean scan the direct children without descending, and mark incomplete('recursive traversal disabled') for each sub-directory not entered; or (b) if policies.md's 'file or recursive directory' means non-recursive directories are unsupported, remove `recursive` from SecurityScanOptions and runScanPath rather than leaving a reachable option that returns a false clean. Either way, recursive:false on a directory must never yield coverage complete.",
+      "evidence": "Executed probe T28-gate-probe.ts, final section 'non-recursive directory scan': gate 'pass', coverage {status:'complete'}, files [{path:'corpus', status:'skipped', reason:'recursive traversal disabled'}], findingCount 0, while corpus/creds.env held a synthetic AWS example key that the same scanner flags in every recursive probe; the subsequent runGate on that cwd returned pass. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-14-50-693Z_run.log lines 239-261.",
+      "confidence": "high",
+      "dedupe_key": "path-scan-nonrecursive-complete-coverage",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/path-scan.ts:194-197",
+          "src/security/service.ts:127",
+          "src/security/service.ts:141",
+          "src/commands/security.ts:282"
+        ],
+        "enumeration_method": "bun src/cli.ts ctx rg \"recursive\" src/security : scope.recursive is read at exactly one site (path-scan.ts:194) and input.recursive forwarded at exactly one site (service.ts:138). Every other match is the unrelated fs mkdir/rm `recursive` option or a test helper. No production caller in src, src/commands or src/mcp supplies recursive:false, so the class is these four sites and is currently unexercised."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T28#F-004",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "major",
+      "file": "src/security/path-scan.ts",
+      "line": 168,
+      "symbol": "scanContainedPath.visit",
+      "problem": "Twelve of the fourteen files.push sites key the per-file row on displayPath (the path actually walked). Two do not: line 168 ('canonical identity already visited') and line 228 ('scanned', via safePath) key on relativePath(ownerRoot, canonical). The row therefore reports the outcome of one filesystem entry under a different entry's name.",
+      "impact": "The Files section of a committable security artifact contradicts what happened, in the one place an operator reads to answer what was covered. Observed in a single probe run: corpus/x is listed as skipped('canonical identity already visited') although corpus/x was fully traversed (the skipped entry was corpus/y/toX), and corpus/a/b/c/creds.env appears twice, once scanned and once skipped, while the symlink that produced the second row (corpus/dup-creds.env) has no row at all. Gate and coverage are unaffected. It also weakens the T20 test at security-recursive-scan.test.ts:52-54, whose secretFiles filter passes because the alias row is folded onto the target's path.",
+      "suggested_fix": "Report path: displayPath on both rows and carry the canonical separately — a distinct optional field (resolvedPath) or inside reason, e.g. 'canonical identity already visited (corpus/a/b/c/creds.env)'. The canonical is proven in-scope by the isInside check at line 147 before either line runs, so surfacing it leaks nothing. Then tighten the T20 test to assert on the encountered names.",
+      "evidence": "Executed probe T28-scan-probe.ts section 'P1 recursion/cycle': files[] contains two rows for corpus/a/b/c/creds.env (one scanned, one skipped) and none for corpus/dup-creds.env, plus a skipped row for corpus/x which the fixture proves was traversed. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log lines 26-68 (sha256 687f8e8cd335cdcd892640cd375c11fa5f4bad714e31bc5d0e0be69392aefa83).",
+      "confidence": "high",
+      "dedupe_key": "path-scan-file-row-canonical-vs-encountered-path",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": false,
+      "class_scope": {
+        "sites": [
+          "src/security/path-scan.ts:168",
+          "src/security/path-scan.ts:227-229"
+        ],
+        "enumeration_method": "grep -n \"files.push\" src/security/path-scan.ts (via keryx ctx run) returns 14 push sites; 12 pass displayPath and exactly these 2 substitute relativePath(ownerRoot, canonical). The set is exhaustive because `files` is a module-local array with no other writer, and runScanPath only copies rows with {...file} and mutates status/reason (service.ts:148-152)."
+      }
+    },
+    {
+      "id": "F-005",
+      "global_id": "T28#F-005",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "minor",
+      "file": "src/commands/security.ts",
+      "line": 282,
+      "symbol": "scanPathArgument / handleScan",
+      "problem": "scanPathArgument skips --recursive so it is not read as the target path, and handleScan never reads it and never forwards `recursive` to runScanPath. scanContainedPath defaults to recursive true, so the flag has no effect and there is no --no-recursive to negate it.",
+      "impact": "Low and partly self-documented (security.ts:982 calls it 'the default for directory targets'), but the CLI advertises a scan-scope control that does nothing, accepts it on single-file targets, and makes F-003's dead branch look reachable and reviewed when nothing in the CLI can reach it.",
+      "suggested_fix": "Resolve with F-003: if non-recursive scanning is supported, add --no-recursive and forward the value; if it is not, drop --recursive from the usage string (security.ts:197, 963) and the help table (982).",
+      "evidence": "Executed probe T28-scan-probe.ts section 'P5 flags': withFlagFiles and withoutFlagFiles are identical and both report scope.recursive true. Raw log .metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log lines 209-232.",
+      "confidence": "high",
+      "dedupe_key": "security-cli-recursive-flag-noop",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": false
+    },
+    {
+      "id": "F-006",
+      "global_id": "T28#F-006",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "minor",
+      "file": "src/security/service.ts",
+      "line": 213,
+      "symbol": "runGate",
+      "problem": "No test anywhere in the repository exercises the security gate. Every `.gate({cwd` hit is createCodeHealthService in health-incomplete.test.ts; runGate itself is referenced only by its definition and its wiring at service.ts:315.",
+      "impact": "F-001 and F-002 are precisely what a small table test would have caught, and the T20 self-report's '53 focused tests pass' is fully compatible with the gate being wrong in every branch. I independently confirmed the traversal half of that claim (bun test src/commands/security-recursive-scan.test.ts -> 3 pass / 0 fail / 18 expect() calls), so the untested area is the gate, not the scanner.",
+      "suggested_fix": "Add a table-driven src/security/service.gate.test.ts over the 13 artifact states in T28-gate-probe.ts, asserting runGate status per state. The probe file is written to be liftable more or less as-is.",
+      "evidence": "bun src/cli.ts ctx rg \"runGate|gate\\(\\{ cwd\" src/security src/commands -> raw .metaproject/data/gdctx/raw/2026-09-06T13-15-22-543Z_rg.log; test run raw .metaproject/data/gdctx/raw/2026-09-06T13-15-07-546Z_run.log (sha256 396272a8f0c0cad7be8a151225a6c21c3211d249329a4d8bc9e23a1ce051457f).",
+      "confidence": "high",
+      "dedupe_key": "security-rungate-untested",
+      "blocking_merge": false,
+      "related_skill": "testing",
+      "learning_candidate": true
+    },
+    {
+      "id": "F-007",
+      "global_id": "T28#F-007",
+      "reviewer": "review-logic+review-security-code",
+      "severity": "info",
+      "file": "src/security/path-scan.ts",
+      "line": 124,
+      "symbol": "scanContainedPath",
+      "problem": "coverage.required is a hardcoded true with no configuration path, while policies.md lists 'required coverage' among the things fixed before the run alongside scope/excludes/limits, and describes an optional skip that warns and is not signed as passed.",
+      "impact": "None today: hardcoding true is the conservative direction and every current scan is genuinely required. Recorded so the field is not later mistaken for an implemented knob.",
+      "suggested_fix": "Either accept `required` in SecurityScanOptions and thread it from config, or add a one-line comment stating that all scans are required by policy so the constant is visibly deliberate.",
+      "evidence": "coverage.required is true in every probe output regardless of flags — raw .metaproject/data/gdctx/raw/2026-09-06T13-13-20-438Z_run.log (P1 through P6).",
+      "confidence": "high",
+      "dedupe_key": "path-scan-coverage-required-hardcoded",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "Should runGate map a report with gate needs-approval to incomplete or to fail?",
+      "why": "policies.md fixes only that strict CI accepts PASS alone; it does not say which not-pass value an approval-pending scan folds to. F-002 is a defect either way, but the fix needs the project decision. workspace.ts:157 treats needs-approval as a hard stop requiring explicit acknowledgement, which argues for fail.",
+      "options": [
+        {
+          "id": "incomplete",
+          "label": "needs-approval -> incomplete (the check finished but is unsigned)",
+          "recommended": true
+        },
+        {
+          "id": "fail",
+          "label": "needs-approval -> fail (matches workspace.ts hard-stop semantics)"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "Q-002",
+      "question": "Is a non-recursive directory scan a supported surface at all?",
+      "why": "policies.md says scan accepts a file or a recursive directory, which reads as if recursive:false on a directory is out of spec. F-003 fix (a) repairs the behaviour, fix (b) removes the option. No in-repo caller uses it and the CLI cannot request it, so removal is cheap today and gets expensive once an external consumer adopts runScanPath.",
+      "options": [
+        {
+          "id": "repair",
+          "label": "Scan direct children and mark sub-directories incomplete"
+        },
+        {
+          "id": "remove",
+          "label": "Remove `recursive` from SecurityScanOptions and runScanPath",
+          "recommended": true
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "probes_executed": 21,
+    "probe_cases_gate": 13,
+    "probe_cases_scan": 8,
+    "findings_blocker": 2,
+    "findings_major": 2,
+    "findings_minor": 2,
+    "findings_info": 1,
+    "stage1_criteria_met": 1,
+    "stage1_criteria_not_met": 2,
+    "stage2_run": false,
+    "files_hash_drift": 1,
+    "hash_drift_files": [
+      "src/security/service.ts"
+    ],
+    "hash_drift_affects_verdict": false
+  },
+  "timestamp_utc": "2026-09-06T13:23:14.763Z"
+}

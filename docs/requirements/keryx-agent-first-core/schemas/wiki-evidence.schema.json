@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wiki-evidence.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "scope": {
+      "$ref": "common.schema.json#/$defs/scope"
+    },
+    "pageRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pageVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sectionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sectionVersion": {
+      "type": "string",
+      "minLength": 1
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "contentClass": {
+      "enum": [
+        "substantive",
+        "scaffold",
+        "reference"
+      ]
+    },
+    "excerpt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startLine": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "endLine": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "text",
+        "startLine",
+        "endLine"
+      ]
+    },
+    "lifecycle": {
+      "$ref": "common.schema.json#/$defs/lifecycle"
+    },
+    "freshness": {
+      "$ref": "common.schema.json#/$defs/freshness"
+    },
+    "provenance": {
+      "$ref": "common.schema.json#/$defs/provenance"
+    },
+    "caveats": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/constraint"
+      }
+    },
+    "bindings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "relation": {
+            "enum": [
+              "describes",
+              "based-on",
+              "verified-by",
+              "supersedes"
+            ]
+          },
+          "targetRef": {
+            "type": "string",
+            "minLength": 1
+          },
+          "targetVersion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "qualification": {
+            "enum": [
+              "confirmed",
+              "proposed",
+              "broken",
+              "unknown"
+            ]
+          }
+        },
+        "required": [
+          "relation",
+          "targetRef",
+          "targetVersion",
+          "qualification"
+        ]
+      }
+    },
+    "conflictRefs": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/source"
+      }
+    },
+    "continuation": {
+      "$ref": "common.schema.json#/$defs/continuation"
+    }
+  },
+  "required": [
+    "contractVersion",
+    "scope",
+    "pageRef",
+    "pageVersion",
+    "sectionId",
+    "sectionVersion",
+    "title",
+    "contentClass",
+    "excerpt",
+    "lifecycle",
+    "freshness",
+    "provenance",
+    "caveats",
+    "bindings",
+    "conflictRefs"
+  ]
+}

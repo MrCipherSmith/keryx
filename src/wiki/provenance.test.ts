@@ -7,6 +7,7 @@ import path from "node:path";
 import type { GraphData } from "../gdgraph/types";
 import {
   computeVerifiedScope,
+  parsePageLifecycle,
   parseProvenance,
   upsertFrontmatterField,
   writeProvenance,
@@ -158,5 +159,122 @@ describe("computeVerifiedScope (AC9)", () => {
     const before = await computeVerifiedScope(cwd, ["src/f1.ts"], graph);
     const after = await computeVerifiedScope(cwd, ["src/gone.ts"], graph);
     expect(after).not.toBe(before);
+  });
+});
+
+// AFC-06 (flow 234): the same six input classes `src/memory/lifecycle.test.ts`
+// covers on the memory surface, covered here on the wiki surface through
+// `parsePageLifecycle`, which delegates to the same `computeLifecycle`.
+describe("parsePageLifecycle (AFC-06 AC1)", () => {
+  const NOW = new Date("2026-06-15T00:00:00.000Z");
+  const page = (fields: Record<string, string>) =>
+    ["# Page", ...Object.entries(fields).map(([k, v]) => `${k}: ${v}`), "", "## Overview", ""].join("\n");
+
+  test("date boundary: ValidFrom == observedAt is current, ValidTo == observedAt is not (AC1 class 1)", () => {
+    const atStart = parsePageLifecycle(page({ Status: "accepted", ValidFrom: "2026-06-15" }), NOW);
+    expect(atStart).toMatchObject({ state: "current", current: true, historical: false });
+
+    const atEnd = parsePageLifecycle(
+      page({ Status: "accepted", ValidFrom: "2026-01-01", ValidTo: "2026-06-15" }),
+      NOW,
+    );
+    expect(atEnd).toMatchObject({ state: "expired", current: false, historical: true });
+  });
+
+  test("future: ValidFrom later than observedAt is not current (AC1 class 2)", () => {
+    const result = parsePageLifecycle(page({ Status: "accepted", ValidFrom: "2026-07-01" }), NOW);
+    expect(result).toMatchObject({ state: "future", current: false, historical: true });
+  });
+
+  test("deprecated: Status: deprecated is never current (AC1 class 3)", () => {
+    const result = parsePageLifecycle(page({ Status: "deprecated" }), NOW);
+    expect(result).toMatchObject({ state: "deprecated", current: false, historical: true });
+  });
+
+  test("conflict: Status: conflict is never current (AC1 class 4)", () => {
+    const result = parsePageLifecycle(page({ Status: "conflict" }), NOW);
+    expect(result).toMatchObject({ state: "conflict", current: false, historical: true });
+  });
+
+  test("superseded: SupersededBy without a lookup is superseded (AC1 class 5)", () => {
+    const result = parsePageLifecycle(
+      page({ Status: "accepted", SupersededBy: "architecture/newer.md" }),
+      NOW,
+    );
+    expect(result).toMatchObject({ state: "superseded", current: false, historical: true });
+  });
+
+  test("malformed date: an unparsable ValidFrom yields an invalid lifecycle, not silently current (AC1 class 6)", () => {
+    const result = parsePageLifecycle(page({ Status: "accepted", ValidFrom: "not-a-date" }), NOW);
+    expect(result).toMatchObject({ state: "invalid", current: false, historical: true });
+    expect(result.reasons).toContain("malformed-valid-from");
+  });
+
+  test("a page with no Status line at all never becomes accepted", () => {
+    const result = parsePageLifecycle("# Bare page\n\nNo frontmatter.\n", NOW);
+    expect(result).toMatchObject({ state: "unknown", current: false, historical: true });
+  });
+
+  test("historical is exactly the complement of current, mirroring the memory surface", () => {
+    const current = parsePageLifecycle(page({ Status: "accepted" }), NOW);
+    const deprecated = parsePageLifecycle(page({ Status: "deprecated" }), NOW);
+    expect(current.historical).toBe(false);
+    expect(deprecated.historical).toBe(true);
+  });
+});
+
+// AFC-06 (flow 234), T18 item 3: memory frontmatter spells these fields
+// hyphenated (`Valid-From`/`Valid-To`/`Superseded-By`, `src/memory/store.ts`);
+// wiki frontmatter documents the unhyphenated form (`ValidFrom`/`ValidTo`/
+// `SupersededBy`, `src/wiki/collect.ts`). Verified directly against both
+// parsers before this fix (see the task report). Without accepting both
+// spellings, an author who copies a working entry from one surface to the
+// other silently gets a field that parses to nothing and a page that is
+// admitted when it should be rejected -- the exact silent trap AC1 forbids.
+describe("parsePageLifecycle accepts the memory-frontmatter (hyphenated) field spelling", () => {
+  const NOW = new Date("2026-06-15T00:00:00.000Z");
+
+  test("a hyphenated Valid-From in the future is rejected, not silently admitted", () => {
+    const content = ["# Page", "Status: accepted", "Valid-From: 2999-01-01", "", "## Overview", ""].join("\n");
+    const result = parsePageLifecycle(content, NOW);
+    expect(result).toMatchObject({ state: "future", current: false, historical: true });
+  });
+
+  test("a hyphenated Valid-To boundary behaves identically to the unhyphenated spelling", () => {
+    const hyphenated = parsePageLifecycle(
+      ["# Page", "Status: accepted", "Valid-From: 2026-01-01", "Valid-To: 2026-06-15", "", "## Overview", ""].join(
+        "\n",
+      ),
+      NOW,
+    );
+    const unhyphenated = parsePageLifecycle(
+      ["# Page", "Status: accepted", "ValidFrom: 2026-01-01", "ValidTo: 2026-06-15", "", "## Overview", ""].join(
+        "\n",
+      ),
+      NOW,
+    );
+    expect(hyphenated).toMatchObject({ state: "expired", current: false, historical: true });
+    expect(hyphenated.state).toBe(unhyphenated.state);
+  });
+
+  test("a hyphenated Superseded-By is admitted/rejected the same as SupersededBy", () => {
+    const hyphenated = parsePageLifecycle(
+      ["# Page", "Status: accepted", "Superseded-By: architecture/newer.md", "", "## Overview", ""].join("\n"),
+      NOW,
+    );
+    expect(hyphenated).toMatchObject({ state: "superseded", current: false, historical: true });
+  });
+
+  test("when both spellings are present, the wiki (unhyphenated) spelling wins", () => {
+    // Valid-From (hyphenated) says "still future"; ValidFrom (unhyphenated,
+    // what this module documents as canonical) says "already valid". The
+    // unhyphenated value must be the one that decides the verdict.
+    const result = parsePageLifecycle(
+      ["# Page", "Status: accepted", "Valid-From: 2999-01-01", "ValidFrom: 2026-01-01", "", "## Overview", ""].join(
+        "\n",
+      ),
+      NOW,
+    );
+    expect(result).toMatchObject({ state: "current", current: true, historical: false });
   });
 });

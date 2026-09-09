@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
@@ -13,6 +13,7 @@ import type {
   ScoredEntry,
 } from "../../memory/types";
 import type { FlowService } from "../../flow/types";
+import type { TestingContext } from "../../testing/types";
 import { createMetaprojectAdapter, type MetaprojectAdapterDeps } from "./metaproject-adapter";
 
 const CWD = "/proj";
@@ -112,7 +113,15 @@ function fakeDeps(opts: {
 
   return {
     calls,
-    deps: { createGdgraphService: () => gdgraph, createMemoryService: () => memory },
+    deps: {
+      createGdgraphService: () => gdgraph,
+      createMemoryService: () => memory,
+      // Flow 235 T8: every graph-backed result now carries the tri-state
+      // freshness the CLI prints. Pinned here so these tests stay hermetic
+      // (the real check shells out to git) and assert delegation, not the
+      // state of whatever tree they happen to run in.
+      checkGraphStaleness: async () => ({ status: "fresh" as const, reasons: [] }),
+    },
   };
 }
 
@@ -157,12 +166,14 @@ test("graphQuery delegates to the fake for orphans and cycles", async () => {
   expect(await orphans.graphQuery({ query: "orphans" })).toEqual({
     query: "orphans",
     orphans: ["src/x.ts"],
+    staleness: { status: "fresh", reasons: [] },
   });
 
   const cycles = createMetaprojectAdapter(CWD, fakeDeps({ query: [["a", "b", "a"]] }).deps);
   expect(await cycles.graphQuery({ query: "cycles" })).toEqual({
     query: "cycles",
     cycles: [["a", "b", "a"]],
+    staleness: { status: "fresh", reasons: [] },
   });
 });
 
@@ -185,16 +196,55 @@ test("memorySearch delegates to the injected memory fake and maps ranked hits", 
   expect(calls.search[0]?.filters).toMatchObject({ module: "harness", status: "accepted", limit: 5 });
   expect(calls.search[0]?.filters?.asOf).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(result.filters).toMatchObject({ module: "harness", status: "accepted" });
-  expect(result.hits).toEqual([
-    {
-      path: "decisions/x.md",
-      title: "Offline determinism",
-      type: "decision",
-      status: "accepted",
-      score: 0.75,
-      excerpt: "Keep the harness core offline and deterministic.",
-    },
-  ]);
+  expect(result.hits).toHaveLength(1);
+  // T51 finding F-007 (flow 234 review, MAJOR): the OLD assertion here was
+  // `toEqual` against the exact six-field object literal below — it failed
+  // the moment provenance fields were added, so the F-002 omission read as
+  // intentional and the correct fix looked like a regression. Pin the
+  // identity fields with `toMatchObject` (which does NOT forbid additional
+  // properties) instead of a shape that forbids growth.
+  expect(result.hits[0]).toMatchObject({
+    path: "decisions/x.md",
+    title: "Offline determinism",
+    type: "decision",
+    status: "accepted",
+    score: 0.75,
+    excerpt: "Keep the harness core offline and deterministic.",
+  });
+  // F-002 (flow 234 review, BLOCKER): the provenance fields themselves must
+  // be present, and an entry with no captured source must carry the literal
+  // "unknown" sentinel rather than being silently omitted or blank.
+  expect(result.hits[0]?.version).toBe("unknown");
+  expect(result.hits[0]?.provenance).toEqual({ source: "unknown", link: "unknown" });
+  expect(result.hits[0]?.author).toBe("unknown");
+  expect(result.hits[0]?.confirmedBy).toBe("unknown");
+  expect(result.hits[0]?.caveat).toBeNull();
+});
+
+test("memorySearch carries a fully provenanced entry through byte-for-byte, distinct from an unsourced one", async () => {
+  const scored: ScoredEntry = {
+    entry: entry({
+      version: "v3",
+      provenance: { source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" },
+      author: "alice",
+      confirmedBy: "council:2026-01-09",
+      caveat: "superseded once the migration lands",
+    }),
+    score: 0.9,
+    components: { relevance: 1, recency: 0, confidence: 1, status: 1, scope: 0 },
+    reason: "match",
+  };
+  const { deps } = fakeDeps({
+    search: { schemaVersion: 1, query: "offline", results: [scored] },
+  });
+  const port = createMetaprojectAdapter(CWD, deps);
+  const result = await port.memorySearch({ query: "offline" });
+
+  expect(result.hits[0]?.version).toBe("v3");
+  expect(result.hits[0]?.provenance).toEqual({ source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" });
+  expect(result.hits[0]?.author).toBe("alice");
+  expect(result.hits[0]?.confirmedBy).toBe("council:2026-01-09");
+  expect(result.hits[0]?.caveat).toBe("superseded once the migration lands");
 });
 
 test("memorySearch validates automatic-recall inputs at the port boundary", async () => {
@@ -216,11 +266,17 @@ test("memorySearch validates automatic-recall inputs at the port boundary", asyn
 });
 
 test("readWiki rejects a path that escapes the wiki root with a structured error result", async () => {
+  // Corrected expectation (T51): the old message interpolated the requested
+  // path into the error string. T6's contained-reader hardening replaced it
+  // with a constant, leak-safe literal that names no path — the same bar
+  // `metaproject-adapter-containment.test.ts`'s `assertSafeWikiError` holds
+  // readWiki to elsewhere in this file's own test suite. This is a corrected
+  // assertion catching up to that deliberate change, not a weakened one.
   const port = createMetaprojectAdapter(CWD, fakeDeps({}).deps);
   const result = await port.readWiki({ path: "../../etc/passwd" });
   expect(result.isError).toBe(true);
   expect(result.content).toBe("");
-  expect(result.error).toContain("escapes the wiki root");
+  expect(result.error).toContain("wiki path is outside its root");
 });
 
 test("readWiki rejects an absolute path escape", async () => {
@@ -231,24 +287,77 @@ test("readWiki rejects an absolute path escape", async () => {
 
 // --- flow 043: new adapter methods -------------------------------------------
 
-test("testRelated delegates to the injected resolver and sorts the results", async () => {
+/** Minimal complete TestingContext stub for a testRelated fake. */
+function testingContext(overrides: Partial<TestingContext> = {}): TestingContext {
+  return {
+    schemaVersion: 1,
+    generatedAt: "2026-01-01T00:00:00.000Z",
+    status: "complete",
+    incompleteReasons: [],
+    frameworks: [],
+    scripts: [],
+    configs: [],
+    testFiles: [],
+    ciFiles: [],
+    instructionFiles: [],
+    conventions: [],
+    recommendations: [],
+    ...overrides,
+  };
+}
+
+test("testRelated delegates to the injected computation + lookup and sorts the results", async () => {
+  const calls: Array<{ cwd: string; target: string }> = [];
+  const context = testingContext();
   const adapter = createMetaprojectAdapter("/proj", {
-    findRelatedTests: async (_cwd, _target) => ["b.test.ts", "a.test.ts"],
+    computeTestingContext: async (cwd) => {
+      expect(cwd).toBe("/proj");
+      return context;
+    },
+    relatedTestsInContext: async (cwd, ctx, target) => {
+      calls.push({ cwd, target });
+      expect(ctx).toBe(context);
+      return ["b.test.ts", "a.test.ts"];
+    },
   });
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
+  expect(calls).toEqual([{ cwd: "/proj", target: "src/a.ts" }]);
   expect(result?.tests).toEqual(["a.test.ts", "b.test.ts"]);
+  expect(result?.context).toEqual({ status: "complete", incompleteReasons: [] });
   expect(result?.error).toBeUndefined();
 });
 
-test("testRelated returns a structured error (never throws) when the resolver fails", async () => {
+test("testRelated returns a structured error (never throws) when the computation fails", async () => {
   const adapter = createMetaprojectAdapter("/proj", {
-    findRelatedTests: async () => {
+    computeTestingContext: async () => {
       throw new Error("testing boom");
     },
   });
   const result = await adapter.testRelated?.({ file: "src/a.ts" });
   expect(result?.tests).toEqual([]);
   expect(result?.error).toMatch(/testing boom/);
+});
+
+// F-003 (flow 234 review, MAJOR) / AC2: an inability to fully refresh the
+// testing context must reach this boundary as `incomplete`, not as a
+// legitimate-looking empty `tests: []` result indistinguishable from "this
+// file genuinely has no related tests".
+test("testRelated surfaces an incomplete context refresh instead of a silent empty result", async () => {
+  const incompleteContext = testingContext({
+    status: "incomplete",
+    incompleteReasons: ["src/locked: EACCES: permission denied"],
+  });
+  const adapter = createMetaprojectAdapter("/proj", {
+    computeTestingContext: async () => incompleteContext,
+    relatedTestsInContext: async () => [],
+  });
+  const result = await adapter.testRelated?.({ file: "src/locked/a.ts" });
+  expect(result?.tests).toEqual([]);
+  expect(result?.context).toEqual({
+    status: "incomplete",
+    incompleteReasons: ["src/locked: EACCES: permission denied"],
+  });
+  expect(result?.error).toBeUndefined();
 });
 
 // --- flow_status: Task Manager flow listing (read-risk alternative to `shell_exec`ing `keryx flow list`) ---
@@ -732,5 +841,175 @@ test("loadSkill rejects a real on-disk path that the catalog walk never discover
     const result = await adapter.loadSkill?.({ name: strayPath });
     expect(result?.found).toBe(false);
     expect(result?.content).toBe("");
+  });
+});
+
+// --- flow 242 (forgetting) lane C: readWiki / memorySearch / wikiResolve ----
+// named outcomes (AC3 + AC5). Real filesystem, real `chmod` — a fake catching
+// a hand-picked error code would prove nothing about the actual EACCES this
+// was measured on.
+
+const SKIP_PERMISSION_TESTS = process.getuid?.() === 0 || process.platform === "win32";
+
+/** Build a temp project root with one real wiki page under architecture/. */
+async function withWikiFixture(fn: (root: string) => Promise<void>): Promise<void> {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-wiki-forgetting-"));
+  try {
+    const dir = path.join(root, ".metaproject", "wiki", "architecture");
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "foo.md"), "<!-- keryx:page id=\"architecture-foo\" v=1 -->\n# Foo\n\nBody.\n", "utf8");
+    await fn(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+/** Register `architecture/foo.md`'s stable page identity in the section registry (mirrors `keryx wiki sections sync`). */
+async function syncWikiRegistry(root: string): Promise<void> {
+  const { collectPages } = await import("../../wiki/collect");
+  const { buildSectionIndex } = await import("../../wiki/section-index");
+  const { syncSectionRegistry } = await import("../../wiki/section-tombstone");
+  const pages = await collectPages(root);
+  const index = buildSectionIndex(
+    await Promise.all(pages.map(async (page) => ({ page, content: await Bun.file(page.absolutePath).text() }))),
+  );
+  const result = await syncSectionRegistry(root, index);
+  if (result.status !== "synced") {
+    throw new Error(`test setup: sync refused: ${result.reason}`);
+  }
+}
+
+test("readWiki: a page that never existed reports outcome absent", async () => {
+  await withWikiFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.readWiki({ path: "architecture/never-existed.md" });
+    expect(result.isError).toBe(true);
+    expect(result.outcome).toBe("absent");
+  });
+});
+
+test("readWiki: a registered page deleted but not yet synced reports outcome pending-tombstone, not absent", async () => {
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    const adapter = createMetaprojectAdapter(root);
+    const result = await adapter.readWiki({ path: "architecture/foo.md" });
+    expect(result.isError).toBe(true);
+    expect(result.outcome).toBe("pending-tombstone");
+  });
+});
+
+test("readWiki: a page removed AND synced reports outcome tombstoned, distinct from a page that never existed", async () => {
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    await syncWikiRegistry(root); // writes the tombstone
+    const adapter = createMetaprojectAdapter(root);
+
+    const removed = await adapter.readWiki({ path: "architecture/foo.md" });
+    expect(removed.isError).toBe(true);
+    expect(removed.outcome).toBe("tombstoned");
+
+    const neverExisted = await adapter.readWiki({ path: "architecture/never-existed.md" });
+    expect(neverExisted.isError).toBe(true);
+    expect(neverExisted.outcome).toBe("absent");
+
+    // The defect this lane exists to close: these must not be the same string.
+    expect(removed.error).not.toBe(neverExisted.error);
+  });
+});
+
+test("readWiki: a genuinely unreadable wiki store reports outcome store-unreadable, exit-code-equivalent to \"cannot tell\" (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    const wikiDir = path.join(root, ".metaproject", "wiki");
+    await chmod(wikiDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      const result = await adapter.readWiki({ path: "architecture/foo.md" });
+      expect(result.isError).toBe(true);
+      expect(result.outcome).toBe("store-unreadable");
+      expect(result.content).toBe("");
+    } finally {
+      await chmod(wikiDir, 0o755);
+    }
+  });
+});
+
+test("readWiki: an unreadable PAGE FOLDER (registry elsewhere still readable) is store-unreadable, not absent — isolates the direct stat guard from the registry-unreadable fallback", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    await syncWikiRegistry(root); // .sections.json lives at the wiki ROOT, untouched below.
+    const archDir = path.join(root, ".metaproject", "wiki", "architecture");
+    await chmod(archDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      const result = await adapter.readWiki({ path: "architecture/foo.md" });
+      expect(result.isError).toBe(true);
+      expect(result.outcome).toBe("store-unreadable");
+    } finally {
+      await chmod(archDir, 0o755);
+    }
+  });
+});
+
+test("memorySearch: a genuinely unreadable memory store reports a distinguishable error and never calls the backing service (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-memory-forgetting-"));
+  try {
+    const lessonsDir = path.join(root, ".metaproject", "memory", "lessons");
+    await mkdir(lessonsDir, { recursive: true });
+    await writeFile(path.join(lessonsDir, "kept.md"), "# Kept\nStatus: accepted\n", "utf8");
+    await chmod(lessonsDir, 0o000);
+    try {
+      const { deps, calls } = fakeDeps({});
+      const port = createMetaprojectAdapter(root, deps);
+      const result = await port.memorySearch({ query: "kept" });
+      expect(result.hits).toEqual([]);
+      expect(result.error).toBeDefined();
+      expect(result.error).toMatch(/memory store could not be read/);
+      // Before this fix, the backing service silently swallowed the same
+      // EACCES as "no entries" — proving the fix means proving the probe
+      // short-circuits BEFORE the (fake, would-have-lied) service is called.
+      expect(calls.search).toEqual([]);
+    } finally {
+      await chmod(lessonsDir, 0o755);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("wikiResolve: matches the SAME kinds `resolveSectionIdentity` (keryx wiki sections resolve) produces — tombstoned vs unknown vs store-unreadable", async () => {
+  await withWikiFixture(async (root) => {
+    const adapter = createMetaprojectAdapter(root);
+
+    // Never registered at all -> unknown (never existed).
+    const neverExisted = await adapter.wikiResolve?.({ ref: "keryx:page/does-not-exist" });
+    expect(neverExisted?.resolution.kind).toBe("unknown");
+
+    await syncWikiRegistry(root);
+    await rm(path.join(root, ".metaproject", "wiki", "architecture", "foo.md"));
+    await syncWikiRegistry(root);
+
+    const removed = await adapter.wikiResolve?.({ ref: "keryx:page/architecture-foo" });
+    expect(removed?.resolution.kind).toBe("tombstoned");
+  });
+});
+
+test("wikiResolve: a genuinely unreadable wiki store reports store-unreadable rather than throwing across the port (real chmod)", async () => {
+  if (SKIP_PERMISSION_TESTS) return;
+  await withWikiFixture(async (root) => {
+    const wikiDir = path.join(root, ".metaproject", "wiki");
+    await chmod(wikiDir, 0o000);
+    try {
+      const adapter = createMetaprojectAdapter(root);
+      // Never throws across the port — a read-only MCP-facing operation must
+      // return a structured refusal, not a stack trace crossing the transport.
+      const result = await adapter.wikiResolve?.({ ref: "keryx:page/architecture-foo" });
+      expect(result?.resolution.kind).toBe("store-unreadable");
+    } finally {
+      await chmod(wikiDir, 0o755);
+    }
   });
 });

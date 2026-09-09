@@ -13,7 +13,7 @@ import path from "node:path";
 // The SHARED stripper and tree walk, not a local copy. A third comment/string
 // stripper is the mistake `config-dir.scan.ts` was extracted to stop, and the
 // guard this file used to hold made it.
-import { code, sourceFiles, treeSources } from "../../lib/config-dir.scan";
+import { sourceFiles, treeSources } from "../../lib/config-dir.scan";
 import { constructsWith, declaresRanking, parse } from "../../lib/config-dir.ast";
 import {
   compareProfiles,
@@ -28,6 +28,47 @@ import { AUTHORITY_AXIS, INPUT_TRUST_AXIS } from "./ranks";
 import type { PolicyProfile } from "./types";
 
 const SRC = path.join(import.meta.dir, "..", "..");
+
+// The tree is read once, and each file is parsed once, for the whole file.
+//
+// Three assertions below walk the same six hundred sources, and every one of
+// them parsed each source again. Alone that cost about three and a half
+// seconds; under the full suite it crossed bun's default per-test budget, so
+// this guard passed when run by itself and failed in the full run. A guard
+// that is only reliable in isolation is worth less than its own comment.
+//
+// Reading once is not a weakening of the guard: what is scanned is still the
+// real tree on disk, and nothing in this process writes into it. The parse
+// memo keeps the source text beside the parse and re-parses whenever the text
+// for a path differs, so the planted fixtures below can never be answered from
+// a real file's parse.
+// Bun's default per-test budget is five seconds, and the first assertion that
+// touches the tree pays for the whole read and parse. That fits with room to
+// spare on an idle machine and did not fit under a fully loaded suite, which is
+// how this guard came to fail only in the full run. The memo above is the fix;
+// this budget is here so a busy machine cannot turn a passing guard red, and it
+// is stated as a number rather than left implicit so that a real regression in
+// scan cost is still visible against it.
+const SCAN_BUDGET_MS = 60_000;
+
+let treeMemo: Map<string, string> | undefined;
+
+function tree(): Map<string, string> {
+  treeMemo ??= treeSources(SRC);
+  return treeMemo;
+}
+
+const parseMemo = new Map<string, { raw: string; parsed: ReturnType<typeof parse> }>();
+
+function parseOnce(file: string, raw: string): ReturnType<typeof parse> {
+  const cached = parseMemo.get(file);
+  if (cached !== undefined && cached.raw === raw) {
+    return cached.parsed;
+  }
+  const parsed = parse(file, raw);
+  parseMemo.set(file, { raw, parsed });
+  return parsed;
+}
 
 describe("resolveLocalProfile", () => {
   test("the extracted profiles are byte-identical to the literals they replace", () => {
@@ -336,7 +377,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
 
   const RANK_TABLE = {
     test: (file: string, source: string): boolean =>
-      declaresRanking(parse(file, source), POLICY_WORDS),
+      declaresRanking(parseOnce(file, source), POLICY_WORDS),
   };
 
 
@@ -357,7 +398,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
       // merely reads one and `requiredControls` alone fires on the interface —
       // except that "fires on the interface" is no longer something that can
       // happen: an interface member is not an object literal.
-      if (constructsWith(parse(file, raw), ["trustMode", "requiredControls"])) {
+      if (constructsWith(parseOnce(file, raw), ["trustMode", "requiredControls"])) {
         offenders.push(file);
       }
     }
@@ -378,17 +419,21 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     return offenders;
   }
 
-  test("only profiles.ts constructs a PolicyProfile literal", () => {
-    expect(literalOffenders(treeSources(SRC))).toEqual([]);
-  });
+  test(
+    "only profiles.ts constructs a PolicyProfile literal",
+    () => {
+      expect(literalOffenders(tree())).toEqual([]);
+    },
+    SCAN_BUDGET_MS,
+  );
 
   test("only ranks.ts declares a permissiveness ordering", () => {
     // F-004. `compareProfiles` grew a second implementation of the ranking
     // `child/isolation.ts` already owned, and the copy dropped `trustMode` — so
     // a remote profile could claim a more trusting posture than the operator's
     // own surface extends and start anyway.
-    expect(rankOffenders(treeSources(SRC))).toEqual([]);
-  });
+    expect(rankOffenders(tree())).toEqual([]);
+  }, SCAN_BUDGET_MS);
 
   test("the scan actually reaches the source tree", () => {
     // Without this both assertions above pass vacuously if the root moves.
@@ -403,13 +448,13 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     // The complement being empty means nothing if the numerator is empty too.
     // Driven through the seams with the exemptions removed, so what is measured
     // is the predicate rather than a re-reading of it.
-    const tree = treeSources(SRC);
-    const profileFiles = [...tree].filter(([file, raw]) => {
-      return constructsWith(parse(file, raw), ["trustMode", "requiredControls"]);
+    const sources = tree();
+    const profileFiles = [...sources].filter(([file, raw]) => {
+      return constructsWith(parseOnce(file, raw), ["trustMode", "requiredControls"]);
     });
     expect(profileFiles.map(([file]) => file)).toEqual(["harness/policy/profiles.ts"]);
 
-    const rankFiles = [...tree].filter(([file, raw]) => RANK_TABLE.test(file, raw));
+    const rankFiles = [...sources].filter(([file, raw]) => RANK_TABLE.test(file, raw));
     // ONE, and the change from two is a false positive going away rather than
     // coverage being lost.
     //
@@ -424,7 +469,7 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
     // the assertion below re-derives the reason instead of trusting this comment.
     expect(rankFiles.map(([file]) => file)).toEqual(["harness/policy/ranks.ts"]);
 
-    const resolve = tree.get("security/resolve.ts");
+    const resolve = sources.get("security/resolve.ts");
     expect(resolve).toBeDefined();
     // It does declare an ordering — over a vocabulary that is not this one.
     expect(declaresRanking(parse("security/resolve.ts", resolve ?? ""), ["block", "warn", "redact"])).toBe(true);
@@ -540,5 +585,5 @@ describe("no fourth copy of a profile literal, and no second ranking table", () 
       "probe/map.ts",
       "probe/ternary.ts",
     ]);
-  });
+  }, SCAN_BUDGET_MS);
 });

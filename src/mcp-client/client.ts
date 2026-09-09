@@ -66,7 +66,6 @@ import type {
   McpClientConnection,
   McpClientPort,
   McpSpawnOptions,
-  McpToolCallOutcome,
   RawCodexEventNotification,
   RawElicitationRequest,
 } from "./types";

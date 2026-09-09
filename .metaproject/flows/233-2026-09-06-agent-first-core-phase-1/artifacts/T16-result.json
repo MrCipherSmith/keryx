@@ -1,0 +1,69 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T16",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Stage 1 review passed the covered Shell AFC-18 behavior but found a major AFC-05 gap: malformed entries inside recognized dependency-audit containers are accepted as clean at exit zero. Stage 2 logic/security review was not claimed because the Stage 1 gate did not pass.",
+  "summary_markdown": "See T16-review.md for spec coverage, exact repro, impact, suggested fix, evidence paths, and the Stage 2 gate decision.",
+  "acceptance": [
+    {
+      "criterion": "Health findings and coverage remain separate; required incomplete never PASS; supported Bun/npm formats recognized and unknown rejected.",
+      "status": "partial",
+      "evidence": "Required incomplete and findings/coverage tests pass, but malformed nested npm entries and reserved-container array shapes validate as recognized clean output; F-001."
+    },
+    {
+      "criterion": "Shell help/argument errors precede credentials/session/UI mutation; actionable examples and nonzero invalid exits.",
+      "status": "met",
+      "evidence": "Focused health/shell verification passes 28/28, including injected startup spies and real CLI help, typo, and missing-value subprocess cases."
+    },
+    {
+      "criterion": "Independent Stage1 then Stage2 with concrete findings and immutable evidence; no false integrated PASS.",
+      "status": "partial",
+      "evidence": "Stage 1 was run first and recorded F-001; Stage 2 was explicitly blocked per review workflow."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T16-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "T16 Stage 1 review and finding",
+      "hash": null
+    }
+  ],
+  "changed_files": [],
+  "findings": [
+    {
+      "id": "F-001",
+      "severity": "major",
+      "problem": "Malformed values inside recognized npm dependency-audit containers are skipped, so validation returns valid and parsing yields zero findings.",
+      "impact": "A required dependency audit can be reported available and parsed, allowing a clean or warning gate despite malformed or unsupported audit output.",
+      "suggested_fix": "Reject any non-record nested npm advisory value and reject reserved npm container keys when their values have the wrong shape before using the Bun package-array fallback.",
+      "evidence": "src/health/sources/dependency-audit.ts:36-41 and :59-65; synthetic rc0 reproductions are recorded in T16-review.md and the review command raw artifact.",
+      "confidence": "high",
+      "reviewer": "review-logic",
+      "class_scope": {
+        "sites": [
+          "src/health/sources/dependency-audit.ts:39-41",
+          "src/health/sources/dependency-audit.ts:66-68",
+          "src/health/sources/dependency-audit.ts:75-76"
+        ],
+        "enumeration_method": "Inspected every branch of decodeAudit: npm-modern vulnerabilities, npm-legacy advisories, and the top-level Bun package-array fallback."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_passed": 28,
+    "tests_failed": 0,
+    "stage1": "failed",
+    "stage2": "blocked",
+    "external_sockets": 0,
+    "model_calls": 0
+  },
+  "timestamp_utc": "2026-09-06T12:10:00Z"
+}

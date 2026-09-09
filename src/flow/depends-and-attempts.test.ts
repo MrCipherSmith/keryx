@@ -225,7 +225,10 @@ test("AC6: a sound dependency graph produces no issues", () => {
       { id: "T3", title: "c", kind: "implement", status: "todo", dependsOn: ["T1", "T2"] },
     ]),
   ).toEqual([]);
-  expect(nextTask([{ id: "T1", title: "a", kind: "implement", status: "done" }])).toEqual({ kind: "none" });
+  expect(nextTask([{ id: "T1", title: "a", kind: "implement", status: "done" }])).toEqual({
+    kind: "none",
+    unresolved: [],
+  });
 });
 
 // ---------------------------------------------------------------------------

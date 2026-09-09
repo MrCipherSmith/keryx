@@ -110,10 +110,15 @@ import {
   providerByName,
   resolveModelsForPicker,
 } from "../commands/providers";
+import { loadSessionLimits } from "../commands/model-limits";
 import { collapseToolOutput, summarizeToolArgs } from "../lib/ui";
 import { classifyDiffLine, summarizeSubmittedLine } from "../lib/md-blocks";
 import { extractPatchText } from "../lib/patch-risk";
 import { collapseHome } from "../lib/statusbar";
+import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oauth/catalog";
+import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
+import { loginDeviceCode } from "../lib/oauth/login";
+import { openVerificationUrl } from "../lib/oauth/open-url";
 import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
@@ -1527,6 +1532,106 @@ function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; env
   });
 }
 
+type AuthMethodChoice = "device-code" | "api-key";
+
+function pickAuthMethodStep(
+  otui: OpenTui,
+  r: Renderer,
+  providerLabel: string,
+  methods: readonly AuthMethodChoice[],
+): Promise<AuthMethodChoice | undefined> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "auth-method-picker");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: "amp-title", content: otui.t`${otui.bold(`How to connect ${providerLabel}`)} ${otui.dim("(↑/↓, Enter · Esc to go back)")}` }));
+    const descriptions: Record<AuthMethodChoice, string> = {
+      "device-code": deviceCodeMethodLabel(providerLabel === "GitHub Copilot" ? "github-copilot" : providerLabel === "OpenAI" ? "openai" : "grok"),
+      "api-key": "Manually enter API Key",
+    };
+    const select = new otui.SelectRenderable(r, {
+      id: "amp-select",
+      width: 60,
+      height: selectBoxHeight(methods.length, true),
+      showScrollIndicator: true,
+      options: methods.map((m) => ({ name: m, description: descriptions[m] })),
+      selectedTextColor: "#ffd166",
+    });
+    box.add(select);
+    select.focus();
+    const cleanup = (): void => {
+      unsub();
+      select.blur();
+      r.root.remove(box);
+    };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        cleanup();
+        resolve(undefined);
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+      const chosen = select.getSelectedOption();
+      cleanup();
+      resolve(chosen === null ? undefined : (chosen.name as AuthMethodChoice));
+    });
+  });
+}
+
+function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const box = overlayBox(otui, r, "device-login");
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, {
+      id: "dl-title",
+      content: otui.t`${otui.bold(deviceCodeMethodLabel(provider))} ${otui.dim("(Esc to cancel)")}`,
+    }));
+    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${otui.dim("Requesting a device code…")}`, marginTop: 1 });
+    box.add(status);
+    const controller = new AbortController();
+    const cleanup = (): void => {
+      unsub();
+      r.root.remove(box);
+    };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        controller.abort();
+        cleanup();
+        resolve(false);
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    void loginDeviceCode({
+      provider,
+      fetch: (input, init) => globalThis.fetch(input, init),
+      signal: controller.signal,
+      onChallenge: (challenge) => {
+        status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Open that URL on any device and enter the code. Waiting for authorization…")}`;
+        openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
+      },
+    }).then((result) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      if (result.ok) {
+        cleanup();
+        applyOAuthAccessToEnv();
+        resolve(true);
+        return;
+      }
+      status.content = otui.t`${otui.red("✗")} ${otui.bold(result.error)} ${otui.dim("(Esc to go back)")}`;
+    }).catch((err) => {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const message = err instanceof Error ? err.message : "device authorization failed";
+      status.content = otui.t`${otui.red("✗")} ${otui.bold(message)} ${otui.dim("(Esc to go back)")}`;
+    });
+  });
+}
+
 /**
  * Resolve models for the picker: always probe the live `/models` endpoint when
  * the provider is OpenAI-compat (network available + optional Bearer key);
@@ -1671,16 +1776,34 @@ export function selectProviderModelInTui(
         const envKey = prov.envKey;
         if (!options.onlyConnected && envKey !== undefined) {
           const existingKey = process.env[envKey];
-          if (existingKey === undefined || existingKey.length === 0) {
-            const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
-            if (kr.kind === "back") {
-              continue; // Esc at the key step → re-pick the provider
+          const hasOauth = oauthAccessToken(prov.name) !== undefined;
+          if ((existingKey === undefined || existingKey.length === 0) && !hasOauth) {
+            const offered: AuthMethodChoice[] = [];
+            if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
+            if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
+            let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
+            if (offered.length > 1) {
+              method = await pickAuthMethodStep(otui, r, prov.label ?? prov.name, offered);
+              if (method === undefined) {
+                continue;
+              }
             }
-            if (kr.kind === "key") {
-              process.env[envKey] = kr.value;
-              saveApiKey(envKey, kr.value); // persist (0600), opencode-style
+            if (method === "device-code") {
+              const ok = await runDeviceLoginInTui(otui, r, prov.name);
+              if (!ok) {
+                continue;
+              }
+            } else {
+              const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
+              if (kr.kind === "back") {
+                continue; // Esc at the key step → re-pick the provider
+              }
+              if (kr.kind === "key") {
+                process.env[envKey] = kr.value;
+                saveApiKey(envKey, kr.value); // persist (0600), opencode-style
+              }
+              // kind === "skip" → proceed without a key (curated fallback models)
             }
-            // kind === "skip" → proceed without a key (curated fallback models)
           }
         }
 
@@ -2205,7 +2328,6 @@ export async function launchTuiAgentShell(opts: {
       flexShrink: 0,
     });
     sidebar.add(sbWorkspace);
-    let currentWorkspace: WorkspaceInfo | undefined;
     let currentSlates: SlateInspectorItem[] = [];
     /** Rebuild the Workspace panel: no bound workspace ⇒ no rows at all. */
     const paintWorkspaceSidebar = (workspace: WorkspaceInfo | undefined, slates: readonly SlateInspectorItem[]): void => {
@@ -2228,7 +2350,6 @@ export async function launchTuiAgentShell(opts: {
       const dir = slateSession?.dir;
       const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
       if (workspaceId === undefined) {
-        currentWorkspace = undefined;
         currentSlates = [];
         paintWorkspaceSidebar(undefined, currentSlates);
         return;
@@ -2238,7 +2359,6 @@ export async function launchTuiAgentShell(opts: {
         loadInspectorWorkspace(cwd, workspaceId),
         loadInspectorSlates(cwd, workspaceId),
       ]);
-      currentWorkspace = workspace;
       currentSlates = slates;
       paintWorkspaceSidebar(workspace, slates);
     };
@@ -3302,12 +3422,18 @@ export async function launchTuiAgentShell(opts: {
       void (async () => {
         const cwd = inspectorCwd();
         const [workspaces, flows] = await Promise.all([loadInspectorWorkspaces(cwd), loadInspectorFlows(cwd)]);
+        const limits = await loadSessionLimits({
+          provider: currentSel.provider,
+          model: currentSel.model,
+          ...(currentSel.baseUrl !== undefined ? { baseUrl: currentSel.baseUrl } : {}),
+        });
         const snapshot = buildSessionInfoSnapshot({
           summary: liveSession.summary,
           selection: currentSel,
           version: packageJson.version,
           usage: lastUsage,
           estimateTokens: estimateContextTokens(history),
+          limits,
           sessionText: history.map((message) => message.content).join("\n"),
           workspaces,
           flows,
@@ -3521,6 +3647,7 @@ export async function launchTuiAgentShell(opts: {
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
       updateModelLabels();
+      void balancePanel.setProvider(ns.provider);
       input.focus();
       chrome.showToast(`Switched to ${ns.provider}/${ns.model}`);
     };
@@ -4005,12 +4132,12 @@ export async function launchTuiAgentShell(opts: {
             fleet.upsert({ id: SIDE_WORKER_ID, label: sideWorkerLabelText, status: "failed", detail: "error" });
           } finally {
             sideWorkerRunning = false;
-            if (sideQueue.length > 0) {
-              showSideQueueStatus();
-              continue;
-            }
-            clearSideWorkerSlot();
           }
+          if (sideQueue.length > 0) {
+            showSideQueueStatus();
+            continue;
+          }
+          clearSideWorkerSlot();
         }
       })();
     };

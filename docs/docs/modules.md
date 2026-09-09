@@ -771,19 +771,23 @@ always-on gateway mode (Phase 4) remains **not** implemented.
 |---|---|---|
 | `security status` | print effective config: mode, raw retention, gate, config-checksum, per-policy action | 0 |
 | `security scan <path> [--json] [--source <kind>]` | scan a file, resolve a decision, write `artifacts/latest.{md,json}` | mode-gated (see below) |
-| `security scan-mcp <manifest\|dir> [--json] [--pin]` | scan MCP tool manifest(s) for injection/exfil signals against a pinned baseline (`--pin` records the baseline) | mode-gated |
+| `security scan-mcp <manifest\|dir> [--json] [--pin]` | scan MCP tool manifest(s) for injection/exfil signals against a pinned baseline (`--pin` records the baseline) | **1** with `--strict`, on a threat or incomplete coverage (independent of mode) |
 | `security check-input [--source <kind>] [--file <path>] [--json]` | evaluate incoming content (default source `untrusted-external`; stdin if no `--file`) | mode-gated |
 | `security check-output [--target <kind>] [--file <path>] [--json]` | evaluate generated content (default source `generated`, target `unknown`) | mode-gated |
 | `security redact <path> [--out <path>]` | mask detected spans; write `--out` or print to stdout | 0 |
-| `security report [--since <ref>] [--json]` | aggregate the last scan artifact (no re-scan) into a category summary | **1 in `ci` mode when gate = fail** |
+| `security report [--since <ref>] [--json]` | aggregate the last scan artifact (no re-scan) into a category summary | **1 in `enforced`/`ci`/`gateway` mode on a non-passing gate** |
 | `security policy validate` | schema-validate the config + verify config checksum | **1 on schema/checksum failure** |
 | `security incidents [--limit <n>]` | list the append-only incident trail (newest first) | 0 |
 | `security eval [--corpus <injection\|exfil\|structured-pii\|secret\|all>] [--with-model] [--json]` | run the labeled red-team corpora through the detectors, print a per-detector FN-rate report | **1 when a detector breaches its committed threshold** |
-| `security hooks <install\|uninstall> --runtime <claude\|cursor\|windsurf\|generic-mcp\|all>` | install/remove the multi-runtime agent-hook registry entries | mode-gated |
+| `security hooks <install\|uninstall> --runtime <claude\|cursor\|windsurf\|generic-mcp\|all>` | install/remove the multi-runtime agent-hook registry entries | **1** on an unknown runtime or a post-install validation error (independent of mode) |
 
-The mode-gated commands honor `config.mode`: **advisory** (default) always exits
-`0`; **ci** exits `1` on a gate **fail**; **enforced** exits `1` on **fail** or
-**needs-approval**.
+`scan`, `check-input`, `check-output`, and `report` are the commands whose
+exit code is actually mode-gated: they honor `config.mode` — **advisory**
+(default) always exits `0`; **enforced**, **ci**, and **gateway** exit `1` on
+any gate other than **pass** — **fail**, **needs-approval**, **incomplete**,
+or an unrecognized stored gate value. `scan-mcp`'s exit is a function of
+`--strict` alone, and `hooks install\|uninstall`'s of runtime/validation —
+neither reads `config.mode` (see their Exit cells above).
 
 **Key files.**
 - `src/commands/security.ts` — CLI dispatcher, arg/flag parsing, rendering, exit-code mapping, help.
@@ -862,8 +866,8 @@ from other modules:
 
 Semantics are uniform: **advisory (default) reports and continues — it never
 blocks or mutates** (the gdctx seam still redacts detected secrets, a pure safety
-step); **enforced/ci blocks or suppresses the write with a masked category+count
-reason**; **disabled is a zero-cost no-op**. The guard degrades to allow on any
+step); **enforced/ci/gateway blocks or suppresses the write with a masked
+category+count reason**; **disabled is a zero-cost no-op**. The guard degrades to allow on any
 engine error, imports only from the engine + shared libs (so the seam stays
 acyclic), and never leaks raw content into reasons or logs.
 
@@ -871,16 +875,17 @@ acyclic), and never leaks raw content into reasons or logs.
 `keryx`'s own workflows. Both are offered by `init` **only when `security` is
 enabled**, default on (confirm prompt; accepted under `--yes`), and no-op when the
 module is disabled. Both honor `config.mode` — **advisory (the default) warns but
-never blocks; enforced/ci block**.
+never blocks; enforced/ci/gateway block**.
 
 - **git pre-push gate** — `installSecurityPrePushHook` (`src/commands/init.ts` →
   `renderSecurityPrePushHook` in `src/lib/templates.ts`) writes a managed
   `# keryx:security-pre-push:begin…:end` block into `.git/hooks/pre-push`. It
   runs `keryx security scan <file> --source trusted-project` over each changed
   file in the push range and delegates blocking to the CLI exit code (advisory
-  exits 0/warns; enforced/ci exit non-zero and block the push). It coexists with
-  the testing pre-push block and user content, degrades to a skip if `keryx`
-  is not on `PATH`, and is recorded in the manifest at `security.hooks.prePush`.
+  exits 0/warns; enforced/ci/gateway exit non-zero and block the push). It
+  coexists with the testing pre-push block and user content, degrades to a
+  skip if `keryx` is not on `PATH`, and is recorded in the manifest at
+  `security.hooks.prePush`.
   Opt out with `--no-security-hook`.
 - **agent `.claude/settings.json` hook** — `installSecurityAgentHooks`
   (`src/security/agent-hooks.ts`) merges, merge-safely (a `_keryxManaged:

@@ -46,7 +46,7 @@ import {
   builtinMetaprojectTools,
   makeKeryxRunner,
 } from "../../src/harness/tool/builtin/metaproject-tools";
-import { createSpawnSubagentTool } from "../../src/harness/tool/builtin/spawn-subagent-tool";
+import { createSpawnSubagentTool, type SpawnSubagentTool } from "../../src/harness/tool/builtin/spawn-subagent-tool";
 import {
   isShellCommandAllowed,
   matchShellPattern,
@@ -177,6 +177,7 @@ function hangingProvider(): ProviderPort {
   return {
     describe: () => CAPS,
     stream: () =>
+      // eslint-disable-next-line require-yield -- This deliberate never-settling generator simulates a hung provider.
       (async function* (): AsyncGenerator<NormalizedEvent> {
         await new Promise(() => {
           /* never resolves */
@@ -271,7 +272,7 @@ const shellTools = (root: string): InteractiveTool[] => [
 ];
 
 /** spawn_subagent bound to a scripted child provider. */
-function spawnToolWith(childRounds: Partial<NormalizedEvent>[][], hang = false): InteractiveTool {
+function spawnToolWith(childRounds: Partial<NormalizedEvent>[][], hang = false): SpawnSubagentTool {
   return createSpawnSubagentTool({
     cwd: FIX_ROOT,
     getParentModel: () => ({ providerId: "anthropic", modelId: "claude-sonnet-5" }),
@@ -325,7 +326,7 @@ async function P1(): Promise<void> {
           })),
         ),
       ],
-      async (_t, input) => {
+      async (_t, _input) => {
         order.push(order.length);
         // Simulate a slow human: proves the gate serializes.
         await new Promise((r) => setTimeout(r, 5));
@@ -639,7 +640,7 @@ async function T3(): Promise<void> {
     expected: "no deadlock, no stack overflow",
     verdict: admitted > 0 && denied > 0 ? "INFO" : admitted === 5 ? "PASS" : "RISK",
     observed:
-      `admitted=${admitted} denied=${denied} in ${Math.round(t.ms)}ms; max_tool_calls clamped 50→16; ` +
+      `admitted=${admitted} denied=${denied} in ${Math.round(t.ms)}ms; tool-call cap=50, default round cap=10; ` +
       `first denial: ${JSON.stringify(reason)}`,
     ms: t.ms,
     detail: { admitted, denied, maxChildrenConst: DEFAULT_MAX_CHILDREN },
@@ -742,14 +743,14 @@ async function M4(): Promise<void> {
     callRound([{ name: "read_file", input: { path: "hello.txt" }, id: `loop-${i}` }]),
   );
   const spawnLoop = spawnToolWith(loop);
-  const tA = await timed(async () => spawnLoop.invoke({ task: "loop forever", label: "m4a", max_tool_calls: 50 }));
+  const tA = await timed(async () => spawnLoop.invoke({ task: "loop forever", label: "m4a", max_tool_calls: 2, max_rounds: 10 }));
   record({
     id: "M4a",
     area: "multi-agent",
     what: "subagent stuck in a tool loop",
     expected: "max_tool_calls stops it",
-    verdict: tA.ms < 30_000 ? "PASS" : "FAIL",
-    observed: `stopped by the child's unique-signature budget in ${Math.round(tA.ms)}ms (identical calls also collapse to one slot)`,
+    verdict: tA.value.status === "BudgetExhausted" ? "PASS" : "FAIL",
+    observed: `child status=${tA.value.status}; tool-call cap=2, round cap=10; elapsed=${Math.round(tA.ms)}ms`,
     ms: tA.ms,
   });
 
@@ -770,8 +771,8 @@ async function M4(): Promise<void> {
     verdict: tB.value === "still-running" ? "RISK" : "PASS",
     observed:
       tB.value === "still-running"
-        ? `still running after ${HANG_MS}ms — the reservation's maxRuntimeMs (5 min) is ACCOUNTING ONLY; ` +
-          `no timer, no AbortSignal, no cancellation path. The parent turn blocks indefinitely.`
+        ? `no child result within the ${HANG_MS}ms observation window; ` +
+          `this probe does not establish whether the longer configured deadline is enforced.`
         : "returned before the probe deadline",
     ms: tB.ms,
   });
@@ -1026,8 +1027,6 @@ async function main(): Promise<void> {
         platform: process.platform,
         bun: Bun.version,
         sandboxShellMode: resolveShellSandboxMode(process.env),
-        // resolveAgentMaxToolCalls() does not exist and never did — this line threw
-        // whenever the JSON report was written. The real guard is round-based.
         maxRounds: resolveAgentMaxRounds(),
         allowEgress: ALLOW_EGRESS,
         findings,
@@ -1049,4 +1048,10 @@ async function main(): Promise<void> {
   process.exit(0);
 }
 
-await main();
+if (import.meta.main) {
+  void main().catch((cause) => {
+    console.error(`stress harness failed: ${cause instanceof Error ? cause.message : String(cause)}`);
+    rmSync(FIX_ROOT, { recursive: true, force: true });
+    process.exit(1);
+  });
+}

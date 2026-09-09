@@ -150,7 +150,7 @@ function isDefinitionName(code: string, openIndex: number): boolean {
     while (k >= 0 && isWs(code[k])) k -= 1;
   }
 
-  let end = k;
+  const end = k;
   while (k >= 0 && isIdChar(code[k])) k -= 1;
   const word = code.slice(k + 1, end + 1);
   if (word.length === 0) {

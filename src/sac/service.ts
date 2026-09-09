@@ -27,8 +27,17 @@ export {
   WorkspaceServiceError,
   localWorkspaceAuthorizationServer,
   newWorkspaceId,
+  // The two shared lookups `keryx workspace list`/`show` and MCP
+  // `sac.workspaceList`/`sac.workspaceShow` both run, so the CLI and the tool
+  // boundary answer the same question the same way at the same moment.
+  listWorkspaceViews,
+  lookupWorkspace,
+  type WorkspaceLookup,
   type WorkspaceManifest,
+  type WorkspaceReferenceReport,
+  type WorkspaceReferenceStatus,
   type WorkspaceResource,
+  type WorkspaceView,
 } from "./workspace-service";
 export {
   buildPolicyCorpus,

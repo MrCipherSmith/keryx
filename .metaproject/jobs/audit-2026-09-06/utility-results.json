@@ -1,0 +1,338 @@
+{
+  "commit": "d0a2a011df93c2459cb4329a7dc152fb0fe625a6",
+  "method": "Deterministic mechanism probes, not agent A/B or patch-success measurement",
+  "bodyOnly": {
+    "question": "uniquequartzprotocol",
+    "citations": [],
+    "answerMarkdown": "# uniquequartzprotocol\n\n_No matching wiki pages or memory entries were found._\n"
+  },
+  "lifecycle": {
+    "question": "auditmarker",
+    "citations": [
+      {
+        "path": "memory/lessons/future.md",
+        "title": "auditmarker future",
+        "excerpt": "auditmarker future guidance.",
+        "score": 0.333,
+        "source": "memory"
+      },
+      {
+        "path": "memory/lessons/accepted.md",
+        "title": "auditmarker accepted",
+        "excerpt": "auditmarker example guidance accepted.",
+        "score": 0.25,
+        "source": "memory"
+      },
+      {
+        "path": "memory/lessons/conflict.md",
+        "title": "auditmarker conflict",
+        "excerpt": "auditmarker example guidance conflict.",
+        "score": 0.25,
+        "source": "memory"
+      },
+      {
+        "path": "memory/lessons/deprecated.md",
+        "title": "auditmarker deprecated",
+        "excerpt": "auditmarker example guidance deprecated.",
+        "score": 0.25,
+        "source": "memory"
+      },
+      {
+        "path": "memory/lessons/draft.md",
+        "title": "auditmarker draft",
+        "excerpt": "auditmarker example guidance draft.",
+        "score": 0.25,
+        "source": "memory"
+      },
+      {
+        "path": "memory/lessons/superseded.md",
+        "title": "auditmarker superseded",
+        "excerpt": "auditmarker example guidance superseded.",
+        "score": 0.25,
+        "source": "memory"
+      }
+    ],
+    "answerMarkdown": "# auditmarker\n\nBased on the project's own wiki and memory:\n\n1. **auditmarker future** — auditmarker future guidance. (`memory/lessons/future.md`)\n2. **auditmarker accepted** — auditmarker example guidance accepted. (`memory/lessons/accepted.md`)\n3. **auditmarker conflict** — auditmarker example guidance conflict. (`memory/lessons/conflict.md`)\n4. **auditmarker deprecated** — auditmarker example guidance deprecated. (`memory/lessons/deprecated.md`)\n5. **auditmarker draft** — auditmarker example guidance draft. (`memory/lessons/draft.md`)\n6. **auditmarker superseded** — auditmarker example guidance superseded. (`memory/lessons/superseded.md`)\n\n## Sources\n\n- `memory/lessons/future.md`\n- `memory/lessons/accepted.md`\n- `memory/lessons/conflict.md`\n- `memory/lessons/deprecated.md`\n- `memory/lessons/draft.md`\n- `memory/lessons/superseded.md`\n"
+  },
+  "graph": {
+    "nodes": 1172,
+    "edges": 3515,
+    "symbols": 0,
+    "unresolved": 50
+  },
+  "repomap": {
+    "entries": 151,
+    "zeroScore": 148,
+    "positiveScore": 3,
+    "estimatedTokens": 1493,
+    "hasServer": false
+  },
+  "direct": {
+    "target": "src/lib/serve-credential.ts",
+    "depth": 1,
+    "dependencies": [
+      "src/lib/config-dir.ts",
+      "src/lib/file-lock.ts"
+    ],
+    "dependents": [
+      "src/commands/serve.cli.test.ts",
+      "src/commands/serve.process.test.ts",
+      "src/commands/serve.recovery.test.ts",
+      "src/commands/serve.ts",
+      "src/lib/config-dir.permissions.test.ts",
+      "src/lib/config-dir.test.ts",
+      "src/lib/serve-credential.test.ts",
+      "src/lib/serve-credential.waiting.test.ts",
+      "src/lib/serve-listener.turns.test.ts",
+      "src/lib/serve-server.test.ts",
+      "src/lib/serve-server.ts",
+      "src/lib/serve-throttle.test.ts",
+      "src/lib/serve-turns.route.test.ts"
+    ],
+    "ranked": []
+  },
+  "transitive": {
+    "target": "src/lib/serve-credential.ts",
+    "depth": 2,
+    "dependencies": [
+      "src/lib/config-dir.ts",
+      "src/lib/file-lock.ts"
+    ],
+    "dependents": [
+      "src/cli.ts",
+      "src/commands/serve.cli.test.ts",
+      "src/commands/serve.escape.test.ts",
+      "src/commands/serve.process.test.ts",
+      "src/commands/serve.recovery.test.ts",
+      "src/commands/serve.ts",
+      "src/lib/config-dir.permissions.test.ts",
+      "src/lib/config-dir.test.ts",
+      "src/lib/serve-credential.test.ts",
+      "src/lib/serve-credential.waiting.test.ts",
+      "src/lib/serve-listener.turns.test.ts",
+      "src/lib/serve-server.test.ts",
+      "src/lib/serve-server.ts",
+      "src/lib/serve-throttle.test.ts",
+      "src/lib/serve-turns.route.test.ts"
+    ],
+    "ranked": [
+      {
+        "path": "src/lib/serve-server.ts",
+        "hop": 1,
+        "fanIn": 5
+      },
+      {
+        "path": "src/commands/serve.ts",
+        "hop": 1,
+        "fanIn": 4
+      },
+      {
+        "path": "src/commands/serve.cli.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/commands/serve.process.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/commands/serve.recovery.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/config-dir.permissions.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/config-dir.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-credential.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-credential.waiting.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-listener.turns.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-server.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-throttle.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/lib/serve-turns.route.test.ts",
+        "hop": 1,
+        "fanIn": 0
+      },
+      {
+        "path": "src/cli.ts",
+        "hop": 2,
+        "fanIn": 5
+      },
+      {
+        "path": "src/commands/serve.escape.test.ts",
+        "hop": 2,
+        "fanIn": 0
+      }
+    ]
+  },
+  "unknown": {
+    "target": "src/nonexistent-audit-target.ts",
+    "depth": 2,
+    "dependencies": [],
+    "dependents": [],
+    "ranked": []
+  },
+  "wikiQueries": [
+    {
+      "question": "OS sandbox Seatbelt bubblewrap network",
+      "ms": 20,
+      "citations": [
+        {
+          "path": "wiki/architecture/os-sandbox.md",
+          "title": "OS Sandbox",
+          "excerpt": "The OS sandbox is a kernel-enforced containment layer that sits *below* keryx's policy engine, structural command guard, env allowlist, and approval gate. Those layers decide **whether a command may start**; the OS sandbox constrains **wha…",
+          "score": 0.074,
+          "source": "wiki"
+        },
+        {
+          "path": "wiki/components/src-harness-tool-builtin.md",
+          "title": "Module src/harness/tool/builtin",
+          "excerpt": "`src/harness/tool/builtin` groups 18 file(s). It depends on `src/harness/provider`, `src/harness/process/sandbox`, and `src/harness/web`, and exposes 9 public symbol(s).",
+          "score": 0.043,
+          "source": "wiki"
+        }
+      ],
+      "answer": "# OS sandbox Seatbelt bubblewrap network\n\nBased on the project's own wiki and memory:\n\n1. **OS Sandbox** — The OS sandbox is a kernel-enforced containment layer that sits *below* keryx's policy engine, structural command guard, env allowlist, and approval gate. Those layers decide **whether a command may start**; the OS sandbox constrains **wha… (`wiki/architecture/os-sandbox.md`)\n2. **Module src/harness/tool/builtin** — `src/harness/tool/builtin` groups 18 file(s). It depends on `src/harness/provider`, `src/harness/process/sandbox`, and `src/harness/web`, and exposes 9 public symbol(s). (`wiki/components/src-harness-tool-builtin.md`)\n\n## Sources\n\n- `wiki/architecture/os-sandbox.md`\n- `wiki/components/src-harness-tool-builtin.md`\n"
+    },
+    {
+      "question": "permission modes ask trust auto",
+      "ms": 6,
+      "citations": [
+        {
+          "path": "wiki/architecture/permission-modes.md",
+          "title": "Permission Modes",
+          "excerpt": "The interactive agent session (`keryx shell`, both the OpenTUI surface and the readline fallback) has three user-selectable permission modes — `ask`, `trust`, `auto` — that decide whether a mutating tool call (`shell_exec`, `spawn_subagent…",
+          "score": 0.067,
+          "source": "wiki"
+        },
+        {
+          "path": "wiki/architecture/testing-map.md",
+          "title": "Testing Map",
+          "excerpt": "This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as…",
+          "score": 0.025,
+          "source": "wiki"
+        },
+        {
+          "path": "memory/lessons/allowlist-not-a-boundary.md",
+          "title": "A shell allowlist matched against the raw command string is not a security boundary",
+          "excerpt": "A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowl…",
+          "score": 0.017,
+          "source": "memory"
+        }
+      ],
+      "answer": "# permission modes ask trust auto\n\nBased on the project's own wiki and memory:\n\n1. **Permission Modes** — The interactive agent session (`keryx shell`, both the OpenTUI surface and the readline fallback) has three user-selectable permission modes — `ask`, `trust`, `auto` — that decide whether a mutating tool call (`shell_exec`, `spawn_subagent… (`wiki/architecture/permission-modes.md`)\n2. **Testing Map** — This page provides a high-level map of the project's testing infrastructure. It documents the testing framework in use, the available test scripts, configuration files, and the location of test files. This map is auto-generated to serve as… (`wiki/architecture/testing-map.md`)\n3. **A shell allowlist matched against the raw command string is not a security boundary** — A remembered glob pattern that is matched against a command string which is then handed to `/bin/sh -c` grants far more than it appears to. The pattern matches text; the shell re-interprets that text. Verified, not theorised: a live allowl… (`memory/lessons/allowlist-not-a-boundary.md`)\n\n## Sources\n\n- `wiki/architecture/permission-modes.md`\n- `wiki/architecture/testing-map.md`\n- `memory/lessons/allowlist-not-a-boundary.md`\n"
+    },
+    {
+      "question": "How does shared agent context relate to wiki graph memory?",
+      "ms": 6,
+      "citations": [
+        {
+          "path": "wiki/components/src-sac.md",
+          "title": "Module src/sac (Shared Agent Context)",
+          "excerpt": "Module src/sac (Shared Agent Context)",
+          "score": 0.231,
+          "source": "wiki"
+        },
+        {
+          "path": "wiki/decisions/sac-proposal-a41fc4152ad147e2.md",
+          "title": "SAC: SAC harness integration demo",
+          "excerpt": "SAC complements wiki and graph; it does not replace them.",
+          "score": 0.15,
+          "source": "wiki"
+        },
+        {
+          "path": "wiki/architecture/wiki-graph-sac.md",
+          "title": "Wiki, Graph, and Shared Agent Context",
+          "excerpt": "The project wiki, the code graph, and Shared Agent Context (SAC) are one connected stack with three owners. Graph answers structural questions. Wiki stores curated long-lived understanding. SAC is a reviewed collaboration entry point: it r…",
+          "score": 0.111,
+          "source": "wiki"
+        }
+      ],
+      "answer": "# How does shared agent context relate to wiki graph memory?\n\nBased on the project's own wiki and memory:\n\n1. **Module src/sac (Shared Agent Context)** — Module src/sac (Shared Agent Context) (`wiki/components/src-sac.md`)\n2. **SAC: SAC harness integration demo** — SAC complements wiki and graph; it does not replace them. (`wiki/decisions/sac-proposal-a41fc4152ad147e2.md`)\n3. **Wiki, Graph, and Shared Agent Context** — The project wiki, the code graph, and Shared Agent Context (SAC) are one connected stack with three owners. Graph answers structural questions. Wiki stores curated long-lived understanding. SAC is a reviewed collaboration entry point: it r… (`wiki/architecture/wiki-graph-sac.md`)\n\n## Sources\n\n- `wiki/components/src-sac.md`\n- `wiki/decisions/sac-proposal-a41fc4152ad147e2.md`\n- `wiki/architecture/wiki-graph-sac.md`\n"
+    },
+    {
+      "question": "How are remote HTTP requests authenticated and authorized?",
+      "ms": 6,
+      "citations": [
+        {
+          "path": "wiki/decisions/sac-proposal-a41fc4152ad147e2.md",
+          "title": "SAC: SAC harness integration demo",
+          "excerpt": "SAC complements wiki and graph; it does not replace them.",
+          "score": 0.05,
+          "source": "wiki"
+        },
+        {
+          "path": "wiki/components/src-metrics.md",
+          "title": "Module src/metrics",
+          "excerpt": "`src/metrics` groups 22 file(s). Depends on `scripts/benchmark`, `src/lib`, `src/security`, and `src/standard`.",
+          "score": 0.048,
+          "source": "wiki"
+        },
+        {
+          "path": "memory/lessons/regex-guards-lose-to-spellings.md",
+          "title": "A source guard loses one spelling per round — and matching the AST only slows it down",
+          "excerpt": "A source guard loses one spelling per round — and matching the AST only slows it down",
+          "score": 0.045,
+          "source": "memory"
+        }
+      ],
+      "answer": "# How are remote HTTP requests authenticated and authorized?\n\nBased on the project's own wiki and memory:\n\n1. **SAC: SAC harness integration demo** — SAC complements wiki and graph; it does not replace them. (`wiki/decisions/sac-proposal-a41fc4152ad147e2.md`)\n2. **Module src/metrics** — `src/metrics` groups 22 file(s). Depends on `scripts/benchmark`, `src/lib`, `src/security`, and `src/standard`. (`wiki/components/src-metrics.md`)\n3. **A source guard loses one spelling per round — and matching the AST only slows it down** — A source guard loses one spelling per round — and matching the AST only slows it down (`memory/lessons/regex-guards-lose-to-spellings.md`)\n\n## Sources\n\n- `wiki/decisions/sac-proposal-a41fc4152ad147e2.md`\n- `wiki/components/src-metrics.md`\n- `memory/lessons/regex-guards-lose-to-spellings.md`\n"
+    },
+    {
+      "question": "quuxneverexistingzz how does it work?",
+      "ms": 5,
+      "citations": [
+        {
+          "path": "wiki/decisions/sac-proposal-a41fc4152ad147e2.md",
+          "title": "SAC: SAC harness integration demo",
+          "excerpt": "SAC complements wiki and graph; it does not replace them.",
+          "score": 0.125,
+          "source": "wiki"
+        },
+        {
+          "path": "memory/constraints/stale-installed-keryx-binary.md",
+          "title": "The keryx on PATH is a stale build; the review pipeline does not exercise the code under review",
+          "excerpt": "`~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that buil…",
+          "score": 0.071,
+          "source": "memory"
+        },
+        {
+          "path": "memory/lessons/regex-guards-lose-to-spellings.md",
+          "title": "A source guard loses one spelling per round — and matching the AST only slows it down",
+          "excerpt": "A source guard loses one spelling per round — and matching the AST only slows it down",
+          "score": 0.053,
+          "source": "memory"
+        }
+      ],
+      "answer": "# quuxneverexistingzz how does it work?\n\nBased on the project's own wiki and memory:\n\n1. **SAC: SAC harness integration demo** — SAC complements wiki and graph; it does not replace them. (`wiki/decisions/sac-proposal-a41fc4152ad147e2.md`)\n2. **The keryx on PATH is a stale build; the review pipeline does not exercise the code under review** — `~/.local/bin/keryx` is an installed build, and its version lags the working tree. It is NOT the working tree. Every `keryx …` invocation — including `keryx review ingest`, which is how a managed review package is recorded — runs that buil… (`memory/constraints/stale-installed-keryx-binary.md`)\n3. **A source guard loses one spelling per round — and matching the AST only slows it down** — A source guard loses one spelling per round — and matching the AST only slows it down (`memory/lessons/regex-guards-lose-to-spellings.md`)\n\n## Sources\n\n- `wiki/decisions/sac-proposal-a41fc4152ad147e2.md`\n- `memory/constraints/stale-installed-keryx-binary.md`\n- `memory/lessons/regex-guards-lose-to-spellings.md`\n"
+    }
+  ]
+}

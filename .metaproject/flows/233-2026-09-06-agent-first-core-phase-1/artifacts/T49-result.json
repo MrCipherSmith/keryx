@@ -1,0 +1,71 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T49",
+  "status": "DONE",
+  "summary": "Closed both leak-adjacent sites T47 flagged in src/flow/review-gate.ts and left open (out of T47's src/flow/service.ts ownership). Verified both independently before changing anything rather than trusting the report: (1) readReviewGateConfig's catch interpolated the caught error's message (from a readFile or JSON.parse failure) into a notes entry that evaluateReviewGate renders into verdict.detail on BOTH its pass and fail branches -- confirmed live and reachable, since pathExists is a TOCTOU check and Node fs errors embed the resolved path. (2) readReviewRounds's scope.md read had no try/catch of its own; traced every caller and found the one production path (complete() -> reviewGate() -> runReviewGate() -> readReviewRounds()) is already caught safely by T47's fix, so this was NOT a currently-live leak or non-blocking outcome through the shipped CLI -- but readReviewRounds/runReviewGate are exported functions with no safety of their own (review-gate.e2e.test.ts already calls runReviewGate directly), so a read failure there threw an actual escaping exception when exercised directly, confirmed empirically pre-fix. Fixed site 1 by splitting the single try into two (read vs parse) and replacing the error.message interpolation with either a safe Node errno code token (new safeFsErrorCode helper) or nothing at all. Fixed site 2 by adding readScopeMarkdown, mirroring the file's own pre-existing readJson pattern, so a read failure degrades to null (identical to a missing scope.md, which condition 5 already reports as a blocking 'unobserved' outcome) instead of throwing. Three new regression tests in review-gate.test.ts (this task's owned test file; service.ts/service.test.ts untouched) using mock.module(\"node:fs/promises\", ...) scoped to one exact path each. Full src/flow/ suite: 188 pass / 0 fail (T47's 185 baseline + 3 new).",
+  "acceptance": [
+    {
+      "criterion": "No note, reason or detail produced on the review gate path contains raw error text, a filesystem path, or source bytes.",
+      "status": "met",
+      "evidence": "readReviewGateConfig no longer interpolates error.message in either of its two catch arms; the read-failure arm carries only a safe, closed-vocabulary Node errno code (via new safeFsErrorCode, which returns undefined for anything not shaped like ENOENT/EACCES/etc.) and the parse-failure arm carries no part of the caught value at all. readScopeMarkdown (mirroring the file's pre-existing readJson pattern) degrades a scope.md read failure to null rather than letting the exception (and its path-carrying message) escape. Regression test 1 plants /Users/attacker/.ssh/id_rsa and \"ENOENT\" in a thrown Error for the config read and asserts config.notes contains neither, pre-fix (RED) it did, post-fix (GREEN) it does not. Regression tests 2/3 do the same for the scope.md read, at the readReviewRounds unit level (asserting the JSON-serialized round records are clean) and at the full service.complete() level (asserting gate.detail is clean)."
+    },
+    {
+      "criterion": "A read failure on that path yields a blocking, constant outcome rather than an escaping exception or a silently passing gate; every currently passing invocation still passes.",
+      "status": "met",
+      "evidence": "Verified pre-fix that calling readReviewRounds directly with a failing scope.md read produced an actual uncaught exception (not a leak, not a silent pass -- a third failure mode), confirming the escaping-exception gap independently rather than assuming it. Post-fix, readScopeMarkdown's null return reuses this file's own pre-existing, already-tested condition-5 path: verification: null already renders as status: \"unobserved\" with a constant, safe message, and unobserved already fails the gate per this module's own header rule. Regression test 3 drives a full service.complete() with a scope.md read failure and asserts status \"fail\", the structured detail \"verifier-stats (unobserved)\" (not merely the generic outer-catch fallback), result.passed false, and flow.status \"in-progress\" -- blocking and constant, confirmed at the full-gate level, not only inferred from the unit-level fix. No behavior changed for any round whose scope.md reads successfully, and no change to problems/ingested semantics for manifest/findings failures -- full src/flow/ suite (188/188) and the four sibling gate/service suites (41/41) both green, including every pre-existing pass/fail-path test unmodified."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after; bun test src/flow/ stays green.",
+      "status": "met",
+      "evidence": "RED (bun test src/flow/review-gate.test.ts -t \"never echoes the caught text|never echoes the caught text into notes|degrades to no verification stats\"): 3 failed / 0 passed -- site 1 failed the not-toContain(secretPath) assertion with the leaked note shown; site 2 unit-level test THREW out of readReviewRounds itself (the escaping-exception gap, observed directly, not inferred); site 2 full-gate-level test failed on the structured-detail assertion (status was already \"fail\" pre-fix via T47's outer catch, but the specific \"verifier-stats (unobserved)\" detail was replaced by the generic fallback). GREEN (same command, post-fix): 3 pass / 0 fail / 17 expect(). Full review-gate.test.ts: 58 pass / 0 fail (55 pre-existing + 3 new). Full src/flow/ suite via bun src/cli.ts ctx run: 188 pass / 0 fail / 633 expect() across 20 files (raw log tabled in T49-implementation.md). Sibling suites (e2e, service, security-gate, task-gate): 41 pass / 0 fail. Typecheck: exit 0, zero errors anywhere in the repo at this point in the session. ESLint on both changed files: clean, no output."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Independent verification of both reported sites (what can reach each, what happens today when it throws) written before any code change, the fix design for both (safeFsErrorCode + split try for site 1, readScopeMarkdown mirroring readJson for site 2), what is deliberately not changed, the regression-test plan, and the verification plan."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full verification writeup for both sites (including the honest finding that site 2 was not a currently-live leak through the shipped CLI, only a real gap in the module's own defenses), the fix, the diagnostic-value tradeoff, what was not changed, RED/GREEN transcripts, and every verification command with raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T49-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/flow/review-gate.ts",
+      "change": "Added safeFsErrorCode (new helper: returns a caught error's Node errno code only when it matches Node's own short uppercase constant shape, else undefined -- never error.message). Split readReviewGateConfig's single try (which wrapped both readFile and JSON.parse) into two separate try/catch blocks, one per failure class, neither of which interpolates the caught error's message any more; the read-failure note carries an optional safe errno code instead. Added readScopeMarkdown (new helper, mirrors the pre-existing readJson pattern in the same function: catch and degrade to null, never throw). Changed one call site in readReviewRounds from a direct, unguarded readFile(scopePath, \"utf8\") to readScopeMarkdown(scopePath). No other line, type, exported signature, condition rule, or GateOutcome-equivalent shape changed."
+    },
+    {
+      "path": "src/flow/review-gate.test.ts",
+      "change": "Added `mock` to the bun:test import and `REVIEW_GATE_SEVERITY_FLOOR_DEFAULT` to the ./review-gate import. Added a module-scope realFsExports snapshot of node:fs/promises (mirrors service.test.ts's realStoreExports/realReviewGateExports pattern). Added three regression tests: one for readReviewGateConfig's read-failure path (site 1), and two for readReviewRounds's scope.md read-failure path (site 2) -- one at the unit level (readReviewRounds called directly) and one at the full service.complete() level."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "tests_passing_full_flow_suite": 188,
+    "tests_failing_full_flow_suite": 0,
+    "tests_passing_sibling_gate_suites": 41,
+    "tests_failing_sibling_gate_suites": 0,
+    "typecheck_errors_src_flow": 0,
+    "typecheck_errors_other": 0
+  },
+  "timestamp_utc": "2026-09-06T15:35:00Z"
+}

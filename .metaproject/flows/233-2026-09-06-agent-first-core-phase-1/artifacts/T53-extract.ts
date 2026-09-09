@@ -1,0 +1,302 @@
+// T53 — extraction probe.
+//
+// Row 1 of the T53 dispatch: "attribute names and values are now read the way a
+// tokenizer reads them". This probe does NOT use the implementer's fourteen
+// rows. Its cases are derived from the HTML Standard's tokenizer state machine
+// (§13.2.5) — every state reachable between `tag name` and the terminating `>`,
+// plus the states the implementer's table did not enumerate (NULL handling,
+// end-tag-with-attributes, raw-text elements, comments, non-ASCII whitespace in
+// the tag name, character references in a NAME rather than a VALUE) — and each
+// case is adjudicated by an INDEPENDENT parser, not by inspection and not by the
+// detector under review.
+//
+// The oracle is Bun's `HTMLRewriter` (Cloudflare lol-html), a separate
+// spec-derived HTML tokenizer. For each case it yields the `src` / `srcset` /
+// `href` values a real parser attributes to an `<img>` / `<image>` / `<base>`
+// element. Those are resolved with the platform WHATWG `URL` against five
+// renderer document bases; if any resolves to the attacker host, a renderer
+// fetches it (for `<base>`, if the base itself carries the attacker authority,
+// every relative destination in that document goes there).
+//
+// Verdicts:
+//   BYPASS       — oracle says a renderer reaches the attacker host, and the
+//                  attacker host survives `applyRedaction(detectExfil(...))`.
+//   OVER         — the detector flags where the oracle says no renderer fetch.
+//                  Not a security defect; counted and listed so the
+//                  over-approximation set is explicit rather than assumed.
+//   OK           — the two agree.
+//
+// Read-only: imports the detector, mutates nothing.
+import { detectExfil } from "../../../../src/security/detect/exfil";
+import { applyRedaction } from "../../../../src/security/redact";
+
+const ATTACKER = "attacker.invalid";
+
+const RENDERER_BASES = [
+  "https://client.example.org/chat/thread",
+  "http://client.example.org/chat/thread",
+  "file:///Users/u/Library/App/index.html",
+  "vscode-webview://0a1b2c3d/index.html",
+  "app://client.example.org/index.html",
+];
+
+const NUL = "\u0000";
+
+interface Case {
+  id: string;
+  html: string;
+  state: string; // the tokenizer state / rule the case exercises
+}
+
+const CASES: Case[] = [
+  // ---- states the implementer's table DID enumerate (regression controls) ----
+  { id: "s01.doubleQuoted", state: "attribute-value-double-quoted", html: `<img src="https://${ATTACKER}/p">` },
+  { id: "s02.singleQuoted", state: "attribute-value-single-quoted", html: `<img src='https://${ATTACKER}/p'>` },
+  { id: "s03.unquoted", state: "attribute-value-unquoted", html: `<img src=https://${ATTACKER}/p>` },
+  { id: "s04.spacedEquals", state: "after-attribute-name/before-attribute-value", html: `<img src\n =\t"https://${ATTACKER}/p">` },
+  { id: "s05.valuelessThenSrc", state: "after-attribute-name (no =)", html: `<img hidden src="https://${ATTACKER}/p">` },
+  { id: "s06.solidusBetween", state: "before-attribute-name ignores /", html: `<img/src="https://${ATTACKER}/p"/>` },
+  { id: "s07.caseFolded", state: "ASCII case-insensitive names", html: `<IMG SRC="https://${ATTACKER}/p">` },
+  { id: "s07b.imageAliasCase", state: "ASCII case-insensitive tag name", html: `<ImAgE SrC="https://${ATTACKER}/p">` },
+  { id: "s08.gtInEarlierValue", state: "> is data in a quoted value", html: `<img alt="a>b" src="https://${ATTACKER}/p">` },
+  { id: "s09.decoyNameInValue", state: "a value is not a name position", html: `<img alt="src=/safe" src="https://${ATTACKER}/p">` },
+  { id: "s10.multiLineTag", state: "LF is HTML whitespace", html: `<img\n  alt="x"\n  src="https://${ATTACKER}/p"\n>` },
+  { id: "s11.dupSrcAttackerFirst", state: "duplicate attribute (first wins)", html: `<img src="https://${ATTACKER}/p" src="/a.png">` },
+  { id: "s11b.dupSrcAttackerSecond", state: "duplicate attribute (first wins)", html: `<img src="/a.png" src="https://${ATTACKER}/p">` },
+  { id: "s12.eofInTagQuoted", state: "eof-in-tag", html: `<img src="https://${ATTACKER}/p"` },
+  { id: "s12b.eofInTagUnquoted", state: "eof-in-tag", html: `<img src=https://${ATTACKER}/p` },
+  { id: "s13.equalsFirstInName", state: "unexpected-equals-sign-before-attribute-name", html: `<img =src="x" src="https://${ATTACKER}/p">` },
+  { id: "s14.markupInsideValue", state: "text, not an element", html: `<img alt="<img src=https://${ATTACKER}/p>" src="/a.png">` },
+
+  // ---- states the implementer's table did NOT enumerate ----
+
+  // NULL handling. tag-name / attribute-name / attribute-value states all
+  // REPLACE U+0000 with U+FFFD rather than terminating. So a NUL in the tag name
+  // or the attribute name makes the element/attribute a different one entirely
+  // (no fetch); a NUL inside the value corrupts the URL.
+  { id: "n01.nulInTagName", state: "tag-name NULL -> U+FFFD", html: `<img${NUL} src="https://${ATTACKER}/p">` },
+  { id: "n02.nulInAttrName", state: "attribute-name NULL -> U+FFFD", html: `<img s${NUL}rc="https://${ATTACKER}/p">` },
+  { id: "n03.nulInValue", state: "attribute-value NULL -> U+FFFD", html: `<img src="ht${NUL}tps://${ATTACKER}/p">` },
+  { id: "n04.nulLeadingValue", state: "attribute-value NULL -> U+FFFD", html: `<img src="${NUL}https://${ATTACKER}/p">` },
+  { id: "n05.nulAfterTagName", state: "before-attribute-name NULL", html: `<img ${NUL}src="https://${ATTACKER}/p">` },
+
+  // Unquoted value terminators. The spec ends attribute-value-unquoted at HTML
+  // whitespace and `>` ONLY. `/`, `"`, `'`, `=`, backtick and `<` are all
+  // appended to the value (with a parse error for the last five).
+  { id: "u01.endAtSpace", state: "unquoted ends at space", html: `<img src=https://${ATTACKER}/p alt=x>` },
+  { id: "u02.endAtTab", state: "unquoted ends at tab", html: `<img src=https://${ATTACKER}/p\talt=x>` },
+  { id: "u03.endAtLF", state: "unquoted ends at LF", html: `<img src=https://${ATTACKER}/p\nalt=x>` },
+  { id: "u04.endAtFF", state: "unquoted ends at FF", html: `<img src=https://${ATTACKER}/p\falt=x>` },
+  { id: "u05.endAtCR", state: "unquoted ends at CR", html: `<img src=https://${ATTACKER}/p\ralt=x>` },
+  { id: "u06.endAtGt", state: "unquoted ends at >", html: `<img src=https://${ATTACKER}/p>` },
+  { id: "u07.slashIsData", state: "unquoted: / is NOT a terminator", html: `<img src=https://${ATTACKER}/p/>` },
+  { id: "u08.quoteIsData", state: "unquoted: \" is data (parse error)", html: `<img src=https://${ATTACKER}/p"x>` },
+  { id: "u09.backtickIsData", state: "unquoted: backtick is data", html: `<img src=https://${ATTACKER}/p\`x>` },
+  { id: "u10.equalsIsData", state: "unquoted: = is data", html: `<img src=https://${ATTACKER}/p=1>` },
+  { id: "u11.ltIsData", state: "unquoted: < is data", html: `<img src=https://${ATTACKER}/p<x>` },
+  { id: "u12.emptyUnquoted", state: "unquoted empty value", html: `<img src= alt=x src="https://${ATTACKER}/p">` },
+
+  // Solidus in odd positions.
+  { id: "v01.solidusBeforeFirstAttr", state: "before-attribute-name /", html: `<img / src="https://${ATTACKER}/p">` },
+  { id: "v02.solidusInsideName", state: "attribute-name ends at /", html: `<img sr/c="https://${ATTACKER}/p">` },
+  { id: "v03.solidusAfterName", state: "after-attribute-name /", html: `<img src/="https://${ATTACKER}/p">` },
+  { id: "v04.solidusRunBetween", state: "repeated self-closing-start-tag", html: `<img ///src="https://${ATTACKER}/p"///>` },
+  { id: "v05.solidusInQuotedValueTail", state: "quoted value, trailing /", html: `<img src="https://${ATTACKER}/p/" />` },
+  { id: "v06.selfCloseThenSecondTag", state: "self-closing then new tag", html: `<img src="/a.png"/><img src="https://${ATTACKER}/p">` },
+
+  // Attribute names containing a quote (unexpected-character-in-attribute-name:
+  // `"`, `'` and `<` are APPENDED to the name, they do not open a value).
+  { id: "q01.quoteStartsName", state: "unexpected-character-in-attribute-name", html: `<img "src=x" src="https://${ATTACKER}/p">` },
+  { id: "q02.quoteInsideName", state: "unexpected-character-in-attribute-name", html: `<img a"b src="https://${ATTACKER}/p">` },
+  { id: "q03.aposStartsName", state: "unexpected-character-in-attribute-name", html: `<img 'src=x' src="https://${ATTACKER}/p">` },
+  { id: "q04.quoteNameOnly", state: "unexpected-character-in-attribute-name", html: `<img src"x="https://${ATTACKER}/p">` },
+  { id: "q05.mixedQuoteNesting", state: "quoted value holds the other quote", html: `<img alt='a"b' src="https://${ATTACKER}/p">` },
+  { id: "q06.mixedQuoteNesting2", state: "quoted value holds the other quote", html: `<img alt="a'b" src='https://${ATTACKER}/p'>` },
+
+  // Character references in an attribute NAME. The character-reference state is
+  // reachable only from the attribute-value states, so `&#115;rc` is a literal
+  // name and NOT `src`. A detector that decoded names would false-positive; one
+  // that decoded values must still decode values.
+  { id: "c01.refInName", state: "no character reference in attribute-name", html: `<img &#115;rc="https://${ATTACKER}/p">` },
+  { id: "c02.refInNameNamed", state: "no character reference in attribute-name", html: `<img &sol;src="https://${ATTACKER}/p">` },
+  { id: "c03.refInTagName", state: "no character reference in tag-name", html: `<i&#109;g src="https://${ATTACKER}/p">` },
+  { id: "c04.refInValue", state: "character-reference in attribute value", html: `<img src="https&colon;//${ATTACKER}/p">` },
+  { id: "c05.refInValueNumeric", state: "character-reference in attribute value", html: `<img src="https&#58;//${ATTACKER}/p">` },
+  { id: "c06.ambiguousAmpersand", state: "ambiguous ampersand in a value", html: `<img src="https&colon=x//${ATTACKER}/p">` },
+
+  // Tag-name terminator set: HTML whitespace is exactly TAB LF FF CR SPACE.
+  { id: "w01.nbspInTagName", state: "U+00A0 stays in the tag name", html: `<img\u00a0src="https://${ATTACKER}/p">` },
+  { id: "w02.lineSepInTagName", state: "U+2028 stays in the tag name", html: `<img\u2028src="https://${ATTACKER}/p">` },
+  { id: "w03.vtabInTagName", state: "U+000B stays in the tag name", html: `<imgsrc="https://${ATTACKER}/p">` },
+  { id: "w04.imgurPrefix", state: "tag name is imgur, not img", html: `<imgur src="https://${ATTACKER}/p">` },
+  { id: "w05.basedPrefix", state: "tag name is based, not base", html: `<based href="https://${ATTACKER}/">` },
+
+  // End tags and non-element contexts. A real parser fetches from none of these.
+  { id: "x01.endTagWithAttrs", state: "end-tag-with-attributes (ignored)", html: `</img src="https://${ATTACKER}/p">` },
+  { id: "x02.inComment", state: "comment state", html: `<!-- <img src="https://${ATTACKER}/p"> -->` },
+  { id: "x03.inScript", state: "script-data (raw text)", html: `<script>var a = '<img src="https://${ATTACKER}/p">';</script>` },
+  { id: "x04.inStyle", state: "rawtext", html: `<style>/* <img src="https://${ATTACKER}/p"> */</style>` },
+  { id: "x05.inTextarea", state: "rcdata", html: `<textarea><img src="https://${ATTACKER}/p"></textarea>` },
+  { id: "x06.inTitle", state: "rcdata", html: `<title><img src="https://${ATTACKER}/p"></title>` },
+  { id: "x07.bogusComment", state: "bogus comment", html: `<?<img src="https://${ATTACKER}/p">`, },
+
+  // Unterminated quoted value swallowing a later real element (eof-in-tag).
+  { id: "y01.unterminatedSwallows", state: "eof-in-tag swallows the rest", html: `<img alt="x <img src="https://${ATTACKER}/p">` },
+  { id: "y02.unterminatedThenTag", state: "eof-in-tag swallows the rest", html: `<img alt='x <img src='https://${ATTACKER}/p'>` },
+  { id: "y03.gtThenRealTag", state: "> in a value, real tag after", html: `<img alt="a>b" src="/a.png"><img src="https://${ATTACKER}/p">` },
+
+  // srcset.
+  { id: "r01.srcsetGt", state: "> in a value before srcset", html: `<img alt="a>b" srcset="https://${ATTACKER}/p 2x">` },
+  { id: "r02.srcsetMulti", state: "srcset candidate list", html: `<img srcset="/a.png 1x, https://${ATTACKER}/p 2x">` },
+  { id: "r03.srcsetDecoy", state: "decoy srcset= in a value", html: `<img alt="srcset=/safe" srcset="https://${ATTACKER}/p 2x">` },
+  { id: "r04.srcsetUnquoted", state: "unquoted srcset (no commas)", html: `<img srcset=https://${ATTACKER}/p>` },
+
+  // <base>.
+  { id: "b01.baseAbsolute", state: "base carries an authority", html: `<base href="https://${ATTACKER}/"><img src="/pixel.png">` },
+  { id: "b02.baseProtocolRelative", state: "base carries an authority", html: `<base href="//${ATTACKER}/"><img src="/pixel.png">` },
+  { id: "b03.baseAfterImg", state: "base applies document-wide", html: `<img src="/pixel.png"><base href="https://${ATTACKER}/">` },
+  { id: "b04.baseGtInValue", state: "> in a value before href", html: `<base target="a>b" href="https://${ATTACKER}/">` },
+  { id: "b05.baseDupFirstSafe", state: "duplicate href (first wins)", html: `<base href="/docs/" href="https://${ATTACKER}/">` },
+  { id: "b06.baseDupFirstHostile", state: "duplicate href (first wins)", html: `<base href="https://${ATTACKER}/" href="/docs/">` },
+  { id: "b07.baseCase", state: "ASCII case-insensitive", html: `<BASE HREF='https://${ATTACKER}/'>` },
+  { id: "b08.baseRelative", state: "control: relative base", html: `<base href="/docs/"><img src="/pixel.png">` },
+  { id: "b09.baseNoHref", state: "control: no href", html: `<base target="_blank">` },
+  { id: "b10.baseInsideValue", state: "control: text, not an element", html: `<img alt='<base href="https://${ATTACKER}/">' src="/a.png">` },
+
+  // Benign controls that must stay unflagged.
+  { id: "g01.relative", state: "control", html: `<img src="/assets/a.png">` },
+  { id: "g02.dotSegments", state: "control", html: `<img src="../a.png">` },
+  { id: "g03.fragment", state: "control", html: `<img src="#frag">` },
+  { id: "g04.dataUri", state: "control", html: `<img src="data:image/png;base64,iVBORw0KGgo=">` },
+  { id: "g05.proseWithSrcAndGt", state: "control", html: `Use src= and > in prose; nothing here is a tag.` },
+  { id: "g06.relativeSrcset", state: "control", html: `<img srcset="/a.png 1x, /b.png 2x">` },
+  { id: "g07.backslashInPath", state: "control", html: `<img src="/assets/a\\b/logo.png">` },
+];
+
+interface OracleElement {
+  tag: string;
+  src: string | null;
+  srcset: string | null;
+  href: string | null;
+}
+
+async function parseWithOracle(html: string): Promise<OracleElement[]> {
+  const found: OracleElement[] = [];
+  const handler = (tag: string) => ({
+    element(element: { getAttribute(name: string): string | null }) {
+      found.push({
+        tag,
+        src: element.getAttribute("src"),
+        srcset: element.getAttribute("srcset"),
+        href: element.getAttribute("href"),
+      });
+    },
+  });
+  const rewriter = new HTMLRewriter()
+    .on("img", handler("img"))
+    .on("image", handler("image"))
+    .on("base", handler("base"));
+  await rewriter.transform(new Response(html)).text();
+  return found;
+}
+
+function hostsFor(url: string, base: string): string | null {
+  try {
+    const resolved = new URL(url, base);
+    if (resolved.protocol !== "http:" && resolved.protocol !== "https:") return null;
+    return resolved.hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+// Does a renderer, parsing this document with a real tokenizer, end up making a
+// request to the attacker host? `<base>` counts because it re-points every
+// relative destination in the document.
+function oracleReachesAttacker(elements: OracleElement[]): boolean {
+  for (const element of elements) {
+    const candidates: string[] = [];
+    if (element.tag === "base") {
+      if (element.href !== null) candidates.push(element.href);
+    } else {
+      if (element.src !== null) candidates.push(element.src);
+      if (element.srcset !== null) {
+        for (const part of element.srcset.split(",")) {
+          const first = part.trim().split(/\s+/)[0];
+          if (first) candidates.push(first);
+        }
+      }
+    }
+    for (const candidate of candidates) {
+      for (const base of RENDERER_BASES) {
+        if (hostsFor(candidate, base) === ATTACKER) return true;
+      }
+    }
+  }
+  return false;
+}
+
+async function main(): Promise<void> {
+  const rows: Array<Record<string, unknown>> = [];
+  const bypasses: string[] = [];
+  const overApproximations: string[] = [];
+
+  for (const testCase of CASES) {
+    const elements = await parseWithOracle(testCase.html);
+    const rendererFetches = oracleReachesAttacker(elements);
+
+    const matches = detectExfil(testCase.html, []);
+    const redacted = applyRedaction(testCase.html, matches);
+    const hostAfterRedaction = redacted.includes(ATTACKER);
+    const flagged = matches.length > 0;
+
+    let verdict: "OK" | "BYPASS" | "OVER";
+    if (rendererFetches && hostAfterRedaction) {
+      verdict = "BYPASS";
+      bypasses.push(testCase.id);
+    } else if (!rendererFetches && flagged) {
+      verdict = "OVER";
+      overApproximations.push(testCase.id);
+    } else {
+      verdict = "OK";
+    }
+
+    rows.push({
+      id: testCase.id,
+      state: testCase.state,
+      verdict,
+      rendererFetches,
+      detectorFlagged: flagged,
+      policyIds: matches.map((match) => match.policyId),
+      hostAfterRedaction,
+      oracleElements: elements.map((element) => ({
+        tag: element.tag,
+        src: element.src,
+        srcset: element.srcset,
+        href: element.href,
+      })),
+      redacted,
+    });
+  }
+
+  const summary = {
+    cases: CASES.length,
+    bypasses: bypasses.length,
+    bypassIds: bypasses,
+    overApproximations: overApproximations.length,
+    overApproximationIds: overApproximations,
+  };
+
+  const out = process.argv[2];
+  if (out) {
+    await Bun.write(out, JSON.stringify({ summary, rows }, null, 2));
+  }
+  for (const row of rows) {
+    console.log(
+      `${String(row.verdict).padEnd(6)} ${String(row.id).padEnd(28)} renderer=${String(row.rendererFetches).padEnd(5)} detector=${String(row.detectorFlagged).padEnd(5)} hostAfter=${String(row.hostAfterRedaction).padEnd(5)} ${row.state}`,
+    );
+  }
+  console.log(JSON.stringify(summary, null, 2));
+}
+
+await main();

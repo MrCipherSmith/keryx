@@ -1,5 +1,6 @@
 import { tokenSet, tokenize } from "./text";
 import { memoryClassOf } from "./types";
+import { computeLifecycle } from "./lifecycle";
 import { isValidAt, validateAsOf } from "./temporal";
 import { validateQuery, validateSearchFilters, MAX_GENERAL_RESULTS } from "./validation";
 import type {
@@ -25,7 +26,7 @@ export function searchEntries(
     (entry) =>
       matchesFilters(entry, filters) &&
       classMatch(entry, filters.class) &&
-      temporalMatch(entry, filters.asOf ?? null, config, today),
+      temporalMatch(entry, filters.asOf ?? null, config, today, Boolean(filters.status)),
   );
 
   const scored = filtered.map((entry) =>
@@ -66,7 +67,7 @@ export function candidatePool(
       (entry) =>
         matchesFilters(entry, filters) &&
         classMatch(entry, filters.class) &&
-        temporalMatch(entry, filters.asOf ?? null, config, today),
+        temporalMatch(entry, filters.asOf ?? null, config, today, Boolean(filters.status)),
     )
     .map((entry) => scoreEntry(entry, queryTokens, filters, config, now))
     .sort((a, b) => b.score - a.score)
@@ -103,14 +104,54 @@ function classMatch(entry: MemoryEntry, cls: MemoryClass | undefined): boolean {
 
 // C2 bitemporal filter. All interval semantics live in temporal.ts so general
 // search, relevant recall, and procedural injection cannot drift apart.
+//
+// AFC-06 (flow 234) AC1: the default-current branch below used to admit any
+// status as long as the validity interval and supersededBy checks passed, so
+// a plain default search (no explicit `--status`) could return a deprecated
+// entry as current. It now delegates to the shared `computeLifecycle`
+// formula, which also requires `status === "accepted"`. An explicit
+// `hasStatusFilter` (the caller supplied `filters.status`, enforced
+// separately in `matchesFilters`) is a deliberate override of that
+// requirement and keeps the prior interval-only behavior.
+//
+// T20 finding 1 (flow 234 review, BLOCKER): `acceptedCurrentSearchFilters`
+// (relevant.ts) always sets BOTH `status: "accepted"` and
+// `asOf: currentDay(now)`. Before this fix, a truthy `asOf` short-circuited
+// straight to `isValidAt` below, before either `hasStatusFilter` or the
+// lifecycle branch was ever reached -- so an `accepted`-status entry with a
+// broken or dangling `Superseded-By` pointer sailed through as "current" on
+// that path, even though the exact same entry was correctly rejected by
+// `keryx memory search`/`keryx wiki ask` (which normally hit the no-`asOf`
+// branches). `flow init`'s "Related Memory" section is built via
+// `acceptedCurrentSearchFilters`, so it handed the stale entry to a model as
+// authoritative.
+//
+// Fixed with an unconditional guard, ahead of both branches: an entry whose
+// OWN status still literally reads `"accepted"` is never temporally valid
+// while it also carries a `supersededBy` pointer. `supersedeEntry`
+// (`supersede.ts`) always flips `Status` to `"superseded"` in the SAME write
+// that sets `Superseded-By` -- `accepted` + a live `supersededBy` pointer is
+// not a normal state the system ever produces; it is exactly the broken/
+// dangling-chain anomaly this finding targets. Scoping the guard to
+// `entry.status === "accepted"` (rather than to `hasStatusFilter`/`asOf`)
+// means it does NOT touch a properly-modeled `superseded`-status entry:
+// - an explicit `--status superseded` query still returns the literal
+//   superseded entries it asked for (their own status already says so);
+// - a bare `asOf` historical query (no status filter) still finds a
+//   properly-superseded entry that was valid on that past date, through
+//   plain `isValidAt` below, unaffected by this guard.
 function temporalMatch(
   entry: MemoryEntry,
   asOf: string | null,
   config: MemoryConfig,
   today: string,
+  hasStatusFilter: boolean,
 ): boolean {
   if (!config.temporal.enabled) {
     return true;
+  }
+  if (entry.status === "accepted" && entry.supersededBy) {
+    return false;
   }
   if (asOf) {
     validateAsOf(asOf, new Date(`${today}T00:00:00.000Z`));
@@ -120,7 +161,18 @@ function temporalMatch(
   if (config.temporal.defaultQuery === "as-of") {
     return true;
   }
-  return isValidAt(entry, today) && !entry.supersededBy;
+  if (hasStatusFilter) {
+    return isValidAt(entry, today) && !entry.supersededBy;
+  }
+  return computeLifecycle(
+    {
+      status: entry.status,
+      validFrom: entry.validFrom ?? null,
+      validTo: entry.validTo ?? null,
+      supersededBy: entry.supersededBy ?? null,
+    },
+    new Date(`${today}T00:00:00.000Z`),
+  ).current;
 }
 
 function scoreEntry(
@@ -227,10 +279,15 @@ export function renderSearchMarkdown(
               .join(", ");
             return [
               `### ${index + 1}. ${e.title}  (score ${item.score})`,
-              `- type: ${e.type} | status: ${e.status} | confidence: ${e.confidence}`,
+              `- type: ${e.type} | status: ${e.status} | confidence: ${e.confidence} | version: ${e.version ?? "unknown"}`,
               `- ${item.reason}`,
               scopes ? `- scopes: ${scopes}` : "",
-              e.provenance.source ? `- provenance: ${e.provenance.source}` : "",
+              // AFC-25 / AC6 (flow 234): always show provenance, author and
+              // confirming participant -- an absent value is the explicit
+              // "unknown" sentinel, never a silently-dropped line a reader
+              // could mistake for "nothing to report".
+              `- provenance: ${e.provenance.source ?? "unknown"}${e.provenance.link ? ` (${e.provenance.link})` : ""} | author: ${e.author ?? "unknown"} | confirmedBy: ${e.confirmedBy ?? "unknown"}`,
+              e.caveat ? `- caveat: ${e.caveat}` : "",
               `- summary: ${e.summary || "(none)"}`,
               `- entry: ${e.relativePath}`,
             ]
@@ -239,7 +296,11 @@ export function renderSearchMarkdown(
           })
           .join("\n\n");
 
-  return `# Memory search: ${query}
+  // Lower-case, matching the committed contract this command already had
+  // (`memory-p0.test.ts` P0-4) and the sibling report renderer's own
+  // `# memory search report:`. Routing the command through this shared
+  // renderer must not quietly restyle output the command already promised.
+  return `# memory search: ${query}
 
 Results: ${results.length}
 

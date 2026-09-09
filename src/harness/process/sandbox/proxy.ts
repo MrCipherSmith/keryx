@@ -14,7 +14,6 @@
 import http from "node:http";
 import https from "node:https";
 import net from "node:net";
-import tls from "node:tls";
 import type { RunCa } from "./tls-ca";
 
 /** Canonical host form for comparison: lowercase, no trailing dot. */

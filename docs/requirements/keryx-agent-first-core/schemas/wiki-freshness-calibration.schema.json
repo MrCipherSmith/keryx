@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "wiki-freshness-calibration.schema.json",
+  "title": "Wiki freshness cost calibration profile",
+  "description": "AFC-22/AC-22 (flow 236, phase 4, T10): the versioned latency budget, concurrency bound and ranking weights that a freshness-path optimisation must be checked against. Written from the requirement text (metrics-and-validation.md §M09/M05/22, wiki-specification.md §7, prd.md AFC-22) and this repo's own existing interactive-tool ceiling, BEFORE any batching/caching change lands — never fitted to a measured run. A later optimisation bumps `profileVersion` here first; it must not just get faster and leave this file silently stale.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "profileVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver of this calibration profile, independent of the package version. Bump on any change to the numbers below, including a change made BECAUSE an optimisation landed."
+    },
+    "derivedFrom": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "minItems": 1,
+      "description": "Requirement/doc anchors this profile's numbers were derived from, not measurements of the current implementation."
+    },
+    "agreedBeforeOptimisation": {
+      "const": true,
+      "description": "AC-22's ordering clause, machine-checkable: this field can only be true, and its presence is the record that the profile predates any batching/caching code change on the freshness path."
+    },
+    "scales": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 1 },
+      "minItems": 3,
+      "description": "The page counts this profile is calibrated for. AC-22 fixes these at 50/500/2000."
+    },
+    "concurrencyBound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxParallelGitSubprocesses", "rationale"],
+      "properties": {
+        "maxParallelGitSubprocesses": { "type": "integer", "minimum": 1 },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "gitSubprocessBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["perDistinctBaseRevision", "fixedPerRun", "worstCaseCeiling", "rationale"],
+      "properties": {
+        "perDistinctBaseRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Git subprocesses budgeted per distinct VerifiedAt base revision touched in a run, once pages sharing a base revision are queried in one batch (existence check + batched log + batched diff)."
+        },
+        "fixedPerRun": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Subprocesses spent once per run regardless of page count or base-revision count (the up-front availability probe)."
+        },
+        "worstCaseCeiling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["perPage", "note"],
+          "properties": {
+            "perPage": {
+              "type": "number",
+              "minimum": 0,
+              "description": "A degenerate corpus (every page on a distinct base revision, batching cannot help) must not exceed this many git subprocesses per page — i.e. batching must never regress the pathological case below today's linear baseline."
+            },
+            "note": { "type": "string", "minLength": 1 }
+          }
+        },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "latencyBudgetMs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["perScale", "hardCeiling", "unitCostAssumptionMs", "rationale"],
+      "properties": {
+        "perScale": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["cold", "repeated"],
+            "properties": {
+              "cold": { "type": "number", "minimum": 0 },
+              "repeated": { "type": "number", "minimum": 0 }
+            }
+          },
+          "description": "Keyed by page count (as a string, matching `scales`). Wall-clock target assuming typical base-revision clustering, NOT the worst case."
+        },
+        "hardCeiling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scale", "ms", "anchoredOn"],
+          "properties": {
+            "scale": { "type": "integer" },
+            "ms": { "type": "number", "minimum": 0 },
+            "anchoredOn": { "type": "string", "minLength": 1 }
+          },
+          "description": "An absolute ceiling at the largest required scale, in ANY corpus shape (including the degenerate no-shared-base-revision case), independent of the typical-case numbers above."
+        },
+        "unitCostAssumptionMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Machine constant (measured git-subprocess overhead on the reference host) used ONLY to translate the subprocess budget above into a wall-clock estimate for reporting. This is a unit-conversion input, not a target derived from the current implementation's behaviour."
+        },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "cachePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inRunCache", "persistentCache", "dirtyCheckoutHandling"],
+      "properties": {
+        "inRunCache": { "type": "string", "minLength": 1 },
+        "persistentCache": { "type": "string", "minLength": 1 },
+        "dirtyCheckoutHandling": { "type": "string", "minLength": 1 }
+      }
+    },
+    "rankingWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["formula", "keys", "note"],
+      "properties": {
+        "formula": { "type": "string", "minLength": 1 },
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["field", "direction", "role"],
+            "properties": {
+              "field": { "type": "string", "minLength": 1 },
+              "direction": { "enum": ["asc", "desc"] },
+              "role": { "enum": ["primary", "tie-break"] }
+            }
+          },
+          "minItems": 1
+        },
+        "note": { "type": "string", "minLength": 1 }
+      }
+    },
+    "gitFailureContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "requirement", "closedBy"],
+      "properties": {
+        "status": { "enum": ["closed", "open"] },
+        "requirement": { "type": "string", "minLength": 1 },
+        "closedBy": { "type": "string", "minLength": 1 }
+      }
+    },
+    "outOfScope": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Named deliberately NOT delivered by the task that wrote this profile, so a later optimisation is not credited with silently reading requirements this document never claimed."
+    }
+  },
+  "required": [
+    "profileVersion",
+    "derivedFrom",
+    "agreedBeforeOptimisation",
+    "scales",
+    "concurrencyBound",
+    "gitSubprocessBudget",
+    "latencyBudgetMs",
+    "cachePolicy",
+    "rankingWeights",
+    "gitFailureContract"
+  ]
+}

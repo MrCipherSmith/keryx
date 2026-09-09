@@ -1,0 +1,191 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T24",
+  "timestamp_utc": "2026-09-06T12:51:00Z",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent Stage 1 security review found four reproducible blockers in structural output handling: credentials in JSON property names bypass the floor, duplicate serialized JSON members can reintroduce credentials after parsed-value validation, local $ref siblings are ignored, and browser-decoded/srcset image URLs bypass auto-fetch detection. Existing focused suites passed 78/78 but did not cover these boundary evasions. Attacker-controlled schema keys and refs do not leak into reasons; optional undefined values correctly fail closed per the approved T19 contract. Stage 2 stopped after Stage 1 failed. Scanner behavior concurrently edited in service/types/schemas was excluded. No global quality PASS is claimed.",
+  "summary_markdown": "T24 structural-output review: **Stage 1 FAIL** with four blockers. Exact offline reproductions and immutable logs are recorded in `T24-review.md` and `T24-stage1-probe.ts`; Stage 2 was stopped as required.",
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
+      "change": "created independent Stage 1 security/specification review"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts",
+      "change": "created exact offline public-boundary reproductions and clean controls"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-result.json",
+      "change": "created schema-valid subagent review result"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent two-skill Stage 1 review with four blocker findings, exact attack vectors, fixes, class-scope enumeration, clean controls, immutable evidence, and routing audit.",
+      "hash": "205f09370bf9e6ef496d4fc207f70e1bbc8ce5d7c30ffc8ed742c38ba43e0559"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T24-stage1-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Offline synthetic probe for property-name disclosure, duplicate-key persistence, $ref sibling validation, reason safety, undefined handling, encoded/srcset exfiltration, and a public-link control.",
+      "hash": "dd315537d588e70dd2b38fc791ba9acc3cabe6bae5e0bf2d6c8c541c7bf17adb"
+    }
+  ],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage_1": "FAIL",
+    "stage_2": "not-run-dispatch-stop-on-spec-gap",
+    "focused_tests_passed": 78,
+    "focused_tests_failed": 0,
+    "focused_assertions": 317,
+    "synthetic_reproduced_findings": 4,
+    "blocker_findings": 4,
+    "major_findings": 0,
+    "minor_findings": 0,
+    "info_findings": 0,
+    "global_suite_run": false,
+    "quality_gate_claim": "none",
+    "scanner_scope_excluded": true
+  },
+  "acceptance": [
+    {
+      "criterion": "Tool/resource/error/SDK output contains no synthetic secret and carries safe sibling metadata without altering operation JSON.",
+      "status": "not_met",
+      "evidence": "F-001 reproduces a recognized credential in an enumerable JSON property name crossing dispatchCallTool with isError false and redaction state none. Ordinary error messages and sibling metadata remained leak-safe and the real SDK round-trip passed."
+    },
+    {
+      "criterion": "Safe numeric values and IDs are retained; recognized secrets cannot bypass by field key; unsafe numeric/schema cases return format-unsafe.",
+      "status": "not_met",
+      "evidence": "Existing numeric and ID controls pass, attacker schema keys and refs do not leak into reason tokens, and undefined fails closed per T19. F-001 bypasses by property key, while F-003 accepts a value violating a supported sibling constraint next to local $ref."
+    },
+    {
+      "criterion": "Disabled advisory settings cannot disable the deterministic floor; persistence applies it; public links remain allowed while auto-fetch exfiltration is blocked.",
+      "status": "not_met",
+      "evidence": "Ordinary disabled-floor and persistence fixtures pass and the public-link control is unchanged. F-002 leaks a credential through duplicate serialized members into persistence; F-004 leaves entity-encoded src and srcset auto-fetch URLs unchanged."
+    },
+    {
+      "criterion": "Review remains independent, bounded, schema-valid, and excludes concurrently changing recursive scanner behavior.",
+      "status": "met",
+      "evidence": "No source, git, flow, package, dependency, model, or network action was taken. Scanner behavior was excluded after service.ts changed during review. Evidence is confined to focused existing tests and synthetic offline probes."
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T24#F-001",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/output-validation.ts",
+      "line": 240,
+      "symbol": "sanitizeJsonValue",
+      "problem": "The structural JSON walker scans property values but copies property names verbatim, so a recognized credential used as an enumerable key reaches MCP output with redaction.state none.",
+      "impact": "An untrusted tool or resource can disclose a credential to the MCP client in operation JSON while the sibling metadata falsely reports no redaction.",
+      "suggested_fix": "Inspect own enumerable string property descriptors and return format-unsafe when a property name contains a redactable secret or PII span; add direct validator and MCP transport regressions.",
+      "evidence": "The offline T24 probe showed property-name leakage through both the core validator and MCP transport while MCP returned a non-error result.",
+      "confidence": "high",
+      "dedupe_key": "afc02:output:secret-property-name",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": false,
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.ts:238",
+          "src/mcp/dispatch.ts:93"
+        ],
+        "enumeration_method": "Complete validator read plus ctx searches for Object.entries, Object.fromEntries, and validateToolOutput enumerated the only object reconstruction path and its public MCP adapter."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T24#F-002",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/service.ts",
+      "line": 38,
+      "symbol": "validateSerializedOutput",
+      "problem": "The adapter validates JSON.parse(content), then restores the original bytes when the parsed value has no findings; duplicate members can hide a recognized secret in an overwritten value.",
+      "impact": "A generated serialized JSON payload can persist or return a recognized credential through the mandatory floor, including when advisory security is disabled.",
+      "suggested_fix": "Require the original serialized text to pass the deterministic text floor before byte-identical return, and add a duplicate-member persistence regression; apply the same rule to the exported MCP compatibility wrapper.",
+      "evidence": "The offline T24 probe logged duplicateKeySerialized.leaked=true and duplicateKeyPersistence.allowed=true/leaked=true in .metaproject/data/gdctx/raw/2026-09-06T12-47-01-651Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc02:serialized-json:duplicate-key-secret",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/service.ts:38",
+          "src/mcp/redact-seam.ts:16",
+          "src/security/guard.ts:55",
+          "src/security/guard.ts:111",
+          "src/security/guard.ts:156",
+          "src/security/service.ts:305"
+        ],
+        "enumeration_method": "ctx searches for JSON.parse(content), byte-preserving no-redaction returns, and every validateSerializedOutput call enumerated both wrappers and all current consumers."
+      }
+    },
+    {
+      "id": "F-003",
+      "global_id": "T24#F-003",
+      "reviewer": "review-logic",
+      "severity": "blocker",
+      "file": "src/security/schemas.ts",
+      "line": 361,
+      "symbol": "walk",
+      "problem": "The output schema screen accepts a local $ref with supported validation siblings, but the underlying validator returns immediately after the reference and ignores those siblings.",
+      "impact": "A tool value that violates its declared operation schema is transmitted with isError false, silently corrupting the client's output contract.",
+      "suggested_fix": "Evaluate supported siblings after the referenced schema, or reject $ref plus validation siblings as unsupported until the validator implements them; add core and MCP regressions.",
+      "evidence": "The offline T24 probe used a local string $ref with minLength 20 and value short; the core returned ok=true and MCP returned refSiblingIsError=false in .metaproject/data/gdctx/raw/2026-09-06T12-47-01-651Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc02:schema:ref-sibling-bypass",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/output-validation.ts:301",
+          "src/security/schemas.ts:333",
+          "src/security/schemas.ts:361"
+        ],
+        "enumeration_method": "ctx search for schema.$ref, $ref.startsWith, and resolveRef across the output screen and underlying validator enumerated every reference handling site."
+      }
+    },
+    {
+      "id": "F-004",
+      "global_id": "T24#F-004",
+      "reviewer": "review-security-code",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 29,
+      "symbol": "detectExfil",
+      "problem": "Auto-fetch detection classifies only raw http(s)/protocol-relative strings and only HTML src, so browser-decoded src values and srcset candidates are released unchanged.",
+      "impact": "Rendering attacker-controlled tool/resource/error text can make a zero-click request to an attacker host and disclose attacker-encoded context.",
+      "suggested_fix": "Canonicalize HTML character references for URL classification while preserving source offsets, enumerate srcset candidates, and add entity/srcset/Markdown entity regressions while retaining the public-link control.",
+      "evidence": "The offline T24 probe logged encodedHtmlImageChanged=false and srcsetHtmlImageChanged=false; ordinaryLinkChanged also remained false in .metaproject/data/gdctx/raw/2026-09-06T12-47-01-651Z_run.log.",
+      "confidence": "high",
+      "dedupe_key": "afc15:exfil:html-canonicalization-srcset",
+      "blocking_merge": true,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:29",
+          "src/security/detect/exfil.ts:77",
+          "src/security/detect/exfil.ts:81",
+          "src/security/detect/exfil.ts:83"
+        ],
+        "enumeration_method": "ctx search for exfilHost, INLINE, REFERENCE_DEF, HTML_IMG, and srcset enumerated every auto-fetch parser; no srcset implementation exists."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": []
+}

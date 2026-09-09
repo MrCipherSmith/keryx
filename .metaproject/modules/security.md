@@ -45,9 +45,10 @@ refreshed by `update` without touching `data/security`.
 - Git pre-push gate (`.git/hooks/pre-push`, opt out with `--no-security-hook`):
   runs `keryx security scan` over the changed/committable content. Blocking
   follows `security.config.json` `mode`: `advisory` (default) warns and allows
-  the push; `enforced`/`ci` block the push (non-zero exit) on a secret/critical
-  finding. Installed as a `# keryx:security-pre-push` managed block that
-  coexists with the testing pre-push block and any user-authored hook content.
+  the push; `enforced`/`ci`/`gateway` block the push (non-zero exit) on a
+  failing or needs-approval gate (not only a secret or critical finding).
+  Installed as a `# keryx:security-pre-push` managed block that coexists with
+  the testing pre-push block and any user-authored hook content.
 - Agent guard (`.claude/settings.json`, opt out with `--no-security-agent-hook`):
   adds `UserPromptSubmit` → `keryx security check-input` and
   `PreToolUse`(Write|Edit) → `keryx security check-output`. Merged under a

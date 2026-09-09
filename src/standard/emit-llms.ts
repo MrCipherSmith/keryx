@@ -6,7 +6,7 @@
 // an H1 title, a blockquote summary, then link sections.
 
 import path from "node:path";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir } from "node:fs/promises";
 import { pathExists, toPosix } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 

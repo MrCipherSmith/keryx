@@ -1,0 +1,69 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent M10 budget/scripts review",
+    "description": "Review M10 authored by another worker. Stage1 verify AC3-AC5 actual invocation cap independently from rounds, truthful stop reasons across history/terminal/child mappings, stress JSON resolver, safe containment port and strict scripts config wiring. Stage2 logic/edge cases only after Stage1 passes. Inspect finite-call handling of unknown/denied/invalid calls and subagent concurrency. Root handles acceptance; do not review own M01.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "AC3 actual configured invocation cap and truthful independent terminal reason are met.",
+    "AC4/AC5 offline script fixtures and strict scripts project are valid and maintain compatibility.",
+    "No blocker/major/minor logic defects in M10 scope; unsupported claims separated from measured behavior."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-change-report.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent-tool-call-budget.test.ts",
+    "/Users/Goodea/goodea/keryx/src/session/slate-terminal-state.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/builtin/spawn-subagent-tool.ts",
+    "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.ts",
+    "/Users/Goodea/goodea/keryx/scripts/stress/keryx-shell-stress.ts",
+    "/Users/Goodea/goodea/keryx/scripts/stress/concurrent-suite-stress.ts",
+    "/Users/Goodea/goodea/keryx/scripts/typecheck.test.ts",
+    "/Users/Goodea/goodea/keryx/tsconfig.scripts.json",
+    "/Users/Goodea/goodea/keryx/package.json"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first. Local review-logic fully; testing context; graph/wiki as needed.",
+    "Base0bc6418fa1a038f8ec909cf949fecba077acf9a4; branch codex/agent-first-core. No source/flow/git edits. No own M01 review.",
+    "No global test run: health worker adds intentional RED tests concurrently; root HTTP/Shell outside scope. Focused offline M10 reproduction allowed.",
+    "Stats disabled. Source finite-cap behavior should be independently assessed beyond author unit tests. No model/network calls.",
+    "Stage1 before quality; stop quality on spec gap. Valid result and security check reports."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T11:32:44.009795+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

@@ -2,6 +2,7 @@ import path from "node:path";
 import { spawn } from "node:child_process";
 import { pathExists } from "../lib/fs";
 import { readFile } from "node:fs/promises";
+import { omissionNote } from "./lines";
 
 // Orientation context for the Metaproject bootstrap + graph/wiki enforcement
 // layer. Where the gdctx
@@ -35,6 +36,16 @@ function metaPath(cwd: string, parts: string[]): string {
 }
 
 function boundedIndexExcerpt(raw: string): string {
+  const compactIndex = raw.trim();
+  if (
+    compactIndex.includes("Routing pointers.") &&
+    compactIndex.includes("routing.md") &&
+    compactIndex.length <= MAX_INDEX_CHARS &&
+    compactIndex.split("\n").length <= MAX_INDEX_LINES
+  ) {
+    return compactIndex;
+  }
+
   const sections = new Map<string, string[]>();
   let projectTitle = "# Metaproject Index";
   let currentSection: string | undefined;
@@ -103,31 +114,87 @@ export async function metaprojectIndexContext(cwd: string): Promise<string> {
   ].join("\n");
 }
 
-// Count uncommitted code-file changes — a deterministic freshness signal that
-// needs no stored build ref. Local git only; failure ⇒ 0 (never blocks/networks).
-export async function uncommittedCodeCount(cwd: string): Promise<number> {
-  const files = await new Promise<string[]>((resolve) => {
+/**
+ * The working-tree freshness signal, as a TRI-STATE (flow 237 T11, F2).
+ *
+ * Two defects this replaces, both measured at a real terminal against a
+ * scratch project with a built graph:
+ *
+ *   1. The count came from `git diff --name-only HEAD`, which does not list
+ *      UNTRACKED files. A brand-new `src/b.ts` — the case this project's own
+ *      routing gate names first ("rebuild when you added, renamed, deleted or
+ *      moved files") — printed `freshness: working tree clean`.
+ *   2. Every git failure was mapped to `0`, i.e. to the same "clean" wording.
+ *      With `.git` moved away entirely, `keryx gdgraph context` still printed
+ *      `freshness: working tree clean`: an assertion about a working tree it
+ *      had not been able to look at.
+ *
+ * So: `git status --porcelain=v1` (which does report untracked, deleted and
+ * renamed paths), and a failure — spawn error, non-zero exit, no git, not a
+ * repository — is `"unknown"` with its own wording. `"unknown"` is never
+ * collapsed into `0`; a check that could not run does not get to say "clean".
+ */
+export type WorkingTreeCodeChanges =
+  | { status: "counted"; count: number }
+  | { status: "unknown"; reason: string };
+
+type GitOutput = { ok: true; stdout: string } | { ok: false; reason: string };
+
+function gitOutput(cwd: string, args: string[]): Promise<GitOutput> {
+  return new Promise<GitOutput>((resolve) => {
     try {
-      const child = spawn("git", ["diff", "--name-only", "HEAD"], {
-        cwd,
-        stdio: ["ignore", "pipe", "ignore"],
-      });
+      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
       let out = "";
       child.stdout?.on("data", (chunk) => {
         out += String(chunk);
       });
-      child.on("error", () => resolve([]));
-      child.on("close", () => resolve(out.split("\n").map((l) => l.trim()).filter(Boolean)));
-    } catch {
-      resolve([]);
+      child.on("error", (error) => resolve({ ok: false, reason: `git could not be run (${error.message})` }));
+      child.on("close", (code) =>
+        resolve(
+          code === 0
+            ? { ok: true, stdout: out }
+            : { ok: false, reason: `\`git ${args.join(" ")}\` exited ${code ?? "with a signal"} (not a git repository, or git is unavailable)` },
+        ),
+      );
+    } catch (error) {
+      resolve({ ok: false, reason: `git could not be run (${error instanceof Error ? error.message : String(error)})` });
     }
   });
-  return files.filter((f) => CODE_EXT.test(f)).length;
 }
 
-function freshnessNote(count: number): string {
-  return count > 0
-    ? `freshness: ${count} uncommitted code file(s) may not be reflected — \`keryx gdgraph build\` to refresh`
+// `git status --porcelain=v1` lines are "XY path", with renames printed as
+// "old -> new". Both sides of a rename are code-relevant, so either matching
+// `CODE_EXT` counts the entry once.
+function countCodePaths(porcelain: string): number {
+  let count = 0;
+  for (const line of porcelain.split("\n")) {
+    if (line.length < 4) continue;
+    const paths = line
+      .slice(3)
+      .split(" -> ")
+      .map((candidate) => candidate.replace(/^"|"$/g, "").trim())
+      .filter(Boolean);
+    if (paths.some((candidate) => CODE_EXT.test(candidate))) count += 1;
+  }
+  return count;
+}
+
+// Count uncommitted code-file changes — a deterministic freshness signal that
+// needs no stored build ref. Local git only; never throws, never networks.
+export async function uncommittedCodeCount(cwd: string): Promise<WorkingTreeCodeChanges> {
+  const status = await gitOutput(cwd, ["status", "--porcelain=v1"]);
+  if (!status.ok) {
+    return { status: "unknown", reason: status.reason };
+  }
+  return { status: "counted", count: countCodePaths(status.stdout) };
+}
+
+function freshnessNote(changes: WorkingTreeCodeChanges): string {
+  if (changes.status === "unknown") {
+    return `freshness: unknown — could not check the working tree for uncommitted code changes: ${changes.reason}. Run \`keryx gdgraph build\` if unsure; do not read this as clean.`;
+  }
+  return changes.count > 0
+    ? `freshness: ${changes.count} uncommitted code file(s) may not be reflected — \`keryx gdgraph build\` to refresh`
     : "freshness: working tree clean";
 }
 
@@ -142,17 +209,21 @@ export async function graphContext(cwd: string): Promise<string> {
   const indexed = lines.find((l) => /Source files indexed:/i.test(l))?.trim();
 
   const start = lines.findIndex((l) => /^##\s+Top Modules/i.test(l));
-  const table: string[] = [];
+  const section: string[] = [];
   if (start >= 0) {
     for (let i = start + 1; i < lines.length; i += 1) {
       const line = lines[i] ?? "";
       if (/^##\s+/.test(line)) break;
-      if (line.trim()) table.push(line);
-      if (table.length >= MAX_MODULE_ROWS + 2) break; // header + separator + rows
+      if (line.trim()) section.push(line);
     }
   }
+  // The cut used to be a bare `break` inside the loop above, so an orientation
+  // block showing twelve modules read as the project's complete module list —
+  // the same unmarked elision fixed across the gdctx summarisers in flow 235.
+  const table = section.slice(0, MAX_MODULE_ROWS + 2); // header + separator + rows
+  const tableNote = omissionNote(table.length, section.length, "module rows");
 
-  const count = await uncommittedCodeCount(cwd);
+  const changes = await uncommittedCodeCount(cwd);
   return [
     "## Code graph (map)",
     "",
@@ -160,8 +231,9 @@ export async function graphContext(cwd: string): Promise<string> {
     "",
     "### Top modules",
     ...(table.length > 0 ? table : ["(no module stats)"]),
+    ...(tableNote ? [tableNote] : []),
     "",
-    freshnessNote(count),
+    freshnessNote(changes),
     "Use `keryx gdgraph affected <file>` / `keryx gdgraph query` for impact & relationships before broad search.",
   ]
     .filter((l) => l !== null)

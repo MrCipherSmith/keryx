@@ -1,0 +1,136 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T77",
+  "dispatch_id": "233-2026-09-06-agent-first-core-phase-1/T77",
+  "status": "DONE",
+  "summary": "Evaluated replacing the hand-rolled markdown extraction in the auto-fetch floor with marked's token stream and found it NOT viable on all four axes, with numbers: availability (marked is declared nowhere in package.json and reaches this checkout only as a transitive dependency of the optional @opentui/core, so an import in the mandatory floor can throw at module load), performance (Lexer.lex is 5093x slower than the detector on a 200 KB bracket run and 3810x slower on a 400 KB `![` run, trading one denial-of-service surface for a larger one), span mapping (tokens carry no offsets, raw concatenation drifts on CRLF, and token.href is empty for the tab-in-scheme vector T24 F-004 closed and loses a backslash on the T24R2#F-001 class), and correctness (12 of 14 coverage rows the floor flags are not resolved to an image by marked, so adoption would release them). Closed the three blockers and three majors by hand instead, removing the invented bounds rather than adding one: image-inside-a-link is now covered in every spelling by the CommonMark alt-text/content asymmetry; MAX_REFERENCE_LABEL is deleted and replaced by an exact necessary condition derived from the document's own definition table; the inline destination grammar is gated on an indexed `)` and memoised by description end, taking the reviewer's cubic 12.5 KB shape from 516829.3 ms to 0.7 ms; srcset candidates are split on the decoded value; reference labels are normalised with CommonMark whitespace collapse on both sides; and the completeness sentence in policies.md is corrected and now verifies in both directions.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md",
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T72-md rendererConfirmedBypasses: [] (was 7); T72-md-diff supersetRegressions: [] and rendererConfirmedBypasses: [] (were 2 and 10); T72-gates bypasses: [] across all 8 attribute-consulting branches; T42-charrefs (240 cases) and T53-extract (88 cases) byte-identical at 0 bypasses; T24-recheck2-boundary field-name rows byte-identical. URL secret: egress.markdown-link-sensitive-value fires 4 times across the corpus and T42-boundary's p.password-key row is character-for-character unchanged. Public link: T72-boundary ac5PublicLinkReleased: true, ac5RelativeReleased: true; all four link spellings released in T72-md and T77-doc; the transport test additionally pins a link wrapping a RELATIVE image at state:\"none\". Raw: T77-after-T72-md.log, T77-after-T72-md-diff.log, T77-after-T72-gates.log, T77-after-T72-boundary.log, T77-after-T42-charrefs.log, T77-after-T53-extract.log, T77-after-T42-boundary.log."
+    },
+    {
+      "criterion": "All three blockers and all three majors closed, verified at the detector and at all four public boundaries",
+      "status": "met",
+      "evidence": "T72-boundary (27 shapes x 4 boundaries: dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport, redactToolOutput): hostileLeakingCount 5 -> 0, leakingWithStateNone [x1LinkedInlineImage, x2LinkedShortcutImage, x3LinkedImageInProse, x4LongLabelFullRef, x5LongLabelShortcut] -> [], hostileFullyClosed 14 -> 19, maskLandsOnRawBytes true, allowlistRemedyWorks true, all 5 exactness negatives still released. T72-srcset: 3 rows verdict=BYPASS -> all 6 verdict=ok. T72-gates: bypasses [srcsetCharrefComma, labelInnerWhitespace, labelNewlineInLabel] -> []. T72-doc: docSaysCoveredButReleased 5 rows -> [], parity false -> true. Six T77_CLASS_VECTORS drive the F-001/F-002/F-005 classes through the persistence materializer and the transport validator in exfil.test.ts. Raw: T77-after-T72-boundary.log, T77-after-T72-srcset.log, T77-after-T72-gates.log, T77-after-T72-doc.log."
+    },
+    {
+      "criterion": "No pathological input inside the floor; state the worst case and its cost; show the shipped code is no worse than what it replaces on every shape the reviewer measured",
+      "status": "met",
+      "evidence": "T72-perf (12 shapes): shapesOverOneSecond [unterminatedDestination=13952ms, unterminatedDestinationAngle=13150.7ms, openRunThenUnterminated=516829.3ms] -> []; superLinearShapes 2 -> []. T72-perf2: shippedGrowthExponent 2.94 -> -0.11, shipped/replaced ratio 2.01-2.12 -> 0.00-0.02, realisticPayloadMs 1884.4 -> 2.9. T77-perf (17 shapes this change makes newly reachable): shapesOverOneSecond [], superLinearShapes [], worstShape labelRunWithDefinition at 26.6 ms. WORST CASE across all 29 measured shapes: balancedNest, 400000 bytes, 88.8 ms, growth exponent 1.15. Faster than the pre-T77 code on every reviewer shape except longLabelUse (3.1 -> 10.2 ms at 400 KB, linear, the price of removing MAX_REFERENCE_LABEL), and faster than the two patterns T71 replaced on every shape including the cubic one where T72 measured it ~2x slower. Raw: T77-before-T72-perf.log / T77-after-T72-perf.log, T77-before-T72-perf2.log / T77-after-T72-perf2.log, T77-perf.log."
+    },
+    {
+      "criterion": "Every prior measurement holds: the extraction, resolution, forty-two case, forty-eight case, character-reference and surface matrices, and the boundary rows for the canonicalization and persistence repairs; compare by hash",
+      "status": "met",
+      "evidence": "All eleven prior matrices are byte-identical before and after by SHA-256, and all eleven also equal the hashes T72 recorded: T42-exfil-attack 0646c50821177132, T24-recheck2-exfil 8c9bfec0481cd229, T42-charrefs 698d88993076fd92, T53-extract ad20286ba1aab3f8, T53-resolve 0603791031f8f078, T53-base 3416d62e56b7674e, T53-boundary 398012ceb8654c55, T42-boundary 7030455d39a56b12, T24-recheck2-boundary 838399622c42414f, T52-base a04404db8a1571b1, T46-surfaces d8348c995f7686e1. Benign corpus: 16 files with findings before and after, the same 16 files and the same policy ids, no new policy id, Part B 7 flagged with the same 7 ids; benign findings 60 -> 62, both the same attack vector (ex09-image-1x1-tracker) in two worktree copies of fixtures/exfil/cases.json, which is T72#F-001 firing on the repository's own fixture file. Raw: T77-before-*.log / T77-after-*.log, T77-after-T53-corpus.log."
+    },
+    {
+      "criterion": "The documentation matches the implementation in both directions",
+      "status": "met",
+      "evidence": "T72-doc.ts (the reviewer's own probe, unmodified): 77 rows, docSaysCoveredButReleased [], docSaysReleasedButFlagged [], propertyFailures [], parity: true (was 5 released rows and parity: false). T77-doc.ts (new, this round's sentences as 24 executable rows): 15 covered / 8 released / 1 property, parity: true, with 12 of the 15 covered rows renderer-confirmed by marked. The same three corrections were applied to the module header (exfil.ts:10-33 and :88-95), T66#F-003's third site. Raw: T77-after-T72-doc.log, T77-doc.log."
+    },
+    {
+      "criterion": "Record which oracle settles which question, since three rounds relied on HTMLRewriter for a decoding question it cannot answer",
+      "status": "met",
+      "evidence": "Recorded in the module header of exfil.ts and in T77-implementation.md Part 2 (T72#F-008). marked settles rendering questions and confirms T72#F-001, F-002 and F-005. HTMLRewriter settles attribution and tag boundaries only; it returns RAW attribute source, so it cannot adjudicate decoding at all and the decoding premise rests on HTML Standard 13.2.5.35-.39. NO oracle in this checkout settles the srcset decoding row (T72#F-004) or bracket nesting past depth 1 (the depth-2..6 over-approximation), and both are stated as such rather than claimed as renderer-confirmed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The viability decision and its evidence, written before any production edit; agreement with the orchestrator's judgement, and where it differs.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "What changed defect by defect, the performance table, the eleven byte-identical matrices, the oracle table, and the concerns.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-viability.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Parser-adoption viability probe: availability, span mapping, performance and correctness axes, measured against marked@17.0.1. Left behind so a future round can test a candidate parser before adopting it.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-perf.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Seventeen shapes this round's change makes newly reachable, scaled across five sizes with growth exponents.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T77-doc.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "This round's new policies.md sentences as 24 executable rows, put to the detector in both directions with marked as renderer oracle.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T77-viability.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Raw viability measurement: three availability failures, three span-mapping failures, the marked-vs-detector performance table, and the 12 coverage rows adoption would release.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T77-perf.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "shapes 17, shapesOverOneSecond [], superLinearShapes [], worstMs 26.6.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T77-doc.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "parity true over 24 rows; rendererFetchesOnCoveredRows names the three srcset rows marked cannot confirm.",
+      "hash": null
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "Closed T72#F-001 by applying CommonMark's alt-text/content asymmetry: an image construct's description is still skipped, a link construct's description is scanned and only its destination span is skipped, in both markdown passes. Deleted MAX_REFERENCE_LABEL and the REFERENCE_LABEL regex, replacing the bound with an exact necessary condition (non-whitespace prefix counts against the longest key the document's own reference definitions produced) and skipping the reference pass entirely when the document defines no labels. Indexed `)` positions alongside the brackets and gated INLINE_DESTINATION on a binary search for one, and memoised both the destination reading and the SENSITIVE_URL_VALUE test by description end, which removes the quadratic and cubic shapes. Added a per-span dedupe for inline findings. Split the srcset candidate list on the decoded value when decoding reveals a comma the raw bytes do not carry, masking the whole raw attribute value in that case. Normalised reference labels with CommonMark's trim/collapse/fold rule identically at the definition and use sites. Extracted isExfilDestination from considerUrl. Rewrote the module header's covered list, its matching rules, and the false performance claim, and recorded which oracle settles which question (T72#F-008)."
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Added seven tests, all written before the corresponding production code and all RED on the pre-fix detector: an image inside a link in seven spellings plus the image-in-image and click-gated controls; reference labels at 998/999/1000/1200/4096 characters in three forms plus the undefined-label negatives; CommonMark whitespace collapse on both sides plus non-whitespace negatives; the entity-encoded srcset comma under a non-empty allowlist plus the allowlist and raw-comma controls; a nine-shape performance budget covering the reviewer's pathological inputs and the shapes this change makes newly reachable; and T77_CLASS_VECTORS driven through prepareOutputForPersistence and validateOutputForTransport, with AC5's public-link and local-badge rows re-pinned. No existing test was modified, weakened or removed."
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/policies.md",
+      "change": "Auto-fetch subsection only, plus the Version line (0.1.3 -> 0.1.4). The covered list now names the image-nested-in-a-link case with the README badge idiom as its carrier; a new sentence states that what a markdown link does not cover is the navigation rather than its content, and that an image inside another image's description is alt text and is not a finding; and the matching paragraph now states the srcset decoding rule, CommonMark label matching with case folding and whitespace collapse applied to both sides, and that there is no label-length bound at all, the only criterion being whether the document defines the label."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 7,
+    "tests_passing": 58,
+    "tests_failing": 0,
+    "focused_suites_pass": 109,
+    "focused_suites_fail": 0,
+    "focused_suites_expect_calls": 1110,
+    "prior_matrices_byte_identical": 11,
+    "reviewer_probes_rerun": 8,
+    "benign_files_with_findings_before": 16,
+    "benign_files_with_findings_after": 16,
+    "worst_shape_ms": 88.8,
+    "worst_shape_bytes": 400000,
+    "blocker_cubic_shape_before_ms": 516829.3,
+    "blocker_cubic_shape_after_ms": 0.7
+  },
+  "timestamp_utc": "2026-09-06T20:05:00Z"
+}

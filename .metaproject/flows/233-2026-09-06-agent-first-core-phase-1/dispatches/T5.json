@@ -1,0 +1,60 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T5",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "AFC-01 contained reads RED regressions",
+    "description": "Create failing behavioral tests for authorized internal symlinks versus external symlink/owner-root escapes in MCP resource/list and harness wiki/skills read paths. Design a bounded safe race fixture and explicit unsupported-platform behavior for a future shared descriptor-read seam. Test only source files in containment ownership; no production edits. Work from containment-spec.md and AFC-01 policies.",
+    "intent": "test"
+  },
+  "acceptance_criteria": [
+    "Ordinary file and internal link chain return same bytes inside narrow owner root.",
+    "External/sibling/root-replacement links and nonfiles/unreadable paths cannot disclose synthetic sentinel or unsafe target names.",
+    "MCP resource listing and harness wiki/skills discovery/direct reads observe the same containment rules; cycles are bounded.",
+    "Race test verifies descriptor/identity protection or explicit capability refusal; no unsupported full TOCTOU claim."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/mcp/resources.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/resources.test.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/contained-path.ts",
+    "/Users/Goodea/goodea/keryx/src/sac/secure-resource-read.ts"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md first. Local tests-creator fully; testing context; graph/wiki before deep code.",
+    "Own containment tests in src/mcp, harness/tool and potential shared lib test. No production/flow/git/AC edits or external model/network calls. Temporary synthetic fixtures only. Stats disabled; auto_commit false.",
+    "Root owns MCP dispatch/redact-seam/security redaction and scan. You own resources/contained readers/skills paths tests only. Coordinate shared files explicitly before edits.",
+    "Health worker writes src/health tests; independent M10 reviewer read-only. No global test suite; focused containment only.",
+    "Safe deterministic race tests: use injectable file operation boundary if needed, but do not create fake acceptance by testing an uncalled helper. Document required seam for implementer."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T5-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T11:36:09.149171+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

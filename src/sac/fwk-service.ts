@@ -36,7 +36,19 @@ export type FwkKnowHow = Readonly<{ id: string; kind: "wiki" | "memory" | "skill
 export type FwkWork = Readonly<{ flowRef?: { uri: string; snapshot: string; revision: string }; completed?: string[]; next?: string[]; blocked?: string[]; evidence?: FwkEvidence[] }>;
 export type FwkSource = Readonly<{ facts: readonly FwkEvidence[]; work?: FwkWork; knowHow: readonly FwkKnowHow[] }>;
 export type AccessReceipt = IntegrityLinkedAccessReceipt;
-export type FwkResult = Readonly<{ partial: boolean; omittedOptional: string[]; manifest: { facts: unknown[]; work: unknown; knowHow: unknown[]; freshness: "fresh" | "stale" | "partial" | "denied" }; receipt: AccessReceipt }>;
+/**
+ * One entry of {@link FwkResult.withheld} — an item this read did NOT return,
+ * named by the reference it came from and by why.
+ *
+ * `omittedOptional` carries assembly ids (`knowhow-0`, `fact-2`), and an
+ * omitted item is by definition absent from `manifest`, so the id alone
+ * resolves to nothing a caller can look at: "something was left out" without
+ * "which reference, and why" is the same absence-shaped answer this lane
+ * exists to close. This list is the id's other half. It is always exactly as
+ * long as `omittedOptional`, in the same order.
+ */
+export type FwkWithheld = Readonly<{ id: string; uri: string; kind: "fact" | "work" | "wiki" | "memory" | "skill"; reason: string }>;
+export type FwkResult = Readonly<{ partial: boolean; omittedOptional: string[]; withheld: readonly FwkWithheld[]; manifest: { facts: unknown[]; work: unknown; knowHow: unknown[]; freshness: "fresh" | "stale" | "partial" | "denied" }; receipt: AccessReceipt }>;
 export type FwkReadResult = FwkResult | ContextOverflow;
 
 const metadataOnly = (value: unknown): boolean => {
@@ -240,6 +252,7 @@ async function resolveLedgerState(ledger: string, checkpointPath: string, verifi
   const document = await readCheckpoint(checkpointPath); let ledgerBytes: number;
   try { ledgerBytes = await ledgerByteLength(ledger); } catch (error) {
     if (!isMissing(error)) throw error;
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     if (document.present) throw new Error("invalid access receipt ledger: orphaned-checkpoint");
     return { ledgerBytes: 0, recordCount: 0, headHash: "GENESIS", tailOffset: 0, digest: createHash("sha256") };
   }
@@ -593,19 +606,43 @@ export class FwkReadService {
     const work = source.work?.flowRef ? { state: "bound" as const, ...source.work } : { state: "unbound" as const };
     const visibleFacts = facts.filter((fact) => fact.visible);
     const acceptedKnowHow = knowHow.filter((entry) => entry.visible && entry.accepted && entry.status !== "withdrawn" && entry.status !== "denied");
-    const withheld = [...facts.filter((fact) => !fact.visible).map((fact) => fact.id), ...knowHow.filter((entry) => !entry.visible || !entry.accepted || entry.status === "withdrawn" || entry.status === "denied").map((entry) => entry.id)];
+    const withheldFacts = facts.filter((fact) => !fact.visible);
+    const withheldKnowHow = knowHow.filter((entry) => !entry.visible || !entry.accepted || entry.status === "withdrawn" || entry.status === "denied");
+    const withheld = [...withheldFacts.map((fact) => fact.id), ...withheldKnowHow.map((entry) => entry.id)];
+    // Why each id in `omittedOptional` is not in the manifest, indexed by that
+    // id. An omitted item is by construction absent from the manifest, so a
+    // caller handed only `["knowhow-0"]` has no way to learn WHICH reference
+    // was dropped or why — the report of incompleteness would itself be
+    // incomplete. Every id that can reach `omittedOptional` is entered here:
+    // the source-withheld ones with their real cause, and every remaining
+    // candidate with the budget cause it would be dropped for.
+    const omissionIndex = new Map<string, FwkWithheld>();
+    const bind = (entry: FwkWithheld): void => { if (!omissionIndex.has(entry.id)) omissionIndex.set(entry.id, entry); };
+    for (const fact of withheldFacts) bind({ id: fact.id, uri: fact.uri, kind: "fact", reason: "evidence reference could not be read at this workspace's declared path" });
+    for (const entry of withheldKnowHow) {
+      bind({
+        id: entry.id, uri: entry.uri, kind: entry.kind,
+        reason: !entry.visible ? "know-how reference could not be read at this workspace's declared path"
+          : entry.status === "withdrawn" ? "know-how reference was withdrawn by its owning store"
+          : "know-how reference is not marked accepted by its owning store",
+      });
+    }
     const select = <T extends { id: string }>(items: T[]): T[] => itemId ? items.filter((entry) => entry.id === itemId) : items;
     const candidates: ContextCandidate[] = [
       ...select(visibleFacts).map((fact) => ({ id: fact.id, required: required.has(fact.id) || !optional.has(fact.id), tokens: Math.ceil(fact.statement.length / 4) })),
       ...(work.state === "bound" && (!itemId || itemId === "work") ? [{ id: "work", required: required.has("work") || !optional.has("work"), tokens: 32 }] : []),
       ...select(acceptedKnowHow).map((item) => ({ id: item.id, required: required.has(item.id) || !optional.has(item.id), tokens: 16 })),
     ];
+    const budgetReason = "omitted to stay inside the requested item/token budget — raise --max-items/--max-tokens, or read it directly by id";
+    for (const fact of select(visibleFacts)) bind({ id: fact.id, uri: fact.uri, kind: "fact", reason: budgetReason });
+    for (const entry of select(acceptedKnowHow)) bind({ id: entry.id, uri: entry.uri, kind: entry.kind, reason: budgetReason });
+    bind({ id: "work", uri: source.work?.flowRef?.uri ?? "(no flow bound)", kind: "work", reason: budgetReason });
     const assembly = await assembleAndRecordContext({ workspaceRoot: this.options.canonical.workspaceRoot, correlationId: input.requestCorrelationId, ...input.budget, candidates, omittedOptional: withheld, configurationRevision: this.options.canonical.configurationRevision, policyRef: policy.policyRef, policyRevision: policy.policyRevision });
     if ("code" in assembly) return assembly;
-    return this.success(input.workspaceId, actor.subject, assembly, facts, work, acceptedKnowHow, now, action, itemId);
+    return this.success(input.workspaceId, actor.subject, assembly, facts, work, acceptedKnowHow, now, action, omissionIndex, itemId);
   }
 
-  private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: "fresh" | "stale" | "expired" | "denied" }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date, action: "overview" | "resource", resourceId?: string): Promise<FwkResult> {
+  private async success(workspaceId: string, actor: string, assembly: ContextAssembly, facts: Array<FwkEvidence & { freshness: "fresh" | "stale" | "expired" | "denied" }>, work: unknown, knowHow: FwkKnowHow[], now: () => Date, action: "overview" | "resource", omissionIndex: ReadonlyMap<string, FwkWithheld>, resourceId?: string): Promise<FwkResult> {
     const selected = new Set(assembly.selected);
     const selectedFacts = facts.filter((fact) => selected.has(fact.id));
     const selectedKnowHow = knowHow.filter((item) => selected.has(item.id));
@@ -617,7 +654,11 @@ export class FwkReadService {
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
     if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
-    return { partial: assembly.partial, omittedOptional: assembly.omittedOptional, manifest, receipt };
+    // One entry per omitted id, in the same order — never a shorter list that
+    // would quietly drop the omissions it has no explanation for. An id with
+    // no index entry is itself reported, by name, as unexplained.
+    const withheld = Object.freeze(assembly.omittedOptional.map((id) => omissionIndex.get(id) ?? Object.freeze({ id, uri: "(unknown)", kind: "fact" as const, reason: "omitted for a reason this read could not attribute to a declared reference" })));
+    return { partial: assembly.partial, omittedOptional: assembly.omittedOptional, withheld, manifest, receipt };
   }
 
   private async denied(workspaceId: string, actor: string, correlationId: string): Promise<FwkResult> {
@@ -628,7 +669,20 @@ export class FwkReadService {
     if (!metadataOnly(receipt)) throw new Error("receipt metadata contract violated");
     const validation = await validateSacContract({ schema: "access-receipt", document: receipt });
     if (!validation.valid) throw new Error(`invalid access receipt: ${validation.errors.map((error) => error.code).join(",")}`);
-    return { partial: false, omittedOptional: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt };
+    // `partial: true`, not `false`. A denial returns no items, and `partial:
+    // false` beside an empty manifest is the claim "this IS the workspace,
+    // complete" — the exact absence-rendered-as-a-complete-result shape this
+    // programme keeps producing. Whatever the workspace holds was not
+    // disclosed here, so this result is by construction incomplete.
+    // `freshness: "denied"` and `decision: "denied"` still name WHY; `partial`
+    // now stops contradicting them.
+    //
+    // `withheld` stays EMPTY rather than naming what was refused: `denied()` is
+    // deliberately the same answer for "no such workspace", "not yours", and
+    // "unsafe reference" (see `resolve`'s catch), so itemising its contents
+    // here would rebuild the discovery oracle that collapse exists to prevent.
+    // `freshness: "denied"` and `decision: "denied"` carry the reason instead.
+    return { partial: true, omittedOptional: [], withheld: [], manifest: { facts: [], work: { state: "unbound" }, knowHow: [], freshness: "denied" }, receipt };
   }
 
   private async receipt(workspaceId: string, actor: string, decision: AccessReceipt["decision"], assembly: ContextAssembly, now: () => Date, action: "overview" | "resource" = "overview", resourceId?: string): Promise<AccessReceipt> {
@@ -695,16 +749,45 @@ export function createLocalFwkReadService(
     source: async ({ workspaceId, actorContext }) => {
       const manifest = await workspaces.showForActor({ actorContext, workspaceId });
       const flow = manifest.resources.find((resource) => resource.kind === "flow");
+      // One unreadable resource withholds ITSELF, not the whole workspace.
+      //
+      // Before this, a single deleted target threw out of these two maps, out
+      // of `source()`, and `resolve()`'s catch turned the entire read into
+      // `denied()` — an empty manifest reported at `partial: false` with an
+      // empty `omittedOptional`, while every other resource in the workspace
+      // was still perfectly readable. The fields that exist to report
+      // incompleteness reported none of it. A withheld entry instead flows
+      // into `withheld` below, which `resolve()` already passes as
+      // `omittedOptional`, and `assembleContext` derives `partial` from it —
+      // so the omission is both counted and NAMED.
+      //
+      // `access_denied` still propagates, exactly as it does out of the `work`
+      // read below and for the same reason: an authorization denial is not a
+      // content problem, and downgrading it to a partial result would disclose
+      // the rest of a workspace to an actor whose role was just revoked.
+      const withhold = (error: unknown): void => {
+        if (error instanceof WorkspaceServiceError && error.code === "access_denied") throw error;
+      };
       const facts = await Promise.all(manifest.resources.filter((resource) => resource.kind === "evidence").map(async (resource, index) => {
-        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource }) as Buffer;
-        const revision = createHash("sha256").update(raw).digest("hex");
-        return { id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}`, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const };
+        try {
+          const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource }) as Buffer;
+          const revision = createHash("sha256").update(raw).digest("hex");
+          return { id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? revision, observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: true, statement: `Evidence reference ${resource.uri}`, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const };
+        } catch (error) {
+          withhold(error);
+          return { id: `fact-${index}`, uri: resource.uri, revision: resource.revision ?? "unreadable", observedAt: manifest.updatedAt, expiresAt: "9999-12-31T23:59:59Z", trust: "primary" as const, visible: false, statement: `Evidence reference ${resource.uri} could not be read`, status: "denied" as const };
+        }
       }));
       const knowHow = await Promise.all(manifest.resources.filter((resource) => resource.kind === "wiki" || resource.kind === "memory" || resource.kind === "skill").map(async (resource, index) => {
-        const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource, encoding: "utf8" }) as string;
-        const revision = createHash("sha256").update(raw).digest("hex");
-        const accepted = /^Status:\s*(accepted|reviewed)\s*$/mi.test(raw);
-        return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
+        try {
+          const raw = await workspaces.readResourceForActor({ actorContext, workspaceId, resource, encoding: "utf8" }) as string;
+          const revision = createHash("sha256").update(raw).digest("hex");
+          const accepted = /^Status:\s*(accepted|reviewed)\s*$/mi.test(raw);
+          return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? revision, trust: "accepted" as const, status: resource.revision === revision || resource.revision === undefined ? "fresh" as const : "stale" as const, accepted, visible: true };
+        } catch (error) {
+          withhold(error);
+          return { id: `knowhow-${index}`, kind: resource.kind as "wiki" | "memory" | "skill", uri: resource.uri, revision: resource.revision ?? "unreadable", trust: "accepted" as const, status: "denied" as const, accepted: false, visible: false };
+        }
       }));
       const work = flow ? await (async () => {
         // A deleted flow resource entry, an unsafe/broken reference, or

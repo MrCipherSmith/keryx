@@ -1,0 +1,75 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T5",
+  "status": "DONE",
+  "summary": "Added three meaningful Bun RED lifecycle tests for M01. Current code fails all three for the intended reasons: rules sync/distill overwrite the compact gate, split-entrypoint consumers still point at the old owner, and rules falsely succeeds when routing.md cannot be published. TypeScript typecheck passes. No production code, git state, flow state, frozen acceptance criteria, or package metadata was changed.",
+  "summary_markdown": "TEST_CASE_SPECS: `src/commands/routing-entrypoint-lifecycle.test.ts` contains 3 RED tests. Run `bun test src/commands/routing-entrypoint-lifecycle.test.ts`; expected pre-implementation result is 0 pass / 3 fail. Full specs and immutable evidence are attached as artifacts.",
+  "acceptance": [
+    {
+      "criterion": "AC1: M01: init, rules sync, rules distill, update and repeated sequences preserve a short index plus full routing document through a shared writer; enabled module/security flags and user-owned entrypoint blocks are preserved.",
+      "status": "met",
+      "evidence": "M01-routing-sync-repeat and M01-routing-distill-update-consumers exercise init→sync→sync and init→distill→distill→update→update, assert short/full ownership, gdctx/security flags, idempotence, and user-owned markers. Both are RED on the current rules writer."
+    },
+    {
+      "criterion": "AC2: M01: orient/catalog and related consumers resolve the split entrypoint, regression fixtures assert correct ownership of both documents, failed pair publication is observable and recoverable on rerun without a false success.",
+      "status": "met",
+      "evidence": "M01-routing-distill-update-consumers asserts orient and the metaproject-router catalogue workflow resolve routing.md. M01-routing-pair-recovery injects an unwritable routing.md directory, requires rejection, removes the obstacle, reruns, and asserts the recovered pair. The current command falsely succeeds, producing the required RED signal."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/routing-entrypoint-lifecycle.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Three black-box Bun lifecycle tests covering sync repeat, distill/update repeat and consumers, and pair-write fault recovery.",
+      "hash": "f4f5759f0e818def06ac5544f872bdd7a562f3c807b876ff62bca128b1be9145"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-test-case-specs.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "Exact test_case_specs with criterion mapping, test IDs, focused run command, and GREEN expectation.",
+      "hash": "02bcd0b38409903461ad31088e0b698ac17e195a836da9bf83a0ed9082adb667"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable focused RED outcome, exact failure signatures, source revision and retained gdctx raw-log references.",
+      "hash": "68c27d2d1d625bd255c88c3b396d633177f412e47bcd52ff5318d9859ff2647f"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/commands/routing-entrypoint-lifecycle.test.ts",
+      "change": "created M01 RED regression suite"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-test-case-specs.json",
+      "change": "created exact task-implementer test_case_specs"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-red-evidence.md",
+      "change": "created immutable RED and typecheck evidence"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T5-result.json",
+      "change": "created schema-conformant worker result"
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 3,
+    "red_passed": 0,
+    "red_failed": 3,
+    "typecheck_exit_code": 0
+  },
+  "timestamp_utc": "2026-09-06T10:50:00Z"
+}

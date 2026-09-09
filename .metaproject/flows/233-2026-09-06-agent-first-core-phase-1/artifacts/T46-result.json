@@ -1,0 +1,146 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T46-render-triggered-surfaces",
+  "dispatch_id": "233-2026-09-06-agent-first-core-phase-1/T46",
+  "status": "DONE",
+  "summary": "Re-enumerated the render-triggered auto-fetch surfaces from the HTML element index, the CSS <url> consumers and the SVG external-reference elements (32 extraction sites, 7 missed and 2 over-counted by the previous list), measured all 44 rows against an independent HTMLRewriter oracle and the four public boundaries, weighed each surface's leave-open cost against its measured benign incidence, and decided per surface. 18 rows covered now (input type=image, meta refresh, video poster/src, audio, source src/srcset, track, embed, object, iframe, background attribute, SVG image and feImage href/xlink:href); 4 deferred with a named prerequisite (script, link, CSS destinations, iframe srcdoc); 5 never covered with the reason each is not a zero-click fetch. Released fetching surfaces fell 33 to 15. Every prior matrix is byte-identical before and after, benign repository content gained no finding of any class, and the limitation is now accurate in the module header and in the requirements package.",
+  "summary_markdown": null,
+  "acceptance": [
+    {
+      "criterion": "AC5 (AFC-15): no field-name or spelling bypass; a URL secret is masked; a public Markdown link is not treated as a network send",
+      "status": "met",
+      "evidence": "T42-exfil-attack.ts 42 cases 0 bypasses / 0 false positives, T24-recheck2-exfil.ts 48 cases 0/0, T42-charrefs.ts 240 cases 0 bypasses, T53-extract.ts 88 cases 0 bypasses, T53-resolve.ts 615 resolutions 0/0 - all byte-identical before and after. egress.markdown-link-sensitive-value fires across the corpus sweep and p.password-key returns secrets.sensitive-field in the re-run boundary matrix. ctlPublicLink is state:none and byte-identical at all four boundaries, and a new transport regression additionally pins a fully-relative HTML page as state:none. Raw: .metaproject/data/gdctx/raw/T46-{before,after}-*.log"
+    },
+    {
+      "criterion": "Every prior measurement holds: the 42- and 48-case matrices at zero bypasses and zero false positives, the character-reference matrix unchanged, the extraction and resolution matrices unchanged, and the boundary rows for the neighbouring repairs unchanged",
+      "status": "met",
+      "evidence": "All nine prior matrices re-run before the first edit and after the last, and compared programmatically with paths normalised: T42-exfil-attack, T24-recheck2-exfil, T42-charrefs, T53-extract, T53-resolve, T53-base, T53-boundary, T42-boundary (rows 1-3, so canonicalization and the persistence signal matrix included), T24-recheck2-boundary - every one IDENTICAL. T52-base.ts re-run as an extra control: notNeutralized [], falsePositives [], unchanged."
+    },
+    {
+      "criterion": "The recorded limitation is accurate and complete after the work, in the module and in the requirements package, and each surface's disposition is justified",
+      "status": "met",
+      "evidence": "Module: exfil.ts's header gains a 'WHAT THIS FLOOR DOES NOT COVER' block naming the four deferred surfaces with each prerequisite and the three never-covered ones with the reason each is not zero-click. Requirements package: docs/requirements/keryx-agent-first-core/policies.md (0.1.1 -> 0.1.2) gains a subsection stating the complete covered list marked as complete rather than exemplary, the deliberately uncovered list with its shared reason, prerequisites and redaction.state=none consequence, the never-covered list, and the extraction's nesting-blind property with the <base href> exception. Per-surface justification: T46-implementation.md section 4. acceptance-criteria.md and flow.json untouched."
+    },
+    {
+      "criterion": "Enumerate the surfaces independently rather than inheriting the previous list, and note what it missed or wrongly included",
+      "status": "met",
+      "evidence": "T46-spec.md section 1-2 (method and list), T46-implementation.md section 1. Missed 7 sites plus 2 CSS spellings (source src, iframe srcdoc, link imagesrcset, background on elements other than td, frame src, SVG feImage href, SVG script href, @import bare-string, image-set()); over-counted 2 (link rel values as separate sites; style attribute and style block as separate sites); wrongly weighted 1 (SVG use href, same-origin restricted in every engine)."
+    },
+    {
+      "criterion": "For each surface establish what happens today by measurement, including whether it reaches the MCP dispatch and the persistence materializer unmasked",
+      "status": "met",
+      "evidence": "T46-surfaces.ts drives 44 rows through an independent HTMLRewriter (lol-html) oracle, detectExfil with an empty allowlist, and dispatchCallTool / prepareOutputForPersistence / validateOutputForTransport / redactToolOutput under mergeMcpConfig({redactToolOutput:false}). Before: 33 of 36 fetching rows released, every one with isError:false, redaction.state:none and byte-identical persistence, transport and seam. After: 15 released, all deliberately deferred. Raw T46-before-surfaces.log / T46-after-surfaces.log."
+    },
+    {
+      "criterion": "Weigh the two costs per surface, using what a Keryx tool output realistically carries rather than this repository's corpus",
+      "status": "met",
+      "evidence": "T46-corpus.ts Part A (22198 files, own walker independent of the detector): only C3.imgSrc has any benign file (3), confirming the corpus cannot decide the question. Part B writes 15 synthetic carriers a Keryx tool output realistically carries: quotedHtmlPage and quotedCssFile trip script/link/CSS with no particular content, while every other surface is tripped only by a document that deliberately embeds something. That categorical difference - infrastructure versus content - is the line the decision is drawn on (T46-implementation.md section 3)."
+    },
+    {
+      "criterion": "Where covering is recommended, implement it the way the existing surfaces were done, regression first",
+      "status": "met",
+      "evidence": "Nine new tests written before any production edit: RED 38 pass / 7 fail / 388 expect (T46-red-exfil-test.log), GREEN 45 pass / 0 fail / 552 expect (T46-green-exfil-test.log). Implementation reuses the existing tokenizer-faithful attribute walker with one declarative element/attribute table; no new parser except the bounded meta-refresh content grammar. No existing test modified, weakened or removed."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Enumeration method, the 32-site list, the measurement plan, the cost framework, provisional dispositions and the planned regressions. Written before any code."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "The enumeration and its method, the per-surface measurement, the per-surface decision with its reasoning, what the limitation now says, and the before/after verification with raw log paths."
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-surfaces.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "44-row surface probe: HTMLRewriter oracle, detectExfil, and the four public boundaries with advisory redaction off.",
+      "hash": "ecd617d1cb06d1d34a7ea7b3cf2488d5a4c5366eebb05821b87a946c8173d41c"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-corpus.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Benign-incidence sweep per site over 22198 files with its own walker, plus a 15-shape synthetic corpus of the carriers a Keryx tool output realistically returns.",
+      "hash": "3638614069c5ea6a016a5a83aade1e322b6cb138c0c9bd6e7d4f2a6a52d0c1d2"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T46-result.json",
+      "kind": "report",
+      "exists": true,
+      "summary": "This file."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/security/detect/exfil.ts",
+      "change": "Extended HTML_START_TAG to the 20 element names covered, added the declarative FETCHING_ATTRIBUTES site table (element -> attribute -> policy id and kind), the type=image and http-equiv=refresh gates that need the whole attribute list, UrlHit.classify for the one surface whose classified string and masked span differ, the bounded meta-refresh content grammar, FETCH_REMEDIATION (renamed from IMAGE_REMEDIATION) and META_REFRESH_REMEDIATION, and a header block stating what the floor does NOT cover with the prerequisite for each deferred surface. SHA-256 efe360a36fad99fd6d8f0e44490cd7424f2054bfbfb6ebc7ccd5f05d77250294"
+    },
+    {
+      "path": "src/security/detect/exfil.test.ts",
+      "change": "Nine new tests appended, written before the implementation: the newly covered surfaces flagged and masked across the tokenizer states already pinned for <img>; no false positive on relative destinations; the type=image gate; the meta-refresh grammar and whole-directive mask; allowlist parity with the image surface; the navigation remediation; the deliberately uncovered surfaces pinned as released with their reason; and both boundary rows (persistence materializer, transport validator) for the new classes. No existing test modified or removed. SHA-256 6ec7871cb8f145ef8fa83823590b96bf47f99e4f9f05213b220fcb3518a6a25b"
+    },
+    {
+      "path": "docs/requirements/keryx-agent-first-core/policies.md",
+      "change": "Version 0.1.1 -> 0.1.2. New subsection 'Auto-fetch floor: покрытая и непокрытая область' at the end of the redaction section, stating the complete covered list, the deliberately uncovered list with its shared reason and prerequisites and its redaction.state=none consequence, the never-covered list with the reason each is not zero-click, and the extraction's nesting-blind property with the <base href> exception. Edited under the 'if and only if the current wording is inaccurate' clause: the package was silent on the floor's scope, which let a reader conclude it was total. No other norm touched. SHA-256 61ddb7f61c62588c6f0f805cfcf4014561b98a117c671ed3cfd578bc8c80cfb4"
+    }
+  ],
+  "findings": [],
+  "questions": [
+    {
+      "id": "T46-Q1",
+      "question": "Should <iframe src> stay in the covered set?",
+      "why": "It is the covered row with the most plausible benign carrier - a documentation page embedding a player (T46-corpus.ts Part B, docsPageWithIframe). It was covered because a page carries no iframe unless it deliberately embeds one, so its incidence is content-dependent rather than file-dependent, and because leaving the canonical alternative to <img src> open would make the rest of the coverage decorative. A reviewer should agree with that rather than inherit it; it is one line in FETCHING_ATTRIBUTES to revert.",
+      "options": [
+        { "id": "keep", "label": "Keep it covered; the allowlist is the remedy, exactly as for <img src>", "recommended": true },
+        { "id": "defer", "label": "Move it to the deferred set with the same default-allowlist prerequisite as <script src> and <link href>" }
+      ],
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T46-Q2",
+      "question": "What should the floor's default egress allowlist contain?",
+      "why": "This is the single named prerequisite for the four deferred surfaces (<script src>, <link href>/<link imagesrcset>, CSS destinations, <iframe srcdoc>). The floor's default allowlist is empty, so deny-by-default equals deny-everything for a document's own infrastructure, and covering those surfaces today would mask URLs inside source a tool was asked to show. It is a product decision outside src/security/detect/exfil.ts and outside this task's ownership.",
+      "can_be_resolved_by_agent": false
+    },
+    {
+      "id": "T46-Q3",
+      "question": "Is the policies.md edit within the 'if and only if the current wording is inaccurate' clause?",
+      "why": "The package described the redaction norm and said nothing at all about the auto-fetch floor's surface coverage, so the limitation existed only in flow artifacts and a reader was free to conclude the floor was total. That silence was treated as the inaccuracy. If the orchestrator reads the clause more narrowly, the addition is one contiguous subsection and one version line. The separate, precise note about the norm's own credential-locator sentence (T46-implementation.md section 7, last paragraph) is offered and deliberately not applied.",
+      "can_be_resolved_by_agent": false
+    }
+  ],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": null,
+    "sites_enumerated": 32,
+    "sites_covered_before": 5,
+    "sites_covered_after": 23,
+    "surface_rows_measured": 44,
+    "fetching_rows_released_before": 33,
+    "fetching_rows_released_after": 15,
+    "prior_matrices_rerun": 9,
+    "prior_matrices_identical": 9,
+    "new_tests": 9,
+    "red_fail": 7,
+    "green_fail": 0,
+    "exfil_suite_pass_after": 45,
+    "focused_suites_pass_before": 87,
+    "focused_suites_pass_after": 96,
+    "focused_suites_fail_after": 0,
+    "corpus_files_scanned": 22233,
+    "benign_files_with_findings_before": 15,
+    "benign_files_with_findings_after": 15,
+    "synthetic_benign_shapes_flagged_before": 6,
+    "synthetic_benign_shapes_flagged_after": 6
+  },
+  "timestamp_utc": "2026-09-06T17:30:00Z"
+}

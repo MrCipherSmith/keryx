@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
@@ -6,6 +7,15 @@ import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 import { wikiAsk } from "./ask";
 import { backlinksFor, buildBacklinkIndex } from "./backlinks";
 import { collectPages } from "./collect";
+import {
+  assembleEvidencePackage,
+  type EvidencePackage,
+  type EvidenceScope,
+  type EvidenceSeed,
+} from "./evidence";
+import { buildSectionIndex } from "./section-index";
+import { readSectionRegistryState } from "./section-tombstone";
+import { HEAD_NOT_REQUESTED, resolveWikiSourceGate } from "./staleness";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -284,8 +294,22 @@ export async function wikiCollect(input: WikiCollectInput): Promise<WikiCollectR
   }
 
   const index = await wikiGenerateIndex(input.cwd);
-  const { recordProvenance } = await import("../sync/provenance");
-  await recordProvenance(input.cwd, "gdwiki", generatedAt);
+  // AFC-08 (flow 236 T8): `recordProvenance` stamps the CURRENT commit as the
+  // revision gdwiki was synced at. Run over a graph built six commits ago that
+  // is the same forged freshness `wiki refresh` was stamping onto pages: `keryx
+  // sync` would then report gdwiki as current when its content came from an
+  // older source. When the source is not demonstrably fresh the record is
+  // skipped, so the previous (older, or absent) provenance stands and sync
+  // under-claims instead of over-claiming — the failure direction that leads
+  // someone to rebuild rather than to trust.
+  // `HEAD_NOT_REQUESTED`, said explicitly: this path reads the graph's age to
+  // decide whether to record gdwiki provenance and never writes `VerifiedAt`
+  // on a page, so it has no revision at stake either way (AFC-22, T13).
+  const sourceGate = await resolveWikiSourceGate(input.cwd, HEAD_NOT_REQUESTED);
+  if (sourceGate.status === "fresh") {
+    const { recordProvenance } = await import("../sync/provenance");
+    await recordProvenance(input.cwd, "gdwiki", generatedAt);
+  }
   return {
     generatedAt,
     created: pages.filter((page) => page.action === "created").length,
@@ -375,7 +399,212 @@ export async function validModuleNames(cwd: string): Promise<Set<string> | undef
   return modules;
 }
 
-export function createGdWikiService(): GdWikiService {
+// AFC-W04 (flow 235, phase 3, T12) — the evidence surface.
+//
+// `wikiAsk` stays the ONE retrieval implementation (wiki-specification.md §8:
+// "перевести wiki search adapters на evidence envelope ... без второй
+// retrieval реализации"). This function does not re-rank and does not
+// re-search: it takes the citations that live path already produced, resolves
+// each one's section identity, and renders the agreed
+// `wiki-evidence.schema.json` envelope around it. The index it builds is the
+// same in-memory projection `wikiCandidates` builds, from the same bytes.
+//
+// Nothing here writes. The section registry is read; `syncSectionRegistry` —
+// the one write in the identity lane — is not called, because a search that
+// mutates state is the AC4 defect this phase removed from `wikiAsk`.
+export type WikiEvidenceInput = {
+  cwd: string;
+  question: string;
+  k?: number | undefined;
+  /** Whole-package token budget. The required set fits, or the call fails. */
+  budgetTokens?: number | undefined;
+  /** Maximum items in the package; the required set is never trimmed to it. */
+  maxItems?: number | undefined;
+  asOf?: string | undefined;
+  scope?: Partial<EvidenceScope> | undefined;
+  /**
+   * sectionRef → snapshot version from a real freshness run. Only a supplied,
+   * verified snapshot can make a section `fresh`; absent one, every section
+   * reports `unknown` ("not verified"), which is the honest state.
+   */
+  verified?: Readonly<Record<string, string>> | undefined;
+};
+
+const DEFAULT_EVIDENCE_BUDGET_TOKENS = 4000;
+const DEFAULT_EVIDENCE_MAX_ITEMS = 8;
+
+export async function wikiEvidence(input: WikiEvidenceInput): Promise<EvidencePackage> {
+  const ask = await wikiAsk({
+    cwd: input.cwd,
+    question: input.question,
+    ...(input.k === undefined ? {} : { k: input.k }),
+    ...(input.asOf === undefined ? {} : { asOf: input.asOf }),
+  });
+
+  // A non-`ok` retrieval outcome is passed through with its own code, not
+  // re-spelled and not upgraded into an empty envelope that reads like an
+  // answer. `wikiAsk` already distinguishes no-match from
+  // insufficient-evidence; a second vocabulary here would lose that.
+  if (ask.status !== undefined && ask.status !== "ok") {
+    return {
+      status: ask.status,
+      reason: ask.reason ?? "the wiki returned no usable evidence for this question.",
+      items: [],
+      refused: [],
+      omittedOptional: [],
+      partial: false,
+      overflow: null,
+      suggestion: "",
+    };
+  }
+
+  const pages = await collectPages(input.cwd);
+  const index = buildSectionIndex(
+    await Promise.all(
+      pages.map(async (page) => ({
+        page,
+        content: await readFile(page.absolutePath, "utf8").catch(() => ""),
+      })),
+    ),
+  );
+  const registry = await readSectionRegistryState(input.cwd);
+
+  const pageStatus: Record<string, string | null> = {};
+  for (const page of pages) {
+    pageStatus[page.relativePath] = page.status;
+  }
+
+  const seeds: EvidenceSeed[] = [];
+  const historicalRefs: string[] = [];
+  const preOmitted: string[] = [];
+  ask.citations.forEach((citation, rank) => {
+    if (citation.sectionRef === undefined) {
+      // A memory citation carries no wiki section identity, so it cannot be
+      // rendered as wiki evidence. Named in the loss manifest rather than
+      // dropped: an omission the caller cannot see is the same defect class.
+      preOmitted.push(citation.path);
+      return;
+    }
+    seeds.push({ sectionRef: citation.sectionRef, rank });
+    if (citation.historical === true) {
+      historicalRefs.push(citation.sectionRef);
+    }
+  });
+
+  return assembleEvidencePackage({
+    index,
+    registry,
+    scope: resolveEvidenceScope(input.cwd, input.scope),
+    seeds,
+    pageStatus,
+    historicalRefs,
+    ...(input.verified ? { verified: input.verified } : {}),
+    maxItems: input.maxItems && input.maxItems > 0 ? input.maxItems : DEFAULT_EVIDENCE_MAX_ITEMS,
+    maxTokens:
+      input.budgetTokens && input.budgetTokens > 0
+        ? input.budgetTokens
+        : DEFAULT_EVIDENCE_BUDGET_TOKENS,
+    preOmitted,
+  });
+}
+
+/**
+ * The envelope's `scope`, derived rather than invented.
+ *
+ * `checkoutId` is a digest of this checkout's absolute path: it identifies the
+ * working copy an evidence item was read from, which is what a continuation
+ * bound to a `sourceVersion` will later have to be compared against. A caller
+ * that has richer identity (a workspace, a task) supplies it.
+ */
+function resolveEvidenceScope(
+  cwd: string,
+  override: Partial<EvidenceScope> | undefined,
+): EvidenceScope {
+  const absolute = path.resolve(cwd);
+  return {
+    projectId: override?.projectId ?? (path.basename(absolute) || "project"),
+    checkoutId:
+      override?.checkoutId ??
+      `checkout:${createHash("sha256").update(absolute).digest("hex").slice(0, 16)}`,
+    ...(override?.workspaceId ? { workspaceId: override.workspaceId } : {}),
+    ...(override?.taskId ? { taskId: override.taskId } : {}),
+  };
+}
+
+/**
+ * The service object MCP's `wiki.ask` and the CLI build.
+ *
+ * Widened here rather than in `./types.ts` (another lane owns that file this
+ * phase): `GdWikiEvidenceService` is a superset, so every existing consumer
+ * typed as `GdWikiService` is unaffected.
+ */
+export type GdWikiEvidenceService = GdWikiService & {
+  evidence(input: WikiEvidenceInput): Promise<EvidencePackage>;
+};
+
+/**
+ * The one producer that mints wiki pages, described by everything it does.
+ *
+ * Each field is checked, because each one alone is trivial to reproduce by
+ * hand and the combination is not something an author arrives at by accident.
+ * All four come from `src/sac/wiki-owner-writer.ts`, which writes the page,
+ * chooses the path, and stamps the provenance block.
+ */
+const WIKI_PAGE_PRODUCERS = [
+  {
+    source: "sac-proposal",
+    pageType: "decision",
+    /**
+     * The path it mints into. `wiki-owner-writer.ts` builds
+     * `decisions/sac-<proposalId>.md` and passes the id through untouched, and
+     * the id's prefix depends on which call site created the proposal:
+     * `proposal-<16 hex>` from the three interactive ones, `wrapup-<32 hex>`
+     * from the automated wrap-up. The first version of this pattern hard-coded
+     * `sac-proposal-`, so pages written by the automated path — the only fully
+     * unattended producer, and the one whose output most needs the exemption —
+     * were accused of failing a Decision template they never claimed. Seven
+     * fabricated findings per page, on a validation gate.
+     *
+     * So the shape is the producer's naming convention rather than one call
+     * site's prefix: a lowercase kind and a hex id. The exemption stays narrow
+     * because the page type and the hash-identified evidence link are checked
+     * alongside it.
+     */
+    path: /^decisions\/sac-[a-z]+-[0-9a-f]+\.md$/,
+  },
+] as const;
+
+/** A `- Source: x` line under the page's provenance, if it has one. */
+function declaredSource(content: string): string | null {
+  const match = /^-[ \t]+Source:[ \t]*(.+?)[ \t]*$/m.exec(content);
+  return match === null ? null : (match[1] as string).trim();
+}
+
+/**
+ * Whether a producer wrote this page, by the whole shape of what it writes.
+ *
+ * Deliberately NOT a single self-declared line: an independent review forged
+ * that one by appending three lines to a hand-written page. The evidence link
+ * is required as well as the source name, because the producer always writes a
+ * hash-identified link and a page claiming machine provenance without pointing
+ * at any evidence is claiming something it cannot support.
+ */
+function isMachineAuthoredPage(pageType: string, relativePath: string, content: string): boolean {
+  const source = declaredSource(content);
+  if (source === null) {
+    return false;
+  }
+  const normalised = relativePath.split(path.sep).join("/").replace(/^wiki\//, "");
+  return WIKI_PAGE_PRODUCERS.some(
+    (producer) =>
+      producer.source === source &&
+      producer.pageType === pageType &&
+      producer.path.test(normalised) &&
+      /^-[ \t]+Link:.*\bsha256\b/m.test(content),
+  );
+}
+
+export function createGdWikiService(): GdWikiEvidenceService {
   return {
     status: (input) => wikiStatus(input.cwd),
     createPage: (input) => wikiCreatePage(input),
@@ -384,6 +613,7 @@ export function createGdWikiService(): GdWikiService {
     validate: (input) => wikiValidate(input.cwd),
     collect: (input) => wikiCollect(input),
     ask: (input) => wikiAsk(input),
+    evidence: (input) => wikiEvidence(input),
   };
 }
 
@@ -1285,6 +1515,9 @@ async function validateStructure(
 ): Promise<void> {
   const { findManagedBlock } = await import("./managed-block");
   const { NOT_CODE_SCOPED, parseDescribesField } = await import("./describes");
+  const { validateTemplateStructure } = await import("./template-structure");
+  const { templateKindForPageType } =
+    await import("./templates");
 
   for (const page of pages) {
     let content: string;
@@ -1329,6 +1562,75 @@ async function validateStructure(
           kind: "describes",
           message: `Describes names a path that does not exist: ${pattern}`,
         });
+      }
+    }
+
+    // AFC-W02 (flow 235) AC8 — the explanation-template contract, wired.
+    //
+    // `validateTemplateStructure` shipped with a test as its only consumer, so
+    // until this call a `business-rule`/`decision`/`user-scenario` page could
+    // fill every mandatory heading, record no per-question verdict at all, and
+    // `keryx wiki validate` still printed "All checks passed." at exit 0 —
+    // measured on a temp wiki before this change, with the validator called
+    // directly on the same bytes returning `coverage-record-missing`.
+    //
+    // NAMED SCOPING DECISION, not a silent exemption. The template is an
+    // AUTHORING contract: wiki-specification.md §4 fixes the questions a page
+    // must close BEFORE the page is written ("До написания страницы
+    // фиксируются вопросы, которые она должна закрыть"). So it is applied to
+    // pages actually written to it, detected by the page carrying at least ONE
+    // of that template's own headings (or the coverage heading). The
+    // machine-written SAC provenance record —
+    // `.metaproject/wiki/decisions/sac-proposal-*.md`, a Summary / Details /
+    // Provenance shape produced by the SAC owner-writer — claims none of them,
+    // and reporting six missing Decision headings against it would be the
+    // validator accusing a page of failing a shape it never claimed.
+    //
+    // The scope is what the page DECLARES ITSELF TO BE, not which headings it
+    // happens to carry.
+    //
+    // The first wiring scoped by heading presence — a page was held to the
+    // template if it carried at least one of the template's headings. That is
+    // a contract you escape by writing less: measured on a temp wiki, a
+    // `business-rule` page with every heading deleted drew no template finding
+    // at all, while the same page with four of them drew five. A guard that
+    // stops applying when a page stops trying is not a guard.
+    //
+    // Scoping it on a line in the page body then replaced that with "escape by
+    // writing one more line": an independent review forged the exemption onto a
+    // hand-written `business-rule` page by appending a `## Provenance` block
+    // with `- Source: sac-proposal`, and it drew zero template findings.
+    //
+    // So the exemption is now everything the producer does that an author does
+    // not do by accident: the page type it mints (`decision`), the path it
+    // mints into (`decisions/sac-proposal-<id>.md`), and the provenance block
+    // it writes, which carries a hash-identified evidence link and not only a
+    // source name. A page missing any one of those is held to the contract.
+    //
+    // This is a CONVENTION check and not authentication, and it is worth being
+    // exact about what it does and does not buy. The producer's real proof is
+    // the receipt it writes, which lives in the workspace tree rather than
+    // beside the page, so this validator cannot reach it. Someone determined to
+    // evade the contract can still write a file into the producer's own
+    // namespace with a fabricated evidence link. What this stops is the case
+    // that actually happens: an author taking the easy way out of an authoring
+    // contract, who would now have to impersonate a producer's output path,
+    // page type and evidence reference to do it — which is deliberate rather
+    // than lazy, and legible to anyone reading the diff.
+    const templateKind = templateKindForPageType(page.pageType);
+    if (templateKind !== null) {
+      if (!isMachineAuthoredPage(page.pageType, page.relativePath, content)) {
+        for (const issue of validateTemplateStructure(page.pageType, content)) {
+          issues.push({
+            page: page.relativePath,
+            // The validator's own kind, carried through rather than collapsed
+            // to one generic "structure" label: `coverage-basis-missing` and
+            // `field-empty` are different defects and a caller must be able to
+            // branch on which one fired.
+            kind: issue.kind,
+            message: issue.message,
+          });
+        }
       }
     }
 

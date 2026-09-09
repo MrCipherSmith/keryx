@@ -76,6 +76,7 @@ export async function withFileLock<T>(
       }
       await removeStaleLock(lockPath, staleMs);
       if (Date.now() - startedAt >= timeoutMs) {
+        // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
         throw new Error(`Timed out waiting for lock: ${lockPath}`);
       }
       await delay(retryMs);

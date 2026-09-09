@@ -1,0 +1,54 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T28",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent bounded recursive scan and coverage review",
+    "description": "Stage1 compare AFC15/AFC17 recursive scanner to approved spec and T20 report: scope/limits/exclusions, internal links once, refused external names/content, incomplete failures retaining findings and gate semantics. Verify actual reports and scan CLI with bounded temp fixtures. Review runGate missing/malformed/latest coverage honestly: no scan must not become clean pass. Stage2 only after Stage1 passes.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Tool/resource/error/SDK output contains no synthetic secret and carries safe metadata without altering operation JSON schema.",
+    "Safe numeric values/IDs retained; recognized secrets cannot bypass by fieldkey; unsafe numeric/schema returns format-unsafe.",
+    "Disabled advisory settings do not disable mandatory floor; persistence materializer applies it too; plain publiclinks allowed while autofetchexfil blocked."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T20-implementation.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/security/path-scan.ts",
+    "/Users/Goodea/goodea/keryx/src/security/service.ts",
+    "/Users/Goodea/goodea/keryx/src/security/types.ts",
+    "/Users/Goodea/goodea/keryx/src/security/schemas.ts",
+    "/Users/Goodea/goodea/keryx/src/security/report.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first. Local review-logic and review-security-code, testing context/wiki, code searches keryx ctx rg.",
+    "Read-only production; write T28 review/result/repro only. No own code review, git/flow/network/global tests/model calls. Stats disabled.",
+    "Root changing guard only, functional changing output-validation and serialized helper service.ts only; scanner stable. Synthetic bounded fixtures; no external sensitive data. Stage1 before Stage2."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T28-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:06:15.356975+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

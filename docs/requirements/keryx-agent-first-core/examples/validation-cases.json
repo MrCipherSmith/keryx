@@ -1,0 +1,292 @@
+{
+  "description": "Synthetic proposed-contract validation cases, not runtime results.",
+  "cases": [
+    {
+      "id": "positive-version-conflict",
+      "schema": "operation-response.schema.json",
+      "valid": true,
+      "value": {
+        "contractVersion": "1.0.0",
+        "operation": "knowledge.apply",
+        "status": "error",
+        "scope": {
+          "projectId": "demo-project",
+          "checkoutId": "demo-checkout",
+          "workspaceId": "demo-workspace",
+          "taskId": "demo-task"
+        },
+        "sources": [
+          {
+            "ref": "wiki:demo-policy",
+            "version": "v7",
+            "fragment": "section:dependency-policy#lines=3-5"
+          }
+        ],
+        "completeness": {
+          "state": "complete",
+          "reasons": []
+        },
+        "redaction": {
+          "state": "unchanged",
+          "reasons": []
+        },
+        "error": {
+          "code": "version-conflict",
+          "message": "Базовая версия изменилась; перечитайте и подготовьте правку заново.",
+          "nextActions": [
+            "knowledge.preview"
+          ],
+          "currentVersion": "v8",
+          "diffRef": "diff:demo-v7-v8"
+        }
+      }
+    },
+    {
+      "id": "negative-redaction-reason",
+      "base": "operation-response.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/redaction",
+          "value": {
+            "state": "redacted",
+            "reasons": []
+          }
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-unknown-reason",
+      "base": "wiki-evidence.json",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/freshness/reason"
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-missing-base",
+      "base": "change-set.json",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/changes/0/expectedVersion"
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-null-replace-base",
+      "base": "change-set.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/changes/0/expectedVersion",
+          "value": null
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "service-stale-base",
+      "base": "change-set.json",
+      "currentVersions": {
+        "wiki:demo-policy": "v8"
+      },
+      "schemaValid": true,
+      "serviceOutcome": "version-conflict"
+    },
+    {
+      "id": "service-cross-scope-handle",
+      "base": "batch.json",
+      "mutations": [
+        {
+          "op": "add",
+          "path": "/steps/1/inputHandles",
+          "value": [
+            {
+              "handleId": "handle-other",
+              "sourceVersion": "v1",
+              "scope": {
+                "projectId": "other-project",
+                "checkoutId": "other-checkout"
+              },
+              "expiresAt": "2099-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "schemaValid": true,
+      "serviceOutcome": "handle-invalid"
+    },
+    {
+      "id": "service-expired-handle",
+      "base": "batch.json",
+      "observedAt": "2099-01-02T00:00:00Z",
+      "mutations": [
+        {
+          "op": "add",
+          "path": "/steps/1/inputHandles",
+          "value": [
+            {
+              "handleId": "handle-demo-1",
+              "sourceVersion": "v7",
+              "scope": {
+                "projectId": "demo-project",
+                "checkoutId": "demo-checkout",
+                "workspaceId": "demo-workspace",
+                "taskId": "demo-task"
+              },
+              "expiresAt": "2099-01-01T00:00:00Z"
+            }
+          ]
+        }
+      ],
+      "schemaValid": true,
+      "serviceOutcome": "handle-expired"
+    },
+    {
+      "id": "positive-unknown-constraint",
+      "base": "handoff.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/constraints/0",
+          "value": {
+            "text": "Не выполнять изменение до уточнения действующих условий.",
+            "sourceStatus": "unknown",
+            "source": null,
+            "unknownReason": "Первичный документ недоступен; это ограничение не служит разрешением."
+          }
+        }
+      ],
+      "schemaValid": true
+    },
+    {
+      "id": "negative-unknown-constraint-without-reason",
+      "base": "handoff.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/constraints/0",
+          "value": {
+            "text": "Ограничение сохранено.",
+            "sourceStatus": "unknown",
+            "source": null
+          }
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-error-without-error-object",
+      "base": "operation-response.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/status",
+          "value": "error"
+        },
+        {
+          "op": "remove",
+          "path": "/result"
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-ok-with-error",
+      "base": "operation-response.json",
+      "mutations": [
+        {
+          "op": "add",
+          "path": "/error",
+          "value": {
+            "code": "invalid-input",
+            "message": "Synthetic error.",
+            "nextActions": []
+          }
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-invalid-range",
+      "base": "wiki-evidence.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/excerpt/startLine",
+          "value": 0
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "service-reversed-range",
+      "base": "wiki-evidence.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/excerpt/endLine",
+          "value": 1
+        }
+      ],
+      "schemaValid": true,
+      "serviceOutcome": "invalid-input"
+    },
+    {
+      "id": "negative-handoff-without-provenance",
+      "base": "handoff.json",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/decisions/0/provenance"
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "negative-handoff-without-constraints",
+      "base": "handoff.json",
+      "mutations": [
+        {
+          "op": "remove",
+          "path": "/constraints"
+        }
+      ],
+      "schemaValid": false
+    },
+    {
+      "id": "service-batch-duplicate-step-ids",
+      "base": "batch.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/steps/1/id",
+          "value": "find-code"
+        }
+      ],
+      "schemaValid": true,
+      "serviceOutcome": "invalid-input"
+    },
+    {
+      "id": "service-batch-dependency-cycle",
+      "base": "batch.json",
+      "mutations": [
+        {
+          "op": "replace",
+          "path": "/steps/0/dependsOn",
+          "value": [
+            "find-impact"
+          ]
+        }
+      ],
+      "schemaValid": true,
+      "serviceOutcome": "invalid-input"
+    }
+  ]
+}

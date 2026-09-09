@@ -1,0 +1,1030 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "232",
+  "slug": "agent-first-core-phase-0",
+  "title": "Agent-first core phase 0: routing lifecycle and benchmark correctness",
+  "status": "done",
+  "createdAt": "2026-09-06T10:39:45.467Z",
+  "updatedAt": "2026-09-07T11:51:19.962Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:670a296698d1a00c29c0de538a55b27a05f14838bdcfdbcabef1ce80a3009ee7",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-07T04:33:04.893Z",
+      "note": "Shared routing writer in src/lib/routing-entrypoint.ts consumed by init, update and rules; short index plus separate routing document preserved across init, sync, distill, update and repeated sequences; module and security flags and user-owned blocks preserved. Independent review T15 PASS; aggregate review T10 verified on the current tree and rated MET"
+    },
+    "AC2": {
+      "at": "2026-09-07T04:33:04.995Z",
+      "note": "orient and catalog resolve the split entrypoint; fixtures assert ownership of both documents; a failed pair publication is observable and recoverable on rerun without a false success, with per-file atomic writes and a lock rather than a claimed multi-file transaction. Aggregate review T10 rated MET on the current tree"
+    },
+    "AC3": {
+      "at": "2026-09-07T04:33:05.097Z",
+      "note": "maxRounds is an inclusive ceiling on every provider request including any wrap-up; maxRounds zero issues none; maxToolCalls stays an independent counter with its own finish reason; a stop no budget caused now reports no_progress rather than budget exhaustion. Independent review T16 Stage1 PASS on all seven points, T21 recheck zero findings, and T10 re-verified with a probe written from scratch, including maxToolCalls minus one throwing rather than being dropped"
+    },
+    "AC4": {
+      "at": "2026-09-07T04:33:05.198Z",
+      "note": "Stress JSON uses the existing resolver and writes its report in the offline fixture; the optional containment port throws a RangeError rather than defaulting. Independently rerun by T16 and re-verified by T10"
+    },
+    "AC5": {
+      "at": "2026-09-07T04:33:05.296Z",
+      "note": "tsconfig.scripts.json covers the benchmark and stress scripts; both TypeScript targets pass with immutable logs from the acceptance run. T10 went beyond the committed test by injecting a TS2322 into the real stress and containment scripts through an in-memory compiler host, leaving the tree untouched, and confirmed the diagnostic is attributed to those files"
+    },
+    "AC6": {
+      "at": "2026-09-07T04:33:54.331Z",
+      "note": "Immutable evidence captured for the acceptance run with hashes: full suite 7110 pass / 18 skip / 0 fail, both TypeScript targets and repository lint. Independent reviews T15, T16, T21, T13 and aggregate T10 report no unresolved blocker, major or minor finding; T10's two minors are closed, the health attribution corrected and the suite figure given its own log. Remaining AFC-21 scope and the zero AFC-16 contribution are recorded in artifacts/DELIVERY.md"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/491"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Current source baseline, graph/wiki/memory/testing and spec mapped in context.md; lane-specific context validated by test workers"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Replaced by explicit per-lane RED/implementation, integration verification, independent review and delivery tasks"
+    },
+    {
+      "id": "T5",
+      "title": "M01 routing lifecycle RED regressions",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:43:02.089Z",
+            "outcome": "started",
+            "detail": "232-T5 tests-creator RED"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "3 black-box RED cases reproduced; source typecheck passes; T5 immutable evidence and valid worker result accepted"
+    },
+    {
+      "id": "T6",
+      "title": "M10 budget stress and scripts RED regressions",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:43:02.257Z",
+            "outcome": "started",
+            "detail": "232-T6 tests-creator RED"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "7 offline RED cases reproduce ignored call cap, missing stress resolver, port validation and scripts target; 13 baseline script diagnostics classified"
+    },
+    {
+      "id": "T7",
+      "title": "M01 shared routing writer implementation",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:52:35.111Z",
+            "outcome": "started",
+            "detail": "232-T7 task-implementer after T5 RED"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "M01 lane GREEN: 57 focused cases and typecheck pass; shared M10 RED plus unavailable required ESLint remain explicit integration concerns"
+    },
+    {
+      "id": "T8",
+      "title": "M10 effective budgets and script fixes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:56:47.721Z",
+            "outcome": "started",
+            "detail": "232-T8 task-implementer after T6 RED"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Parent accepts bounded M10 implementation: focused 11/0 and type targets pass. Integration remains open for two reproduced unowned defects; reported health PASS is not global evidence because required ESLint is skipped."
+    },
+    {
+      "id": "T9",
+      "title": "Phase 0 integration and code-verifier gates",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T8",
+        "T13",
+        "T17",
+        "T18",
+        "T19",
+        "T20"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-06T11:18:44.669Z",
+            "outcome": "started",
+            "detail": "Integrated verifier after both M01/M10 implementations and bounded bootstrap review. Required ESLint unavailable remains explicit; no false global PASS."
+          },
+          {
+            "at": "2026-09-06T11:34:18.055Z",
+            "outcome": "blocked",
+            "detail": "Integrated check completed: TS pass, 6843 pass/18skip/1 resolved schema mirror failure. Required ESLint unavailable => INCOMPLETE; HTTP snapshot defect under separate corrected review. Recheck quality after prerequisites, no repeated full run now."
+          },
+          {
+            "at": "2026-09-06T20:12:54.298Z",
+            "outcome": "started",
+            "detail": "Final integration pass with every writer lane stopped; only one read-only review was running"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Full suite 7100 pass / 18 skip / 0 fail across 579 files; both TypeScript targets and repository lint clean. Health gate reports fail, attributed in full to 14 P0 dependency advisories on the transitive package fast-uri plus 13 P1 and 1 P2 from the same source; no product code finding. Dependency refresh is explicitly out of scope for phases 0 and 1 and is owned by phase 8 under AFC-04. The gate is not relabelled"
+    },
+    {
+      "id": "T10",
+      "title": "Phase 0 independent review and fixes",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T9",
+        "T15",
+        "T16",
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T20:13:04.090Z",
+            "outcome": "started",
+            "detail": "Phase 0 aggregate independent review over the routing lifecycle and budget work, against the frozen criteria and the integration evidence"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Phase 0 delivery evidence and remaining scope",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-07T04:33:54.428Z",
+            "outcome": "started",
+            "detail": "Delivery evidence written by root as the orchestrator's own record"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "artifacts/DELIVERY.md records what shipped, the four strands beyond M01 and M10, the acceptance evidence with hashes, the attributed health failure, the independent reviews, and the remaining AFC-21 scope with the corrected statement that AFC-16 received no contribution"
+    },
+    {
+      "id": "T12",
+      "title": "Allow description-based flow workers without a fabricated GitHub issue number",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:50:13.192Z",
+            "outcome": "started",
+            "detail": "Minimal bootstrap schema/prose repair after verified T14 RED; no fabricated issue"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Optional issue contract repair implemented; 27 regressions pass and source CLI accepts genuine description input; independent gate remains T13"
+    },
+    {
+      "id": "T13",
+      "title": "Verify issue-free worker contract and existing issue compatibility",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-06T11:06:47.707Z",
+            "outcome": "started",
+            "detail": "232-T13 independent code-verifier for bootstrap compatibility"
+          },
+          {
+            "at": "2026-09-06T11:14:07.938Z",
+            "outcome": "failed",
+            "detail": "Independent verifier found unconditional issue references in all task-implementer prose builds; runtime contract tests passed. Repair prose and rerun bounded verification."
+          },
+          {
+            "at": "2026-09-06T11:14:08.241Z",
+            "outcome": "started",
+            "detail": "Attempt 2: repaired all ten worker builds at the four reported issue-reference sites; request independent prose and contract recheck."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent second execution PASS: 33/0; four prose sites across ten builds corrected. Initial failure retained; installed core contract additionally synchronized after integration finding."
+    },
+    {
+      "id": "T14",
+      "title": "RED contract fixtures for description-based implementation dispatch",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T10:47:35.362Z",
+            "outcome": "started",
+            "detail": "232-T14 tests-creator bootstrap contract regression"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Parent executed tests-creator fallback after agent thread limit; RED 2 failures for missing issue_number and 6 controls pass; ctx evidence 2026-09-06T10-49-16-554Z_run"
+    },
+    {
+      "id": "T15",
+      "title": "Independent M01 routing spec and logic review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T11:20:02.713Z",
+            "outcome": "started",
+            "detail": "M10 author independently reviews M01; no self-review. Stage 1 spec gate before code quality."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Independent M01 Stage1/2 PASS, 57 tests and concurrency/second-write recovery probes; zero blocker/major/minor findings. T15-result.json."
+    },
+    {
+      "id": "T16",
+      "title": "Independent M10 budget and scripts spec and logic review",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T19"
+      ],
+      "attempts": {
+        "count": 7,
+        "log": [
+          {
+            "at": "2026-09-06T11:34:17.910Z",
+            "outcome": "started",
+            "detail": "Independent M10 review by M01 author; own M01 excluded, stage1 AC3-5 before quality."
+          },
+          {
+            "at": "2026-09-06T11:50:27.645Z",
+            "outcome": "failed",
+            "detail": "Stage1 AC3 blocker: child max_tool_calls still mapped to maxRounds; reproduction invokes 2 tools for cap1. Root adds runtime regression and fixes child mapping before independent recheck."
+          },
+          {
+            "at": "2026-09-06T12:08:10.157Z",
+            "outcome": "started",
+            "detail": "Recheck after root corrected max_tool_calls child wiring, independent max_rounds and stress status claims; 36 focused tests and strict scripts typecheck pass."
+          },
+          {
+            "at": "2026-09-06T12:18:18.385Z",
+            "outcome": "failed",
+            "detail": "Independent recheck: max_rounds1 produces2 tool-bearing rounds plus3rd wrap-up provider request; original call cap blocker fixed, new strict round bound violation remains."
+          },
+          {
+            "at": "2026-09-06T12:52:11.525Z",
+            "outcome": "started",
+            "detail": "Final review reassigned to independent architecture worker; prior reviewer authored T19 fix."
+          },
+          {
+            "at": "2026-09-06T12:53:19.704Z",
+            "outcome": "blocked",
+            "detail": "User pause for handoff. Final dispatch JSON validated and start logged, but architecture worker was NOT actually invoked. Independent final review remains pending."
+          },
+          {
+            "at": "2026-09-06T13:16:03.285Z",
+            "outcome": "started",
+            "detail": "Final independent budget review actually dispatched this time; dispatch rewritten as T16-final-v2.json with existing file paths and M10 AC3/AC4/AC5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "Install and configure the required ESLint quality prerequisite",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T11:42:33.269Z",
+            "outcome": "started",
+            "detail": "Root owns package/lock/config only; introduce required ESLint with TypeScript recommended baseline and inspect real findings before accepting quality."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Required ESLint installed/configured; full lint and both TypeScript projects now pass. Scoped128 tests pass; integrated verification/review remain T9/T10."
+    },
+    {
+      "id": "T18",
+      "title": "Resolve legacy lint findings without changing behavior",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T11:49:40.613Z",
+            "outcome": "started",
+            "detail": "Lint worker owns explicit manifest excluding active health/containment/budget/security lanes; no broad fix or suppression."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "146 lint findings resolved across bounded 90-file manifest; targeted lint clean and 350 focused tests pass. Remaining root-lane lint and aggregate verification are separate tasks."
+    },
+    {
+      "id": "T19",
+      "title": "Enforce actual model round caps including child and wrap-up requests",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T12:18:19.125Z",
+            "outcome": "started",
+            "detail": "Assign original round-cap reviewer as implementer; independent reviewer will change after fix."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Strict inclusive model round cap implemented; original probe1request1call;129 focused tests, both TypeScript projects and scoped lint pass. Independent reviewer must change after authoring fix."
+    },
+    {
+      "id": "T20",
+      "title": "Correct the terminal reason and stale budget documentation found by the final review",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T13:34:18.657Z",
+            "outcome": "started",
+            "detail": "Fix the four T16-final findings; implementer is neither the T16 reviewer nor the T19 author"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Independent recheck of the terminal reason and documentation corrections",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-06T13:42:52.187Z",
+            "outcome": "started",
+            "detail": "Independent recheck of the terminal-reason correction, including the out-of-scope but disclosed union edit in src/session/slate-terminal-state.ts"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-06T10:39:45.467Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-06T10:42:09.143Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-06T10:42:09.232Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-06T10:42:09.317Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-06T10:42:09.405Z",
+      "event": "task-added",
+      "detail": "T5: M01 routing lifecycle RED regressions"
+    },
+    {
+      "at": "2026-09-06T10:42:09.491Z",
+      "event": "task-added",
+      "detail": "T6: M10 budget stress and scripts RED regressions"
+    },
+    {
+      "at": "2026-09-06T10:42:09.583Z",
+      "event": "task-added",
+      "detail": "T7: M01 shared routing writer implementation"
+    },
+    {
+      "at": "2026-09-06T10:42:09.674Z",
+      "event": "task-added",
+      "detail": "T8: M10 effective budgets and script fixes"
+    },
+    {
+      "at": "2026-09-06T10:42:09.760Z",
+      "event": "task-added",
+      "detail": "T9: Phase 0 integration and code-verifier gates"
+    },
+    {
+      "at": "2026-09-06T10:42:09.846Z",
+      "event": "task-added",
+      "detail": "T10: Phase 0 independent review and fixes"
+    },
+    {
+      "at": "2026-09-06T10:42:09.933Z",
+      "event": "task-added",
+      "detail": "T11: Phase 0 delivery evidence and remaining scope"
+    },
+    {
+      "at": "2026-09-06T10:42:10.026Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-06T10:43:01.605Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-06T10:43:01.755Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-06T10:43:02.089Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 232-T5 tests-creator RED"
+    },
+    {
+      "at": "2026-09-06T10:43:02.257Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 232-T6 tests-creator RED"
+    },
+    {
+      "at": "2026-09-06T10:46:04.429Z",
+      "event": "task-added",
+      "detail": "T12: Allow description-based flow workers without a fabricated GitHub issue number"
+    },
+    {
+      "at": "2026-09-06T10:46:04.626Z",
+      "event": "task-added",
+      "detail": "T13: Verify issue-free worker contract and existing issue compatibility"
+    },
+    {
+      "at": "2026-09-06T10:46:04.808Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T7, T8, T13 (was T7, T8) — Include orchestrator contract compatibility gate before integration acceptance"
+    },
+    {
+      "at": "2026-09-06T10:47:34.837Z",
+      "event": "task-added",
+      "detail": "T14: RED contract fixtures for description-based implementation dispatch"
+    },
+    {
+      "at": "2026-09-06T10:47:35.000Z",
+      "event": "task-depends-set",
+      "detail": "T12: dependsOn T14 (was empty) — TDD regression must fail before issue-free contract fix"
+    },
+    {
+      "at": "2026-09-06T10:47:35.363Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 232-T14 tests-creator bootstrap contract regression"
+    },
+    {
+      "at": "2026-09-06T10:50:12.814Z",
+      "event": "task-done",
+      "detail": "T14: RED contract fixtures for description-based implementation dispatch"
+    },
+    {
+      "at": "2026-09-06T10:50:13.192Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — Minimal bootstrap schema/prose repair after verified T14 RED; no fabricated issue"
+    },
+    {
+      "at": "2026-09-06T10:52:34.499Z",
+      "event": "task-done",
+      "detail": "T5: M01 routing lifecycle RED regressions"
+    },
+    {
+      "at": "2026-09-06T10:52:34.681Z",
+      "event": "task-done",
+      "detail": "T12: Allow description-based flow workers without a fabricated GitHub issue number"
+    },
+    {
+      "at": "2026-09-06T10:52:35.111Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 232-T7 task-implementer after T5 RED"
+    },
+    {
+      "at": "2026-09-06T10:56:47.213Z",
+      "event": "task-done",
+      "detail": "T6: M10 budget stress and scripts RED regressions"
+    },
+    {
+      "at": "2026-09-06T10:56:47.721Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 232-T8 task-implementer after T6 RED"
+    },
+    {
+      "at": "2026-09-06T11:06:47.358Z",
+      "event": "task-done",
+      "detail": "T7: M01 shared routing writer implementation"
+    },
+    {
+      "at": "2026-09-06T11:06:47.707Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 232-T13 independent code-verifier for bootstrap compatibility"
+    },
+    {
+      "at": "2026-09-06T11:14:07.938Z",
+      "event": "task-attempt",
+      "detail": "T13: failed (attempt 2) — Independent verifier found unconditional issue references in all task-implementer prose builds; runtime contract tests passed. Repair prose and rerun bounded verification."
+    },
+    {
+      "at": "2026-09-06T11:14:08.241Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 3) — Attempt 2: repaired all ten worker builds at the four reported issue-reference sites; request independent prose and contract recheck."
+    },
+    {
+      "at": "2026-09-06T11:18:44.362Z",
+      "event": "task-done",
+      "detail": "T8: M10 effective budgets and script fixes"
+    },
+    {
+      "at": "2026-09-06T11:18:44.506Z",
+      "event": "task-done",
+      "detail": "T13: Verify issue-free worker contract and existing issue compatibility"
+    },
+    {
+      "at": "2026-09-06T11:18:44.669Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — Integrated verifier after both M01/M10 implementations and bounded bootstrap review. Required ESLint unavailable remains explicit; no false global PASS."
+    },
+    {
+      "at": "2026-09-06T11:20:02.220Z",
+      "event": "task-added",
+      "detail": "T15: Independent M01 routing spec and logic review"
+    },
+    {
+      "at": "2026-09-06T11:20:02.393Z",
+      "event": "task-added",
+      "detail": "T16: Independent M10 budget and scripts spec and logic review"
+    },
+    {
+      "at": "2026-09-06T11:20:02.553Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T9, T15, T16 (was T9) — Parallel independent reviews per disjoint implementation lane; aggregate acceptance waits for verifier and both reviews."
+    },
+    {
+      "at": "2026-09-06T11:20:02.714Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — M10 author independently reviews M01; no self-review. Stage 1 spec gate before code quality."
+    },
+    {
+      "at": "2026-09-06T11:29:44.774Z",
+      "event": "task-done",
+      "detail": "T15: Independent M01 routing spec and logic review"
+    },
+    {
+      "at": "2026-09-06T11:34:17.910Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — Independent M10 review by M01 author; own M01 excluded, stage1 AC3-5 before quality."
+    },
+    {
+      "at": "2026-09-06T11:34:18.055Z",
+      "event": "task-attempt",
+      "detail": "T9: blocked (attempt 2) — Integrated check completed: TS pass, 6843 pass/18skip/1 resolved schema mirror failure. Required ESLint unavailable => INCOMPLETE; HTTP snapshot defect under separate corrected review. Recheck quality after prerequisites, no repeated full run now."
+    },
+    {
+      "at": "2026-09-06T11:42:32.936Z",
+      "event": "task-added",
+      "detail": "T17: Install and configure the required ESLint quality prerequisite"
+    },
+    {
+      "at": "2026-09-06T11:42:33.113Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T7, T8, T13, T17 (was T7, T8, T13) — Required ESLint cannot run until a real linter/configuration is installed; retain required policy, make missing prerequisite explicit."
+    },
+    {
+      "at": "2026-09-06T11:42:33.269Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — Root owns package/lock/config only; introduce required ESLint with TypeScript recommended baseline and inspect real findings before accepting quality."
+    },
+    {
+      "at": "2026-09-06T11:49:39.909Z",
+      "event": "task-added",
+      "detail": "T18: Resolve legacy lint findings without changing behavior"
+    },
+    {
+      "at": "2026-09-06T11:49:40.058Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T7, T8, T13, T17, T18 (was T7, T8, T13, T17) — New required linter exposes existing findings; explicit remediation task prevents skipped/failed lint being treated as PASS."
+    },
+    {
+      "at": "2026-09-06T11:49:40.613Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — Lint worker owns explicit manifest excluding active health/containment/budget/security lanes; no broad fix or suppression."
+    },
+    {
+      "at": "2026-09-06T11:50:27.646Z",
+      "event": "task-attempt",
+      "detail": "T16: failed (attempt 2) — Stage1 AC3 blocker: child max_tool_calls still mapped to maxRounds; reproduction invokes 2 tools for cap1. Root adds runtime regression and fixes child mapping before independent recheck."
+    },
+    {
+      "at": "2026-09-06T12:08:09.978Z",
+      "event": "task-done",
+      "detail": "T18: Resolve legacy lint findings without changing behavior"
+    },
+    {
+      "at": "2026-09-06T12:08:10.157Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 3) — Recheck after root corrected max_tool_calls child wiring, independent max_rounds and stress status claims; 36 focused tests and strict scripts typecheck pass."
+    },
+    {
+      "at": "2026-09-06T12:11:27.538Z",
+      "event": "task-done",
+      "detail": "T17: Install and configure the required ESLint quality prerequisite"
+    },
+    {
+      "at": "2026-09-06T12:18:18.053Z",
+      "event": "task-added",
+      "detail": "T19: Enforce actual model round caps including child and wrap-up requests"
+    },
+    {
+      "at": "2026-09-06T12:18:18.208Z",
+      "event": "task-depends-set",
+      "detail": "T16: dependsOn T8, T19 (was T8) — Original tool invocation cap fixed; independent recheck found N+1 rounds and unbudgeted wrap-up under max_rounds."
+    },
+    {
+      "at": "2026-09-06T12:18:18.385Z",
+      "event": "task-attempt",
+      "detail": "T16: failed (attempt 4) — Independent recheck: max_rounds1 produces2 tool-bearing rounds plus3rd wrap-up provider request; original call cap blocker fixed, new strict round bound violation remains."
+    },
+    {
+      "at": "2026-09-06T12:18:19.125Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — Assign original round-cap reviewer as implementer; independent reviewer will change after fix."
+    },
+    {
+      "at": "2026-09-06T12:34:48.018Z",
+      "event": "task-done",
+      "detail": "T19: Enforce actual model round caps including child and wrap-up requests"
+    },
+    {
+      "at": "2026-09-06T12:38:42.218Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T7, T8, T13, T17, T18, T19 (was T7, T8, T13, T17, T18) — Current integration gate must include the strict model-round correction."
+    },
+    {
+      "at": "2026-09-06T12:52:11.526Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 5) — Final review reassigned to independent architecture worker; prior reviewer authored T19 fix."
+    },
+    {
+      "at": "2026-09-06T12:53:19.705Z",
+      "event": "task-attempt",
+      "detail": "T16: blocked (attempt 6) — User pause for handoff. Final dispatch JSON validated and start logged, but architecture worker was NOT actually invoked. Independent final review remains pending."
+    },
+    {
+      "at": "2026-09-06T13:16:03.285Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 7) — Final independent budget review actually dispatched this time; dispatch rewritten as T16-final-v2.json with existing file paths and M10 AC3/AC4/AC5"
+    },
+    {
+      "at": "2026-09-06T13:33:46.911Z",
+      "event": "task-done",
+      "detail": "T16: Independent M10 budget and scripts spec and logic review"
+    },
+    {
+      "at": "2026-09-06T13:33:47.112Z",
+      "event": "task-added",
+      "detail": "T20: Correct the terminal reason and stale budget documentation found by the final review"
+    },
+    {
+      "at": "2026-09-06T13:33:47.228Z",
+      "event": "task-added",
+      "detail": "T21: Independent recheck of the terminal reason and documentation corrections"
+    },
+    {
+      "at": "2026-09-06T13:33:47.338Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T7, T8, T13, T17, T18, T19, T20 (was T7, T8, T13, T17, T18, T19) — Integration gate must include the terminal-reason correction the final independent review found"
+    },
+    {
+      "at": "2026-09-06T13:33:47.441Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T9, T15, T16, T21 (was T9, T15, T16) — Aggregate review follows the recheck of the terminal-reason correction"
+    },
+    {
+      "at": "2026-09-06T13:34:18.657Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — Fix the four T16-final findings; implementer is neither the T16 reviewer nor the T19 author"
+    },
+    {
+      "at": "2026-09-06T13:42:52.085Z",
+      "event": "task-done",
+      "detail": "T20: Correct the terminal reason and stale budget documentation found by the final review"
+    },
+    {
+      "at": "2026-09-06T13:42:52.188Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — Independent recheck of the terminal-reason correction, including the out-of-scope but disclosed union edit in src/session/slate-terminal-state.ts"
+    },
+    {
+      "at": "2026-09-06T13:56:00.768Z",
+      "event": "task-done",
+      "detail": "T21: Independent recheck of the terminal reason and documentation corrections"
+    },
+    {
+      "at": "2026-09-06T20:12:54.299Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 3) — Final integration pass with every writer lane stopped; only one read-only review was running"
+    },
+    {
+      "at": "2026-09-06T20:12:54.652Z",
+      "event": "task-done",
+      "detail": "T9: Phase 0 integration and code-verifier gates"
+    },
+    {
+      "at": "2026-09-06T20:13:04.090Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — Phase 0 aggregate independent review over the routing lifecycle and budget work, against the frozen criteria and the integration evidence"
+    },
+    {
+      "at": "2026-09-07T04:33:04.893Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Shared routing writer in src/lib/routing-entrypoint.ts consumed by init, update and rules; short index plus separate routing document preserved across init, sync, distill, update and repeated sequences; module and security flags and user-owned blocks preserved. Independent review T15 PASS; aggregate review T10 verified on the current tree and rated MET"
+    },
+    {
+      "at": "2026-09-07T04:33:04.995Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: orient and catalog resolve the split entrypoint; fixtures assert ownership of both documents; a failed pair publication is observable and recoverable on rerun without a false success, with per-file atomic writes and a lock rather than a claimed multi-file transaction. Aggregate review T10 rated MET on the current tree"
+    },
+    {
+      "at": "2026-09-07T04:33:05.097Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: maxRounds is an inclusive ceiling on every provider request including any wrap-up; maxRounds zero issues none; maxToolCalls stays an independent counter with its own finish reason; a stop no budget caused now reports no_progress rather than budget exhaustion. Independent review T16 Stage1 PASS on all seven points, T21 recheck zero findings, and T10 re-verified with a probe written from scratch, including maxToolCalls minus one throwing rather than being dropped"
+    },
+    {
+      "at": "2026-09-07T04:33:05.198Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Stress JSON uses the existing resolver and writes its report in the offline fixture; the optional containment port throws a RangeError rather than defaulting. Independently rerun by T16 and re-verified by T10"
+    },
+    {
+      "at": "2026-09-07T04:33:05.296Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: tsconfig.scripts.json covers the benchmark and stress scripts; both TypeScript targets pass with immutable logs from the acceptance run. T10 went beyond the committed test by injecting a TS2322 into the real stress and containment scripts through an in-memory compiler host, leaving the tree untouched, and confirmed the diagnostic is attributed to those files"
+    },
+    {
+      "at": "2026-09-07T04:33:54.331Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Immutable evidence captured for the acceptance run with hashes: full suite 7110 pass / 18 skip / 0 fail, both TypeScript targets and repository lint. Independent reviews T15, T16, T21, T13 and aggregate T10 report no unresolved blocker, major or minor finding; T10's two minors are closed, the health attribution corrected and the suite figure given its own log. Remaining AFC-21 scope and the zero AFC-16 contribution are recorded in artifacts/DELIVERY.md"
+    },
+    {
+      "at": "2026-09-07T04:33:54.428Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — Delivery evidence written by root as the orchestrator's own record"
+    },
+    {
+      "at": "2026-09-07T04:33:54.524Z",
+      "event": "task-done",
+      "detail": "T11: Phase 0 delivery evidence and remaining scope"
+    },
+    {
+      "at": "2026-09-07T04:33:54.619Z",
+      "event": "task-done",
+      "detail": "T10: Phase 0 independent review and fixes"
+    },
+    {
+      "at": "2026-09-07T06:35:56.127Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/489 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T06:36:00.592Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T06:36:04.528Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#489 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__489.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 489 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: FAIL: 14 finding(s) at P0; WARN: health regression 5 vs baseline; OPTIONAL: sonarqube source skipped"
+    },
+    {
+      "at": "2026-09-07T10:24:14.904Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/489 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T10:24:15.014Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T10:24:19.305Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — terminal-dispositions (violated): 15 finding(s) at or above `minor` are not terminal: 2026-09-07-branch-codex-agent-first-core#F-001 (blocker, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-002 (blocker, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-003 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-004 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-005 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-006 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-007 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-008 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-009 (minor, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-010 (minor, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-011 (minor, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-015 (blocker, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-016 (major, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-017 (minor, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | 2026-09-07-branch-codex-agent-first-core#F-018 (minor, round 2026-09-07-branch-codex-agent-first-core): no disposition recorded | head-commit (violated): the latest round ran against 0ae1456b76ff1752d466972f4d489c5917d20179, but the PR head is d7c4aa098cb4a00b523f640ee28b4acd3f1dbcab. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#489 was last collected against 8e94a737de19674d5d884822dbab70949dadd66c (round 1), but the PR head is d7c4aa098cb4a00b523f640ee28b4acd3f1dbcab. Everything anyone said after 8e94a737de19674d5d884822dbab70949dadd66c is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 489 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-07-branch-codex-agent-first-core` ran with `verification_mode: annotate` and received 0 claims while retaining 15 finding(s) at or above `minor` (2026-09-07-branch-codex-agent-first-core#F-001, 2026-09-07-branch-codex-agent-first-core#F-002, 2026-09-07-branch-codex-agent-first-core#F-003, 2026-09-07-branch-codex-agent-first-core#F-004, 2026-09-07-branch-codex-agent-first-core#F-005, 2026-09-07-branch-codex-agent-first-core#F-006, 2026-09-07-branch-codex-agent-first-core#F-007, 2026-09-07-branch-codex-agent-first-core#F-008, 2026-09-07-branch-codex-agent-first-core#F-009, 2026-09-07-branch-codex-agent-first-core#F-010, 2026-09-07-branch-codex-agent-first-core#F-011, 2026-09-07-branch-codex-agent-first-core#F-015, 2026-09-07-branch-codex-agent-first-core#F-016, 2026-09-07-branch-codex-agent-first-core#F-017, 2026-09-07-branch-codex-agent-first-core#F-018). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-07T11:11:29.685Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/491 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-07T11:51:15.008Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-07T11:51:19.962Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

@@ -58,7 +58,7 @@ test("spawn_subagent runs a child turn and returns a summary", async () => {
   expect(result.output).toMatch(/MAE reservation/);
 });
 
-test("default per-child round budget is 10 when max_tool_calls is omitted", async () => {
+test("default per-child round budget is 10 when max_rounds is omitted", async () => {
   const tool = createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
@@ -86,8 +86,59 @@ test("per-child round cap is 24 even when the model asks for more", async () => 
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
   });
-  const result = await tool.invoke({ task: "investigate", mode: "read_only", max_tool_calls: 999 });
+  const result = await tool.invoke({ task: "investigate", mode: "read_only", max_rounds: 999 });
   expect(result.output).toMatch(/rounds≤24\b/);
+});
+
+test("child max_tool_calls caps actual invocations independently from model rounds", async () => {
+  let requests = 0;
+  const events: SpawnSubagentFleetEvent[] = [];
+  const base = stubProvider("unused");
+  const provider: ProviderPort = {
+    ...base,
+    describe: () => ({ ...base.describe(), capabilities: { ...base.describe().capabilities, toolCalls: true, parallelToolCalls: true } }),
+    async *stream(_request, options) {
+      requests += 1;
+      if (requests === 1) {
+        for (const [index, name] of ["get_cwd", "list_dir"].entries()) {
+          yield { kind: "tool_call_start", sequence: index * 2, attemptId: options.attemptId, toolCallId: name, toolName: name };
+          yield { kind: "tool_call_end", sequence: index * 2 + 1, attemptId: options.attemptId, toolCallId: name, input: name === "list_dir" ? '{"path":"."}' : "{}" };
+        }
+      } else {
+        yield { kind: "text_delta", sequence: 0, attemptId: options.attemptId, text: "completed" };
+      }
+      yield { kind: "model_end", sequence: 5, attemptId: options.attemptId };
+    },
+  };
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(), getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
+    makeProvider: () => provider, getDetectedProviders: () => [{ name: "ollama" }], onFleetEvent: (event) => events.push(event),
+  });
+  const result = await tool.invoke({ task: "Read cwd then list files", max_tool_calls: 1, max_rounds: 10 });
+  expect(requests).toBe(1);
+  const results = events.filter((event) => event.kind === "log" && event.entry.kind === "result");
+  expect(results.filter((event) => event.kind === "log" && !event.entry.text.includes("(error)"))).toHaveLength(1);
+  expect(results.some((event) => event.kind === "log" && event.entry.text.startsWith("list_dir (error)") && /budget/i.test(event.entry.text))).toBe(true);
+  expect(result.status).toBe("BudgetExhausted");
+  expect(result.output).toContain("calls≤1");
+  expect(result.output).toContain("rounds≤10");
+});
+
+test("invalid child budgets fail before provider creation", async () => {
+  let created = 0;
+  const tool = createSpawnSubagentTool({
+    cwd: process.cwd(), getParentModel: () => ({ providerId: "ollama", modelId: "fixture" }),
+    makeProvider: () => { created += 1; return stubProvider("unused"); }, getDetectedProviders: () => [{ name: "ollama" }],
+  });
+  for (const field of ["max_tool_calls", "max_rounds"]) {
+    for (const value of [-1, 1.5, NaN, Infinity, "2", null]) {
+      expect((await tool.invoke({ task: "fixture", [field]: value })).status).toBe("Error");
+    }
+  }
+  expect(created).toBe(0);
+  expect((await tool.invoke({ task: "fixture", max_rounds: 0 })).status).toBe("Error");
+  expect((await tool.invoke({ task: "fixture", max_tool_calls: 1, runtime: { kind: "external" } })).status).toBe("Error");
+  expect(created).toBe(0);
 });
 
 test("onLedgerReady hands back a working resetBudget the tool keeps functioning after", async () => {
@@ -209,19 +260,17 @@ function hangingProvider(): ProviderPort {
 }
 
 /**
- * Issues a NEW, distinct tool-call signature every round (`probe_1`,
- * `probe_2`, …) — with a tiny `max_tool_calls` (now interpreted as a ROUND
- * count, see `commands/agent.ts`'s `DEFAULT_MAX_ROUNDS`) this exceeds the
- * child's own round budget on the round immediately after the limit (each
- * round's call still executes; the round budget never refuses an
- * individual call), driving `runAgentTurnCore`'s `finishWithBudgetSummary`
- * path (D2a `finishReason: "budget"`).
+ * Issues a NEW, distinct tool-call signature on every provider request
+ * (`probe_1`, `probe_2`, …). With a tiny `max_rounds`, the inclusive child
+ * round cap stops before the next provider request and reports D2a
+ * `finishReason: "budget"` without an extra summary request.
  */
-function distinctToolCallProvider(): ProviderPort {
+function distinctToolCallProvider(onRequest: () => void = () => undefined): ProviderPort {
   let round = 0;
   return {
     describe: () => ({ capabilities: PROBE_CAPABILITIES, descriptor: { providerId: "distinct-calls" } }),
     async *stream(_req, opts: StreamOptions): AsyncGenerator<NormalizedEvent> {
+      onRequest();
       round += 1;
       const id = `t${round}`;
       yield { kind: "tool_call_start", sequence: 0, attemptId: opts.attemptId, toolCallId: id, toolName: `probe_${round}` };
@@ -281,22 +330,28 @@ test("status: Completed on a clean model finish", async () => {
   expect(result.partial).toBeUndefined();
 });
 
-test("status: BudgetExhausted when the child's own tool-call budget exhausts before a clean finish (AC5)", async () => {
+test("status: BudgetExhausted when the child's round budget exhausts before a clean finish (AC5)", async () => {
+  let requests = 0;
+  const events: SpawnSubagentFleetEvent[] = [];
   const tool = createSpawnSubagentTool({
     cwd: process.cwd(),
     getParentModel: () => ({ providerId: "ollama", modelId: "fake" }),
-    makeProvider: () => distinctToolCallProvider(),
+    makeProvider: () => distinctToolCallProvider(() => { requests += 1; }),
     getDetectedProviders: () => [{ name: "ollama" }],
     idSeq: (() => {
       let n = 0;
       return () => `id-${n++}`;
     })(),
     clock: () => "2020-01-01T00:00:00.000Z",
+    onFleetEvent: (event) => events.push(event),
   });
-  // A round budget of 1: round 1's `probe_1` call executes; round 2's
-  // distinct `probe_2` call ALSO executes (the round budget never refuses
-  // an individual call) — the excess is noticed right after round 2.
-  const result = await tool.invoke({ task: "exhaust the child's own tool budget", mode: "read_only", max_tool_calls: 1 });
+  // A strict round budget of 1 admits exactly one provider request and its
+  // `probe_1` call. No second tool-bearing request or tool-free wrap-up may
+  // exceed the model-facing `rounds≤1` reservation.
+  const result = await tool.invoke({ task: "exhaust the child's round budget", mode: "read_only", max_rounds: 1 });
+  const toolCalls = events.filter((event) => event.kind === "log" && event.entry.kind === "tool");
+  expect(requests).toBe(1);
+  expect(toolCalls).toHaveLength(1);
   expect(result.status).toBe("BudgetExhausted");
   expect(result.isError).toBe(true);
   expect(result.status).not.toBe("Completed");

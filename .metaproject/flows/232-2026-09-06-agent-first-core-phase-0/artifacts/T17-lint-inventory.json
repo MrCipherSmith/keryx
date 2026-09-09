@@ -1,0 +1,707 @@
+{
+  "rules": {
+    "@typescript-eslint/no-unused-vars": 72,
+    "require-yield": 2,
+    "no-useless-assignment": 22,
+    "no-control-regex": 8,
+    "preserve-caught-error": 12,
+    "prefer-const": 14,
+    "no-useless-escape": 32,
+    "null": 5,
+    "no-irregular-whitespace": 1,
+    "no-misleading-character-class": 1,
+    "no-unsafe-finally": 1
+  },
+  "production": [
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "line": 72,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'containmentTaskId' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "line": 99,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'UNSAFE_ACTIONS' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "line": 137,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'sshMarker' is defined but never used. Allowed unused args must match /^_/u."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "line": 180,
+      "rule": "require-yield",
+      "message": "This generator function does not have 'yield'."
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "line": 328,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'input' is defined but never used. Allowed unused args must match /^_/u."
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "line": 31,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'writeSlate' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "line": 932,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'roundsLeft' is not used in subsequent statements."
+    },
+    {
+      "file": "src/commands/harness.ts",
+      "line": 439,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'unattended' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/commands/init.ts",
+      "line": 1771,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'syncGitignore' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "line": 780,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "line": 789,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "line": 1355,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "line": 1377,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/commands/review.ts",
+      "line": 1454,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "line": 198,
+      "rule": "prefer-const",
+      "message": "'resumeId' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "line": 1173,
+      "rule": "prefer-const",
+      "message": "'resumeId' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "line": 1812,
+      "rule": "prefer-const",
+      "message": "'providerArg' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "line": 1813,
+      "rule": "prefer-const",
+      "message": "'modelArg' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "line": 1865,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'orient' is not used in subsequent statements."
+    },
+    {
+      "file": "src/commands/standard.ts",
+      "line": 18,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'ValidationResult' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/commands/test.ts",
+      "line": 87,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'source' is not used in subsequent statements."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "line": 344,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\`."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "line": 344,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\`."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "line": 344,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\`."
+    },
+    {
+      "file": "src/commands/workspace.ts",
+      "line": 344,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\`."
+    },
+    {
+      "file": "src/ctx/runtimes.ts",
+      "line": 407,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'command' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/ctx/runtimes.ts",
+      "line": 433,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'command' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/flow/service.ts",
+      "line": 909,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "line": 314,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\.."
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "line": 324,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\.."
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "line": 325,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\.."
+    },
+    {
+      "file": "src/gdgraph/build.ts",
+      "line": 326,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\.."
+    },
+    {
+      "file": "src/gdskills/bundled-eval.ts",
+      "line": 425,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\[."
+    },
+    {
+      "file": "src/gdskills/project-skills.ts",
+      "line": 199,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/harness/child/escalation.ts",
+      "line": 211,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'pending' is not used in subsequent statements."
+    },
+    {
+      "file": "src/harness/child/isolation.ts",
+      "line": 23,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'PolicyProfileRequiredControls' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/process/sandbox/proxy.ts",
+      "line": 17,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'tls' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/process/shell-spawn.ts",
+      "line": 37,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'raw' is not used in subsequent statements."
+    },
+    {
+      "file": "src/harness/search/controller.ts",
+      "line": 1,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'StoredSearchProvider' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/search/registry.ts",
+      "line": 152,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'fields' is defined but never used. Allowed unused args must match /^_/u."
+    },
+    {
+      "file": "src/harness/tool/builtin/interactive-tools.ts",
+      "line": 14,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'readFile' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 14,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'InteractiveToolResult' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 22,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'PolicyProfile' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/harness/tool/metaproject-adapter.ts",
+      "line": 446,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'hasWikiIndex' is not used in subsequent statements."
+    },
+    {
+      "file": "src/harness/web/web-worker-runner.ts",
+      "line": 3,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'join' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/health/metrics/complexity.ts",
+      "line": 153,
+      "rule": "prefer-const",
+      "message": "'end' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/health/skills.ts",
+      "line": 28,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'registry' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/fs.ts",
+      "line": 79,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/lib/git-hooks.ts",
+      "line": 3,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'pathExists' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/json.ts",
+      "line": 8,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/lib/md-blocks.ts",
+      "line": 562,
+      "rule": "no-irregular-whitespace",
+      "message": "Irregular whitespace not allowed."
+    },
+    {
+      "file": "src/lib/md-blocks.ts",
+      "line": 562,
+      "rule": "no-misleading-character-class",
+      "message": "Unexpected combined character in character class."
+    },
+    {
+      "file": "src/lib/metaproject-gitignore.ts",
+      "line": 107,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\[."
+    },
+    {
+      "file": "src/lib/project-registry.ts",
+      "line": 31,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'mkdirSync' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/project-registry.ts",
+      "line": 33,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'readFileSync' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/serve-config.ts",
+      "line": 144,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'head' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/serve-credential.ts",
+      "line": 29,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'mkdirSync' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/serve-credential.ts",
+      "line": 31,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'readFileSync' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/serve-server.ts",
+      "line": 39,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'isTurnId' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "line": 608,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'events' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "line": 609,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'decisions' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "line": 610,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'summary' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "line": 611,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'runStatus' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/serve-turn.ts",
+      "line": 613,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'unresolvedBlockerIds' is not used in subsequent statements."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1347,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\*."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1347,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\*."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1347,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\*."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1347,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\*."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1348,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\[."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1348,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\]."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1348,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\]."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1348,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\(."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1348,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\)."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1362,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1364,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1364,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1366,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1366,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\d."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1366,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\.."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1366,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 1368,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\s."
+    },
+    {
+      "file": "src/lib/templates.ts",
+      "line": 2266,
+      "rule": "no-useless-escape",
+      "message": "Unnecessary escape character: \\$."
+    },
+    {
+      "file": "src/mcp-client/client.ts",
+      "line": 69,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'McpToolCallOutcome' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/memory/supersede.ts",
+      "line": 117,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'toPosix' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/memory/temporal.ts",
+      "line": 47,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'now' is defined but never used. Allowed unused args must match /^_/u."
+    },
+    {
+      "file": "src/metrics/comparative.ts",
+      "line": 73,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'median' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/review/managed.ts",
+      "line": 1352,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/rules/agent-entrypoints.ts",
+      "line": 92,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'files' is not used in subsequent statements."
+    },
+    {
+      "file": "src/sac/fwk-service.ts",
+      "line": 243,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/sac/proposal-lifecycle.ts",
+      "line": 525,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'eventHash' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "line": 5,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'AGENT_CHECK_INPUT_COMMAND' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "line": 6,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'AGENT_CHECK_OUTPUT_COMMAND' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "line": 7,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'checkInputCommand' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "line": 8,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'checkOutputCommand' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/security/agent-hooks.ts",
+      "line": 9,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'AGENT_HOOKS_SENTINEL' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/session/slate-lifecycle.ts",
+      "line": 22,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'courseFromSlate' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/session/store.ts",
+      "line": 17,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'readFileSync' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/standard/emit-llms.ts",
+      "line": 9,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'readFile' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/standard/service.ts",
+      "line": 47,
+      "rule": "preserve-caught-error",
+      "message": "There is no `cause` attached to the symptom error being thrown."
+    },
+    {
+      "file": "src/testing/service.ts",
+      "line": 139,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'raw' is not used in subsequent statements."
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "line": 196,
+      "rule": "prefer-const",
+      "message": "'unsubscribe' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/balance-panel.ts",
+      "line": 12,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'providerBaseUrlEnvKey' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/tui/external-inspector.ts",
+      "line": 153,
+      "rule": "prefer-const",
+      "message": "'unsubscribe' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/game-modal.ts",
+      "line": 495,
+      "rule": "prefer-const",
+      "message": "'handle' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/games/modal.test-helpers.ts",
+      "line": 56,
+      "rule": "require-yield",
+      "message": "This generator function does not have 'yield'."
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "line": 36,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'OtuiLike' is defined but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "line": 69,
+      "rule": "prefer-const",
+      "message": "'activeId' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/games/modal.ts",
+      "line": 229,
+      "rule": "prefer-const",
+      "message": "'handle' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/mcp-inspector.ts",
+      "line": 140,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'action' is not used in subsequent statements."
+    },
+    {
+      "file": "src/tui/shell-chrome.ts",
+      "line": 761,
+      "rule": "no-useless-assignment",
+      "message": "The value assigned to 'lines' is not used in subsequent statements."
+    },
+    {
+      "file": "src/tui/subagent-inspector.ts",
+      "line": 117,
+      "rule": "prefer-const",
+      "message": "'unsubscribe' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/theme-picker.ts",
+      "line": 259,
+      "rule": "prefer-const",
+      "message": "'handle' is never reassigned. Use 'const' instead."
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "line": 2186,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'balancePanel' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "line": 2208,
+      "rule": "@typescript-eslint/no-unused-vars",
+      "message": "'currentWorkspace' is assigned a value but never used. Allowed unused vars must match /^_/u."
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "line": 4010,
+      "rule": "no-unsafe-finally",
+      "message": "Unsafe usage of ContinueStatement."
+    }
+  ]
+}

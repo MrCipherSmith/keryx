@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile, copyFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { spawnSync } from "node:child_process";
 import {
+  renderGdgraphCoreCli,
   renderGdgraphManifest,
   renderGdgraphSkillReadme,
   renderHooksReadme,
@@ -7,8 +12,10 @@ import {
   renderIndexMarkdown,
   ROUTING_FILENAME,
   renderMetaprojectGitignoreBlock,
+  renderMetaprojectDashboardHtml,
 } from "./templates";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
+import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
 
 const ALL_MODULES = {
   enableGdgraph: true,
@@ -202,4 +209,106 @@ test("generated ignore block isolates memory views without hiding canonical entr
   expect(block).toContain(".metaproject/data/memory/artifacts/");
   expect(block).toContain(".metaproject/runtime/memory/");
   expect(block).not.toContain(".metaproject/memory/");
+});
+
+// ---------------------------------------------------------------------------
+// T19 finding 5 (flow 234 review, MINOR) — `renderGdgraphCoreCli()` emits the
+// standalone `.metaproject/core/gdgraph/cli.ts` runner every scaffolded
+// project gets, so a project can run the graph builder without the full
+// `keryx` package installed. Its `affected` handler called the raw
+// `getAffected(graph, target)` with no membership check — the exact same
+// defect as finding 1 (`src/mcp/tools.ts`) — so it printed the same empty
+// `{target, dependencies: [], dependents: []}` shape and exited 0 for a
+// target the graph never indexed, indistinguishable from a real, indexed,
+// edge-less node. This test executes the ACTUAL emitted output (not just its
+// source text) with `bun`, against real copies of `GDGRAPH_CORE_SOURCES`
+// (`build.ts`/`query.ts`/`target.ts`/`types.ts`) — the same files `init`/
+// `update` copy — so it proves the fix in the emitted runner itself, not
+// merely in `getAffected`/`query.ts` (which this task deliberately leaves
+// unchanged; see the task report).
+// ---------------------------------------------------------------------------
+
+async function scaffoldGdgraphCoreRunner(root: string): Promise<string> {
+  const gdgraphCoreRoot = path.join(root, ".metaproject", "core", "gdgraph");
+  await mkdir(gdgraphCoreRoot, { recursive: true });
+  for (const file of GDGRAPH_CORE_SOURCES) {
+    await copyFile(
+      path.join(process.cwd(), "src", "gdgraph", file),
+      path.join(gdgraphCoreRoot, file),
+    );
+  }
+  await writeFile(path.join(gdgraphCoreRoot, "cli.ts"), renderGdgraphCoreCli(), "utf8");
+
+  const storageDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+  await mkdir(storageDir, { recursive: true });
+  await writeFile(
+    path.join(storageDir, "nodes.jsonl"),
+    '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+    "utf8",
+  );
+  return gdgraphCoreRoot;
+}
+
+test("T19 finding 5 — an indexed target with no edges still exits 0 (control, byte-identical to before)", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-templates-core-cli-known-"));
+  try {
+    const gdgraphCoreRoot = await scaffoldGdgraphCoreRunner(root);
+    const result = spawnSync(
+      "bun",
+      [path.join(gdgraphCoreRoot, "cli.ts"), "affected", "src/a.ts", "--json"],
+      { cwd: root, encoding: "utf8" },
+    );
+    expect(result.status).toBe(0);
+    const parsed = JSON.parse(result.stdout) as { target: string; dependencies: string[]; dependents: string[] };
+    expect(parsed).toEqual({ target: "src/a.ts", dependencies: [], dependents: [] });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 20000);
+
+test("T19 finding 5 — the emitted runner's `affected` command rejects a target the graph never indexed, non-zero exit", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-templates-core-cli-unknown-"));
+  try {
+    const gdgraphCoreRoot = await scaffoldGdgraphCoreRunner(root);
+    const result = spawnSync(
+      "bun",
+      [path.join(gdgraphCoreRoot, "cli.ts"), "affected", "src/does-not-exist.ts", "--json"],
+      { cwd: root, encoding: "utf8" },
+    );
+
+    // Before the fix: this printed
+    // `{"target":"src/does-not-exist.ts","dependencies":[],"dependents":[]}`
+    // on stdout and exited 0 — byte-identical to the known-empty control case
+    // above except for the target string.
+    expect(result.status).not.toBe(0);
+    expect(result.stdout.trim()).toBe("");
+    expect(result.stderr).toContain("does-not-exist.ts");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}, 20000);
+
+// docs/verification/page-count-is-not-coverage.md rows 15/16: the dashboard's
+// hero KPI strip prints `wikiPages.length` / `memoryEntries.length` as a bare
+// number — the same "count presented with nothing naming what is absent" shape
+// documented for rows 1 and 5, in the very file where rows 6/7 were fixed. The
+// fix here is a `title` caveat on each tile (verified below); this is a
+// regression tripwire, not a UI redesign — losing the caveat should make this
+// test fail, not silently regress to a bare, unqualified count.
+test("dashboard hero KPI tiles for wiki pages and memory entries carry a 'not coverage' caveat", () => {
+  const html = renderMetaprojectDashboardHtml({
+    ...ALL_MODULES,
+    data: {
+      wiki: { pages: [{ title: "Auth flow", href: "wiki/auth.md", group: "domain" }] },
+      memory: { entries: [{ title: "Lesson one", href: "memory/lesson.md", group: "lessons" }] },
+    },
+  });
+
+  const wikiKpi = /<div class="kpi" title="([^"]*)">\s*<b>1<\/b><span>wiki pages<\/span>/.exec(html);
+  const memoryKpi = /<div class="kpi" title="([^"]*)">\s*<b>1<\/b><span>memory entries<\/span>/.exec(html);
+
+  expect(wikiKpi).not.toBeNull();
+  expect(memoryKpi).not.toBeNull();
+  expect(wikiKpi?.[1]).toMatch(/not a coverage measure/i);
+  expect(memoryKpi?.[1]).toMatch(/not a coverage measure/i);
 });

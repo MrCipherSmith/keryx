@@ -15,13 +15,27 @@ import { freshnessReportPath, readWikiFreshnessMetric } from "../../health/metri
 // (a backing error becomes a structured empty/error result).
 
 import type { Dirent } from "node:fs";
-import { readdir, readFile } from "node:fs/promises";
+import { lstat, readdir, readFile, realpath, stat } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
+import { isNotFound, isPathInside, toPosix } from "../../lib/fs";
+import { readContainedFile } from "../../lib/contained-read";
+import { collectPages, WikiCollectionError } from "../../wiki/collect";
+import { buildSectionIndex } from "../../wiki/section-index";
+import {
+  emptySectionRegistry,
+  readSectionRegistryState,
+  resolveSectionIdentity,
+} from "../../wiki/section-tombstone";
+import { memoryRoot } from "../../memory/store";
+import { MEMORY_TYPES } from "../../memory/types";
 import { createGdgraphService, type GdgraphService } from "../../gdgraph/service";
+import { findCandidates, type FindOutcome, type FindOptions } from "../../gdgraph/find";
+import { normalizeRetrievalCode, RETRIEVAL_NEXT_ACTIONS } from "../../lib/retrieval-codes";
 import { findPath } from "../../gdgraph/path";
 import { querySymbol } from "../../gdgraph/symbol";
 import { loadGraph } from "../../gdgraph/query";
 import { loadGdgraphConfig } from "../../gdgraph/config";
+import { checkGraphStaleness, type StalenessCheck } from "../../gdgraph/staleness";
 import {
   computeRepomap,
   type RepomapOptions,
@@ -31,7 +45,8 @@ import { parseSkillFrontmatter } from "../../gdskills/skill-frontmatter";
 import { createMemoryService } from "../../memory/service";
 import { acceptedCurrentSearchFilters, clipAutomaticRecallText, MAX_AUTOMATIC_RECALL_RESULTS } from "../../memory/relevant";
 import { MEMORY_CLASS_VALUES, type MemoryClass, type MemoryService, type SearchFilters } from "../../memory/types";
-import { findRelatedTests } from "../../testing/service";
+import { computeTestingContext, relatedTestsInContext } from "../../testing/service";
+import type { TestingContext } from "../../testing/types";
 import { createCodeHealthService } from "../../health/service";
 import type { CodeHealthService } from "../../health/types";
 import { createFlowService } from "../../flow/service";
@@ -39,16 +54,22 @@ import { githubAdapter } from "../../flow/tracker/github";
 import { securityFlowGate } from "../../security/guard";
 import type { FlowService } from "../../flow/types";
 import { wikiAsk } from "../../wiki/ask";
-import { wikiPagesForFile } from "../../wiki/service";
+import { wikiEvidence, wikiPagesForFile, type WikiEvidenceInput } from "../../wiki/service";
+import type { EvidencePackage } from "../../wiki/evidence";
+// The forgetting owner's facade — never its internals (`src/lib/import-policy.ts`).
+import { loadDeletionTrail, searchRemovals, type Attribution } from "../../forgetting/service";
 import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
   FlowStatusResult,
   GraphAffectedResult,
+  GraphFindResult,
+  GraphStaleness,
   GraphPathResult,
   GraphQueryResult,
   GraphSymbolResult,
   HealthStatusResult,
+  MemoryRemovalTrail,
   MemorySearchResult,
   MetaprojectPort,
   RepomapResult,
@@ -59,15 +80,26 @@ import type {
   TestRelatedResult,
   WikiAskResult,
   WikiBacklinksResult,
+  WikiEvidenceResult,
   WikiPageResult,
+  WikiResolveResult,
 } from "./metaproject-port";
 
 /** Injectable backing factories (default: the real in-process service facades). */
 export interface MetaprojectAdapterDeps {
   createGdgraphService: () => GdgraphService;
   createMemoryService: () => MemoryService;
-  /** Related-tests resolver (default: the real testing facade). Injectable for tests. */
-  findRelatedTests: (cwd: string, target: string) => Promise<string[]>;
+  /**
+   * Pure testing-context computation — no disk write (default: the real
+   * `computeTestingContext` facade). Injectable for tests. F-003 (flow 234
+   * review, MAJOR): `testRelated` uses this PLUS `relatedTestsInContext`
+   * below instead of the old `findRelatedTests` wrapper, so the context's
+   * `status`/`incompleteReasons` are available to populate the result — and
+   * so only ONE tree walk happens per call, not a second hidden one.
+   */
+  computeTestingContext: (cwd: string) => Promise<TestingContext>;
+  /** Relatedness lookup over an already-computed context (default: the real `relatedTestsInContext` facade). Injectable for tests. */
+  relatedTestsInContext: (cwd: string, context: TestingContext, target: string) => Promise<string[]>;
   /** Code-health facade factory (default: the real health service). Injectable for tests. */
   createCodeHealthService: () => CodeHealthService;
   /**
@@ -77,6 +109,19 @@ export interface MetaprojectAdapterDeps {
   createFlowService: () => FlowService;
   /** Wiki Q&A resolver (default: the real gdwiki `ask` facade). Injectable for tests. */
   wikiAsk: (input: WikiAskInput) => Promise<WikiAskFacadeResult>;
+  /**
+   * The gdwiki evidence envelope (default: the real `wikiEvidence` facade — the
+   * same function `createGdWikiService().evidence` binds, so the agent boundary
+   * and MCP answer from ONE implementation, not two). Injectable for tests.
+   */
+  wikiEvidence: (input: WikiEvidenceInput) => Promise<EvidencePackage>;
+  /**
+   * Explainable graph seed search (default: load the graph, then the pure
+   * `findCandidates` — the same function `keryx gdgraph find` calls, so the
+   * outcome CODE an agent reads is the code the command line prints, not a
+   * second classification). Injectable for tests, which then build no graph.
+   */
+  graphFind: (cwd: string, query: string, options: FindOptions) => Promise<FindOutcome>;
   /**
    * Reverse "documented in" lookup: wiki pages referencing a repo file (default:
    * the real gdwiki `wikiPagesForFile` facade, which builds the backlink index
@@ -90,6 +135,28 @@ export interface MetaprojectAdapterDeps {
    */
   repomapCompute: (cwd: string, options: RepomapOptions) => Promise<GdgraphRepomapResult>;
   /**
+   * Tri-state graph freshness (default: the real `checkGraphStaleness`). Every
+   * graph-backed result carries it so an agent learns what the command line
+   * already prints; a git failure reads as `unknown`, never as a confident
+   * "the repo moved" claim and never as "fresh". Computed AT MOST ONCE per
+   * adapter instance (see `staleness()` below) — it shells out to git, and a
+   * per-call check would spend three subprocesses on every graph read.
+   * Injectable so tests are deterministic and spawn nothing.
+   */
+  checkGraphStaleness: (cwd: string) => Promise<StalenessCheck>;
+  /**
+   * Run ripgrep with a FIXED argv and return its raw streams (default: a real
+   * `Bun.spawn`). This is `searchCode`'s backing: before flow 235 T8 the
+   * adapter's `searchCode` was a permanent stub, and only the interactive path
+   * wrapped it with a subprocess fallback — so code search over MCP was dead
+   * for every pattern, including ones with real matches. Injectable so tests
+   * neither need ripgrep installed nor spawn anything.
+   */
+  runRipgrep: (
+    cwd: string,
+    argv: string[],
+  ) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+  /**
    * Clock for `skillsCatalog`'s `generatedAt` (default: real wall-clock ISO
    * time). Injectable for tests — the only concession to this file's stated
    * "reads nothing from Date.now" determinism, kept isolated to this one
@@ -101,7 +168,8 @@ export interface MetaprojectAdapterDeps {
 const DEFAULT_DEPS: MetaprojectAdapterDeps = {
   createGdgraphService,
   createMemoryService,
-  findRelatedTests,
+  computeTestingContext,
+  relatedTestsInContext,
   createCodeHealthService,
   createFlowService: () =>
     createFlowService({
@@ -114,8 +182,20 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
       now: () => new Date(),
     }),
   wikiAsk,
+  wikiEvidence,
+  graphFind: async (cwd, query, options) => findCandidates(await loadGraph(cwd), query, options),
   wikiPagesForFile,
   now: () => new Date().toISOString(),
+  checkGraphStaleness,
+  runRipgrep: async (cwd, argv) => {
+    const proc = Bun.spawn(argv, { cwd, stdout: "pipe", stderr: "pipe" });
+    const [stdout, stderr, exitCode] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+      proc.exited,
+    ]);
+    return { stdout, stderr, exitCode };
+  },
   repomapCompute: async (cwd, options) => {
     const [graph, config] = await Promise.all([loadGraph(cwd), loadGdgraphConfig(cwd)]);
     return computeRepomap(graph, config, options);
@@ -125,6 +205,57 @@ const DEFAULT_DEPS: MetaprojectAdapterDeps = {
 /** Bounded excerpt/output cap so a structured result stays modest. */
 const MAX_EXCERPT_BYTES = 400;
 const MAX_QUERY_BYTES = 4096;
+// F-002 (flow 234 review, BLOCKER) / AFC-25: explicit sentinel for a
+// provenance field never captured upstream. Mirrors memory/report.ts's own
+// `UNKNOWN` constant (not exported there, so not importable — same literal,
+// kept in sync deliberately) so an entry's version/source/link/author/
+// confirmedBy reads identically at both the compressed-report boundary and
+// this agent-facing one. Never an omitted key, never an empty string.
+const UNKNOWN_PROVENANCE = "unknown";
+
+/** Output cap for `searchCode` — the same bound the interactive fallback used. */
+const MAX_SEARCH_OUTPUT_BYTES = 20_000;
+
+/**
+ * The model-facing diagnosis when ripgrep is missing. Deliberately keeps the
+ * "ripgrep (rg) is not installed" prefix that `normalizeSearchResult`
+ * (`./builtin/metaproject-tools.ts`) keys its detection on, so the interactive
+ * path still recognises the condition after this adapter gained a real backing.
+ */
+export const SEARCH_CODE_RG_MISSING =
+  "ripgrep (rg) is not installed or not on PATH, and search_code needs it. Install it " +
+  "(`brew install ripgrep` / `apt install ripgrep`), or use read_file and list_dir to " +
+  "inspect files directly instead of retrying search_code.";
+
+/** True when an error is a "binary not found on PATH" spawn failure. */
+function isMissingExecutable(cause: unknown): boolean {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  return /Executable not found|\bENOENT\b|not found in \$?PATH/i.test(message);
+}
+
+/**
+ * Confine a caller-supplied search path to the project root. `searchCode` is
+ * classified `read` and auto-approved, so an unconfined `path` would be an
+ * arbitrary read behind a read-only tool — the identical check the interactive
+ * tools already apply (`confineToRoot`, `./builtin/interactive-tools.ts`),
+ * re-derived here rather than imported so this pure adapter keeps no dependency
+ * on the interactive tool layer.
+ */
+function confineToProject(cwd: string, candidate: string): string | null {
+  const target = resolve(cwd, candidate);
+  const rel = relative(cwd, target);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    return null;
+  }
+  return target;
+}
+
+function boundOutput(raw: string): { output: string; truncated: boolean } {
+  return raw.length > MAX_SEARCH_OUTPUT_BYTES
+    ? { output: `${raw.slice(0, MAX_SEARCH_OUTPUT_BYTES)}\n…(truncated)`, truncated: true }
+    : { output: raw, truncated: false };
+}
+
 function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
@@ -149,6 +280,93 @@ function confineToWiki(cwd: string, candidate: string): string | null {
     return null; // escapes the wiki root
   }
   return target;
+}
+
+/**
+ * Flow 242 (forgetting) lane C: `readdir` failing on a memory type-folder used
+ * to be swallowed identically whether the folder simply did not exist yet
+ * (ENOENT — a legitimate empty project) or the memory store itself could not
+ * be read (EACCES, a stale mount) — `collectEntries`
+ * (`../../memory/store.ts`, not owned by this lane) uses the same
+ * `pathExists`-then-`readdir` shape `collectPages` used to. That store is not
+ * this lane's to change, so this checks the SAME folders it walks — every
+ * `MEMORY_TYPES` folder under `memoryRoot(cwd)` — independently, before
+ * trusting an empty/short result from it. Only a non-ENOENT failure is
+ * reported: a folder that legitimately does not exist is not "unreadable".
+ */
+/** How many recorded removals cross this boundary. Bounded like every other list here. */
+const MAX_REMOVAL_RECORDS = 5;
+
+/**
+ * The bound on the trail's own prose, and why it is not `MAX_EXCERPT_BYTES`.
+ *
+ * Measured while wiring this: at the excerpt bound a `no-removal-recorded`
+ * summary was cut at `"No record of a removal"…` — exactly one clause before
+ * `is therefore NOT the claim "this never existed"`. A bound that truncates the
+ * caveat delivers the bare negative this whole lane exists to stop delivering,
+ * so the summary gets a bound sized to survive it. Still bounded: this is a
+ * fixed set of templates over a measured coverage line, not user content, and
+ * `../../forgetting/trail.test.ts` plus the boundary test pin the ending.
+ */
+const MAX_REMOVAL_SUMMARY_BYTES = 1600;
+
+/** `<value> [<basis>]`, or `unknown` — a derived actor never renders as a stated one. */
+function flattenAttribution(attribution: Attribution): string {
+  return attribution.basis === "unknown" || attribution.value === null
+    ? `unknown (${attribution.detail})`
+    : `${attribution.value} [${attribution.basis}]`;
+}
+
+/**
+ * The deletion trail's answer for a memory search that found nothing.
+ *
+ * The verdict and its prose come from the owner (`src/forgetting/trail.ts`, via
+ * `../../forgetting/service`) rather than being re-derived here, so this
+ * boundary and `keryx memory search` cannot drift into two different answers for
+ * the same trail. There is no `never-existed` verdict to project, by
+ * construction.
+ */
+async function projectRemovalTrail(cwd: string, query: string): Promise<MemoryRemovalTrail> {
+  const lookup = searchRemovals(await loadDeletionTrail(cwd), query);
+  if (lookup.verdict !== "recorded-removed") {
+    return { verdict: lookup.verdict, summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES) };
+  }
+  return {
+    verdict: "recorded-removed",
+    summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES),
+    totalRemovals: lookup.occurrences.length,
+    removals: lookup.occurrences.slice(0, MAX_REMOVAL_RECORDS).map((item) => ({
+      layer: item.layer,
+      ref: clipAutomaticRecallText(item.ref, 200),
+      ...(item.title ? { title: clipAutomaticRecallText(item.title, 200) } : {}),
+      ...(item.page ? { page: clipAutomaticRecallText(item.page, 200) } : {}),
+      removedAt: item.at,
+      observedBy: clipAutomaticRecallText(item.observedBy, 200),
+      requestedBy: clipAutomaticRecallText(flattenAttribution(item.requestedBy), MAX_EXCERPT_BYTES),
+      grounds: clipAutomaticRecallText(flattenAttribution(item.grounds), MAX_EXCERPT_BYTES),
+      matchedOn: item.matchedOn,
+    })),
+  };
+}
+
+async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> {
+  const root = memoryRoot(cwd);
+  for (const { folder } of MEMORY_TYPES) {
+    const dir = join(root, folder);
+    try {
+      await readdir(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue;
+      }
+      const message = errorMessage(error);
+      return (
+        `the memory store could not be read (${message}). This is not the same as "no memory": ` +
+        `${dir} may hold entries that could not be listed.`
+      );
+    }
+  }
+  return null;
 }
 
 /**
@@ -185,7 +403,16 @@ async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> 
   const summaries = new Map<string, string>();
   let content: string;
   try {
-    content = await readFile(join(cwd, ".metaproject", "skills", "catalog.md"), "utf8");
+    // catalog.md is a SIBLING of gdskills/ (both live under .metaproject/skills/),
+    // not a descendant of it — the owner root here must be the shared parent, or
+    // readContainedFile's containment check rejects every read as "outside its
+    // owner root" and this fallback silently degrades to "" for every skill.
+    const bytes = await readContainedFile(
+      join(cwd, ".metaproject", "skills"),
+      join(cwd, ".metaproject", "skills", "catalog.md"),
+      { maxBytes: 512 * 1024, requireRegularFile: true },
+    );
+    content = bytes.toString("utf8");
   } catch {
     return summaries;
   }
@@ -214,6 +441,10 @@ async function parseCatalogSummaries(cwd: string): Promise<Map<string, string>> 
 async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   const root = join(cwd, ".metaproject", "skills", "gdskills");
   const entries: SkillsCatalogEntry[] = [];
+  const rootInfo = await lstat(root).catch(() => null);
+  if (!rootInfo || !rootInfo.isDirectory() || rootInfo.isSymbolicLink()) return entries;
+  const rootReal = await realpath(root).catch(() => null);
+  if (!rootReal) return entries;
   let categoryDirs: Dirent[];
   try {
     categoryDirs = await readdir(root, { withFileTypes: true });
@@ -222,10 +453,11 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   }
   const catalogSummaries = await parseCatalogSummaries(cwd);
   for (const categoryDir of categoryDirs) {
-    if (!categoryDir.isDirectory()) {
-      continue;
-    }
+    if (!categoryDir.isDirectory() && !categoryDir.isSymbolicLink()) continue;
     const categoryPath = join(root, categoryDir.name);
+    const categoryReal = await realpath(categoryPath).catch(() => null);
+    const categoryInfo = await stat(categoryPath).catch(() => null);
+    if (!categoryReal || !categoryInfo?.isDirectory() || !isPathInside(rootReal, categoryReal)) continue;
     let skillDirs: Dirent[];
     try {
       skillDirs = await readdir(categoryPath, { withFileTypes: true });
@@ -233,13 +465,15 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
       continue;
     }
     for (const skillDir of skillDirs) {
-      if (!skillDir.isDirectory()) {
-        continue;
-      }
-      const skillMdPath = join(categoryPath, skillDir.name, "SKILL.md");
+      const skillPath = join(categoryPath, skillDir.name);
+      const skillReal = await realpath(skillPath).catch(() => null);
+      const skillInfo = await stat(skillPath).catch(() => null);
+      if (!skillReal || !skillInfo?.isDirectory() || !isPathInside(rootReal, skillReal)) continue;
+      const skillMdPath = join(skillPath, "SKILL.md");
       let content: string;
       try {
-        content = await readFile(skillMdPath, "utf8");
+        const bytes = await readContainedFile(root, skillMdPath, { maxBytes: 512 * 1024, requireRegularFile: true });
+        content = bytes.toString("utf8");
       } catch {
         continue; // no SKILL.md in this directory
       }
@@ -256,6 +490,11 @@ async function walkSkillCatalog(cwd: string): Promise<SkillsCatalogEntry[]> {
   return entries.sort((a, b) => a.path.localeCompare(b.path));
 }
 
+/** A symbol reference as one display label, unresolved refs marked as the CLI marks them. */
+function refLabel(ref: { label: string; resolved: boolean }): string {
+  return ref.resolved ? ref.label : `${ref.label} (unresolved)`;
+}
+
 export function createMetaprojectAdapter(
   cwd: string,
   overrides: Partial<MetaprojectAdapterDeps> = {},
@@ -265,16 +504,100 @@ export function createMetaprojectAdapter(
   const memory = deps.createMemoryService();
   const flow = deps.createFlowService();
 
+  // One freshness check per adapter instance, shared by every graph-backed
+  // result below. `checkGraphStaleness` shells out to git; recomputing it per
+  // operation would put three subprocesses behind every graph read, and the
+  // answer cannot meaningfully change within a single adapter's lifetime.
+  let stalenessOnce: Promise<GraphStaleness> | undefined;
+  function staleness(): Promise<GraphStaleness> {
+    stalenessOnce ??= deps
+      .checkGraphStaleness(cwd)
+      .then((check) => ({ status: check.status, reasons: check.reasons }))
+      // A freshness check that itself failed is `unknown` — the one thing it
+      // must never become is `fresh`.
+      .catch((cause: unknown) => ({
+        status: "unknown" as const,
+        reasons: [`the staleness check failed: ${errorMessage(cause)}`],
+      }));
+    return stalenessOnce;
+  }
+
   return {
-    // searchCode has no in-process facade (gdctx is CLI-only); return a structured
-    // "unavailable" result so a caller without a subprocess fallback degrades
-    // gracefully rather than throwing. The agent tool keeps the subprocess path.
+    /**
+     * Real ripgrep, in-process-owned rather than delegated.
+     *
+     * The previous implementation returned a permanent "no in-process backing"
+     * error. Only the interactive path wrapped the port with a subprocess
+     * fallback, so MCP `search_code` — the tool this project's own routing
+     * tells agents to use — was dead for every pattern.
+     *
+     * The argv is FIXED and the pattern is passed after `--`, so a pattern
+     * that looks like an option (`--pre=/bin/sh`) can never be re-parsed as
+     * one. Exit 1 is ripgrep's "no matches": a legitimate empty answer, NOT an
+     * error — conflating the two is the same "failure indistinguishable from
+     * empty success" defect from the other direction.
+     */
     async searchCode(input): Promise<SearchCodeResult> {
-      return {
+      const echo = {
         pattern: input.pattern,
         ...(input.path !== undefined ? { path: input.path } : {}),
-        output: "search_code has no in-process backing (use the subprocess runner).",
-        isError: true,
+      };
+      if (input.pattern.length === 0) {
+        return { ...echo, output: "search_code requires a non-empty 'pattern'", isError: true };
+      }
+      const argv = [
+        "rg",
+        "--with-filename",
+        "--line-number",
+        "--column",
+        "--no-heading",
+        "--",
+        input.pattern,
+      ];
+      if (input.path !== undefined && input.path.length > 0) {
+        const confined = confineToProject(cwd, input.path);
+        if (confined === null) {
+          return {
+            ...echo,
+            output: `search_code: path escapes the project root: ${input.path}`,
+            isError: true,
+          };
+        }
+        argv.push(confined);
+      }
+      let run: { stdout: string; stderr: string; exitCode: number };
+      try {
+        run = await deps.runRipgrep(cwd, argv);
+      } catch (cause) {
+        return {
+          ...echo,
+          output: isMissingExecutable(cause) ? SEARCH_CODE_RG_MISSING : errorMessage(cause),
+          isError: true,
+        };
+      }
+      if (run.exitCode === 1 && run.stdout.trim().length === 0) {
+        return {
+          ...echo,
+          output: `No matches for ${JSON.stringify(input.pattern)}${input.path !== undefined ? ` under ${input.path}` : ""}. The search ran and completed — this is a no-match, not a failure.`,
+          isError: false,
+        };
+      }
+      if (run.exitCode > 1) {
+        const detail = run.stderr.trim().length > 0 ? run.stderr.trim() : run.stdout.trim();
+        return {
+          ...echo,
+          output: /rg|ripgrep/i.test(detail) && isMissingExecutable(detail)
+            ? SEARCH_CODE_RG_MISSING
+            : `search_code failed (rg exit ${run.exitCode}): ${detail || "(no diagnostic)"}`,
+          isError: true,
+        };
+      }
+      const bounded = boundOutput(run.stdout.trimEnd());
+      return {
+        ...echo,
+        output: bounded.output,
+        isError: false,
+        ...(bounded.truncated ? { truncated: true } : {}),
       };
     },
 
@@ -288,9 +611,22 @@ export function createMetaprojectAdapter(
         const affected = ranked
           ? result.ranked.map((node) => ({ id: node.path, path: node.path, hop: node.hop, fanIn: node.fanIn }))
           : result.dependents.map((path) => ({ id: path, path, hop: 1 }));
-        return { target: result.target, depth: result.depth, ranked, affected };
+        return {
+          target: result.target,
+          depth: result.depth,
+          ranked,
+          affected,
+          // The other half of the blast radius the CLI has always printed.
+          dependencies: [...result.dependencies].sort(),
+          staleness: await staleness(),
+        };
       } catch (cause) {
-        return { target: input.target, affected: [], error: errorMessage(cause) };
+        return {
+          target: input.target,
+          affected: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
@@ -298,10 +634,10 @@ export function createMetaprojectAdapter(
       try {
         const result = await gdgraph.query(cwd, input.query);
         return input.query === "orphans"
-          ? { query: "orphans", orphans: result as string[] }
-          : { query: "cycles", cycles: result as string[][] };
+          ? { query: "orphans", orphans: result as string[], staleness: await staleness() }
+          : { query: "cycles", cycles: result as string[][], staleness: await staleness() };
       } catch (cause) {
-        return { query: input.query, error: errorMessage(cause) };
+        return { query: input.query, staleness: await staleness(), error: errorMessage(cause) };
       }
     },
 
@@ -334,6 +670,23 @@ export function createMetaprojectAdapter(
         status: filters.status ?? "accepted",
         ...(input.class !== undefined ? { class: input.class } : {}),
       };
+      // Flow 242 (forgetting) lane C / AC3: `memory.search`'s backing
+      // (`collectEntries`, `../../memory/store.ts`) treats a folder it cannot
+      // list the SAME as a folder that does not exist — an EACCES store reads
+      // as "nothing accepted matched" with `hits: []` and no `error` at all,
+      // which is a worse version of the exact defect this lane exists to
+      // close: a hard read failure rendered as a clean empty success. Checked
+      // BEFORE calling the service, because the service itself never throws
+      // for this case — there would be nothing to catch.
+      const storeError = await detectMemoryStoreUnreadable(cwd);
+      if (storeError !== null) {
+        return {
+          query: input.query,
+          ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),
+          hits: [],
+          error: storeError,
+        };
+      }
       try {
         const result = await memory.search({ cwd, query: input.query, filters });
         const hits = result.results
@@ -348,6 +701,20 @@ export function createMetaprojectAdapter(
                   status: scored.entry.status,
                   score: scored.score,
                   excerpt: clipAutomaticRecallText(scored.entry.summary, MAX_EXCERPT_BYTES),
+                  // F-002 (flow 234 review, BLOCKER): carried through to the
+                  // agent-facing boundary, bounded with the SAME clipping
+                  // already applied to recalled text above — never a raw,
+                  // unbounded field. Absent upstream -> the explicit
+                  // "unknown" sentinel (never a dropped key); `caveat` alone
+                  // stays nullable, distinct from "not captured".
+                  version: clipAutomaticRecallText(scored.entry.version ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  provenance: {
+                    source: clipAutomaticRecallText(scored.entry.provenance.source ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                    link: clipAutomaticRecallText(scored.entry.provenance.link ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  },
+                  author: clipAutomaticRecallText(scored.entry.author ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  confirmedBy: clipAutomaticRecallText(scored.entry.confirmedBy ?? UNKNOWN_PROVENANCE, MAX_EXCERPT_BYTES),
+                  caveat: scored.entry.caveat ? clipAutomaticRecallText(scored.entry.caveat, MAX_EXCERPT_BYTES) : null,
                 };
           })
           .filter((hit): hit is NonNullable<typeof hit> => hit !== null)
@@ -356,6 +723,15 @@ export function createMetaprojectAdapter(
           query: input.query,
           ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),
           hits,
+          // Flow 242 T9/F3: an empty `hits` said the same thing for an entry
+          // that had been deleted and for a phrase that never named anything —
+          // here and on the MCP `memory.search` tool, which projects through
+          // this same adapter. Consulted ONLY on an empty result: a search with
+          // hits has already answered, and removal history appended to it would
+          // be noise rather than the distinction this closes.
+          ...(hits.length === 0
+            ? { removalTrail: await projectRemovalTrail(cwd, input.query) }
+            : {}),
         };
       } catch (cause) {
         return {
@@ -421,15 +797,140 @@ export function createMetaprojectAdapter(
           path: input.path,
           content: "",
           isError: true,
-          error: `wiki path escapes the wiki root: ${input.path}`,
+          error: "wiki path is outside its root",
+          outcome: "outside-root",
         };
       }
+
+      // Flow 242 (forgetting) lane C / AC3 + AC5: a direct `stat` BEFORE the
+      // containment-checked read, so ENOENT (no page at this path) and every
+      // other failure (EACCES, a stale mount) are told apart here. Below,
+      // `readContainedFile`'s OWN preliminary probe collapses every failure —
+      // a page that never existed and a wiki store that could not even be
+      // listed alike — into one generic "not found"; that hardening stays in
+      // place for the actual read (this adds one extra syscall on the ENOENT
+      // path, not a second read path with its own containment bugs).
+      let exists: boolean;
       try {
-        const content = await readFile(target, "utf8");
-        return { path: input.path, content, isError: false };
-      } catch (cause) {
-        return { path: input.path, content: "", isError: true, error: errorMessage(cause) };
+        await stat(target);
+        exists = true;
+      } catch (error) {
+        if (!isNotFound(error)) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              "the wiki store could not be read right now; \"present\" and \"absent\" cannot be told apart.",
+            outcome: "store-unreadable",
+          };
+        }
+        exists = false;
       }
+
+      if (!exists) {
+        const relativePath = toPosix(relative(join(cwd, ".metaproject", "wiki"), target));
+        const registry = await readSectionRegistryState(cwd);
+        if (registry.state === "unreadable") {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              `this page's removal history could not be read (${registry.reason}) "never existed" and ` +
+              `"existed and was removed" cannot be told apart right now.`,
+            outcome: "store-unreadable",
+          };
+        }
+        const history = registry.state === "present" ? registry.registry : emptySectionRegistry();
+        const tombstone = history.tombstones.find(
+          (entry) => entry.kind === "page" && entry.page === relativePath,
+        );
+        if (tombstone) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              `this page was removed on ${tombstone.removedAt} (${tombstone.reason}). There is no redirect ` +
+              "— a page with the same name elsewhere is NOT this one.",
+            outcome: "tombstoned",
+          };
+        }
+        const pending = history.entries.find(
+          (entry) => entry.kind === "page" && entry.page === relativePath,
+        );
+        if (pending) {
+          return {
+            path: input.path,
+            content: "",
+            isError: true,
+            error:
+              "this page is recorded in the section registry and is gone from the wiki, but " +
+              "`keryx wiki sections sync` has not run since — it was REMOVED, not \"never existed\".",
+            outcome: "pending-tombstone",
+          };
+        }
+        return {
+          path: input.path,
+          content: "",
+          isError: true,
+          error: "no wiki page exists at this path, and nothing records it as ever having existed.",
+          outcome: "absent",
+        };
+      }
+
+      try {
+        const content = (await readContainedFile(join(cwd, ".metaproject", "wiki"), target, {
+          maxBytes: 8 * 1024 * 1024,
+          requireRegularFile: true,
+        })).toString("utf8");
+        return { path: input.path, content, isError: false, outcome: "found" };
+      } catch {
+        return {
+          path: input.path,
+          content: "",
+          isError: true,
+          error: "wiki page could not be read.",
+          outcome: "store-unreadable",
+        };
+      }
+    },
+
+    async wikiResolve(input): Promise<WikiResolveResult> {
+      // Flow 242 (forgetting) lane C / AC5: the SAME computation
+      // `keryx wiki sections resolve` runs (`resolveSectionIdentity` over
+      // `collectPages` + `buildSectionIndex` + the section-tombstone
+      // registry, all from `src/wiki/section-tombstone.ts` and
+      // `src/wiki/collect.ts` — untouched here), so an agent/MCP caller and a
+      // human running the CLI on the same ref get the same answer, not a
+      // second hand-derived one. This was the missing capability: the CLI's
+      // only correct answer for "was this deleted or did it never exist" had
+      // no agent or MCP equivalent at all.
+      let pages;
+      try {
+        pages = await collectPages(cwd);
+      } catch (error) {
+        // `collectPages` now throws `WikiCollectionError` on a genuinely
+        // unreadable store (flow 242 lane C) instead of silently returning an
+        // empty page list. A read-only operation crossing the MCP transport
+        // must never throw — this is the ONE place that failure is caught and
+        // turned into a structured, named outcome rather than a stack trace.
+        const message =
+          error instanceof WikiCollectionError ? error.message : errorMessage(error);
+        return { ref: input.ref, resolution: { kind: "store-unreadable", reason: message } };
+      }
+      const index = buildSectionIndex(
+        await Promise.all(
+          pages.map(async (page) => ({
+            page,
+            content: await readFile(page.absolutePath, "utf8").catch(() => ""),
+          })),
+        ),
+      );
+      const registry = await readSectionRegistryState(cwd);
+      const resolution = resolveSectionIdentity(index, registry, input.ref);
+      return { ref: input.ref, resolution };
     },
 
     async describeContext(): Promise<ContextSummaryResult> {
@@ -443,7 +944,7 @@ export function createMetaprojectAdapter(
       } catch (cause) {
         graphError = errorMessage(cause);
       }
-      let hasWikiIndex = false;
+      let hasWikiIndex: boolean;
       try {
         await readFile(join(cwd, ".metaproject", "wiki", "index.md"), "utf8");
         hasWikiIndex = true;
@@ -455,6 +956,7 @@ export function createMetaprojectAdapter(
         graphNodes,
         graphEdges,
         hasWikiIndex,
+        staleness: await staleness(),
         ...(graphError !== undefined ? { error: graphError } : {}),
       };
     },
@@ -471,16 +973,36 @@ export function createMetaprojectAdapter(
           to: input.to,
           nodes: result.nodes,
           ...(unresolved ? { unresolved: true } : {}),
+          staleness: await staleness(),
         };
       } catch (cause) {
-        return { from: input.from, to: input.to, nodes: [], error: errorMessage(cause) };
+        return {
+          from: input.from,
+          to: input.to,
+          nodes: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
     async testRelated(input): Promise<TestRelatedResult> {
       try {
-        const tests = await deps.findRelatedTests(cwd, input.file);
-        return { file: input.file, tests: [...tests].sort() };
+        // F-003 (flow 234 review, MAJOR) / AC2: the pure computation plus the
+        // relatedness lookup over it (both already exported by
+        // testing/service.ts) instead of the old `findRelatedTests` wrapper —
+        // that wrapper computed the SAME context internally but only
+        // returned `tests`, discarding `status`/`incompleteReasons` and,
+        // when a caller separately needed the context, forcing a second
+        // tree walk. One walk, and the incomplete status now reaches this
+        // boundary instead of silently reading as a clean empty result.
+        const context = await deps.computeTestingContext(cwd);
+        const tests = await deps.relatedTestsInContext(cwd, context, input.file);
+        return {
+          file: input.file,
+          tests: [...tests].sort(),
+          context: { status: context.status, incompleteReasons: context.incompleteReasons },
+        };
       } catch (cause) {
         return { file: input.file, tests: [], error: errorMessage(cause) };
       }
@@ -496,6 +1018,10 @@ export function createMetaprojectAdapter(
           sources: status.sources,
           projectScore: status.projectScore,
           regressions: status.regressions,
+          // The two real counters. `regressions` alone is the DEPRECATED alias
+          // and used to be all this boundary carried.
+          decliningScopes: status.decliningScopes,
+          regressedScopes: status.regressedScopes,
         };
       } catch (cause) {
         return {
@@ -518,6 +1044,7 @@ export function createMetaprojectAdapter(
         return {
           flows: filtered.map((f) => ({
             id: f.id,
+            slug: f.slug,
             status: f.status,
             title: f.title,
             tasksDone: f.tasksDone,
@@ -546,30 +1073,59 @@ export function createMetaprojectAdapter(
             startLine: symbol.startLine,
             container: symbol.container,
           })),
-          callers: result.callers.map((ref) => ref.label),
-          callees: result.callees.map((ref) => ref.label),
+          // The marker travels with the label, because the port declares these
+          // as DISPLAY LABELS and an unresolved callee displayed identically to
+          // a resolved one is a claim the graph never made. `CYRILLIC_RE.test`
+          // is a call to a RegExp method the index cannot attribute to any
+          // project symbol; dropping the flag here made it read, at the agent
+          // boundary only, as a resolved call to a project function named
+          // `test`. The CLI has always rendered it this way — this is the same
+          // rendering, not a second spelling of it.
+          callers: result.callers.map(refLabel),
+          callees: result.callees.map(refLabel),
+          staleness: await staleness(),
         };
       } catch (cause) {
-        return { name: input.name, definitions: [], callers: [], callees: [], error: errorMessage(cause) };
+        return {
+          name: input.name,
+          definitions: [],
+          callers: [],
+          callees: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
       }
     },
 
     async repomap(input): Promise<RepomapResult> {
+      const seed = input.seed?.filter((entry) => typeof entry === "string" && entry.length > 0);
       try {
         // Read-only: compute the map in-process (never writeRepomap → no artifact).
-        const result = await deps.repomapCompute(
-          cwd,
-          input.budget !== undefined ? { budget: input.budget } : {},
-        );
+        const result = await deps.repomapCompute(cwd, {
+          ...(input.budget !== undefined ? { budget: input.budget } : {}),
+          // The seed is the whole point for a change intent; it used to be
+          // unreachable because the port's input had no such field at all.
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+        });
         return {
           budget: input.budget ?? result.tokens,
           files: result.entries.map((entry) => ({
             path: entry.path,
             score: entry.score,
             symbols: entry.symbols,
+            // Which entry the budget protected, not just which scored highest.
+            required: entry.required,
           })),
           tokens: result.tokens,
           omitted: result.omitted,
+          ...(seed !== undefined && seed.length > 0 ? { seed } : {}),
+          // AFC-12's honest markers, all four of them. Without these a dropped
+          // required seed and a trimmed tail were the same `ok` result with a
+          // bigger `omitted` count.
+          omittedOptional: result.omittedOptional,
+          partial: result.partial,
+          ...(result.overflow !== undefined ? { overflow: result.overflow } : {}),
+          staleness: await staleness(),
         };
       } catch (cause) {
         return {
@@ -577,6 +1133,7 @@ export function createMetaprojectAdapter(
           files: [],
           tokens: 0,
           omitted: 0,
+          staleness: await staleness(),
           error: errorMessage(cause),
         };
       }
@@ -584,20 +1141,146 @@ export function createMetaprojectAdapter(
 
     async wikiAsk(input): Promise<WikiAskResult> {
       try {
-        const result = await deps.wikiAsk({ cwd, question: input.question });
+        const result = await deps.wikiAsk({
+          cwd,
+          question: input.question,
+          ...(input.k !== undefined ? { k: input.k } : {}),
+        });
         return {
           question: result.question,
+          ...(result.status !== undefined ? { status: result.status } : {}),
+          ...(result.reason !== undefined ? { reason: result.reason } : {}),
+          // Pass through what `wikiAsk` computed. The previous five-field
+          // re-map silently dropped the retrieval status, the section address,
+          // the match reason and — worst — the HISTORICAL lifecycle marks the
+          // CLI renders, so an agent could not tell current guidance from
+          // superseded guidance.
           citations: result.citations.map((citation) => ({
             path: citation.path,
             title: citation.title,
             excerpt: citation.excerpt,
             score: citation.score,
             source: citation.source,
+            ...(citation.matched !== undefined ? { matched: citation.matched } : {}),
+            ...(citation.sectionId !== undefined ? { sectionId: citation.sectionId } : {}),
+            ...(citation.sectionRef !== undefined ? { sectionRef: citation.sectionRef } : {}),
+            ...(citation.sectionTitle !== undefined ? { sectionTitle: citation.sectionTitle } : {}),
+            ...(citation.sectionStability !== undefined
+              ? { sectionStability: citation.sectionStability }
+              : {}),
+            ...(citation.contentClass !== undefined ? { contentClass: citation.contentClass } : {}),
+            ...(citation.domain !== undefined ? { domain: citation.domain } : {}),
+            ...(citation.startLine !== undefined ? { startLine: citation.startLine } : {}),
+            ...(citation.endLine !== undefined ? { endLine: citation.endLine } : {}),
+            ...(citation.historical !== undefined ? { historical: citation.historical } : {}),
+            ...(citation.lifecycleState !== undefined
+              ? { lifecycleState: citation.lifecycleState }
+              : {}),
+            ...(citation.lifecycleReasons !== undefined
+              ? { lifecycleReasons: citation.lifecycleReasons }
+              : {}),
           })),
           answer: result.answerMarkdown,
         };
       } catch (cause) {
         return { question: input.question, citations: [], answer: "", error: errorMessage(cause) };
+      }
+    },
+
+    /**
+     * `keryx gdgraph find`, at the boundary an agent actually reads.
+     *
+     * The outcome is passed through WHOLE — code, reason, nextActions,
+     * per-candidate `matched`/`discriminating`, and the ubiquitous terms that
+     * explain an `insufficient-evidence`. `normalizeRetrievalCode` is applied
+     * here rather than trusted from the type: `findCandidates` is the current
+     * producer, but this is the transport hop the specification names
+     * ("Нормализатор транспорта сохраняет коды"), and a code that is not in the
+     * shared vocabulary must collapse to `capability-unavailable` instead of
+     * being forwarded as a private spelling the next hop cannot branch on.
+     *
+     * A failure to LOAD the graph is `index-incomplete`, not `no-match`: "the
+     * index could not answer" and "the corpus contains nothing" are the two
+     * situations this whole operation exists to keep apart, and an unreadable
+     * graph has no standing to make a claim about the corpus.
+     */
+    async graphFind(input): Promise<GraphFindResult> {
+      const options: FindOptions = {
+        ...(input.fileLimit !== undefined ? { fileLimit: input.fileLimit } : {}),
+        ...(input.symbolLimit !== undefined ? { symbolLimit: input.symbolLimit } : {}),
+      };
+      try {
+        const outcome = await deps.graphFind(cwd, input.query, options);
+        return {
+          query: input.query,
+          code: normalizeRetrievalCode(outcome.code),
+          reason: outcome.reason,
+          nextActions: [...outcome.nextActions],
+          files: outcome.files.map((file) => ({
+            path: file.path,
+            score: file.score,
+            matched: [...file.matched],
+            discriminating: [...file.discriminating],
+            dependents: file.dependents,
+            reason: file.reason,
+          })),
+          symbols: outcome.symbols.map((symbol) => ({
+            id: symbol.id,
+            name: symbol.name,
+            kind: symbol.kind,
+            path: symbol.path,
+            startLine: symbol.startLine,
+            score: symbol.score,
+            matched: [...symbol.matched],
+            discriminating: [...symbol.discriminating],
+            reason: symbol.reason,
+          })),
+          queryTerms: [...outcome.queryTerms],
+          ubiquitousTerms: [...outcome.ubiquitousTerms],
+          staleness: await staleness(),
+        };
+      } catch (cause) {
+        return {
+          query: input.query,
+          code: "index-incomplete",
+          reason:
+            `the code graph could not be read here (${errorMessage(cause)}). This says nothing ` +
+            "about whether the code exists — run `keryx gdgraph build` and retry.",
+          nextActions: [...RETRIEVAL_NEXT_ACTIONS["index-incomplete"]],
+          files: [],
+          symbols: [],
+          queryTerms: [],
+          ubiquitousTerms: [],
+          staleness: await staleness(),
+          error: errorMessage(cause),
+        };
+      }
+    },
+
+    /**
+     * The wiki evidence envelope, carried WHOLE.
+     *
+     * There is no field re-map here on purpose. The measured defect this closes
+     * is a boundary that re-listed an owner's fields by hand and dropped
+     * thirteen of them; the structural answer is that the envelope crosses as
+     * one value, so no field CAN be dropped in transit. Rendering is a separate
+     * concern and is guarded separately (see `formatWikiEvidence`,
+     * `./metaproject-operations.ts`).
+     */
+    async wikiEvidence(input): Promise<WikiEvidenceResult> {
+      try {
+        const envelope = await deps.wikiEvidence({
+          cwd,
+          question: input.question,
+          ...(input.k !== undefined ? { k: input.k } : {}),
+          ...(input.budgetTokens !== undefined ? { budgetTokens: input.budgetTokens } : {}),
+          ...(input.maxItems !== undefined ? { maxItems: input.maxItems } : {}),
+        });
+        return { question: input.question, envelope };
+      } catch (cause) {
+        // No empty envelope on failure: a zero-item `no-match` is a CLAIM about
+        // the wiki, and a call that never completed has no standing to make it.
+        return { question: input.question, error: errorMessage(cause) };
       }
     },
 
@@ -629,7 +1312,10 @@ export function createMetaprojectAdapter(
       const byName = catalog.find((entry) => entry.name === input.name);
       if (byName !== undefined) {
         try {
-          const content = await readFile(join(cwd, byName.path), "utf8");
+          const content = (await readContainedFile(join(cwd, ".metaproject", "skills", "gdskills"), join(cwd, byName.path), {
+            maxBytes: 512 * 1024,
+            requireRegularFile: true,
+          })).toString("utf8");
           return { name: input.name, path: byName.path, content, found: true };
         } catch {
           return { name: input.name, path: "", content: "", found: false };
@@ -647,7 +1333,10 @@ export function createMetaprojectAdapter(
         return { name: input.name, path: "", content: "", found: false };
       }
       try {
-        const content = await readFile(confined, "utf8");
+        const content = (await readContainedFile(join(cwd, ".metaproject", "skills", "gdskills"), confined, {
+          maxBytes: 512 * 1024,
+          requireRegularFile: true,
+        })).toString("utf8");
         return { name: input.name, path: byPath.path, content, found: true };
       } catch {
         return { name: input.name, path: "", content: "", found: false };

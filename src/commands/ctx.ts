@@ -1,13 +1,34 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { optionValue } from "../lib/args";
-import { pathExists } from "../lib/fs";
+import { pathExists, writeFileAtomic } from "../lib/fs";
 import { readJsonFileOr } from "../lib/json";
 import { resolveProjectRoot } from "../lib/contained-path";
 import { redactRaw } from "../security/guard";
 import { runCtxHook } from "../ctx/hook";
 import { installRuntimeHook, uninstallRuntimeHook } from "../ctx/hook-install";
 import { resolveRuntimes, runtimeIds, UNSUPPORTED_RUNTIMES } from "../ctx/runtimes";
+import {
+  compactLines,
+  detectStructuredFormat,
+  excerptNotice,
+  importantLines,
+  omissionNote,
+  shownSuffix,
+} from "../ctx/lines";
+import type { OmittedRange } from "../ctx/lines";
+import { buildLossManifest, renderLossManifest } from "../ctx/manifest";
+import { cappedHeaderNote, completenessLine, rgSearchScope, scopeLine } from "../ctx/search-scope";
+import type { SearchScope, SearchTotals } from "../ctx/search-scope";
+import { maybeAutoSweepGdctx } from "../retention/auto-sweep";
+import { latestRawTarget, reserveArtifact } from "../ctx/artifact-id";
+import type { ArtifactReservation } from "../ctx/artifact-id";
+import {
+  jsonlExcerptNotice,
+  repairJsonLines,
+  structuralSummaryNotice,
+  summarizeJsonDocument,
+} from "../ctx/structured";
 
 type CtxArtifact = {
   id: string;
@@ -36,6 +57,34 @@ type CommandResult = {
   raw: string;
   exitCode: number;
 };
+
+/**
+ * What a summariser needs to make its own losses recoverable.
+ *
+ * The address has to be decided BEFORE the summary is rendered, because the
+ * manifest inside the summary quotes it. Previously the id was minted inside
+ * `writeArtifact`, after summarising, which is why the only pointer that could
+ * be printed was a trailer bolted on afterwards.
+ */
+export type SummaryContext = {
+  /** Project-relative path of this run's raw copy — the `raw:` line's value. */
+  address: string;
+};
+
+/**
+ * The fallback address for a summariser called without a context (unit tests,
+ * and any future caller that does not persist an artifact). `latest` is a real,
+ * working address rather than a placeholder, so a recovery command built from
+ * it still runs.
+ */
+const LATEST_ADDRESS = ".metaproject/data/gdctx/raw/latest.log";
+
+/** Rendered-summary budget for a structural JSON summary, in UTF-8 bytes. */
+function structuredBudgetBytes(config: CtxConfig): number {
+  // Sized off the same line budget the text path gets, at a nominal 40 bytes a
+  // line, so the two formats cost a reader about the same.
+  return (config.compactHeadLines + config.compactTailLines) * 40;
+}
 
 const DEFAULT_CONFIG: CtxConfig = {
   maxOutputLines: 120,
@@ -164,14 +213,25 @@ async function diffAndSummarize(args: string[], config: CtxConfig): Promise<void
 async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> {
   // `--json` is OUR structured-output flag (a token-aware summary), consumed
   // here and NOT forwarded to rg (whose native `--json` emits a different,
-  // verbose stream). Strip it before building the rg command.
+  // verbose stream). `--all` is likewise ours: it asks for every match/file
+  // this run found, rendered in the same human-readable summary, in one step
+  // — the direct answer to "I need to prove this list is complete" that used
+  // to require re-reading the raw log. Both are stripped before building the
+  // rg command.
   const wantsJson = args.includes("--json");
-  const rgArgs = args.filter((arg) => arg !== "--json");
+  const wantsAll = args.includes("--all");
+  const rgArgs = args.filter((arg) => arg !== "--json" && arg !== "--all");
   if (rgArgs.length === 0) {
-    console.error('Usage: keryx ctx rg "<pattern>" [path] [--json]');
+    console.error('Usage: keryx ctx rg "<pattern>" [path] [--json] [--all]');
     process.exitCode = 1;
     return;
   }
+
+  // What this run did not look at (hidden paths, ignore files, and whether
+  // `-m`/`--max-count` makes ripgrep's own counts unreliable) — computed from
+  // the caller's own args, the same ones `buildRgCommand` forwards, so the
+  // scope reported below can never drift from what was actually run.
+  const scope = rgSearchScope(rgArgs);
 
   // `--files-with-matches`/`--files`/`--count` make rg emit bare paths (or
   // `path:count`), not the `file:line:col:text` the match parser expects — so
@@ -209,8 +269,8 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
     return;
   }
   const summary = listMode
-    ? summarizeRgFileList(command.join(" "), result, config, listMode)
-    : summarizeRg(command.join(" "), result, config);
+    ? summarizeRgFileList(command.join(" "), result, config, listMode, { scope, all: wantsAll })
+    : summarizeRg(command.join(" "), result, config, { scope, all: wantsAll });
   const artifact = await writeArtifact({
     kind: "rg",
     command: command.join(" "),
@@ -219,7 +279,10 @@ async function rgAndSummarize(args: string[], config: CtxConfig): Promise<void> 
     exitCode: result.exitCode,
   });
 
-  printArtifactSummary(artifact, summary);
+  // rg/read are the two callers where nothing downstream depends on the
+  // pointer trailer (see printArtifactSummary) — suppress it once the body
+  // shown above already IS the full content.
+  printArtifactSummary(artifact, summary, { alwaysShowPointer: false });
   process.exitCode = result.exitCode;
 }
 
@@ -240,7 +303,13 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
   }
 
   const absolutePath = path.resolve(process.cwd(), file);
-  const rawContent = await readFile(absolutePath, "utf8");
+  let rawContent: string;
+  try {
+    rawContent = await readFile(absolutePath, "utf8");
+  } catch (cause) {
+    reportUnreadable(file, cause);
+    return;
+  }
   // Redact any detected secret before it is summarized/persisted into a gdctx
   // artifact. No-op (byte-identical) when security is disabled or nothing is
   // detected.
@@ -248,14 +317,17 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
     await redactRaw({ cwd: process.cwd(), content: rawContent, source: "trusted-project" })
   ).content;
   const lines = content.split("\n");
+  const reservation = await newArtifactReservation("read");
+  const context: SummaryContext = { address: rawAddress(reservation) };
   const summary =
     mode === "full"
       ? summarizeFullFile(file, lines)
       : mode === "outline"
         ? summarizeOutline(file, lines, config)
-        : summarizeCompact(file, lines, config);
+        : summarizeCompact(file, lines, config, context);
 
   const artifact = await writeArtifact({
+    reservation,
     kind: "read",
     command: `read ${file} --mode ${mode}`,
     raw: content,
@@ -263,7 +335,81 @@ async function readAndSummarize(args: string[], config: CtxConfig): Promise<void
     exitCode: 0,
   });
 
-  printArtifactSummary(artifact, summary);
+  printArtifactSummary(artifact, summary, {
+    alwaysShowPointer: false,
+    ...(args.includes("--base") ? { prefix: NO_DELTA_REASON } : {}),
+  });
+}
+
+// AC3 (AFC-14) closes with "неверная база возвращает full-view с причиной" — an
+// incorrect base returns the full view with a reason. That clause qualifies a
+// feature that DOES NOT EXIST in this codebase, and this is where that is
+// recorded rather than quietly passed.
+//
+// Measured on this checkout (flow 235 / T9): `src/commands/ctx.ts` and
+// `src/ctx/*.ts` contain no `baseSnapshot`, no `delta`, no `--base` and no
+// consumer snapshot — zero matches. `keryx ctx read <file> --base <anything>`
+// returned exit 0 and an ordinary view with nothing saying the argument had
+// been discarded, which is the worst of the three possible behaviours: it lets
+// a caller believe a delta was computed against their base.
+//
+// The honest minimum, and what is implemented here: `--base` is accepted,
+// nothing is elided against it, and the reason is stated. NOT implemented, and
+// deliberately so — this is the gap a later flow would have to close:
+//
+//   · an explicit base snapshot (a recorded, addressable prior read),
+//   · consumer isolation, so one consumer's base cannot be read by another,
+//   · a `version-conflict` when the source drifts between base and read.
+//
+// Until those exist there is no such thing as a "correct" base here, so every
+// base is an incorrect one and every read is a full view with a reason. Do not
+// read the passing AC3 base test as evidence that delta-from-base works.
+const NO_DELTA_REASON =
+  "Base ignored: keryx ctx offers no delta mode — there is no base snapshot to " +
+  "diff against, so the full view is returned. (Not a fallback from a failed " +
+  "delta: delta-from-base is unimplemented.)";
+
+// AC4 (AFC-30): "закрытый объект не выдаёт existence/id", and specification.md
+// §3: "Ошибка с частными деталями нормализуется одинаково для denied и unknown
+// скрытого объекта."
+//
+// Measured before this fix:
+//   keryx ctx read /etc/master.passwd → EACCES: permission denied, open '/etc/master.passwd'
+//   keryx ctx read <missing>          → ENOENT: no such file or directory, open '<abs path>'
+//
+// Two separate leaks in three lines. EACCES positively CONFIRMS the object
+// exists — the exact disclosure the criterion forbids — and both echo the
+// resolved absolute path, which is an identifier the caller never supplied.
+//
+// What "closed" means here, since the criterion presumes a notion of it: this
+// codebase has two. `resolveContainedPath` (src/lib/contained-path.ts) refuses
+// paths outside the project root, and the OS refuses paths the process may not
+// read. `ctx read` deliberately applies only the second. The routing guard
+// sends every `cat`/`head`/`tail` to this command, including reads of build
+// logs and temporary files outside the project, so adding a containment refusal
+// here would break legitimate use to satisfy a clause about disclosure. The
+// disclosure is what is fixed: denied, missing and unreadable are now one
+// answer with one exit code.
+//
+// The caller's own argument is echoed back, because they supplied it; the
+// resolved path, the errno and the syscall are not.
+const OPAQUE_ERRNOS = new Set(["ENOENT", "EACCES", "EPERM", "ELOOP", "ENOTDIR", "ENAMETOOLONG"]);
+
+function reportUnreadable(requested: string, cause: unknown): void {
+  const code = (cause as { code?: unknown } | null)?.code;
+  process.exitCode = 1;
+  if (typeof code === "string" && OPAQUE_ERRNOS.has(code)) {
+    console.error(
+      `keryx ctx read: \`${requested}\` is unavailable. It does not exist, or it is not ` +
+        `readable by this process; keryx does not disclose which.`,
+    );
+    return;
+  }
+  if (code === "EISDIR") {
+    console.error(`keryx ctx read: \`${requested}\` is a directory, not a file.`);
+    return;
+  }
+  console.error(`keryx ctx read: \`${requested}\` could not be read.`);
 }
 
 async function runAndSummarize(
@@ -272,8 +418,12 @@ async function runAndSummarize(
   config: CtxConfig,
 ): Promise<void> {
   const result = await runCommand(command);
-  const summary = summarizeCommandOutput(command.join(" "), result, config);
+  const reservation = await newArtifactReservation(kind);
+  const summary = summarizeCommandOutput(command.join(" "), result, config, {
+    address: rawAddress(reservation),
+  });
   const artifact = await writeArtifact({
+    reservation,
     kind,
     command: command.join(" "),
     raw: result.raw,
@@ -298,14 +448,36 @@ function gdctxRootDir(): string {
   return path.join(resolveProjectRoot(process.cwd()), ".metaproject", "data", "gdctx");
 }
 
+// `ctx show` is the recovery end of AC4's "доступный пропуск раскрывается по
+// адресу без поиска". Two things stopped it being that, both measured on this
+// checkout (flow 235 / T9):
+//
+//   1. The address it PRINTS was not an address it ACCEPTS. A summary ends
+//      `raw: .metaproject/data/gdctx/raw/<id>_read.log`; feeding that back gave
+//      `Artifact not found: …/.metaproject/data/gdctx/raw/.metaproject/data/gdctx/raw/<id>_read.log`,
+//      because the target was blindly joined onto the root a second time. The
+//      reader had to know to strip four path segments first.
+//   2. Recovery was all-or-nothing. `--raw` dumped the entire raw copy — 1 MB
+//      for a 6 KB summary — so recovering one omitted region meant re-reading
+//      everything and searching it again, which is the re-search the criterion
+//      exists to remove. `--lines A-B` returns exactly the range a manifest
+//      entry names.
 async function showArtifact(args: string[]): Promise<void> {
   const target = args[0] ?? "latest";
   const raw = args.includes("--raw");
   const root = gdctxRootDir();
+  // `latest` is the one address concurrent runs share, so `latest.log` may
+  // belong to a different run than `latest.md`. Ask the summary which log is
+  // actually its own before falling back to the shared file.
   const filePath =
-    target === "latest"
-      ? path.join(root, raw ? "raw" : "artifacts", raw ? "latest.log" : "latest.md")
-      : path.join(root, raw ? "raw" : "artifacts", target);
+    target === "latest" && raw
+      ? ((await latestRawTarget({
+          latestSummaryPath: path.join(root, "artifacts", "latest.md"),
+          rawDir: path.join(root, "raw"),
+          projectRoot: resolveProjectRoot(process.cwd()),
+          exists: pathExists,
+        })) ?? resolveArtifactPath(root, target, raw))
+      : resolveArtifactPath(root, target, raw);
 
   if (!(await pathExists(filePath))) {
     console.error(`Artifact not found: ${filePath}`);
@@ -313,7 +485,70 @@ async function showArtifact(args: string[]): Promise<void> {
     return;
   }
 
-  console.log(await readFile(filePath, "utf8"));
+  const range = parseLineRange(optionValue(args, "--lines"));
+  if (range === "invalid") {
+    console.error("Usage: keryx ctx show <artifact> [--raw] [--lines <start>-<end>]");
+    process.exitCode = 1;
+    return;
+  }
+
+  const content = await readFile(filePath, "utf8");
+  if (!range) {
+    console.log(content);
+    return;
+  }
+
+  const lines = content.split("\n");
+  const start = Math.max(1, range.start);
+  const end = Math.min(lines.length, range.end);
+  if (start > lines.length) {
+    // The range is outside the artifact — say so instead of printing nothing,
+    // which would read as "that range is empty".
+    console.error(
+      `Requested lines ${range.start}-${range.end}, but the artifact has ${lines.length}.`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+  console.log(`# lines ${start}-${end} of ${lines.length} — ${path.basename(filePath)}`);
+  console.log("");
+  console.log(lines.slice(start - 1, end).join("\n"));
+}
+
+/**
+ * Accept every spelling of an artifact address that this tool hands out.
+ *
+ * `latest`; a bare id (`2026-…Z_read`); a bare filename (`2026-…Z_read.log`);
+ * and — the one that was broken — the project-relative path printed as `raw:`
+ * or `summary:`. Anything resolving outside the gdctx directory is pinned back
+ * inside it by basename, so `--raw ../../etc/passwd` cannot walk out.
+ */
+function resolveArtifactPath(root: string, target: string, raw: boolean): string {
+  const dir = path.join(root, raw ? "raw" : "artifacts");
+  const extension = raw ? ".log" : ".md";
+  if (target === "latest") {
+    return path.join(dir, `latest${extension}`);
+  }
+  // A printed address, absolute or project-relative: keep only its basename,
+  // which is what identifies the artifact inside its own directory.
+  const name = path.basename(target);
+  return path.join(dir, path.extname(name) === extension ? name : `${name}${extension}`);
+}
+
+/** `"121-2500"` → `{start,end}`; undefined for absent; `"invalid"` otherwise. */
+function parseLineRange(
+  value: string | undefined,
+): { start: number; end: number } | undefined | "invalid" {
+  if (value === undefined) {
+    return undefined;
+  }
+  const match = /^(\d+)-(\d+)$/.exec(value.trim());
+  if (!match) {
+    return "invalid";
+  }
+  const start = Number(match[1]);
+  const end = Number(match[2]);
+  return start >= 1 && end >= start ? { start, end } : "invalid";
 }
 
 function parseRuntimeArg(args: string[]): string[] {
@@ -434,13 +669,39 @@ async function redactCommandResult(result: CommandResult): Promise<CommandResult
   };
 }
 
+/**
+ * Claim the artifact identity up front, so the summary can quote its own
+ * address — and so it quotes an address this run provably owns.
+ *
+ * A loss manifest has to name the command that recovers each omitted range, and
+ * it is rendered before the artifact is written, so the id cannot be minted
+ * inside `writeArtifact` any more. `reserveArtifact` additionally creates both
+ * files exclusively: see `src/ctx/artifact-id.ts` for the measured collision
+ * this replaces.
+ */
+function newArtifactReservation(kind: string): Promise<ArtifactReservation> {
+  const root = gdctxRootDir();
+  return reserveArtifact({
+    rawDir: path.join(root, "raw"),
+    artifactsDir: path.join(root, "artifacts"),
+    kind,
+  });
+}
+
+/** The `raw:` address of a reservation — project-root-relative, as printed. */
+function rawAddress(reservation: ArtifactReservation): string {
+  return path.relative(resolveProjectRoot(process.cwd()), reservation.rawPath);
+}
+
 async function writeArtifact({
+  reservation,
   kind,
   command,
   raw,
   summary,
   exitCode,
 }: {
+  reservation?: ArtifactReservation;
   kind: string;
   command: string;
   raw: string;
@@ -451,19 +712,23 @@ async function writeArtifact({
   const root = gdctxRootDir();
   const rawRoot = path.join(root, "raw");
   const artifactsRoot = path.join(root, "artifacts");
-  await mkdir(rawRoot, { recursive: true });
-  await mkdir(artifactsRoot, { recursive: true });
 
-  const id = `${new Date().toISOString().replace(/[:.]/g, "-")}_${kind}`;
-  const rawPath = path.join(rawRoot, `${id}.log`);
-  const summaryPath = path.join(artifactsRoot, `${id}.md`);
+  // Callers that do not need to quote their own address inside the summary
+  // (diff, rg) reserve here instead; either way the pair is claimed before a
+  // byte is written to it.
+  // Reserving already created both directories, so there is nothing left to
+  // mkdir here.
+  const claimed = reservation ?? (await newArtifactReservation(kind));
+  const resolvedId = claimed.id;
+  const rawPath = claimed.rawPath;
+  const summaryPath = claimed.summaryPath;
   const latestRawPath = path.join(rawRoot, "latest.log");
   const latestSummaryPath = path.join(artifactsRoot, "latest.md");
   const bytesIn = Buffer.byteLength(raw);
   const bytesOut = Buffer.byteLength(summary);
 
   const artifact: CtxArtifact = {
-    id,
+    id: resolvedId,
     kind,
     command,
     exitCode,
@@ -485,10 +750,37 @@ ${JSON.stringify(artifact, null, 2)}
 \`\`\`
 `;
 
+  // The durable pair: these two paths are reserved, so nothing else can be
+  // writing them and a plain write is enough.
   await writeFile(rawPath, raw, "utf8");
   await writeFile(summaryPath, summaryWithMeta, "utf8");
-  await writeFile(latestRawPath, raw, "utf8");
-  await writeFile(latestSummaryPath, summaryWithMeta, "utf8");
+
+  // `latest.*` is the one address that is deliberately shared, so concurrent
+  // runs DO contend for it. Two hazards, both handled here rather than left to
+  // the reader to notice:
+  //
+  //   · a reader catching a half-finished write would see a truncated log that
+  //     looks like a short command. `writeFileAtomic` renames into place, so
+  //     `latest.*` is only ever some run's complete output.
+  //   · `latest.log` and `latest.md` are two writes, so two runs can interleave
+  //     and leave one run's log beside another run's summary. Nothing can make
+  //     two files swap atomically — instead `latest.md` carries its OWN
+  //     `rawPath` in the metadata block above, and `ctx show latest --raw`
+  //     follows that pointer to the reserved log rather than trusting
+  //     `latest.log`. The pair a reader gets back is therefore always one run's.
+  await writeFileAtomic(latestRawPath, raw);
+  await writeFileAtomic(latestSummaryPath, summaryWithMeta);
+
+  // Flow 237 T12 (F5): the retention policy for these two directories existed
+  // and ran nowhere — `sweepProject`'s only caller was `keryx retention sweep
+  // --apply`, typed by a human, so the store this function appends to had 2,570
+  // entries and ~137 MiB sitting past its own policy. This is the write that
+  // grows it, so this is where it gets bounded. Throttled to at most one sweep
+  // per day per project (see `maybeAutoSweepGdctx` for the cost argument),
+  // best-effort, and silent: a ctx run's output is its summary, not
+  // housekeeping. `keryx retention status`/`sweep` remain the surfaces that
+  // report and force it.
+  await maybeAutoSweepGdctx(projectRoot).catch(() => undefined);
 
   return artifact;
 }
@@ -528,10 +820,12 @@ export function summarizeDiff(
   const shape = parseDiffOutput(lines);
   const count = diffFileCount(shape);
   const risky = shape.files.filter((file) =>
-    /(^|\/)(package\.json|bun\.lockb|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
+    /(^|\/)(package\.json|bun\.lockb?|pnpm-lock\.yaml|yarn\.lock|package-lock\.json|tsconfig.*\.json|\.github\/|scripts\/|src\/cli\.ts|src\/commands\/)/.test(file.path),
   );
-  const hunks = lines.filter((line) => line.startsWith("@@")).slice(0, config.maxOutputLines);
-  const errors = importantLines(lines, config);
+  const allHunks = lines.filter((line) => line.startsWith("@@"));
+  const shownHunks = allHunks.slice(0, config.maxOutputLines);
+  const hunkNote = omissionNote(shownHunks.length, allHunks.length, "hunk headers");
+  const hunks = hunkNote ? [...shownHunks, hunkNote] : shownHunks;
 
   return `# gdctx diff summary
 
@@ -554,7 +848,7 @@ ${renderRiskHints(risky, shape, shape.files)}
 ${hunks.length > 0 ? hunks.join("\n") : "(no hunk headers)"}
 \`\`\`
 
-${errors.length > 0 ? renderTextSection("Errors / Warnings", errors) : ""}
+${importantSection(lines, config)}
 `;
 }
 
@@ -739,6 +1033,17 @@ export function rgListMode(args: string[]): "files" | "count" | null {
   return null;
 }
 
+/** No flag lifted anything: the default a caller gets from a bare summariser call. */
+const NO_SCOPE: SearchScope = { hidden: false, ignored: false, capped: false };
+
+/** Summariser options shared by `summarizeRg` and `summarizeRgFileList`. */
+type RgSummaryOptions = {
+  /** What this run did not look at. Defaults to "nothing was lifted". */
+  scope?: SearchScope;
+  /** `--all`: render every match/file this run found, not the capped default. */
+  all?: boolean;
+};
+
 // Summarize `rg --files-with-matches` / `--files` / `--count` output, whose lines
 // are bare paths (or `path:count`), not `file:line:col:text`.
 export function summarizeRgFileList(
@@ -746,29 +1051,44 @@ export function summarizeRgFileList(
   result: CommandResult,
   config: CtxConfig,
   mode: "files" | "count",
+  options: RgSummaryOptions = {},
 ): string {
+  const scope = options.scope ?? NO_SCOPE;
   const lines = nonEmptyLines(result.raw);
-  const shown = lines.slice(0, config.maxOutputLines);
-  const omitted = lines.length - shown.length;
+  const limit = options.all ? lines.length : config.maxOutputLines;
+  const shown = lines.slice(0, limit);
+  const note = omissionNote(shown.length, lines.length, "files");
+  const totals: SearchTotals = { shown: shown.length, total: lines.length, unit: "files" };
 
   return `# gdctx rg (file list)
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`
+${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`${shownSuffix(shown.length, lines.length)}${cappedHeaderNote(scope)}
+${scopeLine(scope)}
+${completenessLine(totals, scope, result.exitCode)}
 
 ## Files
 
 ${shown.length > 0 ? shown.map((line) => `- ${line}`).join("\n") : "- none"}
-${omitted > 0 ? `\n… omitted ${omitted} more` : ""}
-${result.stderr.trim() ? `\n${renderTextSection("stderr", result.stderr.split("\n").slice(0, config.maxImportantLines))}` : ""}`;
+${note ? `\n${note}` : ""}
+${result.stderr.trim() ? `\n${renderStderr(result.stderr, config)}` : ""}`;
 }
 
-function summarizeRg(
+// Defect (flow 235 / T7, #1): the header counted the whole search and the body
+// showed a fraction of it, with nothing between them saying so. Measured:
+// `Matches: 50` printed above four matches, `Matches: 60` above 28, `Files: 20`
+// above 12. The header count is true — it is the only number in the output that
+// is — so a reader takes it as a description of what they are looking at and
+// builds an enumeration on a twelfth of the result. The counts stay; what they
+// gain is the size of the body beside them, and a marker at every cut.
+export function summarizeRg(
   command: string,
   result: CommandResult,
   config: CtxConfig,
+  options: RgSummaryOptions = {},
 ): string {
+  const scope = options.scope ?? NO_SCOPE;
   const lines = nonEmptyLines(result.raw);
   const matches = parseRgMatches(lines);
   const grouped = groupBy(matches, (match) => match.file);
@@ -776,34 +1096,58 @@ function summarizeRg(
     .map(([file, fileMatches]) => ({ file, matches: fileMatches }))
     .sort((a, b) => b.matches.length - a.matches.length);
 
+  // `--all` lifts both render budgets for THIS call only — every file is
+  // listed, and every match within it — rather than raising the defaults
+  // that protect every other call. See the module comment on `--all` above.
+  const groupLimit = options.all ? files.length : config.maxGroupItems;
+  const perFileLimit = options.all ? Number.POSITIVE_INFINITY : RG_EXAMPLES_PER_FILE;
+
+  const shownFiles = files.slice(0, groupLimit);
+  const shownMatches = shownFiles.reduce(
+    (total, item) => total + Math.min(item.matches.length, perFileLimit),
+    0,
+  );
+  const topFilesNote = omissionNote(shownFiles.length, files.length, "files");
+  const totals: SearchTotals = {
+    shown: shownMatches,
+    total: matches.length,
+    unit: "matches",
+    files: { shown: shownFiles.length, total: files.length },
+  };
+
   return `# gdctx rg summary
 
 Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
-Matches: \`${matches.length}\`
-Files: \`${files.length}\`
+Matches: \`${matches.length}\`${shownSuffix(shownMatches, matches.length)}${cappedHeaderNote(scope)}
+Files: \`${files.length}\`${shownSuffix(shownFiles.length, files.length)}
 Raw lines: \`${lines.length}\`
+${scopeLine(scope)}
+${completenessLine(totals, scope, result.exitCode)}
 
 ## Top Files
 
-${files.length > 0 ? files.slice(0, config.maxGroupItems).map((item) => `- ${item.file}: ${item.matches.length}`).join("\n") : "- none"}
+${files.length > 0 ? [...shownFiles.map((item) => `- ${item.file}: ${item.matches.length}`), ...(topFilesNote ? [topFilesNote] : [])].join("\n") : "- none"}
 
 ## Matches
 
-${renderRgMatches(files, config)}
+${renderRgMatches(files, groupLimit, perFileLimit)}
 
-${result.stderr.trim() ? renderTextSection("stderr", result.stderr.split("\n").slice(0, config.maxImportantLines)) : ""}
+${result.stderr.trim() ? renderStderr(result.stderr, config) : ""}
 `;
 }
 
-function summarizeCommandOutput(
+export function summarizeCommandOutput(
   command: string,
   result: CommandResult,
   config: CtxConfig,
+  context: SummaryContext = { address: LATEST_ADDRESS },
 ): string {
   const lines = nonEmptyLines(result.raw);
-  const important = importantLines(lines, config);
-  const selected = compactLines(lines, config.maxOutputLines);
+  const compaction = compactLines(lines, config.maxOutputLines, config.maxImportantLines);
+  // A command whose output IS a document (`--reporter=json`, a `cat` of a
+  // manifest) must not hand back a compacted body that still looks like one.
+  const format = compaction.omitted > 0 ? detectStructuredFormat(result.raw) : null;
 
   return `# gdctx command summary
 
@@ -812,14 +1156,19 @@ Exit code: \`${result.exitCode}\`
 Raw lines: \`${lines.length}\`
 stdout bytes: \`${Buffer.byteLength(result.stdout)}\`
 stderr bytes: \`${Buffer.byteLength(result.stderr)}\`
-
-${important.length > 0 ? renderTextSection("Errors / Warnings", important) : ""}
-## Output
+${format ? `${excerptNotice(format, compaction.lines.length - 1, lines.length)}\n` : ""}
+${importantSection(lines, config)}${manifestSection(compaction.omittedRanges, context)}## Output
 
 \`\`\`text
-${selected.join("\n") || "(no output)"}
+${compaction.lines.join("\n") || "(no output)"}
 \`\`\`
 `;
+}
+
+/** The `## Omitted` block, with a trailing blank line, or "". */
+function manifestSection(ranges: OmittedRange[], context: SummaryContext): string {
+  const rendered = renderLossManifest(buildLossManifest(ranges, context.address));
+  return rendered ? `${rendered}\n` : "";
 }
 
 function summarizeFullFile(file: string, lines: string[]): string {
@@ -869,23 +1218,78 @@ ${todos.join("\n") || "(none)"}
 `;
 }
 
-function summarizeCompact(file: string, lines: string[], config: CtxConfig): string {
-  const selected =
-    lines.length > config.compactHeadLines + config.compactTailLines
-      ? [
-          ...lines.slice(0, config.compactHeadLines),
-          `... omitted ${lines.length - config.compactHeadLines - config.compactTailLines} lines ...`,
-          ...lines.slice(-config.compactTailLines),
-        ]
-      : lines;
+// `keryx ctx read --mode compact` — the highest-traffic read in the project,
+// because the routing guard sends every `cat`/`head`/`tail` here.
+//
+// Three properties this had to gain (flow 235 / T9), each measured failing on
+// this checkout first:
+//
+//   1. It sliced head+tail with its own inline code and never called
+//      `compactLines`, so the verdict rescue `ctx run` already had was absent:
+//      a `not ok` in the middle of a 4,000-line test log appeared zero times,
+//      under a footer reporting 95% saved. An agent told to READ the log lost
+//      every failure; the same content through `ctx run -- cat` kept them. The
+//      two paths now share one compactor, so they cannot drift again.
+//   2. An elided JSON document was line-truncated. Labelling it "an excerpt
+//      that does not parse" (flow 235 / T7) stopped it claiming to be whole,
+//      but left nothing machine-readable. It is now a structural summary that
+//      parses — see src/ctx/structured.ts.
+//   3. The only disclosure of loss was a scalar byte count, so an omitted
+//      region could be recovered only by re-reading the whole raw copy and
+//      searching it again. Each omitted range is now addressed.
+//
+// A file that fits entirely is untouched in all three respects: no manifest, no
+// excerpt notice, no envelope.
+export function summarizeCompact(
+  file: string,
+  lines: string[],
+  config: CtxConfig,
+  context: SummaryContext = { address: LATEST_ADDRESS },
+): string {
+  const budget = config.compactHeadLines + config.compactTailLines;
+  const content = lines.join("\n");
+
+  // JSON first: for a structured document, "what to keep" is a question about
+  // the structure, not about which lines happen to sit at the ends of the file.
+  const recover = `keryx ctx show ${context.address} --raw`;
+  const structured =
+    lines.length > budget
+      ? summarizeJsonDocument(content, { maxBytes: structuredBudgetBytes(config), recover })
+      : null;
+  if (structured) {
+    return `# gdctx compact file
+
+File: \`${file}\`
+Lines: \`${lines.length}\`
+${structured.complete ? "" : `${structuralSummaryNotice(lines.length, recover)}\n`}
+\`\`\`json
+${structured.text}
+\`\`\`
+`;
+  }
+
+  const compaction = compactLines(lines, budget, config.maxImportantLines);
+  // A JSONL document, or a JSON one the structural summariser declined, still
+  // must not read as whole once it has been cut.
+  const format = compaction.omitted > 0 ? detectStructuredFormat(content) : null;
+  // For JSONL the unit of validity is the row, and every source row already
+  // parses — the only line that does not is the compaction marker. Rewriting it
+  // as a row keeps `lines.map(JSON.parse)` working over the excerpt.
+  const body = format === "jsonl" ? repairJsonLines(compaction.lines, recover) : compaction.lines;
+  const notice =
+    format === "jsonl"
+      ? jsonlExcerptNotice(compaction.lines.length - 1, lines.length)
+      : format
+        ? excerptNotice(format, compaction.lines.length - 1, lines.length)
+        : null;
 
   return `# gdctx compact file
 
 File: \`${file}\`
 Lines: \`${lines.length}\`
-
-\`\`\`text
-${selected.join("\n")}
+${notice ? `${notice}\n` : ""}
+${manifestSection(compaction.omittedRanges, context)}\`\`\`${format === "jsonl" ? "jsonl" : "text"}
+${body.join("\n")}
 \`\`\`
 `;
 }
@@ -1036,10 +1440,10 @@ function renderDiffFiles(shape: DiffOutputShape, config: CtxConfig): string {
   }
 
   const shown = shape.files.slice(0, config.maxGroupItems);
-  const omitted = shape.files.length - shown.length;
+  const note = omissionNote(shown.length, shape.files.length, "files");
   return [
     ...shown.map((file) => `- ${file.path}${renderDiffCounts(file)}`),
-    ...(omitted > 0 ? [`… omitted ${omitted} more`] : []),
+    ...(note ? [note] : []),
   ].join("\n");
 }
 
@@ -1094,50 +1498,81 @@ function renderUntrackedFiles(untracked: string[], config: CtxConfig): string {
   }
 
   const shown = untracked.slice(0, config.maxGroupItems);
-  const omitted = untracked.length - shown.length;
-  return [
-    ...shown.map((file) => `- ${file}`),
-    ...(omitted > 0 ? [`… omitted ${omitted} more`] : []),
-  ].join("\n");
+  const note = omissionNote(shown.length, untracked.length, "untracked files");
+  return [...shown.map((file) => `- ${file}`), ...(note ? [note] : [])].join("\n");
 }
 
+/**
+ * Only real `file:line:column:text` hits. Everything else is dropped.
+ *
+ * This used to keep every unparsable line as a match attributed to a file
+ * called `(unknown)`, and two kinds of line land here that are not matches.
+ * ripgrep writes its errors to the stream — a bad path or a bad regex became
+ * "1 match" in a file named `(unknown)`, and the completeness verdict computed
+ * over that count then said `complete`, so a search that never ran reported a
+ * complete enumeration. And `-A`/`-B`/`-C` context lines use a dash separator
+ * rather than a colon, so a file with five matches asked for two lines of
+ * context reported nineteen, and the "partial" verdict was measured against
+ * that inflated denominator.
+ *
+ * Both mattered more than they look: this is the search route every agent in
+ * this repository is required to use, and the enumeration claims of an entire
+ * programme were computed from these numbers.
+ */
 function parseRgMatches(lines: string[]): Array<{ file: string; line: string; column: string; text: string }> {
-  return lines.map((line) => {
+  const parsed: Array<{ file: string; line: string; column: string; text: string }> = [];
+  for (const line of lines) {
     const match = line.match(/^(.+?):(\d+):(\d+):(.*)$/);
     if (!match) {
-      return { file: "(unknown)", line: "0", column: "0", text: line };
+      continue;
     }
     const [, file = "(unknown)", lineNumber = "0", column = "0", text = ""] = match;
-    return { file, line: lineNumber, column, text: text.trim() };
-  });
+    parsed.push({ file, line: lineNumber, column, text: text.trim() });
+  }
+  return parsed;
 }
+
+/** How many hits are rendered per file before the rest are named as omitted. */
+const RG_EXAMPLES_PER_FILE = 4;
 
 function renderRgMatches(
   files: Array<{ file: string; matches: Array<{ line: string; column: string; text: string }> }>,
-  config: CtxConfig,
+  groupLimit: number,
+  perFileLimit: number,
 ): string {
   if (files.length === 0) {
     return "- none";
   }
 
-  return files
-    .slice(0, config.maxGroupItems)
-    .map((item) => {
-      const examples = item.matches
-        .slice(0, 4)
-        .map((match) => `  - ${match.line}:${match.column} ${truncate(match.text, 180)}`)
-        .join("\n");
-      return `- ${item.file}\n${examples}`;
-    })
-    .join("\n");
+  const rendered = files.slice(0, groupLimit).map((item) => {
+    const shown = item.matches.slice(0, perFileLimit);
+    const note = omissionNote(shown.length, item.matches.length, "matches in this file");
+    return [
+      `- ${item.file}`,
+      ...shown.map((match) => `  - ${match.line}:${match.column} ${truncate(match.text, 180)}`),
+      ...(note ? [`  ${note}`] : []),
+    ].join("\n");
+  });
+  const note = omissionNote(rendered.length, files.length, "files");
+  return [...rendered, ...(note ? [note] : [])].join("\n");
+}
+
+/** stderr, bounded, with the marker that says the bound was reached. */
+function renderStderr(stderr: string, config: CtxConfig): string {
+  const lines = stderr.split("\n");
+  const shown = lines.slice(0, config.maxImportantLines);
+  const note = omissionNote(shown.length, lines.length, "stderr lines");
+  return renderTextSection("stderr", note ? [...shown, note] : shown);
 }
 
 function outlineEntries(lines: string[], pattern: RegExp, config: CtxConfig): string[] {
-  return lines
+  const matched = lines
     .map((line, index) => ({ line, number: index + 1 }))
     .filter(({ line }) => pattern.test(line))
-    .slice(0, config.outlineMaxEntries)
     .map(({ line, number }) => `${number}: ${line.trimEnd()}`);
+  const shown = matched.slice(0, config.outlineMaxEntries);
+  const note = omissionNote(shown.length, matched.length, "entries");
+  return note ? [...shown, note] : shown;
 }
 
 async function loadConfig(): Promise<CtxConfig> {
@@ -1161,31 +1596,16 @@ async function loadConfig(): Promise<CtxConfig> {
   };
 }
 
-function importantLines(lines: string[], config: CtxConfig): string[] {
-  return dedupe(
-    lines.filter((line) =>
-      /error|failed|failure|exception|traceback|warning|warn|fatal|cannot|not found|permission denied/i.test(line),
-    ),
-  ).slice(0, config.maxImportantLines);
-}
-
-function compactLines(lines: string[], limit: number): string[] {
-  if (lines.length <= limit) {
-    return lines;
+// Verdict lines for the `Errors / Warnings` section, with the marker that says
+// how many the budget cut. Which lines count is `classifyLine` in ctx/lines.ts —
+// shared with compaction, which used to carry a second, different regex.
+function importantSection(lines: string[], config: CtxConfig): string {
+  const { kept, total } = importantLines(lines, config.maxImportantLines);
+  if (kept.length === 0) {
+    return "";
   }
-
-  const head = Math.ceil(limit * 0.45);
-  const tail = Math.floor(limit * 0.45);
-  const important = lines.filter((line) =>
-    /error|failed|failure|exception|traceback|warning|warn|fatal/i.test(line),
-  );
-
-  return dedupe([
-    ...lines.slice(0, head),
-    ...important.slice(0, limit - head - tail),
-    `... omitted ${Math.max(0, lines.length - limit)} lines ...`,
-    ...lines.slice(-tail),
-  ]).slice(0, limit + 1);
+  const note = omissionNote(kept.length, total, "failure/warning lines");
+  return renderTextSection("Errors / Warnings", note ? [...kept, note] : kept);
 }
 
 function nonEmptyLines(value: string): string[] {
@@ -1210,8 +1630,36 @@ function groupBy<T>(items: T[], getKey: (item: T) => string): Map<string, T[]> {
   return grouped;
 }
 
-function printArtifactSummary(artifact: CtxArtifact, summary: string): void {
+// Defect (flow 238 / phase 6 / T5, #1): a four-byte `ctx read` printed 311
+// bytes and a single-hit `ctx rg` printed ~490-520 — the raw/summary pointer
+// trailer below was unconditional, so it cost tens of times the payload on
+// small input. The trailer earns its keep only when the body above is NOT
+// the whole story: `artifact.truncated` (compaction actually cut something)
+// means the printed body is partial, so a pointer to the full raw copy is
+// the tool's "expandable without re-reading" contract. When nothing was cut,
+// the body already IS everything — the same pointer would be pure overhead.
+//
+// `alwaysShowPointer` lets `run`/`diff` keep their unconditional trailer
+// (existing callers, e.g. the "writes to the project root" regression test,
+// key off its presence regardless of size) while `read`/`rg` — the two
+// commands the small-input defect was measured on — drop it once
+// `artifact.truncated` is false.
+function printArtifactSummary(
+  artifact: CtxArtifact,
+  summary: string,
+  {
+    alwaysShowPointer = true,
+    prefix,
+  }: { alwaysShowPointer?: boolean; prefix?: string } = {},
+): void {
+  if (prefix) {
+    console.log(prefix);
+    console.log("");
+  }
   console.log(summary.trimEnd());
+  if (!alwaysShowPointer && !artifact.truncated) {
+    return;
+  }
   console.log("");
   if (artifact.truncated && artifact.bytesIn > 0) {
     const savedPct = Math.round((1 - artifact.bytesOut / artifact.bytesIn) * 100);
@@ -1237,12 +1685,27 @@ function printHelp(): void {
 Usage:
   keryx ctx status
   keryx ctx diff [--staged|--stat|<revision>]   # no args: staged + unstaged (git diff HEAD) + untracked list
-  keryx ctx rg "<pattern>"
-  keryx ctx read <file> [--mode outline|compact|full]
+  keryx ctx rg "<pattern>" [path] [--json] [--all]
+  keryx ctx read <file> [--mode outline|compact|full] [--base <ref>]
   keryx ctx run -- <command...>
-  keryx ctx show latest [--raw]
+  keryx ctx show <artifact|latest> [--raw] [--lines <start>-<end>]
   keryx ctx install-hook [--runtime <id|all>]   # opt-in routing guard
   keryx ctx uninstall-hook [--runtime <id|all>]
   keryx ctx hook <runtime>                       # internal: invoked by the hook
+
+Notes:
+  --base is accepted and has no effect. keryx ctx has NO delta mode: there is
+  no base snapshot to diff against, so every read returns the full view and
+  says so. Delta-from-base is unbuilt, not broken — see NO_DELTA_REASON in
+  src/commands/ctx.ts for what building it would require.
+  --lines recovers one range named by a summary's "## Omitted" manifest,
+  addressed by the "raw:" line that same summary printed.
+  Every "ctx rg" summary carries a "Scope:" line (what was not searched — dot
+  paths, .gitignore'd files, binaries — so a nil result there reads as "not
+  looked at", not "not present") and a "Completeness:" line ("complete" or
+  "partial", never silent). Pass --all to render every match/file in one step
+  instead of re-reading the raw log; pass --json for the full machine-readable
+  set. -m/--max-count makes ripgrep's own counts unreliable, which the
+  Completeness line reports as "unknown" rather than trusting them.
 `);
 }

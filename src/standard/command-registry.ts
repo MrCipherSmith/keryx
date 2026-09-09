@@ -128,7 +128,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   {
     module: "gdwiki",
     command: "wiki freshness",
-    summary: "Report which wiki pages a code change puts in doubt, and why. Read-only.",
+    summary:
+      "Report which wiki pages a code change puts in doubt, and why. NOT read-only: " +
+      "overwrites the report artifacts and consumes (deletes) the accumulated freshness queue.",
     intent: [
       "какие страницы вики устарели",
       "wiki freshness",
@@ -151,10 +153,25 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     // so `true` here would let an agent invoke it with no approval — and it
     // writes. Whether the write is small is beside the point.
     //
+    // CORRECTION (flow 236 T9): the `sideEffects` list below named the two
+    // artifact overwrites and stopped there, and the summary above still said
+    // "Read-only." — both wrong the same way `read: true` would have been
+    // wrong. `runFreshnessCommand` (`commands/wiki.ts`) calls `runFreshness`
+    // (`wiki/freshness/run.ts`), which — whenever it drained anything —
+    // deletes `data/wiki/freshness-queue.jsonl` outright. A consumer reading
+    // only the old two-item list would have no way to know the accumulated
+    // backlog is gone once the report lands, which is exactly the gap this
+    // registry exists to close: a machine-readable side-effect declaration an
+    // agent may act on without asking is the one place understating a delete
+    // is least survivable.
+    //
     // The MCP surface `wiki_freshness` is the genuinely read-only way to ask
     // this question: it reads the report and writes nothing at all.
     read: false,
-    sideEffects: ["writes data/wiki/freshness/latest.{json,md}"],
+    sideEffects: [
+      "writes data/wiki/freshness/latest.{json,md}",
+      "DELETES data/wiki/freshness-queue.jsonl once the report is on disk (whenever it drained anything)",
+    ],
   },
   {
     module: "gdwiki",
@@ -169,10 +186,19 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: true,
     read: false,
+    // CORRECTION (flow 236 T9): "stamps VerifiedAt and VerifiedScope on
+    // refreshed pages" used to be unconditional. It is not: `resolveWikiSourceGate`
+    // (`wiki/staleness.ts`, AFC-08) makes the stamp conditional on the code
+    // graph demonstrably being current. A stale-but-not-errored graph still
+    // gets its Reference block repaired (the content is still what that graph
+    // says), but VerifiedAt/VerifiedScope are left untouched — an unstamped
+    // page, not a dishonestly-stamped one. A graph in ERROR preserves the
+    // existing block entirely (action `stale-source`) rather than rewriting
+    // it from a source that could not be interrogated.
     sideEffects: [
-      "rewrites the managed Reference block of affected pages",
-      "bumps page Version and appends one Changelog line",
-      "stamps VerifiedAt and VerifiedScope on refreshed pages",
+      "rewrites the managed Reference block of affected pages (preserved, not rewritten, when the source graph is in error)",
+      "bumps page Version and appends one Changelog line for each page actually rewritten",
+      "stamps VerifiedAt and VerifiedScope on refreshed pages ONLY when the code graph is demonstrably current (resolveWikiSourceGate); otherwise the stamp is left exactly as it was",
     ],
   },
   {
@@ -579,7 +605,16 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: false,
     read: false,
-    sideEffects: ["writes .metaproject/wiki/**"],
+    // CORRECTION (flow 236 T9): `wikiCollect` (`wiki/service.ts`) also
+    // conditionally records the gdwiki sync-provenance file — outside
+    // `.metaproject/wiki/**` — whenever `resolveWikiSourceGate` finds the code
+    // graph demonstrably current. The old list stopped at the page tree and
+    // silently understated this write, the same gap corrected on `wiki
+    // freshness` and `wiki refresh` above.
+    sideEffects: [
+      "writes .metaproject/wiki/**",
+      "writes .metaproject/data/gdwiki/.provenance.json, but only when the code graph is demonstrably current (resolveWikiSourceGate)",
+    ],
   },
   {
     module: "gdwiki",
@@ -592,6 +627,37 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     // writer because a consumer gating writes must gate this one too.
     read: false,
     sideEffects: ["writes .metaproject/data/gdwiki/link-check/latest.md"],
+  },
+  // ---- forgetting -------------------------------------------------------
+  // Flow 242 T9/F9. Both are pure reads of
+  // `.metaproject/data/forgetting/journal.jsonl` — the trail is append-only and
+  // only `keryx sync --apply` writes it, so neither of these can shorten a
+  // history and both are safe to call speculatively.
+  {
+    module: "forgetting",
+    command: "forgetting trail",
+    summary: "Read the deletion trail: what was removed, when, at whose request, on what basis.",
+    intent: ["что было удалено", "deletion trail", "removal history", "журнал удалений"],
+    args: [
+      { name: "limit", type: "number", required: false, desc: "how many records to show (newest first)" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "forgetting",
+    command: "forgetting lookup",
+    summary: 'Was this removed, or is there simply no record of a removal? Never answers "never existed".',
+    intent: ["это удалили или не существовало", "was this deleted", "removed or never existed", "когда это удалили"],
+    args: [
+      { name: "<ref-or-path>", type: "string", required: true, desc: "identity, wiki page path or file path" },
+      { name: "layer", type: "string", required: false, desc: "narrow to one knowledge layer" },
+      { name: "search", type: "bool", required: false, desc: "phrase match over ref/page/title instead of exact identity" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    json: true,
+    read: true,
   },
   {
     module: "memory",
@@ -682,7 +748,59 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     intent: ["check keryx version", "check for update", "проверь версию keryx"],
     args: [{ name: "json", type: "bool", required: false, desc: "typed structured result" }],
     json: true,
+    // CORRECTION (flow 236 T9): found while auditing this file for the same
+    // defect class as `wiki freshness` below — `read: true` here made this
+    // auto-allowable, and it is not read-only. `checkVersion`
+    // (`lib/version-check.ts`) is served from a local cache/backoff window on
+    // some calls, but on every other call it makes a live outbound HTTPS
+    // request to `REGISTRY_URL` (a third-party npm registry) and then writes
+    // the result into `<keryx-config-dir>/version-check.json` — the per-user
+    // config directory, OUTSIDE this project — via `updateCache`. A descriptor
+    // cannot promise a caller which path a given invocation takes, so it
+    // cannot claim `read: true` for the paths that do neither.
+    read: false,
+    sideEffects: [
+      "makes an outbound HTTPS request to the npm registry, unless served from the local cache or failure-backoff window",
+      "writes <per-user keryx config dir>/version-check.json (outside this project)",
+    ],
+  },
+  // ---- auth -------------------------------------------------------------
+  {
+    module: "providers",
+    command: "auth list",
+    summary: "Which providers have a stored OAuth grant, and which subscription logins are offered.",
+    intent: ["keryx auth list", "какие провайдеры авторизованы", "oauth status"],
+    args: [{ name: "json", type: "bool", required: false, desc: "authorized grants without secrets" }],
+    json: true,
     read: true,
+  },
+  {
+    module: "providers",
+    command: "auth status",
+    summary: "Authorization method, expiry and refreshability for one provider. Never prints a token.",
+    intent: ["keryx auth status", "oauth grant expiry"],
+    args: [
+      { name: "<provider>", type: "string", required: true, desc: "provider id (grok, openai, github-copilot)" },
+      { name: "json", type: "bool", required: false, desc: "status without secrets" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "providers",
+    command: "auth login",
+    summary: "Authorize a sanctioned subscription via device-code (SuperGrok, ChatGPT Plus/Pro, Copilot).",
+    intent: ["keryx auth login", "подключить SuperGrok", "login grok oauth"],
+    args: [{ name: "<provider>", type: "string", required: true, desc: "grok, openai, or github-copilot" }],
+    sideEffects: ["writes an OAuth grant to user-global auth.json (0600)"],
+  },
+  {
+    module: "providers",
+    command: "auth logout",
+    summary: "Discard a stored OAuth grant.",
+    intent: ["keryx auth logout", "отозвать grok oauth"],
+    args: [{ name: "<provider>", type: "string", required: true, desc: "provider id" }],
+    sideEffects: ["deletes the OAuth grant from user-global auth.json"],
   },
   // ---- providers --------------------------------------------------------
   // Both are read-only and network-free: they report over `llm-providers.json`
@@ -697,6 +815,59 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     args: [{ name: "json", type: "bool", required: false, desc: "structured provider/family list" }],
     json: true,
     read: true,
+  },
+  // ---- retention ----------------------------------------------------------
+  {
+    module: "retention",
+    command: "retention status",
+    summary: "Read-only inventory of gdctx raw/artifacts logs and owner write-conflict sidecars against their retention caps.",
+    intent: [
+      "статус хранения",
+      "retention status",
+      "сколько логов накопилось",
+      "how big are the ctx logs",
+      "retention inventory",
+    ],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured per-target counts/bytes" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "retention",
+    command: "retention sweep",
+    summary:
+      "Apply the retention policy (age cutoff, then a total-byte cap evicting oldest-first) to gdctx raw/artifacts logs " +
+      "and owner write-conflict sidecars. DRY RUN BY DEFAULT — nothing is removed unless --apply is passed.",
+    intent: [
+      "почисти логи ctx",
+      "retention sweep",
+      "clean up gdctx logs",
+      "prune raw logs",
+      "sweep old context logs",
+    ],
+    args: [
+      { name: "apply", type: "bool", required: false, desc: "actually remove eligible entries; without it, nothing is deleted" },
+      { name: "target", type: "string", required: false, desc: "restrict to one target id from `retention status` (repeatable)" },
+      { name: "max-age-days", type: "number", required: false, desc: "override every target's age cutoff for this run only" },
+      { name: "max-bytes", type: "number", required: false, desc: "override every target's byte cap for this run only" },
+      { name: "json", type: "bool", required: false, desc: "structured per-target sweep report" },
+    ],
+    json: true,
+    // `read: false` unconditionally, even though the default invocation (no
+    // `--apply`) deletes nothing — the same reasoning `wiki freshness` above
+    // documents: a descriptor cannot promise a caller which path a given
+    // invocation takes, and `read` feeds `isAutoAllowable`. A consumer that
+    // auto-allows this because "it's usually just a dry run" would auto-allow
+    // exactly the invocation that deletes files under .metaproject/. An
+    // unreachable store or a failed removal also makes this exit 1 with
+    // `status: "incomplete"` — never a silent partial success.
+    read: false,
+    sideEffects: [
+      "dry run by default: reports what would be removed under .metaproject/data/gdctx/raw, " +
+        ".metaproject/data/gdctx/artifacts, and .metaproject/workspaces/**/*-write-conflicts/**, without touching disk",
+      "--apply PERMANENTLY REMOVES eligible files/directories under those same paths",
+      "does not touch content already relayed to an agent, exported copies, or git history",
+    ],
   },
   {
     module: "providers",

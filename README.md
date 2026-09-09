@@ -233,7 +233,8 @@ What is in it today:
   `/resume`, `/sessions`, `/status`, `/flows`, `/compact`, `/new`, and
   `keryx sessions list|fork|export` — `fork` branches a conversation into a new
   session that keeps its ancestry, without editing a transcript by hand.
-  `/status` is the session inspector; `/session-info` and `/info` are not aliases.
+  `/status` is the session inspector (identity, context window and limits when
+  the provider reported them); `/session-info` and `/info` are not aliases.
 - **Responsive busy-turn UX.** A running main turn can be interrupted with
   `/interrupt`; additional prompts are queued and answered as read-only side workers
   (`side-1`) in the TUI so the shell stays usable under long-running turns.

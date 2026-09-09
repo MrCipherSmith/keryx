@@ -208,7 +208,6 @@ export function escalate(ladder: Ladder, ctx: EscalationContext, deps: Escalatio
           attempt_number: pending.fromAttempt,
         },
       });
-      pending = null;
     }
 
     const result = deps.runRung(tier, attemptNumber);

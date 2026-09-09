@@ -1,4 +1,4 @@
-import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
+import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig } from "../../lib/search-config";
 import type { SearchConnectionResult, SearchProviderDescriptor, SearchProviderId } from "./types";
 import { SearchProviderRegistry } from "./registry";
 

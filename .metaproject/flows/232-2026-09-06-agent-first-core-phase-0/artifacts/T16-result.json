@@ -1,0 +1,110 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T16",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Independent Stage 1 M10 review found one reproducible AC3 blocker. Direct AgentDeps.maxToolCalls enforcement is correct, sequential under a finite cap, and emits truthful history, finishReason, and terminal-state evidence. However, the production spawn_subagent.max_tool_calls input is still converted to maxRounds and is not passed to childDeps.maxToolCalls: an offline child configured for one call executed two tools and returned Completed. AC4 behavior passed. AC5 wiring and stable evidence pass, while a later captured rerun was contaminated only by concurrent out-of-scope health source changes. Per dispatch, Stage 2 acceptance stopped after the spec gap. No global quality PASS is claimed.",
+  "summary_markdown": "T16 M10 review: **Stage 1 FAIL** with one blocker. `spawn_subagent.max_tool_calls: 1` executed two child tools and returned `Completed`; exact offline probe and evidence are preserved in `T16-review.md` and `T16-child-budget-probe.ts`.",
+  "acceptance": [
+    {
+      "criterion": "AC3 actual configured invocation cap and truthful independent terminal reason are met.",
+      "status": "not_met",
+      "evidence": "Direct AgentDeps.maxToolCalls behavior passed an independent offline probe, but spawn_subagent.max_tool_calls remains represented by maxRounds. The preserved child probe configured one call, observed two actual tool-result messages and two provider requests, and received status Completed."
+    },
+    {
+      "criterion": "AC4/AC5 offline script fixtures and strict scripts project are valid and maintain compatibility.",
+      "status": "met",
+      "evidence": "The stress serialization and containment tests passed; scripts config includes benchmark/stress trees, package wiring is present, and the injected-error fixture detects TS2322. Stable M10 evidence is 11/11. The later captured rerun's only failure came from concurrent out-of-scope metaproject-adapter source and is not attributed to M10."
+    },
+    {
+      "criterion": "No blocker/major/minor logic defects in M10 scope; unsupported claims separated from measured behavior.",
+      "status": "not_met",
+      "evidence": "F-001 is an explicit AC3 spec gap and blocker. T16-review.md separately records the unreachable child mapper claim and the narrower measured import behavior of keryx-shell-stress.ts."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Independent Stage 1 M10 specification review with one blocker, exact source sites, focused evidence, unsupported-claim separation, and routing audit.",
+      "hash": "791c696059d04fc985d0b14f4bcd136a61f89079613e3ab0fb04753e223b9326"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Exact offline reproduction showing spawn_subagent max_tool_calls=1 permits two child tool invocations and reports Completed.",
+      "hash": "72eb6d0266360752206f9f893077dee0a53bb7cdf355c969c6f5b8488c220215"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-review.md",
+      "change": "created independent M10 Stage 1 review report"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-child-budget-probe.ts",
+      "change": "created exact offline blocker reproduction requested for promotion to a regression test"
+    },
+    {
+      "path": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T16-result.json",
+      "change": "created schema-valid subagent review result"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T16#F-001",
+      "reviewer": "review-logic",
+      "severity": "blocker",
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "line": 470,
+      "symbol": "createSpawnSubagentTool",
+      "problem": "The model-facing max_tool_calls input is converted into maxRounds and the sole child AgentDeps construction omits maxToolCalls, so the configured child call cap does not cap actual child tool invocations.",
+      "impact": "A child configured with max_tool_calls: 1 can invoke two tools in one provider round and return Completed. This directly violates AC3's requirement that maxToolCalls not be ignored or represented by maxRounds, and makes the new tool-call-budget child status mapping unreachable on the production native-child path.",
+      "suggested_fix": "Parse and validate max_tool_calls as an independent maxToolCalls value and pass it to childDeps.maxToolCalls. Keep maxRounds independently defaulted/configured; expose max_rounds separately if model control is required. Update prompt/output text and replace old tests asserting max_tool_calls means rounds with the preserved offline regression.",
+      "evidence": "`bun src/cli.ts ctx run bun /tmp/keryx-t16-child-budget-probe.ts` exited 0 and logged configuredMaxToolCalls=1, actualToolResultsBeforeCompletion=2, providerRequests=2, resultStatus=Completed, reservationLine='MAE reservation: rounds≤1...'. Raw log `.metaproject/data/gdctx/raw/2026-09-06T11-45-05-615Z_run.log`, SHA-256 81311075d69f252824ab2b921877614f39d8c48146a92faeeee64cbf4a775b4f. Reproducer artifact SHA-256 72eb6d0266360752206f9f893077dee0a53bb7cdf355c969c6f5b8488c220215.",
+      "confidence": "high",
+      "dedupe_key": "m10:spawn:call-budget",
+      "blocking_merge": true,
+      "related_skill": "review-logic",
+      "learning_candidate": false,
+      "class_scope": {
+        "sites": [
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:378",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:390",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:470",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:810",
+          "src/harness/tool/builtin/spawn-subagent-tool.ts:1175",
+          "scripts/stress/keryx-shell-stress.ts:628",
+          "scripts/stress/keryx-shell-stress.ts:745"
+        ],
+        "enumeration_method": "`bun src/cli.ts ctx rg 'max_tool_calls|maxToolCalls' src scripts --glob '!*.test.ts'` enumerated every production occurrence. Within the spawn_subagent child pipeline there is one advertised/schema field, one parser, one child AgentDeps construction, one completion mapper, and two current stress consumers; direct benchmark AgentDeps producers already reach the correct core counter."
+      }
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage_1": "FAIL",
+    "stage_2": "not-run-dispatch-stop-on-spec-gap",
+    "tests_initial_passed": 11,
+    "tests_initial_failed": 0,
+    "tests_later_captured_passed": 10,
+    "tests_later_captured_failed": 1,
+    "tests_later_failure_scope": "concurrent-out-of-scope",
+    "offline_probes_passed": 2,
+    "blocker_findings": 1,
+    "major_findings": 0,
+    "minor_findings": 0,
+    "info_findings": 0,
+    "global_suite_run": false,
+    "quality_gate_claim": "none"
+  },
+  "timestamp_utc": "2026-09-06T11:46:08Z"
+}

@@ -8,16 +8,25 @@ import type { GraphData } from "../../gdgraph/types";
 import type { ClassifiedChange } from "./classify-change";
 import { buildFreshnessReport } from "./report";
 import type { GitRunner } from "./page-freshness";
+import type { GitCmdResult } from "../../sync/provenance";
 
 const SHA = "a".repeat(40);
-const noGit: GitRunner = async () => null;
+
+// AFC-22 (flow 236 T13): `GitRunner` now carries `GitCmdResult`, so a fixture
+// must say which of the three events it means — a refusal git ANSWERED, or a
+// failure that could not be run. `null` said neither.
+const ok = (stdout: string): GitCmdResult => ({ kind: "ok", stdout });
+const refused = (stderr = "fatal: Not a valid object name"): GitCmdResult => ({ kind: "exit-error", code: 128, stderr });
+const cannotRun = (): GitCmdResult => ({ kind: "spawn-error", message: "spawn git ENOENT" });
+
+const noGit: GitRunner = async () => cannotRun();
 
 /** git that reports two commits touching everything since VerifiedAt. */
 const busyGit: GitRunner = async (_cwd, args) => {
-  if (args[0] === "cat-file") return "";
-  if (args[0] === "log") return "c1\nc2";
-  if (args[0] === "diff") return "src/core.ts";
-  return null;
+  if (args[0] === "cat-file") return ok("");
+  if (args[0] === "log") return ok("c1\nc2");
+  if (args[0] === "diff") return ok("src/core.ts");
+  return ok("");
 };
 
 async function project(options: {
@@ -141,6 +150,7 @@ describe("categories", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["renameMe"] })],
       symbolLayerAvailable: true,
       git: busyGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -164,6 +174,7 @@ describe("categories", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["renameMe"] })],
       symbolLayerAvailable: true,
       git: busyGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -188,6 +199,7 @@ describe("categories", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["renameMe"] })],
       symbolLayerAvailable: true,
       git: busyGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -268,9 +280,9 @@ describe("limitations and totals (AC7)", () => {
     // is genuinely fresh. With `noGit` this would assert "no provenance"
     // instead of "cosmetic produced nothing" — a different fact.
     const quietGit: GitRunner = async (_cwd, args) => {
-      if (args[0] === "cat-file") return "";
-      if (args[0] === "log") return "";
-      return null;
+      if (args[0] === "cat-file") return ok("");
+      if (args[0] === "log") return ok("");
+      return ok("");
     };
     const report = await buildFreshnessReport({
       cwd,
@@ -278,11 +290,108 @@ describe("limitations and totals (AC7)", () => {
       changes: [change({ path: "src/core.ts", changeClass: "cosmetic" })],
       symbolLayerAvailable: true,
       git: quietGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
     expect(report.totals.filesCosmetic).toBe(1);
     expect(report.pages).toEqual([]);
     expect(report.totals.pagesFresh).toBe(1);
+  });
+});
+
+// Flow 236, phase 4, T7 (AFC-22 clause 2 / AFC-W05 clause 3: "a git failure
+// yields unknown"). Measured before this task: driving `buildFreshnessReport`
+// with an always-failing git produced 11 fresh / 35 affected against a
+// healthy repository's 12 / 34 — the SAME two limitation codes, no
+// `not-a-git-repository` limitation, no per-page signal at all. A reader
+// could not tell a working repository from a completely broken one.
+describe("a git failure yields unknown at the report level (AFC-22 clause 2 / AFC-W05 clause 3)", () => {
+  const alwaysFailingGit: GitRunner = async () => cannotRun();
+
+  test("a wholly broken git declares `not-a-git-repository` and reports a VerifiedAt page as `unknown`, not a silent scope-hash verdict", async () => {
+    const { cwd, graph } = await project({ pages: { "components/src-core.md": CORE_PAGE } });
+
+    const report = await buildFreshnessReport({
+      cwd,
+      graph,
+      changes: [],
+      symbolLayerAvailable: true,
+      git: alwaysFailingGit,
+      toRev: "HEAD",
+    });
+
+    expect(report.limitations.map((l) => l.code)).toContain("not-a-git-repository");
+    expect(report.pages[0]?.category).toBe("unknown");
+    expect(report.pages[0]?.gitFailure).toBeDefined();
+    expect(report.totals.pagesFresh).toBe(0);
+  });
+
+  test("an explicit gitAvailable: true skips the probe and behaves exactly as a healthy run (no spurious limitation)", async () => {
+    const { cwd, graph } = await project({ pages: { "components/src-core.md": CORE_PAGE } });
+
+    const report = await buildFreshnessReport({
+      cwd,
+      graph,
+      changes: [],
+      symbolLayerAvailable: true,
+      git: busyGit,
+      gitAvailable: true,
+      toRev: "HEAD",
+    });
+
+    expect(report.limitations.map((l) => l.code)).not.toContain("not-a-git-repository");
+    expect(report.pages[0]?.category).not.toBe("unknown");
+  });
+
+  test("git answers rev-parse but fails later for one page: that page is `unknown` with `git-command-failed` declared, and it does not contaminate a healthy page", async () => {
+    const { cwd, graph } = await project({
+      pages: {
+        "components/src-core.md": CORE_PAGE,
+        "components/src-b.md": [
+          "# src/b",
+          "Version: 1.0.0",
+          "Type: component",
+          "Status: accepted",
+          `VerifiedAt: ${SHA}`,
+          "Describes:",
+          "  - src/b.ts",
+          "",
+        ].join("\n"),
+      },
+      files: { "src/core.ts": "export const core = 1;\n", "src/b.ts": "export const b = 1;\n" },
+    });
+
+    // rev-parse succeeds (git is generally available); cat-file succeeds for
+    // both pages (both revisions resolve); `log` fails ONLY for src/core.ts's
+    // describe-set, succeeds (empty, confirmed-unchanged) for src/b.ts's.
+    const partiallyFailingGit: GitRunner = async (_cwd, args) => {
+      if (args[0] === "rev-parse") return ok(SHA);
+      if (args[0] === "cat-file") return ok("");
+      if (args[0] === "log") {
+        return args.includes("src/core.ts") ? refused("fatal: bad object") : ok("");
+      }
+      return ok("");
+    };
+
+    const report = await buildFreshnessReport({
+      cwd,
+      graph,
+      changes: [],
+      symbolLayerAvailable: true,
+      git: partiallyFailingGit,
+      toRev: "HEAD",
+    });
+
+    const corePage = report.pages.find((p) => p.path === "components/src-core.md");
+    expect(corePage?.category).toBe("unknown");
+    expect(corePage?.gitFailure).toBeDefined();
+    expect(report.limitations.map((l) => l.code)).toContain("git-command-failed");
+    expect(report.limitations.find((l) => l.code === "git-command-failed")?.affectedCount).toBe(1);
+    // src/b.md was correctly measured (log succeeded, empty) — a partial
+    // failure elsewhere must not mark it unknown too.
+    expect(report.pages.find((p) => p.path === "components/src-b.md")).toBeUndefined();
+    expect(report.totals.pagesFresh).toBe(1);
+    expect(report.limitations.map((l) => l.code)).not.toContain("not-a-git-repository");
   });
 });
 
@@ -307,10 +416,10 @@ describe("ordering (AC13)", () => {
     });
 
     const git: GitRunner = async (_cwd, args) => {
-      if (args[0] === "cat-file") return "";
-      if (args[0] === "log") return args.includes("src/b.ts") ? "c1\nc2\nc3" : "c1";
-      if (args[0] === "diff") return "";
-      return null;
+      if (args[0] === "cat-file") return ok("");
+      if (args[0] === "log") return ok(args.includes("src/b.ts") ? "c1\nc2\nc3" : "c1");
+      if (args[0] === "diff") return ok("");
+      return ok("");
     };
 
     const report = await buildFreshnessReport({
@@ -319,6 +428,7 @@ describe("ordering (AC13)", () => {
       changes: [],
       symbolLayerAvailable: true,
       git,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -340,6 +450,7 @@ describe("read-only guarantee (AC5)", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["x"] })],
       symbolLayerAvailable: true,
       git: busyGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -350,9 +461,9 @@ describe("read-only guarantee (AC5)", () => {
 
 describe("provenance outranks propagation", () => {
   const stampedAtHead: GitRunner = async (_cwd, args) => {
-    if (args[0] === "cat-file") return "";
-    if (args[0] === "log") return ""; // nothing since VerifiedAt
-    return null;
+    if (args[0] === "cat-file") return ok("");
+    if (args[0] === "log") return ok(""); // nothing since VerifiedAt
+    return ok("");
   };
 
   test("a page verified after the change is fresh, not must-refresh", async () => {
@@ -372,6 +483,7 @@ describe("provenance outranks propagation", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["x"] })],
       symbolLayerAvailable: true,
       git: stampedAtHead,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -399,6 +511,7 @@ describe("provenance outranks propagation", () => {
       changes: [change({ path: "src/dep.ts", changeClass: "signature", symbols: ["dep"] })],
       symbolLayerAvailable: true,
       git: stampedAtHead,
+      gitAvailable: true,
       toRev: "HEAD",
     });
 
@@ -423,6 +536,7 @@ describe("provenance outranks propagation", () => {
       changes: [change({ path: "src/core.ts", changeClass: "signature", symbols: ["x"] })],
       symbolLayerAvailable: true,
       git: busyGit,
+      gitAvailable: true,
       toRev: "HEAD",
     });
     expect(report.pages[0]?.category).toBe("stale-reference");

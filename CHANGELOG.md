@@ -3,6 +3,139 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.83] — 2026-09-08
+
+One commit. `/status` already showed last-turn tokens and a labelled
+estimate, and refused to invent a 128k window. It still could not show
+the model's actual limit, so the bar was always relative to used tokens.
+
+### Added
+
+- **`/status` reports provider-reported context window, rate limits, and
+  balance when the provider actually sends them.** OpenAI-compatible
+  `/models` (including nested OpenRouter shapes) and Ollama `/api/show`
+  supply the window; rate-limit headers and DeepSeek/OpenRouter balance
+  endpoints fill the rest. Anthropic, Gemini, and any fetch that does not
+  answer stay `—`. The context bar fills against that window when it is
+  known, otherwise it keeps the old relative bar. Wired through the TUI
+  inspector and both readline surfaces. Missing is missing — never a
+  guessed limit.
+
+## [0.2.82] — 2026-09-08
+
+One commit. SuperGrok login in the TUI spawned `xdg-open` without an
+`error` listener. On a Linux box with no display that binary is often
+missing; Node emits ENOENT later, that is an uncaught exception, and
+the shell dies.
+
+### Fixed
+
+- **Device-code login no longer crashes the TUI on headless Linux.**
+  Opening a browser is best-effort and only attempted when `DISPLAY` or
+  `WAYLAND_DISPLAY` is set. A missing opener is ignored rather than
+  becoming an uncaught exception. The overlay keeps the URL and user
+  code so the operator can finish on another device, and a failed login
+  stays on screen instead of vanishing.
+
+## [0.2.81] — 2026-09-08
+
+Six commits since 0.2.80. The agent-first core programme closed phases 0–2
+on main, then an independent review found the auto-fetch floor still leaked
+across line endings; that class is closed here. Separately, subscription
+login landed for SuperGrok, Copilot and ChatGPT, and this repository
+adopted the full gdskills install profile it had been running uncommitted.
+
+### Added
+
+- **`keryx auth` — device-code login for SuperGrok, ChatGPT Plus/Pro, and
+  GitHub Copilot.** RFC 8628 against the vendor-published clients: xAI
+  (`auth.x.ai`, Grok CLI client), OpenAI Codex headless device-auth, and
+  GitHub Copilot (`login/device/code` then `copilot_internal/v2/token`).
+  Grants land in user-global `auth.json` at mode 0600. SuperGrok injects
+  `XAI_API_KEY`; Copilot injects `GITHUB_COPILOT_TOKEN`; a ChatGPT grant is
+  stored and is not applied as `OPENAI_API_KEY`. Claude Pro/Max, Gemini
+  Google-account login, and DeepSeek subscription OAuth stay refused: those
+  vendors do not sanction third-party clients. Commands: `auth list`,
+  `auth status`, `auth login`, `auth logout`. `/provider` offers SuperGrok
+  vs API key when xAI is the family.
+
+- **The routing gate is 277 tokens instead of ~3,226.** `.metaproject/index.md`
+  keeps pointers and the two rules that change behaviour (`keryx ctx rg`,
+  graph answers from the last build). Everything else moved to `routing.md`.
+  Subagent prompts are no longer required to re-read the full index: the
+  parent inlines the pointers that slice needs. Measured, not assumed: the
+  old index was re-sent every turn, about 80,000 tokens on a 25-turn task.
+
+- **Agent-first core phases 0–2.** One routing-entrypoint writer shared by
+  init, update and rules (M01). `maxRounds` is an inclusive ceiling on every
+  provider request including wrap-up; a stop with no progress no longer
+  claims budget exhaustion with rounds unspent (M10). Contained reader with
+  owner/target pinning, secrets in property names fail closed, loopback-only
+  bind, findings separated from coverage so a missing required source is no
+  longer a clean pass, scan recursion terminating on `dev:ino`, shell argv
+  validated before the model starts (phase 1). Wiki and memory share one
+  lifecycle rule; testing snapshots stop serving a cached answer; graph
+  invalidation no longer treats an untouched `.git/HEAD` mtime as fresh;
+  the transpiler loader is chosen by extension; grammar availability loads
+  the grammar rather than checking an asset resolved; claim provenance
+  survives onto the assembled handoff (phase 2).
+
+- **This repository now installs the full gdskills profile.** Thirty skill
+  directories that had been sitting uncommitted are versioned; `keryx skills
+  install --profile full` is idempotent at 78 bundled skills.
+
+### Fixed
+
+- **The zero-click auto-fetch floor leaked across line endings.** A construct
+  may wrap, and inside a block container the marker is repeated on the
+  continuation line. Four rounds each fixed one reader and declared the
+  class closed; the fifth enumeration found five of eleven regex readers
+  still carrying the shape. The inline-destination reader now calls the
+  existing marker-consuming helper. HTML is re-scanned over the renderer's
+  own view of the document, so a future HTML reader is covered by
+  construction. A source census derives "does this cross a line terminator"
+  from the pattern itself, and a metamorphic test asserts the floor is at
+  least as capable on a document as on the renderer's view of it — 109 leaks
+  on the reverted code. Cost stays linear: 47 ms over 840 KB.
+
+- **Reference definitions inside blockquotes and list items were an
+  accepted bypass, and that judgement was wrong.** Phase 1 shipped twelve
+  spellings the renderer fetched while every public boundary reported
+  nothing. Extending the definition scanner's leading-whitespace skip to
+  consume container markers closed all twelve without a markup parser, then
+  seven more wrapped-destination shapes the enumeration found. 13.5 ms on a
+  megabyte of nested markers.
+
+- **A failure rendered as a clean success, at sixteen sites across two
+  phases.** `readJsonObjectFile` separates a parsed object, a non-object
+  value and an unreadable file; only readers feeding a gate, an exit code
+  or a security decision were migrated. The agent-facing tool boundary
+  dropped every provenance field, so a sourced entry and an unsourced one
+  reached a model byte-identically. Testing incompleteness reached no
+  read-only surface. The health file walk crashed on an unreadable
+  directory. One health adapter accepted a corrupt report as parsed with
+  zero findings.
+
+- **The link checker matched markdown inside backticks**, so the document
+  that has to write `![alt](URL)` verbatim to define the auto-fetch floor
+  failed CI with three broken links to a file named `URL`. Code is blanked
+  before extraction. Net: three phantom links gone, one real link the old
+  regex had missed.
+
+### Changed
+
+- **ESLint is installed and actually runs.** The health gate's "required
+  ESLint" had been silently skipping because the binary did not exist.
+  Root config now ignores `vscode-extension/` (its own package, own
+  tsconfig); a `**/*.test.ts` override without a TypeScript parser had
+  been parsing those tests as espree and then the "fix" of dropping type
+  imports broke the extension typecheck job.
+
+- **28 dependency advisories to 0.** Every one arrived through a
+  development or optional dependency; the runtime dependency block is
+  empty and stays empty. Health gate PASS with zero blocking findings,
+  the first time in this programme.
+
 ## [0.2.80] — 2026-09-05
 
 Five commits, and three of them are one shape: a mechanism that could not

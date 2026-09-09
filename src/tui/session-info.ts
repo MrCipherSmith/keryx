@@ -2,6 +2,8 @@
 // TUI open goes through `openModal` from `./modal-host`. No private overlay.
 
 import type { NormalizedUsage } from "../harness/provider/types";
+import { formatRateLimit, type ModelLimits } from "../commands/model-limits";
+import { formatBalance } from "./balance-panel";
 import { buildContextUsage, formatContextUsageText, type ContextUsageView } from "./context-usage";
 import {
   flowsInSession,
@@ -51,6 +53,8 @@ export type SessionInfoSource = {
   version?: string | undefined;
   usage?: Pick<NormalizedUsage, "inputTokens" | "outputTokens" | "totalTokens"> | undefined;
   estimateTokens?: number | undefined;
+  /** Live provider limits (window / rate-limit / balance). Absent fields stay unknown. */
+  limits?: ModelLimits | undefined;
   sessionText?: string | undefined;
   workspaces?: readonly WorkspaceInfo[] | undefined;
   flows?: readonly FlowInspectorItem[] | undefined;
@@ -124,12 +128,22 @@ function usageUsed(usage: SessionInfoSource["usage"]): number | undefined {
 }
 
 function contextRow(source: SessionInfoSource): string {
+  const window = source.limits?.contextWindow;
   const used = usageUsed(source.usage);
-  if (used !== undefined) {
-    return `${used} tokens`;
+  const usedLabel =
+    used !== undefined
+      ? `${used} tokens`
+      : source.estimateTokens !== undefined
+        ? `${source.estimateTokens} tokens (estimate)`
+        : undefined;
+  if (usedLabel !== undefined && window !== undefined) {
+    return `${usedLabel} / ${window.toLocaleString()}`;
   }
-  if (source.estimateTokens !== undefined) {
-    return `${source.estimateTokens} tokens (estimate)`;
+  if (usedLabel !== undefined) {
+    return usedLabel;
+  }
+  if (window !== undefined) {
+    return `window ${window.toLocaleString()}`;
   }
   return MISSING;
 }
@@ -173,10 +187,22 @@ export function buildSessionInfoSnapshot(source: SessionInfoSource): SessionInfo
       value: source.usage?.outputTokens === undefined ? MISSING : String(source.usage.outputTokens),
     },
     { label: "Context estimate", value: estimate },
+    {
+      label: "Context window",
+      value: source.limits?.contextWindow === undefined ? MISSING : source.limits.contextWindow.toLocaleString(),
+    },
   ];
+  const rate = formatRateLimit(source.limits?.rateLimit);
+  if (rate !== undefined) {
+    usageRows.push({ label: "Rate limit", value: rate });
+  }
+  if (source.limits?.balance !== undefined) {
+    usageRows.push({ label: "Balance", value: formatBalance(source.limits.balance) });
+  }
   const context = buildContextUsage({
     estimateTokens: source.estimateTokens,
     usage: source.usage,
+    ...(source.limits?.contextWindow !== undefined ? { contextWindow: source.limits.contextWindow } : {}),
   });
   const sessionWorkspaces = workspacesInSession(source.workspaces ?? [], {
     sessionId: id,
@@ -336,7 +362,7 @@ export function presentSessionInfo(
         paintContent(otui, renderer, body, snapshot.flowLines.join("\n"), width);
         return;
       }
-      paintRows(otui, renderer, body, snapshot.sessionRows, width);
+      paintRows(otui, renderer, body, [...snapshot.sessionRows, ...snapshot.usageRows], width);
     },
     onClose: () => {
       unsubscribeKey?.();

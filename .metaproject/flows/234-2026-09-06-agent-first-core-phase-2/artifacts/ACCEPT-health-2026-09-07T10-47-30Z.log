@@ -1,0 +1,18 @@
+# command: bun src/cli.ts health run
+# cwd: /Users/Goodea/goodea/keryx
+# started: 2026-09-07T10:50:14Z
+# ---- output below, may legitimately be empty ----
+# Code Health: PASS
+
+scope: project
+project score: 93 (trend: stable)
+findings: 250
+
+- OPTIONAL: sonarqube source skipped
+- PASS: no gate conditions triggered
+
+report: .metaproject/data/health/artifacts/latest.md
+json: .metaproject/data/health/artifacts/latest.json
+# ---- output above ----
+# finished: 2026-09-07T10:50:29Z
+# exit code: 0

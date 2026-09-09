@@ -1,0 +1,403 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "238",
+  "slug": "agent-first-core-phase-6",
+  "title": "Agent-first core phase 6: Composition and evidence: SDK batch and neutral evaluation runner",
+  "status": "in-progress",
+  "createdAt": "2026-09-06T10:44:10.689Z",
+  "updatedAt": "2026-09-09T05:45:16.694Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:62a10aaad2388cf6c93869938e5c82a547a83e356b5832cb73e6ac71b0949d5c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Лейн A, честность стоимости (M05/M09): ctx раздувает короткий ответ, deriveRate(0,0) выдаёт нулевой процент с нулевой шириной интервала, агрегат событий не дедуплицирует по event_id, надёжность источника объявляется точной по непустому массиву",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Лейн C: deriveRate(0,0) выдаёт уверенный ноль, и buildRawBaselineManifest не имеет охраны, поэтому сфабрикованный ноль доходит до публикуемого сравнительного отчёта",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Остатки: отчёт пишется и печатается до валидации в двух скриптах; precision и recall возвращают единицу на пустом знаменателе — та же форма, вывернутая наизнанку",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Остаток: ещё восемь производителей выдают до проверки, и охрана пустого знаменателя частичная — oracleMetrics публикует уверенную единицу с пометкой exact",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Лейн D: фикстуры контракта и аудит публичного экспорта — шесть схем и валидационные случаи без единого потребителя",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Лейн B: предполётная проверка и хранилище пар — пустой или повреждённый граф, несовпадение манифеста, сохранение одного веса пары при повторе",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Слой сборки графа: вызов регулярного выражения .test( записывается как вызываемый символ с именем test — измерено на gdgraph symbol wikiAsk, строка test (src/harness/search/controller.ts:40)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Тесты, падающие только под полной параллельной нагрузкой: три случая за сессию (охрана профилей по времени, утечки временных директорий в spawn-subagent-child-slate, ещё два невоспроизведённых). Прогон, зелёный при повторе, не даёт сигнала, на который опирается вся приёмка",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC8"
+      ],
+      "evidenceRefs": [
+        "src/ctx/artifact-race.e2e.test.ts",
+        "src/flow/resume-handoff.test.ts",
+        "src/commands/ctx.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "keryx ctx rg отбрасывает совпадения в собственной сводке (Matches: 12, 4 shown) и не достаёт до .metaproject — значит маршрутизированный поиск непригоден для доказательства полноты перечисления, а на нём основаны перечисления всей программы",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC8"
+      ],
+      "evidenceRefs": [
+        "src/ctx/search-scope.ts",
+        "src/commands/ctx.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "F1 (blocker, фаза 6): предполётная проверка и хранилище пар не имеют вызывающих кроме собственных тестов — ворота, оправдывающие трату денег на прогон, не вызываются ничем",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "F3 (major, фаза 6): f1 возвращает единицу при пустых множествах с пометкой exact и проходит валидацию манифеста — та же форма, что исправляли, одним полем в стороне",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [
+        "AC8"
+      ],
+      "evidenceRefs": [
+        "src/metrics/ir.test.ts",
+        "src/metrics/rate-honesty.test.ts"
+      ],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Два теста пишут артефакты в корень настоящего репозитория, а не во временный каталог: fake-bin/gh и .metaproject/reviews/pr-comments/acme__app__7.json — тот же класс общего состояния, что и уже исправленные",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-06T10:44:10.689Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-07T12:03:46.426Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-07T12:03:46.528Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-07T12:18:29.295Z",
+      "event": "task-added",
+      "detail": "T5: Лейн A, честность стоимости (M05/M09): ctx раздувает короткий ответ, deriveRate(0,0) выдаёт нулевой процент с нулевой шириной интервала, агрегат событий не дедуплицирует по event_id, надёжность источника объявляется точной по непустому массиву"
+    },
+    {
+      "at": "2026-09-07T12:38:13.183Z",
+      "event": "task-done",
+      "detail": "T5: Лейн A, честность стоимости (M05/M09): ctx раздувает короткий ответ, deriveRate(0,0) выдаёт нулевой процент с нулевой шириной интервала, агрегат событий не дедуплицирует по event_id, надёжность источника объявляется точной по непустому массиву"
+    },
+    {
+      "at": "2026-09-07T12:38:13.278Z",
+      "event": "task-added",
+      "detail": "T6: Лейн C: deriveRate(0,0) выдаёт уверенный ноль, и buildRawBaselineManifest не имеет охраны, поэтому сфабрикованный ноль доходит до публикуемого сравнительного отчёта"
+    },
+    {
+      "at": "2026-09-07T14:50:55.427Z",
+      "event": "task-done",
+      "detail": "T6: Лейн C: deriveRate(0,0) выдаёт уверенный ноль, и buildRawBaselineManifest не имеет охраны, поэтому сфабрикованный ноль доходит до публикуемого сравнительного отчёта"
+    },
+    {
+      "at": "2026-09-07T14:50:55.581Z",
+      "event": "task-added",
+      "detail": "T7: Остатки: отчёт пишется и печатается до валидации в двух скриптах; precision и recall возвращают единицу на пустом знаменателе — та же форма, вывернутая наизнанку"
+    },
+    {
+      "at": "2026-09-07T15:07:52.984Z",
+      "event": "task-done",
+      "detail": "T7: Остатки: отчёт пишется и печатается до валидации в двух скриптах; precision и recall возвращают единицу на пустом знаменателе — та же форма, вывернутая наизнанку"
+    },
+    {
+      "at": "2026-09-07T15:07:53.094Z",
+      "event": "task-added",
+      "detail": "T8: Остаток: ещё восемь производителей выдают до проверки, и охрана пустого знаменателя частичная — oracleMetrics публикует уверенную единицу с пометкой exact"
+    },
+    {
+      "at": "2026-09-07T15:31:04.862Z",
+      "event": "task-done",
+      "detail": "T8: Остаток: ещё восемь производителей выдают до проверки, и охрана пустого знаменателя частичная — oracleMetrics публикует уверенную единицу с пометкой exact"
+    },
+    {
+      "at": "2026-09-07T19:25:06.260Z",
+      "event": "task-added",
+      "detail": "T9: Лейн D: фикстуры контракта и аудит публичного экспорта — шесть схем и валидационные случаи без единого потребителя"
+    },
+    {
+      "at": "2026-09-07T19:25:06.472Z",
+      "event": "task-added",
+      "detail": "T10: Лейн B: предполётная проверка и хранилище пар — пустой или повреждённый граф, несовпадение манифеста, сохранение одного веса пары при повторе"
+    },
+    {
+      "at": "2026-09-07T19:38:06.775Z",
+      "event": "task-done",
+      "detail": "T9: Лейн D: фикстуры контракта и аудит публичного экспорта — шесть схем и валидационные случаи без единого потребителя"
+    },
+    {
+      "at": "2026-09-07T19:46:19.021Z",
+      "event": "task-done",
+      "detail": "T10: Лейн B: предполётная проверка и хранилище пар — пустой или повреждённый граф, несовпадение манифеста, сохранение одного веса пары при повторе"
+    },
+    {
+      "at": "2026-09-07T21:02:43.693Z",
+      "event": "task-added",
+      "detail": "T11: Слой сборки графа: вызов регулярного выражения .test( записывается как вызываемый символ с именем test — измерено на gdgraph symbol wikiAsk, строка test (src/harness/search/controller.ts:40)"
+    },
+    {
+      "at": "2026-09-07T22:07:43.290Z",
+      "event": "task-done",
+      "detail": "T11: Слой сборки графа: вызов регулярного выражения .test( записывается как вызываемый символ с именем test — измерено на gdgraph symbol wikiAsk, строка test (src/harness/search/controller.ts:40)"
+    },
+    {
+      "at": "2026-09-08T04:29:42.187Z",
+      "event": "task-added",
+      "detail": "T12: Тесты, падающие только под полной параллельной нагрузкой: три случая за сессию (охрана профилей по времени, утечки временных директорий в spawn-subagent-child-slate, ещё два невоспроизведённых). Прогон, зелёный при повторе, не даёт сигнала, на который опирается вся приёмка"
+    },
+    {
+      "at": "2026-09-08T06:41:24.524Z",
+      "event": "task-added",
+      "detail": "T13: keryx ctx rg отбрасывает совпадения в собственной сводке (Matches: 12, 4 shown) и не достаёт до .metaproject — значит маршрутизированный поиск непригоден для доказательства полноты перечисления, а на нём основаны перечисления всей программы"
+    },
+    {
+      "at": "2026-09-08T14:30:29.762Z",
+      "event": "task-done",
+      "detail": "T13: keryx ctx rg отбрасывает совпадения в собственной сводке (Matches: 12, 4 shown) и не достаёт до .metaproject — значит маршрутизированный поиск непригоден для доказательства полноты перечисления, а на нём основаны перечисления всей программы"
+    },
+    {
+      "at": "2026-09-08T18:24:07.547Z",
+      "event": "task-done",
+      "detail": "T12: Тесты, падающие только под полной параллельной нагрузкой: три случая за сессию (охрана профилей по времени, утечки временных директорий в spawn-subagent-child-slate, ещё два невоспроизведённых). Прогон, зелёный при повторе, не даёт сигнала, на который опирается вся приёмка"
+    },
+    {
+      "at": "2026-09-09T04:31:05.893Z",
+      "event": "task-added",
+      "detail": "T14: F1 (blocker, фаза 6): предполётная проверка и хранилище пар не имеют вызывающих кроме собственных тестов — ворота, оправдывающие трату денег на прогон, не вызываются ничем"
+    },
+    {
+      "at": "2026-09-09T04:31:05.998Z",
+      "event": "task-added",
+      "detail": "T15: F3 (major, фаза 6): f1 возвращает единицу при пустых множествах с пометкой exact и проходит валидацию манифеста — та же форма, что исправляли, одним полем в стороне"
+    },
+    {
+      "at": "2026-09-09T05:26:29.290Z",
+      "event": "task-done",
+      "detail": "T15: F3 (major, фаза 6): f1 возвращает единицу при пустых множествах с пометкой exact и проходит валидацию манифеста — та же форма, что исправляли, одним полем в стороне"
+    },
+    {
+      "at": "2026-09-09T05:45:16.694Z",
+      "event": "task-added",
+      "detail": "T16: Два теста пишут артефакты в корень настоящего репозитория, а не во временный каталог: fake-bin/gh и .metaproject/reviews/pr-comments/acme__app__7.json — тот же класс общего состояния, что и уже исправленные"
+    }
+  ]
+}

@@ -1,11 +1,25 @@
+import { randomUUID } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { createMemoryService } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
+import { renderSearchMarkdown } from "../memory/search";
+import { renderMemorySearchReport } from "../memory/report";
+import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
+import {
+  describeRemovalLookup,
+  loadDeletionTrail,
+  searchRemovals,
+  type RemovalLookup,
+} from "../forgetting/service";
 import { runAssetsSubcommand } from "../assets/command";
-import { MEMORY_CLASS_VALUES } from "../memory/types";
+import { MEMORY_CLASS_VALUES, MEMORY_TYPES } from "../memory/types";
+import { memoryRoot } from "../memory/store";
+import { isNotFound } from "../lib/fs";
 import { MemoryValidationError } from "../memory/validation";
-import type { MemoryClass, MemoryStatus, SearchFilters } from "../memory/types";
+import type { MemoryClass, MemoryStatus, ScoredEntry, SearchFilters } from "../memory/types";
 
 let service: ReturnType<typeof createMemoryService> | null = null;
 
@@ -125,11 +139,60 @@ async function runIndex(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * Flow 242 (forgetting) lane C / AC3: `getService().search()` walks the
+ * memory store the same way the old `wiki/collect.ts` used to walk the wiki
+ * store — a `readdir` that cannot list a type-folder is treated identically
+ * to a folder that simply does not exist yet, so an EACCES store answers
+ * `{ results: [] }` at exit 0. Measured on this repo: `chmod 000
+ * .metaproject/memory` then `keryx memory search <query> --json` prints
+ * `{"query":"...","results":[]}` and exits 0 — a hard read failure reported
+ * as a clean, empty, successful search. `memory/store.ts` is not this lane's
+ * file to change, so this checks the SAME folders it walks, independently,
+ * before trusting an empty result from it.
+ */
+async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> {
+  const root = memoryRoot(cwd);
+  for (const { folder } of MEMORY_TYPES) {
+    const dir = join(root, folder);
+    try {
+      await readdir(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return (
+        `the memory store could not be read (${message}). This is not the same as "no memory": ` +
+        `${dir} may hold entries that could not be listed.`
+      );
+    }
+  }
+  return null;
+}
+
 async function runSearch(args: string[]): Promise<void> {
   const query = positionalArgs(args)[0] ?? "";
   if (!query) {
     console.error('Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]');
     process.exitCode = 1;
+    return;
+  }
+
+  // Checked BEFORE calling the service: the service itself never throws for
+  // this case (see the note on `detectMemoryStoreUnreadable` above), so there
+  // would be nothing for a try/catch below to catch. `store-unreadable` mirrors
+  // `keryx wiki sections resolve`'s exit-code convention (2, not the CLI
+  // default of 1) — reserved for "cannot tell", distinct from both a
+  // completed search and a validation error.
+  const storeError = await detectMemoryStoreUnreadable(process.cwd());
+  if (storeError !== null) {
+    if (args.includes("--json")) {
+      console.log(JSON.stringify({ query, outcome: "store-unreadable", error: storeError }, null, 2));
+    } else {
+      console.error(`store-unreadable: ${storeError}`);
+    }
+    process.exitCode = 2;
     return;
   }
 
@@ -171,18 +234,82 @@ async function runSearch(args: string[]): Promise<void> {
     ? await getService().writeReport({ cwd: process.cwd(), search: result, filters })
     : undefined;
 
+  // Flow 242 T9/F3: a zero-result search said one thing for an entry that was
+  // deleted and for a phrase that never named anything — measured on this repo,
+  // `memory search "charge once"` after deleting the entry and
+  // `memory search "quantum flux capacitor"` printed the identical
+  // `_No matching memory entries._`. The deletion trail is consulted here, and
+  // ONLY on an empty result: a search that found something has already answered
+  // the caller's question, and appending removal history to a hit list would be
+  // noise rather than the distinction this closes.
+  //
+  // A memory query is a phrase, not an identity, so this is `searchRemovals`
+  // (phrase mode) rather than `lookupRemoval` — and every hit it renders carries
+  // its own layer, so a wiki identity surfaced by a memory query reads as a wiki
+  // identity. Where the trail has no record, "never existed" is NOT claimed:
+  // `no-removal-recorded` and its coverage say exactly how little that silence
+  // proves.
+  const removalTrail: RemovalLookup | null =
+    result.results.length === 0 ? searchRemovals(await loadDeletionTrail(process.cwd()), query) : null;
+
+  // AFC-06 (flow 234) T22, AC1 second half: `--as-of` is memory's existing
+  // explicit historical mode (`SearchFilters.asOf`, `../memory/types.ts` --
+  // "overrides the default `current` exclusion"). It already prints each
+  // result's raw `status`, but that alone does not carry the classifier's
+  // full verdict -- an `accepted`-status entry returned only because its
+  // validity window matches the requested date (future/expired relative to
+  // TODAY) reads as ordinary "accepted" with no hint it isn't current. Label
+  // it with the SAME `state`/`reasons` `computeLifecycle` already produces
+  // (`../memory/lifecycle.ts`) -- computed here, not inside `search.ts`/
+  // `renderSearchMarkdown`, which this task does not own -- so a non-current
+  // result is unmistakable in both JSON and the text a model actually reads.
+  const asOfMode = Boolean(filters.asOf);
+  const now = new Date();
+  const historicalByPath = new Map<string, LifecycleResult>();
+  if (asOfMode) {
+    for (const item of result.results) {
+      const lifecycle = lifecycleOf(item, now);
+      if (lifecycle.historical) {
+        historicalByPath.set(item.entry.relativePath, lifecycle);
+      }
+    }
+  }
+
   if (args.includes("--json")) {
+    // T24 (flow 234) F-005 (MAJOR): this used to hand-roll five fields
+    // (score/title/type/status/path), silently dropping every AC6 provenance
+    // carrier (version, provenance.source/link, author, confirmedBy, caveat,
+    // scope) the human `renderSearchMarkdown` form of this SAME command
+    // already carries -- and because the keys were simply absent rather than
+    // an explicit sentinel, a consumer of the JSON form could not tell "this
+    // entry has no source" apart from "this surface doesn't report sources".
+    // Built from the report formatter's own per-result projection
+    // (`renderMemorySearchReport`, `../memory/report.ts`) -- the identical
+    // bounded, "unknown"-sentineled shape AFC-25/AC6 already specify and
+    // `--save-report` already persists -- so the JSON form carries the same
+    // provenance the text form does, instead of a strictly weaker subset.
+    // Pure/no disk I/O: computing the projection here does not persist a
+    // report; only `--save-report` (above) does that, unchanged.
+    const projection = renderMemorySearchReport({
+      runId: randomUUID(),
+      generatedAt: new Date(),
+      search: result,
+      filters,
+    });
     console.log(
       JSON.stringify(
         {
           query,
-          results: result.results.map((item) => ({
-            score: item.score,
-            title: item.entry.title,
-            type: item.entry.type,
-            status: item.entry.status,
-            path: item.entry.relativePath,
-          })),
+          results: projection.results.map((item) => {
+            const lifecycle = historicalByPath.get(item.path);
+            return {
+              ...item,
+              ...(lifecycle
+                ? { historical: true, lifecycleState: lifecycle.state, lifecycleReasons: lifecycle.reasons }
+                : {}),
+            };
+          }),
+          ...(removalTrail ? { removalTrail } : {}),
           ...(report ? { report } : {}),
         },
         null,
@@ -192,20 +319,49 @@ async function runSearch(args: string[]): Promise<void> {
     return;
   }
 
-  console.log(`# memory search: ${query}`);
-  console.log("");
-  console.log(`results: ${result.results.length}`);
-  console.log("");
-  for (const [i, item] of result.results.entries()) {
-    console.log(
-      `${i + 1}. [${item.score}] ${item.entry.title} (${item.entry.type}/${item.entry.status}) - ${item.entry.relativePath}`,
-    );
+  // T20 finding 3 (flow 234 review, MAJOR): this used to build its own
+  // one-line-per-result markdown here, inline, carrying no provenance at
+  // all -- while `renderSearchMarkdown` (memory/search.ts), which DOES carry
+  // full AFC-25/AC6 provenance (version, scope, source/link, author,
+  // confirmedBy, caveat), had no production caller anywhere in the tree.
+  // Routed through the shared renderer so the real user-facing search
+  // surface actually shows what AC6 requires.
+  console.log(renderSearchMarkdown(query, result.results).trimEnd());
+  if (removalTrail) {
+    console.log("");
+    console.log("## Removal trail");
+    for (const line of describeRemovalLookup(removalTrail)) {
+      console.log(line);
+    }
+  }
+  if (historicalByPath.size > 0) {
+    console.log("");
+    console.log("## Historical (--as-of; not current guidance)");
+    for (const item of result.results) {
+      const lifecycle = historicalByPath.get(item.entry.relativePath);
+      if (!lifecycle) continue;
+      console.log(
+        `- ${item.entry.title} (\`${item.entry.relativePath}\`): state=${lifecycle.state}; reason=${lifecycle.reasons.join(", ")}`,
+      );
+    }
   }
   if (report) {
     console.log("");
     console.log(`report: ${report.markdownPath}`);
     console.log(`json: ${report.jsonPath}`);
   }
+}
+
+function lifecycleOf(item: ScoredEntry, observedAt: Date): LifecycleResult {
+  return computeLifecycle(
+    {
+      status: item.entry.status,
+      validFrom: item.entry.validFrom ?? null,
+      validTo: item.entry.validTo ?? null,
+      supersededBy: item.entry.supersededBy ?? null,
+    },
+    observedAt,
+  );
 }
 
 async function runSupersede(args: string[]): Promise<void> {
@@ -363,6 +519,8 @@ Usage:
   keryx memory new <type> [slug] --title "<title>" [--force]
   keryx memory index [--embeddings]
   keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>] [--as-of <YYYY-MM-DD>] [--class <semantic|episodic|procedural>] [--semantic] [--save-report]
+                         # --as-of admits non-current entries too; each is
+                         # marked HISTORICAL with its lifecycle state/reason
   keryx memory supersede <old-path> --by <new-path> [--date <YYYY-MM-DD>]
   keryx memory transition <path> --to <draft|accepted|conflict|deprecated> [--reason <text>]
   keryx memory assets <list|verify|pull> [<id>]

@@ -1,0 +1,72 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T23",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "review-logic",
+  "task": {
+    "title": "Independent containment/SAC security review",
+    "description": "Review other-author AFC01 contained descriptor reader, real-directory/target identity racefix and narrow MCP/harness owner scopes. Stage1 approved containment spec andAC1 beforeStage2 security/logic. Root original probe now refused;89 focusedtests passed. Independently examine pre-open identities, symlink realpath-to-descriptor chain, FIFO/regularfile/byte bound, unsupportedplatform refusal and SAC nofollow compatibility. No review of your own structural validator or health. Read-only code; bounded safe temp probes allowed.",
+    "intent": "review"
+  },
+  "acceptance_criteria": [
+    "Internal symlink chains read same bytes within narrow owner root; external/replaced owner/target paths refused without disclosure.",
+    "Descriptor/platform/file-type/size guarantees hold for supported runtime and fail explicitly otherwise; SAC nofollow not weakened.",
+    "Stage1thenStage2 independent verdict with concrete evidence, no own code review."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/containment-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T6-implementation.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T18-implementation.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T17-owner-race-probe.ts",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/lib/contained-read.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/descriptor-read.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/contained-path.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/resources.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter.ts",
+    "/Users/Goodea/goodea/keryx/src/sac/secure-resource-read.ts",
+    "/Users/Goodea/goodea/keryx/src/lib/contained-read.test.ts",
+    "/Users/Goodea/goodea/keryx/src/mcp/resources-containment.test.ts",
+    "/Users/Goodea/goodea/keryx/src/harness/tool/metaproject-adapter-containment.test.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; index first, local review-security-code/review-logic fully, testing context/wiki. Code search only keryx ctx rg.",
+    "Graph rebuilt12:32:42 to1172nodes3542edges; scanner worker mayaddfilesafterward, check freshness. No source/git/flow/deps/global tests/model/network edits.",
+    "Do not review own T19 validator or T12 health. Root+functional implemented reviewed scope. Stage1 beforeStage2, output T23-review.md/T23-result.json and safe repros.",
+    "Schema validate result and security-check artifacts, stats disabled."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T23-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T12:06:15.356975+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

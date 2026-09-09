@@ -216,6 +216,39 @@ test("gdgraph.affected returns dependencies + dependents", async () => {
   expect(parsed.dependents).toContain("src/a.ts");
 });
 
+// ---------------------------------------------------------------------------
+// T19 finding 1 (flow 234 review, BLOCKER) — AC3 requires an unknown graph
+// target to be distinguishable from an indexed target with no edges. The
+// service facade (`gdgraph/service.ts`) and the CLI (`commands/gdgraph.ts`)
+// already make this distinction, but `gdgraph.affected` here called
+// `getAffected(graph, file)` directly and never checked graph membership, so
+// a target the graph never indexed came back byte-identical to
+// `src/lonely.ts` (a real, indexed node with zero edges) — the exact defect
+// class AC3 exists to eliminate, on an agent-facing boundary.
+// ---------------------------------------------------------------------------
+
+test("T19 finding 1 — an indexed target with no edges reports an empty-but-valid result, isError false", async () => {
+  const ctx = await buildMcpContext(root);
+  const result = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/lonely.ts" });
+  expect(result.isError).toBe(false);
+  const parsed = JSON.parse(result.text) as { target: string; dependencies: string[]; dependents: string[] };
+  expect(parsed).toEqual({ target: "src/lonely.ts", dependencies: [], dependents: [] });
+});
+
+test("T19 finding 1 — an unknown target is NOT byte-identical to an indexed-with-no-edges result", async () => {
+  const ctx = await buildMcpContext(root);
+  const known = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/lonely.ts" });
+  const unknown = await dispatchCallTool(ctx, "gdgraph.affected", { file: "src/definitely-not-a-file.ts" });
+
+  // The reproduced defect: both calls returned the exact same shape with no
+  // error flag — `{"target":...,"dependencies":[],"dependents":[]}` — so an
+  // agent could not tell "never indexed" from "indexed, no edges".
+  expect(unknown.isError).toBe(true);
+  expect(known.isError).toBe(false);
+  expect(unknown.text).not.toBe(known.text.replace("src/lonely.ts", "src/definitely-not-a-file.ts"));
+  expect(unknown.text).toContain("src/definitely-not-a-file.ts");
+});
+
 // --- resources / AC2 ----------------------------------------------------------
 
 test("AC2: resources/list enumerates >= 3 classes and reads content", async () => {
@@ -271,10 +304,10 @@ test("AC3: with mcp disabled, no tools/resources are exposed", async () => {
 
 // --- AC4: redaction seam ------------------------------------------------------
 
-test("AC4: with security disabled, tool output is byte-identical (never throws)", async () => {
+test("AC4: safe tool values are preserved with advisory security disabled", async () => {
   const ctx = await buildMcpContext(root);
   const result = await dispatchCallTool(ctx, "gdgraph.orphans", {});
-  // Security module is not initialized in the fixture ⇒ redactRaw is a no-op.
+  // The mandatory floor preserves this fixture's nonsensitive values.
   expect(result.isError).toBe(false);
   expect(JSON.parse(result.text)).toEqual(getOrphans(await import("../gdgraph/query").then((m) => m.loadGraph(root))));
 });
@@ -315,6 +348,7 @@ test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", 
       listTools(): Promise<{ tools: Array<{ name: string }> }>;
       callTool(args: { name: string; arguments: Record<string, unknown> }): Promise<{
         content: Array<{ type: string; text: string }>;
+        _meta?: Record<string, unknown>;
       }>;
       close(): Promise<void>;
     };
@@ -348,6 +382,7 @@ test("stdio round-trip over the real SDK transport (skips if SDK unavailable)", 
   // AC1 parity: the transported result equals the in-process dispatch result.
   const inProcess = await dispatchCallTool(ctx, "gdgraph.orphans", {});
   expect(overWire).toBe(inProcess.text);
+  expect(called._meta?.["keryx/redaction"]).toEqual(inProcess.redaction);
 
   await client.close();
   await server.close();

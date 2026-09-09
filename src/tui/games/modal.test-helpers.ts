@@ -53,6 +53,7 @@ export function hangingProvider(): ProviderPort {
     describe() {
       return { capabilities: { ...CAPABILITIES }, descriptor: { providerId: "stub-hang" } };
     },
+    // eslint-disable-next-line require-yield -- This deliberate never-settling generator simulates a hung provider.
     async *stream(): AsyncIterable<NormalizedEvent> {
       await new Promise<never>(() => {});
     },

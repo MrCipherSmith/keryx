@@ -1,0 +1,162 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T80-review-2026-09-06",
+  "dispatch_id": "flow-233-T80",
+  "status": "DONE_WITH_CONCERNS",
+  "summary": "Seventh-pass independent review of T79's repair of T76 F-001..F-004 and the orchestrator's own follow-up fix (security.ts:801, T79#F-005), on branch codex/agent-first-core at base 0bc6418. Stage 1: all four rows PASS, one with a caveat. Row 1 (enumeration axis): re-derived independently; the six mechanisms are sound and a broad non-keyword-scoped repo sweep found no seventh mechanism, but T79's execution within mechanism 5 (self-hosted checked-in copies) was keyword-bound rather than a full-content comparison against the generator each copy mirrors -- a full byte-diff surfaces a real, previously-undiscovered, pre-existing drift (F-001). Row 2 (the six corrections): all verified present and accurate against measured code, both directions checked, no new over- or under-claim introduced. Row 3 (pinning): both new regressions (security-pre-push.test.ts, templates.test.ts) run GREEN (12 pass / 0 fail / 32 expect(), matching T79's own count) and independently confirmed load-bearing by applying their own assertion predicates to the OLD text quoted verbatim in prior review artifacts (since this review is read-only on production files and cannot literally revert-and-rerun) -- every predicate flips false against the OLD text and true against current, matching the real GREEN run. The 'three unpinnable' claim is overstated: two of the three (docs/docs/modules.md, .metaproject/modules/security.md) are merely unpinned, using a pin idiom (readFile + assert, no generator seam required) this repo already uses in src/cli-reference-coverage.test.ts (F-002). Row 4 (orchestrator's security.ts:801 fix): verified right and complete (gateway now named); swept the whole file twice (28- and 37-match keyword sweeps, both undercounted by the compacted summary to 4 shown, raw read directly) and found no second site with the same defect -- every other match is an internal comment or a plain value echo. New finding F-001: this repo's own checked-in .metaproject/modules/security.md still carries the pre-T75 stale section-14 self-protection sentence ('a mode downgrade is always surfaced as a finding'), which T70/T75 already established is false in the generator function but which this on-disk self-hosted copy was never regenerated to match -- confirmed pre-existing (already stale at HEAD, untouched by this session's own WIP diff to the same file) and evading every prior sweep because the claim family falls outside the 'advisory|enforced|gateway|mode-gated|secret/critical|needs-approval' keyword list every probe from T70 through T79 used. Minor, not blocking: the actual runtime behaviour is correct, only the self-hosted static copy is stale. F-002 names the cheap pin available for both remaining 'unpinnable' sites. Per RESIDUALS.md's own recorded rule, neither finding meets the one exception (blocker, reproduced on a public boundary), so both are classified for the residual list, not a new fix round. Full dispatch-scope test suite run twice independently: bun test src/lib src/commands src/security src/health -> 2147 pass / 6 skip / 0 fail / 8517 expect() both times; typecheck clean; eslint on the 7 changed files clean (0 errors). src/security/detect/exfil.test.ts (the other worker's in-flight file) run separately and excluded from this review's verdict per dispatch instruction -- clean (58/0) at time of measurement but not attributed either way. No production, test, or documentation file was modified by this review; file hashes are identical start to end for every file read.",
+  "summary_markdown": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-review.md",
+  "acceptance": [
+    {
+      "criterion": "AC8: no artifact reaching a user or an agent describes behaviour the code does not have, in either direction",
+      "status": "partial",
+      "evidence": "All six of T79's corrections and the orchestrator's security.ts:801 fix are confirmed accurate against measured code (Stage 1 rows 2 and 4, PASS). One new site, outside T79's own swept keyword family, is found stale: .metaproject/modules/security.md:88-89 still carries the pre-T75 disproven self-protection claim (F-001, minor, not blocking -- the generator and the actual runtime behaviour are both correct; only this self-hosted static copy drifted). Per RESIDUALS.md's recorded scope decision this is documented for the residual list rather than opened as a new fix round, since it is not a blocker reproduced on a public boundary."
+    },
+    {
+      "criterion": "The enumeration is exhaustive by a stated axis, and every mechanism is swept",
+      "status": "met",
+      "evidence": "Re-derived the six-mechanism axis independently and ran a broad, non-keyword-scoped ctx rg across the entire tracked tree; no seventh mechanism found -- every hit fell inside one of the six, and every hit beyond T79's fixed set was an established-precedent internal comment or already-correct prose. The axis's categorization is sound. The caveat recorded (F-001) is about execution depth within mechanism 5 (keyword-bound rather than full-content comparison against the generator), not about a missing mechanism."
+    },
+    {
+      "criterion": "Findings are classified so the residual list can be trusted: blocking-and-reproduced vs. documentation-grade",
+      "status": "met",
+      "evidence": "Both new findings (F-001, F-002) are explicitly classified documentation-grade in the Residual classification section of T80-review.md, with the reasoning against RESIDUALS.md's own stated exception (blocker, reproduced on a public boundary) spelled out for each. T79's six corrections and the orchestrator's F-005 fix are explicitly marked confirmed closed, no residual entry needed."
+    },
+    {
+      "criterion": "The two pinning regressions are load-bearing (would fail if the corrected text regressed)",
+      "status": "met",
+      "evidence": "Both suites run GREEN directly (12 pass / 0 fail / 32 expect(), matching T79's reported count). Read both new tests in full: both assert on the render functions' live string output. T80-pin-check.ts applies the tests' own assertion predicates verbatim to the OLD text quoted word-for-word in T76-review.md/T73-implementation.md, confirming every predicate flips to false against the old text (i.e. the test would fail) and true against the current unmodified output."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-review.md",
+      "kind": "review",
+      "exists": true,
+      "summary": "Full review report: scope with start/end file hashes, Stage 1 table (4 rows), 2 findings, residual classification, confirmed clean areas, evidence table, routing audit, keryx:findings block.",
+      "hash": "9227106a6f31078abedc5b27d1f4c48b6da12aa9993a5099d0aabd3a25713e57"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file.",
+      "hash": null
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-pin-check.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Stage 1 row 3 probe: applies the two new tests' own assertion predicates, verbatim, to the OLD (pre-T79) text quoted in T76-review.md/T73-implementation.md and to the CURRENT unmodified production output, without editing any production file (read-only constraint).",
+      "hash": "5099b7a415f3c40f1df162d1a6b9103cfaf9dcc7dd964e9d92d92b0e3fdeb3ca"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-manifest-drift.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "F-001 probe: full byte-level comparison of .metaproject/modules/security.md and .metaproject/core/security/README.md against their respective generator functions' live output.",
+      "hash": "e227c769edf740f56eddbfc9da138bbc44fdc6e84ce18718a78d186befee03cc"
+    }
+  ],
+  "changed_files": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-review.md",
+      "change": "added (review report)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-result.json",
+      "change": "added (schema-validated result)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-pin-check.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-manifest-drift.ts",
+      "change": "added (probe)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/*T80*.log and other *_rg.log/*_run.log/*_diff.log generated by this review's ctx commands",
+      "change": "added (raw evidence; no production, test or documentation file was modified by this review)"
+    }
+  ],
+  "findings": [
+    {
+      "id": "F-001",
+      "global_id": "T80#F-001",
+      "reviewer": "review-logic (T80 independent seventh-pass review)",
+      "severity": "minor",
+      "file": ".metaproject/modules/security.md",
+      "line": 88,
+      "symbol": "Lifecycle section, §14 self-protection sentence",
+      "problem": "This repo's own checked-in copy of the security manifest (mechanism 5 in T79's enumeration; produced by renderSecurityManifest() and refreshed by `keryx update`) still reads 'A `configChecksum` mismatch or a mode downgrade is always surfaced as a finding plus an incident entry (self-protection, specification.md 14).' T70 F-003 established this is false and T75 corrected it -- but only in the generator function's return value. self-protect.ts has exactly one findings.push (the checksum arm); the mode-downgrade and disabled-policy arms each push a warning + an incident, never a finding, so a mode downgrade never moves the gate. This on-disk file was never regenerated for that fix: git show HEAD:.metaproject/modules/security.md already contains the stale sentence (predates this whole review chain), and this session's own WIP diff for the file touches only lines 45-51 (a separate, unrelated fix), not 88-89.",
+      "impact": "AC8's 'no artifact reaching a user or an agent describes behaviour the code does not have' fails on this specific site, in the false-confidence direction: a reader believes a mode-downgrade attack is caught as a finding (and therefore visible in the gate-relevant findings list) when it is actually only a warning+incident that does not move the gate or exit code. Blast radius is narrower than a shipped-into-every-project site (this file is self-hosted, this-repo-only), so severity stays minor, matching T70's original rating for the same claim. Not a working bypass: the actual runtime behaviour is correct; only this static checked-in copy is stale.",
+      "suggested_fix": "Regenerate .metaproject/modules/security.md from the corrected renderSecurityManifest() (run `keryx update`, or hand-align lines 88-89 to the generator's current sentence). Add the pin named in T80#F-002 -- an equality check between this file and its generator -- so a self-hosted copy drifting from a generator-only fix cannot recur silently again.",
+      "evidence": "bun .metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T80-manifest-drift.ts -> .metaproject/data/gdctx/raw/2026-09-06T20-00-30-104Z_run.log (sha256 3926336def17a44723a5c3a3e87f75aee7d25ec5e87e565971c482395e0b8bd8): manifest identical to generator: false, first diff at line 87 (generator's corrected sentence vs disk's stale one); manifest still contains the stale pre-T75 14 sentence: true; readme identical to generator: true (no equivalent drift there). git diff -- .metaproject/modules/security.md confirms this session touched only lines 45-51. git show HEAD:.metaproject/modules/security.md confirms pre-existing staleness.",
+      "confidence": "high",
+      "dedupe_key": "shipped-guidance/security-manifest-self-hosted-copy/stale-section14-drift",
+      "blocking_merge": false,
+      "related_skill": "review-security-code",
+      "learning_candidate": true,
+      "class_scope": {
+        "sites": [
+          ".metaproject/modules/security.md:88-89 (14 Lifecycle sentence) - DEFECT (stale)",
+          ".metaproject/modules/security.md:45-51 (Hooks section) - correct, this session's own T79 edit, verified",
+          ".metaproject/core/security/README.md (full file) - correct, byte-identical to renderSecurityCoreReadme()",
+          "src/security/templates.ts (renderSecurityManifest, the generator itself) - correct, pinned by templates.test.ts"
+        ],
+        "enumeration_method": "Full byte-level line-by-line comparison of .metaproject/modules/security.md's on-disk content against renderSecurityManifest()'s live return value (and the same pairing for core/security/README.md against renderSecurityCoreReadme()), via T80-manifest-drift.ts -- a full-content diff rather than a keyword grep, because this claim family (configChecksum/mode-downgrade/always-surfaced-as-a-finding) falls outside every keyword list T70 through T79 used for the security mode/gate/exit sweep. Both generator/self-hosted-copy pairs in this module were checked; only the manifest pair drifted."
+      }
+    },
+    {
+      "id": "F-002",
+      "global_id": "T80#F-002",
+      "reviewer": "review-logic (T80 independent seventh-pass review)",
+      "severity": "minor",
+      "file": "docs/docs/modules.md",
+      "line": null,
+      "symbol": "T79's pinning-table rationale (\"no generator seam\")",
+      "problem": "T79-implementation.md's pinning table calls docs/docs/modules.md and .metaproject/modules/security.md unpinnable because 'no generator seam exists.' A pin does not require a render* function -- only a way to read the shipped text and assert on it. src/cli-reference-coverage.test.ts already does exactly this, today, for cli-reference.md, index.md, mkdocs.yml, architecture.md and commands/workspace.ts (readFile + toContain/regex), none of which is generated either. The same idiom pins modules.md's Exit cells and init.ts:497's prompt string at effectively zero cost. For .metaproject/modules/security.md specifically, an even stronger pin exists: an equality check between the on-disk file and renderSecurityManifest()'s live output -- using the generator that already exists for this exact file, contradicting 'no generator seam' for this one in particular.",
+      "impact": "Not a code defect; a gap in this phase's own verification rigor. T80#F-001 is live proof of the cost: the exact drift this pin would catch immediately has been sitting in the tracked tree, undetected, through six review rounds specifically because no such pin exists.",
+      "suggested_fix": "Add to src/cli-reference-coverage.test.ts (or a sibling docs-drift.test.ts): (a) readFile+toContain/not.toContain for docs/docs/modules.md's scan-mcp/hooks-install Exit cells; (b) readFile+toContain for src/commands/init.ts:497's prompt string; (c) an equality (or normalized-equality) test between .metaproject/modules/security.md and renderSecurityManifest(), and between .metaproject/core/security/README.md and renderSecurityCoreReadme() -- the highest-value of the three, since it protects the whole file against any future drift, not just one sentence.",
+      "evidence": "src/cli-reference-coverage.test.ts read in full (228 lines): every one of its 7 tests reads a doc or source file directly via readFile and asserts on the returned string; none calls a render* function. bun src/cli.ts ctx rg \"modules.md\" src --glob '*.test.ts' -> 0 matches, confirming docs/docs/modules.md has no existing test coverage to extend. T80-manifest-drift.ts's own run demonstrates the equality-with-generator pin is mechanically trivial.",
+      "confidence": "high",
+      "dedupe_key": "process/pinning-rigor/hand-authored-docs-are-not-actually-unpinnable",
+      "blocking_merge": false,
+      "related_skill": "review-logic",
+      "learning_candidate": true
+    }
+  ],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "stage1_rows_passed": 4,
+    "stage1_rows_failed": 0,
+    "stage2_entered": true,
+    "probes_written": 2,
+    "evidence_logs": 13,
+    "tests_pass_pre_push_templates": 12,
+    "tests_fail_pre_push_templates": 0,
+    "expect_calls_pre_push_templates": 32,
+    "tests_pass_full_scope": 2147,
+    "tests_skip_full_scope": 6,
+    "tests_fail_full_scope": 0,
+    "expect_calls_full_scope": 8517,
+    "exfil_tests_pass_excluded_from_verdict": 58,
+    "exfil_tests_fail_excluded_from_verdict": 0,
+    "findings_blocker": 0,
+    "findings_major": 0,
+    "findings_minor": 2,
+    "findings_info": 0,
+    "manifest_drift_from_generator_found": true,
+    "gdctx_compaction_row_drops_observed": 3,
+    "graph_used": false,
+    "wiki_used": false,
+    "ctx_used": true,
+    "raw_rg_used": false
+  },
+  "timestamp_utc": "2026-09-06T20:05:00.000Z"
+}

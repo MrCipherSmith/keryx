@@ -1,0 +1,89 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T60",
+  "status": "DONE",
+  "summary": "Closed T57-review.md F-001: T56's fold correctly made `warn` health-gate completions still succeed (GateOutcome.status:\"pass\"), and claimed the row stays distinguishable from a genuine pass because `detail` differs (\"health gate: warn\" vs \"health gate: pass\") -- but that `detail` never reached the two durable/published surfaces. `flow.json`'s \"done\" history event wrote the fixed constant \"all gates passed\" regardless of which health status produced it, and buildIssueComment rendered `${gate.name}: ${gate.status}` (status, never detail) -- so a warn completion's stored record and published issue comment were byte-identical to a genuine pass's, with the word \"warn\" appearing in neither. Fixed by adding one small helper, healthWarnNote(gates), that reads the health gate's own already-computed, already-leak-safe detail and returns it only when it is not a clean pass. Two call sites use it: the \"done\" transition detail (\"all gates passed (health gate: warn)\" instead of the bare constant when warn) and buildIssueComment's health-gate line (renders the distinguishing detail instead of \"health: pass\" when warn). A genuine pass is byte-identical to before at both sites (verified via the reviewer's own T57-flow.ts probe, row C01, before/after). Did not widen GateOutcome.status to a 4th \"warn\" member (F-001's suggested option (b)): src/commands/flow.ts:578-584, outside this task's ownership, picks the terminal color by status and would paint a warn as a hard failure (red) if that member existed. Did not blanket-join every gate's detail into both surfaces either (the failing path already does this for failed gates): health is the only gate whose vocabulary admits a passing-but-not-clean state today, and widening to all gates would expose review's verdict.detail from the 2000-line review-gate.ts, a file this task does not own and which T47 already flagged as carrying at least one accepted, unfixed leak-adjacent path outside a throw. Corrected healthGateOutcome's doc comment, which previously asserted this distinguishability as a property of flow.json (false, per F-001) -- it now points at healthWarnNote as the actual mechanism. Strengthened T56's existing warn regression test with artifact-level assertions (reads flow.json off disk, checks result.issueComment) instead of only the in-memory result.gates the review found insufficient; added one new committed regression mirroring the reviewer's own T57-flow.ts C99 probe, comparing a genuine pass's and a warn completion's persisted flow.json and issueComment byte for byte. Reproduced F-001 pre-fix and confirmed closed post-fix with the reviewer's own probe (row C99: storedRecordsIdentical true->false, storedRecordContainsWarnWord false->true). Full src/flow/ suite: 192 pass / 0 fail.",
+  "acceptance": [
+    {
+      "criterion": "AC8: no required failed or incomplete check is relabeled PASS, and an optional warning is never signed as passed in a durable record.",
+      "status": "met",
+      "evidence": "T56 already closed the failed/incomplete-relabeled-PASS half (unchanged, not reopened here). The 'warning never signed as passed in a durable record' half: before this fix, a warn completion's flow.json history entry read {\"event\":\"done\",\"detail\":\"all gates passed\"} -- byte-identical to a genuine pass, no trace of the word 'warn' anywhere in the stored JSON (T57 F-001, reproduced pre-fix: .metaproject/data/gdctx/raw/T60-probe-before.log, storedRecordContainsWarnWord:false). After this fix, the same run's history entry reads {\"event\":\"done\",\"detail\":\"all gates passed (health gate: warn)\"} -- the word 'warn' is literally in the persisted record (.metaproject/data/gdctx/raw/T60-probe-after-final.log, storedRecordContainsWarnWord:true). The status itself is still 'pass' (T56's own decision, correctly not reopened -- policies.md's 'optional skip warns, not signed as passed' concerns an optional-skip reason, not blocking completion on every warn), but the record is no longer indistinguishable text-for-text from a genuine pass."
+    },
+    {
+      "criterion": "A reader of the stored flow record, and a reader of the published comment, can tell a warning from a genuine pass. A completion that legitimately succeeds today still succeeds.",
+      "status": "met",
+      "evidence": "Stored record: verified above. Published comment: buildIssueComment's Gates line read '...health: pass...' for BOTH a genuine pass and a warn before this fix (T60-probe-before.log, issueCommentHealthLinePass === issueCommentHealthLineWarn, issueCommentsIdentical:true); after the fix it reads '...health: pass...' for a genuine pass and '...health gate: warn...' for a warn (T60-probe-after-final.log, issueCommentsIdentical:false). 'Still succeeds': the pass/fail fold (gates.every(status !== \"fail\")) is untouched, GateOutcome.status stays \"pass\" for warn (unchanged from T56), and the reviewer's probe's C01 row (genuine pass) and the new committed regression's 'pass' fixture both show flow.status:\"done\", passed:true, and byte-identical flow.json/comment text before and after this task's change -- confirmed by reading the artifact, not inferring it."
+    },
+    {
+      "criterion": "Regressions fail before the change and pass after, and assert on the persisted artifact and the comment text rather than on the in-memory result; bun test src/flow/ stays green.",
+      "status": "met",
+      "evidence": "RED, by hand-reverting the two call-site edits (not git stash/checkout, per the no-git-state-changes constraint and because this file already carries substantial uncommitted work from prior tasks in this session): the strengthened warn test failed on `expect(doneEvent?.detail).toContain(\"warn\")` (received \"all gates passed\"); the new committed C99-style test failed on `expect(warn.stored).not.toBe(genuinePass.stored)` with the two JSON blobs shown byte-identical in the transcript (T60-implementation.md). GREEN after re-applying the fix: `bun test src/flow/service.test.ts -t \"warn|NOT identical\"` -> 2 pass / 0 fail / 16 expect(). Full suite: `bun src/cli.ts ctx run -- bun test src/flow/` -> 192 pass / 0 fail / 660 expect() across 20 files (.metaproject/data/gdctx/raw/2026-09-06T16-46-30-223Z_run.md). Both new/strengthened assertions read `flow.json` off disk via `readFile` and check `result.issueComment`'s actual string content -- not `result.gates` alone, which is exactly the gap the independent review named (T56's original warn test asserted only on the return value and would have stayed green while F-001 stood; it is strengthened, not replaced, with the artifact-level checks added alongside it)."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "The defect reproduced pre-edit via the reviewer's own T57-flow.ts probe, the reader enumeration for both surfaces touched, the fix design, the 'why not widen to a 4th GateOutcome.status member' and 'why not join every gate's detail' rejections with their reasoning, the code-comment correction, and the regression-test plan -- written before any code change."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Which option was chosen and why, full reader enumeration, evidence taken from the persisted artifact (before/after probe rows), RED/GREEN transcripts including the title-bug caught and fixed during RED verification, and every verification command with raw log paths."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T60-result.json",
+      "kind": "final-report",
+      "exists": true,
+      "summary": "This file."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-before.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Reviewer's own T57-flow.ts probe, run before any code change, reproducing F-001 (row C99: storedRecordsIdentical:true, storedRecordContainsWarnWord:false)."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-probe-after-final.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Same probe, post-fix (row C99: storedRecordsIdentical:false, storedRecordContainsWarnWord:true); re-run confirmed byte-identical in T60-probe-after-final2.log."
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/T60-T39exit-after.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T39-exit.ts re-run post-fix, confirming healthGateOutcome's own in-memory return values (which the review did not fault) are unchanged."
+    }
+  ],
+  "changed_files": [
+    {
+      "path": "src/flow/service.ts",
+      "change": "Added healthWarnNote(gates), placed directly after healthGateOutcome: returns the health gate's own detail when it is not the literal \"health gate: pass\", else null. complete()'s \"done\" transition detail now uses it instead of the fixed constant \"all gates passed\" (byte-identical for a genuine pass; includes the health detail in parentheses for a warn). buildIssueComment's Gates line renders the health gate's distinguishing detail instead of \"health: pass\" when it is not a clean pass, unchanged for every other gate and for a genuine pass. Corrected healthGateOutcome's doc comment, which previously asserted the distinguishability property as if it belonged to healthGateOutcome's own return value; it now points at healthWarnNote as the actual mechanism and states plainly that healthGateOutcome only ever returns an in-memory value. No change to GateOutcome, FlowServiceDeps, the pass/fail fold, or any other gate."
+    },
+    {
+      "path": "src/flow/service.test.ts",
+      "change": "Strengthened the existing T56 test \"healthGate -> warn still completes, but the row is not identical to a genuine pass\" with artifact-level assertions: reads flow.json back off disk and asserts the \"done\" history entry's detail contains \"warn\" and is not the bare \"all gates passed\"; asserts result.issueComment contains \"warn\". No existing assertion removed. Added one new test, \"a warn completion's stored flow.json and issue comment are NOT identical to a genuine pass's\", driving complete() twice (same title/slug/id, differing only in health status) and comparing the persisted flow.json and result.issueComment byte for byte between a genuine pass and a warn."
+    }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 1,
+    "tests_strengthened": 1,
+    "tests_passing_full_flow_suite": 192,
+    "tests_failing_full_flow_suite": 0,
+    "typecheck_errors_src_flow": 0,
+    "typecheck_errors_other": 0,
+    "eslint_errors": 0
+  },
+  "timestamp_utc": "2026-09-06T16:50:00Z"
+}

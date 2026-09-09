@@ -1,0 +1,95 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T7",
+  "status": "DONE",
+  "summary": "Created eight bounded failing runtime tests for structural MCP/security redaction and recursive security scanning. The RED run is 0 pass/8 fail on actual defects: invalid JSON from numeric false positives, missing format-unsafe and redaction metadata, raw resource leakage, public Markdown misclassified as egress, and directory EISDIR instead of bounded recursive coverage. All fixtures are synthetic/local and targeted ESLint passes.",
+  "summary_markdown": "T7 RED is complete. Run `bun test src/mcp/structural-redaction.test.ts src/security/structural-detection.test.ts src/commands/security-recursive-scan.test.ts`; current result is 0 pass and 8 intentional runtime failures. Exact test_case_specs, approved additive contracts, hashes, and immutable evidence are in `T7-red.md`.",
+  "acceptance": [
+    {
+      "criterion": "Synthetic secret absent from JSON, text resource and error; JSON preserves safe fields and numeric schema. Unsafe secret-bearing numeric representation gives format-unsafe.",
+      "status": "met",
+      "evidence": "Three MCP runtime tests cover parseable operation JSON with sibling redaction metadata, a required numeric secret producing a leak-safe format-unsafe error, and tool-error/resource redaction. Tests currently fail on invalid JSON, missing state, incorrect success, and raw resource content."
+    },
+    {
+      "criterion": "Safe IDs/metrics remain, true secrets cannot bypass through field name. Sensitive URL query/path redacted; plain public Markdown link alone not exfiltration.",
+      "status": "met",
+      "evidence": "Two security-service/detector tests preserve safe IDs, counts and decimal metrics while requiring secrets under id/metric keys to be masked. URL path/query masking is a passing positive control; the same scenario remains RED because a plain public documentation link is incorrectly classified as egress."
+    },
+    {
+      "criterion": "Recursive nested scan works, symlink cycles terminate, required inaccessible/limit cases are incomplete while findings retained.",
+      "status": "met",
+      "evidence": "Three CLI runtime tests cover default recursive traversal, canonical internal links and cycles, external/unreadable entries, leak-safe per-file results, max-files/max-bytes bounds, and FAIL with independently incomplete coverage. All currently reproduce EISDIR."
+    }
+  ],
+  "artifacts": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Exact three-file, eight-case task-implementer contract and run command.",
+      "hash": "3e0ff405b7448db2d0cf4fb72d956f4344bf60007085aaf94f6b25b8a835a805"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-red.md",
+      "kind": "report",
+      "exists": true,
+      "summary": "RED defect matrix, parent-confirmed additive public contracts, hygiene and routing evidence.",
+      "hash": "21080250d8236fcb38d8b270ad8191b824e3608b3904e66fdf8eba29722d2111"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/mcp/structural-redaction.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "MCP JSON, numeric format safety, error, and resource redaction tests.",
+      "hash": "cc459f00125316fc7ac0b3cb5e032341abc1eaeba778273c2345c38cb32088bc"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/security/structural-detection.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Contextual safe-number/ID, field-bypass, URL-secret and public-Markdown tests.",
+      "hash": "f2f39a291717582fcc48e08930da468a65a5e7ffa751c154284432f3a1774848"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/src/commands/security-recursive-scan.test.ts",
+      "kind": "custom",
+      "exists": true,
+      "summary": "Recursive traversal, symlink, inaccessible/external, limit and finding-retention CLI tests.",
+      "hash": "615e5f6bac4d87e1b7f3c3efae38ccfe85ddccb301a109f2e32de16e27a753c6"
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/data/gdctx/raw/2026-09-06T12-11-35-102Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "Immutable focused RED run: 0 pass, 8 runtime failures.",
+      "hash": "cdb1cce1790ac2ba95834389f81efdacef33668bbdec0690825cf035cec5fca5"
+    }
+  ],
+  "changed_files": [
+    { "path": "src/mcp/structural-redaction.test.ts", "change": "created three structural MCP redaction RED tests" },
+    { "path": "src/security/structural-detection.test.ts", "change": "created two contextual detection/redaction RED tests" },
+    { "path": "src/commands/security-recursive-scan.test.ts", "change": "created three bounded recursive scan RED tests" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json", "change": "created exact task-implementer test contract" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-red.md", "change": "created immutable RED evidence report" },
+    { "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-result.json", "change": "created schema-conformant worker result" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0,
+    "tests_written": 8,
+    "tests_passing_before_implementation": 0,
+    "tests_failing_before_implementation": 8,
+    "targeted_lint_exit_code": 0,
+    "production_files_modified": 0,
+    "external_model_calls": 0,
+    "network_calls": 0,
+    "commits_created": 0
+  },
+  "timestamp_utc": "2026-09-06T12:12:00Z"
+}

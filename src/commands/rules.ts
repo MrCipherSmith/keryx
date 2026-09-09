@@ -2,17 +2,27 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import {
-  renderIndexMarkdown,
-  renderProjectRulesReadme,
-} from "../lib/templates";
+  planRoutingEntrypointPair,
+  rulesReadmeStep,
+  writeRoutingEntrypointPair,
+} from "../lib/routing-entrypoint";
+import {
+  formatInstallPlan,
+  isPreviewRequested,
+  parseDivergenceResolution,
+  type DivergenceResolution,
+} from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
 import {
   distillAgentEntrypoints,
   hasDistilledEntrypoints,
+  listRootEntrypoints,
 } from "../rules/distill";
 
 type RulesOptions = {
   help: boolean;
+  preview: boolean;
+  resolution: DivergenceResolution | undefined;
 };
 
 type ManifestModule = {
@@ -55,12 +65,51 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   const manifestPath = path.join(metaprojectRoot, "metaproject.json");
   const manifest = await readManifest(manifestPath);
   const enableTasks = moduleEnabled(manifest, "tasks");
+
+  // Preview before either intent writes anything: `listRootEntrypoints` is the
+  // read-only twin of the discovery `syncAgentRules`/`distillAgentEntrypoints`
+  // do, so no default AGENTS.md is created and no rule file is imported.
+  if (options.preview) {
+    const plan = await planRoutingEntrypointPair(
+      metaprojectRoot,
+      {
+        enableGdgraph: moduleEnabled(manifest, "gdgraph"),
+        enableGdctx: moduleEnabled(manifest, "gdctx"),
+        enableGdwiki: moduleEnabled(manifest, "gdwiki"),
+        enableGdskills: moduleEnabled(manifest, "gdskills"),
+        enableHealth: moduleEnabled(manifest, "health"),
+        enableTesting: moduleEnabled(manifest, "testing"),
+        enableMemory: moduleEnabled(manifest, "memory"),
+        enableTasks,
+        enableSecurity: moduleEnabled(manifest, "security"),
+        ruleSources: await listRootEntrypoints(projectRoot, manifest.agentEntrypoints?.root ?? []),
+        hasDistilledEntrypoints:
+          subcommand === "distill" ? true : await hasDistilledEntrypoints(metaprojectRoot),
+      },
+      { intent: `rules ${subcommand}`, steps: [rulesReadmeStep(metaprojectRoot, "managed")] },
+    );
+    console.log(
+      formatInstallPlan(plan, {
+        ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
+        relativeTo: projectRoot,
+        notes: [
+          "Not digest-planned by this release: metaproject.json, the imported " +
+            ".metaproject/rules/*.md files, and (for distill) the entrypoint index and project skills.",
+        ],
+      }),
+    );
+    return;
+  }
+
   if (subcommand === "distill") {
     const result = await distillAgentEntrypoints(projectRoot, metaprojectRoot, {
       enableTasks,
       manifestSources: manifest.agentEntrypoints?.root ?? [],
     });
-    await refreshRulesIndex(metaprojectRoot, manifest, result.sources, true);
+    await refreshRoutingEntrypoints(metaprojectRoot, manifest, result.sources, true, {
+      intent: "rules distill",
+      resolution: options.resolution,
+    });
     await persistManifestEntrypoints(manifestPath, manifest, result.sources);
 
     console.log(`# rules distill`);
@@ -81,10 +130,15 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
   const ruleSources = syncedRules.map((rule) => rule.source);
 
   await mkdir(path.join(metaprojectRoot, "rules"), { recursive: true });
-  await writeTextIfChanged(path.join(metaprojectRoot, "rules", "README.md"), renderProjectRulesReadme());
 
   await persistManifestEntrypoints(manifestPath, manifest, ruleSources);
-  await refreshRulesIndex(metaprojectRoot, manifest, ruleSources, await hasDistilledEntrypoints(metaprojectRoot));
+  await refreshRoutingEntrypoints(
+    metaprojectRoot,
+    manifest,
+    ruleSources,
+    await hasDistilledEntrypoints(metaprojectRoot),
+    { intent: "rules sync", resolution: options.resolution },
+  );
 
   console.log(`# rules sync`);
   console.log("");
@@ -97,6 +151,8 @@ export async function rulesCommand(args: string[] = [], projectRoot: string = pr
 function parseRulesOptions(args: string[]): RulesOptions {
   return {
     help: args.includes("--help") || args.includes("-h"),
+    preview: isPreviewRequested(args),
+    resolution: parseDivergenceResolution(args),
   };
 }
 
@@ -138,15 +194,16 @@ async function persistManifestEntrypoints(
   await writeJsonIfChanged(manifestPath, manifest);
 }
 
-async function refreshRulesIndex(
+async function refreshRoutingEntrypoints(
   metaprojectRoot: string,
   manifest: MetaprojectManifest,
   ruleSources: string[],
   hasDistilled: boolean,
+  context: { intent: string; resolution: DivergenceResolution | undefined },
 ): Promise<void> {
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, "index.md"),
-    renderIndexMarkdown({
+  await writeRoutingEntrypointPair(
+    metaprojectRoot,
+    {
       enableGdgraph: moduleEnabled(manifest, "gdgraph"),
       enableGdctx: moduleEnabled(manifest, "gdctx"),
       enableGdwiki: moduleEnabled(manifest, "gdwiki"),
@@ -155,9 +212,20 @@ async function refreshRulesIndex(
       enableTesting: moduleEnabled(manifest, "testing"),
       enableMemory: moduleEnabled(manifest, "memory"),
       enableTasks: moduleEnabled(manifest, "tasks"),
+      enableSecurity: moduleEnabled(manifest, "security"),
       ruleSources,
       hasDistilledEntrypoints: hasDistilled,
-    }),
+    },
+    {
+      intent: context.intent,
+      steps: [rulesReadmeStep(metaprojectRoot, "managed")],
+      ...(context.resolution === undefined ? {} : { resolution: context.resolution }),
+      onNotice: (line) => {
+        if (line.trim().length > 0) {
+          console.log(line);
+        }
+      },
+    },
   );
 }
 
@@ -168,5 +236,10 @@ function printHelp(): void {
 
 Commands:
   sync     Import root AGENTS.md/CLAUDE.md into .metaproject/rules and refresh index
-  distill  Split large AGENTS.md/CLAUDE.md into high-priority rules and project skills`);
+  distill  Split large AGENTS.md/CLAUDE.md into high-priority rules and project skills
+
+Options:
+  --preview, --dry-run  Print the lifecycle plan (create/update/skip/conflict + base digests) and write nothing
+  --accept-version      Publish this version's content over lifecycle files a different version left divergent
+  --keep-existing       Leave divergent lifecycle files alone and record that this run did not publish them`);
 }

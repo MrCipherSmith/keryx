@@ -559,7 +559,14 @@ export function summarizeSubmittedLine(line: string): string {
 // width model is deliberately small instead of a full Unicode width table.
 
 /** Combining marks and other zero-width code points. */
-const ZERO_WIDTH = /^[̀-ͯ​-‏︀-️⁠-⁤]$/u;
+function isZeroWidth(cp: number): boolean {
+  return (
+    (cp >= 0x0300 && cp <= 0x036f) ||
+    (cp >= 0x200b && cp <= 0x200f) ||
+    (cp >= 0xfe00 && cp <= 0xfe0f) ||
+    (cp >= 0x2060 && cp <= 0x2064)
+  );
+}
 
 /**
  * Ranges that terminals render two columns wide: CJK, Hangul, Kana, fullwidth
@@ -600,10 +607,11 @@ function codePointWidth(cp: number): number {
 export function visualWidth(text: string): number {
   let width = 0;
   for (const ch of text) {
-    if (ZERO_WIDTH.test(ch)) {
+    const codePoint = ch.codePointAt(0) ?? 0;
+    if (isZeroWidth(codePoint)) {
       continue;
     }
-    width += codePointWidth(ch.codePointAt(0) ?? 0);
+    width += codePointWidth(codePoint);
   }
   return width;
 }

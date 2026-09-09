@@ -22,21 +22,78 @@ export function provenancePath(cwd: string, module: string): string {
   return path.join(cwd, ".metaproject", "data", module, ".provenance.json");
 }
 
-// Run a git command, returning trimmed stdout or null on any failure.
-export function gitCmd(cwd: string, args: string[]): Promise<string | null> {
+// AFC-22/AFC-W05 (flow 236, phase 4, T7): "a git failure yields unknown" only
+// holds if a git failure is itself distinguishable from a git *success*. The
+// previous `gitCmd` collapsed three different events into one `null` answer:
+//   1. the process could not be started at all (spawn error — git missing,
+//      permission denied, a `cwd` that does not exist);
+//   2. the process started and exited non-zero (git RAN and refused — a
+//      corrupt repo, a bad revision, "fatal: not a git repository"; note
+//      some commands, e.g. `cat-file -e`, use a non-zero exit as their own
+//      legitimate negative *answer*, not a failure — that distinction is the
+//      caller's to make, which is exactly why it needs the raw exit code);
+//   3. the process ran, exited zero, and produced no stdout — a legitimate
+//      result for several commands (`git log` over a range with zero
+//      matching commits, `git status --porcelain` on a clean tree).
+// Every caller that only ever saw `string | null` necessarily read (1) and
+// (2) as the same fact, and — wherever it used a truthy check like `if
+// (!result)` — case (3) as well. `gitCmdResult` is the separated primitive;
+// `gitCmd` below is now a thin, byte-identical-behavior wrapper over it, kept
+// so every existing caller (`gdgraph/staleness.ts`, `sync/diff.ts`,
+// `commands/wiki.ts`, …) is unaffected. New or updated callers that need to
+// tell "could not run" apart from "ran and refused" apart from "ran and said
+// nothing" should call `gitCmdResult` directly instead of adding another
+// ad hoc null check.
+export type GitCmdResult =
+  | { kind: "ok"; stdout: string }
+  | { kind: "spawn-error"; message: string }
+  | { kind: "exit-error"; code: number | null; stderr: string };
+
+export function gitCmdResult(cwd: string, args: string[]): Promise<GitCmdResult> {
   return new Promise((resolve) => {
     try {
-      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "ignore"] });
+      const child = spawn("git", args, { cwd, stdio: ["ignore", "pipe", "pipe"] });
       let out = "";
+      let err = "";
       child.stdout?.on("data", (chunk) => {
         out += String(chunk);
       });
-      child.on("error", () => resolve(null));
-      child.on("close", (code) => resolve(code === 0 ? out.trim() : null));
-    } catch {
-      resolve(null);
+      child.stderr?.on("data", (chunk) => {
+        err += String(chunk);
+      });
+      child.on("error", (error) => {
+        resolve({ kind: "spawn-error", message: error instanceof Error ? error.message : String(error) });
+      });
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve({ kind: "ok", stdout: out.trim() });
+        } else {
+          resolve({ kind: "exit-error", code, stderr: err.trim() });
+        }
+      });
+    } catch (error) {
+      resolve({ kind: "spawn-error", message: error instanceof Error ? error.message : String(error) });
     }
   });
+}
+
+// Run a git command, returning trimmed stdout or null on any failure.
+//
+// Back-compat surface, deliberately unchanged: `null` still means "spawn
+// error OR non-zero exit", and a genuinely empty successful result still
+// comes back as `""` (not `null`) exactly as before — verified against
+// `gitCmdResult` directly in `provenance.test.ts` so this stays true.
+//
+// AFC-22 (flow 236 T13): this is the DISCARDING wrapper, and calling it is a
+// statement — "for this command, I do not need to tell a failure from a
+// negative answer". That statement belongs at the call site, not in the type.
+// Any caller whose output claims something about git's state (a freshness
+// basis, a stamped revision, a recorded diff) must call `gitCmdResult` and
+// branch on `kind`; a discriminating primitive that the next line flattens is
+// the same as not having one, which is exactly the defect this closes.
+export async function gitCmd(cwd: string, args: string[]): Promise<string | null> {
+  const result = await gitCmdResult(cwd, args);
+  return result.kind === "ok" ? result.stdout : null;
 }
 
 export async function gitHead(cwd: string): Promise<{ commit: string; branch: string } | null> {
@@ -44,6 +101,125 @@ export async function gitHead(cwd: string): Promise<{ commit: string; branch: st
   if (!commit) return null;
   const branch = (await gitCmd(cwd, ["rev-parse", "--abbrev-ref", "HEAD"])) ?? "HEAD";
   return { commit, branch };
+}
+
+// AFC-22 (flow 236 T13, F236-02): "there is no git here" and "git is here and
+// could not answer" are opposite facts, and `rev-parse HEAD` fails identically
+// for both. Every caller that only ever saw `string | undefined` therefore
+// printed, and acted on, the FIRST for the second — measured on a repository
+// whose `.git/HEAD` pointed at a missing ref: `keryx wiki verify --baseline`
+// dropped its stale-graph refusal and reported "(no git; scope hash only)"
+// inside a working git repository. `resolveGitHead` is the separated answer.
+//
+// Four outcomes, each established from a real signal rather than inferred:
+//
+//   resolved       `rev-parse HEAD` answered a 40-hex sha.
+//   unborn         a repository exists but has no commits yet (`git init`,
+//                  nothing committed). No revision exists to stamp — a
+//                  legitimate absence, not a failure.
+//   no-repository  git ran and reported this is not a repository (or git
+//                  itself is unavailable). The supported git-free project
+//                  (`src/commands/init.no-git.test.ts`) lands here.
+//   failed         a repository is present but git could not answer. NEVER
+//                  reportable as "no git".
+export type GitHeadResolution =
+  | { kind: "resolved"; commit: string }
+  | { kind: "unborn"; detail: string }
+  | { kind: "no-repository"; detail: string }
+  | { kind: "failed"; detail: string };
+
+const SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+function failureDetail(result: GitCmdResult, command: string): string {
+  if (result.kind === "spawn-error") return `\`git ${command}\` could not be started: ${result.message}`;
+  if (result.kind === "exit-error") {
+    const stderr = result.stderr.split("\n")[0] ?? "";
+    return `\`git ${command}\` exited ${result.code ?? "with a signal"}${stderr ? `: ${stderr}` : ""}`;
+  }
+  return `\`git ${command}\` returned an unusable value`;
+}
+
+/**
+ * The nearest `.git` entry at `cwd` or any ancestor, or `null` when there is
+ * none all the way to the filesystem root.
+ *
+ * V236-01 (flow 236 T15): the probe this replaces asked only
+ * `pathExists(path.join(cwd, ".git"))`. `cwd` here is the PROJECT root, which
+ * `src/gdgraph/staleness.ts` documents may sit below the git root in a
+ * monorepo — the same fact that made `git status --porcelain` paths need
+ * `--show-prefix` there. So with `.metaproject` one directory below the git
+ * root, a repository whose object store had been made unreadable was
+ * classified `no-repository` rather than `failed`, and BOTH of the refusals
+ * this file exists to arm were bypassed. Measured, same breakage both times:
+ *
+ *   .metaproject AT the git root         → {"kind":"failed"}
+ *   .metaproject ONE LEVEL BELOW it      → {"kind":"no-repository"}
+ *
+ * `git rev-parse --git-dir` / `--show-toplevel` cannot stand in for this: with
+ * the object store unreadable BOTH exit 128 with "not a git repository", at the
+ * root and in a subdirectory alike — measured. When git cannot answer, the
+ * filesystem is the only remaining witness that a repository is there, and the
+ * ancestor walk is git's own discovery rule rather than a probe of one
+ * directory. A `.git` FILE (a linked worktree or submodule gitlink) counts, the
+ * same as a directory.
+ *
+ * This walk is consulted ONLY after `--is-inside-work-tree` has already failed:
+ * a genuinely git-free project nested somewhere under an unrelated repository
+ * has a working git that answers for the outer repository, so it never reaches
+ * here and is unaffected.
+ */
+export async function findGitEntry(cwd: string): Promise<string | null> {
+  let dir = path.resolve(cwd);
+  // A `cwd` that does not exist gets no repository credited to it. Climbing out
+  // of a path that is not there would answer a question about some ancestor
+  // directory the caller never named — and "this directory does not exist" is
+  // not evidence that a repository is present and broken.
+  if (!(await pathExists(dir))) {
+    return null;
+  }
+  for (;;) {
+    const candidate = path.join(dir, ".git");
+    if (await pathExists(candidate)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) {
+      return null;
+    }
+    dir = parent;
+  }
+}
+
+export async function resolveGitHead(cwd: string): Promise<GitHeadResolution> {
+  const head = await gitCmdResult(cwd, ["rev-parse", "HEAD"]);
+  if (head.kind === "ok" && SHA_PATTERN.test(head.stdout)) {
+    return { kind: "resolved", commit: head.stdout };
+  }
+  const headDetail = head.kind === "ok" ? `\`git rev-parse HEAD\` answered "${head.stdout}", which is not a sha` : failureDetail(head, "rev-parse HEAD");
+
+  // Is a repository present at all? Two independent signals, because neither
+  // alone covers every real breakage measured for this task: `--is-inside-
+  // work-tree` answers cleanly for a corrupt-HEAD repository but reports
+  // "not a git repository" when the object store is unreadable (a permission
+  // change), while a `.git` entry on disk still proves a repository is there.
+  // That second signal searches `cwd` AND its ancestors — see `findGitEntry`,
+  // and V236-01 for what a cwd-only probe did to a monorepo layout.
+  const insideWorkTree = await gitCmdResult(cwd, ["rev-parse", "--is-inside-work-tree"]);
+  const hasGitEntry = insideWorkTree.kind === "ok" || (await findGitEntry(cwd)) !== null;
+  if (insideWorkTree.kind !== "ok" && !hasGitEntry) {
+    return { kind: "no-repository", detail: headDetail };
+  }
+
+  // A repository IS present. Distinguish "no commits yet" from "broken":
+  // `rev-list -n 1 --all` succeeds with empty output on a genuinely unborn
+  // repository, succeeds with a sha when history exists (so an unresolvable
+  // HEAD over real history is corruption), and fails outright when git cannot
+  // read the repository at all.
+  const anyCommit = await gitCmdResult(cwd, ["rev-list", "-n", "1", "--all"]);
+  if (anyCommit.kind === "ok" && anyCommit.stdout.length === 0) {
+    return { kind: "unborn", detail: "the git repository has no commits yet" };
+  }
+  return { kind: "failed", detail: headDetail };
 }
 
 // Stamp `<module>` with the current HEAD. No-op (silent) outside a git repo.

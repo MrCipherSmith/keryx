@@ -436,7 +436,7 @@ export async function harnessCommand(args: string[], deps?: HarnessCommandDeps):
     return;
   }
 
-  const { provider, model, baseUrl, prompt, record, unattended, workspace } = parseArgs(args);
+  const { provider, model, baseUrl, prompt, record, workspace } = parseArgs(args);
 
   // UX guard (flow 021, T5 / AC4): an invalid/empty --provider or an empty
   // prompt prints the usage line and returns BEFORE building input or running

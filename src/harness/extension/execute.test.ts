@@ -131,7 +131,6 @@ import { describe, expect, test } from "bun:test";
 import { validateAgainstSchema } from "../../contracts/validator";
 import { buildChildDispatchExtension, parseChildResult } from "../child/contract";
 import type { ChildContractExtension, ParsedChildResult } from "../child/contract";
-import type { BudgetReservation } from "../child/isolation";
 import { checkApproval } from "../mutation/approval";
 import type { ApprovalCheckInput, ApprovalRequest } from "../mutation/approval";
 import { registerExtension } from "./registry";

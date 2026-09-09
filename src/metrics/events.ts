@@ -6,11 +6,44 @@ export type EventAggregation = {
   retries: RetryRecord[];
 };
 
+// Defect (flow 238 / phase 6 / T5, #3): the aggregate used to count every
+// element of the input array as-is. A replayed event (retried delivery, an
+// at-least-once bus, a log re-ingested after a crash) carries the same
+// `event_id` twice, and every count derived from `events.length`/`.filter`
+// doubled right along with it. Dedupe by `event_id` up front — first
+// occurrence wins — so the aggregate is a function of the SET of distinct
+// events the run actually produced, not of how many times a transport
+// happened to deliver them. Reproducibility (same synthetic events in, same
+// aggregate out, replay-invariant) depends on this running before anything
+// else touches `events`.
+function dedupeByEventId(events: ExecutionEvent[]): ExecutionEvent[] {
+  const seen = new Map<string, ExecutionEvent>();
+  for (const event of events) {
+    if (!seen.has(event.event_id)) seen.set(event.event_id, event);
+  }
+  return [...seen.values()];
+}
+
 export function aggregateExecutionEvents(
-  events: ExecutionEvent[],
+  rawEvents: ExecutionEvent[],
   bounds: { startedAt: string; finishedAt: string },
 ): EventAggregation {
-  const sourceReliability = events.length > 0 ? "exact" : "unknown";
+  const events = dedupeByEventId(rawEvents);
+  // Defect (flow 238 / phase 6 / T5, #4): this used to be
+  // `events.length > 0 ? "exact" : "unknown"` — ANY non-empty array was
+  // declared exact, even a single stray event with no evidence the capture
+  // spans the run. Length is not provenance. What actually establishes
+  // exactness here: the event stream is bounded by genuine lifecycle
+  // bookends (`run_started` AND `run_finished`), which is the one signal in
+  // this data that the capture ran start-to-finish rather than arriving as
+  // a partial/orphaned fragment. Per-event `reliability` was considered and
+  // rejected as the signal: no producer in this codebase ever sets it, so
+  // gating on it would silently collapse every populated stream to
+  // `unknown` — trading one false-precision proxy for a permanently-wrong
+  // one, not an honest measurement.
+  const hasRunStart = events.some((event) => event.type === "run_started");
+  const hasRunFinish = events.some((event) => event.type === "run_finished");
+  const sourceReliability = hasRunStart && hasRunFinish ? "exact" : "unknown";
   const metric = (
     value: number | null,
     source: string,

@@ -11,7 +11,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import type { InteractiveTool, InteractiveToolResult } from "./interactive-tools";
+import type { InteractiveTool } from "./interactive-tools";
 import { builtinReadOnlyTools } from "./interactive-tools";
 import { makeKeryxRunner, builtinMetaprojectTools } from "./metaproject-tools";
 import { slateWriteSeedTool } from "./slate-tool";
@@ -19,7 +19,6 @@ import { createMetaprojectAdapter } from "../metaproject-adapter";
 import { RemainingBudgetLedger } from "../../child/ledger";
 import { spawnSubagent, foldChildSummary, DEFAULT_MAX_CHILDREN } from "../../child/orchestrate";
 import type { SubagentContext } from "../../child/orchestrate";
-import type { PolicyProfile } from "../../policy/types";
 import { shellChildReadOnlyProfile, shellParentProfile } from "../../policy/profiles";
 import type { Provenance } from "../../session/types";
 import { runAgentTurn, type AgentDeps, type AgentIO, type RunAgentTurnResult } from "../../../commands/agent";
@@ -69,8 +68,12 @@ export type SpawnSubagentFleetEvent =
  * cases that previously all collapsed into a bare `isError:false`/`true`:
  *
  * - `"Completed"` — clean finish, the child produced a final result.
- * - `"BudgetExhausted"` — the child's OWN `maxRounds` round budget ran out
- *   before a clean finish (`runAgentTurn`'s `finishReason: "budget"`, D2a).
+ * - `"BudgetExhausted"` — the child's OWN round budget ran out before a
+ *   clean finish (`runAgentTurn`'s `finishReason: "budget"`, D2a) OR its
+ *   tool-call budget ran out (`finishReason: "tool-call-budget"`) — the
+ *   mapping deliberately collapses both reasons into one advisory status;
+ *   the `MAE reservation:` line the child reports still names both caps that
+ *   were actually configured (T20 F-003).
  * - `"Timeout"` — the PARENT-granted wall-clock `maxRuntimeMs` elapsed
  *   (existing path, now labeled).
  * - `"Denied"` — MAE admission denial, e.g. depth/count/budget cap (existing
@@ -162,10 +165,10 @@ function parseIntEnvVar(env: Record<string, string | undefined>, key: string): n
 export const DEFAULT_SUBAGENT_LEDGER_RUNTIME_MS = 30 * 60_000;
 
 /**
- * Per-child model-round-trip budget when the model's `spawn_subagent` call
- * omits `max_tool_calls` (the JSON-schema property name is unchanged — see
- * that field's own doc comment — its value is now interpreted as a round
- * count, matching the top-level turn's `DEFAULT_MAX_ROUNDS` redesign).
+ * Inclusive per-child model-round-trip budget when `max_rounds` is omitted.
+ * Every child provider request consumes one round, including an optional
+ * no-progress summary; no request is made after this limit.
+ * The optional `max_tool_calls` limit counts actual invocations separately.
  */
 export const DEFAULT_SUBAGENT_MAX_ROUNDS = 10;
 
@@ -375,7 +378,10 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         "Spawn a bounded subagent to work on a focused subtask in parallel-safe isolation " +
         "(MAE multi-agent). Use for independent investigations, reviews, or research while " +
         "you continue the main plan. Input: { task: string, mode?: 'read_only'|'general', " +
-        "label?: string, max_tool_calls?: number }. Default mode is read_only (no shell). " +
+        "label?: string, max_tool_calls?: integer, max_rounds?: integer }. " +
+        "max_tool_calls caps actual native child tool invocations; max_rounds independently " +
+        "limits model rounds (default 10, capped at 24). External runtimes cannot accept these limits. " +
+        "Default mode is read_only (no shell). " +
         "Returns the child's summary. Prefer one clear task per spawn; do not spawn for " +
         "trivial questions (answer yourself). Optionally accepts a 'model_tier' " +
         "(light|standard|deep) to size the child's model against your own, and a 'runtime' " +
@@ -387,7 +393,8 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           task: { type: "string" },
           mode: { type: "string", enum: ["read_only", "general"] },
           label: { type: "string" },
-          max_tool_calls: { type: "number" },
+          max_tool_calls: { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+          max_rounds: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
           /**
            * Flow 204 — how much model this child's work is worth.
            *
@@ -467,13 +474,19 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         return { status: "Error", output: "spawn_subagent requires a non-empty 'task'", isError: true };
       }
       const mode: SubagentMode = input.mode === "general" ? "general" : "read_only";
-      // `max_tool_calls` is the model-facing input field name (unchanged, see
-      // the tool's `inputSchema` above); its value is interpreted as a round
-      // count, not a unique-tool-call count — see `DEFAULT_SUBAGENT_MAX_ROUNDS`.
-      const maxRounds =
-        typeof input.max_tool_calls === "number" && input.max_tool_calls > 0
-          ? Math.min(MAX_SUBAGENT_MAX_ROUNDS, Math.floor(input.max_tool_calls))
-          : DEFAULT_SUBAGENT_MAX_ROUNDS;
+      for (const field of ["max_tool_calls", "max_rounds"] as const) {
+        const value = input[field];
+        const minimum = field === "max_rounds" ? 1 : 0;
+        if (value !== undefined && (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum)) {
+          return { status: "Error", output: `spawn_subagent ${field} must be a safe integer >= ${minimum}`, isError: true };
+        }
+      }
+      const maxToolCalls = input.max_tool_calls as number | undefined;
+      const maxRounds = Math.min(MAX_SUBAGENT_MAX_ROUNDS, (input.max_rounds as number | undefined) ?? DEFAULT_SUBAGENT_MAX_ROUNDS);
+      if ((maxToolCalls !== undefined || input.max_rounds !== undefined) &&
+        typeof input.runtime === "object" && input.runtime !== null && Reflect.get(input.runtime, "kind") === "external") {
+        return { status: "Error", output: "External subagents do not support native tool-call or model-round limits; use supported runtime budgets.", isError: true };
+      }
       const labelRaw = typeof input.label === "string" ? input.label.trim() : "";
       childSeq += 1;
       const workerId = `sub:${idSeq()}`;
@@ -815,6 +828,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         systemInstruction:
           "You are a keryx subagent. Complete ONLY the assigned task. " +
           "Be concise. Use tools when needed. Do not spawn further subagents. " +
+          (maxToolCalls === undefined ? "" : `You may invoke at most ${maxToolCalls} tools in total. `) +
           `You have up to ${maxRounds} model turns (rounds) to complete this task — each round ` +
           "may include several tool calls; an identical call repeated does not start a new round " +
           "but is still capped at a few attempts, so do not retry the same query hoping for a " +
@@ -824,6 +838,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           "spending rounds probing the same dead end. End with a short factual summary the parent can use.",
         idSeq: () => idSeq(),
         maxRounds,
+        ...(maxToolCalls === undefined ? {} : { maxToolCalls }),
       };
 
       let assistant = "";
@@ -1174,7 +1189,11 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
         // only labels what `finishReason` (D2a) already computed.
         const finishReason = turnResult?.finishReason;
         const status: SubagentCompletionStatus =
-          finishReason === "budget" ? "BudgetExhausted" : finishReason === "no-progress" ? "NoProgress" : "Completed";
+          finishReason === "budget" || finishReason === "tool-call-budget"
+            ? "BudgetExhausted"
+            : finishReason === "no-progress"
+              ? "NoProgress"
+              : "Completed";
         // PRD R9 guard: `status` is advisory for the PARENT MODEL's own
         // judgment only — do not add auto-retry/auto-extend logic here keyed
         // off it.
@@ -1195,6 +1214,7 @@ export function createSpawnSubagentTool(deps: SpawnSubagentToolDeps): SpawnSubag
           output:
             `subagent ${label} (${workerId}) ${mode} via ${runModel.provider}/${runModel.model}\n` +
             `MAE reservation: rounds≤${maxRounds} ` +
+            (maxToolCalls === undefined ? "" : `calls≤${maxToolCalls} `) +
             `runtime≤${spawned.reservation.maxRuntimeMs}ms children=${ledger.childCount}\n` +
             (tierRecord === undefined ? "" : `${tierRecord}\n`) +
             `--- summary ---\n${boundSummary(folded.text)}`,

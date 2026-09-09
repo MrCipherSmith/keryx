@@ -1,0 +1,91 @@
+{
+  "framework": "bun:test",
+  "test_files": [
+    {
+      "path": "src/commands/agent-tool-call-budget.test.ts",
+      "target_module": "src/commands/agent.ts runAgentTurn tool invocation budget",
+      "test_count": 2,
+      "tests": [
+        {
+          "id": "M10-tool-call-stop",
+          "description": "one offline provider round containing three calls stops after two actual invocations when maxToolCalls is two and returns tool-call-budget",
+          "criterion": "AC3: configured call budget stops execution with a truthful terminal reason",
+          "type": "edge_case",
+          "status": "written_red"
+        },
+        {
+          "id": "M10-tool-call-is-not-round",
+          "description": "maxToolCalls two limits a three-call batch even when maxRounds is independently configured to one",
+          "criterion": "AC3: maxToolCalls counts actual tool invocations and is not represented by maxRounds",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "scripts/stress/keryx-shell-stress.test.ts",
+      "target_module": "scripts/stress/keryx-shell-stress.ts offline report path",
+      "test_count": 1,
+      "tests": [
+        {
+          "id": "M10-stress-json",
+          "description": "subprocess with no selected suites writes one JSON report under --out and records maxRounds from KERYX_AGENT_MAX_ROUNDS",
+          "criterion": "AC4: stress JSON creation uses an existing resolver and writes an offline fixture report",
+          "type": "happy_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "scripts/benchmark/run-containment.test.ts",
+      "target_module": "scripts/benchmark/run-containment.ts bound listener port validation",
+      "test_count": 2,
+      "tests": [
+        {
+          "id": "M10-containment-valid-port",
+          "description": "the pure containment port seam preserves a concrete bound listener port",
+          "criterion": "AC4: optional containment port is narrowed before case construction",
+          "type": "happy_path",
+          "status": "written_red"
+        },
+        {
+          "id": "M10-containment-missing-port",
+          "description": "the pure containment port seam throws when Bun reports no bound port instead of choosing a fallback",
+          "criterion": "AC4: optional containment port has no unsafe default",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    },
+    {
+      "path": "scripts/typecheck.test.ts",
+      "target_module": "tsconfig.scripts.json strict benchmark/stress TypeScript target",
+      "test_count": 2,
+      "tests": [
+        {
+          "id": "M10-scripts-target-current",
+          "description": "the scripts config resolves the named benchmark/stress entrypoints and compiles the current script set cleanly",
+          "criterion": "AC5: a separate scripts TypeScript check covers benchmark and stress scripts",
+          "type": "happy_path",
+          "status": "written_red"
+        },
+        {
+          "id": "M10-scripts-target-injected-error",
+          "description": "a temporary config extending the real scripts target rejects an injected strict assignment error with TS2322",
+          "criterion": "AC5: the scripts TypeScript check fails on an injected type error",
+          "type": "error_path",
+          "status": "written_red"
+        }
+      ]
+    }
+  ],
+  "run_command": "bun test src/commands/agent-tool-call-budget.test.ts scripts/stress/keryx-shell-stress.test.ts scripts/benchmark/run-containment.test.ts scripts/typecheck.test.ts",
+  "expected_result_before_implementation": "7 failing, 0 passing (RED phase)",
+  "expected_result_after_implementation": "7 passing, 0 failing",
+  "additional_green_commands": [
+    "bun run typecheck",
+    "./node_modules/.bin/tsc --project tsconfig.scripts.json --noEmit"
+  ],
+  "red_evidence": ".metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+  "notes": "No live provider is constructed or called. The agent tests use an in-memory ProviderPort. The stress test launches the executable only with an unmatched --only selector and a temporary --out directory, so it runs report serialization without any suite or model call. run-containment.ts is safe to import because its main function is guarded by import.meta.main. The required test seam is a small exported pure function resolveContainmentPort(port: number | undefined): number on that existing entrypoint: return a valid concrete port and throw on undefined/invalid input; no separate support-module layout is required. commit_test_stubs=false; no git or flow state was mutated."
+}

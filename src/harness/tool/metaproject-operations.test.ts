@@ -5,6 +5,8 @@ import { validateAgainstSchemaObject } from "../../contracts/validator";
 import { toMcpTools } from "../../mcp/metaproject-tools";
 import type { MetaprojectPort } from "./metaproject-port";
 import {
+  formatMemory,
+  formatTestRelated,
   METAPROJECT_OPERATIONS,
   type MetaprojectOperation,
   toInteractiveTools,
@@ -32,6 +34,10 @@ const OPERATION_SCHEMA = JSON.parse(
 const EXPECTED_NAMES = [
   "flow_status",
   "graph_affected",
+  // AFC (flow 240): `keryx gdgraph find`'s explainable outcome — code, reason,
+  // bounded next actions, per-candidate matched/discriminating — was CLI-only
+  // until this descriptor existed. See `graph-find-projection.test.ts`.
+  "graph_find",
   "graph_path",
   "graph_query",
   "graph_symbol",
@@ -45,7 +51,16 @@ const EXPECTED_NAMES = [
   "test_related",
   "wiki_ask",
   "wiki_backlinks",
+  // AFC (flow 240): the AFC-W04 evidence envelope, whose only caller was its
+  // own test. See `wiki-evidence-projection.test.ts`.
+  "wiki_evidence",
   "wiki_freshness",
+  // Flow 242 (forgetting) lane C / AC5: `keryx wiki sections resolve`'s
+  // named-outcome vocabulary (found/tombstoned/pending-tombstone/reoccupied/
+  // unknown/registry-unreadable, plus store-unreadable) had no agent or MCP
+  // equivalent — this closes that gap. See `metaproject-adapter.test.ts` and
+  // `mcp.test.ts` for the store-unreadable proof (a real `chmod`, not a fake).
+  "wiki_resolve",
 ];
 
 interface PortCalls {
@@ -600,4 +615,101 @@ test("a skill_load result validates against skill-load-result.schema.json", () =
   const validation = validateAgainstSchemaObject(schema, result);
   expect(validation.errors).toEqual([]);
   expect(validation.valid).toBe(true);
+});
+
+// --- F-002 / F-007 (flow 234 review): the memory formatter's rendered text --
+// is the thing a model actually reads. Before this, nothing anywhere
+// asserted its output, so the boundary could (and did) silently drop every
+// provenance field with no test noticing.
+
+test("formatMemory renders version/provenance/author/confirmedBy/caveat for a fully sourced hit", () => {
+  const result = formatMemory({
+    query: "offline",
+    hits: [
+      {
+        path: "decisions/x.md",
+        title: "Offline determinism",
+        type: "decision",
+        status: "accepted",
+        score: 0.75,
+        excerpt: "Keep the harness core offline and deterministic.",
+        version: "v3",
+        provenance: { source: "docs/adr/017.md#L12-20", link: "https://example.com/adr/017" },
+        author: "alice",
+        confirmedBy: "council:2026-01-09",
+        caveat: "superseded once the migration lands",
+      },
+    ],
+  });
+  expect(result.isError).toBe(false);
+  expect(result.output).toContain("version: v3");
+  expect(result.output).toContain("source=docs/adr/017.md#L12-20");
+  expect(result.output).toContain("link=https://example.com/adr/017");
+  expect(result.output).toContain("author=alice");
+  expect(result.output).toContain("confirmedBy=council:2026-01-09");
+  expect(result.output).toContain("caveat: superseded once the migration lands");
+});
+
+test("formatMemory renders the explicit 'unknown' sentinel for an entry with no captured source, and it reads as distinguishable from a sourced one", () => {
+  const sourced = formatMemory({
+    query: "x",
+    hits: [
+      {
+        path: "decisions/sourced.md",
+        title: "Sourced",
+        score: 1,
+        version: "v1",
+        provenance: { source: "docs/a.md", link: "https://example.com/a" },
+        author: "alice",
+        confirmedBy: "bob",
+        caveat: null,
+      },
+    ],
+  });
+  const unsourced = formatMemory({
+    query: "x",
+    hits: [
+      {
+        path: "decisions/unsourced.md",
+        title: "Unsourced",
+        score: 1,
+        version: "unknown",
+        provenance: { source: "unknown", link: "unknown" },
+        author: "unknown",
+        confirmedBy: "unknown",
+        caveat: null,
+      },
+    ],
+  });
+  expect(unsourced.output).toContain("source=unknown");
+  expect(unsourced.output).toContain("author=unknown");
+  // The two renders must not collapse to the same text — a council-confirmed,
+  // sourced entry must read as distinguishable from an unsourced one.
+  expect(sourced.output).not.toBe(unsourced.output);
+  expect(sourced.output).toContain("source=docs/a.md");
+  expect(sourced.output).not.toContain("caveat:"); // null caveat renders no caveat line
+});
+
+// --- F-003 (flow 234 review): the related-tests formatter must surface an --
+// incomplete testing-context refresh, not a silent empty result.
+
+test("formatTestRelated reports INCOMPLETE before the empty branch, naming the unreadable path", () => {
+  const result = formatTestRelated({
+    file: "src/locked/a.ts",
+    tests: [],
+    context: { status: "incomplete", incompleteReasons: ["src/locked: EACCES: permission denied"] },
+  });
+  expect(result.output).toContain("INCOMPLETE");
+  expect(result.output).toContain("src/locked: EACCES: permission denied");
+  expect(result.output).toContain("No related tests found for src/locked/a.ts.");
+});
+
+test("formatTestRelated renders normally (no INCOMPLETE banner) for a complete context", () => {
+  const result = formatTestRelated({
+    file: "src/a.ts",
+    tests: ["src/a.test.ts"],
+    context: { status: "complete", incompleteReasons: [] },
+  });
+  expect(result.output).not.toContain("INCOMPLETE");
+  expect(result.output).toContain("src/a.test.ts");
 });

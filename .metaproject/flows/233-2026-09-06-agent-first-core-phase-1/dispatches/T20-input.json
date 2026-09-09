@@ -1,0 +1,50 @@
+{
+  "task": {
+    "task_id": "task-20",
+    "task_name": "Recursive security scan with explicit coverage",
+    "task_type": "fix",
+    "complexity": "high",
+    "dependencies": [],
+    "description": "Implement AFC17 and security completeness portionAFC05 from T7 RED and policies. CLI scan accepts a file or recursive directory by default, flags --recursive, --max-files, --max-bytes, explicit exclusions. Walk narrow authorized scope, internal symlinks only, canonical identities visited once, no cycles, bound directories/depth/count/bytes; refuse external targets, never leak external names/content. Use shared readContainedFile descriptor reader after T18 identity fix. Capture declared scope/excludes/limits before traversal; preserve all valid findings when another file is unavailable/denied/limited. coverage:{status,required,reasons}, files:[{path,status,reason?}] additive; scan report FAIL dominates finding threshold but coverage incomplete remains. Missing required source/report and parser/execution failure must not be called PASS. Propagate incomplete through CLI/gate/service/report/schema consumers and tell root about outside ownership adapter unions. Keep root-added service validateSerializedOutput and redact integration intact. No guard/output-validation/detector changes; root owns these. Use path-scan module to avoid command/service monolith and avoid import cycles. Security service.check error should be incomplete rather than fabricated pass if touching that path, inform root for guard strict rejection.",
+    "target_files": [
+      "src/security/path-scan.ts",
+      "src/security/path-scan.test.ts",
+      "src/security/service.ts",
+      "src/security/types.ts",
+      "src/security/schemas.ts",
+      "src/security/report.ts",
+      "src/commands/security.ts",
+      "src/commands/security-recursive-scan.test.ts"
+    ],
+    "acceptance_criteria": [
+      "Nested directory default recursion, internal symlink canonical duplicate once, cycle termination.",
+      "Denied/unreadable/limit yields incomplete required coverage without dropping already established findings or exposing unauthorized target names.",
+      "File and directory CLI/runtime reports include declared scope/exclusions/limits and per-file scanned/skipped/failed outcomes; matching gate/exit statuses truthful."
+    ],
+    "context": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T7-test-case-specs.json",
+    "existing_tests": [
+      "src/commands/security-recursive-scan.test.ts"
+    ],
+    "existing_stories": [],
+    "module_patterns": "Deterministic security boundary, preserve public compatibility except approved fixes, fail closed with typed constant errors.",
+    "test_case_specs": {
+      "test_files": [
+        "src/commands/security-recursive-scan.test.ts"
+      ],
+      "run_command": "bun test src/commands/security-recursive-scan.test.ts"
+    }
+  },
+  "workspace": {
+    "codebase_path": "/Users/Goodea/goodea/keryx",
+    "branch": "codex/agent-first-core",
+    "context_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/context.md"
+  },
+  "automation": {
+    "skip_confirmation": true,
+    "auto_commit": false,
+    "verify_lint": true,
+    "verify_types": true,
+    "verify_tests": true,
+    "max_self_fix_attempts": 3
+  }
+}

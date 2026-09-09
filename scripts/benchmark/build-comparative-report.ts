@@ -17,9 +17,68 @@
 
 import { readFile } from "node:fs/promises";
 import { buildAblationManifest, buildRawBaselineManifest, type AblationTaskInput, type RawBaselineTaskInput } from "../../src/metrics/ablation-runner";
-import { buildComparativeReport, validateComparativeReport, type ComparativeLegs } from "../../src/metrics/comparative";
+import { buildComparativeReport, validateComparativeReport, type ComparativeLegs, type ComparativeReport } from "../../src/metrics/comparative";
 
 const FIXTURES_DIR = new URL("../../fixtures/benchmark/keryx/", import.meta.url);
+
+/** Injectable side effects for {@link finalizeComparativeReport} — real I/O in `main`, spies in tests. */
+export type ComparativeEmissionIO = {
+  readonly writeReport: (contents: string) => Promise<void>;
+  readonly printReport: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the comparative-report build, GATED on validation (defect fix:
+ * previously the report was written to disk and printed to stdout FIRST, and only
+ * afterward checked for validity — an invalid report reached both the file and the
+ * terminal before the process exited non-zero, indistinguishable there from a good one).
+ * Now the report JSON is written and printed ONLY when `validation.valid` is true; the
+ * validity line, every validation error, and the per-cell diagnostics always go to
+ * `logLine` (stderr in `main`) so a reader can see *why* a run was rejected.
+ *
+ * Choice recorded (task asked for one): on an invalid run, a previously-written GOOD
+ * report file is left ON DISK, UNTOUCHED — not overwritten with the invalid report, and
+ * not deleted either. Overwriting it would destroy the last known-good artifact for no
+ * benefit (the new run is invalid, so it has nothing better to offer); deleting it would
+ * make a transient validation failure (e.g. a leg's fixture temporarily out of date)
+ * silently erase a fine artifact. A caller that truly wants a clean slate can remove the
+ * file itself before regenerating.
+ *
+ * Returns the process exit code the caller should use (0 valid, 1 invalid).
+ */
+export async function finalizeComparativeReport(
+  report: ComparativeReport,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: ComparativeEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    const json = JSON.stringify(report, null, 2);
+    await io.writeReport(`${json}\n`);
+    io.printReport(json);
+  }
+
+  io.logLine(`\n# ladder=comparative report valid (AC-6): ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+  io.logLine("\n# cells, publishable status:");
+  for (const cell of report.cells) {
+    io.logLine(
+      `${cell.taskId} / ${cell.cell} (${cell.target}, ${cell.model}): rate=${cell.successRate.rate} ` +
+        `n=${cell.successRate.n} publishable=${cell.publishable}`,
+    );
+  }
+
+  if (validation.valid) {
+    io.logLine("wrote fixtures/benchmark/keryx/comparative-report.json");
+    return 0;
+  }
+  io.logLine(
+    "invalid report — nothing written to disk and nothing printed to stdout; " +
+      "fixtures/benchmark/keryx/comparative-report.json left unchanged " +
+      "(a previously-written valid report, if any, is preserved as-is)",
+  );
+  return 1;
+}
 
 async function readFixture<T>(name: string): Promise<{ model: string; tasks: T[] }> {
   const raw = await readFile(new URL(name, FIXTURES_DIR), "utf8");
@@ -55,23 +114,19 @@ async function main(): Promise<void> {
   const validation = validateComparativeReport(report);
 
   const reportUrl = new URL("comparative-report.json", FIXTURES_DIR);
-  await Bun.write(reportUrl, `${JSON.stringify(report, null, 2)}\n`);
-  console.log(JSON.stringify(report, null, 2));
-
-  console.error(`\n# ladder=comparative report valid (AC-6): ${validation.valid ? "yes" : "no"}`);
-  for (const err of validation.errors) console.error(`- ${err}`);
-  console.error("\n# cells, publishable status:");
-  for (const cell of report.cells) {
-    console.error(
-      `${cell.taskId} / ${cell.cell} (${cell.target}, ${cell.model}): rate=${cell.successRate.rate} ` +
-        `n=${cell.successRate.n} publishable=${cell.publishable}`,
-    );
-  }
-  console.error("wrote fixtures/benchmark/keryx/comparative-report.json");
-  if (!validation.valid) process.exit(1);
+  const code = await finalizeComparativeReport(report, validation, {
+    writeReport: async (contents) => {
+      await Bun.write(reportUrl, contents);
+    },
+    printReport: (contents) => console.log(contents),
+    logLine: (line) => console.error(line),
+  });
+  if (code !== 0) process.exit(code);
 }
 
-main().catch((error) => {
-  console.error(`build-comparative-report failed: ${(error as Error).message}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error(`build-comparative-report failed: ${(error as Error).message}`);
+    process.exit(1);
+  });
+}

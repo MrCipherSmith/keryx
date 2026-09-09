@@ -10,7 +10,7 @@ triggers:
   - "Implement issue task"
 metadata:
   author: "MrCipherSmith"
-  version: "1.3.0"
+  version: "1.3.1"
   category: "implementation"
   agent_worthy: true
   compatible_harnesses: "claude,cursor,codex,zed,opencode"
@@ -23,7 +23,7 @@ license: "MIT"
 
 Receives a single atomic task (JSON task object from `issue-analyzer`) and implements it end-to-end. Designed to run autonomously as a sub-agent — no user interaction required. Commits its changes to a shared feature branch managed by the orchestrator.
 
-**Input:** JSON task object + workspace context (branch, codebase path, issue number)
+**Input:** JSON task object + workspace context (branch, codebase path, optional real issue number)
 **Output:** JSON result object with implementation status, files modified, verification results
 
 ## When to Use
@@ -86,9 +86,11 @@ TASK: (from JSON object passed by orchestrator)
 WORKSPACE:
   codebase_path:        absolute path to the repository
   branch:               feature branch to work on (already checked out by orchestrator)
-  issue_number:         GitHub issue number (for commit messages)
+  issue_number:         Optional real GitHub issue number; omit for description-based tasks
   issue_title:          issue title (for commit messages)
 ```
+
+For a description-based task, omit `issue_number` and issue references in commit messages. Never substitute a flow ID or fabricate a GitHub issue. A supplied issue number must remain a positive integer.
 
 **1.3 For fix tasks (dispatched from review loop):**
 
@@ -120,7 +122,7 @@ The refusals are the contract's, not a checklist you run by eye
 | `task_type` outside `ui_component\|store_logic\|service_api\|refactoring\|fix\|mixed` | `task.task_type.enum` |
 | A `task_id` that is not `task-<n>` | `task.task_id.pattern` |
 | Empty `target_files` or empty `acceptance_criteria` | `minItems: 1` on both |
-| Missing `codebase_path` / `branch` / `issue_number` | `workspace.required` |
+| Missing `codebase_path` / `branch` | `workspace.required` |
 | `skip_confirmation` anything but `true` | `automation.skip_confirmation.const` |
 | `max_self_fix_attempts` above 3 | `automation.max_self_fix_attempts.maximum` |
 | Any field the contract does not declare | `additionalProperties: false` |
@@ -315,7 +317,7 @@ Execute the change plan. Write production-quality code.
 
 **4.5 Commit after implementation:**
 
-Create a conventional commit with the changes:
+When auto-commit is enabled, create a conventional commit with the changes. Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
 ```bash
 git add <modified files>
 git commit -m "<type>(<scope>): <description>
@@ -399,6 +401,7 @@ said. Report the block instead, naming what repeated.
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
 **5.5 Re-commit fixes if any:**
+When auto-commit is enabled, use the template below. Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
 ```bash
 git add <fixed files>
 git commit -m "fix(<scope>): resolve lint/type/test issues
@@ -530,7 +533,7 @@ second copy of a schema is how that happens.
 5. **DO** use project path aliases (`@components`, `@utils`, etc.) for imports.
 6. **DO** wrap React components with `observer()` when they access MobX stores.
 7. **DO** use `runInAction()` after every `await` in MobX actions.
-8. **DO** commit with conventional commit format referencing the issue number.
+8. **DO** use conventional commit format when auto-commit is enabled. Reference only a supplied real issue number; omit the issue reference when absent.
 9. **DO** verify your work before reporting.
 10. **DO** make `STATUS: <TOKEN>` the first line of your final message, and put no
     JSON in the response body. The full JSON result is the file Phase 6.1 writes

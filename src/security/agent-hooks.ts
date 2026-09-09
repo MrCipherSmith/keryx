@@ -2,11 +2,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
 import {
-  AGENT_CHECK_INPUT_COMMAND,
-  AGENT_CHECK_OUTPUT_COMMAND,
-  checkInputCommand,
-  checkOutputCommand,
-  AGENT_HOOKS_SENTINEL,
   CLAUDE_RUNTIME,
   MANAGED_KEY,
   getRuntime,

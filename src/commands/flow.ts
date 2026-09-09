@@ -19,6 +19,7 @@ import {
   symbols,
   nextSteps,
 } from "../lib/ui";
+import { taskResumeState, type TaskResumeState } from "../flow/machine";
 import { ATTEMPT_CLI_OUTCOMES } from "../flow/types";
 import type {
   AttemptCliOutcome,
@@ -30,6 +31,13 @@ import type {
 } from "../flow/types";
 
 const VALID_TASK_KINDS: readonly TaskKind[] = ["context", "implement", "test", "verify", "review", "docs"];
+
+/**
+ * Marker for "the record cannot answer this", kept distinct from `symbols.ok`
+ * and `symbols.cross`. An unresolved attempt is neither a pass nor a failure,
+ * and borrowing either symbol would put it in the wrong bucket at a glance.
+ */
+const WARN = "!";
 
 function parseTaskKind(raw: string | undefined): TaskKind | undefined {
   if (raw === undefined) {
@@ -64,6 +72,28 @@ const VALID_DISPOSITIONS = ["completed", "blocked", "failed", "skipped"] as cons
  * afterwards through the schema enum, which is too late: the flow was already
  * `done`.
  */
+/**
+ * A comma-separated option as a trimmed, de-duplicated list.
+ *
+ * Returns `undefined` when the flag is absent, so an omitted flag leaves an
+ * existing value alone, while `--ac ""` clears it — the two are different
+ * intentions and collapsing them would make a field impossible to unset.
+ */
+function listOption(args: string[], flag: string): string[] | undefined {
+  const raw = optionValue(args, flag);
+  if (raw === undefined) {
+    return undefined;
+  }
+  const seen = new Set<string>();
+  for (const part of raw.split(",")) {
+    const value = part.trim();
+    if (value.length > 0) {
+      seen.add(value);
+    }
+  }
+  return [...seen];
+}
+
 function parseDisposition(raw: string | undefined): TaskDisposition | undefined {
   if (raw === undefined) {
     return undefined;
@@ -311,6 +341,7 @@ async function runStatus(args: string[]): Promise<void> {
   console.log(`  PR:      ${flow.pr.url ? style.cyan(flow.pr.url) : style.dim("none")}`);
 
   const doneCount = flow.tasks.filter((task) => task.status === "done").length;
+  const unresolvedTasks: string[] = [];
   heading(`Tasks (${doneCount}/${flow.tasks.length})`);
   for (const task of flow.tasks) {
     // Flow 209 AC6: the two v2 fields, on the screen an operator already reads.
@@ -319,14 +350,27 @@ async function runStatus(args: string[]): Promise<void> {
     // field goes a release without anyone noticing it stayed at zero.
     const attempts = task.attempts?.count ?? 0;
     const declared = task.dependsOn ?? [];
+    // A bare count says "1 attempt(s)" for an attempt that failed and closed and
+    // for an attempt that opened and never came back. Those call for different
+    // acts on resume, so the openness — not just the number — is on the line.
+    const resume = taskResumeState(task);
     const annotations = [
       ...(declared.length === 0 ? [] : [`depends on ${declared.join(", ")}`]),
       ...(attempts === 0 ? [] : [`${attempts} attempt(s)`]),
+      ...(resume.kind === "unresolved" ? [`${resume.reason}: outcome UNKNOWN`] : []),
     ];
     statusLine(
       `${task.id} ${task.title}${annotations.length === 0 ? "" : ` ${style.dim(`[${annotations.join("; ")}]`)}`}`,
       task.status === "done",
       task.kind,
+    );
+    if (resume.kind === "unresolved") {
+      unresolvedTasks.push(task.id);
+    }
+  }
+  if (unresolvedTasks.length > 0) {
+    note(
+      `${unresolvedTasks.join(", ")}: an attempt was opened and no end was recorded. Whether that work landed cannot be told from this record — resolve it before redoing or closing the task.`,
     );
   }
 
@@ -335,6 +379,70 @@ async function runStatus(args: string[]): Promise<void> {
     console.log(
       `  ${style.dim(event.at)} ${event.event}${event.detail ? style.dim(`: ${event.detail}`) : ""}`,
     );
+  }
+}
+
+/**
+ * The one sentence a resuming or handed-off agent needs, in words that differ
+ * between the three answers it must not confuse.
+ *
+ * `unresolved` is deliberately phrased as ignorance rather than as a diagnosis.
+ * "The previous agent crashed" would be a guess: an open attempt is equally
+ * consistent with another agent still working, because the flow lock covers one
+ * mutation and not one task. What is certain is only that no end was recorded,
+ * and that this build cannot tell from the record whether the work landed.
+ */
+function resumeSummary(taskId: string, resume: TaskResumeState): string | null {
+  switch (resume.kind) {
+    case "done":
+      return `${taskId} is already done.`;
+    case "never-started":
+      return `${taskId} has no recorded attempt: nothing has been tried yet.`;
+    case "ended":
+      return `${taskId} has ${resume.attempts} recorded attempt(s); the last one ended ${resume.outcome} at ${resume.at}. This would be attempt ${resume.attempts + 1}.`;
+    case "unresolved":
+      return resume.reason === "attempt-not-closed"
+        ? `${taskId} has an attempt opened at ${resume.openedAt} that never recorded an end. Whether its work partially landed is UNKNOWN — this is not the same as "not started". Inspect the tree before redoing it, then close the attempt with \`keryx flow task attempt <flow> ${taskId} --outcome failed|blocked\` or \`keryx flow task done\`.${resume.detail ? ` Last detail: ${resume.detail}` : ""}`
+        : `${taskId} has an attempt record this build cannot read as complete (${resume.reason}, ${resume.attempts} claimed). What was already tried is UNKNOWN — do not treat it as "not started".`;
+  }
+}
+
+/** Print the resume state of the task the caller is about to pick up. */
+function reportResume(taskId: string, resume: TaskResumeState): void {
+  const summary = resumeSummary(taskId, resume);
+  if (!summary) {
+    return;
+  }
+  if (resume.kind === "unresolved") {
+    console.log(`  ${style.yellow(WARN)} ${summary}`);
+    return;
+  }
+  note(summary);
+}
+
+/**
+ * Unresolved tasks OTHER than the one being handed back.
+ *
+ * A flow can have several tasks dispatched at once; reporting only the next one
+ * would hide every other interrupted attempt behind it until it closed, which is
+ * the same silence one task over.
+ */
+function reportOtherUnresolved(
+  unresolved: ReadonlyArray<{ task: { id: string }; resume: TaskResumeState }>,
+  exclude: string | null,
+): void {
+  const others = unresolved.filter((entry) => entry.task.id !== exclude);
+  if (others.length === 0) {
+    return;
+  }
+  heading(
+    `${style.yellow(WARN)} ${others.length} other task(s) carry an attempt with no recorded end`,
+  );
+  for (const entry of others) {
+    const summary = resumeSummary(entry.task.id, entry.resume);
+    if (summary) {
+      console.log(`  ${style.yellow(WARN)} ${summary}`);
+    }
   }
 }
 
@@ -374,11 +482,17 @@ async function runNext(args: string[]): Promise<void> {
         ? "no declared dependencies; this is the first task that is not done"
         : `all declared dependencies are done: ${declared.join(", ")}`,
     );
+    // The line that used to be missing. Without it the two sentences above were
+    // the WHOLE answer, and they read identically for a task nobody has touched
+    // and a task an agent started and never closed.
+    reportResume(decision.task.id, decision.resume);
+    reportOtherUnresolved(decision.unresolved, decision.task.id);
     return;
   }
 
   if (decision.kind === "none") {
     console.log(`  ${style.green(symbols.ok)} Every task is done.`);
+    reportOtherUnresolved(decision.unresolved, null);
     return;
   }
 
@@ -391,6 +505,7 @@ async function runNext(args: string[]): Promise<void> {
   note(
     "A dependency that is not done, does not exist, or forms a cycle. `keryx flow check` names which.",
   );
+  reportOtherUnresolved(decision.unresolved, null);
   process.exitCode = 1;
 }
 
@@ -452,17 +567,26 @@ async function runTask(args: string[]): Promise<void> {
     const taskId = positional(args, 2);
     if (!id || !taskId) {
       throw new Error(
-        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"]',
+        'Usage: keryx flow task done <id> <taskId> [--disposition completed|blocked|failed|skipped] [--reason "<why>"] [--ac AC1,AC2] [--evidence <path|ref>,...]',
       );
     }
     const disposition = parseDisposition(optionValue(args, "--disposition"));
     const reason = optionValue(args, "--reason");
+    // `acRefs` and `evidenceRefs` have been in the task schema since v2 with no
+    // way to set them from the command line, so every task in every flow of
+    // this programme carries two empty arrays where the trace from work to
+    // criterion was supposed to be. The fields were not missing; the writer
+    // was.
+    const acRefs = listOption(args, "--ac");
+    const evidenceRefs = listOption(args, "--evidence");
     const flow = await getService().taskDone({
       cwd: process.cwd(),
       id,
       taskId,
       disposition,
       reason,
+      acRefs,
+      evidenceRefs,
     });
     const done = flow.tasks.filter((task) => task.status === "done").length;
     console.log(`  ${style.green(symbols.ok)} Task ${style.bold(taskId.toUpperCase())} done ${style.dim(`(${done}/${flow.tasks.length})`)}`);

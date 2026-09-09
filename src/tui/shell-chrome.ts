@@ -758,7 +758,7 @@ export async function createShellChrome(
 
   const syncComposerHeight = (): void => {
     const cap = composerMaxRowsForViewport(viewportRows());
-    let lines = 1;
+    let lines: number;
     try {
       const wrapWidth = typeof textarea.width === "number" && textarea.width > 0 ? textarea.width : 0;
       lines = Math.max(
@@ -872,6 +872,12 @@ export async function createShellChrome(
   let busyTimer: ReturnType<typeof setInterval> | undefined;
   let busy = false;
   let footerOverride: (() => StyledContent | undefined) | undefined;
+  // Live copy of the footer-right label. `setStatus` must mutate THIS — not
+  // just paint `footerRight` — because `paintBusyStatus` / `stopBusy` restore
+  // the idle right-hand slot from it. Writing only the node left mid-session
+  // `/model` switches looking updated until the next busy/idle cycle, which
+  // then snapped back to the launch-time `opts.status`.
+  let status = opts.status;
 
   const paintBusyStatus = (): void => {
     // The override owns the footer even mid-turn: the spinner interval would
@@ -883,7 +889,7 @@ export async function createShellChrome(
     }
     if (!busy) {
       footerLeft.content = otui.t`${otui.dim(opts.footerHint)}`;
-      footerRight.content = otui.t`${otui.dim(opts.status)}`;
+      footerRight.content = otui.t`${otui.dim(status)}`;
       return;
     }
     const frame = SPINNER[spinIdx % SPINNER.length] ?? "⠋";
@@ -894,7 +900,7 @@ export async function createShellChrome(
     // (provider/model stays in the header title); idle restores the status.
     const perm = opts.permissionMode?.();
     footerRight.content = otui.t`${otui.dim(
-      perm !== undefined && perm.length > 0 ? `mode ${perm}` : opts.status,
+      perm !== undefined && perm.length > 0 ? `mode ${perm}` : status,
     )}`;
     if (liveStatus !== undefined) {
       liveStatus.content = otui.t`${otui.dim(line)}`;
@@ -1228,7 +1234,10 @@ export async function createShellChrome(
     },
 
     setTitle: (text) => paintDim(headerLeft, text),
-    setStatus: (text) => paintDim(footerRight, text),
+    setStatus: (text) => {
+      status = text;
+      paintDim(footerRight, text);
+    },
     setHeaderMeta: (text) => paintDim(headerRight, text),
 
     showSuggestion,

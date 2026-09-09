@@ -241,3 +241,30 @@ function row(rows: { label: string; value: string }[], label: string): string {
   expect(found).toBeDefined();
   return found?.value ?? "";
 }
+
+test("provider-reported window and rate limit appear; missing stays em-dash", () => {
+  const withLimits = buildSessionInfoSnapshot({
+    summary: SUMMARY,
+    estimateTokens: 40,
+    limits: {
+      contextWindow: 200000,
+      contextSource: "live-models",
+      rateLimit: { requestsRemaining: 19, requestsLimit: 20 },
+      balance: { currency: "USD", total: 6.19, exact: true },
+    },
+  });
+  expect(row(withLimits.usageRows, "Context window")).toBe("200,000");
+  expect(row(withLimits.usageRows, "Rate limit")).toContain("19/20");
+  expect(row(withLimits.usageRows, "Balance")).toBe("$6.19");
+  expect(row(withLimits.sessionRows, "Context")).toContain("200,000");
+  expect(withLimits.context.window).toBe(200000);
+  const painted = formatSessionInfoText(withLimits);
+  expect(painted).toContain("200,000");
+  expect(painted.toLowerCase()).toContain("provider-reported");
+
+  const missing = buildSessionInfoSnapshot({ summary: SUMMARY });
+  expect(row(missing.usageRows, "Context window")).toBe("—");
+  expect(missing.usageRows.some((r) => r.label === "Rate limit")).toBe(false);
+  expect(missing.usageRows.some((r) => r.label === "Balance")).toBe(false);
+});
+

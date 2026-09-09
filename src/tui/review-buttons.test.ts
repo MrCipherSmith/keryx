@@ -8,7 +8,7 @@ import { expect, test } from "bun:test";
 import type { CatchUpItem, CatchUpProposalItem } from "../sac/catch-up";
 import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
-import { destroyModalHost, openModal } from "./modal-host";
+import { destroyModalHost } from "./modal-host";
 import { openReview } from "./review-inspector";
 import { applyThemeId, getThemeId } from "./theme";
 

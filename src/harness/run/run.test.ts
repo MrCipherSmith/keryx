@@ -458,7 +458,7 @@ describe("runOffline — threads the child's resolved provider/model (flow 090)"
         },
         descriptor: { providerId: "stub" },
       }),
-      // eslint-disable-next-line require-yield
+
       async *stream() {
         yield { kind: "model_end", sequence: 0, attemptId: "attempt-stub" } as const;
       },

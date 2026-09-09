@@ -83,8 +83,53 @@ function measured(value: number, source: string): BenchmarkValue {
   return { value, reliability: "exact", source };
 }
 
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
+function round(value: number | null): number | null {
+  return value === null ? null : Math.round(value * 1000) / 1000;
+}
+
+/** Injectable side effects for {@link finalizeRagEmbeddingBaselineRun} — real I/O in `main`, spies in tests. */
+export type RagEmbeddingBaselineEmissionIO = {
+  readonly writeResultsFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the RAG-embedding-baseline run, GATED on validation (same defect
+ * shape fixed across every scripts/benchmark/run-*-oracle.ts producer: previously the
+ * captured ranked-passage fixture was written to disk and the derived manifest printed to
+ * stdout FIRST, and only afterward validated). Choice recorded (same as run-ablation.ts's
+ * finalizeAblationRun): on an invalid run, a previously-written GOOD fixture file is left
+ * ON DISK, UNTOUCHED.
+ */
+export async function finalizeRagEmbeddingBaselineRun(
+  resultsFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: RagEmbeddingBaselineEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`# layer=rag-embedding-baseline manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine("wrote fixtures/benchmark/keryx/wiki-ask-results-embedding-baseline.json");
+    io.logLine(
+      "compare side by side (never averaged) with fixtures/benchmark/keryx/wiki-ask-results.json " +
+        "(gdwiki lexical oracle, same gold, same k)",
+    );
+    return 0;
+  }
+  io.logLine(
+    "invalid manifest — nothing written to disk and nothing printed to stdout; " +
+      "fixtures/benchmark/keryx/wiki-ask-results-embedding-baseline.json left unchanged " +
+      "(a previously-written valid fixture, if any, is preserved as-is)",
+  );
+  return 1;
 }
 
 async function main(): Promise<void> {
@@ -155,7 +200,6 @@ async function main(): Promise<void> {
     captured: new Date().toISOString().slice(0, 10),
     targets: queries.map(({ target: query }) => ({ target: query, affected: systemByQuery.get(query) ?? [] })),
   };
-  await Bun.write(resultsUrl, `${JSON.stringify(resultsFixture, null, 2)}\n`);
 
   const source =
     `local embedding search (${EMBEDDING_MODEL_LABEL}) over .metaproject/wiki/**/*.md ` +
@@ -178,9 +222,12 @@ async function main(): Promise<void> {
       tokenCap: null,
       seeds: [1],
       quality: "measured",
+      // ndcg/recallAtK are `null` only when the gold set for this query is empty
+      // (RESOLVED 2026-09-09, flow 238/T15: ir.ts used to fabricate a `1` there) — omit
+      // the field entirely, never emit it with a null value.
       oracle: {
-        ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`),
-        recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`),
+        ...(nd !== null ? { ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`) } : {}),
+        ...(atK !== null ? { recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`) } : {}),
       },
       human_interventions: null,
     };
@@ -194,22 +241,23 @@ async function main(): Promise<void> {
     speedClaim: { claimed: false },
   };
 
-  console.log("# layer: rag-embedding-baseline (local Xenova/all-MiniLM-L6-v2 vs gdwiki-lexical gold)");
-  console.log(JSON.stringify(manifest, null, 2));
   console.error("# RAG-adapter baseline result — layer=rag-embedding-baseline");
   for (const run of manifest.runs) {
     const o = run.oracle;
     console.error(`${run.task_id}: nDCG@${k}=${o?.ndcg?.value} recall@${k}=${o?.recallAtK?.value}`);
   }
   const result = validatePairedBenchmark(manifest);
-  console.error(`# layer=rag-embedding-baseline manifest valid: ${result.valid ? "yes" : "no"}`);
-  for (const err of result.errors) console.error(`- ${err}`);
-  console.error("wrote fixtures/benchmark/keryx/wiki-ask-results-embedding-baseline.json");
-  console.error(
-    "compare side by side (never averaged) with fixtures/benchmark/keryx/wiki-ask-results.json " +
-      "(gdwiki lexical oracle, same gold, same k)",
-  );
-  if (!result.valid) process.exit(1);
+  const code = await finalizeRagEmbeddingBaselineRun(resultsFixture, manifest, result, {
+    writeResultsFixture: async (contents) => {
+      await Bun.write(resultsUrl, contents);
+    },
+    printManifest: (contents) => {
+      console.log("# layer: rag-embedding-baseline (local Xenova/all-MiniLM-L6-v2 vs gdwiki-lexical gold)");
+      console.log(contents);
+    },
+    logLine: (line) => console.error(line),
+  });
+  if (code !== 0) process.exit(code);
 }
 
 if (import.meta.main) {

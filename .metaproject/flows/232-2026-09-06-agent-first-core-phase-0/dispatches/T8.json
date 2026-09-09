@@ -1,0 +1,80 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "232",
+  "dispatch_id": "232-T8",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "task-implementer",
+  "task": {
+    "title": "M10 effective tool-call budgets and script correctness",
+    "description": "Implement phase0 AC3–5 and make T6 RED tests green. Add a real independent optional tool-call cap counted at actual invocation boundary, preserve round budget and report truthful terminal reason. Fix stress JSON resolver, validate missing/invalid bound port, add strict scripts TypeScript target wired into project check and fix classified script diagnostics without weakening strictness or running models. Read T8-input.json and T6 evidence.",
+    "intent": "implement"
+  },
+  "acceptance_criteria": [
+    "AC3: M10: offline stub proves the actual configured round/call budget stops execution with a truthful terminal reason; maxToolCalls is never silently ignored or represented by maxRounds.",
+    "AC4: M10: stress JSON creation uses an existing resolver and writes a report in the offline fixture; optional containment port is handled with no unsafe default.",
+    "AC5: M10: a scripts TypeScript check covers the benchmark/stress scripts and fails on an injected type error; root and scripts checks pass without external model calls."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/context.md",
+      "kind": "context",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/plan.md",
+      "kind": "plan",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/acceptance-criteria.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-test-case-specs.json",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T6-red-evidence.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/commands/agent.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/agent.test.ts",
+    "/Users/Goodea/goodea/keryx/scripts/benchmark/run-ablation.ts",
+    "/Users/Goodea/goodea/keryx/scripts/benchmark/run-containment.ts",
+    "/Users/Goodea/goodea/keryx/package.json",
+    "/Users/Goodea/goodea/keryx/tsconfig.json"
+  ],
+  "constraints": [
+    "Read /Users/Goodea/goodea/keryx/.metaproject/index.md before code searches/reads.",
+    "Use local tests-creator skill and testing context; graph/wiki before deeper reads, keryx ctx rg only for code search.",
+    "Do not edit flow.json or frozen acceptance criteria; parent owns all flow transitions.",
+    "Stats disabled; no external model calls, no private dataset copying.",
+    "Do not modify unrelated files. Coordinate shared test file ownership before edits.",
+    "Return STATUS first and validate subagent-result; persist RED command/output and test_case_specs in artifacts.",
+    "Own src/commands/agent.ts and direct associated budget types/tests, scripts/benchmark and scripts/stress necessary corrections, scripts/typecheck.test.ts, tsconfig.scripts.json and package.json typecheck/check scripts only. Do not change dependencies/lockfiles, routing/template/init/update/rules, skill schemas, security implementations or frozen docs. Coordinate any ownership expansion.",
+    "Root fixed description-based input schema (optional issue_number). Validate using bun src/cli.ts skills contracts validate ... --schema task-implementer-input because global binary still ships old schema; do not fabricate issue numbers.",
+    "auto_commit=false. Full source CLI/current tests, not stale generated global implementation. Do not claim skipped ESLint is passed; parent integrates gates separately.",
+    "Read FULL local task-implementer skill. Validate limit inputs and interaction with approvals/unknown calls/multiple rounds; preserve existing stop reasons when cap not reached. Add meaningful missed edge tests if needed, do not weaken T6 tests."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/232-2026-09-06-agent-first-core-phase-0/artifacts/T8-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T10:56:47.367731+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

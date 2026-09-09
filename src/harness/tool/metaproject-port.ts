@@ -11,6 +11,36 @@
 // memory-search-result in particular). A reference implementation lives in
 // metaproject-adapter.ts (`createMetaprojectAdapter`); consumers depend only on
 // the interface here.
+//
+// The two imports below are TYPE-ONLY and therefore erased: this module still
+// emits nothing at runtime. They exist because the alternative — re-spelling a
+// vocabulary and an envelope by hand at the boundary — is the exact defect this
+// programme keeps measuring. `WikiAskCitation` below was hand-copied from
+// `src/wiki/types.ts` and a five-field re-map silently dropped thirteen of its
+// fields at this boundary; a hand-copied `EvidenceItem` would do it again, and a
+// hand-copied retrieval-code union would let a transport fork the vocabulary
+// that `src/lib/retrieval-codes.ts` exists to keep single.
+
+import type { RetrievalCode } from "../../lib/retrieval-codes";
+import type { EvidencePackage } from "../../wiki/evidence";
+import type { SectionResolution } from "../../wiki/section-tombstone";
+
+/**
+ * Tri-state graph freshness, carried to the agent-facing boundary.
+ *
+ * Mirrors `StalenessCheck` (`src/gdgraph/staleness.ts`) field for field rather
+ * than inventing a second vocabulary. `unknown` is the load-bearing member: a
+ * git failure means staleness could not be determined, which is NOT evidence
+ * the repo moved. The command line has routed onto this tri-state since flow
+ * 237; before flow 235 T8 no graph-backed tool result carried freshness at
+ * all — not the tri-state, not even the old boolean — so an agent asking the
+ * same question through a tool learned nothing.
+ */
+export interface GraphStaleness {
+  status: "fresh" | "stale" | "unknown";
+  /** One per trigger/failure that fired. Empty only when `status` is `fresh`. */
+  reasons: string[];
+}
 
 /** One transitive dependent (blast-radius) node — graph-affected-result.schema.json. */
 export interface GraphAffectedNode {
@@ -34,8 +64,17 @@ export interface GraphAffectedResult {
   ranked?: boolean;
   /** Dependent nodes. */
   affected: GraphAffectedNode[];
+  /**
+   * The other half of the blast radius: what the target itself imports.
+   * `AffectedResult.dependencies` has always been computed and both the CLI
+   * (`keryx gdgraph affected`) and the bespoke MCP `gdgraph.affected` tool
+   * print it; this boundary used to drop it.
+   */
+  dependencies?: string[];
   /** True when the result was capped by an output bound. */
   truncated?: boolean;
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the backing service failed — the result is structured-empty, not thrown. */
   error?: string;
 }
@@ -48,6 +87,8 @@ export interface GraphQueryResult {
   orphans?: string[];
   /** Cycles as ordered path lists (present when `query === "cycles"`). */
   cycles?: string[][];
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -65,6 +106,27 @@ export interface MemorySearchHit {
   score: number;
   /** Bounded snippet of the entry body. */
   excerpt?: string;
+  // --- F-002 (flow 234 review, BLOCKER) / AFC-25 / AC6: knowledge provenance
+  // carried into the hit, mirroring the compressed-report shape memory/report.ts
+  // already produces (renderMemorySearchReport) rather than a second one. A
+  // council-confirmed, sourced, versioned decision must not arrive
+  // byte-identical to a completely unsourced entry at THIS boundary — the one
+  // an agent actually reads (both the interactive tool and the MCP tool
+  // project through the same adapter). Optional at the TYPE level only so a
+  // hit literal built before this fix (e.g. an out-of-scope test fixture)
+  // still type-checks; `createMetaprojectAdapter().memorySearch` always
+  // populates every field below, falling back to the literal "unknown"
+  // sentinel exactly like memory/report.ts does — never an omitted key.
+  /** Exact source fragment/version. Absent upstream -> "unknown". */
+  version?: string;
+  /** Exact source fragment + link. Absent upstream -> "unknown" for each. */
+  provenance?: { source: string; link: string };
+  /** Who wrote/proposed the claim. Absent upstream -> "unknown". */
+  author?: string;
+  /** The confirming participant / acceptance basis. Absent upstream -> "unknown". */
+  confirmedBy?: string;
+  /** A deferral/qualification caveat. `null` -> not captured upstream — distinct from an omitted field. */
+  caveat?: string | null;
 }
 
 /** Applied memory-search filters (all optional) — memory-search-result.schema.json. */
@@ -72,6 +134,65 @@ export interface MemorySearchFilters {
   module?: string;
   status?: string;
   class?: string;
+}
+
+/**
+ * One removal the deletion trail records, projected for this boundary.
+ *
+ * Flat strings rather than the owner's `Attribution` objects because an agent
+ * reads one line: the basis is folded into the text (`alice [stated]`) so a
+ * derived actor can never be rendered as a stated one by a caller that prints
+ * only `.value` — the fabrication `src/forgetting/journal.ts` refuses to commit
+ * at the write end, refused again at the read end.
+ */
+export interface MemoryRemovalRecord {
+  /** Knowledge layer the removal was recorded in (`wiki-identity`, …). */
+  layer: string;
+  /** The removed identity. */
+  ref: string;
+  /** Its title when the record carried one. */
+  title?: string;
+  /** Wiki-relative page, when the record carried one. */
+  page?: string;
+  removedAt: string;
+  /** The command that observed the removal. */
+  observedBy: string;
+  /** `<value> [<basis>]`, or `unknown` — never a bare value. */
+  requestedBy: string;
+  /** `<value> [<basis>]`, or `unknown` — never a bare value. */
+  grounds: string;
+  /** Which field of the record the query matched: `ref` | `page` | `title`. */
+  matchedOn: string;
+}
+
+/**
+ * What the deletion trail says about a search that found nothing.
+ *
+ * Flow 242 T9/F3: `{"hits":[]}` was the whole answer both for a memory entry
+ * that had been deleted and for a phrase that never named anything, on this
+ * boundary and on the MCP `memory.search` tool that projects through it.
+ *
+ * `verdict` is never `never-existed`, and there is deliberately no such member:
+ * the trail records removals a reconcile OBSERVED, so its silence supports
+ * "nothing here records a removal" and nothing stronger. `summary` always
+ * carries that bound in words, so a model that renders only this one field
+ * still cannot read the silence as proof.
+ */
+export interface MemoryRemovalTrail {
+  /**
+   * `recorded-removed` (the trail names a matching removal) |
+   * `no-removal-recorded` (read, and it names none — NOT "never existed") |
+   * `trail-absent` (nothing has ever been appended to the trail here) |
+   * `trail-unreadable` (it exists and could not be read — removed and
+   * never-recorded cannot be told apart).
+   */
+  verdict: "recorded-removed" | "no-removal-recorded" | "trail-absent" | "trail-unreadable";
+  /** One-paragraph answer, always carrying the bound on a negative verdict. */
+  summary: string;
+  /** Matching removals, bounded. Present only for `recorded-removed`. */
+  removals?: MemoryRemovalRecord[];
+  /** How many matched in total, when `removals` was capped. */
+  totalRemovals?: number;
 }
 
 /** Structured result of `memorySearch` — memory-search-result.schema.json. */
@@ -82,6 +203,13 @@ export interface MemorySearchResult {
   filters?: MemorySearchFilters;
   /** Ranked memory entries. */
   hits: MemorySearchHit[];
+  /**
+   * The deletion trail's answer, set ONLY when `hits` is empty and the search
+   * itself completed. Optional at the type level so a `MetaprojectPort`
+   * implementation predating this field still type-checks; the reference
+   * adapter always sets it on an empty, successful result.
+   */
+  removalTrail?: MemoryRemovalTrail;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -100,7 +228,20 @@ export interface SearchCodeResult {
   truncated?: boolean;
 }
 
-/** Structured result of `readWiki`. */
+/**
+ * Structured result of `readWiki`.
+ *
+ * `outcome` is flow 242 (forgetting) lane C's named-outcome vocabulary,
+ * additive on an interface that has shipped since flow 037 — every existing
+ * `isError`/`error` consumer is unaffected. Before this, a page that never
+ * existed, one that was deleted (tombstoned or pending a
+ * `keryx wiki sections sync`), and one the wiki store itself could not read
+ * (EACCES, a stale mount) all produced the SAME literal error string, so
+ * "never existed", "existed and was removed" and "cannot tell" — AC5's three
+ * required answers — collapsed into one at this boundary. `found` is set on
+ * every successful read for symmetry, even though `isError` already implies
+ * it; a caller should still branch on `isError` first.
+ */
 export interface WikiPageResult {
   /** The requested wiki path (relative to .metaproject/wiki/). */
   path: string;
@@ -110,6 +251,43 @@ export interface WikiPageResult {
   isError: boolean;
   /** Set with a human-readable reason when `isError` is true. */
   error?: string;
+  /**
+   * `found` | `absent` (never existed) | `tombstoned` (removed, on record) |
+   * `pending-tombstone` (removed; `keryx wiki sections sync` has not run) |
+   * `store-unreadable` (the wiki store or its removal registry could not be
+   * read — "found"/"absent"/"tombstoned" cannot be told apart) |
+   * `outside-root` (the path escaped the wiki root; a security refusal, not
+   * a knowledge-removal answer). Optional so a `MetaprojectPort`
+   * implementation predating this field still type-checks; the reference
+   * adapter always sets it.
+   */
+  outcome?: "found" | "absent" | "tombstoned" | "pending-tombstone" | "store-unreadable" | "outside-root";
+}
+
+/**
+ * Structured result of `wikiResolve` — reference resolution over the
+ * section-tombstone registry (`src/wiki/section-tombstone.ts`,
+ * `resolveSectionIdentity`), projected for a caller asking "why can I not
+ * give you this knowledge" (flow 242, lane C). This is the SAME computation
+ * `keryx wiki sections resolve` runs — not a re-derivation of its
+ * vocabulary — so an agent/MCP caller and a human running the CLI on the
+ * same ref get the same answer by construction.
+ *
+ * `resolution.kind` is `SectionResolution`'s own union verbatim (`found` |
+ * `page-found` | `tombstoned` | `reoccupied` | `pending-tombstone` |
+ * `stale-locator` | `registry-unreadable` | `unknown`), plus ONE addition —
+ * `store-unreadable` — for the case `SectionResolution` cannot represent at
+ * all: the wiki page tree itself (not just the `.sections.json` registry)
+ * could not be listed, so no index could be built to resolve against. Never
+ * thrown: a `collectPages` failure (`WikiCollectionError`,
+ * `src/wiki/collect.ts`) is caught and turned into this outcome, because an
+ * MCP/agent caller of a read-only operation must get a structured refusal,
+ * not a stack trace crossing the transport.
+ */
+export interface WikiResolveResult {
+  /** The requested identity (`keryx:page/<id>` or `keryx:page/<id>#<sectionId>`). */
+  ref: string;
+  resolution: SectionResolution | { kind: "store-unreadable"; reason: string };
 }
 
 /** Structured result of `graphPath` — the connection between two graph endpoints. */
@@ -125,6 +303,8 @@ export interface GraphPathResult {
   nodes: string[];
   /** True when either endpoint resolved to no graph node. */
   unresolved?: boolean;
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -135,6 +315,16 @@ export interface TestRelatedResult {
   file: string;
   /** Related test file paths (naming + directory heuristic), sorted. */
   tests: string[];
+  // F-003 (flow 234 review, MAJOR) / AC2: the testing-context refresh status
+  // behind this answer, mirroring TestingReport.context. An inability to fully
+  // walk the tree (e.g. a permission-denied subdirectory) must read as
+  // `incomplete`, never as an indistinguishable "there are no related tests"
+  // empty success. Optional only because a `MetaprojectPort` implementation
+  // predating this field would not set it; the reference adapter always does.
+  context?: {
+    status: "complete" | "incomplete";
+    incompleteReasons: string[];
+  };
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -145,14 +335,24 @@ export interface HealthStatusResult {
   enabled: boolean;
   /** ISO timestamp of the last health run, or null when none exists. */
   lastRunAt: string | null;
-  /** Latest gate status (pass/warn/fail), or null when no report exists. */
-  gate: "pass" | "warn" | "fail" | null;
+  /** Latest gate status (pass/warn/incomplete/fail), or null when no report exists. */
+  gate: "pass" | "warn" | "incomplete" | "fail" | null;
   /** Per-source availability status from the latest report. */
   sources: Array<{ source: string; status: string }>;
   /** Latest project-level health score, or null when unavailable. */
   projectScore: number | null;
-  /** Number of metrics with a positive regression score in the latest report. */
+  /**
+   * DEPRECATED compatibility alias for `decliningScopes` (see
+   * `HealthStatusResult`, `src/health/types.ts`). Until flow 235 T8 this was
+   * the ONLY count that reached this boundary, so an agent read the deprecated
+   * alias while `health.status` and `keryx health status` both showed the two
+   * real counters below.
+   */
   regressions: number;
+  /** Scopes whose score is declining. */
+  decliningScopes?: number;
+  /** Scopes with a confirmed regression. */
+  regressedScopes?: number;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -183,6 +383,8 @@ export interface GraphSymbolResult {
   callers: string[];
   /** Display labels of the symbols the resolved symbol(s) call, sorted. */
   callees: string[];
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }
@@ -191,6 +393,8 @@ export interface GraphSymbolResult {
 export interface FlowSummaryResult {
   /** Stable flow id. */
   id: string;
+  /** The flow's slug — half of its directory name, and how humans name it. */
+  slug?: string;
   /** Current lifecycle status. */
   status: string;
   /** Flow title. */
@@ -219,6 +423,12 @@ export interface RepomapFile {
   score: number;
   /** Rendered top symbols/signatures for the file. */
   symbols: string[];
+  /**
+   * AFC-12: a matched seed, or a direct consumer/test of one — protected from
+   * budget/rank eviction rather than being another ranked candidate. Mirrors
+   * `RepomapEntry.required` (`src/gdgraph/repomap.ts`).
+   */
+  required?: boolean;
 }
 
 /** Structured result of `repomap` — a ranked, token-budgeted repo map. */
@@ -231,7 +441,89 @@ export interface RepomapResult {
   tokens: number;
   /** Number of ranked entries dropped to fit the budget. */
   omitted: number;
+  /** The seeds the caller asked to protect, echoed back. */
+  seed?: string[];
+  /** AFC-12: paths of OPTIONAL entries dropped for budget — named, not just counted. */
+  omittedOptional?: string[];
+  /** AFC-12: true when an optional-entry loss occurred. */
+  partial?: boolean;
+  /**
+   * AFC-12: present only when the REQUIRED set does not fit as a whole. When
+   * set, `files` is empty: a truncated required set is never an ordinary
+   * success. Same vocabulary as `ContextOverflow` (`src/ctx/assembly.ts`).
+   */
+  overflow?: { code: "context_overflow"; requiredId: string };
+  /** Freshness of the graph this map came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/** One ranked file candidate from `graphFind` — mirrors `FindResult` (`src/gdgraph/find.ts`). */
+export interface GraphFindFile {
+  path: string;
+  /** A RANKING score. Never a probability, never a percentage (specification.md §3). */
+  score: number;
+  /** Which query terms hit this path. */
+  matched: string[];
+  /** The subset of `matched` that actually narrows the corpus — the evidence. */
+  discriminating: string[];
+  /** Fan-in (dependents). A TIE-BREAK, never evidence that this answers the question. */
+  dependents: number;
+  /** Why this candidate is here, in one line. */
+  reason: string;
+}
+
+/** One ranked symbol candidate from `graphFind` — mirrors `SymbolFindResult`. */
+export interface GraphFindSymbol {
+  id: string;
+  name: string;
+  kind: string;
+  path: string;
+  startLine: number;
+  score: number;
+  matched: string[];
+  discriminating: string[];
+  reason: string;
+}
+
+/**
+ * Structured result of `graphFind` — the explainable seed-file search.
+ *
+ * `code` is the load-bearing field and the reason this result type exists at
+ * all. `findCandidates` (`src/gdgraph/find.ts`) already distinguishes a genuine
+ * no-match from an unbuilt index from a query whose every term is corpus-wide,
+ * and `keryx gdgraph find` already prints the distinction — but the whole
+ * classification was CLI-only: no agent or MCP tool could ask this question,
+ * so an agent's only route to the same answer was `search_code`, which cannot
+ * tell those four situations apart.
+ *
+ * The `RetrievalCode` type is imported rather than re-spelled as a string
+ * union: `src/lib/retrieval-codes.ts` exists precisely so a transport cannot
+ * fork the vocabulary, and `normalizeRetrievalCode` is what enforces it at the
+ * hop (see `formatFind`, `./metaproject-operations.ts`). Type-only, so this
+ * module stays runtime-free.
+ */
+export interface GraphFindResult {
+  /** The query, echoed back. */
+  query: string;
+  /** The AC5 outcome code, from the one shared closed vocabulary. */
+  code: RetrievalCode;
+  /** Safe prose saying what happened. Never a stack, never a secret. */
+  reason: string;
+  /** At most `MAX_NEXT_ACTIONS` bounded continuations — never a full layer tour. */
+  nextActions: string[];
+  /** Ranked file candidates (may be empty even when `code` is `ok`-adjacent). */
+  files: GraphFindFile[];
+  /** Ranked symbol candidates. */
+  symbols: GraphFindSymbol[];
+  /** The content terms the query reduced to, after stop-word removal. */
+  queryTerms: string[];
+  /** The query terms that appear across this corpus and therefore discriminate nothing. */
+  ubiquitousTerms: string[];
+  /** Freshness of the graph this answer came from (never recomputed here). */
+  staleness?: GraphStaleness;
+  /** Set when the backing service failed — structured, not thrown. */
   error?: string;
 }
 
@@ -242,21 +534,90 @@ export interface WikiAskCitation {
   title: string;
   /** Bounded excerpt of the cited page/entry. */
   excerpt: string;
-  /** Deterministic lexical relevance score. */
+  /** Deterministic lexical relevance score (a RANKING score, never a probability). */
   score: number;
   /** Which corpus the citation came from. */
   source: "wiki" | "memory";
+
+  // --- flow 235 T8: everything below is computed by `wikiAsk` (src/wiki/ask.ts)
+  // and rendered by the CLI, and used to be dropped by the adapter's five-field
+  // re-map. Optional at the TYPE level only so a hand-written port stub still
+  // compiles; the reference adapter passes through whatever the facade set.
+  /** Which query terms hit — the reason, kept rather than computed and dropped. */
+  matched?: string[];
+  /** Stable section id (AFC-W01), for a wiki citation that has one. */
+  sectionId?: string;
+  /** The resolvable section address, e.g. `wiki:<page>#<sectionId>`. */
+  sectionRef?: string;
+  /** `Page › Section` — what distinguishes two identically titled sections. */
+  sectionTitle?: string;
+  /** How far `sectionRef` can be trusted across an edit. */
+  sectionStability?: "stable" | "version-bound";
+  /** Whether the cited body is real content or scaffolding/generated reference. */
+  contentClass?: "substantive" | "scaffold" | "reference";
+  /** The wiki page type that owns the section. */
+  domain?: string;
+  startLine?: number;
+  endLine?: number;
+  /**
+   * Set when this citation is NOT current. The CLI renders a
+   * `**[HISTORICAL — not current: …]**` marker from these three; dropping them
+   * here handed an agent stale guidance with no way to tell.
+   */
+  historical?: boolean;
+  /** The lifecycle state verbatim (`LifecycleState`), never re-derived here. */
+  lifecycleState?: string;
+  lifecycleReasons?: string[];
 }
+
+/**
+ * A retrieval OUTCOME, not a shape the caller must infer from an empty array
+ * (`WikiAskStatus`, `src/wiki/types.ts`). A zero-information query, an unbuilt
+ * index and a genuine no-match are different answers.
+ */
+export type WikiAskStatus = "ok" | "no-match" | "insufficient-evidence";
 
 /** Structured result of `wikiAsk` — deterministic lexical Q&A over wiki + memory. */
 export interface WikiAskResult {
   /** The question asked. */
   question: string;
+  /**
+   * `ok` only when the citations are evidence for the question asked.
+   * Optional because a port stub may not set it; `undefined` means "a stub,
+   * not a real retrieval" — never "ok".
+   */
+  status?: WikiAskStatus;
+  /** Why, when `status` is not `ok`. Bounded and specific. */
+  reason?: string;
   /** Ranked citations (empty when nothing matched). */
   citations: WikiAskCitation[];
   /** Assembled Markdown answer built deterministically from the citations. */
   answer: string;
   /** Set when the backing service failed — structured-empty, not thrown. */
+  error?: string;
+}
+
+/**
+ * Structured result of `wikiEvidence` — the AFC-W04 evidence envelope.
+ *
+ * `envelope` is `EvidencePackage` VERBATIM, not a re-mapped subset. That is the
+ * whole design of this result type: the measured defect at this boundary was a
+ * hand-written re-map that dropped thirteen fields from a wiki answer, and the
+ * only structural fix is to make dropping a field impossible rather than to
+ * write a longer re-map and hope. A field added to the envelope arrives here
+ * with no edit to this file; a field renamed there fails to compile in the
+ * renderer that projects it.
+ *
+ * `envelope` is optional ONLY for the `error` branch — a backing failure is a
+ * structured result, never a throw, and never an empty envelope that would read
+ * as a genuine `no-match`.
+ */
+export interface WikiEvidenceResult {
+  /** The question asked, echoed back. */
+  question: string;
+  /** The evidence envelope, whole. Absent only when `error` is set. */
+  envelope?: EvidencePackage;
+  /** Set when the backing service failed — structured, not thrown. */
   error?: string;
 }
 
@@ -317,6 +678,8 @@ export interface ContextSummaryResult {
   graphEdges: number;
   /** Whether a wiki index (.metaproject/wiki/index.md) is present. */
   hasWikiIndex: boolean;
+  /** Freshness of the graph these counts came from (never recomputed here). */
+  staleness?: GraphStaleness;
   /** Set when the summary could not be fully computed (partial/degraded). */
   error?: string;
 }
@@ -392,10 +755,50 @@ export interface MetaprojectPort {
 
   /** Where a symbol is defined + its callers/callees over the symbol layer (gdgraph). */
   graphSymbol?(input: { name: string }): Promise<GraphSymbolResult>;
-  /** A ranked, token-budgeted repo map over the code graph (gdgraph). */
-  repomap?(input: { budget?: number }): Promise<RepomapResult>;
-  /** Deterministic lexical Q&A over the project's wiki + memory (gdwiki). */
-  wikiAsk?(input: { question: string }): Promise<WikiAskResult>;
+  /**
+   * A ranked, token-budgeted repo map over the code graph (gdgraph).
+   *
+   * `seed` is the whole point of the operation for a change intent: a seeded
+   * file and its direct consumers/tests become the REQUIRED set, protected
+   * from rank eviction. `computeRepomap` and `keryx gdgraph repomap --seed`
+   * have accepted it all along; this input used to be `{ budget? }` only, so
+   * no seed could ever reach the compute through a tool.
+   */
+  repomap?(input: { budget?: number; seed?: string[] }): Promise<RepomapResult>;
+  /**
+   * Deterministic lexical Q&A over the project's wiki + memory (gdwiki).
+   * `k` caps the citation count, exactly as `keryx wiki ask --k` does.
+   */
+  wikiAsk?(input: { question: string; k?: number }): Promise<WikiAskResult>;
+
+  // --- AFC (flow 240): the two capabilities that existed with no boundary ----
+  // Same OPTIONAL contract as every batch above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw.
+
+  /**
+   * Explainable seed-file/symbol search over the code graph (gdgraph), with the
+   * AC5 outcome code attached. `keryx gdgraph find` has returned this since
+   * flow 235; nothing on the agent or MCP boundary could ask for it.
+   */
+  graphFind?(input: {
+    query: string;
+    fileLimit?: number;
+    symbolLimit?: number;
+  }): Promise<GraphFindResult>;
+
+  /**
+   * The wiki evidence envelope (gdwiki) — required items that cannot be
+   * silently dropped, conflicting sources paired symmetrically, and a mandatory
+   * overflow reported as `budget-exceeded` rather than a shortened rule.
+   * `createGdWikiService().evidence` has backed it since flow 235; nothing
+   * outside its own test called it.
+   */
+  wikiEvidence?(input: {
+    question: string;
+    k?: number;
+    budgetTokens?: number;
+    maxItems?: number;
+  }): Promise<WikiEvidenceResult>;
 
   // --- flow 122: additive OPTIONAL read operation (MP-5a) ---------------------
   // Same OPTIONAL contract as flows 043/044: an absent method is an
@@ -425,4 +828,20 @@ export interface MetaprojectPort {
   skillsCatalog?(input: Record<string, never>): Promise<SkillsCatalogResult>;
   /** One skill's full SKILL.md body, by name or exact path (gdskills). */
   loadSkill?(input: { name: string }): Promise<SkillLoadResult>;
+
+  // --- additive OPTIONAL read operation: flow 242 (forgetting) lane C -------
+  // Same OPTIONAL contract as every batch above: an absent method is an
+  // "unavailable" operation (a structured result), never a throw. Before this
+  // the CLI's `keryx wiki sections resolve` had no agent or MCP equivalent at
+  // all — the one place this project could answer "never existed" vs
+  // "existed and was removed" vs "cannot tell" for a wiki identity existed on
+  // one surface only, and AC5 of flow 242 requires the same three answers on
+  // all three (CLI, agent tool boundary, MCP).
+
+  /**
+   * Resolve a wiki page/section identity to what it IS, not what merely
+   * occupies its address: live, tombstoned, pending a sync, reoccupied by a
+   * different document, or never registered at all (gdwiki).
+   */
+  wikiResolve?(input: { ref: string }): Promise<WikiResolveResult>;
 }

@@ -28,12 +28,33 @@ class FakeText {
   }
 }
 
+class FakeBox {
+  children: FakeText[] = [];
+  id: string | undefined;
+  constructor(_r: unknown, opts: Record<string, unknown>) {
+    this.id = typeof opts.id === "string" ? opts.id : undefined;
+  }
+  add(child: unknown): void {
+    this.children.push(child as FakeText);
+  }
+  remove(child: unknown): void {
+    const i = this.children.indexOf(child as FakeText);
+    if (i >= 0) {
+      this.children.splice(i, 1);
+    }
+  }
+  getChildren(): readonly FakeText[] {
+    return this.children;
+  }
+}
+
 function tag(strings: TemplateStringsArray, ...values: unknown[]): string {
   return strings.reduce((acc, s, i) => acc + String(values[i - 1] ?? "") + s);
 }
 
 const fakeOtui = {
   TextRenderable: FakeText,
+  BoxRenderable: FakeBox,
   t: tag,
   bold: (x: unknown) => x,
   dim: (x: unknown) => x,
@@ -42,6 +63,15 @@ const fakeOtui = {
 interface FakeSidebar {
   children: FakeText[];
   add(child: unknown): void;
+  remove(child: unknown): void;
+}
+
+function balanceBox(sidebar: FakeSidebar): FakeBox {
+  const box = sidebar.children.find((c) => c.id === "sb-balance");
+  if (!(box instanceof FakeBox)) {
+    throw new Error("sb-balance box missing");
+  }
+  return box;
 }
 
 function makeSidebar(): FakeSidebar {
@@ -50,6 +80,12 @@ function makeSidebar(): FakeSidebar {
     children,
     add(child) {
       children.push(child as FakeText);
+    },
+    remove(child) {
+      const i = children.indexOf(child as FakeText);
+      if (i >= 0) {
+        children.splice(i, 1);
+      }
     },
   };
 }
@@ -74,8 +110,8 @@ test("mountBalancePanel mounts Balance row and fetches on start", async () => {
     env: { DEEPSEEK_API_KEY: "sk-test" },
   }) as BalancePanelHandle;
   // Initial state before the fetch resolves: "…".
-  expect(sidebar.children.some((c) => c.id === "sb-balance-k")).toBe(true);
-  const value = sidebar.children.find((c) => c.id === "sb-balance-v");
+  expect(balanceBox(sidebar).children.some((c) => c.id === "sb-balance-k")).toBe(true);
+  const value = balanceBox(sidebar).children.find((c) => c.id === "sb-balance-v");
   expect(value).toBeDefined();
   // Let the injected fetch resolve.
   await new Promise((resolve) => setTimeout(resolve, 10));
@@ -96,7 +132,7 @@ test("mountBalancePanel mounts NOTHING for providers without a balance endpoint"
   }) as BalancePanelHandle;
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(handle.current()).toBeUndefined();
-  expect(sidebar.children).toEqual([]);
+  expect(balanceBox(sidebar).children).toEqual([]);
   // …and the handle stays safe to call, so callers need no capability branch.
   await handle.refresh();
   expect(handle.current()).toBeUndefined();
@@ -115,15 +151,80 @@ test("clicking the balance value re-fetches", async () => {
       { status: 200, headers: { "content-type": "application/json" } },
     );
   }) as unknown) as typeof fetch;
-  const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
+  mountBalancePanel(sidebar, fakeOtui, {}, {
     provider: "deepseek",
     fetch: fetchFn,
     env: { DEEPSEEK_API_KEY: "sk-test" },
   }) as BalancePanelHandle;
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(calls).toBe(1);
-  const value = sidebar.children.find((c) => c.id === "sb-balance-v");
+  const value = balanceBox(sidebar).children.find((c) => c.id === "sb-balance-v");
   value?.onMouseDown?.();
   await new Promise((resolve) => setTimeout(resolve, 10));
   expect(calls).toBe(2);
+});
+
+test("setProvider re-fetches the NEW provider instead of the mount-time one", async () => {
+  const sidebar = makeSidebar();
+  const seen: string[] = [];
+  const fetchFn = ((async (input: RequestInfo | URL) => {
+    seen.push(String(input));
+    const url = String(input);
+    const total = url.includes("openrouter") ? "1.11" : "9.99";
+    const body = url.includes("openrouter")
+      ? { credits: { total: Number(total), used: 0, currency: "USD" } }
+      : {
+          is_available: true,
+          balance_infos: [{ currency: "USD", total_balance: total, granted_balance: "0", topped_up_balance: total }],
+        };
+    return new Response(JSON.stringify(body), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    });
+  }) as unknown) as typeof fetch;
+  const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
+    provider: "deepseek",
+    fetch: fetchFn,
+    env: { DEEPSEEK_API_KEY: "ds-key", OPENROUTER_API_KEY: "or-key" },
+  }) as BalancePanelHandle;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(seen.some((u) => u.includes("deepseek"))).toBe(true);
+  expect(handle.current()?.total).toBe(9.99);
+
+  await handle.setProvider("openrouter");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(seen.some((u) => u.includes("openrouter"))).toBe(true);
+  expect(handle.current()?.total).toBe(1.11);
+  expect(balanceBox(sidebar).children.some((c) => c.id === "sb-balance-v")).toBe(true);
+});
+
+test("setProvider unmounts the row when the new provider has no balance endpoint", async () => {
+  const sidebar = makeSidebar();
+  const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
+    provider: "deepseek",
+    fetch: balanceFetch(),
+    env: { DEEPSEEK_API_KEY: "ds-key" },
+  }) as BalancePanelHandle;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(balanceBox(sidebar).children.some((c) => c.id === "sb-balance-k")).toBe(true);
+
+  await handle.setProvider("zai");
+  expect(balanceBox(sidebar).children).toEqual([]);
+  expect(handle.current()).toBeUndefined();
+});
+
+test("setProvider mounts the row when switching onto a capable provider", async () => {
+  const sidebar = makeSidebar();
+  const handle = mountBalancePanel(sidebar, fakeOtui, {}, {
+    provider: "zai",
+    fetch: balanceFetch(),
+    env: { DEEPSEEK_API_KEY: "ds-key", ZAI_API_KEY: "zai-key" },
+  }) as BalancePanelHandle;
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(balanceBox(sidebar).children).toEqual([]);
+
+  await handle.setProvider("deepseek");
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  expect(balanceBox(sidebar).children.some((c) => c.id === "sb-balance-k")).toBe(true);
+  expect(handle.current()?.total).toBe(9.99);
 });

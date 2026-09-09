@@ -1,5 +1,5 @@
 # Metrics and Validation: Keryx Provider Auth
-Version: 1.0.0
+Version: 1.1.0
 
 ## Status
 
@@ -10,7 +10,7 @@ makes no performance or availability claim about any provider.
 
 | ID | Metric | Target | Source |
 |---|---|---|---|
-| M-01 | Registry entries declaring exactly one authentication method | 100% | Registry validation |
+| M-01 | Registry entries declaring at least one permitted authentication method, and none declaring a forbidden one | 100% / 0 forbidden | Registry validation |
 | M-02 | Registry entries declaring a method their vendor prohibits | 0 | Compliance fixtures |
 | M-03 | Device-grant authorizations completed with no loopback listener and no browser on the keryx machine | 100% of device-grant fixtures | Fake authorization server |
 | M-04 | Polls issued faster than the provider's declared interval | 0 | Polling fixtures |

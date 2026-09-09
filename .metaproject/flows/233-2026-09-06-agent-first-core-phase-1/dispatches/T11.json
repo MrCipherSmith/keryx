@@ -1,0 +1,62 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "233",
+  "dispatch_id": "233-T11",
+  "orchestrator": "flow-orchestrator",
+  "target_skill": "tests-creator",
+  "task": {
+    "title": "AFC-05 truthful health gate and audit parsing RED regressions",
+    "description": "Create meaningful failing runtime tests from health-spec.md and PRD AFC-05: required coverage separate from finding failure, parser output/exit validity, Bun/npm fixtures, strict CLI/service status. Only test files and artifacts; no production edits. Distinguish recognized findings nonzero from execution failure. Root will assign implementation after RED evidence.",
+    "intent": "test"
+  },
+  "acceptance_criteria": [
+    "Required missing/skipped/disabled/unparsed outcomes yield incomplete absent blocking findings; findings retained and FAIL dominates with coverage incomplete.",
+    "Synthetic Bun package-keyed arrays and npm modern/legacy formats parse; unknown/malformed output cannot report clean even rc0.",
+    "Strict health CLI/service reject incomplete; optional skips visible and source-filter coverage truthful."
+  ],
+  "context_refs": [
+    {
+      "path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/health-spec.md",
+      "kind": "custom",
+      "exists": true
+    },
+    {
+      "path": "/Users/Goodea/goodea/keryx/docs/requirements/keryx-agent-first-core/policies.md",
+      "kind": "custom",
+      "exists": true
+    }
+  ],
+  "files_to_read": [
+    "/Users/Goodea/goodea/keryx/src/health/gate.ts",
+    "/Users/Goodea/goodea/keryx/src/health/run.ts",
+    "/Users/Goodea/goodea/keryx/src/health/types.ts",
+    "/Users/Goodea/goodea/keryx/src/health/service.ts",
+    "/Users/Goodea/goodea/keryx/src/health/sources/dependency-audit.ts",
+    "/Users/Goodea/goodea/keryx/src/health/sources/eslint.ts",
+    "/Users/Goodea/goodea/keryx/src/health/gate.test.ts",
+    "/Users/Goodea/goodea/keryx/src/commands/health.ts"
+  ],
+  "constraints": [
+    "Root /Users/Goodea/goodea/keryx; read .metaproject/index.md first, local tests-creator SKILL.md and testing context.",
+    "Write tests only under src/health and health CLI test files; avoid all routing/budgets/HTTP/Shell production files. No git/flow/AC edits or real audit/model/network calls. Stats disabled, auto_commit false.",
+    "Do not alter existing behavioral assertions merely to create RED; new tests target accepted changed health contract. Existing obsolete expected warn/fail behavior will be adjusted by implementer with evidence.",
+    "Global verifier snapshot is finishing; read and design now, wait for root write-go before test edits. Do not run global suite; focused health tests only.",
+    "Write T11-test-case-specs.json, T11-red.md, T11-result.json; schema/security-check outputs."
+  ],
+  "allowed_actions": [
+    "read",
+    "write",
+    "run-command"
+  ],
+  "output_contract": {
+    "schema": "subagent-result",
+    "artifact_path": "/Users/Goodea/goodea/keryx/.metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T11-result.json"
+  },
+  "budget": {
+    "max_output_tokens": null
+  },
+  "provenance": {
+    "created_at": "2026-09-06T11:29:44.939132+00:00",
+    "created_by": "flow-orchestrator"
+  }
+}

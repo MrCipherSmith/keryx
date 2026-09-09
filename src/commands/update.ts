@@ -10,7 +10,7 @@ import {
   type GdskillsProfile,
 } from "../gdskills/catalog";
 import { syncAgentRules } from "../rules/agent-entrypoints";
-import { hasDistilledEntrypoints } from "../rules/distill";
+import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import { STANDARD_VERSION, computeProfiles } from "../standard/profiles";
 import { reconcileCapabilitiesOnUpdate } from "../capability/registry";
 import { renderHealthConfig } from "../health/config";
@@ -87,18 +87,26 @@ import {
   renderGdskillsPostCommitHook,
   renderHealthPostCommitHook,
   renderHooksReadme,
-  renderIndexGateMarkdown,
-  renderIndexMarkdown,
-  ROUTING_FILENAME,
   renderMetaprojectCoreReadme,
   renderMetaprojectDashboardHtml,
   renderMetaprojectDashboardPostCommitHook,
   renderMetaprojectReadme,
-  renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
   renderSecurityPrePushHook,
   type MetaprojectDashboardData,
 } from "../lib/templates";
+import {
+  planRoutingEntrypointPair,
+  rulesReadmeStep,
+  writeRoutingEntrypointPair,
+} from "../lib/routing-entrypoint";
+import {
+  formatInstallPlan,
+  InstallPlanBlockedError,
+  isPreviewRequested,
+  parseDivergenceResolution,
+  type DivergenceResolution,
+} from "../lib/install-plan";
 import {
   renderTestingPostCommitHook,
   renderTestingPrePushHook,
@@ -145,6 +153,8 @@ type UpdateOptions = {
   hooks: boolean;
   skipRuntime: boolean;
   noTasks: boolean;
+  preview: boolean;
+  resolution: DivergenceResolution | undefined;
 };
 
 export type DashboardBuildResult = {
@@ -172,6 +182,13 @@ export async function updateCommand(args: string[] = []): Promise<void> {
     return;
   }
 
+  // Preview before anything mutates: not even the managed-runtime fetch below
+  // has run yet. Every input the plan needs is read-only.
+  if (options.preview) {
+    console.log(await previewServiceFiles(projectRoot, options));
+    return;
+  }
+
   if (!options.skipRuntime) {
     await updateRuntime(projectRoot);
   }
@@ -181,7 +198,18 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   if (legacyMemoryArtifacts.length > 0) {
     note(formatLegacyMemoryMigrationAdvisory(legacyMemoryArtifacts));
   }
-  const summary = await refreshServiceFiles(projectRoot, options);
+  let summary: RefreshSummary;
+  try {
+    summary = await refreshServiceFiles(projectRoot, options);
+  } catch (error) {
+    if (error instanceof InstallPlanBlockedError) {
+      console.log("");
+      console.log(error.message);
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
 
   heading("Refreshed service files");
   note("Data artifacts were left untouched.");
@@ -216,7 +244,7 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   } else {
     steps.push(`Run ${style.cyan("keryx update --hooks")} to run post-update hooks.`);
   }
-  steps.push(`Read ${style.cyan(".metaproject/index.md")} for the current module map.`);
+  steps.push(`Read ${style.cyan(".metaproject/index.md")} first; open ${style.cyan(".metaproject/routing.md")} for the full module map and intent router.`);
   nextSteps(steps);
 }
 
@@ -237,6 +265,51 @@ type RefreshSummary = {
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
+
+/**
+ * Read-only twin of the lifecycle write inside {@link refreshServiceFiles}.
+ * `readManifest`, `listRootEntrypoints` and `hasDistilledEntrypoints` all only
+ * read, so this path cannot write — including the default AGENTS.md that
+ * `syncAgentRules` would create on a real run.
+ */
+async function previewServiceFiles(projectRoot: string, options: UpdateOptions): Promise<string> {
+  const metaprojectRoot = path.join(projectRoot, ".metaproject");
+  const manifestState = await readManifest(metaprojectRoot);
+  const manifest = manifestState.manifest;
+  const enableTasks = moduleEnabled(manifest, "tasks") || !options.noTasks;
+  const ruleSources = await listRootEntrypoints(projectRoot, manifest.agentEntrypoints?.root ?? []);
+  const plan = await planRoutingEntrypointPair(
+    metaprojectRoot,
+    {
+      enableGdgraph: moduleEnabled(manifest, "gdgraph"),
+      enableGdctx: moduleEnabled(manifest, "gdctx"),
+      enableGdwiki: moduleEnabled(manifest, "gdwiki"),
+      enableGdskills: moduleEnabled(manifest, "gdskills"),
+      enableHealth: moduleEnabled(manifest, "health"),
+      enableTesting: moduleEnabled(manifest, "testing"),
+      enableMemory: moduleEnabled(manifest, "memory"),
+      enableTasks,
+      enableSecurity: moduleEnabled(manifest, "security"),
+      ruleSources,
+      hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+    },
+    { intent: "update", steps: [rulesReadmeStep(metaprojectRoot, "managed")] },
+  );
+  return formatInstallPlan(plan, {
+    ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
+    relativeTo: projectRoot,
+    notes: [
+      manifestState.exists && manifestState.valid
+        ? "metaproject.json is readable; module flags come from it."
+        : "metaproject.json is missing or unreadable; a real run would recover it from the folders on disk.",
+      "Not digest-planned by this release: module manifests, skills, templates, the dashboard, " +
+        "the managed runtime, metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
+        "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
+      "Hooks are merged into existing files by their own installers and are not digest-planned; " +
+        "a real run reports which of them it touched.",
+    ],
+  });
+}
 
 async function refreshServiceFiles(projectRoot: string, options: UpdateOptions): Promise<RefreshSummary> {
   const metaprojectRoot = path.join(projectRoot, ".metaproject");
@@ -289,7 +362,6 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
 
   await writeTextIfChanged(path.join(metaprojectRoot, "core", "README.md"), renderMetaprojectCoreReadme());
   await writeTextIfChanged(path.join(metaprojectRoot, "hooks", "README.md"), renderHooksReadme());
-  await writeTextIfChanged(path.join(metaprojectRoot, "rules", "README.md"), renderProjectRulesReadme());
   await writeTextIfChanged(
     path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
     renderProjectRulesSkillReadme({ sources: ruleSources }),
@@ -298,23 +370,12 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   // The gate is read once per agent and then re-sent on every turn, so its size
   // is multiplied by task length — see
   // docs/requirements/keryx-context-measurement/context-loading.md.
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, "index.md"),
-    renderIndexGateMarkdown({
-      enableGdgraph,
-      enableGdctx,
-      enableGdwiki,
-      enableGdskills,
-      enableHealth,
-      enableTesting,
-      enableMemory,
-      enableTasks,
-      enableSecurity,
-    }),
-  );
-  await writeTextIfChanged(
-    path.join(metaprojectRoot, ROUTING_FILENAME),
-    renderIndexMarkdown({
+  // The pair and the rules README go out under one plan, one lock and one
+  // journal: an interrupted update resumes from the durable record of which
+  // steps had begun instead of being merely repeatable from the top.
+  await writeRoutingEntrypointPair(
+    metaprojectRoot,
+    {
       enableGdgraph,
       enableGdctx,
       enableGdwiki,
@@ -326,7 +387,17 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       enableSecurity,
       ruleSources,
       hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-    }),
+    },
+    {
+      intent: "update",
+      steps: [rulesReadmeStep(metaprojectRoot, "managed")],
+      ...(options.resolution === undefined ? {} : { resolution: options.resolution }),
+      onNotice: (line) => {
+        if (line.trim().length > 0) {
+          console.log(`  ${line}`);
+        }
+      },
+    },
   );
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
@@ -1522,6 +1593,8 @@ function parseUpdateArgs(args: string[]): UpdateOptions {
     hooks: args.includes("--hooks"),
     skipRuntime: args.includes("--skip-runtime"),
     noTasks: args.includes("--no-tasks"),
+    preview: isPreviewRequested(args),
+    resolution: parseDivergenceResolution(args),
   };
 }
 
@@ -1642,5 +1715,8 @@ function printHelp(): void {
     { flag: "--skip-runtime", desc: "Refresh local service files without fetching the managed runtime." },
     { flag: "--hooks", desc: "Run executable .metaproject/hooks/post-update.d hooks explicitly." },
     { flag: "--no-tasks", desc: "Do not backfill/enable the Task Manager module." },
+    { flag: "--preview, --dry-run", desc: "Print the lifecycle plan (create/update/skip/conflict + base digests) and write nothing." },
+    { flag: "--accept-version", desc: "Publish this version's content over lifecycle files a different version left divergent." },
+    { flag: "--keep-existing", desc: "Leave divergent lifecycle files alone and record that this run did not publish them." },
   ]);
 }

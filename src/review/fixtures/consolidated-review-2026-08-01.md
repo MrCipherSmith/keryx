@@ -410,7 +410,7 @@ readers and whether it guards the throw".
 
 - A literal NUL byte in `src/lib/serve-turn-store.test.ts:83` makes git treat the
   file as binary, so that entire test suite was unreviewable in the PR diff
-  (`Bin 0 -> 11891 bytes`). Use the ` ` escape.
+  (`Bin 0 -> 11891 bytes`). Use the `\0` escape.
 - `emit("turn.started")` precedes the containment check whose comment says "a
   turn that began is a turn whose evidence says it began" — comment contradicts
   code, the class flow 130's AC9 exists for.

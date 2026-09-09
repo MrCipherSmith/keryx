@@ -17,11 +17,10 @@
 // security guard scan. Nothing here bypasses that path or invents a second one.
 // The proposal-record read + evidence hash re-verification is shared with
 // wiki-owner-writer.ts via proposal-evidence.ts.
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { readFile } from "node:fs/promises";
 import { writeCanonicalEntry } from "../memory/write";
-import type { KnowledgeOwner, OwnerReceipt, OwnerWriteIntent } from "./guarded-owner-writer";
-import { ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence } from "./proposal-evidence";
+import type { KnowledgeOwner, OwnerReceipt, OwnerWriteFailure, OwnerWriteIntent } from "./guarded-owner-writer";
+import { applyGuardedTargetWrite, ownerReceiptPath, readSidecarNote, readVerifiedProposalEvidence, recoverStagedOwnerWrite } from "./proposal-evidence";
 
 export { proposalNotePath } from "./proposal-evidence";
 
@@ -85,9 +84,19 @@ is the source of truth for what actually happened.
 export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string; now?: () => Date }): {
   authorize: (intent: OwnerWriteIntent) => Promise<boolean>;
   recover: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
-  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | { ok: false; code: string }>;
+  recoverReceipt: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | undefined>;
+  persist: (intent: OwnerWriteIntent & { owner: KnowledgeOwner }) => Promise<OwnerReceipt | OwnerWriteFailure>;
 } {
   const now = opts?.now ?? (() => new Date());
+
+  /** Replays the staged entry through the SAME canonical writer `persist` used. */
+  const applyStaged = async (staged: Record<string, unknown>): Promise<{ ok: true } | OwnerWriteFailure> => {
+    const result = await writeCanonicalEntry({ cwd, relativePath: staged.relativePath as string, content: staged.content as string });
+    if (result.status !== "written") {
+      return { ok: false, code: result.status === "skipped" ? `security_gate_${result.reason}` : `memory_write_failed_${result.error.code}` };
+    }
+    return { ok: true };
+  };
 
   return {
     async authorize(intent) {
@@ -104,6 +113,12 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
       } catch {
         return undefined;
       }
+    },
+
+    // AFC-27 / flow 237 AC1: the non-mutating restart question — see the same
+    // hook on wiki-owner-writer.ts for why `recover` alone cannot answer it.
+    async recoverReceipt(intent) {
+      return recoverStagedOwnerWrite({ cwd, owner: "memory", intent, apply: applyStaged });
     },
 
     async persist(intent) {
@@ -126,24 +141,34 @@ export function createRealMemoryOwnerWriter(cwd: string, opts?: { note?: string;
         note: sidecarNote ?? opts?.note,
         date,
       });
+      // Already canonical for `resolveCanonicalEntryPath` (typed folder, `.md`,
+      // inside the memory root), so the path the canonical writer reports back
+      // is this one — which is what lets the receipt be prepared, and staged,
+      // before the entry is written.
       const relativePath = `task-notes/sac-${proposal.id}.md`;
-
-      const result = await writeCanonicalEntry({ cwd, relativePath, content });
-      if (result.status !== "written") {
-        return { ok: false, code: result.status === "skipped" ? `security_gate_${result.reason}` : `memory_write_failed_${result.error.code}` };
-      }
 
       // receiptRef/targetRef are schema-typed as workspace-relative `path`s (no `#`,
       // no query strings — see workspace-proposal.schema.json's `path` pattern), so
       // this is a distinct logical path, not a URL-style fragment on targetRef.
       const receipt: OwnerReceipt = {
-        receiptRef: `./memory/${result.path.replace(/\.md$/, "")}.receipt.json`,
-        targetRef: `./memory/${result.path}`,
+        receiptRef: `./memory/${relativePath.replace(/\.md$/, "")}.receipt.json`,
+        targetRef: `./memory/${relativePath}`,
         completedAt: now().toISOString(),
       };
-      await mkdir(path.dirname(ownerReceiptPath(cwd, "memory", intent.workspaceId, intent.idempotencyKey)), { recursive: true });
-      await writeFile(ownerReceiptPath(cwd, "memory", intent.workspaceId, intent.idempotencyKey), `${JSON.stringify(receipt, null, 2)}\n`, "utf8");
-      return receipt;
+      // No `predictedContent`: the canonical writer runs its own security guard
+      // and may legitimately persist redacted bytes, so this owner must not
+      // claim to know the applied digest. Recovery falls back to the durable
+      // target-version record, and finishes from staging when even that is
+      // missing — an idempotent replay of the same canonical write.
+      return applyGuardedTargetWrite({
+        cwd,
+        owner: "memory",
+        intent,
+        receipt,
+        staged: { relativePath, content },
+        proposedContent: content,
+        apply: applyStaged,
+      });
     },
   };
 }

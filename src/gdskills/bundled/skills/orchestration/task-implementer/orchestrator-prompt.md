@@ -47,7 +47,7 @@ TASK:
 WORKSPACE:
   codebase_path        → absolute path to project repo (worktree path)
   branch               → feature branch name (already checked out in worktree)
-  issue_number         → GitHub issue number
+  issue_number         → Optional real GitHub issue number; omit for description-based tasks
   issue_title          → GitHub issue title
 
 JOB_CONTEXT (optional):
@@ -68,7 +68,7 @@ the rule. Do not dispatch a request that does not validate. The schema is
 `input-contract.schema.json` in this folder, registered in
 `src/gdskills/contracts.ts`; it is what refuses an empty `target_files`, a
 `task_type` outside the enum, a `task_id` that is not `task-<n>`, a missing
-`codebase_path`/`branch`/`issue_number`, `skip_confirmation` other than `true`,
+`codebase_path`/`branch`, `skip_confirmation` other than `true`,
 `max_self_fix_attempts` above 3, and any undeclared field.
 
 One check the schema cannot make, because it is a fact about the machine:

@@ -1,0 +1,103 @@
+{
+  "contract_version": "1.0.0",
+  "run_id": "T75-run-1",
+  "dispatch_id": "T75",
+  "status": "DONE",
+  "summary": "Closed T70 F-001..F-004: corrected three shipped security-mode exit-behaviour guidance sites (cli-reference.md, modules.md) to the measured enforced/ci/gateway fold on fail/needs-approval/incomplete/unrecognized; closed a fourth SourceRunInfo.error producer (validate() return value) with a closed-vocabulary allow-list, found by enumerating by write site rather than by catch binding; corrected the security manifest's overclaim that a mode downgrade produces a finding; and strengthened the F-005 regressions with two new end-to-end tests that assert on the persisted health artifact and the service-read gate, after the reviewer's own suggested mock.module design reproduced T69's documented cross-file test hazard and was replaced with a mock-free design (exporting writeOutputs the same way runAdapter already is).",
+  "acceptance": [
+    {
+      "criterion": "AC4 (AFC-05): fixtures, damaged JSON, skipped-required, incomplete coverage give expected verdict; violations not lost when another check is unavailable",
+      "status": "met",
+      "evidence": "computeGate's brokenRequired filter never reads s.error content (read-only, unedited); both fixes are string-only inside the error field; full required suite green; every new regression asserts gate.status/serviceGate.status is unmoved (incomplete)"
+    },
+    {
+      "criterion": "AC8: no shipped guidance describes behaviour the code does not have; no required failed/incomplete check relabeled PASS",
+      "status": "met",
+      "evidence": "T75-guidance-before.log / T75-guidance-after.log: section B suspects dropped 5->2 (remaining 2 pre-classified non-defects), section B §14 manifestHasIt true->false; docs/docs/cli-reference.md:2137-2148 and docs/docs/modules.md:778,784-787 rewritten to the measured exitCodeFor/reportExitCode fold; src/security/templates.ts:103-105 corrected to match self-protect.ts"
+    },
+    {
+      "criterion": "The fourth producer of the health source error field is closed and the enumeration axis is corrected, every write site listed with disposition",
+      "status": "met",
+      "evidence": "T75-implementation.md item 2 table: 8 write sites enumerated by grepping the error: field itself (not catch), each given a disposition; run.ts:356-358 fixed with safeValidationError/KNOWN_VALIDATION_ERRORS; T75-health-leak-after.log row P1 clean at all 4 LEAK_* surfaces"
+    },
+    {
+      "criterion": "Regressions assert on the artifact, fail before the change and pass after; bun test src/health/ src/commands/ src/security/ stays green",
+      "status": "met",
+      "evidence": "Two new F-004 tests in health-truthful-gate.test.ts read latest.json/latest.md from disk and call the real createCodeHealthService().gate(); RED confirmed by temporary source revert (plain file edit, not git stash), GREEN after restore; bun src/cli.ts ctx run -- bun test src/health/ src/commands/ src/security/ -> 1370 pass / 6 skip / 0 fail / 5822 expect() across 1376 tests, 120 files (2026-09-06T18-57-30-347Z_run.log, cross-checked against the raw log's true tail)"
+    }
+  ],
+  "artifacts": [
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T75-spec.md",
+      "kind": "plan",
+      "exists": true,
+      "summary": "Pre-edit spec: measurement plan and site enumeration for all four items, written before any edit"
+    },
+    {
+      "path": ".metaproject/flows/233-2026-09-06-agent-first-core-phase-1/artifacts/T75-implementation.md",
+      "kind": "implementation-report",
+      "exists": true,
+      "summary": "Full implementation report: measurement before/after each guidance correction, write-site enumeration with dispositions, F-004 regression evidence taken from the artifact, verification table, routing audit"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T75-guidance-before.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T70-guidance.ts output before editing (reproduces F-001/F-003)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T75-guidance-after.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T70-guidance.ts output after editing (F-001/F-003 closed)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T75-health-leak-before.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T70-health-leak.ts output before editing (reproduces F-002, row P1 leaking)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/T75-health-leak-after.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "T70-health-leak.ts output after editing (F-002 closed, row P1 clean)"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-57-30-347Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun test src/health/ src/commands/ src/security/ raw output: 1370 pass / 6 skip / 0 fail"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-58-00-925Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bun run typecheck raw output: exit 0"
+    },
+    {
+      "path": ".metaproject/data/gdctx/raw/2026-09-06T18-58-07-809Z_run.log",
+      "kind": "report",
+      "exists": true,
+      "summary": "bunx eslint on every changed source/doc file: exit 0, 0 errors"
+    }
+  ],
+  "changed_files": [
+    { "path": "docs/docs/cli-reference.md", "change": "modified" },
+    { "path": "docs/docs/modules.md", "change": "modified" },
+    { "path": "src/health/run.ts", "change": "modified" },
+    { "path": "src/health/health-truthful-gate.test.ts", "change": "modified" },
+    { "path": "src/security/templates.ts", "change": "modified" },
+    { "path": "src/security/templates.test.ts", "change": "modified" }
+  ],
+  "findings": [],
+  "questions": [],
+  "errors": [],
+  "metrics": {
+    "duration_ms": null,
+    "prompt_tokens": null,
+    "output_tokens": null,
+    "retries": 0
+  },
+  "timestamp_utc": "2026-09-06T18:59:59Z"
+}

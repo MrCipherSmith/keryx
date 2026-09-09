@@ -196,6 +196,7 @@ export async function readSkillOrigin(
   try {
     content = await readFile(resolved, "utf8");
   } catch (cause) {
+    // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
     throw new Error(
       `Cannot read the origin file ${ref} (resolved to ${resolved}): ${cause instanceof Error ? cause.message : String(cause)}`,
     );
