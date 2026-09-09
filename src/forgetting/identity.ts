@@ -40,6 +40,26 @@ export type IdentityLayerOutcome = {
    * journal records them as different outcomes (`refused` vs `reported-only`).
    */
   refusal: string | null;
+  /**
+   * The refs THIS run's write turned into tombstones — the run's own act, as
+   * opposed to every removal ever recorded.
+   *
+   * It exists because the deletion trail did not have it. `syncSectionRegistry`
+   * has always returned `tombstoned` (the diff between the registry it read and
+   * the one it wrote) and this function threw it away, keeping only a count for
+   * a prose `cause`; the journal then recorded `registry.tombstones`, the
+   * CUMULATIVE set. Measured on a scratch project: Alice removed `p-one` and
+   * synced, Bob removed `p-two` and synced, and Bob's append-only record listed
+   * six removals — Alice's three among them — under Bob's stated reason
+   * "removing ONLY p-two".
+   *
+   * Empty is a real answer and the caller must treat it as one: a sync that
+   * tombstoned nothing removed nothing, whatever the registry's history holds.
+   * A re-tombstone IS this run's act and does appear here — `diffSectionRegistry`
+   * emits an identity that was lifted and removed again in the run that removes
+   * it, which is the run that should answer for it.
+   */
+  tombstonedNow: string[];
 };
 
 /**
@@ -75,12 +95,14 @@ export async function applyIdentityLayer(
       propagated: false,
       cause: `the identity registry refused this write and nothing was recorded: ${outcome.reason}`,
       refusal: outcome.reason,
+      tombstonedNow: [],
     };
   }
   return {
     propagated: true,
     cause: `${outcome.tombstoned.length} tombstone(s) written by this run.`,
     refusal: null,
+    tombstonedNow: outcome.tombstoned.map((tombstone) => tombstone.ref),
   };
 }
 
@@ -92,5 +114,6 @@ export function reportOnlyIdentityOutcome(): IdentityLayerOutcome {
       "this run is a report. `keryx sync --apply` writes the tombstones; until then every identity below is " +
       "recorded as live in the registry while the wiki no longer carries it.",
     refusal: null,
+    tombstonedNow: [],
   };
 }

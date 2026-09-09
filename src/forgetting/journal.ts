@@ -47,7 +47,19 @@ import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { isNotFound } from "../lib/fs";
 
-export const DELETION_JOURNAL_VERSION = 1;
+/**
+ * 2 changes what `removed` MEANS, which is why it is a version and not a silent
+ * edit. In version 1 the field carried `registry.tombstones` — every removal the
+ * project had ever recorded — so each record claimed its predecessors' work.
+ * From 2 it carries only what the recording run itself removed, and
+ * `observedUnrecorded` carries what the run saw removed and could not record.
+ *
+ * A v1 record is still readable and is NOT rewritten: the trail is append-only,
+ * and correcting history in place is the property this file exists to deny
+ * itself. The version is how a reader tells a cumulative `removed` from an
+ * attributed one.
+ */
+export const DELETION_JOURNAL_VERSION = 2;
 
 export function forgettingDataDir(cwd: string): string {
   return path.join(cwd, ".metaproject", "data", "forgetting");
@@ -102,7 +114,21 @@ export type DeletionRecord = {
   /** The command that observed the removal, e.g. "keryx sync --apply". */
   observedBy: string;
   outcome: DeletionOutcome;
+  /**
+   * What THIS run removed. Not what is on record — see
+   * `DELETION_JOURNAL_VERSION`.
+   */
   removed: RemovedItem[];
+  /**
+   * What this run OBSERVED as removed and did not record — the identities left
+   * behind by a refusal, or by an interruption before any run wrote a tombstone.
+   *
+   * Kept apart from `removed` rather than merged into it with a flag, for the
+   * same reason `Attribution.basis` exists: "I removed this" and "I saw this was
+   * gone and could not write it down" are different claims, and a reader must
+   * not have to infer which one a record is making.
+   */
+  observedUnrecorded: RemovedItem[];
   untouched: UntouchedLayer[];
   /** At whose request. */
   requestedBy: Attribution;

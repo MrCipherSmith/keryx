@@ -1,6 +1,7 @@
 import { gitHead, readProvenance, recordProvenance, SYNCED_MODULES, type SyncedModule } from "../sync/provenance";
 import { codeOnly, diffSince, totalChanges } from "../sync/diff";
 import { describeSourceGate, HEAD_NOT_REQUESTED, resolveWikiSourceGate, type WikiSourceGate } from "../wiki/staleness";
+import type { DeletionWindow, RemovalAttribution } from "../forgetting/service";
 
 // `keryx sync` — reconcile the derived artifacts (graph, wiki, memory) with the
 // current code. Each artifact records the commit it was built from (provenance);
@@ -50,8 +51,13 @@ export async function syncCommand(args: string[]): Promise<void> {
   // demonstrably just been deleted and the stage still reported "the deletion
   // window was checked and is EMPTY". The window belongs to the state sync
   // FOUND, not the state it leaves.
-  const deletedFiles = await deletedCodeFiles(cwd);
+  const window = await deletionWindow(cwd);
 
+  // Whether this run rebuilt the graph, which is the only thing that removes a
+  // deleted file's node from it. Tracked here because the loop below is the only
+  // place that knows: the forgetting stage used to claim the graph layer had
+  // propagated on every run, report-only ones included.
+  let graphRebuilt = false;
   let anyStale = false;
   for (const module of SYNCED_MODULES) {
     const provenance = await readProvenance(cwd, module);
@@ -61,6 +67,7 @@ export async function syncCommand(args: string[]): Promise<void> {
       anyStale = true;
       if (apply) {
         const outcome = await applyModule(cwd, module, null, at);
+        graphRebuilt ||= module === "gdgraph";
         printApplyOutcome(outcome, "  → built + provenance recorded (baseline)", "  → built; provenance NOT recorded (baseline)");
       } else {
         console.log("  no provenance — run `keryx sync --apply` to build + record a baseline");
@@ -86,6 +93,7 @@ export async function syncCommand(args: string[]): Promise<void> {
       anyStale = true;
       if (apply) {
         const outcome = await applyModule(cwd, module, null, at);
+        graphRebuilt ||= module === "gdgraph";
         printApplyOutcome(
           outcome,
           `  → rebuilt from scratch; provenance named ${provenance.commit.slice(0, 8)}, which this repository does not have`,
@@ -117,6 +125,7 @@ export async function syncCommand(args: string[]): Promise<void> {
     for (const f of code.deleted.slice(0, 5)) console.log(`    - ${f}`);
     if (apply) {
       const outcome = await applyModule(cwd, module, provenance.commit, at);
+      graphRebuilt ||= module === "gdgraph";
       printApplyOutcome(outcome, "  → updated + provenance advanced", "  → updated; provenance NOT advanced");
       if (module === "gdwiki" && code.deleted.length > 0) {
         const { wikiPruneOrphans } = await import("../wiki/service");
@@ -132,7 +141,7 @@ export async function syncCommand(args: string[]): Promise<void> {
     console.log("");
   }
 
-  await runForgettingStage(cwd, { apply, at, args, deletedFiles });
+  await runForgettingStage(cwd, { apply, at, args, window, graphRebuilt });
 
   if (!apply && anyStale) {
     process.exitCode = 0; // advisory; hooks decide what to do with the report
@@ -183,7 +192,13 @@ export async function syncCommand(args: string[]): Promise<void> {
 // of the CLI that happened to ask.
 async function runForgettingStage(
   cwd: string,
-  options: { apply: boolean; at: string; args: string[]; deletedFiles: string[] },
+  options: {
+    apply: boolean;
+    at: string;
+    args: string[];
+    window: DeletionWindow;
+    graphRebuilt: boolean;
+  },
 ): Promise<void> {
   const { reconcileForgetting, deletionJournalPath } = await import("../forgetting/service");
 
@@ -193,16 +208,17 @@ async function runForgettingStage(
     cwd,
     apply: options.apply,
     at: options.at,
-    observedBy: "keryx sync --apply",
+    observedBy: options.apply ? "keryx sync --apply" : "keryx sync",
     reason: flagValue(options.args, "--reason"),
     actor: flagValue(options.args, "--actor"),
     envActor: process.env["KERYX_ACTOR"],
     gitIdentity: await gitUserEmail(cwd),
     // The deletion window, captured by the caller before the module loop
-    // advanced any provenance. Without it no unresolved import is attributed to
-    // a deletion at all: the graph cannot tell an import whose target was
-    // removed from one that never resolved.
-    deletedFiles: options.deletedFiles,
+    // advanced any provenance — in whichever of its three states it is. An
+    // undetermined window attributes nothing AND claims nothing, which is the
+    // difference between it and the empty one it used to be flattened into.
+    deletionWindow: options.window,
+    graphRebuilt: options.graphRebuilt,
   });
 
   if (identity.refusal) {
@@ -223,8 +239,24 @@ async function runForgettingStage(
   console.log(`  status: ${report.status} (over the examined layers)`);
   console.log(`  not examined: ${report.notExamined.join(", ") || "none"}`);
 
+  // What THIS run did, said before the history so it cannot be read off the
+  // history. Every removal on record was printed under one undifferentiated
+  // `- removed:` heading, so a sync that removed nothing rendered as a sync
+  // that had removed everything the project ever had.
+  console.log(
+    report.removedInThisRun.length > 0
+      ? `  this run removed: ${report.removedInThisRun.length} identit${
+          report.removedInThisRun.length === 1 ? "y" : "ies"
+        }`
+      : "  this run removed: nothing",
+  );
+
   for (const identityRecord of report.removed) {
-    console.log(`  - removed: ${identityRecord.ref}${identityRecord.page ? ` (${identityRecord.page})` : ""}`);
+    console.log(
+      `  - removed (${describeRemovalAttribution(identityRecord.recordedBy)}): ${identityRecord.ref}${
+        identityRecord.page ? ` (${identityRecord.page})` : ""
+      }`,
+    );
     // The observed response, not an inventory line. AC7: a confirmation has to
     // show what the system ANSWERS for a reference into deleted knowledge.
     console.log(`      looked up now, it ${identityRecord.observedResponse}`);
@@ -246,7 +278,11 @@ async function runForgettingStage(
     }
   }
 
-  if (trail === null) {
+  if (trail.kind !== "recorded") {
+    // Both non-recording outcomes say WHY, because "no trail line" is exactly
+    // the silence this stage exists to remove — and the two causes are not the
+    // same fact.
+    console.log(`  trail: no deletion record appended — ${trail.cause}`);
     console.log("");
     return;
   }
@@ -254,6 +290,12 @@ async function runForgettingStage(
   const { append, requestedBy, grounds } = trail;
   if (append.status === "appended") {
     console.log(`  trail: appended to ${deletionJournalPath(cwd)}`);
+    console.log(
+      `      recording ${append.record.removed.length} removal(s) made by this run` +
+        (append.record.observedUnrecorded.length > 0
+          ? `, and ${append.record.observedUnrecorded.length} observed as removed that this run could NOT record`
+          : ""),
+    );
     console.log(
       `      requested by: ${requestedBy.value ?? "unknown"} [${requestedBy.basis}] — ${requestedBy.detail}`,
     );
@@ -267,22 +309,69 @@ async function runForgettingStage(
 }
 
 /**
- * Code files git says were deleted since the graph was built.
+ * The window of code deletions the graph's unresolved edges are judged against —
+ * and, when it cannot be computed, the fact that it cannot.
  *
- * Reuses the diff the module loop above already runs, against gdgraph's own
- * provenance — the graph is what the unresolved edges live in, so its baseline
- * is the right window to judge them against. Every failure here (no provenance,
- * a baseline commit this repository no longer has) yields an EMPTY window, and
- * an empty window attributes nothing: the report then says so rather than
- * guessing which unresolved imports were once resolvable.
+ * This function returned `string[]` and answered `[]` to three different
+ * questions: "gdgraph has no provenance, so there is no baseline", "git could
+ * not diff against the baseline it has", and "I compared and nothing was
+ * deleted". The report then printed the third for all three. Measured on a
+ * clean project with `src/a.ts` deleted and `src/b.ts` importing it, first
+ * `sync --apply`:
+ *
+ *     status: clean (over the examined layers)
+ *     · graph: propagated [examined]
+ *         ? 1 unclassified — … The deletion window was checked and is EMPTY —
+ *           git reports no code file deleted since the graph was built — so none
+ *           of these can be a reference into knowledge removed in this window.
+ *     $ keryx gdgraph query orphans
+ *     src/b.ts
+ *
+ * The report did not overlook the dangling reference. It asserted there could
+ * not be one, and closed the reconcile as clean — the exact collapse this lane
+ * exists to remove, inside the code written to remove it. The three answers are
+ * now three values, and the undecidable one makes the layer's inspection fail
+ * rather than pass.
  */
-async function deletedCodeFiles(cwd: string): Promise<string[]> {
+async function deletionWindow(cwd: string): Promise<DeletionWindow> {
   const provenance = await readProvenance(cwd, "gdgraph");
   if (!provenance) {
-    return [];
+    return {
+      state: "undetermined",
+      cause:
+        "gdgraph has recorded no provenance in this project, so there is no commit to diff against and no " +
+        "window exists to be checked. This is the ordinary state of a project's FIRST sync — the graph being " +
+        "built in this very run — and it is the state in which a deletion is least likely to be noticed, not " +
+        "most.",
+    };
   }
   const diff = await diffSince(cwd, provenance.commit);
-  return diff === null ? [] : codeOnly(diff).deleted;
+  if (diff === null) {
+    return {
+      state: "undetermined",
+      cause:
+        `git could not diff against ${provenance.commit.slice(0, 8)}, the commit gdgraph records as its ` +
+        "baseline — most often a branch that was squash-merged and deleted. The deletions since that commit " +
+        "are unknown here, not absent.",
+    };
+  }
+  return {
+    state: "determined",
+    deleted: codeOnly(diff).deleted,
+    basis: `git, diffing ${provenance.commit.slice(0, 8)}..HEAD,`,
+  };
+}
+
+/** Whose act a removal on record is, in the words the report prints. */
+function describeRemovalAttribution(attribution: RemovalAttribution): string {
+  switch (attribution) {
+    case "this-run":
+      return "this run";
+    case "an-earlier-run":
+      return "an earlier run — not this one";
+    default:
+      return "not recorded by any run yet";
+  }
 }
 
 /** `--flag value` (and `--flag=value`). Returns undefined when absent. */
@@ -411,5 +500,9 @@ wiki no longer carries, what the system now ANSWERS when that identity is looked
 up, and — for every layer — whether the removal propagated there, with a cause
 either way. It does not cascade: a removal in one layer never deletes authored
 content in another.
+
+A deletion record is appended only by a run that actually removed something (or
+that was refused), and it names only THAT run's removals — removals already on
+record belong to the runs that made them.
 `);
 }

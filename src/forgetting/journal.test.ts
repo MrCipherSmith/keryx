@@ -23,6 +23,7 @@ const RECORD = {
   removed: [
     { layer: "wiki-identity", ref: "keryx:page/billing", page: "architecture/billing.md", title: "Billing" },
   ],
+  observedUnrecorded: [],
   untouched: [{ layer: "memory", cause: "authored content is never deleted by a wiki removal" }],
   requestedBy: { value: "aleks", basis: "stated" as const, detail: "named on the command line (`--actor`)" },
   grounds: { value: "superseded by ADR-14", basis: "stated" as const, detail: "given with the deletion" },

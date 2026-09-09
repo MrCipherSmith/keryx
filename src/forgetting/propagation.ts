@@ -65,6 +65,9 @@
 // of losing authored content — it only ever adds a tombstone — so it is done,
 // not merely reported.
 
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { isNotFound, pathExists } from "../lib/fs";
 import {
   explainOrphans,
   getDanglingEdges,
@@ -83,7 +86,49 @@ import {
 } from "../memory/cross-layer";
 import { resolveSectionIdentity } from "../wiki/section-tombstone";
 
-export type KnowledgeLayer = "wiki-identity" | "memory" | "graph" | "sac-evidence";
+/**
+ * Every layer this reconcile accounts for.
+ *
+ * The list was four and neither complete nor mandatory, which is a defect of
+ * the same kind as the ones inside it: `.metaproject/wiki/index.md` goes on
+ * linking a page after the page is deleted (it is regenerated only by
+ * `--apply`, so a report-only run reads a stale one), and the freshness queue
+ * named in this flow's description was not here either. A layer that is simply
+ * absent from a completeness report is indistinguishable from a layer that was
+ * checked and found clean — which is the thing AC1 forbids, committed by the
+ * report that enforces it.
+ *
+ * Adding a layer to this union is the whole mechanism: `reportPropagation`
+ * builds one outcome per layer and `propagation.test.ts` pins the rendered set
+ * against this list, so a layer that is declared and not produced fails.
+ */
+export type KnowledgeLayer =
+  | "wiki-identity"
+  | "wiki-index"
+  | "wiki-freshness"
+  | "memory"
+  | "graph"
+  | "sac-evidence";
+
+/**
+ * WHOSE act a removal on record is.
+ *
+ * The distinction is the whole of T7. `registry.tombstones` is cumulative — it
+ * holds every removal this project has ever recorded — and a run that reads it
+ * as "what I removed" writes an audit record attributing its predecessors'
+ * deletions to itself, under its own stated reason. An append-only trail cannot
+ * take that back.
+ *
+ *   `this-run`       — this run's own write turned the identity into a
+ *                      tombstone. This is the ONLY value a deletion record may
+ *                      report as its own act.
+ *   `an-earlier-run` — the tombstone was on disk before this run started. Still
+ *                      reported (a reference into it still resolves to a
+ *                      removal, which is AC7's evidence) — never as this run's.
+ *   `not-recorded`   — the wiki no longer carries it and NO run has recorded
+ *                      it. Observed, not attributed: the interruption window.
+ */
+export type RemovalAttribution = "this-run" | "an-earlier-run" | "not-recorded";
 
 /** A knowledge identity the wiki no longer carries. */
 export type RemovedIdentity = {
@@ -92,6 +137,8 @@ export type RemovedIdentity = {
   title: string | null;
   /** `tombstoned` — recorded. `pending` — gone from disk, not yet recorded. */
   state: "tombstoned" | "pending";
+  /** Whose act this is. Never inferred from the registry's contents alone. */
+  recordedBy: RemovalAttribution;
   removedAt: string | null;
   /**
    * What the system ANSWERS when this identity is looked up now. This is the
@@ -162,11 +209,59 @@ export type PropagationReport = {
    *           `clean` cannot be claimed even for the layers that did answer.
    */
   status: "clean" | "dangling" | "undecidable";
+  /**
+   * Every removal on record, each labelled with whose act it is. Cumulative on
+   * purpose: a reference into a removal from last month still resolves to a
+   * tombstone today, and AC7's evidence is that answer.
+   *
+   * Nothing may read this field as "what this run removed". Use
+   * `removedInThisRun`.
+   */
   removed: RemovedIdentity[];
+  /**
+   * The subset this run's own write produced — the only removals a record of
+   * this run may claim. Empty means this run removed nothing.
+   */
+  removedInThisRun: RemovedIdentity[];
+  /**
+   * Identities the wiki no longer carries that NO run has recorded. Observed by
+   * this run, attributed to none: the interruption window, and what a refusal
+   * leaves behind.
+   */
+  observedUnrecorded: RemovedIdentity[];
   layers: LayerOutcome[];
   /** Layers this reconcile did not look at. Never silently empty. */
   notExamined: KnowledgeLayer[];
 };
+
+/**
+ * The window an unresolved import is judged against — in THREE states, because
+ * there are three facts and the caller had been sending one value for all of
+ * them.
+ *
+ * `deletedCodeFiles` in `src/commands/sync.ts` returned `[]` for "gdgraph has
+ * no provenance yet", for "the diff could not be computed" and for "nothing was
+ * deleted" alike, and the report rendered all three as *"The deletion window was
+ * checked and is EMPTY — git reports no code file deleted since the graph was
+ * built"*. Measured on a clean project where `src/a.ts` had been deleted and
+ * `src/b.ts` imports it: the first `sync --apply` printed exactly that sentence
+ * and `status: clean`, while `keryx gdgraph query orphans` printed `src/b.ts`.
+ * The report did not merely fail to notice the dangling reference; it denied it.
+ *
+ * `undetermined` is therefore not an optional field and not an omitted one — a
+ * caller must decide and say which it has. The old shape reserved `undefined`
+ * for the undecidable case and no surface ever sent it, so the branch was
+ * unreachable from the CLI: the collapse this lane exists to remove, committed
+ * inside the code written to remove it.
+ */
+export type DeletionWindow =
+  /**
+   * The window was computed. `deleted` may legitimately be empty — that is
+   * "nothing was deleted", and it is a real observation.
+   */
+  | { state: "determined"; deleted: ReadonlyArray<string>; basis: string }
+  /** It could not be computed, and this says why. NOT an empty window. */
+  | { state: "undetermined"; cause: string };
 
 export type PropagationInput = {
   cwd: string;
@@ -174,18 +269,25 @@ export type PropagationInput = {
    * Whether the identity layer was written in this call. The caller performs
    * that write (it is a `wiki sections sync`), and passes what happened —
    * this module never writes.
-   */
-  identityLayer: { propagated: true } | { propagated: false; cause: string };
-  /**
-   * Project-relative paths of code files the caller can show were deleted (the
-   * git diff `keryx sync` already computes against each artifact's provenance).
    *
-   * Without it, NO unresolved import is attributed to a deletion — the graph
-   * alone cannot tell an import whose target was deleted from one that never
-   * resolved, and guessing would be the fabrication. Omitted ⇒ every in-project
-   * unresolved edge is reported as unclassified, with that stated.
+   * `tombstonedNow` is what that write actually recorded. It is required on the
+   * propagated branch rather than optional: an absent value would default to
+   * "everything", which is the misattribution.
    */
-  deletedFiles?: ReadonlyArray<string> | undefined;
+  identityLayer:
+    | { propagated: true; tombstonedNow: ReadonlyArray<string> }
+    | { propagated: false; cause: string };
+  graphLayer: {
+    /**
+     * Whether THIS run rebuilt the code graph. Without a rebuild the graph
+     * still carries the deleted file's node, so nothing propagated there — and
+     * this layer used to report `propagated: true` unconditionally on its
+     * success path, including on a report-only run where `gdgraph affected`
+     * still answered with the deleted file.
+     */
+    rebuiltInThisRun: boolean;
+    window: DeletionWindow;
+  };
 };
 
 /**
@@ -195,15 +297,17 @@ export type PropagationInput = {
 export async function reportPropagation(input: PropagationInput): Promise<PropagationReport> {
   const { cwd } = input;
   const view = await loadWikiKnowledgeView(cwd);
-  const removed = await collectRemovedIdentities(cwd, view);
+  const removed = await collectRemovedIdentities(
+    view,
+    new Set(input.identityLayer.propagated ? input.identityLayer.tombstonedNow : []),
+  );
 
   const layers: LayerOutcome[] = [
     identityOutcome(input.identityLayer, view, removed),
+    await wikiIndexOutcome(cwd),
+    freshnessOutcome(),
     await memoryOutcome(cwd, view),
-    // `undefined` (no window at all) and `[]` (a window that found nothing
-    // deleted) are different facts and the report says which it had — so the
-    // two are carried apart rather than merged by a `?? []`.
-    await graphOutcome(cwd, input.deletedFiles ? new Set(input.deletedFiles) : null),
+    await graphOutcome(cwd, input.graphLayer),
     sacOutcome(),
   ];
 
@@ -212,6 +316,8 @@ export async function reportPropagation(input: PropagationInput): Promise<Propag
   return {
     status: anyFailed ? "undecidable" : anyDangling ? "dangling" : "clean",
     removed,
+    removedInThisRun: removed.filter((identity) => identity.recordedBy === "this-run"),
+    observedUnrecorded: removed.filter((identity) => identity.recordedBy === "not-recorded"),
     layers,
     notExamined: layers.filter((layer) => layer.inspection === "not-examined").map((layer) => layer.layer),
   };
@@ -224,10 +330,10 @@ export async function reportPropagation(input: PropagationInput): Promise<Propag
  * interruption window, in which a deleted identity used to read as
  * never-existed.
  */
-async function collectRemovedIdentities(
-  cwd: string,
+function collectRemovedIdentities(
   view: WikiKnowledgeView,
-): Promise<RemovedIdentity[]> {
+  tombstonedNow: ReadonlySet<string>,
+): RemovedIdentity[] {
   if (view.registry.state !== "present") {
     return [];
   }
@@ -248,6 +354,10 @@ async function collectRemovedIdentities(
       page: tombstone.page,
       title: tombstone.title,
       state: "tombstoned",
+      // The whole of the attribution fix is this one line. `registry.tombstones`
+      // is what the project has EVER removed; only the refs this run's own write
+      // produced are this run's act.
+      recordedBy: tombstonedNow.has(tombstone.ref) ? "this-run" : "an-earlier-run",
       removedAt: tombstone.removedAt,
       observedResponse: describeObservedResponse(view, tombstone.ref),
     });
@@ -261,6 +371,7 @@ async function collectRemovedIdentities(
       page: entry.page,
       title: entry.title,
       state: "pending",
+      recordedBy: "not-recorded",
       removedAt: null,
       observedResponse: describeObservedResponse(view, entry.ref),
     });
@@ -344,6 +455,127 @@ function identityOutcome(
   };
 }
 
+/**
+ * The generated wiki index — the fifth layer, and the one that was missing.
+ *
+ * `.metaproject/wiki/index.md` is a table of contents linking every page by
+ * relative path. It is rewritten by `wikiGenerateIndex`, which runs only inside
+ * `keryx sync --apply`; a report-only run therefore reads an index generated
+ * before the deletion, still linking the page that is gone. That is a dangling
+ * reference in a layer AC1 requires to be accounted for, and it was not one of
+ * the four.
+ *
+ * The check is deliberately the plain one: a link whose target file is not
+ * there. No title matching, no nearest-page fallback — the same rule
+ * `resolveSectionIdentity` follows, for the same reason.
+ */
+async function wikiIndexOutcome(cwd: string): Promise<LayerOutcome> {
+  const wikiRoot = path.join(cwd, ".metaproject", "wiki");
+  const indexPath = path.join(wikiRoot, "index.md");
+  let content: string;
+  try {
+    content = await readFile(indexPath, "utf8");
+  } catch (error) {
+    if (isNotFound(error)) {
+      return {
+        layer: "wiki-index",
+        propagated: false,
+        cause:
+          "no index has been generated in this project (`.metaproject/wiki/index.md` does not exist), so it " +
+          "holds no link into anything. This is an examined empty, not an unchecked one.",
+        dangling: [],
+        inspection: "examined",
+        unclassified: null,
+      };
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      layer: "wiki-index",
+      propagated: false,
+      cause:
+        `the wiki index exists and could not be read (${message}), so whether it links removed knowledge cannot ` +
+        'be established here. This is not "the index links nothing".',
+      dangling: [],
+      inspection: "failed",
+      unclassified: null,
+    };
+  }
+
+  const dangling: DanglingReference[] = [];
+  const seen = new Set<string>();
+  for (const match of content.matchAll(/\[[^\]]*\]\(([^)\s]+)\)/g)) {
+    const target = match[1];
+    if (!target || !target.endsWith(".md") || /^[a-z]+:/i.test(target) || target.startsWith("#")) {
+      continue;
+    }
+    const relative = target.split("#")[0] ?? target;
+    if (seen.has(relative)) {
+      continue;
+    }
+    seen.add(relative);
+    if (await pathExists(path.join(wikiRoot, relative))) {
+      continue;
+    }
+    dangling.push({
+      layer: "wiki-index",
+      holder: ".metaproject/wiki/index.md",
+      reference: relative,
+      verdict: "index-links-a-missing-page",
+      detail:
+        "the generated index still lists this page and the file is not there. The index is rewritten only by " +
+        "`keryx sync --apply`, so every report-only run — and every reader following the index — is offered a " +
+        "link into knowledge that has been removed.",
+    });
+  }
+
+  return {
+    layer: "wiki-index",
+    propagated: false,
+    cause:
+      dangling.length > 0
+        ? "NOT PROPAGATED in this run: the index is regenerated by `keryx sync --apply`, not by this report. " +
+          "The links it still holds into missing pages are named below."
+        : "the index links no page that is missing. It is regenerated by `keryx sync --apply`; nothing needed " +
+          "changing here.",
+    dangling,
+    inspection: "examined",
+    unclassified: null,
+  };
+}
+
+/**
+ * The freshness queue, listed rather than omitted — and listed with what it
+ * actually holds, rather than with a shrug.
+ *
+ * `.metaproject/data/wiki/freshness-queue.jsonl` is named in this flow's
+ * description as a layer a deletion touches, and it was not in the report at
+ * all. Examined against its own schema (`../wiki/freshness/queue.ts`), each row
+ * is `{event, rev, recordedAt, paths}` — "these code paths changed at this
+ * revision". A deleted path in a row is a true statement about a past commit
+ * and stays true after the deletion; there is no identity in it that a removal
+ * could invalidate and no lookup it can answer wrongly. So it is reported as
+ * NOT EXAMINED with that as the cause, which is an under-claim and not a
+ * silence: the alternative — omitting it — is the one thing AC1 rules out,
+ * because a layer that is not in the report reads exactly like a layer that was
+ * checked and found clean.
+ */
+function freshnessOutcome(): LayerOutcome {
+  return {
+    layer: "wiki-freshness",
+    propagated: false,
+    cause:
+      "NOT INSPECTED for dangling references, and not because it was overlooked. Each row of " +
+      "`.metaproject/data/wiki/freshness-queue.jsonl` records that a set of code paths changed at a given " +
+      "revision; a path that was later deleted makes that row no less true, and the queue resolves no knowledge " +
+      "identity that a removal could turn into a wrong answer. What the queue's DRAIN then claims is a property " +
+      "of the freshness surfaces (`keryx wiki freshness …`), which this command does not drive. Listed here " +
+      'because a layer absent from a completeness report reads as "checked and clean".',
+    dangling: [],
+    inspection: "not-examined",
+    unclassified: null,
+  };
+}
+
 async function memoryOutcome(cwd: string, view: WikiKnowledgeView): Promise<LayerOutcome> {
   const entries = await collectEntries(cwd);
   const findings = await checkMemoryCrossLayer(cwd, entries, view);
@@ -380,7 +612,7 @@ function toMemoryDangling(finding: CrossLayerFinding): DanglingReference {
 
 async function graphOutcome(
   cwd: string,
-  deletedFiles: ReadonlySet<string> | null,
+  input: PropagationInput["graphLayer"],
 ): Promise<LayerOutcome> {
   let graph: GraphData;
   try {
@@ -403,7 +635,9 @@ async function graphOutcome(
   // reference into REMOVED knowledge only when it names a file that can be
   // shown to have been deleted. On this repository's own graph the unfiltered
   // set is dozens of import statements sitting inside test fixture strings.
+  const window = input.window;
   const inProject = getDanglingEdges(graph, { scope: "in-project" });
+  const deletedFiles = window.state === "determined" ? new Set(window.deleted) : null;
   const intoDeleted = deletedFiles
     ? inProject.filter((edge) => namesDeletedFile(edge, deletedFiles))
     : [];
@@ -417,15 +651,39 @@ async function graphOutcome(
     (orphan) => orphan.cause === "dangling-only" && intoDeletedFiles.has(orphan.path),
   );
 
+  // An undetermined window with unresolved in-project edges in hand is a FAILED
+  // inspection, and `reportPropagation` turns that into `undecidable` rather
+  // than `clean`. The graph was read; what could not be decided is whether any
+  // of these edges points into knowledge removed in a window that could not be
+  // computed. Reporting `examined` there is how a clean project with `src/a.ts`
+  // deleted and `src/b.ts` importing it came back `status: clean`.
+  //
+  // With NO unresolved in-project edge, there is nothing a window could have
+  // decided about, so `examined` is honest — which is also what keeps this from
+  // being a guard that fires on every run and therefore means nothing.
+  const undecidable = window.state === "undetermined" && inProject.length > 0;
+
   return {
     layer: "graph",
-    propagated: true,
+    // Only a rebuild removes the node. On a report-only run nothing was rebuilt
+    // and `gdgraph dependencies`/`affected` still answer with the deleted file,
+    // so claiming propagation here is a write reported as having happened.
+    propagated: input.rebuiltInThisRun,
     cause:
-      "PROPAGATED for the node, NOT for the edges. A rebuild removes the deleted file's node, but every import " +
-      "of it survives as an unresolved edge, which `dependencies`, `dependents` and `orphans` all filter out " +
-      "before answering — so the importer reported `Dependencies: none` and then appeared in `query orphans`. " +
-      "Those three answers are unchanged (an unresolved edge has no node to close a dependency over); the edges " +
-      "they drop are listed here.",
+      (input.rebuiltInThisRun
+        ? "PROPAGATED for the node, NOT for the edges. A rebuild removes the deleted file's node, but every " +
+          "import of it survives as an unresolved edge, which `dependencies`, `dependents` and `orphans` all " +
+          "filter out before answering — so the importer reported `Dependencies: none` and then appeared in " +
+          "`query orphans`. Those three answers are unchanged (an unresolved edge has no node to close a " +
+          "dependency over); the edges they drop are listed here."
+        : "NOT PROPAGATED: this run did not rebuild the code graph, so the graph still carries a node for every " +
+          "file deleted since it was built — `gdgraph dependencies`, `dependents` and `affected` keep answering " +
+          "with knowledge that is gone. Run `keryx sync --apply` (or `keryx gdgraph build`) to rebuild it. What " +
+          "is reported below was read from the graph as it stands, which is the state BEFORE the deletion.") +
+      (undecidable
+        ? " The deletion window could not be determined in this run, so the edges below are reported without a " +
+          "verdict on whether they point into removed knowledge — see the unclassified line."
+        : ""),
     dangling: [
       ...intoDeleted.map((edge) => toGraphDangling(edge)),
       ...orphanedByDeletion.map((orphan) => ({
@@ -440,29 +698,46 @@ async function graphOutcome(
           "from that one line of output.",
       })),
     ],
-    inspection: "examined",
+    inspection: undecidable ? "failed" : "examined",
     unclassified:
       unattributed > 0
-        ? {
-            count: unattributed,
-            cause:
-              deletedFiles === null
-                ? "in-project imports that resolve to no file. NO deletion window was supplied to this run, so " +
-                  "none of them is attributed to a deletion: the graph alone cannot tell an import whose target " +
-                  "was removed from one that never resolved, and guessing would be the fabrication. " +
-                  "`keryx gdgraph query orphans` and a build's `Unresolved imports` line list them."
-                : deletedFiles.size === 0
-                ? "in-project imports that resolve to no file. The deletion window was checked and is EMPTY — " +
-                  "git reports no code file deleted since the graph was built — so none of these can be a " +
-                  "reference into knowledge removed in this window. They resolve to nothing for some other " +
-                  "reason (most are import statements inside test fixture strings) and are counted, not hidden."
-                : "further in-project imports that resolve to no file and do NOT name any file deleted in this " +
-                  "window. Most are import statements written inside test fixture strings, which never resolved " +
-                  "and never will — they are counted rather than listed so the references that ARE into removed " +
-                  "knowledge stay visible, and counted rather than dropped so the count is not hidden.",
-          }
+        ? { count: unattributed, cause: unclassifiedCause(window) }
         : null,
   };
+}
+
+/**
+ * What the count of unattributed unresolved imports actually means — which is a
+ * different sentence in each of the window's three states.
+ *
+ * The middle one is the only one entitled to say "checked and is EMPTY", and it
+ * is now reachable only when a diff genuinely ran and genuinely found no
+ * deletion.
+ */
+function unclassifiedCause(window: DeletionWindow): string {
+  if (window.state === "undetermined") {
+    return (
+      "in-project imports that resolve to no file. THE DELETION WINDOW COULD NOT BE DETERMINED: " +
+      `${window.cause} Whether any of these is a reference into knowledge removed since the graph was built is ` +
+      "UNDECIDED here — this is not \"the window was checked and is empty\", and it is not \"these are fine\". " +
+      "The layer is reported as a failed inspection for that reason, so this run cannot come back `clean`. " +
+      "`keryx gdgraph query orphans` lists the files these imports leave stranded."
+    );
+  }
+  if (window.deleted.length === 0) {
+    return (
+      "in-project imports that resolve to no file. The deletion window was checked and is EMPTY — " +
+      `${window.basis} reports no code file deleted since the graph was built — so none of these can be a ` +
+      "reference into knowledge removed in this window. They resolve to nothing for some other reason (most " +
+      "are import statements inside test fixture strings) and are counted, not hidden."
+    );
+  }
+  return (
+    "further in-project imports that resolve to no file and do NOT name any file deleted in this window. Most " +
+    "are import statements written inside test fixture strings, which never resolved and never will — they are " +
+    "counted rather than listed so the references that ARE into removed knowledge stay visible, and counted " +
+    "rather than dropped so the count is not hidden."
+  );
 }
 
 function toGraphDangling(edge: DanglingEdge): DanglingReference {

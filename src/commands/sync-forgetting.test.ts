@@ -145,14 +145,14 @@ describe("keryx sync reports the deletion it used to pass over (flow 242 lane E,
       const output = logged.join("\n");
 
       expect(output).toContain("## forgetting");
-      expect(output).toContain("removed: keryx:page/architecture-billing-charges#constraints");
+      expect(output).toContain("keryx:page/architecture-billing-charges#constraints (architecture/billing-charges.md)");
       // AC7: the confirmation is the OBSERVED RESPONSE, not a count of files.
       expect(output).toContain("looked up now, it resolves to");
       expect(output).toContain('not "never existed"');
       // Every layer, each with a cause — including the one not inspected.
       expect(output).toContain("· memory: NOT propagated");
       expect(output).toContain("· graph:");
-      expect(output).toContain("not examined: sac-evidence");
+      expect(output).toContain("not examined: wiki-freshness, sac-evidence");
       // The memory entry's dangling citation, named with the file and the line.
       expect(output).toContain("decisions/charge-once.md:15");
     } finally {
@@ -432,7 +432,7 @@ describe("one object, three layers, one reconcile (flow 242 lane E, AC1)", () =>
 
       // LAYER 1 — the identity. AC7's requirement: the confirmation is what the
       // system ANSWERS when the removed identity is looked up, not a count.
-      expect(output).toContain("removed: keryx:page/architecture-billing-charges#constraints");
+      expect(output).toContain("keryx:page/architecture-billing-charges#constraints (architecture/billing-charges.md)");
       expect(output).toContain("looked up now, it resolves to");
 
       // LAYER 2 — memory. The citation is named with its file and line, and the
@@ -449,7 +449,7 @@ describe("one object, three layers, one reconcile (flow 242 lane E, AC1)", () =>
       // untouched, and a layer missing from the report reads exactly like a
       // layer that was checked and found clean.
       expect(output).toContain("· sac-evidence: NOT propagated [not-examined]");
-      expect(output).toContain("not examined: sac-evidence");
+      expect(output).toContain("not examined: wiki-freshness, sac-evidence");
       expect(output).toContain('"not checked" must not read as "checked and clean"');
     } finally {
       await rm(cwd, { recursive: true, force: true });
@@ -487,7 +487,131 @@ describe("one object, three layers, one reconcile (flow 242 lane E, AC1)", () =>
       expect(output).not.toContain("[unresolved-import]");
       expect(output).not.toContain("looked up now, it resolves to");
       // The fourth layer is still named, deletion or no deletion.
-      expect(output).toContain("not examined: sac-evidence");
+      expect(output).toContain("not examined: wiki-freshness, sac-evidence");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("the trail records the run's OWN act, not the registry's history (flow 242 lane E, AC6, T7)", () => {
+  test("a second operator's record does not claim the first operator's deletions", async () => {
+    // Reproduced on a scratch project before this test existed:
+    //
+    //   Alice ran: sync --apply --actor Alice --reason "removing p-one"
+    //   Bob then:  sync --apply --actor Bob   --reason "removing ONLY p-two"
+    //
+    //   Alice | removing p-one      | attributed removals: 3 | [p-one]
+    //   Bob   | removing ONLY p-two | attributed removals: 6 | [p-one, p-two]
+    //
+    // Bob is permanently on record, in an append-only trail, as the requester of
+    // Alice's deletions on Bob's stated grounds. `collectRemovedIdentities`
+    // pushed every entry of `registry.tombstones` — the cumulative set — and the
+    // service mapped `report.removed` straight into the record.
+    const cwd = await deletedKnowledgeProject();
+    try {
+      // Alice removes the page identity that is already gone from disk.
+      await withCwd(cwd, () => syncCommand(["--apply", "--actor", "Alice", "--reason", "removing billing"]));
+
+      // Bob removes a DIFFERENT identity: a second page, registered and then
+      // deleted between the two runs.
+      const second = path.join(cwd, ".metaproject", "wiki", "architecture", "payments.md");
+      await writeFile(second, PAGE.replace(/billing-charges/g, "payments").replace(/Billing/g, "Payments"), "utf8");
+      await withCwd(cwd, () => syncCommand(["--apply", "--actor", "registrar"]));
+      await rm(second);
+      await withCwd(cwd, () => syncCommand(["--apply", "--actor", "Bob", "--reason", "removing ONLY payments"]));
+
+      const journal = await readDeletionJournal(cwd);
+      const records = journal.state === "present" ? journal.records : [];
+      const bob = records.find((record) => record.requestedBy.value === "Bob");
+      const alice = records.find((record) => record.requestedBy.value === "Alice");
+
+      expect(alice?.removed.map((item) => item.ref)).toContain("keryx:page/architecture-billing-charges");
+      // The whole point. Bob removed payments; billing was Alice's act and stays
+      // hers, however much of it the registry holds when Bob's sync reads it.
+      expect(bob?.removed.map((item) => item.ref).sort()).toEqual([
+        "keryx:page/architecture-payments",
+        "keryx:page/architecture-payments#constraints",
+      ]);
+      expect(bob?.removed.map((item) => item.ref)).not.toContain("keryx:page/architecture-billing-charges");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  test("a run that removed nothing appends no deletion record at all", async () => {
+    // The `--apply` run that changes nothing used to journal a full
+    // `outcome: "propagated"` record naming its operator, their stated reason,
+    // and every removal on the project's books.
+    const cwd = await deletedKnowledgeProject();
+    try {
+      await withCwd(cwd, () => syncCommand(["--apply", "--actor", "Alice", "--reason", "removing billing"]));
+      const afterFirst = await readDeletionJournal(cwd);
+      expect(afterFirst.state === "present" ? afterFirst.records.length : 0).toBe(1);
+
+      logged = [];
+      await withCwd(cwd, () => syncCommand(["--apply", "--actor", "Carol", "--reason", "just syncing"]));
+
+      const afterSecond = await readDeletionJournal(cwd);
+      expect(afterSecond.state === "present" ? afterSecond.records.length : 0).toBe(1);
+      expect(
+        afterSecond.state === "present"
+          ? afterSecond.records.some((record) => record.requestedBy.value === "Carol")
+          : true,
+      ).toBe(false);
+      // Absent, and said to be absent — an unexplained missing line would be the
+      // same silence in a new place.
+      const output = logged.join("\n");
+      expect(output).toContain("this run removed: nothing");
+      expect(output).toContain("no deletion record was appended");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("an undetermined deletion window is never reported as an empty one (flow 242 lane E, T8)", () => {
+  test("a first sync on a project with a deleted import does not deny the dangling reference", async () => {
+    // Reproduced on a clean project — `src/a.ts` deleted, `src/b.ts` importing
+    // it, first `sync --apply`:
+    //
+    //   status: clean (over the examined layers)
+    //   · graph: propagated [examined]
+    //       ? 1 unclassified — … The deletion window was checked and is EMPTY —
+    //         git reports no code file deleted since the graph was built — so
+    //         none of these can be a reference into knowledge removed in this
+    //         window.
+    //   $ keryx gdgraph query orphans
+    //   src/b.ts
+    //
+    // `deletedCodeFiles` returned `[]` for "no provenance recorded" exactly as
+    // it did for "nothing was deleted", so the report affirmatively denied a
+    // dangling reference that exists and then called the reconcile clean.
+    const cwd = await mkdtemp(path.join(tmpdir(), "keryx-sync-window-undet-"));
+    try {
+      await git(cwd, ["init", "-q"]);
+      await git(cwd, ["config", "user.email", "fixture@example.invalid"]);
+      await git(cwd, ["config", "user.name", "fixture"]);
+      await mkdir(path.join(cwd, "src"), { recursive: true });
+      await writeFile(path.join(cwd, "src", "a.ts"), "export const a = 1;\n", "utf8");
+      await writeFile(path.join(cwd, "src", "b.ts"), 'import { a } from "./a";\nexport const b = a;\n', "utf8");
+      await git(cwd, ["add", "-A"]);
+      await git(cwd, ["commit", "-q", "-m", "before"]);
+      await rm(path.join(cwd, "src", "a.ts"));
+      await git(cwd, ["add", "-A"]);
+      await git(cwd, ["commit", "-q", "-m", "delete a"]);
+
+      // No gdgraph provenance anywhere: the window cannot be computed at all.
+      await withCwd(cwd, () => syncCommand(["--apply"]));
+      const output = logged.join("\n");
+
+      expect(output).toContain("THE DELETION WINDOW COULD NOT BE DETERMINED");
+      // The denial, in the words it was made in.
+      expect(output).not.toContain("The deletion window was checked and is EMPTY");
+      // And the verdict it licensed. `clean` over a layer that could not decide
+      // is the claim that made this a blocker rather than a wording defect.
+      expect(output).toContain("status: undecidable");
+      expect(output).not.toContain("status: clean");
     } finally {
       await rm(cwd, { recursive: true, force: true });
     }
