@@ -12,7 +12,10 @@
 // measured is not the thing people run.
 
 import { appendFileSync } from "node:fs";
-import { redactSensitiveText } from "../security/redact";
+// Through the security facade, not `security/redact`: reaching past a facade
+// reaches everything behind it, and the import policy counts that as a bypass
+// against a ceiling that is a ratchet.
+import { redactSensitiveText } from "../security/service";
 
 /** Provider-reported usage, in the shape `NormalizedUsage` already carries. */
 export interface ShellEventUsage {
@@ -65,8 +68,8 @@ export function clip(value: string, limit: number = FIELD_LIMIT): string {
  * because a producer skipped this step. Redaction happens BEFORE clipping, so a
  * secret cannot survive by sitting past the cut.
  */
-export function serializeShellEvent(event: ShellEvent): string {
-  const safe = (value: string): string => clip(redactSensitiveText(value));
+export function serializeShellEvent(event: ShellEvent, fieldLimit: number = FIELD_LIMIT): string {
+  const safe = (value: string): string => clip(redactSensitiveText(value), fieldLimit);
   let redacted: ShellEvent;
   switch (event.type) {
     case "turn_start":
@@ -109,13 +112,14 @@ export function serializeShellEvent(event: ShellEvent): string {
 export function createFileEventSink(
   filePath: string,
   onError?: (message: string) => void,
+  fieldLimit: number = FIELD_LIMIT,
 ): ShellEventSink {
   let broken = false;
   return {
     emit(event) {
       if (broken) return;
       try {
-        appendFileSync(filePath, serializeShellEvent(event), "utf8");
+        appendFileSync(filePath, serializeShellEvent(event, fieldLimit), "utf8");
       } catch (error) {
         broken = true;
         onError?.(

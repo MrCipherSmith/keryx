@@ -44,6 +44,16 @@ import { scanContainedPath, type SecurityScanOptions } from "./path-scan";
  * MCP compatibility wrapper cannot drift apart again (T24 F-002): byte preservation is
  * decided there, after the structural walk, by canonical structural equivalence.
  */
+/**
+ * Scrub secrets, PII and exfiltration spans from free text.
+ *
+ * Re-exported here because this is the security module's facade and callers
+ * outside it should not reach past it: importing `security/redact` directly
+ * reaches everything behind the facade too, which is what the import policy
+ * counts as a bypass. The implementation stays where it is.
+ */
+export { redactSensitiveText } from "./redact";
+
 export function validateSerializedOutput(content: string): OutputValidationResult {
   return validateSerializedContentForTransport(content);
 }

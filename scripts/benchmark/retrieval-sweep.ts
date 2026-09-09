@@ -98,8 +98,15 @@ export async function loadResults(resultsPath: string): Promise<ArmResult[]> {
  * every task under `grok` and report a second harness as complete having run
  * none of it — and the results file would look exactly like a finished run.
  */
+/** The separator, as its own value so no template literal has to carry it. */
+const SEPARATOR = " ";
+
 export function completionKey(harness: string, taskId: string): string {
-  return `${harness} ${taskId}`;
+  // Joined rather than interpolated with a literal separator: twice in this
+  // programme a space written between two `${}` in a template came out as a NUL
+  // byte, which made the file invisible to grep and, here, silently changed what
+  // a resumed sweep re-runs. The construct is avoided rather than re-checked.
+  return [harness, taskId].join(SEPARATOR);
 }
 
 /** Keys with BOTH arms recorded. One arm alone is not a finished task. */
