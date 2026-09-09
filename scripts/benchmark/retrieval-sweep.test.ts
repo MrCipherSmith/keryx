@@ -125,7 +125,7 @@ describe("runSweep", () => {
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-sweep-wt-"));
     const resultsPath = path.join(worktreesDir, "results.jsonl");
     try {
-      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath });
+      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath, modelFor: selectModel });
       const lines = (await readFile(resultsPath, "utf8")).trim().split("\n");
       expect(lines).toHaveLength(6); // three tasks, two arms each
     } finally {
@@ -139,7 +139,7 @@ describe("runSweep", () => {
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-sweep-wt-"));
     const resultsPath = path.join(worktreesDir, "results.jsonl");
     try {
-      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks: tasks.slice(0, 2), resultsPath });
+      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks: tasks.slice(0, 2), resultsPath, modelFor: selectModel });
 
       let calls = 0;
       const counting: AgentPort = {
@@ -149,7 +149,7 @@ describe("runSweep", () => {
           return okAgent.run(input);
         },
       };
-      const report = await runSweep({ repoRoot: root, worktreesDir, agent: counting, tasks, resultsPath });
+      const report = await runSweep({ repoRoot: root, worktreesDir, agent: counting, tasks, resultsPath, modelFor: selectModel });
 
       expect(report.resumed).toHaveLength(2);
       expect(calls).toBe(2); // only the third task's two arms
@@ -176,7 +176,7 @@ describe("runSweep", () => {
           return okAgent.run(input);
         },
       };
-      const report = await runSweep({ repoRoot: root, worktreesDir, agent: flaky, tasks, resultsPath });
+      const report = await runSweep({ repoRoot: root, worktreesDir, agent: flaky, tasks, resultsPath, modelFor: selectModel });
       expect(report.failed).toHaveLength(1);
       expect(report.failed[0]?.reason).toContain("model refused");
       expect(report.verdict.tasks).toBe(1);
@@ -193,7 +193,7 @@ describe("runSweep", () => {
     try {
       // Only the context-on arm ever got written.
       await writeFile(resultsPath, `${JSON.stringify(armResult("t0", "context-on"))}\n`, "utf8");
-      const report = await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath });
+      const report = await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath, modelFor: selectModel });
       expect(report.resumed).toHaveLength(0);
       const onArms = report.results.filter((r) => r.taskId === "t0" && r.arm === "context-on");
       expect(onArms).toHaveLength(1);
@@ -222,7 +222,7 @@ describe("the harness is part of the resume key", () => {
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-sweep-wt-"));
     const resultsPath = path.join(worktreesDir, "results.jsonl");
     try {
-      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath });
+      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath, modelFor: selectModel });
 
       let calls = 0;
       const other: AgentPort = {
@@ -232,7 +232,7 @@ describe("the harness is part of the resume key", () => {
           return okAgent.run(input);
         },
       };
-      const report = await runSweep({ repoRoot: root, worktreesDir, agent: other, tasks, resultsPath });
+      const report = await runSweep({ repoRoot: root, worktreesDir, agent: other, tasks, resultsPath, modelFor: selectModel });
 
       expect(calls).toBe(4); // two tasks, two arms each — nothing skipped
       expect(report.resumed).toHaveLength(0);
@@ -254,7 +254,7 @@ describe("the harness is part of the resume key", () => {
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-sweep-wt-"));
     const resultsPath = path.join(worktreesDir, "results.jsonl");
     try {
-      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath });
+      await runSweep({ repoRoot: root, worktreesDir, agent: okAgent, tasks, resultsPath, modelFor: selectModel });
       const lines = (await readFile(resultsPath, "utf8")).split("\n").filter((line) => line.trim().length > 0);
       expect(lines.length).toBe(2);
       for (const line of lines) {

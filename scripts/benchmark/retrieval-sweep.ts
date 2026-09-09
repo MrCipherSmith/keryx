@@ -21,6 +21,10 @@ import { runTask, type RunOptions } from "./retrieval-run";
 import { decide, decideByHarness, LEGACY_HARNESS, type ArmResult, type Verdict } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
 
+// Kept as the claude leg's names and nothing more. The rule that picks between
+// them lives in retrieval-harnesses.ts, once, for every harness — a second copy
+// here is how a grok arm ends up asking for `claude-opus-5` and still returning
+// numbers.
 export const MODEL_HARD = "claude-opus-5";
 export const MODEL_EASY = "claude-sonnet-5";
 
@@ -43,7 +47,15 @@ export interface SweepOptions extends Omit<RunOptions, "modelFor"> {
   readonly tasks: readonly RetrievalTask[];
   /** JSONL, one ArmResult per line. Appended to, never rewritten. */
   readonly resultsPath: string;
-  readonly modelFor?: (task: RetrievalTask) => string;
+  /**
+   * The model for a task under THIS sweep's harness. Required.
+   *
+   * It used to default to the claude pair, which meant a sweep run with the
+   * grok adapter and no explicit rule would ask that CLI for `claude-opus-5`.
+   * The run would not obviously fail — it would produce arms, and numbers, on
+   * whatever the CLI resolved instead. A missing rule is now a type error.
+   */
+  readonly modelFor: (task: RetrievalTask) => string;
   readonly onProgress?: (message: string) => void;
 }
 
@@ -107,7 +119,7 @@ export function completedKeys(results: readonly ArmResult[]): Set<string> {
 }
 
 export async function runSweep(options: SweepOptions): Promise<SweepReport> {
-  const modelFor = options.modelFor ?? selectModel;
+  const modelFor = options.modelFor;
   const say = options.onProgress ?? (() => {});
 
   const harness = options.agent.harness;
