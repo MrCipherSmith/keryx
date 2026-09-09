@@ -3,6 +3,68 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.85] — 2026-09-09
+
+One theme: `keryx mcp` meant "keryx is the MCP server", and the same verb is
+needed for the opposite — the third-party servers keryx connects to, which is
+what `mcp add|list|remove` means in every other CLI. MCP names a protocol, not a
+direction, and keryx is on both sides of it. So the publisher surface is renamed
+and `keryx mcp` is freed for the consumer that does not exist yet.
+
+Nothing is removed. Every retired spelling still works and still exits with the
+code it did, so a script that ran before runs now.
+
+### Changed
+
+- **`keryx mcp serve` → `keryx serve-mcp`; `keryx mcp install` → `keryx
+  integrate <editor>`; `keryx mcp uninstall` → `keryx integrate --remove
+  <editor>`; `/mcp` → `/integrations`.** The new verbs hold the implementation
+  and the old spellings are thin aliases — a new verb delegating to the old one
+  proves nothing and leaves two implementations to drift. Each retired spelling
+  prints exactly one deprecation line, asserted as exactly one: a notice
+  repeated per sub-operation is a notice people learn to ignore. On the serve
+  path it goes to stderr, because stdout is the JSON-RPC channel.
+
+- **`/mcp` is not repointed at the consumer.** It keeps opening the installer
+  view and gains `/integrations` as the name that says what it does. A slash
+  command aimed at nothing is worse than one aimed at the old thing.
+
+### Fixed
+
+- **Generated editor configs invoked the retired spelling.** `MCP_SERVER_ARGS`
+  was still `["mcp","serve"]`, so every config keryx writes would have printed
+  our own deprecation notice into other people's sessions, permanently.
+
+- **`keryx mcp install --help` did not print help — it installed.** Into every
+  runtime. Someone asking for help got entries written into four other tools'
+  configs.
+
+- **`keryx integrate --remove <editor> --dry-run` performed a real removal.**
+  The flag was accepted, documented and ignored. Pre-existing, but the rewritten
+  help dropped the old "install only" qualifier, turning a documented limitation
+  into a documentation lie.
+
+- **`scripts/` was never typechecked.** `tsconfig`'s `include` stopped at
+  `src/`, which is not a skipped convenience check: a leakage check in the
+  benchmark harness read a property its own result type does not have — it could
+  never have detected leakage — and typechecked clean for weeks. The gates this
+  repository relies on are written in that directory.
+
+- **The NUL-byte guard failed on other programs' output.** It walked the working
+  tree into gitignored benchmark transcripts, so it was red on developer
+  machines and green in CI. A check that fails only where people work is one
+  they learn to skip past.
+
+- **`.benchmark-runs/` was untracked but not ignored**, so one `git add -A`
+  could put another project's material into this repository's history.
+
+### Internal
+
+- A build gate fails when documentation, source or `.gitignore` teaches a
+  retired spelling. Mapping tables recording "was → is" are exempt by shape, per
+  cell rather than per row — a genuine pair must not excuse an unrelated
+  instruction sharing its table row.
+
 ## [0.2.84] — 2026-09-09
 
 One theme: a project-skill you already have as a `SKILL.md` — in a folder,
