@@ -761,6 +761,11 @@ export interface McpUninstallReport {
 export async function uninstallMcpClient(
   projectRoot: string,
   ids: string[],
+  // `--dry-run` previously reached only the install path, so
+  // `integrate --remove <editor> --dry-run` performed a real removal while the
+  // help text promised a preview. Found in review of PR #499. A flag that says
+  // it writes nothing must write nothing, on both paths.
+  options: { dryRun?: boolean } = {},
 ): Promise<McpUninstallReport> {
   const absoluteProjectRoot = path.resolve(projectRoot);
   const { runtimes, unknown } = resolveMcpRuntimes(ids);
@@ -780,7 +785,11 @@ export async function uninstallMcpClient(
     const settings = await readSettings(file);
     const hadManaged = runtime.hasManaged(settings);
     const stripped = runtime.strip(settings);
-    await writeSettings(file, stripped);
+    if (options.dryRun !== true) {
+      await writeSettings(file, stripped);
+    }
+    // `removed` reports what WOULD go under a dry run, which is what a preview
+    // is for; the caller distinguishes the two by the flag it passed.
     outcomes.push({ id: runtime.id, filePath: file, removed: hadManaged });
   }
 

@@ -159,3 +159,28 @@ describe("declared historical passages", () => {
     expect([...lines].sort((a, b) => a - b)).toEqual([2, 3]);
   });
 });
+
+test("a live instruction wearing a table's clothes is NOT exempt", () => {
+  // Found in review of PR #499 and confirmed by running the gate: the shape
+  // rule only asked that a line start with `|` and contain a retired spelling
+  // and SOME replacement anywhere on it. This line satisfied that and was
+  // silently swallowed — while being exactly the thing the gate exists to
+  // catch, documentation re-teaching the retired name.
+  const line = "| Tip | run `keryx mcp install --runtime cursor` (or the new `keryx integrate cursor`) |";
+  expect(isWasIsRow(line)).toBe(false);
+});
+
+test("a real was->is row is still exempt, suffixes and all", () => {
+  // The pairing rule must not be so strict that genuine rename records trip it;
+  // real rows carry argument suffixes.
+  expect(
+    isWasIsRow("| `keryx mcp uninstall --runtime <editor>` | `keryx integrate --remove <editor>` |"),
+  ).toBe(true);
+  expect(isWasIsRow("| `keryx mcp serve` | `keryx serve-mcp` |")).toBe(true);
+});
+
+test("a retired spelling paired with the WRONG replacement is not exempt", () => {
+  // `keryx mcp serve` did not become `keryx integrate`. A rule that accepts any
+  // replacement anywhere on the row would excuse a table that misinforms.
+  expect(isWasIsRow("| `keryx mcp serve` | `keryx integrate` |")).toBe(false);
+});

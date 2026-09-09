@@ -495,3 +495,22 @@ test("AC4: `mcp install --runtime bogus` still exits 1", async () => {
   expect(run.exitCode).toBe(1);
   expect(run.stderr).toContain("bogus");
 });
+
+test("AC3: integrate --remove --dry-run previews and removes nothing", async () => {
+  // Found in review of PR #499. `--remove` returned before `--dry-run` was ever
+  // read, so this combination performed a real removal while the help text
+  // promised a preview. Bounded — only the managed entry goes and re-running
+  // integrate restores it — but a flag that says it writes nothing must write
+  // nothing.
+  await mkdir(path.join(root, ".cursor"), { recursive: true });
+  await runVerb("integrate", ["cursor"]);
+  const before = await readFile(path.join(root, ".cursor", "mcp.json"), "utf8");
+  expect(before).toContain("keryx");
+
+  const run = await runVerb("integrate", ["--remove", "cursor", "--dry-run"]);
+
+  expect(await readFile(path.join(root, ".cursor", "mcp.json"), "utf8")).toBe(before);
+  // And it has to SAY it was a preview, or the operator cannot tell a dry run
+  // from a real one that happened to find nothing.
+  expect(run.stdout).toMatch(/would be removed/i);
+});

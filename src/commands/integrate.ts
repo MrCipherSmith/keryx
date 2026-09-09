@@ -37,7 +37,7 @@ export async function integrateCommand(
   const editors = parseEditors(args);
 
   if (args.includes("--remove")) {
-    await removeIntegration(cwd, editors, label ?? "keryx integrate --remove");
+    await removeIntegration(cwd, editors, args.includes("--dry-run"), label ?? "keryx integrate --remove");
     return;
   }
   await addIntegration(cwd, editors, args.includes("--dry-run"), label ?? "keryx integrate");
@@ -114,8 +114,13 @@ async function addIntegration(
 
 // Removes ONLY the managed keryx entry, leaving other servers + user content
 // intact.
-async function removeIntegration(cwd: string, editors: string[], label: string): Promise<void> {
-  const report = await uninstallMcpClient(cwd, editors);
+async function removeIntegration(
+  cwd: string,
+  editors: string[],
+  dryRun: boolean,
+  label: string,
+): Promise<void> {
+  const report = await uninstallMcpClient(cwd, editors, { dryRun });
 
   if (report.unknown.length > 0) {
     console.error(`Unknown runtime(s): ${report.unknown.join(", ")}`);
@@ -131,7 +136,7 @@ async function removeIntegration(cwd: string, editors: string[], label: string):
     }
     const rel = path.relative(cwd, outcome.filePath);
     console.log(
-      `  ${outcome.removed ? style.green(symbols.ok) : style.gray(symbols.off)} ${outcome.id} ${style.dim(outcome.removed ? `removed from ${rel}` : "nothing to remove")}`,
+      `  ${outcome.removed ? style.green(symbols.ok) : style.gray(symbols.off)} ${outcome.id} ${style.dim(outcome.removed ? `${dryRun ? "would be removed from" : "removed from"} ${rel}` : "nothing to remove")}`,
     );
   }
 }
@@ -145,7 +150,7 @@ export function printIntegrateHelp(): void {
   ]);
   helpOptions([
     { flag: "--remove", desc: "Remove the managed keryx server instead of writing it." },
-    { flag: "--dry-run", desc: "Print the planned change and write nothing." },
+    { flag: "--dry-run", desc: "Print the planned change and write nothing. Works with --remove too." },
   ]);
   heading("Notes");
   console.log(

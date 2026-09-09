@@ -82,9 +82,52 @@ export type Violation = { file: string; line: number; spelling: string; text: st
 export function isWasIsRow(line: string): boolean {
   const trimmed = line.trim();
   if (!trimmed.startsWith("|")) return false;
-  RETIRED.lastIndex = 0;
-  return RETIRED.test(trimmed) && REPLACEMENTS.test(trimmed);
+
+  // Cells must PAIR, not merely co-occur. Requiring only "a retired spelling
+  // and some replacement appear somewhere on a line starting with |" exempted
+  // this, which is a live instruction wearing a table's clothes:
+  //
+  //   | Tip | run `keryx mcp install --runtime cursor` (or `keryx integrate cursor`) |
+  //
+  // Found by review and confirmed by running it: the gate reported zero
+  // undeclared. That is precisely the "documentation quietly re-teaches the
+  // retired name" failure this file exists to prevent, so the shape rule has to
+  // be a shape rule — a cell that IS the old spelling beside a cell that IS its
+  // own replacement.
+  const cells = trimmed
+    .split("|")
+    .map((cell) => cell.trim().replace(/`/g, "").replace(/\s+/g, " ").trim())
+    .filter((cell) => cell.length > 0);
+
+  for (let i = 0; i < cells.length; i += 1) {
+    const cell = cells[i] as string;
+    // startsWith, not equality: real rows carry argument suffixes such as
+    // `keryx mcp uninstall --runtime <editor>`. Not `includes` either — that is
+    // the hole. In the instruction that slipped through, the cell begins "run",
+    // and a cell whose subject is the command begins with the command.
+    const entry = [...RETIREMENTS].find(([retired]) => cell.startsWith(retired));
+    if (entry === undefined) continue;
+    const replacement = entry[1];
+    // The pair may run either way round; some tables read "is | was".
+    for (const neighbour of [cells[i - 1], cells[i + 1]]) {
+      if (neighbour !== undefined && neighbour.startsWith(replacement)) return true;
+    }
+  }
+  return false;
 }
+
+/**
+ * Each retired spelling and the one thing it became.
+ *
+ * A map rather than two loose regexes, so `keryx mcp serve` cannot be excused
+ * by sitting next to `keryx integrate` — a pairing that is wrong but that a
+ * "both appear somewhere" rule accepted.
+ */
+const RETIREMENTS = new Map<string, string>([
+  ["keryx mcp serve", "keryx serve-mcp"],
+  ["keryx mcp install", "keryx integrate"],
+  ["keryx mcp uninstall", "keryx integrate --remove"],
+]);
 
 /**
  * Resolve declared exemptions to the set of line numbers (1-based) they cover.
