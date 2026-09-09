@@ -1719,6 +1719,14 @@ export interface ShellCliFlags {
    * usage. Written beside the rendered output, never instead of it.
    */
   eventsFile?: string;
+  /**
+   * `--events-max-field <n>`: the per-field character cap in that transcript.
+   *
+   * Raised by callers that need whole tool outputs — a reader looking for a
+   * particular path in a long result cannot tell a clipped output from one that
+   * never contained it. Redaction still runs first at any limit.
+   */
+  eventsMaxField?: number;
 }
 
 /**
@@ -1751,6 +1759,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let permissionModeFlag: PermissionMode | undefined;
   let printPromptArg: string | undefined;
   let eventsFile: string | undefined;
+  let eventsMaxField: number | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -1794,6 +1803,11 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       i += 1;
     } else if (arg === "--events-file") {
       eventsFile = valueAfter(i++);
+    } else if (arg === "--events-max-field") {
+      const raw = valueAfter(i++);
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed < 1) invalid("--events-max-field must be a positive integer");
+      eventsMaxField = parsed;
     } else {
       invalid("Unknown shell argument");
     }
@@ -1818,6 +1832,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
+    ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
   };
 }
 
@@ -1895,6 +1910,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --ask | --trust | --auto       Permission shortcuts; last flag wins
   --print, -p <prompt>          Run one agent turn on this prompt and exit
   --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
+  --events-max-field <n>        Per-field character cap in that transcript (default 4000)
 
 Session continuation and resume are mutually exclusive. Permission flags
 are ignored in chat mode. Without a TTY, resume without an ID uses the latest session.
@@ -2297,9 +2313,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const events =
         flags.eventsFile === undefined
           ? undefined
-          : createFileEventSink(flags.eventsFile, (message) => {
-              emitSystem(`${message}\n`);
-            });
+          : createFileEventSink(
+              flags.eventsFile,
+              (message) => {
+                emitSystem(`${message}\n`);
+              },
+              flags.eventsMaxField,
+            );
       await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
         cwd: process.cwd(),
         ...(flags.continueLast === true ? { continueLast: true } : {}),
