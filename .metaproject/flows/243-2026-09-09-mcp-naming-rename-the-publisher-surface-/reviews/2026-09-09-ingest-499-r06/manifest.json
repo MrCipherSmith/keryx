@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-09-ingest-499",
+  "reviewId": "2026-09-09-ingest-499-r06",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "report",
     "ref": "499",
-    "head": "f0b74c26"
+    "head": "f0b74c26880b8c9704910cfdc24bac1eefe8c4bf"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/scope.md",
-    "coverage": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/coverage.md",
-    "report": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/report.md",
-    "findings": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/findings.json",
-    "learning": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/learning.md",
-    "decisions": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499/decisions.md"
+    "scope": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/scope.md",
+    "coverage": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/coverage.md",
+    "report": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/report.md",
+    "findings": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/findings.json",
+    "learning": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/learning.md",
+    "decisions": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-/reviews/2026-09-09-ingest-499-r06/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 0,
+    "total": 3,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
-    "dropped_refuted": null,
+    "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 0,
+    "retained": 3,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -44,10 +44,6 @@
         "reason": "no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`."
       },
       {
-        "stage": "refuted",
-        "reason": "`verification_mode: off` — no verdict was read, so no finding could be removed by one. `annotate` records verdicts and removes nothing, which is a measured zero; this is not."
-      },
-      {
         "stage": "round_dismissed",
         "reason": "the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction."
       },
@@ -57,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-09T17:51:07.275Z",
-  "updatedAt": "2026-09-09T17:51:20.241Z",
+  "createdAt": "2026-09-09T19:46:26.987Z",
+  "updatedAt": "2026-09-09T19:46:35.367Z",
   "flow": {
     "id": "243",
     "path": ".metaproject/flows/243-2026-09-09-mcp-naming-rename-the-publisher-surface-"
