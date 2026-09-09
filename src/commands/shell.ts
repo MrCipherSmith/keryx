@@ -53,6 +53,7 @@ import {
   formatSessionInfoText,
   isSessionInfoCommand,
 } from "../tui/session-info";
+import { loadSessionLimits } from "./model-limits";
 import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
@@ -291,6 +292,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
               selection: { provider: providerName, model: modelName },
               version: packageJson.version,
               estimateTokens: estimateContextTokens(history),
+              limits: await loadSessionLimits({
+                provider: providerName,
+                model: modelName,
+                ...(baseUrl !== undefined ? { baseUrl } : {}),
+              }),
               sessionText: history.map((message) => message.content).join("\n"),
               workspaces,
               flows,
@@ -1295,6 +1301,10 @@ async function runAgentRepl(
               version: packageJson.version,
               usage: lastUsage,
               estimateTokens: estimateContextTokens(history),
+              limits: await loadSessionLimits({
+                provider: deps.providerId,
+                model: deps.modelId,
+              }),
               sessionText: history.map((message) => message.content).join("\n"),
               workspaces,
               flows,
@@ -1581,6 +1591,10 @@ export async function resolveTuiStartup(opts: {
   // Saved keys populate the env (env always wins); the saved provider+model
   // become the default selection when no `--provider` flag is given.
   const savedCfg = loadShellConfig(opts.configDir);
+  const { refreshProviderGrant } = await import("../lib/oauth/login");
+  const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
+  await refreshProviderGrant("grok", { fetch: oauthFetch }, opts.configDir).catch(() => undefined);
+  await refreshProviderGrant("github-copilot", { fetch: oauthFetch }, opts.configDir).catch(() => undefined);
   const appliedKeys = applySavedApiKeys(opts.configDir);
   const { providerArg, modelArg, baseUrl } = opts;
   if (providerArg !== undefined && modelArg !== undefined) {

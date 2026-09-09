@@ -20,6 +20,7 @@ import {
   familyOf,
   loadCustomCompatProviders,
 } from "../lib/provider-config";
+import { envWithOAuthAccess } from "../lib/oauth/grants";
 import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
 
@@ -216,6 +217,14 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     envKey: "XAI_API_KEY",
     models: ["grok-2-latest", "grok-2", "grok-beta"],
     note: "xAI · OpenAI-compatible",
+  },
+  {
+    name: "github-copilot",
+    label: "GitHub Copilot",
+    baseUrl: "https://api.githubcopilot.com",
+    envKey: "GITHUB_COPILOT_TOKEN",
+    models: ["gpt-4o", "gpt-4.1", "gpt-4o-mini"],
+    note: "Copilot · device login",
   },
 ];
 
@@ -551,7 +560,7 @@ export function providersCommand(args: string[]): void {
 }
 
 function runProvidersList(args: string[]): void {
-  const env = envWithSavedApiKeys();
+  const env = envWithOAuthAccess(envWithSavedApiKeys());
   const configured = configuredProviders(env).map((provider) => ({
     provider: provider.name,
     family: familyOf(provider.name),
@@ -631,7 +640,7 @@ export function crossFamilyReviewForSession(
       providerId: (session.providerId ?? config.provider ?? "").trim(),
       modelId: (session.modelId ?? config.model ?? "").trim(),
     },
-    configured: configuredProviders(envWithSavedApiKeys()),
+    configured: configuredProviders(envWithOAuthAccess(envWithSavedApiKeys())),
   });
 }
 

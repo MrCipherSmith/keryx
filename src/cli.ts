@@ -36,6 +36,7 @@ import { metricsCommand } from "./commands/metrics";
 import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
+import { authCommand } from "./commands/auth";
 import { retentionCommand } from "./commands/retention";
 import { forgettingCommand } from "./commands/forgetting";
 import packageJson from "../package.json" with { type: "json" };
@@ -64,6 +65,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   modules: modulesCommand,
   projects: projectsCommand,
   providers: providersCommand,
+  auth: authCommand,
   serve: serveCommand,
   update: updateCommand,
   dashboard: dashboardCommand,
@@ -175,6 +177,10 @@ Usage:
   keryx sync install-hooks | uninstall-hooks
   keryx providers list [--json]
   keryx providers cross-family [--opt-in] [--json]
+  keryx auth list [--json]
+  keryx auth login <provider>
+  keryx auth logout <provider>
+  keryx auth status <provider> [--json]
   keryx health run [--strict] [--changed [--since <ref>]] [--scope <s>] [--source a,b]
   keryx health status | gate [--strict-warn] | sources | trend
   keryx health explain <file-or-module> [--narrate] [--json]
@@ -275,6 +281,7 @@ Commands:
   rules     Sync root AGENTS.md/CLAUDE.md into high-priority project rules
   sync      Reconcile graph/wiki/memory with the current code, and wire the git hooks
   providers Providers this operator has configured, and cross-family review eligibility
+  auth      Subscription login (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) and API-key status
   orient    Emit a bounded graph + wiki startup block, or install it as a turn-start hook
   agents    Manage optional global agent bootstrap instructions
   gdgraph   Build and query code dependency graph

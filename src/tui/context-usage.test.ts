@@ -19,3 +19,20 @@ test("estimate is labelled and the bar does not invent a model limit", () => {
   expect(text).toContain("last in");
   expect(text.toLowerCase()).toContain("no model context window");
 });
+
+test("provider-reported window fills the bar against the real limit", () => {
+  const view = buildContextUsage({
+    estimateTokens: 80,
+    usage: { inputTokens: 12, outputTokens: 3 },
+    contextWindow: 200,
+  });
+  expect(view.window).toBe(200);
+  expect(view.free).toBe(120);
+  expect(view.segments.map((segment) => segment.id)).toEqual(["history", "last-in", "last-out", "free"]);
+  const text = formatContextUsageText(view);
+  expect(text).toContain("80");
+  expect(text).toContain("200");
+  expect(text.toLowerCase()).toContain("provider-reported");
+  expect(text.toLowerCase()).not.toContain("no model context window");
+});
+

@@ -1,5 +1,5 @@
 # Keryx Provider Auth
-Version: 1.0.0
+Version: 1.1.0
 
 ## Purpose
 
@@ -8,6 +8,9 @@ is authorized, including from a phone. It defines a small taxonomy of
 authentication methods, makes the provider registry declare which one it uses,
 and adds the **device authorization grant** so a provider can be authorized by
 opening a link on any device — which is what makes remote setup work at all.
+Subscription OAuth is in scope for every vendor that sanctions third-party
+clients (xAI SuperGrok, ChatGPT Plus/Pro, GitHub Copilot), and is an explicit
+refusal for Claude Pro/Max, Gemini Google-account login, and DeepSeek.
 
 It serves both the local TUI and [keryx-remote-entry](../keryx-remote-entry/README.md),
 so a provider is authorized the same way whether the operator is at the keyboard
@@ -27,22 +30,24 @@ The obvious model — "authorize Claude with a Max subscription by opening a
 link", the way Claude Code does — **is not available to keryx**, and building it
 would harm the operator rather than help them.
 
-Anthropic's Consumer Terms now state that OAuth tokens from Free, Pro and Max
-plans may not be used in any other product, tool or service, and that
-third-party developers may not offer Claude.ai login or route requests through
-consumer-plan credentials. Enforcement began in January 2026 and the policy took
-effect in April 2026. keryx is a third-party tool. Implementing subscription
-OAuth would put **the operator's own account** at risk of disruption, not just
-ours. OpenAI draws the same line: ChatGPT sign-in serves Codex, its own client,
-while third-party tools use platform API keys.
+Anthropic's Consumer Terms state that OAuth tokens from Free, Pro and Max
+plans may not be used in any other product, tool or service. Enforcement began
+in January 2026. keryx is a third-party tool: shipping Claude Pro OAuth would
+put **the operator's own account** at risk.
+
+That refusal is not a ban on every subscription. xAI, OpenAI (ChatGPT/Codex)
+and GitHub have invited third-party clients. Gemini Google-account login has
+not. DeepSeek has no such grant.
 
 Subscription-based login is therefore adopted **only where the vendor sanctions
-third-party clients**. GitHub Copilot is the clear case: GitHub documents the
-device flow for CLI clients and shipped support for a third-party agent in
-January 2026.
+third-party clients**. As of 1.1.0 that set is:
 
-The mechanism the user wanted is still the right one — it is simply pointed at
-providers that permit it. See [decisions.md](decisions.md).
+- **xAI SuperGrok / X Premium** — RFC 8628 device-code; xAI published OpenCode support.
+- **OpenAI ChatGPT Plus/Pro (Codex)** — PKCE locally, device-style headless remotely.
+- **GitHub Copilot** — GitHub's documented CLI device flow.
+
+Claude Pro/Max stays refused. Gemini Google-account OAuth stays refused (Gemini
+CLI only). DeepSeek has no consumer OAuth. See [decisions.md](decisions.md) §D-01.
 
 ## Scope
 
@@ -50,9 +55,9 @@ providers that permit it. See [decisions.md](decisions.md).
 - The **device authorization grant** (RFC 8628): keryx requests a code, the
   operator opens a verification URL on any device and approves, keryx polls for
   the token. No secret ever transits the transport, and no loopback is required.
-- An expanded provider list covering the notable absences — OpenAI itself, and
-  Google, Mistral and the major inference hosts — plus GitHub Copilot as the
-  first sanctioned subscription provider.
+- An expanded method list: SuperGrok and ChatGPT Plus/Pro on the existing
+  Grok/OpenAI entries, GitHub Copilot as a new `device-code` provider, Gemini
+  and DeepSeek remaining `api-key`.
 - How each method is presented and completed over a remote transport.
 
 ## Non-goals

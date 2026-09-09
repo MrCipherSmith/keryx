@@ -20,6 +20,7 @@ test("registry lists the flow-085 providers with sensible metadata", () => {
   expect(names).toContain("moonshot");
   expect(names).toContain("rapid-mlx");
   expect(names).toContain("zai-coding");
+  expect(names).toContain("github-copilot");
   for (const p of OPENAI_COMPAT_PROVIDERS) {
     if (p.name !== "rapid-mlx") {
       expect(p.baseUrl.startsWith("https://")).toBe(true);

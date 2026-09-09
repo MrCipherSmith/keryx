@@ -149,12 +149,15 @@ holds and what forking copies.
 - `/help` lists every slash command available in the current mode
   (`agent` vs `chat`). The registry is `AGENT_SLASH_COMMANDS`.
 - `/status` (chat and agent) opens a read-only inspector. The TUI modal
-  always has **Status** and **Context** (last-turn tokens plus a labelled
-  estimate — never a guessed window). **Workspaces** and **Flow** tabs
-  appear only when the session actually referenced a SAC workspace or a
-  flow (`runLink.sessionId` or an explicit `flow 154` / `/flows 154`
-  mention). `c` copies the session id. Readline / `--no-tui` prints the
-  same rows. `/session-info` and `/info` are **not** aliases.
+  always has **Status** and **Context**: last-turn tokens, a labelled
+  estimate, and — when the provider reported one — the model context
+  window, optional rate-limit headers, and DeepSeek/OpenRouter balance.
+  A missing figure stays `—`; the bar never invents a 128k window.
+  **Workspaces** and **Flow** tabs appear only when the session actually
+  referenced a SAC workspace or a flow (`runLink.sessionId` or an
+  explicit `flow 154` / `/flows 154` mention). `c` copies the session id.
+  Readline / `--no-tui` prints the same rows. `/session-info` and `/info`
+  are **not** aliases.
 - `/flows` lists project flows, newest first (highest id, then `updatedAt`).
   In the TUI, the List tab uses `↑/↓` to move the selection; Enter or `→`
   opens Detail. On Detail, `↑/↓` scroll the body instead — `[`/`]` (or
@@ -390,6 +393,30 @@ keryx projects [list [--json] | register <path> | forget <id>]
 The registry is user-global (not per-project) and is what `keryx serve` resolves
 a request's target project against. A request naming an unregistered project is
 refused; there is no fallback to "some other project".
+
+---
+
+## auth
+
+Authorize a **vendor-sanctioned subscription** (SuperGrok, ChatGPT Plus/Pro, GitHub Copilot) or inspect that state. Credentials are written to the user-global `auth.json` at mode 0600. Secrets are never printed.
+
+Claude Pro/Max, Gemini Google-account login, and DeepSeek subscription OAuth are refused at the point of choice.
+
+```
+keryx auth list [--json]
+keryx auth login <provider>
+keryx auth logout <provider>
+keryx auth status <provider> [--json]
+```
+
+| Subcommand | Flags | Description |
+|---|---|---|
+| `list` | `--json` | Authorized providers (method and expiry, never a token) and which subscription logins are offered. |
+| `login` | `<provider>` | Run the provider's device authorization grant. Prints a verification URL and code (opens a browser only when a graphical session is present); keryx polls for the token. |
+| `logout` | `<provider>` | Discard the stored grant. |
+| `status` | `<provider>`, `--json` | Method, state, expiry, refreshability — never the secret. |
+
+`/provider` in `keryx shell` offers the same SuperGrok vs API-key choice for xAI.
 
 ---
 

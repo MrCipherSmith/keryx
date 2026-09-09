@@ -1,41 +1,42 @@
 # PRD: Keryx Provider Auth
-Version: 1.0.0
+Version: 1.1.0
 
 ## Problem
 
 Two gaps, one of them embarrassing.
 
-**The provider list has holes.** `src/commands/providers.ts` offers eight
-OpenAI-compatible providers — OpenRouter, DeepSeek, Z.AI (two entries), Cerebras,
-Groq, Moonshot, xAI — plus native Anthropic and Ollama adapters. **OpenAI itself
-is absent.** So are Google, Mistral, and the major inference hosts. An operator
-choosing a provider sees a list that looks arbitrary.
+**The provider list still authenticates one way.** Native Anthropic, OpenAI and
+Gemini adapters exist, and the compat registry covers OpenRouter, DeepSeek,
+Z.AI, Cerebras, Groq, Moonshot and xAI. Every one of them is a Bearer API key
+from an environment variable or a TUI prompt. An operator with SuperGrok,
+ChatGPT Plus or Copilot cannot use that subscription in keryx.
 
-**Every provider authenticates the same way, and that way does not travel.**
-All eight registry entries are a Bearer API key from an environment variable or
-a TUI prompt. That works at a keyboard. It does not work from a phone: the
-credential handoff link specified in
+**That one way does not travel.** A key prompt works at a keyboard. It does not
+work from a phone: the credential handoff link in
 [keryx-remote-entry](../keryx-remote-entry/README.md) resolves to loopback, and
 a loopback link is unreachable from somewhere else. Remote setup therefore stops
 at the first provider that needs a credential.
 
 ## Goal
 
-Make the provider list representative, and make authorization work from a phone
-without a secret ever passing through the chat — by adopting the device
-authorization grant and declaring each provider's method in the registry.
+Make authorization work from a phone without a secret ever passing through the
+chat, and offer every *vendor-sanctioned* subscription login — SuperGrok,
+ChatGPT Plus/Pro, GitHub Copilot — next to the existing API-key path. Claude
+Pro/Max, Gemini Google-account login, and a fictional DeepSeek OAuth stay
+refused. The device authorization grant is the remote method; each provider
+declares its permitted methods in the registry.
 
 ## Constraint that shapes the solution
 
 Subscription login is adopted **only where the vendor sanctions third-party
-clients**. Anthropic's Consumer Terms forbid using Claude Free/Pro/Max OAuth
-tokens in other products and forbid third-party developers offering Claude.ai
-login; OpenAI directs third-party tools to platform API keys and reserves
-ChatGPT sign-in for Codex. GitHub, by contrast, documents the device flow for
-CLI clients and shipped third-party agent support.
+clients**. That is now a per-vendor fact, not a blanket "no subscriptions":
 
-This is a compliance boundary, not an engineering one. The reasoning, the
-consequence for the operator, and the sources are in [decisions.md](decisions.md).
+- **Ship:** xAI SuperGrok, OpenAI ChatGPT Plus/Pro (Codex), GitHub Copilot.
+- **Refuse:** Anthropic Claude Free/Pro/Max OAuth; Gemini "Sign in with Google";
+  DeepSeek has no such grant.
+
+This is a compliance boundary, not an engineering one. The matrix and sources
+are in [decisions.md](decisions.md) §D-01.
 
 ## Non-goals
 
@@ -51,8 +52,11 @@ consequence for the operator, and the sources are in [decisions.md](decisions.md
 | Operator at the keyboard | Adds a provider needing an API key | Enters it in the TUI or through the local handoff link, as today. |
 | Operator on a phone | Adds a provider supporting the device grant | Receives a short code and a verification URL, approves in the phone's browser; keryx obtains the token by polling. Nothing secret is in the chat. |
 | Operator on a phone | Adds a provider needing an API key | Told plainly that this provider needs a key and that entry requires the machine — rather than being handed a link that cannot open. |
+| Operator with SuperGrok | Wants Grok in keryx without an API key | `/provider` → xAI → SuperGrok device-code; usage from the subscription. |
+| Operator with ChatGPT Plus/Pro | Wants Codex models in keryx | ChatGPT OAuth (browser locally, device-style headless remotely), or a platform API key. |
 | Operator with a Copilot subscription | Wants to use it | Authorizes through the device flow, which GitHub sanctions. |
 | Operator with a Claude Max subscription | Expects to authorize by link | Told that Anthropic's terms do not permit third-party subscription login, and pointed to a Console API key. Their account is not put at risk. |
+| Operator with Gemini / DeepSeek | Expects a Google or DeepSeek subscription login | Gemini: API key only (Google-account OAuth is Gemini CLI). DeepSeek: API key only; no consumer OAuth exists. |
 | Operator offline | Uses a local model | Ollama and other local providers declare method `none` and need nothing. |
 
 ## Requirements
@@ -61,14 +65,14 @@ consequence for the operator, and the sources are in [decisions.md](decisions.md
 
 | ID | Requirement |
 |---|---|
-| FR-01 | Every provider registry entry declares its authentication method: `none`, `api-key`, `device-code`, `oauth-pkce-loopback`, or `cloud-credentials`. |
-| FR-02 | The registry stays the single source of truth. Adding a provider or changing its method is a registry edit, not a code branch. |
+| FR-01 | Every provider registry entry declares one or more permitted authentication methods from `none`, `api-key`, `device-code`, `oauth-pkce-loopback`, `cloud-credentials`. |
+| FR-02 | The registry stays the single source of truth. Adding a provider or changing its methods is a registry edit, not a code branch. |
 | FR-03 | Implement the device authorization grant (RFC 8628): request a code, present the user code and verification URL, poll the token endpoint, honour `interval`, `slow_down`, `expired_token` and `access_denied`. |
 | FR-04 | A device grant needs no loopback listener and no browser on the keryx machine. |
 | FR-05 | A method's presentation adapts to where the operator is. Remotely, `device-code` proceeds; `api-key` and `oauth-pkce-loopback` explain that they need the machine rather than issuing an unusable link. |
 | FR-06 | Obtained credentials — key, token, refresh token, expiry — are stored only in the existing user-global store at mode 0600. |
 | FR-07 | Tokens that expire are refreshed where the grant supports it; a refresh failure surfaces as an authorization error, never as a silent downgrade. |
-| FR-08 | Expand the provider list: OpenAI, Google Gemini, Mistral, and the major OpenAI-compatible inference hosts as `api-key`; GitHub Copilot as `device-code`; local runtimes as `none`. |
+| FR-08 | Wave 1 subscription logins: xAI SuperGrok (`device-code` + `api-key`), OpenAI ChatGPT Plus/Pro (`oauth-pkce-loopback` / headless + `api-key`), GitHub Copilot (`device-code`). Gemini and DeepSeek stay `api-key`. Claude Pro/Max OAuth is not offered. |
 | FR-09 | A provider whose terms forbid third-party subscription login declares only the methods it permits. The registry never carries a method the vendor prohibits. |
 | FR-10 | Authorization state is inspectable: which providers are authorized, by which method, and when a grant expires — without revealing any secret. |
 
@@ -106,5 +110,6 @@ consequence for the operator, and the sources are in [decisions.md](decisions.md
 ## Recommendation
 
 Add the method taxonomy to the registry, implement the device grant first
-because it unlocks remote setup, expand the provider list in the same change,
-and keep subscription login confined to vendors that sanction it.
+because it unlocks remote setup, and in the same change wire Wave 1
+subscription logins: SuperGrok, ChatGPT Plus/Pro, GitHub Copilot. Claude
+Pro/Max, Gemini Google-account OAuth, and DeepSeek stay API-key-only.

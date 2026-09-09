@@ -764,6 +764,44 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "writes <per-user keryx config dir>/version-check.json (outside this project)",
     ],
   },
+  // ---- auth -------------------------------------------------------------
+  {
+    module: "providers",
+    command: "auth list",
+    summary: "Which providers have a stored OAuth grant, and which subscription logins are offered.",
+    intent: ["keryx auth list", "какие провайдеры авторизованы", "oauth status"],
+    args: [{ name: "json", type: "bool", required: false, desc: "authorized grants without secrets" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "providers",
+    command: "auth status",
+    summary: "Authorization method, expiry and refreshability for one provider. Never prints a token.",
+    intent: ["keryx auth status", "oauth grant expiry"],
+    args: [
+      { name: "<provider>", type: "string", required: true, desc: "provider id (grok, openai, github-copilot)" },
+      { name: "json", type: "bool", required: false, desc: "status without secrets" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "providers",
+    command: "auth login",
+    summary: "Authorize a sanctioned subscription via device-code (SuperGrok, ChatGPT Plus/Pro, Copilot).",
+    intent: ["keryx auth login", "подключить SuperGrok", "login grok oauth"],
+    args: [{ name: "<provider>", type: "string", required: true, desc: "grok, openai, or github-copilot" }],
+    sideEffects: ["writes an OAuth grant to user-global auth.json (0600)"],
+  },
+  {
+    module: "providers",
+    command: "auth logout",
+    summary: "Discard a stored OAuth grant.",
+    intent: ["keryx auth logout", "отозвать grok oauth"],
+    args: [{ name: "<provider>", type: "string", required: true, desc: "provider id" }],
+    sideEffects: ["deletes the OAuth grant from user-global auth.json"],
+  },
   // ---- providers --------------------------------------------------------
   // Both are read-only and network-free: they report over `llm-providers.json`
   // plus the built-in registry and exit. `model: false` is therefore honest —
