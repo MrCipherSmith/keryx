@@ -12,12 +12,12 @@ protocol adapter — it defines no new module logic.
 
 ## Commands
 
-- `keryx mcp serve` — stdio JSON-RPC MCP server (default transport).
-- `keryx mcp serve --http` — isolated HTTP/SSE opt-in (localhost only;
+- `keryx serve-mcp` — stdio JSON-RPC MCP server (default transport).
+- `keryx serve-mcp --http` — isolated HTTP/SSE opt-in (localhost only;
   requires `http.enabled=true` in this module's manifest entry).
-- `keryx mcp serve --cwd <project-root>` — expose a specific project,
+- `keryx serve-mcp --cwd <project-root>` — expose a specific project,
   independent of the MCP client's launch directory.
-- `keryx mcp install --runtime <cursor|claude|generic|all> [--dry-run]` —
+- `keryx integrate <cursor|claude|generic|all> [--dry-run]` —
   wire this project into an editor/agent: writes a project-local client
   config (cursor → `.cursor/mcp.json`, claude → `.mcp.json`) and sets
   `modules.mcp.enabled=true`. `--dry-run` prints the change without
@@ -25,7 +25,7 @@ protocol adapter — it defines no new module logic.
   "connect" or "enable" MCP for this project — it is the full, real setup
   step; hand-editing a client config file directly is unnecessary and
   skips setting `modules.mcp.enabled`.
-- `keryx mcp uninstall --runtime <cursor|claude|generic|all>` — remove the
+- `keryx integrate --remove <cursor|claude|generic|all>` — remove the
   managed client config again.
 
 ## Notes

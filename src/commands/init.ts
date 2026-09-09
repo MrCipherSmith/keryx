@@ -1047,7 +1047,7 @@ export async function initCommand(args: string[]): Promise<void> {
       }
     }
     if (!report.sdk.available) {
-      note(`Optional MCP SDK not found — install it to run \`keryx mcp serve\`: ${report.sdk.hint}`);
+      note(`Optional MCP SDK not found — install it to run \`keryx serve-mcp\`: ${report.sdk.hint}`);
     }
   }
 
@@ -1164,7 +1164,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // Interactive-only: never under `--yes`/non-interactive, so the default floor
   // output stays byte-identical to today (golden rule, AC6).
   if (!enableMcp && !options.yes) {
-    note(`Wire an editor/agent to the MCP server later with ${style.cyan("keryx mcp install")}.`);
+    note(`Wire an editor/agent to the MCP server later with ${style.cyan("keryx integrate <editor>")}.`);
   }
 }
 

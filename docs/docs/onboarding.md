@@ -309,22 +309,22 @@ keryx standard capabilities # standard version, profiles, enabled modules
 The MCP server module exposes the `.metaproject/` workspace to editors and agents (Cursor, Claude Code, or any generic MCP client) over the Model Context Protocol. It is the one module that defaults **off** — `init` asks whether to enable it, and you can always wire it up later.
 
 ```bash
-keryx mcp install --runtime cursor    # write .cursor/mcp.json
-keryx mcp install --runtime claude    # write .mcp.json (Claude Code)
-keryx mcp install --runtime generic   # print a config snippet to paste anywhere
-keryx mcp install --runtime all        # cursor + claude (the default)
+keryx integrate cursor    # write .cursor/mcp.json
+keryx integrate claude    # write .mcp.json (Claude Code)
+keryx integrate generic   # print a config snippet to paste anywhere
+keryx integrate all       # cursor + claude (the default)
 ```
 
-`install` writes a project-local MCP client config, sets `modules.mcp.enabled=true` in `.metaproject/metaproject.json`, and prints a snippet for `generic`. Pass `--dry-run` to preview the change without writing anything, and use `keryx mcp uninstall --runtime <...>` to remove just the managed keryx entry.
+`integrate` writes a project-local MCP client config, sets `modules.mcp.enabled=true` in `.metaproject/metaproject.json`, and prints a snippet for `generic`. Pass `--dry-run` to preview the change without writing anything, and use `keryx integrate --remove <...>` to remove just the managed keryx entry.
 
 The server itself runs over stdio by default:
 
 ```bash
-keryx mcp serve                # stdio JSON-RPC MCP server (what clients launch)
-keryx mcp serve --http         # isolated localhost HTTP/SSE transport (opt-in)
+keryx serve-mcp                # stdio JSON-RPC MCP server (what clients launch)
+keryx serve-mcp --http         # isolated localhost HTTP/SSE transport (opt-in)
 ```
 
-Serving requires the optional `@modelcontextprotocol/sdk`; `install` only probes for it and never installs it or opens a network connection.
+Serving requires the optional `@modelcontextprotocol/sdk`; `integrate` only probes for it and never installs it or opens a network connection.
 
 ## TTY / CI behavior
 

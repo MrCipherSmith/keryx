@@ -168,7 +168,7 @@ the agent and MCP consume it). Phase 3 adds:
 - `keryx flow schema [--out <path>]` — emit `flow.schema.json` (schema export).
 - `keryx flow check` — already validates flows; extended to validate against the
   exported schema.
-- (Existing) `keryx mcp install` — continues to wire the MCP surface, now sourced
+- (Existing) `keryx integrate` — continues to wire the MCP surface, now sourced
   from the unified tool definitions.
 
 ## Data Contracts

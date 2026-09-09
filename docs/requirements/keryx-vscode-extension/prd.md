@@ -8,7 +8,7 @@ into a workspace, auto-detect whether keryx is initialized, offer to run
 `keryx init` if not, and provide a visual UI to manage keryx, ideally with
 "its own TUI." A discovery pass (commit `a0ebce1`) confirmed the backend
 picture is much further along than expected — `keryx serve` (HTTP+SSE) and
-`keryx mcp serve` (21-tool MCP server) are real, tested, and sufficient
+`keryx serve-mcp` (21-tool MCP server) are real, tested, and sufficient
 backends — but also confirmed a hard constraint: OpenTUI cannot be embedded
 in a webview (Finding 4), so "its own TUI inside VS Code" is not
 achievable as originally imagined. That discovery paused deliberately
@@ -48,7 +48,7 @@ TUI."
 2. On successful init, auto-reveal the tree view so the transition from
    "just installed" to "something happened" is visible without the user
    hunting for it.
-3. Register `keryx mcp serve` as a `vscode` MCP runtime target
+3. Register `keryx serve-mcp` as a `vscode` MCP runtime target
    (`src/mcp/client-config.ts` — currently `cursor`/`claude`/`opencode`/
    `generic`, no `vscode` entry — Finding 5).
 4. Status bar item combining base status (`GET /v1/status`) and an ambient
@@ -64,7 +64,7 @@ TUI."
    optional, load-bearing for user trust per the critic round.
 7. Editor hover provider for `wiki.query`/`wiki.ask` snippets, scoped to
    wiki only — no `gdgraph.affected`/`memory.search` extension in v1.
-8. Mutating operations not servable via `keryx serve`/`keryx mcp serve`
+8. Mutating operations not servable via `keryx serve`/`keryx serve-mcp`
    (init, and whatever else Requirement 6's audit-log needs to observe)
    run via `child_process` shell-out, per Finding 2's explicit non-goal
    boundary on `keryx serve` itself.

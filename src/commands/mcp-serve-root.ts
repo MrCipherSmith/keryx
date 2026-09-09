@@ -1,3 +1,4 @@
+// retired-spellings-ok: file — two comments recording the bug this module was written for, which happened under the old spelling
 /**
  * Which project root `keryx mcp serve` exposes.
  *

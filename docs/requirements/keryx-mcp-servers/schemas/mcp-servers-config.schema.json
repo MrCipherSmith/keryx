@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/mcp-servers-config.json",
+  "title": "Keryx MCP servers native config",
+  "description": "User-global or project-scoped MCP servers consumed by keryx shell. Not the inbound keryx serve-mcp config.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "servers"],
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "const": 1
+    },
+    "servers": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/server" },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_-]+$"
+      }
+    }
+  },
+  "$defs": {
+    "server": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "command": { "type": "string", "minLength": 1 },
+        "args": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "cwd": { "type": "string" },
+        "url": { "type": "string", "minLength": 1 },
+        "type": {
+          "type": "string",
+          "enum": ["stdio", "http", "sse"]
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "bearer_token_env_var": { "type": "string" },
+        "oauth": {
+          "oneOf": [
+            { "type": "boolean", "const": false },
+            { "$ref": "#/$defs/oauth" }
+          ]
+        },
+        "enabled": { "type": "boolean", "default": true },
+        "startup_timeout_sec": { "type": "number", "exclusiveMinimum": 0 },
+        "tool_timeout_sec": { "type": "number", "exclusiveMinimum": 0 },
+        "tool_timeouts": {
+          "type": "object",
+          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+        }
+      },
+      "allOf": [
+        {
+          "description": "A server is stdio (command) or HTTP (url), never both, never neither.",
+          "oneOf": [
+            {
+              "required": ["command"],
+              "not": { "required": ["url"] }
+            },
+            {
+              "required": ["url"],
+              "not": { "required": ["command"] }
+            }
+          ]
+        }
+      ]
+    },
+    "oauth": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "clientId": { "type": "string" },
+        "clientSecretEnvVar": { "type": "string" },
+        "scopes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "callbackPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    }
+  }
+}

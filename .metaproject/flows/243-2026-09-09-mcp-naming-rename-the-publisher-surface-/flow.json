@@ -1,0 +1,485 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "243",
+  "slug": "mcp-naming-rename-the-publisher-surface-",
+  "title": "MCP naming: rename the publisher surface so keryx mcp can mean the consumer (serve-mcp, integrate, /integrations)",
+  "status": "in-progress",
+  "createdAt": "2026-09-09T13:21:44.094Z",
+  "updatedAt": "2026-09-09T15:17:02.619Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:aa31e5c6bcb1fd9583aa960179759f8c74dca81340a676b57821deb370faa7b3",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "T1 confirm 'integrate' and 'serve-mcp' collide with no existing or roadmapped verb",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "T2 failing tests for serve-mcp, integrate, integrate --remove, and the one-line alias notice",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "T3 route serve-mcp and integrate in src/cli.ts; move the implementation off the mcp verb",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "T4 make mcp serve|install|uninstall thin aliases that emit the notice exactly once",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "T5 register /integrations; alias /mcp to it and mark it deprecated in the command list",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "T6 sweep docs, README and .metaproject prose to the new spellings",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "T7 test that fails when old spellings reappear in prose, exempting was-to-is tables by shape",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "T8 VERIFY every acceptance check runs the working tree, never the installed keryx",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "T9 VERIFY mutation: adding /mcps to the registry still fails the build",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "T10 VERIFY the 414 references are closed: changed plus deliberately-left sums to 414",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "T11 VERIFY a retired spelling still exits with its previous code, so scripts do not break",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "T12 generated editor configs must invoke serve-mcp, not the retired spelling",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "T13 cli-reference sections for serve-mcp and integrate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "T18 stop src/ teaching the retired spelling: template + 3 user-facing messages",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "T19 extend the retired-spelling guard to src/ string literals, so this cannot regress",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-09T13:21:44.094Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-09T13:24:21.120Z",
+      "event": "task-added",
+      "detail": "T5: T1 confirm 'integrate' and 'serve-mcp' collide with no existing or roadmapped verb"
+    },
+    {
+      "at": "2026-09-09T13:24:21.236Z",
+      "event": "task-added",
+      "detail": "T6: T2 failing tests for serve-mcp, integrate, integrate --remove, and the one-line alias notice"
+    },
+    {
+      "at": "2026-09-09T13:24:21.351Z",
+      "event": "task-added",
+      "detail": "T7: T3 route serve-mcp and integrate in src/cli.ts; move the implementation off the mcp verb"
+    },
+    {
+      "at": "2026-09-09T13:24:21.467Z",
+      "event": "task-added",
+      "detail": "T8: T4 make mcp serve|install|uninstall thin aliases that emit the notice exactly once"
+    },
+    {
+      "at": "2026-09-09T13:24:21.579Z",
+      "event": "task-added",
+      "detail": "T9: T5 register /integrations; alias /mcp to it and mark it deprecated in the command list"
+    },
+    {
+      "at": "2026-09-09T13:24:21.700Z",
+      "event": "task-added",
+      "detail": "T10: T6 sweep docs, README and .metaproject prose to the new spellings"
+    },
+    {
+      "at": "2026-09-09T13:24:21.817Z",
+      "event": "task-added",
+      "detail": "T11: T7 test that fails when old spellings reappear in prose, exempting was-to-is tables by shape"
+    },
+    {
+      "at": "2026-09-09T13:24:21.931Z",
+      "event": "task-added",
+      "detail": "T12: T8 VERIFY every acceptance check runs the working tree, never the installed keryx"
+    },
+    {
+      "at": "2026-09-09T13:24:22.046Z",
+      "event": "task-added",
+      "detail": "T13: T9 VERIFY mutation: adding /mcps to the registry still fails the build"
+    },
+    {
+      "at": "2026-09-09T13:24:22.163Z",
+      "event": "task-added",
+      "detail": "T14: T10 VERIFY the 414 references are closed: changed plus deliberately-left sums to 414"
+    },
+    {
+      "at": "2026-09-09T13:24:22.281Z",
+      "event": "task-added",
+      "detail": "T15: T11 VERIFY a retired spelling still exits with its previous code, so scripts do not break"
+    },
+    {
+      "at": "2026-09-09T13:24:44.109Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-09T13:24:44.226Z",
+      "event": "task-done",
+      "detail": "T5: T1 confirm 'integrate' and 'serve-mcp' collide with no existing or roadmapped verb"
+    },
+    {
+      "at": "2026-09-09T13:25:05.966Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-09T13:25:06.084Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-09T13:41:06.259Z",
+      "event": "task-done",
+      "detail": "T6: T2 failing tests for serve-mcp, integrate, integrate --remove, and the one-line alias notice"
+    },
+    {
+      "at": "2026-09-09T13:45:13.306Z",
+      "event": "ac-updated",
+      "detail": "AC8's 414-reference baseline was measured with keryx ctx rg, which writes every search verbatim into the gitignored .metaproject/data/gdctx log directory; the count therefore grew each time it was taken and was never reproducible. Re-measured with git grep against HEAD: 116 total (serve 65, install 39, uninstall 12), 93 of them in scope. Surfaced by a subagent that measured independently and refused to reconcile to the frozen number."
+    },
+    {
+      "at": "2026-09-09T13:45:37.331Z",
+      "event": "task-done",
+      "detail": "T10: T6 sweep docs, README and .metaproject prose to the new spellings"
+    },
+    {
+      "at": "2026-09-09T13:45:37.446Z",
+      "event": "task-done",
+      "detail": "T11: T7 test that fails when old spellings reappear in prose, exempting was-to-is tables by shape"
+    },
+    {
+      "at": "2026-09-09T13:45:37.560Z",
+      "event": "task-done",
+      "detail": "T14: T10 VERIFY the 414 references are closed: changed plus deliberately-left sums to 414"
+    },
+    {
+      "at": "2026-09-09T13:52:36.071Z",
+      "event": "task-added",
+      "detail": "T16: T12 generated editor configs must invoke serve-mcp, not the retired spelling"
+    },
+    {
+      "at": "2026-09-09T13:52:36.188Z",
+      "event": "task-added",
+      "detail": "T17: T13 cli-reference sections for serve-mcp and integrate"
+    },
+    {
+      "at": "2026-09-09T14:01:37.473Z",
+      "event": "task-done",
+      "detail": "T7: T3 route serve-mcp and integrate in src/cli.ts; move the implementation off the mcp verb"
+    },
+    {
+      "at": "2026-09-09T14:01:37.731Z",
+      "event": "task-done",
+      "detail": "T8: T4 make mcp serve|install|uninstall thin aliases that emit the notice exactly once"
+    },
+    {
+      "at": "2026-09-09T14:01:37.966Z",
+      "event": "task-done",
+      "detail": "T16: T12 generated editor configs must invoke serve-mcp, not the retired spelling"
+    },
+    {
+      "at": "2026-09-09T14:01:38.194Z",
+      "event": "task-done",
+      "detail": "T17: T13 cli-reference sections for serve-mcp and integrate"
+    },
+    {
+      "at": "2026-09-09T14:11:31.198Z",
+      "event": "task-added",
+      "detail": "T18: T18 stop src/ teaching the retired spelling: template + 3 user-facing messages"
+    },
+    {
+      "at": "2026-09-09T14:11:31.319Z",
+      "event": "task-added",
+      "detail": "T19: T19 extend the retired-spelling guard to src/ string literals, so this cannot regress"
+    },
+    {
+      "at": "2026-09-09T14:21:08.984Z",
+      "event": "task-done",
+      "detail": "T18: T18 stop src/ teaching the retired spelling: template + 3 user-facing messages"
+    },
+    {
+      "at": "2026-09-09T14:21:09.101Z",
+      "event": "task-done",
+      "detail": "T19: T19 extend the retired-spelling guard to src/ string literals, so this cannot regress"
+    },
+    {
+      "at": "2026-09-09T14:21:09.215Z",
+      "event": "task-done",
+      "detail": "T13: T9 VERIFY mutation: adding /mcps to the registry still fails the build"
+    },
+    {
+      "at": "2026-09-09T14:21:09.329Z",
+      "event": "task-done",
+      "detail": "T15: T11 VERIFY a retired spelling still exits with its previous code, so scripts do not break"
+    },
+    {
+      "at": "2026-09-09T15:17:02.506Z",
+      "event": "task-done",
+      "detail": "T9: T5 register /integrations; alias /mcp to it and mark it deprecated in the command list"
+    },
+    {
+      "at": "2026-09-09T15:17:02.619Z",
+      "event": "task-done",
+      "detail": "T12: T8 VERIFY every acceptance check runs the working tree, never the installed keryx"
+    }
+  ]
+}

@@ -39,6 +39,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/integrations",
     "/mcp",
     "/compact",
     "/theme",
@@ -122,6 +123,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/integrations",
     "/mcp",
     "/compact",
     "/theme",
@@ -227,6 +229,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/flows",
     "/workspace",
     "/review",
+    "/integrations",
     "/mcp",
     "/compact",
     "/theme",
@@ -270,14 +273,25 @@ test("filterCommands: prefix narrows the set (agent)", () => {
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
   expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review"]);
-  expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
+  // `/integrations` shares this prefix with `/interrupt` — a cost of the name
+  // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
+  // plainly different words and the completion menu shows both, so the prefix
+  // is ambiguous rather than dangerous. Pinned so the pair is a decision on
+  // record, not a surprise the next person rediscovers at the prompt.
+  expect(filterCommands("/int", "agent").map((c) => c.name)).toEqual([
+    "/integrations",
+    "/interrupt",
+  ]);
   expect(filterCommands("/s", "agent").map((c) => c.name)).toEqual([
     "/search-provider",
     "/search-connect",
     "/sessions",
     "/status",
   ]);
-  expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual(["/interrupt"]);
+  expect(filterCommands("/i", "agent").map((c) => c.name)).toEqual([
+    "/integrations",
+    "/interrupt",
+  ]);
   expect(filterCommands("/f", "agent").map((c) => c.name)).toEqual(["/flows"]);
   expect(filterCommands("/n", "agent").map((c) => c.name)).toEqual(["/new"]);
   expect(filterCommands("/comp", "agent").map((c) => c.name)).toEqual(["/compact"]);

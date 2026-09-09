@@ -59,7 +59,7 @@ local development is `claude --plugin-dir ./path`, which also accepts a `.zip`.
 
 Four connection interfaces, all of them **writers into somebody else's file**:
 
-1. `keryx mcp install --runtime claude` → writes `.mcp.json` in the project root.
+1. `keryx integrate claude` → writes `.mcp.json` in the project root.
 2. `keryx ctx hook` and `keryx security hooks install` → merge entries into
    `.claude/settings.json`, marked with a `_keryxManaged` sentinel.
 3. `keryx orient install-hook` → the turn-start context block, same mechanism.
@@ -85,6 +85,7 @@ shows which arguments held.
 this document and it is wrong; it is left in with its correction because the
 correction is the finding.**
 
+<!-- retired-spellings-ok: line — verbatim quote of the superseded draft; rewriting it to `keryx integrate` would misattribute a claim the draft never made -->
 The draft argued: `keryx mcp install` writes
 `"args": ["mcp","serve","--cwd","<absolute path>"]`, which is correct on exactly
 one machine — ours carried a macOS path from 2026-08-13 and sat dead on Linux
@@ -202,7 +203,7 @@ multiplies the installer matrix.
 **B. Ship a keryx plugin, project-scoped.** One package carrying the MCP server
 (`${CLAUDE_PROJECT_DIR}`), the routing/security/orientation hooks, and the
 bundled skills. Committed to the repository under `.claude-plugin/` or offered by
-`keryx mcp install --runtime plugin`. Enabled per project, so the
+`keryx integrate plugin`. Enabled per project, so the
 no-`.metaproject` case is rare — but must still be fixed first.
 
 **C. Ship it to a marketplace.** B plus a marketplace manifest so
@@ -245,7 +246,7 @@ since the hook is globally installable today.
 - `claude plugin validate` on the current `--runtime plugin` export → passed, but
   as a *marketplace* manifest; with `marketplace.json` removed it validated as a
   plugin and passed.
-- `keryx mcp serve --cwd <dir with no .metaproject>` → initializes, `tools/list`
+- `keryx serve-mcp --cwd <dir with no .metaproject>` → initializes, `tools/list`
   returns **0 tools**.
 - `keryx ctx hook claude` in the same directory → **exit 2, command blocked**.
 

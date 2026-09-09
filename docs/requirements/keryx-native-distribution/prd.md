@@ -49,7 +49,7 @@ native package-manager consumer of it.
    build` against a real TypeScript file from the compiled binary correctly
    produced `1 nodes, 0 edges`, proving `web-tree-sitter` (the WASM-backed,
    most bundling-risky of the three) genuinely works standalone, not merely
-   that the binary launches. `keryx mcp serve`'s bundling was NOT
+   that the binary launches. `keryx serve-mcp`'s bundling was NOT
    conclusively verified the same way — a background smoke test exited
    quickly with no error output, consistent with normal stdio-server
    behavior when no MCP client is attached rather than a bundling failure,

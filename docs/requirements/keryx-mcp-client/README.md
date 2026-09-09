@@ -1,5 +1,5 @@
 # Keryx MCP Client
-Version: 0.2.0
+Version: 0.2.1
 
 ## Purpose
 
@@ -86,6 +86,9 @@ full record.
   arbitrary user-added servers). This version is scoped to keryx spawning and
   connecting to a *specific* server it already controls (`codex mcp-server`),
   not consuming arbitrary third-party MCP servers a user configures.
+  That deferred surface is specified separately as
+  [keryx-mcp-servers](../keryx-mcp-servers/README.md) (Grok Build parity;
+  specification ready, not implemented).
 - Widening `keryx-external-agent-runtime`'s vendor registry beyond
   `codex-cli`/`claude-cli`. Tracked separately; see roadmap note.
 - Any change to `keryx-provider-auth` D-01's credential boundary. codex's own
@@ -107,3 +110,6 @@ full record.
 - [Keryx Provider Auth](../keryx-provider-auth/README.md) — D-01, the
   credential boundary this package sits beside and must not cross, exactly as
   `keryx-external-agent-runtime` already commits to.
+- [Keryx MCP Servers](../keryx-mcp-servers/README.md) — the general
+  user-configured MCP consumer this package's D-04 left room for. Sibling,
+  not a successor: Codex elicitation stays here.
