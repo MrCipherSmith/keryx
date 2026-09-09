@@ -74,6 +74,19 @@ const SKIP_PATHS = [
   ".git/",
   ".claude/worktrees/",
   ".metaproject/data/gdctx/",
+  // Benchmark run output, for the same reason as gdctx's logs directly above:
+  // these are captured transcripts and diffs of OTHER programs, and they hold
+  // whatever bytes those programs produced. Two `diff.patch` files under
+  // `harness/runs/` carry a NUL, and this guard failed on them — on developer
+  // machines only, because all three paths are gitignored and CI never has
+  // them. A guard that is red locally and green in CI teaches people to ignore
+  // it, which costs more than the bytes it found.
+  //
+  // Anchored to the repository root like the others, so a `runs/` directory
+  // inside the source tree would still be scanned.
+  "docs/requirements/keryx-shell-benchmark/harness/runs/",
+  "docs/requirements/keryx-shell-benchmark/harness/logs/",
+  ".benchmark-runs/",
 ];
 
 /**
@@ -218,6 +231,23 @@ describe("every source file can be found by a text search", () => {
     expect([...files.keys()].some((file) => file.startsWith(".metaproject/"))).toBe(true);
     // A `.mdc` rule file, an extension the first TEXT list omitted.
     expect([...files.keys()].some((file) => file.endsWith(".mdc"))).toBe(true);
+  });
+
+  test("the captured-run skips are anchored, so they cannot blind the source tree", () => {
+    // The benchmark harness directories are skipped because they hold captured
+    // output of other programs, which legitimately contains any byte. That
+    // excuse must not spread by name: this file already records a version whose
+    // skips matched a bare directory name at any depth, so a NUL under
+    // `src/lib/dist/` went unseen. These assertions are that regression written
+    // down for the new entries.
+    expect(isSkipped("docs/requirements/keryx-shell-benchmark/harness/runs/keryx/A1/x.patch")).toBe(true);
+    expect(isSkipped(".benchmark-runs/keryx-2026-09-05/transcript.jsonl")).toBe(true);
+
+    // The same names anywhere else are still scanned.
+    expect(isSkipped("src/lib/runs/thing.ts")).toBe(false);
+    expect(isSkipped("src/benchmark-runs/thing.ts")).toBe(false);
+    expect(isSkipped("scripts/logs/thing.ts")).toBe(false);
+    expect(isSkipped("docs/requirements/keryx-shell-benchmark/harness/README.md")).toBe(false);
   });
 
   test("the binary list holds nothing that is actually text", () => {
