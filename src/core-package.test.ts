@@ -381,14 +381,61 @@ test("the exports map closes the accidental deep-import surface", () => {
   ).toEqual([]);
 });
 
+/**
+ * Locate npm's own JSON array inside `stdout` and parse it.
+ *
+ * MEASURED (CI run 34317596649, `typecheck-and-tests`): `npm pack --dry-run
+ * --ignore-scripts --json` was assumed to put ONLY that JSON on stdout, on
+ * the strength of `--ignore-scripts` skipping the package's `prepare` script
+ * (`"prepare": "bun run build"`). Locally that held (npm 11.17.0: the
+ * captured stdout was the 1552-line JSON array, byte for byte, nothing else).
+ * On the CI runner's npm, `--ignore-scripts` did not stop `prepare` from
+ * running before pack computed its own output, and `prepare`'s three `bun
+ * build` invocations write their own summary to the SAME stdout stream
+ * (`Bundled 522 modules in 103ms`, `Bundled 171 modules in 40ms`, `Bundled 3
+ * modules in 3ms`, reproduced verbatim with `bun run build` here) ahead of
+ * npm's JSON — hence `JSON Parse error: Unexpected identifier "Bundled"`.
+ *
+ * The fix keeps asking npm (the point of this test, stated below) rather
+ * than falling back to re-implementing `files`/ignore semantics, but no
+ * longer assumes stdout IS the JSON: it locates the array npm actually
+ * printed and parses that slice. A `prepare` preamble contains no `[`, so
+ * the first `[` in the stream is unambiguously where npm's own array starts
+ * regardless of which npm version honoured `--ignore-scripts`. Genuinely
+ * broken JSON — from npm itself, or from contamination that happens to
+ * follow rather than precede the array — still throws, with the raw stream
+ * attached, rather than being silently swallowed.
+ */
+function parseNpmPackJson(stdout: string): Array<{ files: Array<{ path: string }> }> {
+  const start = stdout.indexOf("[");
+  if (start === -1) {
+    throw new Error(
+      `\`npm pack --dry-run --json\` produced no JSON array on stdout at all. ` +
+        `First 400 bytes: ${JSON.stringify(stdout.slice(0, 400))}`,
+    );
+  }
+  try {
+    return JSON.parse(stdout.slice(start)) as Array<{ files: Array<{ path: string }> }>;
+  } catch (cause) {
+    const message = cause instanceof Error ? cause.message : String(cause);
+    throw new Error(
+      `\`npm pack --dry-run --json\`'s stdout was not parseable JSON once its own array was ` +
+        `located (${message}). This is not the known \`prepare\`-preamble case (that case parses); ` +
+        `something else is wrong. First 400 bytes: ${JSON.stringify(stdout.slice(0, 400))}`,
+      { cause },
+    );
+  }
+}
+
 test("npm pack ships no test file — asked of npm, not of the manifest", () => {
   // The repository's own method for "what is in the tarball" is `npm pack`
   // (`.github/workflows/release.yml`), so this asks npm rather than
   // re-implementing its `files`/ignore semantics — which is precisely the
   // reading that missed 22 shipped test files in the first place.
-  // `--ignore-scripts` skips the `prepare` build: the question is which files
-  // npm SELECTS, and rebuilding `dist/` to ask it would make a guard that
-  // takes a minute out of one that takes a second.
+  // `--ignore-scripts` skips the `prepare` build on npm versions that honour
+  // it for `pack`; where it does not (see `parseNpmPackJson` above), the
+  // question this test asks is still which files npm SELECTS, not what its
+  // `prepare` script printed on the way there.
   const proc = Bun.spawnSync(["npm", "pack", "--dry-run", "--ignore-scripts", "--json"], {
     cwd: ROOT,
     stdout: "pipe",
@@ -400,7 +447,7 @@ test("npm pack ships no test file — asked of npm, not of the manifest", () => 
         `because it is the tool the release uses to build the tarball: ${proc.stderr.toString().slice(0, 400)}`,
     );
   }
-  const packed = JSON.parse(proc.stdout.toString()) as Array<{ files: Array<{ path: string }> }>;
+  const packed = parseNpmPackJson(proc.stdout.toString());
   const files = (packed[0]?.files ?? []).map((f) => f.path);
 
   // Numerator first: an empty or unreadable file list must not read as clean.

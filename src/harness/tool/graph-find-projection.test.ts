@@ -14,14 +14,46 @@
 // through the REAL adapter. Nothing calls `formatFind` on a hand-built literal
 // and calls that a boundary test.
 import { expect, test } from "bun:test";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { createMetaprojectAdapter } from "./metaproject-adapter";
 import { METAPROJECT_OPERATIONS } from "./metaproject-operations";
+import { buildGraph } from "../../gdgraph/build";
 import type { FindOutcome } from "../../gdgraph/find";
 import { RETRIEVAL_CODES, type RetrievalCode } from "../../lib/retrieval-codes";
 import type { InteractiveToolResult } from "./builtin/interactive-tools";
 
 const REPO_ROOT = path.join(import.meta.dir, "..", "..", "..");
+
+/**
+ * A tiny project this test owns, with a real graph built over it — used ONLY
+ * by the REAL SEAM test below, which must load an actual built graph rather
+ * than an injected `graphFind`. This repository's own
+ * `.metaproject/data/gdgraph/storage` is `.gitignore`d
+ * (`.metaproject/data/**\/storage/`) and exists only on a machine where
+ * `keryx gdgraph build` happened to run — a CI checkout has none, so a test
+ * that reads `REPO_ROOT`'s live graph measures ambient developer-machine
+ * state, not this test's own property. `gdgraph.find` matches file PATHS, so
+ * the fixture path carries the query terms; none of the fixture paths carries
+ * "kubernetes"/"helm"/"chart"/"ingress" — the no-match probe relies on that
+ * absence, not on anything about the real repository's contents.
+ */
+async function graphFixture(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-graph-find-projection-"));
+  const files: Record<string, string> = {
+    "src/wiki/evidence-envelope.ts": "export const envelope = 'wiki evidence envelope';\n",
+    "src/wiki/evidence-index.ts": "export const index = 'wiki evidence';\n",
+    "src/other/unrelated-module.ts": "export const noop = true;\n",
+  };
+  for (const [relative, content] of Object.entries(files)) {
+    const absolute = path.join(root, relative);
+    await mkdir(path.dirname(absolute), { recursive: true });
+    await writeFile(absolute, content, "utf8");
+  }
+  await buildGraph(root);
+  return root;
+}
 
 function operation(name: string) {
   const found = METAPROJECT_OPERATIONS.find((op) => op.name === name);
@@ -175,25 +207,34 @@ test("an empty query is refused by the descriptor before the port is touched", a
   expect(result.isError).toBe(true);
 });
 
-test("REAL SEAM — the live repository graph answers through the adapter with a real code", async () => {
-  // No injected `graphFind`: this loads the actual built graph and runs the
-  // actual classifier, so the boundary is proven end to end and not only
-  // against fakes.
-  const port = createMetaprojectAdapter(REPO_ROOT, FROZEN_STALENESS);
-  const found = await operation("graph_find").invoke(port, {
-    query: "wiki evidence envelope",
-    fileLimit: 3,
-  });
-  expect(found.output).toContain("code: ok");
-  expect(found.output).toContain("src/wiki/evidence.ts");
-  expect(found.isError).toBe(false);
+test("REAL SEAM — the adapter answers through a real built graph and the real classifier, no injected fake", async () => {
+  // No injected `graphFind`: this loads an actual built graph (over a fixture
+  // project this test owns and tears down — see `graphFixture` above) and
+  // runs the actual classifier, so the boundary is proven end to end and not
+  // only against fakes. It does NOT read `REPO_ROOT`'s own graph: that
+  // storage is `.gitignore`d and absent on a clean CI checkout, so measuring
+  // it here would be measuring ambient developer-machine state rather than a
+  // property this test owns.
+  const root = await graphFixture();
+  try {
+    const port = createMetaprojectAdapter(root, FROZEN_STALENESS);
+    const found = await operation("graph_find").invoke(port, {
+      query: "wiki evidence envelope",
+      fileLimit: 3,
+    });
+    expect(found.output).toContain("code: ok");
+    expect(found.output).toContain("src/wiki/evidence-envelope.ts");
+    expect(found.isError).toBe(false);
 
-  const nothing = await operation("graph_find").invoke(port, {
-    query: "kubernetes helm chart ingress",
-  });
-  expect(nothing.output).toContain("code: no-match");
-  // A completed search that found nothing is an ANSWER, at exit-code parity
-  // with the CLI's own `retrievalStatus` mapping.
-  expect(nothing.isError).toBe(false);
-  expect(nothing.output).toContain("keryx ctx rg");
+    const nothing = await operation("graph_find").invoke(port, {
+      query: "kubernetes helm chart ingress",
+    });
+    expect(nothing.output).toContain("code: no-match");
+    // A completed search that found nothing is an ANSWER, at exit-code parity
+    // with the CLI's own `retrievalStatus` mapping.
+    expect(nothing.isError).toBe(false);
+    expect(nothing.output).toContain("keryx ctx rg");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

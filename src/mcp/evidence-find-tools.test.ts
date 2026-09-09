@@ -20,8 +20,15 @@ import { buildToolRegistry } from "./tools";
 // written copy of the envelope's fields in a test is the same drift the
 // projection itself must not have.
 import { EVIDENCE_ITEM_FIELDS } from "../harness/tool/metaproject-operations";
-
-const REPO_ROOT = path.join(import.meta.dir, "..", "..");
+// `gdgraph.find` reads a BUILT graph off disk (`loadGraph` ->
+// `.metaproject/data/gdgraph/storage/*.jsonl`), never the module's in-memory
+// state. This repository's own `.metaproject/data/gdgraph/storage` is
+// `.gitignore`d (`.metaproject/data/**/storage/`) and exists only on a machine
+// where `keryx gdgraph build` happened to run — this repository's checked-out
+// state is not this test's to depend on, and CI checks out a clean tree with
+// no such directory. So the tests that exercise `gdgraph.find` build THEIR OWN
+// graph, over a fixture project they own and tear down (`graphFixture` below).
+import { buildGraph } from "../gdgraph/build";
 
 function tool(name: string) {
   const found = buildToolRegistry().find((entry) => entry.name === name);
@@ -108,6 +115,29 @@ async function wikiFixture(): Promise<string> {
   return root;
 }
 
+/**
+ * A tiny project this test owns, with a real graph built over it —
+ * `gdgraph.find` matches file PATHS, so the fixture's paths carry the terms
+ * these tests query for. None of them carries "kubernetes"/"helm"/"chart"/
+ * "ingress" — the no-match probe below relies on that absence, not on
+ * anything about the real repository's contents.
+ */
+async function graphFixture(): Promise<string> {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-mcp-find-"));
+  const files: Record<string, string> = {
+    "src/retrieval/codes-vocabulary.ts": "export const vocabulary = 'retrieval codes';\n",
+    "src/retrieval/codes-index.ts": "export const codes = 'retrieval index';\n",
+    "src/other/unrelated-module.ts": "export const noop = true;\n",
+  };
+  for (const [relative, content] of Object.entries(files)) {
+    const absolute = path.join(root, relative);
+    await mkdir(path.dirname(absolute), { recursive: true });
+    await writeFile(absolute, content, "utf8");
+  }
+  await buildGraph(root);
+  return root;
+}
+
 test("both tools are registered, read-only, and declare their required input", () => {
   const evidence = tool("wiki.evidence");
   expect(evidence.module).toBe("wiki");
@@ -185,31 +215,36 @@ test("wiki.evidence reports a mandatory overflow as budget-exceeded with no item
 });
 
 test("gdgraph.find returns the outcome CODE, so a client can branch instead of parsing prose", async () => {
-  const found = (await tool("gdgraph.find").invoke(
-    REPO_ROOT,
-    { query: "retrieval codes vocabulary", fileLimit: 2 },
-    undefined,
-  )) as Record<string, unknown>;
-  expect(found.code).toBe("ok");
-  expect(found.query).toBe("retrieval codes vocabulary");
-  const files = found.files as Array<Record<string, unknown>>;
-  expect(files.length).toBeGreaterThan(0);
-  // The per-candidate explanation, not just a ranked path list.
-  expect(files[0]).toHaveProperty("matched");
-  expect(files[0]).toHaveProperty("discriminating");
-  expect(files[0]).toHaveProperty("reason");
+  const root = await graphFixture();
+  try {
+    const found = (await tool("gdgraph.find").invoke(
+      root,
+      { query: "retrieval codes vocabulary", fileLimit: 2 },
+      undefined,
+    )) as Record<string, unknown>;
+    expect(found.code).toBe("ok");
+    expect(found.query).toBe("retrieval codes vocabulary");
+    const files = found.files as Array<Record<string, unknown>>;
+    expect(files.length).toBeGreaterThan(0);
+    // The per-candidate explanation, not just a ranked path list.
+    expect(files[0]).toHaveProperty("matched");
+    expect(files[0]).toHaveProperty("discriminating");
+    expect(files[0]).toHaveProperty("reason");
 
-  const nothing = (await tool("gdgraph.find").invoke(
-    REPO_ROOT,
-    { query: "kubernetes helm chart ingress" },
-    undefined,
-  )) as Record<string, unknown>;
-  // A completed search that found nothing is `no-match` — a different answer
-  // from an index that could not answer at all, which is the whole point.
-  expect(nothing.code).toBe("no-match");
-  expect(nothing.nextActions).toEqual([
-    'keryx ctx rg "<pattern>" — text search over file contents',
-  ]);
+    const nothing = (await tool("gdgraph.find").invoke(
+      root,
+      { query: "kubernetes helm chart ingress" },
+      undefined,
+    )) as Record<string, unknown>;
+    // A completed search that found nothing is `no-match` — a different answer
+    // from an index that could not answer at all, which is the whole point.
+    expect(nothing.code).toBe("no-match");
+    expect(nothing.nextActions).toEqual([
+      'keryx ctx rg "<pattern>" — text search over file contents',
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("gdgraph.find rejects a page size below 1 instead of answering confidently", async () => {
@@ -222,26 +257,31 @@ test("gdgraph.find rejects a page size below 1 instead of answering confidently"
   // over a corpus that held forty. The scan half is now fixed in
   // `../gdgraph/find.ts`, but a caller asking for zero results and silently
   // getting twenty is still a lie of a different kind, so the boundary refuses.
-  for (const bad of [0, -1, -20, 1.5, "3", true]) {
-    await expect(
-      tool("gdgraph.find").invoke(REPO_ROOT, { query: "retrieval codes", fileLimit: bad }, undefined),
-    ).rejects.toThrow(/fileLimit must be an integer of at least 1/);
-    await expect(
-      tool("gdgraph.find").invoke(
-        REPO_ROOT,
-        { query: "retrieval codes", symbolLimit: bad },
-        undefined,
-      ),
-    ).rejects.toThrow(/symbolLimit must be an integer of at least 1/);
-  }
+  const root = await graphFixture();
+  try {
+    for (const bad of [0, -1, -20, 1.5, "3", true]) {
+      await expect(
+        tool("gdgraph.find").invoke(root, { query: "retrieval codes", fileLimit: bad }, undefined),
+      ).rejects.toThrow(/fileLimit must be an integer of at least 1/);
+      await expect(
+        tool("gdgraph.find").invoke(
+          root,
+          { query: "retrieval codes", symbolLimit: bad },
+          undefined,
+        ),
+      ).rejects.toThrow(/symbolLimit must be an integer of at least 1/);
+    }
 
-  // Absent stays absent — the default page size, not an error.
-  const fine = (await tool("gdgraph.find").invoke(
-    REPO_ROOT,
-    { query: "retrieval codes vocabulary" },
-    undefined,
-  )) as Record<string, unknown>;
-  expect(fine.code).toBe("ok");
+    // Absent stays absent — the default page size, not an error.
+    const fine = (await tool("gdgraph.find").invoke(
+      root,
+      { query: "retrieval codes vocabulary" },
+      undefined,
+    )) as Record<string, unknown>;
+    expect(fine.code).toBe("ok");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("both find boundaries declare the same lower bound on their page sizes", async () => {
