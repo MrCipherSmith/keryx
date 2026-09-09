@@ -153,14 +153,12 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
 export function githubBlobToRaw(url: string): string {
   const trimmed = url.trim();
   const blob = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/.exec(trimmed);
-  if (blob) {
-    const [, owner, repo, ref, rest] = blob;
-    return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${rest.split("?")[0]}`;
+  if (blob?.[1] && blob[2] && blob[3] && blob[4]) {
+    return `https://raw.githubusercontent.com/${blob[1]}/${blob[2]}/${blob[3]}/${blob[4].split("?")[0]}`;
   }
   const rawGh = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/raw\/([^/]+)\/(.+)$/.exec(trimmed);
-  if (rawGh) {
-    const [, owner, repo, ref, rest] = rawGh;
-    return `https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${rest.split("?")[0]}`;
+  if (rawGh?.[1] && rawGh[2] && rawGh[3] && rawGh[4]) {
+    return `https://raw.githubusercontent.com/${rawGh[1]}/${rawGh[2]}/${rawGh[3]}/${rawGh[4].split("?")[0]}`;
   }
   return trimmed.split("?")[0] ?? trimmed;
 }
@@ -543,11 +541,13 @@ export async function runSkillsImportCommand(args: string[]): Promise<void> {
     printSkillsImportHelp();
     throw new Error("Usage: keryx skills import --from <dir|SKILL.md|https://github.com/.../SKILL.md>");
   }
+  const moduleName = optionValue(args, "--module");
+  const skillName = optionValue(args, "--name");
   const result = await importProjectSkills({
     projectRoot: process.cwd(),
     from,
-    module: optionValue(args, "--module"),
-    name: optionValue(args, "--name"),
+    ...(moduleName !== undefined ? { module: moduleName } : {}),
+    ...(skillName !== undefined ? { name: skillName } : {}),
     dryRun: args.includes("--dry-run"),
     force: args.includes("--force"),
   });
@@ -564,11 +564,12 @@ export async function runSkillsUpdateCommand(args: string[]): Promise<void> {
     return;
   }
   const positional = args.slice(1).filter((arg) => !arg.startsWith("--"));
+  const from = optionValue(args, "--from");
   const result = await updateProjectSkills({
     projectRoot: process.cwd(),
-    skill: positional[0],
+    ...(positional[0] !== undefined ? { skill: positional[0] } : {}),
     all: args.includes("--all"),
-    from: optionValue(args, "--from"),
+    ...(from !== undefined ? { from } : {}),
     dryRun: args.includes("--dry-run"),
   });
   if (args.includes("--json")) {

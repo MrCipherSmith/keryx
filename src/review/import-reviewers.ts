@@ -32,8 +32,8 @@ export async function importOverlayReviewers(options: ImportReviewersOptions): P
     from: options.from,
     module: PROJECT_REVIEWER_MODULE,
     namePrefix: OVERLAY_REVIEWER_PREFIX,
-    dryRun: options.dryRun,
-    force: options.force,
+    ...(options.dryRun !== undefined ? { dryRun: options.dryRun } : {}),
+    ...(options.force !== undefined ? { force: options.force } : {}),
   });
 }
 
