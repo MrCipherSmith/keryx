@@ -332,6 +332,129 @@ credential store, which is a worse trade than disclosing them.
 was produced under a different tool roster than the sweep will use, and none of
 it carries forward.
 
+### Amendment, 2026-09-09: the harness becomes an axis
+
+**Why.** The claim this document tests is stated as holding "on any model and
+any CLI". The 2026-09-05 run held the CLI fixed at one — Claude Code headless —
+so it could not address that sentence at all, and a result from one harness is
+silent about the others by construction, not by accident.
+
+**The legs.** `claude` (Claude Code), `grok` (grok build), and `keryx` (keryx's
+own shell). `codex` is admissible but weaker; see the cost rule below.
+`opencode` is excluded, and the reason is not preference: its headless mode
+hangs indefinitely on any task that requires a tool call, reproduced twice
+including an `opencode serve` + `--attach` variant, with a plausible cause
+recorded in the benchmark suite's plan. A harness that cannot complete a task
+cannot contribute an arm.
+
+**Never pooled.** Each harness gets its own verdict. This is enforced in code:
+`decide` throws on results spanning more than one harness, and `decideByHarness`
+returns one verdict per leg. Two reasons, and the second is the load-bearing
+one. An average can hide one harness winning while another loses, which is the
+single most interesting thing a multi-harness run could find. And pairing is
+keyed on task id, so one task run under two CLIs has two `context-on` rows that
+a task id cannot tell apart — a pooled call would average four arms of a
+two-arm task and report the number as if it were paired.
+
+**The resume key gains the harness.** Without it a sweep completed under one
+CLI would skip every task under the next and report a leg as finished having
+run none of it, leaving a results file indistinguishable from a real one.
+
+**A leg that cannot report what it read cannot win.** `contextTokens` is now
+nullable and null is not zero. `codex exec --json` reports `input_tokens` and
+`output_tokens` with no cache breakdown, and this document already records why
+those are not the same quantity: a four-word prompt through the Claude CLI
+measured 2 input tokens beside 20,325 read from cache. A zero would have
+satisfied the threshold's cost condition unconditionally — `0 <= 0` — and
+published a win bought with an unknown. Where the quantity cannot be
+established the verdict says the second half of the rule could not be
+evaluated, and the leg is reported on recall alone with that stated. One
+unknown arm makes the whole mean unknown rather than being averaged around: a
+mean over the arms that happened to report would compare a subset of one arm
+against a subset of the other.
+
+**The invariant extends.** Both arms of a single task always share a model AND
+a harness. Assignment is still decided from the task alone, before either arm
+runs.
+
+### Amendment, 2026-09-09: a second ladder — the same model in two shells
+
+**Why.** Asked by the operator, and newly possible. keryx gained an x.ai
+provider under subscription, so `keryx shell` and `grok build` can drive the
+SAME model. The comparative ladder was abandoned in August precisely because no
+third-party harness would let the model be pinned: `codex` resolves its own
+default under the active account, and `opencode`'s headless mode hangs. This is
+the first configuration in which "which shell is cheaper for the same model" is
+a question with an answer.
+
+**It is a different question, and it is reported separately.** The measurement
+above asks whether project-local context helps. This asks what a wrapper costs
+around a fixed model. Both arms here are `context-on`; the variable is the
+shell. The two ladders are never combined into one number — the benchmark
+suite's own specification already forbids it, for the same reason.
+
+**What it measures.** Same task, same model, same prompt: context tokens read,
+tool calls, wall clock, and whether the task was completed at all. Cost in
+dollars is reported and is not part of any rule.
+
+**A precondition, recorded because it was a product gap.** `keryx shell` had no
+non-interactive mode: no single-prompt flag, no machine-readable output, and
+`runAgentTurn` returns only a finish reason. keryx tracks usage internally and
+shows it in the TUI, but could not report what a turn consumed to anything
+outside it. That is added for this ladder, and it is a real capability rather
+than a benchmark fixture. The August run's inability to compare shells on
+anything but wall-clock seconds is the same gap, seen a month earlier.
+
+### Amendment, 2026-09-09: how a wiki gets into an arm without carrying the answer
+
+**The problem this solves.** The primary 2026-09-05 run had two boilerplate
+pages in the `context-on` arm, so the wiki — one of the three things this
+document names as project-local context — has never actually been tested. The
+consolidated report says so and calls it untested rather than disproven.
+
+**Why the obvious fix is a leak.** A wiki generated at `HEAD` describes the code
+as it is now, including the changes each task asks the agent to locate. Copying
+it into a worktree at the parent commit hands the arm a description of the
+answer. The same objection retires the idea of preparing two fixed checkouts by
+hand: the harness builds both arms per task from that task's own parent, and a
+single frozen tree would replace fifty different parents with one.
+
+**The rule.** The wiki is generated ONCE, at a chosen commit X, and a task is
+admissible only if its parent commit is a descendant of X. A wiki written at X
+cannot mention a change that had not yet happened, so it cannot carry the
+answer for any admissible task. Ancestry is asserted per task before the run,
+not assumed from dates.
+
+**What this costs in honesty.** The wiki is then stale for tasks well after X,
+and increasingly so. That is a real limitation and it is also what a wiki looks
+like in a project that generated one and did not refresh it — which is the
+common case. It is recorded with every result rather than mentioned once: each
+arm's inventory already carries the page count, and the wiki's own commit is
+recorded alongside it.
+
+**The alternative that was rejected, and why.** Generating a wiki per worktree
+at each task's parent is cleaner and was rejected on cost: the generator is
+itself a model, so it would at least double the price of every task, and a
+model-written wiki varying per task adds a second source of variance to a
+measurement that already has trouble separating anything.
+
+### Amendment, 2026-09-09: tasks neither arm can do
+
+**The finding this responds to.** On 17 of 50 tasks in the primary run, both
+arms scored zero. A third of the sample separated nothing while dragging both
+means down, and the consolidated report says any rerun should decide in advance
+how to treat them.
+
+**Decided in advance, and this is that.** The primary verdict is computed over
+the FULL sample, unchanged. The solvable subset — tasks where at least one arm
+scored above zero — is reported as a secondary figure, always alongside the
+primary and never instead of it.
+
+Fixing it this way rather than filtering is deliberate. A filter defined after
+seeing which tasks scored zero is a filter defined by the result. Reporting both
+lets a reader see whether the conclusion depends on the choice, which is the
+only thing the distinction is good for.
+
 ## The threshold, fixed in advance
 
 **keryx wins** if `context-on` file recall exceeds `context-off` by **≥10
