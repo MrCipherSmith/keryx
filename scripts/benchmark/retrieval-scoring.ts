@@ -137,8 +137,12 @@ export interface ArmResult {
    * — and it was not, until this was added: the adapter read `total_cost_usd`
    * and `runArm` dropped it on the floor, so the document promised a number
    * nothing kept. Reported, never part of the rule; prices change, tokens do not.
+   *
+   * Null where the harness does not price its own turns. `keryx shell` reports
+   * token counts and no dollar figure, and a zero there would understate its
+   * cost in the write-up while looking like a measurement.
    */
-  readonly costUsd: number;
+  readonly costUsd: number | null;
   /**
    * Tool calls made before the agent first HELD a gold path — named in a tool
    * input or returned in a tool result. Null if it never did. See the 2026-09-05
@@ -173,9 +177,12 @@ export interface Verdict {
   /** Null when any paired arm could not report what it read. See ArmResult. */
   readonly tokensOn: number | null;
   readonly tokensOff: number | null;
-  /** Mean dollar cost per arm. Reported for the write-up; not part of the rule. */
-  readonly costOn: number;
-  readonly costOff: number;
+  /**
+   * Mean dollar cost per arm. Reported for the write-up; not part of the rule.
+   * Null when any paired arm's harness does not price its turns.
+   */
+  readonly costOn: number | null;
+  readonly costOff: number | null;
   readonly meetsThreshold: boolean;
   readonly reason: string;
 }
@@ -232,8 +239,8 @@ export function decide(results: readonly ArmResult[]): Verdict {
       recallGainPoints: 0,
       tokensOn: null,
       tokensOff: null,
-      costOn: 0,
-      costOff: 0,
+      costOn: null,
+      costOff: null,
       meetsThreshold: false,
       reason: "no task has both arms — nothing to compare",
     };
@@ -267,8 +274,18 @@ export function decide(results: readonly ArmResult[]): Verdict {
   const tokensOff = offTokenValues === null ? null : mean(offTokenValues);
   // Computed alongside tokens and deliberately absent from every line below
   // that decides anything.
-  const costOn = mean(onPaired.map((r) => r.costUsd));
-  const costOff = mean(offPaired.map((r) => r.costUsd));
+  const costValues = (rows: readonly ArmResult[]): number[] | null => {
+    const known: number[] = [];
+    for (const row of rows) {
+      if (row.costUsd === null) return null;
+      known.push(row.costUsd);
+    }
+    return known;
+  };
+  const onCostValues = costValues(onPaired);
+  const offCostValues = costValues(offPaired);
+  const costOn = onCostValues === null ? null : mean(onCostValues);
+  const costOff = offCostValues === null ? null : mean(offCostValues);
 
   const recallGainPoints = (recallOn - recallOff) * 100;
   const costKnown = tokensOn !== null && tokensOff !== null;

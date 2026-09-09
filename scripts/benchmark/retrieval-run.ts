@@ -35,7 +35,8 @@ export interface AgentAnswer {
    * pre-registered cost condition for free.
    */
   readonly contextTokens: number | null;
-  readonly costUsd: number;
+  /** What the run cost, or null where the harness does not price its turns. */
+  readonly costUsd: number | null;
   /** Tool calls made before the first gold file was named, if ever. */
   readonly stepsToFirstGold: number | null;
 }
