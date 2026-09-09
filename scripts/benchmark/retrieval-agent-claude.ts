@@ -11,6 +11,16 @@
 // `context-off` it simply has no workspace to read.
 
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
+import { LEGACY_HARNESS } from "./retrieval-scoring";
+
+/**
+ * The id this adapter records on every result.
+ *
+ * Deliberately the same constant `loadResults` uses for a line with no harness
+ * field: every such line was written before the field existed, when this was
+ * the only adapter there was.
+ */
+export const CLAUDE_HARNESS = LEGACY_HARNESS;
 
 export interface ClaudeAgentOptions {
   /** Wall-clock ceiling per arm. A hung run must not stall a fifty-task sweep. */
@@ -215,6 +225,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
 
   return {
+    harness: CLAUDE_HARNESS,
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
 

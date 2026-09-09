@@ -26,14 +26,26 @@ export type Arm = "context-on" | "context-off";
 export interface AgentAnswer {
   readonly text: string;
   readonly toolCalls: number;
-  /** input + cache_creation + cache_read — see the pre-registration. */
-  readonly contextTokens: number;
+  /**
+   * input + cache_creation + cache_read — see the pre-registration — or null
+   * where the harness does not report the cache at all.
+   *
+   * An adapter that cannot establish this must return null and not a zero. A
+   * zero is a claim that the arm read nothing, and it satisfies the
+   * pre-registered cost condition for free.
+   */
+  readonly contextTokens: number | null;
   readonly costUsd: number;
   /** Tool calls made before the first gold file was named, if ever. */
   readonly stepsToFirstGold: number | null;
 }
 
 export interface AgentPort {
+  /**
+   * Which CLI this is. Recorded on every result, because a verdict is per
+   * harness and a task id alone cannot tell two harnesses' arms apart.
+   */
+  readonly harness: string;
   run(input: { cwd: string; prompt: string; model: string; gold: readonly string[] }): Promise<AgentAnswer>;
 }
 
@@ -104,7 +116,10 @@ export async function runArm(
   options: RunOptions,
 ): Promise<ArmResult> {
   const model = options.modelFor(task);
-  const treePath = path.join(options.worktreesDir, `${task.id}-${arm}`);
+  // The harness is in the path because one results file now holds several of
+  // them, and two harnesses sweeping the same task would otherwise check out
+  // into, and delete, each other's tree.
+  const treePath = path.join(options.worktreesDir, `${task.id}-${options.agent.harness}-${arm}`);
   await createIsolatedCheckout({
     repoRoot: options.repoRoot,
     path: treePath,
@@ -150,6 +165,7 @@ export async function runArm(
       taskId: task.id,
       arm,
       model,
+      harness: options.agent.harness,
       score: scoreRetrieval(predicted, task.gold),
       toolCalls: answer.toolCalls,
       contextTokens: answer.contextTokens,

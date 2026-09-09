@@ -106,9 +106,32 @@ export interface ArmResult {
   readonly taskId: string;
   readonly arm: "context-on" | "context-off";
   readonly model: string;
+  /**
+   * Which agent CLI produced this. The claim under test is about keryx, not
+   * about one harness, so the harness is an axis and never an average: two
+   * harnesses' recalls pooled into one number would answer a question nobody
+   * asked, and would also pair `context-on` under one CLI with `context-off`
+   * under another, since a task id alone does not distinguish them.
+   *
+   * Absent on every line written before this field existed. See LEGACY_HARNESS.
+   */
+  readonly harness: string;
   readonly score: RetrievalScore;
   readonly toolCalls: number;
-  readonly contextTokens: number;
+  /**
+   * Everything the model read, cache included — or null where the harness
+   * cannot say.
+   *
+   * Null rather than zero, and the distinction decides a verdict. The
+   * pre-registered rule has two halves, and the second is "at no greater
+   * context cost"; a zero would satisfy it unconditionally and report a win
+   * bought with an unknown. `codex exec --json` reports `input_tokens` and
+   * `output_tokens` with no cache breakdown, and claude's own numbers show why
+   * that is not the same quantity: a four-word prompt measured 2 input tokens
+   * beside 43,000 cached. Where the quantity cannot be established, the verdict
+   * says the second half could not be evaluated.
+   */
+  readonly contextTokens: number | null;
   /**
    * What the arm actually cost. Recorded because the pre-registration says it is
    * — and it was not, until this was added: the adapter read `total_cost_usd`
@@ -141,12 +164,15 @@ export interface ArmResult {
 }
 
 export interface Verdict {
+  /** The one harness this verdict is about. Verdicts are never pooled. */
+  readonly harness: string;
   readonly tasks: number;
   readonly recallOn: number;
   readonly recallOff: number;
   readonly recallGainPoints: number;
-  readonly tokensOn: number;
-  readonly tokensOff: number;
+  /** Null when any paired arm could not report what it read. See ArmResult. */
+  readonly tokensOn: number | null;
+  readonly tokensOff: number | null;
   /** Mean dollar cost per arm. Reported for the write-up; not part of the rule. */
   readonly costOn: number;
   readonly costOff: number;
@@ -158,6 +184,21 @@ export interface Verdict {
 export const RECALL_GAIN_THRESHOLD_POINTS = 10;
 
 /**
+ * The harness a result line with no `harness` field came from.
+ *
+ * Every line written before the field existed came from the claude adapter,
+ * because it was the only one. Reading such a line as `claude` recovers the
+ * 2026-09-05 sweep instead of stranding it under an "unknown" label that no
+ * verdict could use.
+ *
+ * This is a claim about history, and history is not a guard. What makes it safe
+ * is that new lines cannot reach this path: the writer sets the field from the
+ * agent port, the field is required on the type, and a test appends a result
+ * through the real writer and fails if the field is absent.
+ */
+export const LEGACY_HARNESS = "claude";
+
+/**
  * Apply the pre-registered rule to paired results.
  *
  * Two conditions, both required: recall at least ten points higher, AND context
@@ -166,18 +207,31 @@ export const RECALL_GAIN_THRESHOLD_POINTS = 10;
  * support the claim under test.
  */
 export function decide(results: readonly ArmResult[]): Verdict {
+  // Refused rather than averaged. Pooling two harnesses would also pair the
+  // arms wrongly: `paired` matches on task id, and the same task run under two
+  // CLIs has two `context-on` rows that a task id cannot tell apart.
+  const harnesses = [...new Set(results.map((r) => r.harness))];
+  if (harnesses.length > 1) {
+    throw new Error(
+      `decide: results span ${harnesses.length} harnesses (${harnesses.join(", ")}) — ` +
+        "verdicts are per-harness; use decideByHarness",
+    );
+  }
+  const harness = harnesses[0] ?? "none";
+
   const on = results.filter((r) => r.arm === "context-on");
   const off = results.filter((r) => r.arm === "context-off");
 
   const paired = on.filter((a) => off.some((b) => b.taskId === a.taskId)).map((a) => a.taskId);
   if (paired.length === 0) {
     return {
+      harness,
       tasks: 0,
       recallOn: 0,
       recallOff: 0,
       recallGainPoints: 0,
-      tokensOn: 0,
-      tokensOff: 0,
+      tokensOn: null,
+      tokensOff: null,
       costOn: 0,
       costOff: 0,
       meetsThreshold: false,
@@ -195,24 +249,46 @@ export function decide(results: readonly ArmResult[]): Verdict {
 
   const recallOn = mean(onPaired.map((r) => r.score.recall));
   const recallOff = mean(offPaired.map((r) => r.score.recall));
-  const tokensOn = mean(onPaired.map((r) => r.contextTokens));
-  const tokensOff = mean(offPaired.map((r) => r.contextTokens));
+
+  // One unknown poisons the mean, and must: a mean taken over the arms that
+  // happened to report would compare a subset of one arm against a subset of
+  // the other, and the rule would be applied to a comparison nobody made.
+  const tokenValues = (rows: readonly ArmResult[]): number[] | null => {
+    const known: number[] = [];
+    for (const row of rows) {
+      if (row.contextTokens === null) return null;
+      known.push(row.contextTokens);
+    }
+    return known;
+  };
+  const onTokenValues = tokenValues(onPaired);
+  const offTokenValues = tokenValues(offPaired);
+  const tokensOn = onTokenValues === null ? null : mean(onTokenValues);
+  const tokensOff = offTokenValues === null ? null : mean(offTokenValues);
   // Computed alongside tokens and deliberately absent from every line below
   // that decides anything.
   const costOn = mean(onPaired.map((r) => r.costUsd));
   const costOff = mean(offPaired.map((r) => r.costUsd));
 
   const recallGainPoints = (recallOn - recallOff) * 100;
-  const cheaper = tokensOn <= tokensOff;
+  const costKnown = tokensOn !== null && tokensOff !== null;
+  const cheaper = costKnown && tokensOn <= tokensOff;
   const meetsThreshold = recallGainPoints >= RECALL_GAIN_THRESHOLD_POINTS && cheaper;
 
+  // Order matters. A recall gain the cost condition cannot judge is not a win
+  // and is not a plain miss either, and saying "below the threshold" for it
+  // would describe the wrong failure.
   const reason = meetsThreshold
     ? `recall +${recallGainPoints.toFixed(1)} points at no greater context cost`
     : recallGainPoints < RECALL_GAIN_THRESHOLD_POINTS
       ? `recall gain ${recallGainPoints.toFixed(1)} points is below the pre-registered ${RECALL_GAIN_THRESHOLD_POINTS}`
-      : `recall gain ${recallGainPoints.toFixed(1)} points was bought with more context (${tokensOn.toFixed(0)} vs ${tokensOff.toFixed(0)} tokens)`;
+      : !costKnown
+        ? `recall gain ${recallGainPoints.toFixed(1)} points clears the threshold, but ${harness} does not report what each arm read, ` +
+          "so the pre-registered cost condition could not be evaluated and this is not recorded as a win"
+        : `recall gain ${recallGainPoints.toFixed(1)} points was bought with more context (${(tokensOn as number).toFixed(0)} vs ${(tokensOff as number).toFixed(0)} tokens)`;
 
   return {
+    harness,
     tasks: paired.length,
     recallOn,
     recallOff,
@@ -224,4 +300,22 @@ export function decide(results: readonly ArmResult[]): Verdict {
     meetsThreshold,
     reason,
   };
+}
+
+/**
+ * One verdict per harness, in first-seen order.
+ *
+ * The separation is the point. "keryx helps on any model and any CLI" is not a
+ * claim a pooled average can support or refute: an average can hide one harness
+ * winning and another losing, which is the single most interesting thing such a
+ * run could find.
+ */
+export function decideByHarness(results: readonly ArmResult[]): Verdict[] {
+  const byHarness = new Map<string, ArmResult[]>();
+  for (const result of results) {
+    const rows = byHarness.get(result.harness) ?? [];
+    rows.push(result);
+    byHarness.set(result.harness, rows);
+  }
+  return [...byHarness.values()].map((rows) => decide(rows));
 }

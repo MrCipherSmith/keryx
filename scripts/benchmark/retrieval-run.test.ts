@@ -49,6 +49,7 @@ async function fixtureRepo(): Promise<{ root: string; task: RetrievalTask }> {
 function fakeAgent(seen: { cwd: string; arm: string }[], answer: string): AgentPort {
   let call = 0;
   return {
+    harness: "claude",
     async run({ cwd }) {
       seen.push({ cwd, arm: call === 0 ? "context-on" : "context-off" });
       call += 1;
@@ -64,6 +65,7 @@ describe("runTask wiring", () => {
     try {
       const contents: Record<string, string[]> = {};
       const agent: AgentPort = {
+        harness: "claude",
         async run({ cwd }) {
           contents[(await readdir(cwd)).includes(".metaproject") ? "with" : "without"] =
             await readdir(cwd);
@@ -92,6 +94,7 @@ describe("runTask wiring", () => {
     try {
       const rates: string[] = [];
       const agent: AgentPort = {
+        harness: "claude",
         async run({ cwd }) {
           rates.push(await Bun.file(path.join(cwd, "src", "charge.ts")).text());
           return { text: "src/charge.ts", toolCalls: 1, contextTokens: 100, costUsd: 0, stepsToFirstGold: 0 };
@@ -178,6 +181,7 @@ describe("runTask wiring", () => {
 
       let called = 0;
       const agent: AgentPort = {
+        harness: "claude",
         async run() {
           called += 1;
           return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
@@ -221,6 +225,7 @@ describe("runTask wiring", () => {
 
       const seen: Record<string, string> = {};
       const agent: AgentPort = {
+        harness: "claude",
         async run({ cwd }) {
           const file = path.join(cwd, ".claude", "settings.json");
           seen[existsSync(path.join(cwd, ".metaproject")) ? "on" : "off"] = existsSync(file)
@@ -254,6 +259,7 @@ describe("runTask wiring", () => {
       const released: string[] = [];
       const seen: string[] = [];
       const agent: AgentPort = {
+        harness: "claude",
         async run({ cwd }) {
           seen.push(cwd);
           return { text: "src/charge.ts", toolCalls: 1, contextTokens: 1, costUsd: 0, stepsToFirstGold: 0 };
@@ -290,6 +296,7 @@ describe("runTask wiring", () => {
     try {
       const released: string[] = [];
       const agent: AgentPort = {
+        harness: "claude",
         async run() {
           throw new Error("agent died mid-task");
         },
@@ -324,6 +331,7 @@ describe("runTask wiring", () => {
     const worktreesDir = await mkdtemp(path.join(tmpdir(), "keryx-retrieval-wt-"));
     try {
       const agent: AgentPort = {
+        harness: "claude",
         async run({ cwd }) {
           if (!existsSync(path.join(cwd, ".metaproject"))) {
             // The control arm, doing exactly what nothing stops it doing.

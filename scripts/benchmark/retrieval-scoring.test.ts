@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   decide,
+  decideByHarness,
   extractPaths,
   normalizePath,
   RECALL_GAIN_THRESHOLD_POINTS,
@@ -84,6 +85,7 @@ describe("scoreRetrieval", () => {
 function arm(over: Partial<ArmResult> & Pick<ArmResult, "taskId" | "arm">): ArmResult {
   return {
     model: "test",
+    harness: "claude",
     score: { recall: 0, precision: 0, f1: 0, matched: [], missed: [], extra: [] },
     toolCalls: 0,
     contextTokens: 1000,
@@ -181,5 +183,73 @@ describe("decide — the pre-registered rule", () => {
     const verdict = decide([withRecall("t1", "context-on", 1.0)]);
     expect(verdict.meetsThreshold).toBe(false);
     expect(verdict.reason).toContain("nothing to compare");
+  });
+});
+
+describe("the harness axis", () => {
+  test("results from two harnesses are refused, not averaged", () => {
+    // Pooling would also pair them wrongly: `paired` matches on task id, and one
+    // task run under two CLIs has two `context-on` rows a task id cannot tell
+    // apart. The average would be over four arms of a task that has two.
+    expect(() =>
+      decide([
+        arm({ taskId: "t1", arm: "context-on", harness: "claude" }),
+        arm({ taskId: "t1", arm: "context-off", harness: "grok" }),
+      ]),
+    ).toThrow(/span 2 harnesses/);
+  });
+
+  test("each harness gets its own verdict, and they can disagree", () => {
+    // The single most interesting thing a multi-harness run could find is one
+    // CLI winning and another losing. An average is the shape that hides it.
+    const scored = (recall: number) => ({ recall, precision: recall, f1: recall, matched: [], missed: [], extra: [] });
+    const verdicts = decideByHarness([
+      arm({ taskId: "t1", arm: "context-on", harness: "a", contextTokens: 100, score: scored(0.9) }),
+      arm({ taskId: "t1", arm: "context-off", harness: "a", contextTokens: 100, score: scored(0.5) }),
+      arm({ taskId: "t1", arm: "context-on", harness: "b", contextTokens: 100, score: scored(0.5) }),
+      arm({ taskId: "t1", arm: "context-off", harness: "b", contextTokens: 100, score: scored(0.9) }),
+    ]);
+    expect(verdicts.map((v) => v.harness)).toEqual(["a", "b"]);
+    expect(verdicts[0]?.meetsThreshold).toBe(true);
+    expect(verdicts[1]?.meetsThreshold).toBe(false);
+  });
+
+  test("a harness that cannot report what it read does not get a free win", () => {
+    // The whole reason contextTokens is nullable. With a zero here the recall
+    // gain would clear the threshold, the cost condition would pass because
+    // 0 <= 0, and the run would publish a win bought with an unknown.
+    const scored = (recall: number) => ({ recall, precision: recall, f1: recall, matched: [], missed: [], extra: [] });
+    const verdict = decide([
+      arm({ taskId: "t1", arm: "context-on", harness: "codex", contextTokens: null, score: scored(0.9) }),
+      arm({ taskId: "t1", arm: "context-off", harness: "codex", contextTokens: null, score: scored(0.5) }),
+    ]);
+    expect(verdict.recallGainPoints).toBeCloseTo(40, 5);
+    expect(verdict.tokensOn).toBeNull();
+    expect(verdict.meetsThreshold).toBe(false);
+    expect(verdict.reason).toContain("does not report what each arm read");
+  });
+
+  test("one unknown arm is enough to make the cost condition unevaluable", () => {
+    // A mean over the arms that happened to report would compare a subset of one
+    // arm against a subset of the other, and the rule would then be applied to a
+    // comparison nobody made.
+    const verdict = decide([
+      arm({ taskId: "t1", arm: "context-on", harness: "h", contextTokens: 100 }),
+      arm({ taskId: "t1", arm: "context-off", harness: "h", contextTokens: 100 }),
+      arm({ taskId: "t2", arm: "context-on", harness: "h", contextTokens: null }),
+      arm({ taskId: "t2", arm: "context-off", harness: "h", contextTokens: 100 }),
+    ]);
+    expect(verdict.tokensOn).toBeNull();
+    expect(verdict.tokensOff).toBe(100);
+  });
+
+  test("a known cost is still compared, so the unknown branch is not a bypass", () => {
+    const scored = (recall: number) => ({ recall, precision: recall, f1: recall, matched: [], missed: [], extra: [] });
+    const verdict = decide([
+      arm({ taskId: "t1", arm: "context-on", harness: "h", contextTokens: 300, score: scored(0.9) }),
+      arm({ taskId: "t1", arm: "context-off", harness: "h", contextTokens: 100, score: scored(0.5) }),
+    ]);
+    expect(verdict.meetsThreshold).toBe(false);
+    expect(verdict.reason).toContain("bought with more context");
   });
 });

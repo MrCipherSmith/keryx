@@ -18,7 +18,7 @@
 import { appendFile, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { runTask, type RunOptions } from "./retrieval-run";
-import { decide, type ArmResult, type Verdict } from "./retrieval-scoring";
+import { decide, decideByHarness, LEGACY_HARNESS, type ArmResult, type Verdict } from "./retrieval-scoring";
 import type { RetrievalTask } from "./retrieval-tasks";
 
 export const MODEL_HARD = "claude-opus-5";
@@ -48,7 +48,10 @@ export interface SweepOptions extends Omit<RunOptions, "modelFor"> {
 }
 
 export interface SweepReport {
+  /** The verdict for the harness this sweep ran. */
   readonly verdict: Verdict;
+  /** One per harness present in the results file, this sweep's included. */
+  readonly verdicts: readonly Verdict[];
   readonly results: readonly ArmResult[];
   /** Tasks skipped because the results file already had them. */
   readonly resumed: readonly string[];
@@ -64,7 +67,10 @@ export async function loadResults(resultsPath: string): Promise<ArmResult[]> {
   for (const line of text.split("\n")) {
     if (line.trim().length === 0) continue;
     try {
-      results.push(JSON.parse(line) as ArmResult);
+      const parsed = JSON.parse(line) as ArmResult & { harness?: string };
+      // A line from before the harness axis existed. See LEGACY_HARNESS for why
+      // reading it as `claude` is a statement about history and not a default.
+      results.push(parsed.harness === undefined ? { ...parsed, harness: LEGACY_HARNESS } : parsed);
     } catch {
       // A line torn by an interrupted write is skipped rather than fatal; the
       // task it belonged to is then simply re-run.
@@ -73,17 +79,29 @@ export async function loadResults(resultsPath: string): Promise<ArmResult[]> {
   return results;
 }
 
-/** Task ids with BOTH arms recorded. One arm alone is not a finished task. */
-export function completedTaskIds(results: readonly ArmResult[]): Set<string> {
+/**
+ * The resume key: a task is done for ONE harness, not in general.
+ *
+ * Keyed on the task alone, a sweep that finished under `claude` would skip
+ * every task under `grok` and report a second harness as complete having run
+ * none of it — and the results file would look exactly like a finished run.
+ */
+export function completionKey(harness: string, taskId: string): string {
+  return `${harness} ${taskId}`;
+}
+
+/** Keys with BOTH arms recorded. One arm alone is not a finished task. */
+export function completedKeys(results: readonly ArmResult[]): Set<string> {
   const arms = new Map<string, Set<string>>();
   for (const result of results) {
-    const seen = arms.get(result.taskId) ?? new Set<string>();
+    const key = completionKey(result.harness, result.taskId);
+    const seen = arms.get(key) ?? new Set<string>();
     seen.add(result.arm);
-    arms.set(result.taskId, seen);
+    arms.set(key, seen);
   }
   const done = new Set<string>();
-  for (const [taskId, seen] of arms) {
-    if (seen.has("context-on") && seen.has("context-off")) done.add(taskId);
+  for (const [key, seen] of arms) {
+    if (seen.has("context-on") && seen.has("context-off")) done.add(key);
   }
   return done;
 }
@@ -92,18 +110,19 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
   const modelFor = options.modelFor ?? selectModel;
   const say = options.onProgress ?? (() => {});
 
+  const harness = options.agent.harness;
   const previous = await loadResults(options.resultsPath);
-  const done = completedTaskIds(previous);
+  const done = completedKeys(previous);
   // Only complete pairs are kept. A half-recorded task is re-run, and keeping
   // its orphan arm would let it into the mean without a partner.
-  const results: ArmResult[] = previous.filter((r) => done.has(r.taskId));
-  const resumed = [...done];
-  if (resumed.length > 0) say(`resuming: ${resumed.length} task(s) already recorded`);
+  const results: ArmResult[] = previous.filter((r) => done.has(completionKey(r.harness, r.taskId)));
+  const resumed = [...done].filter((key) => key.startsWith(`${harness} `));
+  if (resumed.length > 0) say(`resuming ${harness}: ${resumed.length} task(s) already recorded`);
 
   const failed: { taskId: string; reason: string }[] = [];
 
   for (const [index, task] of options.tasks.entries()) {
-    if (done.has(task.id)) continue;
+    if (done.has(completionKey(harness, task.id))) continue;
     const model = modelFor(task);
     say(`[${index + 1}/${options.tasks.length}] ${task.id} (${model}, ${task.gold.length} gold)`);
     try {
@@ -127,5 +146,11 @@ export async function runSweep(options: SweepOptions): Promise<SweepReport> {
     }
   }
 
-  return { verdict: decide(results), results, resumed, failed };
+  // Every harness in the file gets its own verdict, including ones this sweep
+  // did not run: a file holding a finished `claude` leg and a half-finished
+  // `grok` one should say so, rather than reporting only the leg that happened
+  // to be invoked last.
+  const verdicts = decideByHarness(results);
+  const verdict = verdicts.find((v) => v.harness === harness) ?? decide([]);
+  return { verdict, verdicts, results, resumed, failed };
 }
