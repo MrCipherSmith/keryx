@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { redactSensitiveText } from "./redact";
 
 // F3: tool output is scrubbed before it enters provider-bound agent history, so a
@@ -62,4 +62,38 @@ test("F3: benign output is returned unchanged (no false positives on plain text)
 
 test("F3: empty output is a no-op", () => {
   expect(redactSensitiveText("")).toBe("");
+});
+
+describe("the case redactSensitiveText's own contract names", () => {
+  // Its doc comment says it exists so that "a contained shell command that
+  // reads a credential (`cat ~/.aws/credentials`, `env`) must not leak the raw
+  // value into the model context and onward to the provider". Both forms of
+  // that exact file went through untouched until 2026-09-09: the uppercase
+  // env-assignment rule only matched names ENDING in SECRET/API_KEY/TOKEN, and
+  // `AWS_SECRET_ACCESS_KEY` ends in ACCESS_KEY — while the file itself writes
+  // the name in lower case, which that rule could not match in any form.
+  const value = "Kq3nZ8vTt1cLpR7yWx0bA5dGf2HjMn6QsUv9Ye4Z";
+
+  test("the credentials file, as the file actually writes it", () => {
+    const text = `[default]\naws_access_key_id = AKIAIOSFODNN7EXAMPLE\naws_secret_access_key = ${value}\n`;
+    expect(redactSensitiveText(text)).not.toContain(value);
+  });
+
+  test("the environment variable, as `env` prints it", () => {
+    expect(redactSensitiveText(`AWS_SECRET_ACCESS_KEY=${value}`)).not.toContain(value);
+  });
+
+  test("an OAuth client secret", () => {
+    expect(redactSensitiveText("client_secret: hunter2hunter2")).not.toContain("hunter2hunter2");
+  });
+
+  test("prose and identifiers are left alone", () => {
+    // A redactor that mangles legitimate text gets turned off, so the lowercase
+    // rule is a short list of names that mean one thing rather than a
+    // case-insensitive sweep for the word "secret".
+    const prose = "the secret access key is stored elsewhere";
+    expect(redactSensitiveText(prose)).toBe(prose);
+    const code = 'const secretAccessKeyName = "aws";';
+    expect(redactSensitiveText(code)).toBe(code);
+  });
 });
