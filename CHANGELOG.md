@@ -3,6 +3,44 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.84] — 2026-09-09
+
+One theme: a project-skill you already have as a `SKILL.md` — in a folder,
+a file, or a GitHub blob — could not become a project-skill without being
+re-typed through `keryx skills create`. Overlay reviewers lived in
+`~/.vantage-frontend` and `review-orchestrator` never saw them.
+
+### Added
+
+- **`keryx skills import --from <dir|SKILL.md|https-url>`.** Copies a
+  `SKILL.md` (or a directory of them) into
+  `.metaproject/project-skills/<module>/<name>/`, stamps Origin, and
+  hashes the source so drift is detectable. `--module review` is the only
+  module `review-orchestrator` auto-dispatches (`keryx review reviewers`).
+  Other modules register for `keryx skills route` and are not injected
+  into flow-orchestrator's fixed pipeline — the import report says so.
+  A GitHub `--from` must be an https blob/raw URL to a `SKILL.md`; tree
+  URLs and other hosts are refused. A name that collides with a bundled
+  keryx skill is skipped unless `--force`.
+
+- **`keryx skills update <module>/<name> [--from <origin>]`** and
+  **`keryx skills update --all`.** Re-reads Origin and overwrites
+  `SKILL.md` when the source moved on. A skill with no Origin is skipped,
+  not guessed.
+
+- **`keryx review import --from <dir>`.** Alias for
+  `keryx skills import --module review` with an extra filter: only
+  `review-vantage-*` packages, so generic copies of bundled reviewers
+  cannot shadow the engine.
+
+### Changed
+
+- **`createProjectSkill` accepts already-fetched origin bytes.** A GitHub
+  `SKILL.md` is not a file; the import path hashes the fetched body and
+  records the URL as Origin. HTTPS origins report `clean` on
+  `keryx review reviewers` rather than `missing` — listing does not open
+  a socket; `skills update` re-fetches.
+
 ## [0.2.83] — 2026-09-08
 
 One commit. `/status` already showed last-turn tokens and a labelled

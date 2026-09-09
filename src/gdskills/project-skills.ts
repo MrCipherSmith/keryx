@@ -30,6 +30,12 @@ export type CreateProjectSkillOptions = {
    * reference, and hashed from the resolved file so drift is detectable.
    */
   origin?: string | undefined;
+  /**
+   * Already-fetched origin bytes. When set, `origin` is recorded as the
+   * reference (a path or an https URL) and hashed from these bytes instead of
+   * being read from disk. Required for a GitHub SKILL.md, which is not a file.
+   */
+  originContent?: string | undefined;
   format?: ProjectSkillFormat | undefined;
   dryRun?: boolean | undefined;
 };
@@ -105,7 +111,15 @@ export async function createProjectSkill(
   const format = options.format ?? "auto";
   const packageRoot = path.join(metaprojectRoot, "project-skills", moduleName, skillName);
   const relativeSkillPath = toPosix(path.relative(projectRoot, packageRoot));
-  const origin = options.origin ? await readSkillOrigin(projectRoot, options.origin) : undefined;
+  const origin = options.origin
+    ? options.originContent !== undefined
+      ? {
+          ref: options.origin.trim(),
+          hash: hashOriginContent(options.originContent),
+          importedAt: new Date().toISOString(),
+        }
+      : await readSkillOrigin(projectRoot, options.origin)
+    : undefined;
   const evidence = await collectEvidence(projectRoot, options.target);
   const warnings = collectWarnings(evidence, format);
   const files = filesForPackage(packageRoot, format);

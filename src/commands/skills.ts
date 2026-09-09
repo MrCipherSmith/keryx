@@ -39,6 +39,7 @@ import {
   normalizeProjectSkillFormat,
   type ProjectSkillRegistryEntry,
 } from "../gdskills/project-skills";
+import { runSkillsImportCommand, runSkillsUpdateCommand } from "../gdskills/import-skills";
 import { verifyProjectSkill } from "../gdskills/verify";
 import {
   defaultBundledRoot,
@@ -146,6 +147,26 @@ export async function skillsCommand(args: string[]): Promise<void> {
 
   if (command === "create" || command === "generate") {
     await createSkillCommand(args);
+    return;
+  }
+
+  if (command === "import") {
+    try {
+      await runSkillsImportCommand(args);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
+    return;
+  }
+
+  if (command === "update") {
+    try {
+      await runSkillsUpdateCommand(args);
+    } catch (error) {
+      console.error(error instanceof Error ? error.message : String(error));
+      process.exitCode = 1;
+    }
     return;
   }
 
@@ -1345,6 +1366,8 @@ Usage:
   keryx skills install [--profile minimal|recommended|full|custom]
   keryx skills create <target> --module <module> --name <skill-name>
   keryx skills generate <target> --module <module> --name <skill-name>
+  keryx skills import --from <dir|SKILL.md|https-url> [--module <module>] [--name <name>]
+  keryx skills update [<module>/<name>|--all] [--from <origin>]
   keryx skills verify <skill-or-target>
   keryx skills verify --all
   keryx skills verify --bundled [--root <dir>] [--json]
@@ -1364,6 +1387,8 @@ Commands:
   install   Install bundled gdskills into .metaproject
   create    Create a canonical project skill package
   generate  Alias for create
+  import    Copy a SKILL.md or overlay tree into project-skills
+  update    Re-read a project-skill Origin and overwrite SKILL.md
   verify    Verify a project skill, or --bundled for the shipped skill tree
   learn     Create or apply auditable learning proposals
   export    Export a canonical project skill to a runtime artifact

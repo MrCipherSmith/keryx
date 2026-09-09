@@ -24,6 +24,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
+import { runImportReviewers } from "../review/import-reviewers";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -256,6 +257,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
+const IMPORT_FLAGS = ["--from", "--dry-run", "--force", "--json", "--help"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.
@@ -354,6 +356,11 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "reviewers") {
       await runReviewers(args.slice(1));
+      return;
+    }
+    if (command === "import") {
+      rejectUnknownFlags(args.slice(1), IMPORT_FLAGS, "import");
+      await runImportReviewers(args.slice(1));
       return;
     }
     if (command === "status") {
@@ -1943,6 +1950,8 @@ Usage:
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
+  keryx review reviewers [--json]
+  keryx review import --from <dir> [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...
