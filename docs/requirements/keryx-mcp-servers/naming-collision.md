@@ -124,3 +124,76 @@ Build's naming wholesale — `mcp add|list|remove|enable|disable|doctor` and
 `/mcps` — without recording that keryx already uses `mcp` for the opposite
 direction. If an option here is adopted, that decision needs amending with the
 reason, not silently overwriting.
+
+## Concrete naming (operator decision 2026-09-09: keep the new, rename the old)
+
+The consumer surface keeps `mcp`, because that is what the word means everywhere
+else. The publisher surface — the one whose meaning surprises people — takes a
+name that says what it does.
+
+### Consumer: keryx calls other people's servers
+
+| surface | name |
+|---|---|
+| CLI | `keryx mcp add \| list \| remove \| enable \| disable \| doctor \| auth` |
+| TUI | `/mcp` |
+| user config | `{keryxConfigDir()}/mcp-servers.json` |
+| project config | `<project>/.keryx/mcp-servers.json` |
+
+Unchanged from the specification. This is the ecosystem spelling; a user
+arriving from Claude Code, Cursor or Grok Build types it without reading docs.
+
+### Publisher: keryx is the server
+
+Two jobs are bundled under `mcp` today, and they are not the same job. Split
+them by what they do:
+
+| today | proposed | why |
+|---|---|---|
+| `keryx mcp serve` | `keryx serve-mcp` | runs the server process. "serve" was never ambiguous, but it should not sit under a verb that now means the opposite. |
+| `keryx mcp install --runtime cursor` | `keryx integrate cursor` | it writes keryx into *another tool's* config. That is integration, not installation — nothing is installed. |
+| `keryx mcp uninstall --runtime cursor` | `keryx integrate --remove cursor` | same. |
+| `/mcp` (TUI, publisher) | `/integrations` | shows which editors keryx is wired into. |
+
+`integrate` is the load-bearing rename. `keryx mcp install` reads as "install
+MCP" or "install a server"; it does neither. It tells Cursor that keryx exists.
+
+### What each old spelling does after the rename
+
+Every retired spelling keeps working and prints one line pointing at the new
+name. None of them is removed:
+
+- `keryx mcp serve` → runs, warns once, suggests `keryx serve-mcp`
+- `keryx mcp install|uninstall` → runs, warns once, suggests `keryx integrate`
+- `keryx mcp` with no subcommand → still serves, as today
+
+### Cost, counted not guessed
+
+| spelling | references in `docs/`, `README.md`, `src/`, `.metaproject/` |
+|---|---|
+| `keryx mcp serve` | 266 |
+| `keryx mcp install` | 132 |
+| `keryx mcp uninstall` | 16 |
+
+414 references to update, and one TUI slash command changes meaning — `/mcp`
+stops being the publisher view and becomes the consumer one. That last change is
+the only one that can surprise someone mid-session, so it needs a release note
+rather than a changelog line.
+
+### Cheaper variant, if 266 references is too much churn
+
+Leave `keryx mcp serve` where it is and rename only `install`/`uninstall` (148
+references). `serve` genuinely is not ambiguous — nobody reads "serve" as
+"consume" — and it is the single most-referenced spelling in the repository.
+
+This keeps one asymmetry: `keryx mcp serve` and `keryx mcp add` coexist under one
+verb meaning opposite directions. Tolerable, because neither can be mistaken for
+the other in use, and it saves the bulk of the churn.
+
+### What does not change under either variant
+
+`/mcps` is not introduced. The guard is
+`src/commands/agent-commands.confusable.test.ts`: a second slash command
+differing only by a trailing `s` fails the build unless it is declared with a
+written reason. `/model` + `/models` are declared; they share a subject, so a
+mistype costs a keystroke.
