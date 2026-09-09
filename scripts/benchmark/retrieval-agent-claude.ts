@@ -59,6 +59,17 @@ export interface ParsedStream {
   readonly costUsd: number;
   readonly stepsToFirstGold: number | null;
   readonly isError: boolean;
+  /**
+   * The tool roster the CLI reported at startup, and the MCP servers behind it.
+   *
+   * Captured so the arm's environment is asserted rather than assumed. Both are
+   * empty when the transcript carried no init event, which `assertRoster` treats
+   * as a refusal rather than as "nothing was loaded" — an absent roster and an
+   * empty one are the same shape and mean opposite things.
+   */
+  readonly tools: readonly string[];
+  readonly mcpServers: readonly string[];
+  readonly sawInit: boolean;
 }
 
 /**
@@ -87,6 +98,9 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
   let contextTokens = 0;
   let costUsd = 0;
   let isError = false;
+  let tools: string[] = [];
+  let mcpServers: string[] = [];
+  let sawInit = false;
 
   const goldNames = gold.map((file) => file.toLowerCase());
   const namesGold = (value: unknown): boolean => {
@@ -100,6 +114,20 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
       event = JSON.parse(line) as Record<string, unknown>;
     } catch {
       continue;
+    }
+
+    // Both CLIs announce their environment in one init event before any turn.
+    // grok's is shaped like claude's, which is why one parser serves both.
+    if (event.type === "system" && event.subtype === "init") {
+      sawInit = true;
+      tools = Array.isArray(event.tools) ? (event.tools as string[]) : [];
+      const servers = event.mcp_servers;
+      mcpServers = Array.isArray(servers)
+        ? servers.map((entry) => {
+            const named = entry as { name?: unknown };
+            return typeof named.name === "string" ? named.name : String(entry);
+          })
+        : [];
     }
 
     if (event.type === "assistant") {
@@ -137,7 +165,62 @@ export function parseStream(lines: readonly string[], gold: readonly string[]): 
     }
   }
 
-  return { text, toolCalls, contextTokens, costUsd, stepsToFirstGold, isError };
+  return { text, toolCalls, contextTokens, costUsd, stepsToFirstGold, isError, tools, mcpServers, sawInit };
+}
+
+/**
+ * Tool names no arm may hold, matched case-insensitively as substrings.
+ *
+ * The web ones are not caution. keryx is a PUBLIC repository, the query IS a
+ * merged pull request's subject line, and the gold set is the files it changed:
+ * a web search for that sentence returns the pull request. The 2026-09-05 run
+ * was conducted with `WebSearch` and `WebFetch` in the roster and no record of
+ * whether either was called — the harness counted tool calls without naming
+ * them. That is not a bias between the arms, since both had them, but it does
+ * undercut the claim that the files were found by searching the repository.
+ *
+ * `github` and `gitkraken` are here because grok discovered six MCP servers
+ * from the operator's global configuration, among them a code searcher over
+ * GitHub and a set of git tools — the same "the control arm has a second
+ * retrieval system" defect this document already recorded once, arriving
+ * through a different door.
+ */
+export const FORBIDDEN_TOOL_MARKERS: readonly string[] = [
+  "websearch",
+  "webfetch",
+  "web_search",
+  "web_fetch",
+  "github__",
+  "gitkraken__",
+];
+
+/**
+ * Refuse an arm whose environment is not the one the pre-registration describes.
+ *
+ * A missing init event is a refusal, not a pass. An absent roster and an empty
+ * roster are the same shape in the transcript and mean opposite things, and the
+ * permissive reading is the one that silently accepts an arm running with a
+ * hundred tools nobody looked at.
+ */
+export function assertRoster(parsed: ParsedStream, harness: string): void {
+  if (!parsed.sawInit) {
+    throw new Error(
+      `${harness}: the transcript carried no init event, so the tool roster could not be checked — ` +
+        "refusing rather than assuming it was clean",
+    );
+  }
+  if (parsed.mcpServers.length > 0) {
+    throw new Error(
+      `${harness}: ${parsed.mcpServers.length} MCP server(s) reached this arm (${parsed.mcpServers.join(", ")}) — ` +
+        "an arm with a second retrieval system is not the arm this measures",
+    );
+  }
+  const forbidden = parsed.tools.filter((tool) =>
+    FORBIDDEN_TOOL_MARKERS.some((marker) => tool.toLowerCase().includes(marker)),
+  );
+  if (forbidden.length > 0) {
+    throw new Error(`${harness}: forbidden tools in the roster: ${forbidden.join(", ")}`);
+  }
 }
 
 /**
@@ -178,6 +261,14 @@ export function buildClaudeArgs(
     // The effect runs against keryx rather than for it, which is the safer
     // direction. A measurement should not need that excuse.
     "--strict-mcp-config",
+    // The repository under test is public and the query is a merged pull
+    // request's subject line. Left in the roster, the shortest path to the gold
+    // set is a web search, not a search of the tree. The flag is belt; the
+    // roster assertion after the run is braces — a flag that stops being
+    // honoured would otherwise change nothing visible.
+    "--disallowedTools",
+    "WebSearch",
+    "WebFetch",
   ];
   if (allowedTools !== undefined) {
     args.push("--allowed-tools", ...allowedTools);
@@ -249,7 +340,12 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
       }
 
       const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
-      return interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
+      // interpretRun first, so a timeout is reported as a timeout rather than
+      // as "no init event" — a killed process can lose the transcript entirely,
+      // and the less specific message would hide the real cause.
+      const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
+      assertRoster(parsed, CLAUDE_HARNESS);
+      return answer;
     },
   };
 }
@@ -275,18 +371,21 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
  */
 export function interpretRun(
   parsed: ParsedStream,
-  context: { timedOut: boolean; timeoutMs: number; model: string; cwd: string },
+  context: { timedOut: boolean; timeoutMs: number; model: string; cwd: string; harness?: string },
 ): AgentAnswer {
+  // Named so a grok failure does not report itself as a claude failure. The
+  // default keeps every existing call site and its tests unchanged.
+  const who = context.harness ?? CLAUDE_HARNESS;
   if (context.timedOut) {
     throw new Error(
-      `claude exceeded ${Math.round(context.timeoutMs / 1000)}s for model ${context.model} in ${context.cwd}`,
+      `${who} exceeded ${Math.round(context.timeoutMs / 1000)}s for model ${context.model} in ${context.cwd}`,
     );
   }
   if (parsed.isError) {
-    throw new Error(`claude reported an error for model ${context.model} in ${context.cwd}`);
+    throw new Error(`${who} reported an error for model ${context.model} in ${context.cwd}`);
   }
   if (parsed.text.trim().length === 0) {
-    throw new Error(`claude produced no final answer for model ${context.model} in ${context.cwd}`);
+    throw new Error(`${who} produced no final answer for model ${context.model} in ${context.cwd}`);
   }
   return {
     text: parsed.text,

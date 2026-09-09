@@ -2,6 +2,17 @@ import { describe, expect, test } from "bun:test";
 import { buildClaudeArgs, buildClaudeEnv, contextTokensOf, interpretRun, parseStream } from "./retrieval-agent-claude";
 
 describe("buildClaudeArgs", () => {
+  test("web tools are refused, because the repository under test is public", () => {
+    // The query IS a merged pull request's subject line and keryx is public, so
+    // a web search for it returns the answer. The 2026-09-05 run was conducted
+    // without this flag and recorded tool-call counts without names, so whether
+    // either arm reached for the web cannot now be established either way.
+    const args = buildClaudeArgs("find the files", "claude-sonnet-5");
+    expect(args).toContain("--disallowedTools");
+    expect(args).toContain("WebSearch");
+    expect(args).toContain("WebFetch");
+  });
+
   test("excludes user-global MCP servers", () => {
     // Measured, not assumed: without this flag the init event reports 88 tools
     // of which 59 are MCP — including a code-search server with its own index of
@@ -94,6 +105,9 @@ describe("interpretRun", () => {
     costUsd: 0.1,
     stepsToFirstGold: 2,
     isError: false,
+    tools: ["Read", "Grep"],
+    mcpServers: [],
+    sawInit: true,
   };
 
   test("a timeout throws rather than scoring as zero recall", () => {
