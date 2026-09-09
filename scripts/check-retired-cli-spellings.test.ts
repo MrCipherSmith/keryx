@@ -35,6 +35,11 @@ describe("retired publisher spellings are not taught to readers", () => {
     expect(files).toContain("docs/docs/cli-reference.md");
     expect(files).toContain("docs/docs/onboarding.md");
     expect(files).toContain(".metaproject/modules/mcp.md");
+    // `.gitignore` is prose too: it names the command that writes each ignored
+    // file and how to regenerate it. It survived the rename teaching
+    // `keryx mcp install` for the same reason the src/ occurrences did — the
+    // collector could not see it.
+    expect(files).toContain(".gitignore");
   });
 });
 

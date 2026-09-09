@@ -48,6 +48,12 @@ const PATTERNS = [
   // project telling it to run the retired spelling. A gate that only reads
   // documentation cannot stop the code from teaching the old name.
   "src/**/*.ts",
+  // `.gitignore` too. It carries prose telling a reader which command wrote the
+  // file being ignored and how to regenerate it, and it survived the rename for
+  // the same reason the src/ occurrences did: the gate could not see it. A
+  // config file that teaches a retired command teaches it just as effectively
+  // as a document.
+  ".gitignore",
 ];
 
 // Excluded because they are not reader-facing prose, and scanning them would
