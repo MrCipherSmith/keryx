@@ -123,6 +123,21 @@ test("root entrypoint block carries the same rebuild rule as the index", () => {
   expect(block).toContain(".metaproject/modules/gdgraph.md");
 });
 
+test("the managed gitignore block covers forgetting and retention runtime state", () => {
+  // These two lines were added to this repository's .gitignore by hand, INSIDE
+  // the `# keryx:begin`/`# keryx:end` markers. `keryx update` regenerates that
+  // region from this template, so the next update silently deleted them and the
+  // auto-sweep stamp — runtime state the gdctx write path rewrites on every
+  // call — became eligible for tracking again.
+  //
+  // Anything that must survive an update belongs in the template, not in a
+  // hand-edit of the block the template owns.
+  const block = renderMetaprojectGitignoreBlock();
+
+  expect(block).toContain(".metaproject/data/forgetting/");
+  expect(block).toContain(".metaproject/data/retention/");
+});
+
 test("the index gate stays small, because its size is multiplied by task length", () => {
   // Measured 2026-09-05: the full router is ~3,226 tokens and an agent re-sends
   // its whole transcript every turn, so reading it once costs ~3,226 x turns —
