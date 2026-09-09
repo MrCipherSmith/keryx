@@ -37,6 +37,7 @@ import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
 import { retentionCommand } from "./commands/retention";
+import { forgettingCommand } from "./commands/forgetting";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -95,6 +96,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
+  forgetting: forgettingCommand,
 };
 
 export async function main(): Promise<void> {
@@ -250,6 +252,10 @@ Usage:
   keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
                                                Bound gdctx raw/artifacts logs and owner write-conflict
                                                sidecars; dry run by default, --apply removes
+  keryx forgetting trail [--limit <n>] [--json]
+  keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+                                               Read the deletion trail: what was removed, when, at
+                                               whose request, on what basis
   keryx --version
 
 Commands:
@@ -289,6 +295,7 @@ Commands:
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
   retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  forgetting Read the deletion trail — was this removed, or did it never exist?
 `);
 }
 

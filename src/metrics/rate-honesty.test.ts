@@ -162,6 +162,17 @@ describe("the validator rejects an unmeasured rate inside a scored manifest", ()
     const result = validatePairedBenchmarkV2(manifest).errors.join(" ");
     expect(result).toContain("without an explicit n");
   });
+
+  // RESOLVED 2026-09-09, flow 238/T15: `n <= 0` alone let a fractional n like `1e-9`
+  // through — a trial count is a positive integer, not a number merely greater than zero.
+  test("a fractional n (e.g. 1e-9) is refused: a trial count is a positive integer", () => {
+    const manifest = keryxLeg();
+    (manifest.runs[0] as PairedBenchmarkRunV2).rates = {
+      taskSuccess: { successes: 0, n: 1e-9, rate: 0, ci95: { lower: 0, upper: 1 }, reliability: "exact" } as never,
+    };
+    const result = validatePairedBenchmarkV2(manifest).errors.join(" ");
+    expect(result).toContain("must be a positive integer, not a fraction");
+  });
 });
 
 describe("the fabricated zero can no longer reach a comparative report", () => {

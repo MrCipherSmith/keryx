@@ -83,8 +83,8 @@ function measured(value: number, source: string): BenchmarkValue {
   return { value, reliability: "exact", source };
 }
 
-function round(value: number): number {
-  return Math.round(value * 1000) / 1000;
+function round(value: number | null): number | null {
+  return value === null ? null : Math.round(value * 1000) / 1000;
 }
 
 /** Injectable side effects for {@link finalizeRagEmbeddingBaselineRun} — real I/O in `main`, spies in tests. */
@@ -209,9 +209,12 @@ async function main(): Promise<void> {
       tokenCap: null,
       seeds: [1],
       quality: "measured",
+      // ndcg/recallAtK are `null` only when the gold set for this query is empty
+      // (RESOLVED 2026-09-09, flow 238/T15: ir.ts used to fabricate a `1` there) — omit
+      // the field entirely, never emit it with a null value.
       oracle: {
-        ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`),
-        recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`),
+        ...(nd !== null ? { ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`) } : {}),
+        ...(atK !== null ? { recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`) } : {}),
       },
       human_interventions: null,
     };

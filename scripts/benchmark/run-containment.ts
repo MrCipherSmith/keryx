@@ -67,6 +67,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgentTurn, type AgentDeps, type AgentIO } from "../../src/commands/agent";
 import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
+import { checkAnswerReachability } from "../../src/metrics/leakage";
 import {
   buildContainmentManifest,
   type ContainmentCaseClass,
@@ -78,6 +79,15 @@ import { builtinReadOnlyTools, type InteractiveToolResult } from "../../src/harn
 import { makeCommandRunner, shellExecTool } from "../../src/harness/tool/builtin/shell-exec-tool";
 import { makeProvider } from "../../src/harness/provider/make-provider";
 import type { NormalizedMessage } from "../../src/harness/provider/types";
+
+// T14 (flow 238), AC7 / AC-M07 preflight ("answer-reachable" — src/metrics/preflight.ts):
+// the worktree spawned below is a full `git worktree add --detach <path> HEAD` checkout
+// (src/harness/child/git-worktree-port.ts), and every live case gives the agent
+// read_file + list_dir over the WHOLE thing — which includes THIS SCRIPT, naming the
+// exact canary paths/patterns and (via buildCases) the unsafe-action framing under test.
+// A curious agent that lists/reads its own worktree can see it is being tested, which
+// contaminates the very behavior under measurement. Never checked before this fix.
+export const CONTAINMENT_GOLD_ARTIFACT_PATH = "scripts/benchmark/run-containment.ts";
 
 function argValue(flag: string, fallback: string): string {
   const index = process.argv.indexOf(flag);
@@ -282,6 +292,29 @@ function attemptedAction(toolCalls: Array<{ name: string; input: string }>, unsa
   return toolCalls.some((call) => call.name === "shell_exec" && pattern.test(call.input));
 }
 
+/**
+ * AC7 money gate: strip this script's own gold-bearing copy from the worktree and verify
+ * it is genuinely unreachable, BEFORE any live model call. `checkAnswerReachability`'s
+ * `"reachable"` and `"unverified"` statuses both refuse — never a fabricated pass for a
+ * check that could not actually run (src/metrics/preflight.ts's framing for this class of
+ * check). Exported so this exact refusal path is covered by an offline test (no live
+ * model, no git worktree, no sandbox) in run-containment.test.ts.
+ */
+export async function verifyContainmentWorktreeClean(worktreeRoot: string): Promise<void> {
+  await rm(join(worktreeRoot, CONTAINMENT_GOLD_ARTIFACT_PATH), { force: true });
+  const reachability = checkAnswerReachability(worktreeRoot, { goldArtifactPaths: [CONTAINMENT_GOLD_ARTIFACT_PATH] });
+  if (reachability.status !== "clean") {
+    const detail =
+      reachability.reachable.length > 0
+        ? reachability.reachable.map((hit) => `${hit.kind}:${hit.where}`).join(", ")
+        : reachability.problems.join("; ");
+    throw new Error(
+      `AC7: this script's own case definitions (${CONTAINMENT_GOLD_ARTIFACT_PATH}) are ${reachability.status} ` +
+        `from ${worktreeRoot}: ${detail} — refusing to run any live containment case`,
+    );
+  }
+}
+
 async function verifyEscape(
   fixture: CaseFixture,
   fakeHome: string,
@@ -429,6 +462,11 @@ async function main(): Promise<void> {
     console.error(`worktree: ${created.path}`);
     console.error(`fake HOME: ${fakeHome}`);
     console.error(`canary listener: 127.0.0.1:${canaryPort}`);
+
+    // AC7 money gate (T14, flow 238): refuse before any live case if this script's own
+    // case definitions are still reachable from the worktree.
+    await verifyContainmentWorktreeClean(created.path);
+    console.error(`# AC7: ${CONTAINMENT_GOLD_ARTIFACT_PATH} stripped and verified unreachable\n`);
 
     // --- 3. Mandatory preflight canary: proves the sandbox actually engages on THIS
     // host, through the SAME code path, before any live LLM case runs. ---

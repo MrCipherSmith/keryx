@@ -1,10 +1,14 @@
 {
-  "note": "AC-5 dogfood demonstration (specification.md §7): a REAL git worktree checkout of this repository at HEAD genuinely exposes its own ablation gold artifacts (scripts/benchmark/ablation-tasks.ts, mutating-tasks.ts) to an agent's read_file tool — this is the real vulnerability every M1 ablation producer had before this fix, not a contrived example. checkGoldLeakage (src/metrics/leakage.ts) correctly flags it as leakageAssertion: failed on the unmodified worktree, and correctly reports leakageAssertion: passed once the gold artifacts are stripped (the fix now wired into run-ablation.ts, run-ablation-codex.ts, run-ablation-mutating.ts). No live case is run against the leaked worktree — per AC-5 it is excluded from scoring, not scored and zeroed. validatePairedBenchmarkV2's own hard invariant (a manifest containing any leakageAssertion: failed run is invalid) is separately unit-tested in src/metrics/benchmark.test.ts.",
+  "note": "AC-5 dogfood demonstration (specification.md §7): a REAL git worktree checkout of this repository at HEAD genuinely exposes its own ablation gold artifacts (scripts/benchmark/ablation-tasks.ts, mutating-tasks.ts) to an agent's read_file tool — this is the real vulnerability every M1 ablation producer had before this fix, not a contrived example. checkGoldLeakage (src/metrics/leakage.ts) correctly flags it as leakageAssertion: failed on the unmodified worktree, and correctly reports leakageAssertion: passed once the gold artifacts are stripped (the fix now wired into run-ablation.ts, run-ablation-codex.ts, run-ablation-mutating.ts). No live case is run against the leaked worktree — per AC-5 it is excluded from scoring, not scored and zeroed. validatePairedBenchmarkV2's own hard invariant (a manifest containing any leakageAssertion: failed run is invalid) is separately unit-tested in src/metrics/benchmark.test.ts. T14 (flow 238) extends the same real demonstration to run-safety.ts's false-premise track and run-containment.ts, neither of which stripped or verified its own gold-bearing script before this fix, via checkAnswerReachability (src/metrics/leakage.ts) — the same 'money gate' check src/metrics/preflight.ts's answer-reachable/answer-reachability-unverified codes are built from, now wired into both scripts (verifyFalsePremiseWorktreeClean / verifyContainmentWorktreeClean) before any live model call.",
   "generated_by": "bun scripts/benchmark/run-leakage-check.ts",
-  "captured": "2026-08-14",
+  "captured": "2026-09-09",
   "goldArtifactPaths": [
     "scripts/benchmark/ablation-tasks.ts",
     "scripts/benchmark/mutating-tasks.ts"
+  ],
+  "selfLeakPaths": [
+    "scripts/benchmark/run-safety.ts",
+    "scripts/benchmark/run-containment.ts"
   ],
   "findings": [
     {
@@ -18,6 +22,19 @@
     {
       "case": "stripped-worktree",
       "assertion": "passed",
+      "reachablePaths": []
+    },
+    {
+      "case": "unmodified-worktree-self-leak",
+      "assertion": "reachable",
+      "reachablePaths": [
+        "scripts/benchmark/run-safety.ts",
+        "scripts/benchmark/run-containment.ts"
+      ]
+    },
+    {
+      "case": "stripped-worktree-self-leak",
+      "assertion": "clean",
       "reachablePaths": []
     }
   ]

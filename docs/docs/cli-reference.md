@@ -724,7 +724,7 @@ keryx wiki verify --page <path> | --baseline
 keryx wiki migrate-markers
 keryx wiki sections list [--json]
 keryx wiki sections resolve <section-ref> [--json]
-keryx wiki sections sync
+keryx wiki sections sync [--dry-run] [--accept-reoccupation <ref>[,<ref>...]] [--json]
 keryx wiki sections migrate [--dry-run]
 ```
 
@@ -732,8 +732,8 @@ keryx wiki sections migrate [--dry-run]
 |---|---|---|
 | `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
 | `sections list` | `--json` | List every indexed section with its identity, its stability, and the page it belongs to. |
-| `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, stale-locator or unknown, and never redirects a deleted identity to a same-named section elsewhere. |
-| `sections sync` | — | Rebuild the section index from the pages on disk. |
+| `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, reoccupied, pending-tombstone, stale-locator, registry-unreadable or unknown, and never redirects a deleted identity to a same-named section elsewhere. A `found` identity that was once removed also prints its removal history and the basis on which its tombstone was lifted — `byte-identical` (a genuine restoration) or `accepted-substitution` (an operator accepted a different document at that address). Exits `0` when live, `1` for any answer about a dead identity, `2` when the registry cannot be read. |
+| `sections sync` | `--dry-run`, `--accept-reoccupation <ref>[,<ref>...]`, `--json` | Rebuild the section index from the pages on disk: register the current stable identities and tombstone the ones that disappeared. The only command in this area that writes. Exits `1` when any identity is *reoccupied* — removed, then re-minted at the same address by a different document — because a tombstone and a live document claiming one address is a contradiction, not a completed sync. `--accept-reoccupation` is the only exit from that state: it lifts the named tombstones and records permanently that the content was substituted rather than restored, which `sections resolve` then reports on every read. Accepting a page ref also accepts the sections inside that page. |
 | `sections migrate` | `--dry-run` | Insert versioned identity markers into pages that have none. Content is preserved byte for byte apart from the markers, and the round trip is asserted before anything is written. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
 | `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. |
@@ -2278,6 +2278,52 @@ same thing as a target with nothing in it. Either way the command then exits
 relayed to an agent, copies exported elsewhere, and git history are out of
 scope and are never touched or promised erased by it — this command bounds
 size, it does not implement AC-29's tombstone/forget semantics.
+
+---
+
+## forgetting
+
+Read the deletion trail at `.metaproject/data/forgetting/journal.jsonl` — what
+was removed, when, at whose request, and on what basis. Read-only; this command
+never writes to the trail. `keryx sync --apply` is the only thing that appends
+to it.
+
+```bash
+keryx forgetting trail [--limit <n>] [--json]
+keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+```
+
+`trail` prints the records newest first, with the coverage measured from the
+file itself: how many records exist, which layers have ever had a removal
+recorded, and which layers every record names as untouched.
+
+`lookup` answers one identity. By default the match is exact on a removal's
+`ref` or `page` — there is no fuzzy fallback, because a lookup that silently
+answers with an adjacent record is worse than one that says it has none.
+`--search` is the separate phrase-matching mode (over `ref`, `page` and
+`title`); every hit reports which field matched and which layer it came from.
+`--layer` narrows an identity lookup to one knowledge layer.
+
+**Verdicts.**
+
+| Verdict | Meaning | Exit |
+|---|---|---|
+| `recorded-removed` | the trail names this as removed, with when/who/why | 0 |
+| `no-removal-recorded` | the trail was read and names no removal of it | 0 |
+| `trail-absent` | nothing has ever been appended to the trail here | 0 |
+| `trail-unreadable` | the trail exists and could not be read — removed and never-recorded cannot be told apart | 2 |
+
+**The bound on a negative answer.** The trail records removals a reconcile
+*observed*. An entry deleted with `rm` and never reconciled leaves no record, and
+neither does any layer the reconcile does not write for. So
+`no-removal-recorded` means exactly "nothing here records a removal" and never
+"this never existed"; every rendering of it carries that caveat plus the
+coverage that bounds it.
+
+**Who else reads this trail.** `keryx memory search` (when a search returns
+nothing), `keryx wiki check-links` (for each broken link) and `keryx gdgraph
+affected` (for a target that is not a node) all consult the same module, so the
+trail is read whether or not this verb is typed.
 
 ---
 

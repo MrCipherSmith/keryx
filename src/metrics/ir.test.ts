@@ -69,8 +69,8 @@ describe("f1", () => {
     expect(f1(["a", "b", "c"], ["a", "b", "d"])).toBeCloseTo(2 / 3, 10);
   });
 
-  test("edge case: both retrieved and relevant empty -> both vacuous 1 -> f1 = 1", () => {
-    expect(f1([], [])).toBe(1);
+  test("edge case: both retrieved and relevant empty -> unmeasured (null), never a fabricated 1 (flow 238/T15)", () => {
+    expect(f1([], [])).toBeNull();
   });
 
   test("edge case: empty retrieved, non-empty relevant -> unmeasured precision treated as neutral -> f1 = 0", () => {
@@ -106,9 +106,9 @@ describe("recallAtK", () => {
     expect(recallAtK(ranked, ["a", "b"], -5)).toBe(0);
   });
 
-  test("edge case: empty relevant set is defined as 1 regardless of k", () => {
-    expect(recallAtK(ranked, [], 0)).toBe(1);
-    expect(recallAtK(ranked, [], 2)).toBe(1);
+  test("edge case: empty relevant set is unmeasured (null) regardless of k, never a fabricated 1 (flow 238/T15)", () => {
+    expect(recallAtK(ranked, [], 0)).toBeNull();
+    expect(recallAtK(ranked, [], 2)).toBeNull();
   });
 
   test("duplicate IDs keep only the first (best-ranked) occurrence", () => {
@@ -136,8 +136,12 @@ describe("ndcg", () => {
     expect(ndcg(["X", "Y"], ["A", "B"], 2)).toBe(0);
   });
 
-  test("edge case: empty relevant set is defined as 1", () => {
-    expect(ndcg(["A", "B"], [], 2)).toBe(1);
+  test("edge case: empty relevant set is unmeasured (null), never a fabricated 1 (flow 238/T15)", () => {
+    expect(ndcg(["A", "B"], [], 2)).toBeNull();
+  });
+
+  test("edge case: zero-width window (k resolves to 0) with non-empty relevant is also unmeasured (null)", () => {
+    expect(ndcg(["A", "B"], ["A"], 0)).toBeNull();
   });
 
   test("edge case: empty ranking with non-empty relevant -> 0", () => {
@@ -173,9 +177,9 @@ describe("factPreservation", () => {
     expect(factPreservation(["f1", "f2", "f3"], ["f1"])).toBeCloseTo(1 / 3, 10);
   });
 
-  test("edge case: empty raw-facts set is defined as 1 (nothing to lose)", () => {
-    expect(factPreservation([], ["f1"])).toBe(1);
-    expect(factPreservation([], [])).toBe(1);
+  test("edge case: empty raw-facts set is unmeasured (null), never a fabricated 1 (flow 238/T15)", () => {
+    expect(factPreservation([], ["f1"])).toBeNull();
+    expect(factPreservation([], [])).toBeNull();
   });
 
   test("duplicate IDs in rawFacts are deduped before dividing", () => {

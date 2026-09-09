@@ -29,11 +29,29 @@ export type LeakageCheckResult = {
 /**
  * Check whether any of `goldArtifactPaths` (repo-relative) exist under `agentRoot` —
  * the exact directory an agent's file-reading tools are confined to for this case.
- * `"failed"` when ANY gold artifact is reachable (AC-5's unsafe state); `"passed"` when
- * none are. Never `"not-applicable"` — this function is only called for cases that
- * genuinely have a gold artifact to check.
+ * `"failed"` when ANY gold artifact is reachable (AC-5's unsafe state); `"passed"` only
+ * when the check genuinely looked and found none reachable.
+ *
+ * RESOLVED 2026-09-09, flow 238/T15: an empty `goldArtifactPaths` list, or an `agentRoot`
+ * that does not exist, used to also report `"passed"` — the same "absence of a check
+ * rendered as a clean result" bug this repository has already found and fixed three times
+ * elsewhere (see the module comment above, and this function's sibling
+ * `checkAnswerReachability` below, which has always correctly returned `"unverified"` in
+ * both of these cases). `LeakageAssertion` (./benchmark.ts) has no `"unverified"` member —
+ * only `"passed" | "failed" | "not-applicable"` — so `"not-applicable"` is the honest value
+ * here: "this check had nothing to verify," never "this check ran and found it clean."
+ * Every real caller in this codebase always passes a concrete, existing worktree root and a
+ * non-empty gold-path list, so this changes no production behavior — it only closes the
+ * loophole a caller could otherwise read as a clean bill of health for a check that never
+ * actually ran.
  */
 export function checkGoldLeakage(agentRoot: string, goldArtifactPaths: readonly string[]): LeakageCheckResult {
+  if (goldArtifactPaths.length === 0) {
+    return { assertion: "not-applicable", reachablePaths: [] };
+  }
+  if (!existsSync(agentRoot)) {
+    return { assertion: "not-applicable", reachablePaths: [] };
+  }
   const reachablePaths = goldArtifactPaths.filter((relPath) => existsSync(path.join(agentRoot, relPath)));
   return { assertion: reachablePaths.length > 0 ? "failed" : "passed", reachablePaths };
 }

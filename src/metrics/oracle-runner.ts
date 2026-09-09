@@ -56,7 +56,13 @@ export type OracleTargetScore = {
   readonly precision: number | null;
   /** `null` when `gold` was empty (no denominator) — see ./ir.ts recall()'s doc comment. Same omit-not-null-value contract as `precision` above. */
   readonly recall: number | null;
-  readonly f1: number;
+  /**
+   * `null` only when BOTH `system` and `gold` were empty (no measurement at all) — see
+   * ./ir.ts f1()'s doc comment (RESOLVED 2026-09-09, flow 238/T15: this used to always be a
+   * plain number, fabricating a `1` in that one case). Same omit-not-null-value contract as
+   * `precision`/`recall` above.
+   */
+  readonly f1: number | null;
   readonly systemSize: number;
   readonly goldSize: number;
   /** |system ∩ gold|. */
@@ -106,19 +112,19 @@ function measured(value: number): BenchmarkValue {
   return { value, reliability: ORACLE_RELIABILITY, source: METRIC_SOURCE };
 }
 
-// precision/recall are OMITTED entirely when unmeasured (score.precision/.recall is
-// `null` — see OracleTargetScore's doc comment) rather than emitted with a null value:
+// precision/recall/f1 are OMITTED entirely when unmeasured (score.precision/.recall/.f1
+// is `null` — see OracleTargetScore's doc comment) rather than emitted with a null value:
 // OracleMetrics documents "present only when measured", and validatePairedBenchmarkV2's
 // `requireMeasured` guard on `run.oracle.*` actively REJECTS a present field whose
 // `value` is null / `reliability` is "unknown" as "metric field present without a
 // corresponding measurement" — so a conditional field, not a null-valued one, is the only
-// encoding validatePairedBenchmark accepts. f1 is unaffected (see ./ir.ts f1()'s doc
-// comment: it always returns a plain number, never null).
+// encoding validatePairedBenchmark accepts. f1 is null only when BOTH system and gold were
+// empty (see ./ir.ts f1()'s doc comment, RESOLVED 2026-09-09 flow 238/T15).
 function oracleMetrics(score: OracleTargetScore): OracleMetrics {
   return {
     ...(score.precision !== null ? { precision: measured(score.precision) } : {}),
     ...(score.recall !== null ? { recall: measured(score.recall) } : {}),
-    f1: measured(score.f1),
+    ...(score.f1 !== null ? { f1: measured(score.f1) } : {}),
   };
 }
 
@@ -277,7 +283,7 @@ function oracleMetricsForGold(score: OracleTargetScore, source: string, notes: s
   return {
     ...(score.precision !== null ? { precision: measuredValue(score.precision, source, notes) } : {}),
     ...(score.recall !== null ? { recall: measuredValue(score.recall, source, notes) } : {}),
-    f1: measuredValue(score.f1, source, notes),
+    ...(score.f1 !== null ? { f1: measuredValue(score.f1, source, notes) } : {}),
   };
 }
 
@@ -415,7 +421,7 @@ export function scoreTestImpactRun(
     oracle: {
       ...(score.precision !== null ? { precision: measuredValue(score.precision, source) } : {}),
       ...(score.recall !== null ? { recall: measuredValue(score.recall, source) } : {}),
-      f1: measuredValue(score.f1, source),
+      ...(score.f1 !== null ? { f1: measuredValue(score.f1, source) } : {}),
     },
     ...(rates ? { rates } : {}),
     human_interventions: null,
@@ -514,7 +520,9 @@ export function scoreMemorySearchRun(
     oracle: {
       ...(score.precision !== null ? { precision: measuredValue(score.precision, source) } : {}),
       ...(score.recall !== null ? { recall: measuredValue(score.recall, source) } : {}),
-      recallAtK: measuredValue(atK, source),
+      // recallAtK is `null` only when `input.gold` is empty (RESOLVED 2026-09-09, flow
+      // 238/T15: ./ir.ts recallAtK() used to fabricate a `1` there) — omit, never a null value.
+      ...(atK !== null ? { recallAtK: measuredValue(atK, source) } : {}),
     },
     ...(rates ? { rates } : {}),
     human_interventions: null,
@@ -651,7 +659,10 @@ export function scoreGdctxRun(
   const taskId = gdctxTaskId(input.input);
   const source = `${GDCTX_SOURCE} [layer=gdctx: ${GDCTX_FACT_PRESERVATION_LABEL}]`;
   // Same "no fabricated denominator" convention as oracleRates: only report a Wilson-CI'd
-  // rate when there is a real n (a non-empty raw-facts set).
+  // rate when there is a real n (a non-empty raw-facts set). `rate` and the rates guard
+  // below both key off the same rawSet.size (equivalently rate !== null — RESOLVED
+  // 2026-09-09, flow 238/T15: ./ir.ts factPreservation() now returns `null`, not a
+  // fabricated `1`, on an empty raw-facts set), so they can never drift apart.
   const rates: Record<string, RateWithCI> | undefined =
     rawSet.size > 0 ? { factPreservation: deriveRate(preserved, rawSet.size, ORACLE_RELIABILITY) } : undefined;
   return {
@@ -666,8 +677,10 @@ export function scoreGdctxRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
+    // factPreservation is OMITTED entirely (never emitted with a null value) when `rate`
+    // is null — same "present only when measured" contract as every other oracle metric.
     oracle: {
-      factPreservation: measuredValue(rate, source),
+      ...(rate !== null ? { factPreservation: measuredValue(rate, source) } : {}),
     },
     ...(rates ? { rates } : {}),
     human_interventions: null,
@@ -787,9 +800,12 @@ export function scoreWikiAskRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
+    // ndcg/recallAtK are `null` only when `input.gold` is empty, or (ndcg only) when `k`
+    // resolves to a zero-width window (RESOLVED 2026-09-09, flow 238/T15: ./ir.ts ndcg()/
+    // recallAtK() used to fabricate a `1` there) — omit, never a null value.
     oracle: {
-      ndcg: measuredValue(nd, source),
-      recallAtK: measuredValue(atK, source),
+      ...(nd !== null ? { ndcg: measuredValue(nd, source) } : {}),
+      ...(atK !== null ? { recallAtK: measuredValue(atK, source) } : {}),
     },
     judge: panel,
     human_interventions: null,

@@ -213,8 +213,44 @@ async function runCollect(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * Why a broken link's target is missing — removed, or never there.
+ *
+ * Flow 242 T9/F3: `check-links` printed `(target not found)` for a page that was
+ * tombstoned and for a page that never existed, and the tombstone was on disk
+ * the whole time. The registry is read here rather than inside
+ * `wikiCheckLinks` (`../wiki/service.ts`) because that function returns
+ * `WikiBrokenLink`, whose `reason` is a plain string that several other
+ * consumers already render; widening it is that lane's call, and this is the
+ * surface where the collapse was observed.
+ *
+ * Two sources, strongest first. The section registry's page tombstones are the
+ * direct evidence — the same `removedAt`/`reason` pair `keryx wiki sections
+ * resolve` answers `tombstoned` with, not a second vocabulary. The deletion
+ * trail is the fallback and the bound: where neither records anything, the
+ * answer says "no record of a removal", never "it never existed".
+ */
+async function explainBrokenLink(
+  cwd: string,
+  pageRelativeToCwd: string,
+  target: string,
+): Promise<string> {
+  const nodePath = await import("node:path");
+  const { explainAbsentWikiPage } = await import("../forgetting/service");
+
+  const filePart = target.split("#")[0] ?? "";
+  const absoluteTarget = nodePath.resolve(nodePath.dirname(nodePath.resolve(cwd, pageRelativeToCwd)), filePart);
+  const wikiRoot = nodePath.join(cwd, ".metaproject", "wiki");
+  const wikiRelative = nodePath.relative(wikiRoot, absoluteTarget);
+  const cwdRelative = nodePath.relative(cwd, absoluteTarget);
+
+  const absence = await explainAbsentWikiPage(cwd, wikiRelative, [cwdRelative]);
+  return `${absence.verdict}: ${absence.reason}`;
+}
+
 async function runCheckLinks(): Promise<void> {
-  const result = await wikiCheckLinks(process.cwd());
+  const cwd = process.cwd();
+  const result = await wikiCheckLinks(cwd);
 
   console.log("# gdwiki check-links");
   console.log("");
@@ -228,6 +264,7 @@ async function runCheckLinks(): Promise<void> {
     console.log("## Broken");
     for (const broken of result.broken) {
       console.log(`- ${broken.page} -> ${broken.target} (${broken.reason})`);
+      console.log(`    ${await explainBrokenLink(cwd, broken.page, broken.target)}`);
     }
     console.log("");
   }

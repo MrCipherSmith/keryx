@@ -628,6 +628,37 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: ["writes .metaproject/data/gdwiki/link-check/latest.md"],
   },
+  // ---- forgetting -------------------------------------------------------
+  // Flow 242 T9/F9. Both are pure reads of
+  // `.metaproject/data/forgetting/journal.jsonl` — the trail is append-only and
+  // only `keryx sync --apply` writes it, so neither of these can shorten a
+  // history and both are safe to call speculatively.
+  {
+    module: "forgetting",
+    command: "forgetting trail",
+    summary: "Read the deletion trail: what was removed, when, at whose request, on what basis.",
+    intent: ["что было удалено", "deletion trail", "removal history", "журнал удалений"],
+    args: [
+      { name: "limit", type: "number", required: false, desc: "how many records to show (newest first)" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "forgetting",
+    command: "forgetting lookup",
+    summary: 'Was this removed, or is there simply no record of a removal? Never answers "never existed".',
+    intent: ["это удалили или не существовало", "was this deleted", "removed or never existed", "когда это удалили"],
+    args: [
+      { name: "<ref-or-path>", type: "string", required: true, desc: "identity, wiki page path or file path" },
+      { name: "layer", type: "string", required: false, desc: "narrow to one knowledge layer" },
+      { name: "search", type: "bool", required: false, desc: "phrase match over ref/page/title instead of exact identity" },
+      { name: "json", type: "bool", required: false, desc: "structured JSON result" },
+    ],
+    json: true,
+    read: true,
+  },
   {
     module: "memory",
     command: "memory index",

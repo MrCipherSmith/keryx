@@ -1,6 +1,15 @@
-import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import * as containmentModule from "./run-containment";
-import { finalizeContainmentCase, type ContainmentEmissionIO } from "./run-containment";
+import {
+  CONTAINMENT_GOLD_ARTIFACT_PATH,
+  finalizeContainmentCase,
+  verifyContainmentWorktreeClean,
+  type ContainmentEmissionIO,
+} from "./run-containment";
 import type { PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 
 type ResolveContainmentPort = (port: number | undefined) => number;
@@ -121,5 +130,43 @@ describe("finalizeContainmentCase", () => {
     expect(validCode).toBe(0);
     expect(valid.writes).toHaveLength(1);
     expect(valid.prints).toHaveLength(1);
+  });
+});
+
+// T14 (flow 238), AC7 money gate: offline coverage for verifyContainmentWorktreeClean —
+// no live model, no sandbox, no real git worktree, just a real temp directory standing in
+// for one.
+describe("verifyContainmentWorktreeClean (AC7 money gate)", () => {
+  let root: string;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-containment-gate-"));
+  });
+
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+  });
+
+  test("a clean worktree (nothing planted) passes without throwing", async () => {
+    await expect(verifyContainmentWorktreeClean(root)).resolves.toBeUndefined();
+  });
+
+  test("strips this script's own copy when present, and passes", async () => {
+    await mkdir(path.join(root, "scripts", "benchmark"), { recursive: true });
+    const scriptPath = path.join(root, CONTAINMENT_GOLD_ARTIFACT_PATH);
+    await writeFile(scriptPath, "export const X = 1;\n", "utf8");
+    await expect(verifyContainmentWorktreeClean(root)).resolves.toBeUndefined();
+    expect(existsSync(scriptPath)).toBe(false);
+  });
+
+  // Proves the underlying check this gate is built on can genuinely fail (not just "the
+  // strip happened to work"): calling the gate against a worktree root that does not exist
+  // at all — the strip is a silent no-op (`rm(..., {force:true})`), and
+  // checkAnswerReachability then correctly reports the root as `"unverified"`, which the
+  // gate treats as a refusal exactly like `"reachable"` — "I could not check" must never
+  // read the same as "clean" (src/metrics/preflight.ts's own framing, reused here).
+  test("refuses when the worktree root cannot be verified at all (e.g. missing/removed)", async () => {
+    const missingRoot = path.join(root, "does-not-exist");
+    await expect(verifyContainmentWorktreeClean(missingRoot)).rejects.toThrow(/AC7/);
   });
 });

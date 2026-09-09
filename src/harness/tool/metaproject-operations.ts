@@ -205,7 +205,38 @@ export function formatMemory(result: MemorySearchResult): InteractiveToolResult 
     return { output: `memory_search failed: ${result.error}`, isError: true };
   }
   if (result.hits.length === 0) {
-    return { output: `No memory entries matched "${result.query}".`, isError: false };
+    // Flow 242 T9/F3: this line was the whole answer both for a memory entry
+    // that had been deleted and for a phrase that never named anything — the
+    // same collapse `formatWiki`/`formatWikiResolve` already fixed for the wiki,
+    // fixed here with the same device: the verdict as a bracketed tag, so
+    // "removed, on record" and "nothing here records a removal" are visibly
+    // different answers rather than one string with different prose under it.
+    //
+    // `removalTrail` is absent when the port implementation predates the field;
+    // the line then reads exactly as it always did.
+    const trail = result.removalTrail;
+    if (trail === undefined) {
+      return { output: `No memory entries matched "${result.query}".`, isError: false };
+    }
+    const lines = [`No memory entries matched "${result.query}".`, `[${trail.verdict}] ${trail.summary}`];
+    for (const removal of trail.removals ?? []) {
+      const title = removal.title !== undefined ? ` "${removal.title}"` : "";
+      const page = removal.page !== undefined ? ` in ${removal.page}` : "";
+      lines.push(
+        `  - [${removal.layer}] ${removal.ref}${title}${page} — removed ${removal.removedAt}, observed by ` +
+          `\`${removal.observedBy}\` (matched on ${removal.matchedOn})`,
+        `      requested by: ${removal.requestedBy}`,
+        `      grounds: ${removal.grounds}`,
+      );
+    }
+    if (trail.totalRemovals !== undefined && trail.totalRemovals > (trail.removals ?? []).length) {
+      lines.push(
+        `  … ${trail.totalRemovals - (trail.removals ?? []).length} further recorded removal(s) not shown ` +
+          "(bounded output) — `keryx forgetting lookup --search` lists them all.",
+      );
+    }
+    // Not an error: the search completed, and "this was removed" is an answer.
+    return { output: lines.join("\n"), isError: false };
   }
   const header = `Memory hits for "${result.query}" (${result.hits.length}):`;
   const lines = result.hits.flatMap((hit) => {
@@ -402,6 +433,41 @@ const MEMORY_OUTPUT_SCHEMA: Record<string, unknown> = {
         },
         required: ["path", "title", "score"],
       },
+    },
+    // Flow 242 T9/F3: additive and optional, exactly like the provenance fields
+    // above — a result produced before this field still validates. `verdict` is
+    // enumerated because it is the field a consumer branches on, and the enum is
+    // the enforceable statement that `never-existed` is not among the answers
+    // this tool can give.
+    removalTrail: {
+      type: "object",
+      properties: {
+        verdict: {
+          type: "string",
+          enum: ["recorded-removed", "no-removal-recorded", "trail-absent", "trail-unreadable"],
+        },
+        summary: { type: "string" },
+        totalRemovals: { type: "integer" },
+        removals: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              layer: { type: "string" },
+              ref: { type: "string" },
+              title: { type: "string" },
+              page: { type: "string" },
+              removedAt: { type: "string" },
+              observedBy: { type: "string" },
+              requestedBy: { type: "string" },
+              grounds: { type: "string" },
+              matchedOn: { type: "string" },
+            },
+            required: ["layer", "ref", "removedAt", "requestedBy", "grounds"],
+          },
+        },
+      },
+      required: ["verdict", "summary"],
     },
     error: { type: "string" },
   },
@@ -1385,7 +1451,10 @@ export const METAPROJECT_OPERATIONS: MetaprojectOperation[] = [
     description:
       "Search project memory — decisions, lessons, constraints (`keryx memory search`). Input: " +
       "{ query: string, module?: string, class?: \"semantic\"|\"episodic\"|\"procedural\", limit?: integer } — " +
-      "the same narrowing the CLI offers. Automatic recall is always bounded to accepted, current entries.",
+      "the same narrowing the CLI offers. Automatic recall is always bounded to accepted, current entries. " +
+      "An empty result is NOT proof the knowledge never existed: it carries the deletion trail's verdict — " +
+      "recorded-removed (with when, at whose request and on what basis) / no-removal-recorded / trail-absent / " +
+      "trail-unreadable. Read that tag before concluding anything from zero hits.",
     inputSchema: {
       type: "object",
       properties: {

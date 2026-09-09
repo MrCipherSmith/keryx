@@ -8,6 +8,12 @@ import { renderSearchMarkdown } from "../memory/search";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
+import {
+  describeRemovalLookup,
+  loadDeletionTrail,
+  searchRemovals,
+  type RemovalLookup,
+} from "../forgetting/service";
 import { runAssetsSubcommand } from "../assets/command";
 import { MEMORY_CLASS_VALUES, MEMORY_TYPES } from "../memory/types";
 import { memoryRoot } from "../memory/store";
@@ -228,6 +234,24 @@ async function runSearch(args: string[]): Promise<void> {
     ? await getService().writeReport({ cwd: process.cwd(), search: result, filters })
     : undefined;
 
+  // Flow 242 T9/F3: a zero-result search said one thing for an entry that was
+  // deleted and for a phrase that never named anything — measured on this repo,
+  // `memory search "charge once"` after deleting the entry and
+  // `memory search "quantum flux capacitor"` printed the identical
+  // `_No matching memory entries._`. The deletion trail is consulted here, and
+  // ONLY on an empty result: a search that found something has already answered
+  // the caller's question, and appending removal history to a hit list would be
+  // noise rather than the distinction this closes.
+  //
+  // A memory query is a phrase, not an identity, so this is `searchRemovals`
+  // (phrase mode) rather than `lookupRemoval` — and every hit it renders carries
+  // its own layer, so a wiki identity surfaced by a memory query reads as a wiki
+  // identity. Where the trail has no record, "never existed" is NOT claimed:
+  // `no-removal-recorded` and its coverage say exactly how little that silence
+  // proves.
+  const removalTrail: RemovalLookup | null =
+    result.results.length === 0 ? searchRemovals(await loadDeletionTrail(process.cwd()), query) : null;
+
   // AFC-06 (flow 234) T22, AC1 second half: `--as-of` is memory's existing
   // explicit historical mode (`SearchFilters.asOf`, `../memory/types.ts` --
   // "overrides the default `current` exclusion"). It already prints each
@@ -285,6 +309,7 @@ async function runSearch(args: string[]): Promise<void> {
                 : {}),
             };
           }),
+          ...(removalTrail ? { removalTrail } : {}),
           ...(report ? { report } : {}),
         },
         null,
@@ -302,6 +327,13 @@ async function runSearch(args: string[]): Promise<void> {
   // Routed through the shared renderer so the real user-facing search
   // surface actually shows what AC6 requires.
   console.log(renderSearchMarkdown(query, result.results).trimEnd());
+  if (removalTrail) {
+    console.log("");
+    console.log("## Removal trail");
+    for (const line of describeRemovalLookup(removalTrail)) {
+      console.log(line);
+    }
+  }
   if (historicalByPath.size > 0) {
     console.log("");
     console.log("## Historical (--as-of; not current guidance)");

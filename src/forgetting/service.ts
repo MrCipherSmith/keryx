@@ -28,18 +28,48 @@ import {
   type Attribution,
   type JournalAppend,
 } from "./journal";
-import { reportPropagation, type PropagationReport } from "./propagation";
+import { reportPropagation, type DeletionWindow, type PropagationReport } from "./propagation";
 
 export type { Attribution, DeletionRecord, JournalAppend, JournalRead } from "./journal";
 export type {
   DanglingReference,
+  DeletionWindow,
   KnowledgeLayer,
   LayerOutcome,
   PropagationReport,
+  RemovalAttribution,
   RemovedIdentity,
 } from "./propagation";
 export type { IdentityLayerOutcome } from "./identity";
 export { deletionJournalPath, readDeletionJournal } from "./journal";
+// T9/F9: the trail's READ side, published through the same door the write side
+// uses. `readDeletionJournal` was already exported here and still had no caller
+// outside this directory — a facade that publishes an operation nothing can act
+// on. These are the functions the CLI, `memory search`, `wiki check-links` and
+// `gdgraph affected` reach the trail through, so `src/lib/import-policy.ts`'s
+// rule (an adapter imports a core owner only via its `service.ts`) stays
+// satisfied instead of gaining four new bypasses.
+export {
+  TRAIL_SCOPE_CAVEAT,
+  describeAttribution,
+  describeCoverageAgainst,
+  describeOccurrence,
+  describeRemovalLookup,
+  explainAbsentGraphTarget,
+  explainAbsentWikiPage,
+  loadDeletionTrail,
+  lookupRemoval,
+  searchRemovals,
+  trailCoverage,
+} from "./trail";
+export type {
+  DeletionTrail,
+  GraphAbsence,
+  RemovalLookup,
+  RemovalOccurrence,
+  TrailCoverage,
+  WikiAbsence,
+} from "./trail";
 
 export type ForgettingReconcileInput = {
   cwd: string;
@@ -64,27 +94,38 @@ export type ForgettingReconcileInput = {
    */
   gitIdentity?: string | undefined;
   /**
-   * Code files git shows deleted since the graph was built — the window an
-   * unresolved import is judged against. An empty window attributes nothing.
+   * The window an unresolved import is judged against, in its three states.
+   * `undetermined` is a real answer the caller must be able to give: it used to
+   * be an `undefined` no surface ever sent, so "I could not compute the window"
+   * arrived here as "I computed it and it was empty".
    */
-  deletedFiles: ReadonlyArray<string>;
+  deletionWindow: DeletionWindow;
+  /**
+   * Whether this run rebuilt the code graph. `keryx sync` without `--apply`
+   * does not, and the graph then still asserts the deleted knowledge.
+   */
+  graphRebuilt: boolean;
 };
 
-export type ForgettingTrail = {
-  append: JournalAppend;
-  requestedBy: Attribution;
-  grounds: Attribution;
-};
+/**
+ * What became of the deletion trail for this run — three outcomes, because a
+ * missing record has three different meanings and only one of them is a fault.
+ *
+ * `not-a-write` and `nothing-removed` were the same `null` before, and the
+ * second did not exist at all: every `--apply` run appended a record, so a sync
+ * that removed nothing wrote a permanent `outcome: "propagated"` entry naming
+ * its operator, their stated reason, and every removal the project had ever
+ * recorded.
+ */
+export type ForgettingTrail =
+  | { kind: "not-a-write"; cause: string }
+  | { kind: "nothing-removed"; cause: string }
+  | { kind: "recorded"; append: JournalAppend; requestedBy: Attribution; grounds: Attribution };
 
 export type ForgettingReconcile = {
   identity: IdentityLayerOutcome;
   report: PropagationReport;
-  /**
-   * Null exactly when the run did not write — a report-only run journals
-   * nothing because nothing happened, which is different from a write whose
-   * record failed to land (`append.status === "failed"`).
-   */
-  trail: ForgettingTrail | null;
+  trail: ForgettingTrail;
 };
 
 /**
@@ -104,12 +145,47 @@ export async function reconcileForgetting(input: ForgettingReconcileInput): Prom
 
   const report = await reportPropagation({
     cwd: input.cwd,
-    identityLayer: identity.propagated ? { propagated: true } : { propagated: false, cause: identity.cause },
-    deletedFiles: input.deletedFiles,
+    identityLayer: identity.propagated
+      ? { propagated: true, tombstonedNow: identity.tombstonedNow }
+      : { propagated: false, cause: identity.cause },
+    graphLayer: { rebuiltInThisRun: input.graphRebuilt, window: input.deletionWindow },
   });
 
   if (!input.apply) {
-    return { identity, report, trail: null };
+    return {
+      identity,
+      report,
+      trail: {
+        kind: "not-a-write",
+        cause:
+          "this run wrote nothing anywhere, so there is no deletion to record. `keryx sync --apply` writes the " +
+          "tombstones and appends the record.",
+      },
+    };
+  }
+
+  // What this run may claim. `report.removed` is every removal on record and
+  // saying so is the fix: a run that reads the cumulative set as its own act
+  // writes an append-only record attributing its predecessors' deletions to
+  // itself, under its own stated reason.
+  const removedNow = report.removedInThisRun;
+  const observedUnrecorded = report.observedUnrecorded;
+
+  // A run that removed nothing and refused nothing is not a deletion, and
+  // journalling it as one is exactly the false record this trail exists to
+  // prevent. The absence is announced rather than silent — the caller prints
+  // this cause.
+  if (removedNow.length === 0 && observedUnrecorded.length === 0 && identity.refusal === null) {
+    return {
+      identity,
+      report,
+      trail: {
+        kind: "nothing-removed",
+        cause:
+          "no identity was removed in this run and no layer refused, so no deletion record was appended. " +
+          "Removals already on record stay on record; they belong to the runs that made them.",
+      },
+    };
   }
 
   const requestedBy = resolveRequestedBy({
@@ -117,26 +193,29 @@ export async function reconcileForgetting(input: ForgettingReconcileInput): Prom
     env: input.envActor,
     gitIdentity: input.gitIdentity,
   });
+  const observedCount = removedNow.length > 0 ? removedNow.length : observedUnrecorded.length;
   const grounds = resolveGrounds({
     stated: input.reason,
     observed:
-      report.removed.length > 0
-        ? `${report.removed.length} registered wiki identit${
-            report.removed.length === 1 ? "y is" : "ies are"
-          } no longer carried by the wiki, observed by \`${input.observedBy}\``
+      observedCount > 0
+        ? `${observedCount} registered wiki identit${observedCount === 1 ? "y is" : "ies are"} no longer ` +
+          `carried by the wiki, observed by \`${input.observedBy}\``
         : undefined,
+  });
+
+  const item = (entry: (typeof removedNow)[number]) => ({
+    layer: "wiki-identity",
+    ref: entry.ref,
+    page: entry.page,
+    title: entry.title,
   });
 
   const append = await appendDeletionRecord(input.cwd, {
     at: input.at,
     observedBy: input.observedBy,
     outcome: identity.refusal ? "refused" : identity.propagated ? "propagated" : "reported-only",
-    removed: report.removed.map((entry) => ({
-      layer: "wiki-identity",
-      ref: entry.ref,
-      page: entry.page,
-      title: entry.title,
-    })),
+    removed: removedNow.map(item),
+    observedUnrecorded: observedUnrecorded.map(item),
     untouched: report.layers
       .filter((layer) => !layer.propagated)
       .map((layer) => ({ layer: layer.layer, cause: layer.cause })),
@@ -146,5 +225,5 @@ export async function reconcileForgetting(input: ForgettingReconcileInput): Prom
     refusals: identity.refusal ? [identity.refusal] : [],
   });
 
-  return { identity, report, trail: { append, requestedBy, grounds } };
+  return { identity, report, trail: { kind: "recorded", append, requestedBy, grounds } };
 }

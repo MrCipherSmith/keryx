@@ -136,6 +136,65 @@ export interface MemorySearchFilters {
   class?: string;
 }
 
+/**
+ * One removal the deletion trail records, projected for this boundary.
+ *
+ * Flat strings rather than the owner's `Attribution` objects because an agent
+ * reads one line: the basis is folded into the text (`alice [stated]`) so a
+ * derived actor can never be rendered as a stated one by a caller that prints
+ * only `.value` — the fabrication `src/forgetting/journal.ts` refuses to commit
+ * at the write end, refused again at the read end.
+ */
+export interface MemoryRemovalRecord {
+  /** Knowledge layer the removal was recorded in (`wiki-identity`, …). */
+  layer: string;
+  /** The removed identity. */
+  ref: string;
+  /** Its title when the record carried one. */
+  title?: string;
+  /** Wiki-relative page, when the record carried one. */
+  page?: string;
+  removedAt: string;
+  /** The command that observed the removal. */
+  observedBy: string;
+  /** `<value> [<basis>]`, or `unknown` — never a bare value. */
+  requestedBy: string;
+  /** `<value> [<basis>]`, or `unknown` — never a bare value. */
+  grounds: string;
+  /** Which field of the record the query matched: `ref` | `page` | `title`. */
+  matchedOn: string;
+}
+
+/**
+ * What the deletion trail says about a search that found nothing.
+ *
+ * Flow 242 T9/F3: `{"hits":[]}` was the whole answer both for a memory entry
+ * that had been deleted and for a phrase that never named anything, on this
+ * boundary and on the MCP `memory.search` tool that projects through it.
+ *
+ * `verdict` is never `never-existed`, and there is deliberately no such member:
+ * the trail records removals a reconcile OBSERVED, so its silence supports
+ * "nothing here records a removal" and nothing stronger. `summary` always
+ * carries that bound in words, so a model that renders only this one field
+ * still cannot read the silence as proof.
+ */
+export interface MemoryRemovalTrail {
+  /**
+   * `recorded-removed` (the trail names a matching removal) |
+   * `no-removal-recorded` (read, and it names none — NOT "never existed") |
+   * `trail-absent` (nothing has ever been appended to the trail here) |
+   * `trail-unreadable` (it exists and could not be read — removed and
+   * never-recorded cannot be told apart).
+   */
+  verdict: "recorded-removed" | "no-removal-recorded" | "trail-absent" | "trail-unreadable";
+  /** One-paragraph answer, always carrying the bound on a negative verdict. */
+  summary: string;
+  /** Matching removals, bounded. Present only for `recorded-removed`. */
+  removals?: MemoryRemovalRecord[];
+  /** How many matched in total, when `removals` was capped. */
+  totalRemovals?: number;
+}
+
 /** Structured result of `memorySearch` — memory-search-result.schema.json. */
 export interface MemorySearchResult {
   /** The search query. */
@@ -144,6 +203,13 @@ export interface MemorySearchResult {
   filters?: MemorySearchFilters;
   /** Ranked memory entries. */
   hits: MemorySearchHit[];
+  /**
+   * The deletion trail's answer, set ONLY when `hits` is empty and the search
+   * itself completed. Optional at the type level so a `MetaprojectPort`
+   * implementation predating this field still type-checks; the reference
+   * adapter always sets it on an empty, successful result.
+   */
+  removalTrail?: MemoryRemovalTrail;
   /** Set when the backing service failed — structured-empty, not thrown. */
   error?: string;
 }

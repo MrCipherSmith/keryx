@@ -23,6 +23,8 @@ import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
 import { requireSymbols, SymbolsUnavailableError } from "../gdgraph/symbols-capability";
 import { createTreesitterSpec, type GrammarDiagnosis } from "../gdgraph/treesitter/adapter";
+// Through the owner's facade, not its internals — `src/lib/import-policy.ts`.
+import { explainAbsentGraphTarget, loadDeletionTrail } from "../forgetting/service";
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
   if (process.env.KERYX_GDGRAPH_LOCAL !== "1") {
@@ -734,6 +736,22 @@ async function runAffected(rest: string[]): Promise<void> {
 
   const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
   if (!isKnownNode) {
+    // Flow 242 T9/F3: `target-not-indexed` was the whole answer for a file that
+    // was DELETED and for one that never existed — measured on a scratch
+    // project, `affected src/billing.ts` (deleted) and `affected
+    // src/nonexistent.ts` printed the same code and the same prose.
+    //
+    // The code stays `target-not-indexed`. It is a closed vocabulary
+    // (`src/lib/retrieval-codes.ts`, verbatim from the norm) and inventing a
+    // `target-removed` member here would fork it — the exact defect that module
+    // exists to prevent. The distinction travels in an ADDITIVE `removal` field
+    // instead, which a caller can branch on and a transport can carry, and which
+    // no existing consumer of `code`/`error`/`reason` is affected by.
+    const absence = explainAbsentGraphTarget(
+      graph,
+      affected.target,
+      await loadDeletionTrail(process.cwd()),
+    );
     // A caller error (typo, wrong path, or a new file the graph has not been
     // rebuilt for), not an empty-but-valid answer — exit 1, matching this
     // file's own convention for a bad argument (missing-argument usage above,
@@ -768,6 +786,12 @@ async function runAffected(rest: string[]): Promise<void> {
             target,
             dependencies: [],
             dependents: [],
+            removal: {
+              verdict: absence.verdict,
+              reason: absence.reason,
+              referencedBy: absence.referencedBy,
+              trailPath: absence.removal.path,
+            },
           },
           null,
           2,
@@ -776,6 +800,7 @@ async function runAffected(rest: string[]): Promise<void> {
     } else {
       console.error("code: target-not-indexed");
       console.error(message);
+      console.error(`removal: [${absence.verdict}] ${absence.reason}`);
     }
     process.exitCode = 1;
     return;

@@ -690,9 +690,13 @@ describe("gdctx fact-preservation oracle (compact form vs raw-output facts)", ()
     expect(run.rates?.factPreservation?.successes).toBe(0);
   });
 
-  test("empty raw-facts set => rate vacuously 1 and no fabricated rate n", () => {
+  // RESOLVED 2026-09-09, flow 238/T15: an empty raw-facts set used to publish a fabricated
+  // "vacuously 1" — nothing was there to compact, so there is nothing measured. The field
+  // is now omitted entirely (never emitted with a null value), same "present only when
+  // measured" contract precision/recall already had.
+  test("empty raw-facts set => factPreservation omitted (unmeasured), never a fabricated 1", () => {
     const run = scoreGdctxRun({ input: "empty-raw", rawFacts: [], compactFacts: ["a.ts"] });
-    expect(run.oracle?.factPreservation?.value).toBe(1);
+    expect(run.oracle?.factPreservation).toBeUndefined();
     expect(run.rates?.factPreservation).toBeUndefined();
   });
 

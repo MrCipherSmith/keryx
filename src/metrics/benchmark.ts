@@ -531,6 +531,12 @@ function validateRate(label: string, rate: RateWithCI | undefined, errors: strin
     errors.push(`${label}: rate reported without an explicit n`);
     return;
   }
+  // A trial count is a positive integer: `n <= 0` alone let a fractional n like `1e-9`
+  // through (RESOLVED 2026-09-09, flow 238/T15) — a trial cannot be a fraction of a run.
+  if (!Number.isInteger(rate.n)) {
+    errors.push(`${label}: rate n must be a positive integer, not a fraction`);
+    return;
+  }
   if (typeof rate.successes !== "number" || rate.successes < 0 || rate.successes > rate.n) {
     errors.push(`${label}: successes out of range for n`);
     return;

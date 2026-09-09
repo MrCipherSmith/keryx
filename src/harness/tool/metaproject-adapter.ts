@@ -56,6 +56,8 @@ import type { FlowService } from "../../flow/types";
 import { wikiAsk } from "../../wiki/ask";
 import { wikiEvidence, wikiPagesForFile, type WikiEvidenceInput } from "../../wiki/service";
 import type { EvidencePackage } from "../../wiki/evidence";
+// The forgetting owner's facade — never its internals (`src/lib/import-policy.ts`).
+import { loadDeletionTrail, searchRemovals, type Attribution } from "../../forgetting/service";
 import type { WikiAskInput, WikiAskResult as WikiAskFacadeResult } from "../../wiki/types";
 import type {
   ContextSummaryResult,
@@ -67,6 +69,7 @@ import type {
   GraphQueryResult,
   GraphSymbolResult,
   HealthStatusResult,
+  MemoryRemovalTrail,
   MemorySearchResult,
   MetaprojectPort,
   RepomapResult,
@@ -291,6 +294,61 @@ function confineToWiki(cwd: string, candidate: string): string | null {
  * trusting an empty/short result from it. Only a non-ENOENT failure is
  * reported: a folder that legitimately does not exist is not "unreadable".
  */
+/** How many recorded removals cross this boundary. Bounded like every other list here. */
+const MAX_REMOVAL_RECORDS = 5;
+
+/**
+ * The bound on the trail's own prose, and why it is not `MAX_EXCERPT_BYTES`.
+ *
+ * Measured while wiring this: at the excerpt bound a `no-removal-recorded`
+ * summary was cut at `"No record of a removal"…` — exactly one clause before
+ * `is therefore NOT the claim "this never existed"`. A bound that truncates the
+ * caveat delivers the bare negative this whole lane exists to stop delivering,
+ * so the summary gets a bound sized to survive it. Still bounded: this is a
+ * fixed set of templates over a measured coverage line, not user content, and
+ * `../../forgetting/trail.test.ts` plus the boundary test pin the ending.
+ */
+const MAX_REMOVAL_SUMMARY_BYTES = 1600;
+
+/** `<value> [<basis>]`, or `unknown` — a derived actor never renders as a stated one. */
+function flattenAttribution(attribution: Attribution): string {
+  return attribution.basis === "unknown" || attribution.value === null
+    ? `unknown (${attribution.detail})`
+    : `${attribution.value} [${attribution.basis}]`;
+}
+
+/**
+ * The deletion trail's answer for a memory search that found nothing.
+ *
+ * The verdict and its prose come from the owner (`src/forgetting/trail.ts`, via
+ * `../../forgetting/service`) rather than being re-derived here, so this
+ * boundary and `keryx memory search` cannot drift into two different answers for
+ * the same trail. There is no `never-existed` verdict to project, by
+ * construction.
+ */
+async function projectRemovalTrail(cwd: string, query: string): Promise<MemoryRemovalTrail> {
+  const lookup = searchRemovals(await loadDeletionTrail(cwd), query);
+  if (lookup.verdict !== "recorded-removed") {
+    return { verdict: lookup.verdict, summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES) };
+  }
+  return {
+    verdict: "recorded-removed",
+    summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES),
+    totalRemovals: lookup.occurrences.length,
+    removals: lookup.occurrences.slice(0, MAX_REMOVAL_RECORDS).map((item) => ({
+      layer: item.layer,
+      ref: clipAutomaticRecallText(item.ref, 200),
+      ...(item.title ? { title: clipAutomaticRecallText(item.title, 200) } : {}),
+      ...(item.page ? { page: clipAutomaticRecallText(item.page, 200) } : {}),
+      removedAt: item.at,
+      observedBy: clipAutomaticRecallText(item.observedBy, 200),
+      requestedBy: clipAutomaticRecallText(flattenAttribution(item.requestedBy), MAX_EXCERPT_BYTES),
+      grounds: clipAutomaticRecallText(flattenAttribution(item.grounds), MAX_EXCERPT_BYTES),
+      matchedOn: item.matchedOn,
+    })),
+  };
+}
+
 async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> {
   const root = memoryRoot(cwd);
   for (const { folder } of MEMORY_TYPES) {
@@ -665,6 +723,15 @@ export function createMetaprojectAdapter(
           query: input.query,
           ...(Object.keys(appliedFilters).length > 0 ? { filters: appliedFilters } : {}),
           hits,
+          // Flow 242 T9/F3: an empty `hits` said the same thing for an entry
+          // that had been deleted and for a phrase that never named anything —
+          // here and on the MCP `memory.search` tool, which projects through
+          // this same adapter. Consulted ONLY on an empty result: a search with
+          // hits has already answered, and removal history appended to it would
+          // be noise rather than the distinction this closes.
+          ...(hits.length === 0
+            ? { removalTrail: await projectRemovalTrail(cwd, input.query) }
+            : {}),
         };
       } catch (cause) {
         return {
