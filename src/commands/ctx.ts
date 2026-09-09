@@ -1066,7 +1066,7 @@ Command: \`${command}\`
 Exit code: \`${result.exitCode}\`
 ${mode === "count" ? "Files (path:count)" : "Files"}: \`${lines.length}\`${shownSuffix(shown.length, lines.length)}${cappedHeaderNote(scope)}
 ${scopeLine(scope)}
-${completenessLine(totals, scope)}
+${completenessLine(totals, scope, result.exitCode)}
 
 ## Files
 
@@ -1123,7 +1123,7 @@ Matches: \`${matches.length}\`${shownSuffix(shownMatches, matches.length)}${capp
 Files: \`${files.length}\`${shownSuffix(shownFiles.length, files.length)}
 Raw lines: \`${lines.length}\`
 ${scopeLine(scope)}
-${completenessLine(totals, scope)}
+${completenessLine(totals, scope, result.exitCode)}
 
 ## Top Files
 
@@ -1502,15 +1502,34 @@ function renderUntrackedFiles(untracked: string[], config: CtxConfig): string {
   return [...shown.map((file) => `- ${file}`), ...(note ? [note] : [])].join("\n");
 }
 
+/**
+ * Only real `file:line:column:text` hits. Everything else is dropped.
+ *
+ * This used to keep every unparsable line as a match attributed to a file
+ * called `(unknown)`, and two kinds of line land here that are not matches.
+ * ripgrep writes its errors to the stream — a bad path or a bad regex became
+ * "1 match" in a file named `(unknown)`, and the completeness verdict computed
+ * over that count then said `complete`, so a search that never ran reported a
+ * complete enumeration. And `-A`/`-B`/`-C` context lines use a dash separator
+ * rather than a colon, so a file with five matches asked for two lines of
+ * context reported nineteen, and the "partial" verdict was measured against
+ * that inflated denominator.
+ *
+ * Both mattered more than they look: this is the search route every agent in
+ * this repository is required to use, and the enumeration claims of an entire
+ * programme were computed from these numbers.
+ */
 function parseRgMatches(lines: string[]): Array<{ file: string; line: string; column: string; text: string }> {
-  return lines.map((line) => {
+  const parsed: Array<{ file: string; line: string; column: string; text: string }> = [];
+  for (const line of lines) {
     const match = line.match(/^(.+?):(\d+):(\d+):(.*)$/);
     if (!match) {
-      return { file: "(unknown)", line: "0", column: "0", text: line };
+      continue;
     }
     const [, file = "(unknown)", lineNumber = "0", column = "0", text = ""] = match;
-    return { file, line: lineNumber, column, text: text.trim() };
-  });
+    parsed.push({ file, line: lineNumber, column, text: text.trim() });
+  }
+  return parsed;
 }
 
 /** How many hits are rendered per file before the rest are named as omitted. */

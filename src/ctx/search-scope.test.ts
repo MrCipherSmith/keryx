@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { cappedHeaderNote, completenessLine, rgSearchScope, scopeLine } from "./search-scope";
 import type { SearchScope, SearchTotals } from "./search-scope";
 
@@ -150,4 +150,26 @@ test("cappedHeaderNote flags a capped header count", () => {
   const note = cappedHeaderNote({ hidden: false, ignored: false, capped: true });
   expect(note).toContain("-m");
   expect(note).toContain("not a total");
+});
+
+describe("a search that did not run, and lines that are not matches", () => {
+  // Both defects were found by an independent reviewer in the commit that
+  // claimed this tool "can now prove a complete answer". It could not: a
+  // ripgrep that failed had its error text counted as a match, and the verdict
+  // was computed over that count.
+  const scope = { kind: "ripgrep defaults", capped: false, hidden: false, ignored: false } as const;
+
+  test("a failed ripgrep reports `failed`, never `complete`", () => {
+    const totals = { shown: 1, total: 1, unit: "matches" as const };
+    expect(completenessLine(totals, scope, 2)).toContain("`failed`");
+    expect(completenessLine(totals, scope, 2)).toContain("It did not search");
+  });
+
+  test("exit 1 is ripgrep's honest no-matches and stays a real verdict", () => {
+    expect(completenessLine({ shown: 0, total: 0, unit: "matches" }, scope, 1)).toContain("`complete`");
+  });
+
+  test("an omitted exit code leaves existing callers unchanged", () => {
+    expect(completenessLine({ shown: 1, total: 1, unit: "matches" }, scope)).toContain("`complete`");
+  });
 });

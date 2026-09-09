@@ -174,7 +174,24 @@ export type SearchTotals = {
  * so claiming `complete` because it happened to render every emitted line would
  * be the header-count defect wearing a new label.
  */
-export function completenessLine(totals: SearchTotals, scope: SearchScope): string {
+export function completenessLine(totals: SearchTotals, scope: SearchScope, exitCode?: number): string {
+  // A search that did not run has no completeness to report.
+  //
+  // ripgrep exits 0 with matches, 1 with none, and 2 or above when it failed —
+  // a path that does not exist, a regex it cannot parse, a directory it cannot
+  // read. Without this the failure was reported as `complete`: the error text
+  // ripgrep wrote to the stream was counted as a match, and the verdict was
+  // computed over that count. A search that never happened claimed to be a
+  // complete enumeration, in the tool this repository requires every agent to
+  // search through, and on which the enumeration claims of a whole programme
+  // were built.
+  if (exitCode !== undefined && exitCode > 1) {
+    return (
+      `Completeness: \`failed\` — ripgrep exited ${exitCode}. It did not search. ` +
+      "Whatever is above is its error output, not a result: nothing here says anything " +
+      "about what the corpus contains."
+    );
+  }
   if (scope.capped) {
     return (
       "Completeness: `unknown` — `-m`/`--max-count` caps ripgrep's own output, so the counts " +
