@@ -42,7 +42,8 @@ export type LimitationCode =
   | "unresolved-edges-present"
   | "queue-truncated"
   | "page-without-describes"
-  | "not-a-git-repository";
+  | "not-a-git-repository"
+  | "git-command-failed";
 
 export interface ReportEntry {
   path: string;
@@ -52,6 +53,13 @@ export interface ReportEntry {
   verifiedAt: string | null;
   commitsBehind: number;
   reasons: Reason[];
+  /**
+   * Set only when `category === "unknown"` BECAUSE a git operation failed —
+   * flow 236 T7 (AFC-22 clause 2 / AFC-W05 clause 3: "a git failure yields
+   * unknown"). Distinguishes "git could not measure this page" from the
+   * ordinary "nobody has verified this page yet" unknown (unset).
+   */
+  gitFailure?: string;
 }
 
 export interface Limitation {
@@ -89,6 +97,16 @@ export interface BuildReportInput {
   queueEntriesConsumed?: number | undefined;
   queueTruncated?: boolean | undefined;
   now?: () => Date;
+  /**
+   * Whether git could answer at all this run. When omitted, `report.ts`
+   * probes for itself with a single `rev-parse HEAD` — this function must be
+   * able to tell a totally broken repository from a healthy one on its own,
+   * not only when a caller (`run.ts`) happens to have already checked
+   * (flow 236 T7). A caller that has ALREADY done this probe (`run.ts` needs
+   * it anyway to compute `fromRev`) should pass the result through here
+   * rather than paying for a second `rev-parse` spawn.
+   */
+  gitAvailable?: boolean;
 }
 
 export async function buildFreshnessReport(input: BuildReportInput): Promise<FreshnessReport> {
@@ -134,6 +152,26 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
         "Signature-level classification was unavailable, so every substantive change was reported as `body`. Pages that a signature change would have marked `stale-reference` may be missing.",
     });
   }
+
+  // Flow 236 T7 (AFC-22 clause 2 / AFC-W05 clause 3: "a git failure yields
+  // unknown"). Established ONCE per report, exactly like
+  // `gdgraph/staleness.ts`'s `checkGraphStaleness` establishes it once per
+  // graph check — measured before this fix: an always-failing git produced
+  // 11 fresh / 35 affected against a healthy repository's 12 / 34, the SAME
+  // two limitation codes and no signal at all that git was broken. Every page
+  // whose freshness would otherwise come from git history is reported
+  // `unknown` instead of silently falling back to the strictly weaker
+  // `VerifiedScope` comparison — see `evaluatePageFreshness`'s `gitAvailable`
+  // parameter. Pages with no `VerifiedAt` at all never depended on git and
+  // are unaffected either way.
+  const gitAvailable = input.gitAvailable ?? (await input.git(input.cwd, ["rev-parse", "HEAD"])).kind === "ok";
+  if (!gitAvailable) {
+    limitations.push({
+      code: "not-a-git-repository",
+      detail:
+        "`git rev-parse HEAD` failed this run (no repository, or git is unavailable/broken in this environment). Pages verified via git history are reported `unknown` rather than silently falling back to the weaker `VerifiedScope` comparison. Pages with no `VerifiedAt` at all (never dependent on git) are unaffected.",
+    });
+  }
   if (input.queueTruncated) {
     limitations.push({
       code: "queue-truncated",
@@ -170,6 +208,11 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
   let undecidable = 0;
   let notCodeScoped = 0;
   let fresh = 0;
+  // Counts only PER-PAGE failures that happen despite `gitAvailable` being
+  // true (rev-parse itself answered) — the blanket `not-a-git-repository`
+  // limitation above already covers the wholly-unavailable case without
+  // needing a per-page count.
+  let gitCommandFailed = 0;
 
   for (const page of pages) {
     const content = await readFile(page.absolutePath, "utf8").catch(() => "");
@@ -232,13 +275,23 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
       describePaths: describeSet.paths,
       graph: input.graph,
       git: input.git,
+      gitAvailable,
     });
+
+    if (freshness.gitFailure && gitAvailable) {
+      // The up-front probe answered fine, but THIS page's own measurement
+      // still failed (a corrupt object, an index lock, a permission error) —
+      // distinct from the wholly-unavailable case, which the blanket
+      // `not-a-git-repository` limitation already declares.
+      gitCommandFailed += 1;
+    }
 
     const affected = affectedByPage.get(`wiki:${page.relativePath}`);
 
     if (freshness.basis === "undecidable") {
-      // A page nobody ever verified. `unknown` is the honest category — it is
-      // not fresh, and it is not stale either; nobody knows.
+      // A page nobody ever verified — OR one git could not measure this run
+      // (`freshness.gitFailure` set). `unknown` is the honest category
+      // either way: it is not fresh, and it is not stale either.
       entries.push({
         path: page.relativePath,
         category: "unknown",
@@ -249,6 +302,7 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
         verifiedAt: page.verifiedAt ?? null,
         commitsBehind: 0,
         reasons: affected?.reasons ?? [],
+        ...(freshness.gitFailure ? { gitFailure: freshness.gitFailure } : {}),
       });
       continue;
     }
@@ -313,6 +367,18 @@ export async function buildFreshnessReport(input: BuildReportInput): Promise<Fre
       detail:
         "Pages whose describe-set resolved empty were excluded from scoring. Give them an explicit `Describes:` frontmatter list to bring them in, or `Describes: none` if the page is not about code.",
       affectedCount: undecidable,
+    });
+  }
+  if (gitCommandFailed > 0) {
+    // Flow 236 T7: distinct from `not-a-git-repository` — git DID answer the
+    // up-front probe, so this is a narrower, per-page refusal (a corrupt
+    // object, an index lock, a permission error on one describe-set), not
+    // evidence the whole repository is unusable.
+    limitations.push({
+      code: "git-command-failed",
+      detail:
+        "Git answered the up-front availability check but a later command failed for at least one page. Those pages are reported `unknown` rather than silently falling back to `VerifiedScope`.",
+      affectedCount: gitCommandFailed,
     });
   }
   // Deliberately NOT a limitation: these pages declared themselves out of

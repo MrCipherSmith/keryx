@@ -345,7 +345,15 @@ export async function loadTestingReport(cwd: string): Promise<TestingReport | nu
 
 export async function loadCompatibleTestingReport(
   cwd: string,
-  input: { scope: "project" | "changed"; since?: string | null },
+  // Flow 237 T6 defect 4 (AFC-28/AC-28, "an old test pass is not reused as
+  // evidence for new code"): "module"/"file" join "project"/"changed" as
+  // scopes this loader can vouch for, each requiring `name` (the module name
+  // or file path a report's own `scope` string must match, mirroring how
+  // `describeScope`/`runRun`'s `--scope` produces that string). Before this,
+  // `src/health/sources/tests.ts`'s `compatibleReportForHealth` went around
+  // this function entirely for those two scope kinds and imported whatever
+  // `loadTestingReport` returned with no gitRef or scope check at all.
+  input: { scope: "project" | "changed" | "module" | "file"; since?: string | null; name?: string },
 ): Promise<TestingReport | null> {
   const report = await loadTestingReport(cwd);
   if (!report) {
@@ -357,6 +365,11 @@ export async function loadCompatibleTestingReport(
   }
   if (input.scope === "project") {
     return !report.selection.changed && report.scope === "project" ? report : null;
+  }
+  if (input.scope === "module" || input.scope === "file") {
+    return !report.selection.changed && input.name !== undefined && report.scope === input.name
+      ? report
+      : null;
   }
   if (!report.selection.changed) {
     return null;
@@ -559,11 +572,15 @@ function detectFrameworks(input: {
     ...Object.keys(input.dependencies),
     ...input.scripts.map((script) => `${script.name} ${script.command}`),
     ...input.configs,
-    ...input.files.filter((file) => file.includes("bun.lockb")),
+    // F-240-06: `bun.lock` (Bun >= 1.2) as well as the pre-1.2 `bun.lockb`.
+    // Filtering on the old name alone meant a current Bun project's lockfile
+    // never entered the haystack, so the `bun` framework was recognised only
+    // when some script or dependency name happened to say "bun".
+    ...input.files.filter((file) => file.includes("bun.lock")),
   ].join("\n");
   const frameworks: string[] = [];
   for (const [name, pattern] of [
-    ["bun", /\bbun\b|bun:test|bun\.lockb/i],
+    ["bun", /\bbun\b|bun:test|bun\.lockb?/i],
     ["vitest", /\bvitest\b|vitest\.config/i],
     ["jest", /\bjest\b|jest\.config/i],
     ["playwright", /\bplaywright\b|playwright\.config/i],
@@ -862,8 +879,18 @@ function resolveTestCommand(
   return null;
 }
 
+// F-240-06 (flow 240 T6). Bun 1.2 replaced the binary `bun.lockb` with the text
+// `bun.lock`, so a project on current Bun has ONLY `bun.lock` and this function
+// fell through every arm to the `npm` default below -- a Bun project resolved as
+// npm. It was masked in this repository only because `package.json`'s test
+// script happens to name `bun`, which `detectFrameworks` picks up on a different
+// path. Both names are checked because both are legal: a repository pinned to
+// Bun < 1.2, or one that has not re-run `bun install` since upgrading, still
+// carries `bun.lockb`.
+const BUN_LOCKFILES = ["bun.lock", "bun.lockb"] as const;
+
 function detectPackageManager(cwd: string): "bun" | "pnpm" | "yarn" | "npm" {
-  if (resolveBunBin() && pathExistsSync(path.join(cwd, "bun.lockb"))) {
+  if (resolveBunBin() && BUN_LOCKFILES.some((name) => pathExistsSync(path.join(cwd, name)))) {
     return "bun";
   }
   if (Bun.which("pnpm") && pathExistsSync(path.join(cwd, "pnpm-lock.yaml"))) {

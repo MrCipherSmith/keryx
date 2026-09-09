@@ -21,7 +21,16 @@ import { loadMemoryConfig } from "../memory/config";
 import type { ConflictHint, DuplicateHint, MemoryEntry, MemoryStatus } from "../memory/types";
 import { readVerifiedProposalEvidence } from "./proposal-evidence";
 import { localWorkspaceAuthorizationServer, WorkspaceService } from "./workspace-service";
-import { runModelTurn, type ModelTurnResult, type ProviderFactory } from "../harness/provider/single-turn";
+// AFC-19 (flow 239, phase 7): the judge annotation used to reach the model
+// through a static `runModelTurn` import from `../harness/provider/single-turn`,
+// which put the whole provider registry into the public SAC facade's shipped
+// graph. It is now an injected port core declares and a client supplies.
+import {
+  resolveModelTurnPort,
+  warnModelTurnUnavailable,
+  type ModelTurnOutcome,
+  type ModelTurnPort,
+} from "./model-turn-port";
 
 export type DedupHint = {
   duplicates: DuplicateHint[];
@@ -143,7 +152,13 @@ export type ComputeDedupHintInput = {
   provider?: string;
   model?: string;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /**
+   * The injected single-turn capability (`./model-turn-port.ts`). Core holds no
+   * provider registry (AFC-19); without this — and without a process-wide
+   * default from `setModelTurnPort` — the annotation is refused (and said so
+   * once on stderr) rather than silently omitted.
+   */
+  modelTurn?: ModelTurnPort;
   annotationTimeoutMs?: number;
 };
 
@@ -229,9 +244,20 @@ async function computeAnnotation(
     "This is informational only and will never itself accept, reject, or merge anything.";
   const user = `--- new entry ---\ntitle: ${title}\nsummary: ${summary}\n\n--- candidates ---\n${candidates}`;
 
-  let modelResult: ModelTurnResult | undefined;
+  // No port, no verdict. This annotation is informational, so the RESULT is the
+  // same `undefined` the no-credential and unparseable paths already return —
+  // but the reason is not the same, and a missing client wiring must not look
+  // like a model that had nothing to say. `warnModelTurnUnavailable` names it,
+  // once per process, on stderr.
+  const modelTurn = resolveModelTurnPort(input.modelTurn);
+  if (modelTurn === undefined) {
+    warnModelTurnUnavailable("decision-dedup-annotation");
+    return undefined;
+  }
+
+  let modelResult: ModelTurnOutcome | undefined;
   const timeoutMs = input.annotationTimeoutMs ?? DEFAULT_ANNOTATION_TIMEOUT_MS;
-  const turn = runModelTurn({
+  const turn = modelTurn({
     system,
     user,
     requestId: "decision-dedup-annotation",
@@ -239,7 +265,6 @@ async function computeAnnotation(
     ...(input.provider !== undefined ? { provider: input.provider } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.env !== undefined ? { env: input.env } : {}),
-    ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
   }).then((result) => {
     modelResult = result;
     return "done" as const;

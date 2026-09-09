@@ -1,5 +1,8 @@
 #!/usr/bin/env bun
 
+import { runModelTurn } from "./harness/provider/single-turn";
+import { setModelTurnPort } from "./sac/model-turn-port";
+
 import { initCommand } from "./commands/init";
 import { ctxCommand } from "./commands/ctx";
 import { gdgraphCommand } from "./commands/gdgraph";
@@ -34,6 +37,8 @@ import { versionCommand } from "./commands/version";
 import { workspaceCommand } from "./commands/workspace";
 import { providersCommand } from "./commands/providers";
 import { authCommand } from "./commands/auth";
+import { retentionCommand } from "./commands/retention";
+import { forgettingCommand } from "./commands/forgetting";
 import packageJson from "../package.json" with { type: "json" };
 
 const VERSION = packageJson.version;
@@ -92,9 +97,25 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   session: sessionsCommand,
   version: versionCommand,
   workspace: workspaceCommand,
+  retention: retentionCommand,
+  forgetting: forgettingCommand,
 };
 
 export async function main(): Promise<void> {
+  // The client supplies the model turn that core refuses to import.
+  //
+  // `src/sac/**` declares a port and holds no provider: the norm forbids a
+  // provider registry, model selection, credentials and live model calls inside
+  // core, and a build-graph test fails if any of them reappear there. Without
+  // this registration the SAC paths that need a model turn refuse by name
+  // rather than pretending to have run one, which is correct but is not what a
+  // user with a key configured expects. The CLI is the client, so it registers.
+  //
+  // Inside `main`, not at module scope: a registration at import time changes
+  // the behaviour of every process that merely imports this file, which turned
+  // three tests asserting the unwired refusal green for the wrong reason.
+  setModelTurnPort(async (request) => runModelTurn(request));
+
   const args = process.argv.slice(2);
   const command = args[0];
 
@@ -233,6 +254,14 @@ Usage:
   keryx workspace create --title <title> [--component <workspace-relative-ref>]
   keryx workspace list|show|add-resource
   keryx mcp install|uninstall --runtime <cursor|claude|opencode|generic|all> [--dry-run]
+  keryx retention status [--json]
+  keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+                                               Bound gdctx raw/artifacts logs and owner write-conflict
+                                               sidecars; dry run by default, --apply removes
+  keryx forgetting trail [--limit <n>] [--json]
+  keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+                                               Read the deletion trail: what was removed, when, at
+                                               whose request, on what basis
   keryx --version
 
 Commands:
@@ -272,6 +301,8 @@ Commands:
   mcp       Expose Metaproject services over the Model Context Protocol (opt-in)
   metrics   Provenance-aware execution observability: run records, baselines, benchmarks
   workspace Shared Agent Context: workspaces, FWK reads, propose/review (module sac)
+  retention Bound stores that grow without bound (gdctx raw/artifacts, owner write-conflict sidecars)
+  forgetting Read the deletion trail — was this removed, or did it never exist?
 `);
 }
 

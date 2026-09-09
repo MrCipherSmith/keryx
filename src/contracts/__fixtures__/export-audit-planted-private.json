@@ -1,0 +1,6 @@
+{
+  "_purpose": "RED/GREEN proof fixture for src/contracts/agent-first-core.fixtures.test.ts's export-audit tests. Deliberately private-looking synthetic content — NOT part of the real selected difference and never scanned by the clean-tree assertion (that assertion only enumerates docs/requirements/keryx-agent-first-core/{schemas,examples}). Proves the audit can fail rather than only ever passing.",
+  "leakedPath": "/Users/example-user/keryx/internal-notes.md",
+  "leakedEmail": "internal-user@example-corp-private.test",
+  "leakedSecret": "sk-proj-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+}

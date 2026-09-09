@@ -116,3 +116,47 @@ describe("keryx wiki ask — historical mode (--as-of) is explicit and its items
     expect(errOutput).toContain("invalid-temporal-date");
   });
 });
+
+// Flow 236 T8, defect 3: `keryx wiki freshness` described itself as a
+// "read-only backlog" in both `--help` and its own doc comment, while
+// `runFreshness` persists `latest.{json,md}` AND calls `clearQueue`, deleting
+// the accumulated `freshness-queue.jsonl`. A phase-4 inventory pass refused to
+// run the command for exactly that reason — a real queue existed in the tree
+// and running the "read-only" command would have consumed it. Same defect
+// class as the earlier command in this programme that declared itself
+// non-mutating and wrote the user's query to disk. The help text is the
+// contract a user reads before deciding whether a command is safe to run.
+describe("keryx wiki --help declares what `freshness` actually does", () => {
+  let logged: string[] = [];
+  let originalLog: typeof console.log;
+
+  beforeEach(() => {
+    logged = [];
+    originalLog = console.log;
+    console.log = (...parts: unknown[]) => {
+      logged.push(parts.map(String).join(" "));
+    };
+  });
+
+  afterEach(() => {
+    console.log = originalLog;
+  });
+
+  test("the freshness line does not call the command read-only", async () => {
+    await wikiCommand(["--help"]);
+    const help = logged.join("\n");
+    const line = help.split("\n").find((entry) => entry.includes("wiki freshness")) ?? "";
+
+    expect(line).not.toBe("");
+    expect(line.toLowerCase()).not.toContain("read-only");
+  });
+
+  test("the help states that the run consumes the queue and writes the report", async () => {
+    await wikiCommand(["--help"]);
+    const help = logged.join("\n").toLowerCase();
+
+    expect(help).toContain("freshness-queue.jsonl");
+    expect(help).toMatch(/consumes|clears|drains/);
+    expect(help).toContain("latest.json");
+  });
+});

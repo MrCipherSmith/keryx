@@ -109,12 +109,21 @@ import {
   renderMetaprojectCoreReadme,
   renderMetaprojectDashboardHtml,
   renderMetaprojectReadme,
-  renderProjectRulesReadme,
   renderProjectRulesSkillReadme,
 } from "../lib/templates";
-import { writeRoutingEntrypointPair } from "../lib/routing-entrypoint";
+import {
+  planRoutingEntrypointPair,
+  rulesReadmeStep,
+  writeRoutingEntrypointPair,
+} from "../lib/routing-entrypoint";
+import {
+  formatInstallPlan,
+  InstallPlanBlockedError,
+  isPreviewRequested,
+  parseDivergenceResolution,
+} from "../lib/install-plan";
 import { syncAgentRules } from "../rules/agent-entrypoints";
-import { hasDistilledEntrypoints } from "../rules/distill";
+import { hasDistilledEntrypoints, listRootEntrypoints } from "../rules/distill";
 import {
   findLegacyMemoryArtifacts,
   formatLegacyMemoryMigrationAdvisory,
@@ -175,6 +184,7 @@ type InitOptions = {
   noTreesitter: boolean;
   testingTia: boolean;
   noTestingTia: boolean;
+  preview: boolean;
 };
 
 type ModuleConfig =
@@ -523,6 +533,60 @@ export async function initCommand(args: string[]): Promise<void> {
   const enableTestingTia = options.testingTia && !options.noTestingTia;
   const testingTiaFlagPresent = options.testingTia || options.noTestingTia;
 
+  const routingModuleFlags = {
+    enableGdgraph,
+    enableGdctx,
+    enableGdwiki,
+    enableGdskills,
+    enableHealth,
+    enableTesting,
+    enableMemory,
+    enableTasks,
+    enableSecurity,
+  };
+
+  // Preview: every decision above is made, nothing below has run, and nothing
+  // on disk has been touched. `listRootEntrypoints` is the read-only twin of
+  // `syncAgentRules`' own discovery, so the preview never creates the default
+  // AGENTS.md that a real run would.
+  const divergenceResolution = parseDivergenceResolution(args);
+
+  if (options.preview) {
+    const previewRuleSources = await listRootEntrypoints(
+      projectRoot,
+      existingManifest?.agentEntrypoints?.root ?? [],
+    );
+    const plan = await planRoutingEntrypointPair(
+      metaprojectRoot,
+      {
+        ...routingModuleFlags,
+        ruleSources: previewRuleSources,
+        hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+      },
+      { intent: "init", steps: [rulesReadmeStep(metaprojectRoot, "create-if-absent")] },
+    );
+    console.log(
+      formatInstallPlan(plan, {
+        ...(divergenceResolution === undefined ? {} : { resolution: divergenceResolution }),
+        relativeTo: projectRoot,
+        notes: initPreviewNotes({
+          alreadyExists,
+          ruleSources: previewRuleSources,
+          hooks: {
+            gdgraph: enableGdgraph && enableGdgraphHook,
+            gdskills: enableGdskills && enableGdskillsHook,
+            health: enableHealth && enableHealthHook,
+            testingPostCommit: enableTesting && enableTestingPostCommitHook,
+            testingPrePush: enableTesting && enableTestingPrePushHook,
+            securityPrePush: enableSecurity && enableSecurityPrePushHook,
+            securityAgent: enableSecurity && enableSecurityAgentHook,
+          },
+        }),
+      }),
+    );
+    return;
+  }
+
   await createBaseStructure(metaprojectRoot);
   await syncMetaprojectGitignore(projectRoot);
   const legacyMemoryArtifacts = await findLegacyMemoryArtifacts(projectRoot);
@@ -715,10 +779,6 @@ export async function initCommand(args: string[]): Promise<void> {
     path.join(metaprojectRoot, "hooks", "README.md"),
     renderHooksReadme(),
   );
-  await writeTextIfMissing(
-    path.join(metaprojectRoot, "rules", "README.md"),
-    renderProjectRulesReadme(),
-  );
   await writeTextIfChanged(
     path.join(metaprojectRoot, "skills", "project-rules", "README.md"),
     renderProjectRulesSkillReadme({ sources: agentRuleSources }),
@@ -726,20 +786,37 @@ export async function initCommand(args: string[]): Promise<void> {
 
   // index.md is the compact gate; the full router is routing.md beside it. The
   // gate is re-sent on every turn, so its size is multiplied by task length —
-  // docs/requirements/keryx-context-measurement/context-loading.md.
-  await writeRoutingEntrypointPair(metaprojectRoot, {
-    enableGdgraph,
-    enableGdctx,
-    enableGdwiki,
-    enableGdskills,
-    enableHealth,
-    enableTesting,
-    enableMemory,
-    enableTasks,
-    enableSecurity,
-    ruleSources: agentRuleSources,
-    hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
-  });
+  // docs/requirements/keryx-context-measurement/context-loading.md. The pair
+  // and the rules README go out under one plan, one lock and one journal, so an
+  // interrupted install is resumable rather than merely repeatable.
+  try {
+    await writeRoutingEntrypointPair(
+      metaprojectRoot,
+      {
+        ...routingModuleFlags,
+        ruleSources: agentRuleSources,
+        hasDistilledEntrypoints: await hasDistilledEntrypoints(metaprojectRoot),
+      },
+      {
+        intent: "init",
+        steps: [rulesReadmeStep(metaprojectRoot, "create-if-absent")],
+        ...(divergenceResolution === undefined ? {} : { resolution: divergenceResolution }),
+        onNotice: (line) => {
+          if (line.trim().length > 0) {
+            console.log(`  ${line}`);
+          }
+        },
+      },
+    );
+  } catch (error) {
+    if (error instanceof InstallPlanBlockedError) {
+      console.log("");
+      console.log(error.message);
+      process.exitCode = 1;
+      return;
+    }
+    throw error;
+  }
   await writeTextIfChanged(
     path.join(metaprojectRoot, "keryx-dashboard.html"),
     renderMetaprojectDashboardHtml({
@@ -1120,8 +1197,48 @@ function parseInitArgs(args: string[]): InitOptions {
     noTreesitter: args.includes("--no-treesitter"),
     testingTia: args.includes("--testing-tia"),
     noTestingTia: args.includes("--no-testing-tia"),
+    preview: isPreviewRequested(args),
   };
 }
+
+/**
+ * What the plan above does NOT digest-plan, said out loud rather than left to
+ * be discovered. `artifact-lifecycle.md` is explicit that "partial hook setup
+ * не скрывается за «всё обновлено»", so the hook intents are listed even though
+ * their bytes are merged by the hook installers rather than planned here.
+ */
+function initPreviewNotes(input: {
+  alreadyExists: boolean;
+  ruleSources: string[];
+  hooks: Record<string, boolean>;
+}): string[] {
+  const notes: string[] = [];
+  notes.push(
+    input.alreadyExists
+      ? ".metaproject already exists; this preview reflects a repeat run."
+      : ".metaproject does not exist yet; a real run creates the whole workspace.",
+  );
+  notes.push(
+    "Not digest-planned by this release: module scaffolding, skill and template files, " +
+      "metaproject.json (it carries an updatedAt timestamp and is rewritten on every run), " +
+      "and the imported .metaproject/rules/*.md files published by the rules sync writer.",
+  );
+  notes.push(
+    input.ruleSources.length > 0
+      ? `Root rule sources that would be imported: ${input.ruleSources.join(", ")}.`
+      : "No root AGENTS.md/CLAUDE.md found; a real run would create a default one.",
+  );
+  const intended = Object.entries(input.hooks)
+    .filter(([, on]) => on)
+    .map(([name]) => name);
+  notes.push(
+    intended.length > 0
+      ? `Hooks a real run would install (merged, not digest-planned): ${intended.join(", ")}.`
+      : "No hooks would be installed.",
+  );
+  return notes;
+}
+
 
 function printInitHelp(): void {
   helpTitle("keryx init", "set up a .metaproject workspace");
@@ -1156,6 +1273,9 @@ function printInitHelp(): void {
     { flag: "--no-treesitter", desc: "Do not enable the gdgraph tree-sitter symbol layer (default)." },
     { flag: "--testing-tia", desc: "Enable the opt-in testing coverage-map TIA (default off)." },
     { flag: "--no-testing-tia", desc: "Do not enable the testing coverage-map TIA (default)." },
+    { flag: "--preview, --dry-run", desc: "Print the lifecycle plan (create/update/skip/conflict + base digests) and write nothing." },
+    { flag: "--accept-version", desc: "Publish this version's content over lifecycle files a different version left divergent." },
+    { flag: "--keep-existing", desc: "Leave divergent lifecycle files alone and record that this run did not publish them." },
   ]);
 }
 

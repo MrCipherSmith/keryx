@@ -190,13 +190,26 @@ export async function checkGraphStaleness(cwd: string): Promise<StalenessCheck> 
   return reasons.length > 0 ? { status: "stale", reasons } : { status: "fresh", reasons: [] };
 }
 
-// Back-compat boolean surface for existing callers (`commands/gdgraph.ts`,
-// `wiki/staleness.ts`): "not demonstrably fresh" -> true. `"stale"` and
-// `"unknown"` both map to `true` so a git failure can never read as `false`
-// ("fresh") the way the old mtime-diff implementation did.
-export async function graphMaybeStale(cwd: string): Promise<boolean> {
-  const result = await checkGraphStaleness(cwd);
-  return result.status !== "fresh";
-}
-
+// Flow 237 T11 (F4): the boolean wrapper `graphMaybeStale` used to live here.
+// It mapped BOTH `"stale"` and `"unknown"` to `true`, which was safe for the
+// callers it had (nothing could read a git failure as "fresh") but lossy: the
+// difference between "the repo moved" and "we could not tell" — the whole
+// point of the tri-state, and the difference between STALE_NOTE and
+// UNKNOWN_NOTE below — did not survive the call. T6 moved the last two
+// production callers (`commands/gdgraph.ts`, `wiki/staleness.ts`) onto
+// `checkGraphStaleness`, leaving the wrapper with no caller but its own test:
+// a collapse sitting in the codebase waiting for the next caller to pick it
+// up by accident. There is no boolean surface any more. Callers that only
+// want a yes/no write `(await checkGraphStaleness(cwd)).status !== "fresh"`
+// at the call site, where the discarded distinction is visible in the diff.
 export const STALE_NOTE = "note: repo moved since the last graph build — `keryx gdgraph build` to refresh.";
+
+// Flow 237 T6 (AFC-28/AC-28, "a check that could not run is unknown rather
+// than passed"): a git failure means staleness genuinely could not be
+// determined — it is not evidence the repo moved. Printing `STALE_NOTE`
+// ("repo moved...") for this case asserted something the check never
+// established. Every live caller must print THIS note (with the tri-state's
+// own reasons) for `status: "unknown"`, and reserve `STALE_NOTE` for a
+// confirmed `status: "stale"`.
+export const UNKNOWN_NOTE =
+  "note: could not determine whether the graph is stale (see reasons below) — run `keryx gdgraph build` if unsure.";

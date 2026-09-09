@@ -28,6 +28,12 @@ export async function assembleAndRecordContext(input: {
 /**
  * Persist a resolvable, metadata-only Context Operations trace for an assembly
  * that did not read source content (for example, a policy or ACL denial).
+ *
+ * `partial: true`, matching the result `FwkReadService.denied()` returns to the
+ * caller (its sole caller). A no-content assembly selected nothing, so
+ * `partial: false` in the durable trace would tell a later auditor "this is the
+ * complete assembly" about a read that disclosed nothing at all — and would
+ * disagree with the answer the caller was actually given at the time.
  */
 export async function recordNoContentContext(input: {
   workspaceRoot: string; correlationId: string; configurationRevision: string;
@@ -37,7 +43,7 @@ export async function recordNoContentContext(input: {
   const assembly: ContextAssembly = {
     traceRef: traceRefFor(traceId), configurationRevision: input.configurationRevision,
     policyRef: input.policyRef, policyRevision: input.policyRevision,
-    selected: [], omittedOptional: [], partial: false,
+    selected: [], omittedOptional: [], partial: true,
   };
   await recordContextAssembly({ ...input, assembly });
   return assembly;

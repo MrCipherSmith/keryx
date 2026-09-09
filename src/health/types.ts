@@ -142,7 +142,30 @@ export type ScopeMetrics = {
 };
 
 export type GateStatus = "pass" | "warn" | "incomplete" | "fail";
-export type CoverageStatus = "complete" | "incomplete";
+/**
+ * How much of the configured picture this gate actually saw.
+ *
+ * F-240-03 (flow 240 T7): this used to be derived from broken REQUIRED sources
+ * alone, so a `dependencyAudit` that never ran -- the tool absent, or the
+ * command unable to produce results -- reported `complete`. A source that ran
+ * and found nothing and a source that never ran are different facts, and the
+ * gate's own vocabulary has to be able to say which; `partial` is that word.
+ *
+ * - `complete`   -- every source the config enables ran and parsed.
+ * - `partial`    -- every REQUIRED source ran, but at least one enabled
+ *                   OPTIONAL source did not produce a result (tool missing,
+ *                   excluded by a `--sources` filter, or configured-but-failed).
+ *                   Never escalates `status` by itself: whether a missing
+ *                   optional source should BLOCK is the question
+ *                   `sources[*].required` already answers. It only stops the
+ *                   report claiming a completeness it does not have.
+ * - `incomplete` -- a REQUIRED source did not run or did not parse. Unchanged;
+ *                   `status` is escalated to `incomplete` on the same condition.
+ *
+ * A source with `mode: "disabled"` is NOT counted against completeness: an
+ * operator turning a check off is a configuration fact, not an unmeasured check.
+ */
+export type CoverageStatus = "complete" | "partial" | "incomplete";
 export type GateResult = {
   status: GateStatus;
   reasons: string[];

@@ -49,14 +49,15 @@
 // asserting that path looks right in isolation.
 
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { mkdtemp, readdir, readFile } from "node:fs/promises";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createSpawnSubagentTool, ENV_SUBAGENT_TIMEOUT_MS } from "./spawn-subagent-tool";
 import type { SpawnSubagentToolDeps } from "./spawn-subagent-tool";
 import { openSlate } from "../../../session/slate-lifecycle";
 import { readSlate } from "../../../session/slate";
+import type { Slate } from "../../../session/slate";
 import type { NormalizedEvent, ProviderDescription, ProviderPort, NormalizedRequest } from "../../provider/types";
 
 const DESCRIPTION: ProviderDescription = {
@@ -162,6 +163,34 @@ function toolDeps(
 // guard once Track A lands its child-tool wiring — it is not expected to be
 // RED, unlike the rest of this file.
 
+/**
+ * Every ephemeral child slate directory this dispatch created is gone.
+ *
+ * Checked BY NAME rather than by diffing the OS tempdir before and after.
+ * `spawn-subagent-tool.ts` sets `dispatchId = path.basename(ephemeralDir)`,
+ * so each key of `childDispatches` IS the directory that dispatch created —
+ * which is exactly what these assertions are about.
+ *
+ * The before/after diff this replaces measured a resource shared with every
+ * other test in the run, and attributed anything that appeared in the window
+ * to this dispatch. It matched any entry containing "subagent" or "slate" —
+ * broader still than the `keryx-subagent-slate-` prefix the tool actually uses
+ * — so a sibling test creating its own slate directory failed THIS test. That
+ * is how the suite came to fail only under full parallel load and pass on a
+ * rerun, and a suite that is green only on the second try cannot be the
+ * evidence an acceptance gate rests on.
+ */
+function expectEphemeralDirsRemoved(slate: Slate): void {
+  const dispatchIds = Object.keys(slate.childDispatches ?? {});
+  // Not vacuous: an empty list would make every assertion below pass without
+  // checking anything, which is the shape these tests exist to catch.
+  expect(dispatchIds.length).toBeGreaterThan(0);
+  for (const dispatchId of dispatchIds) {
+    expect(dispatchId.startsWith("keryx-subagent-slate-")).toBe(true);
+    expect(existsSync(path.join(tmpdir(), dispatchId))).toBe(false);
+  }
+}
+
 test("AC1: spawn-subagent-tool.ts source never calls flow complete / workspace propose / workspace review", () => {
   const source = readFileSync(path.join(import.meta.dir, "spawn-subagent-tool.ts"), "utf8");
   expect(source).not.toMatch(/flow\s+complete/);
@@ -249,7 +278,6 @@ test("AC3: after the dispatch returns, the child's Seed is unreachable through e
 
   const marker = "CHILD-SEED-MARKER-AC3-7bd1";
   const captured: NormalizedRequest[] = [];
-  const tmpEntriesBefore = new Set(await readdir(tmpdir()));
 
   const tool = createSpawnSubagentTool(
     toolDeps({
@@ -287,10 +315,7 @@ test("AC3: after the dispatch returns, the child's Seed is unreachable through e
   // immediately after handoff" per the spec (plan.md Track A step 3). Proven
   // by diffing the OS tempdir's listing before/after rather than predicting
   // an exact directory name (implementer discretion per plan.md).
-  const tmpEntriesAfter = new Set(await readdir(tmpdir()));
-  const newEntries = [...tmpEntriesAfter].filter((entry) => !tmpEntriesBefore.has(entry));
-  const leakedSlateDirs = newEntries.filter((entry) => entry.toLowerCase().includes("subagent") || entry.toLowerCase().includes("slate"));
-  expect(leakedSlateDirs).toEqual([]);
+  expectEphemeralDirsRemoved(parentSlate);
 });
 
 test("AC3: on a child timeout, the fold still happens with status 'incomplete' and the ephemeral dir is still cleaned up (try/finally, not merely the happy path)", async () => {
@@ -300,7 +325,6 @@ test("AC3: on a child timeout, the fold still happens with status 'incomplete' a
     const parentDir = await tempParentDir();
     const parentCwd = process.cwd();
     await openSlate({ dir: parentDir, cwd: parentCwd, mintAttemptId: () => "parent-open-1" });
-    const tmpEntriesBefore = new Set(await readdir(tmpdir()));
 
     const tool = createSpawnSubagentTool(
       toolDeps({
@@ -324,10 +348,7 @@ test("AC3: on a child timeout, the fold still happens with status 'incomplete' a
     expect(dispatchIds).toHaveLength(1);
     expect(parentSlate.childDispatches![dispatchIds[0]!]!.status).toBe("incomplete");
 
-    const tmpEntriesAfter = new Set(await readdir(tmpdir()));
-    const newEntries = [...tmpEntriesAfter].filter((entry) => !tmpEntriesBefore.has(entry));
-    const leakedSlateDirs = newEntries.filter((entry) => entry.toLowerCase().includes("subagent") || entry.toLowerCase().includes("slate"));
-    expect(leakedSlateDirs).toEqual([]);
+    expectEphemeralDirsRemoved(parentSlate);
   } finally {
     if (prev === undefined) delete process.env[ENV_SUBAGENT_TIMEOUT_MS];
     else process.env[ENV_SUBAGENT_TIMEOUT_MS] = prev;
@@ -506,7 +527,6 @@ test("F-001: a slate_write_seed write that arrives after timeout-driven cleanup 
     const gate = new Promise<void>((resolve) => {
       releaseGate = resolve;
     });
-    const tmpEntriesBefore = new Set(await readdir(tmpdir()));
 
     const tool = createSpawnSubagentTool(
       toolDeps({
@@ -550,13 +570,10 @@ test("F-001: a slate_write_seed write that arrives after timeout-driven cleanup 
     // tool call and attempt (and, pre-fix, complete) the write.
     await new Promise((resolve) => setTimeout(resolve, 300));
 
-    // No directory was resurrected under the OS tempdir.
-    const tmpEntriesAfter = new Set(await readdir(tmpdir()));
-    const newEntries = [...tmpEntriesAfter].filter((entry) => !tmpEntriesBefore.has(entry));
-    const leakedSlateDirs = newEntries.filter(
-      (entry) => entry.toLowerCase().includes("subagent") || entry.toLowerCase().includes("slate"),
-    );
-    expect(leakedSlateDirs).toEqual([]);
+    // No directory was resurrected under the OS tempdir. Named exactly: this
+    // test is about THIS dispatch's directory not coming back, so a listing of
+    // a shared tempdir was never the right instrument for it.
+    expectEphemeralDirsRemoved(parentAfterTimeout);
 
     // The parent's own dispatch snapshot is unchanged, and the marker text
     // never landed anywhere reachable on disk.

@@ -1,7 +1,7 @@
 import { optionValue } from "../lib/args";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
-import { localWorkspaceAuthorizationServer, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
+import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
 import { createLocalFwkReadService, diagnosePolicyReadiness, normalizeFwkResult } from "../sac/fwk-service";
 import { formatFwkExplain } from "../sac/fwk-explain";
 import { createHarnessProposalLifecycleService, createLocalProposalLifecycleService, normalizeProposalLifecycleResult, readProposalSecurityGate } from "../sac/proposal-lifecycle";
@@ -37,15 +37,27 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       const workspace = await service().create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
       console.log(JSON.stringify(workspace, null, 2)); return;
     }
+    // `list` and `show` go through `listWorkspaceViews`/`lookupWorkspace` —
+    // the same two helpers MCP's `sac.workspaceList`/`sac.workspaceShow` call —
+    // so the CLI and the tool boundary cannot answer the same question
+    // differently at the same moment. Both emit the manifest with a
+    // `references` report beside it: a workspace whose target was deleted is
+    // still listed and still shown, with the failing reference named, because
+    // disappearing is indistinguishable from never having existed.
     if (subcommand === "list") {
       rejectUnknownOptions(args.slice(1), new Set(["--include-archived"]));
       const includeArchived = booleanFlag(args, "--include-archived");
-      console.log(JSON.stringify(await service().list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived }), null, 2)); return;
+      const views = await listWorkspaceViews(service(), includeArchived);
+      console.log(JSON.stringify(views.map((view) => ({ ...view.manifest, references: view.references })), null, 2)); return;
     }
     if (subcommand === "show") {
       rejectUnknownOptions(args.slice(2), new Set());
       const id = args[1]; if (!id) throw new Error("Usage: keryx workspace show <workspace-id>");
-      console.log(JSON.stringify(await service().show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId: id }), null, 2)); return;
+      const found = await lookupWorkspace(service(), id);
+      // The three non-workspace outcomes stay distinguishable in the text a
+      // human reads, not just in an exit code they all share.
+      if (found.outcome !== "workspace") throw new Error(`${found.outcome}: ${found.detail}`);
+      console.log(JSON.stringify({ ...found.manifest, references: found.references }, null, 2)); return;
     }
     if (subcommand === "add-resource") {
       rejectUnknownOptions(args.slice(2), new Set(["--kind", "--uri", "--revision"]));
@@ -195,6 +207,41 @@ export async function workspaceCommand(args: string[]): Promise<void> {
       console.log(JSON.stringify(result, null, 2));
       return;
     }
+    // `handoff` — the writer the reader below never had.
+    //
+    // `CollaborationActivity` has carried a `handoff-recorded` kind, and
+    // `CollaborationService.record()` has been able to write it, since the
+    // module was added. Nothing called `record()`: its only caller in the whole
+    // repository was its own test. So `keryx workspace collaboration` — which
+    // the sac skill file describes as showing "cross-session collaboration
+    // state" — returned `activity: []` for every workspace that has ever
+    // existed, and could not have returned anything else. An empty list read as
+    // "no handoffs happened" when what was true was "no handoff can be
+    // recorded", which is the same absence-as-result the resume path had.
+    if (subcommand === "handoff") {
+      // Flow 237 T10 (F1): `--from` used to be forwarded and used to WIN over
+      // the authenticated actor, so `--from "user:the-cto"` wrote
+      // `handoff.from: "user:the-cto"` on a row whose `actorSubject` was
+      // `user:local-502`. `from` is now always the resolved actor and the
+      // service refuses a supplied one; this branch refuses the flag by name
+      // rather than as a generic "Unknown option", so anyone who scripted it
+      // learns why it is gone instead of reading it as a typo.
+      if (args.slice(2).some((argument) => argument === "--from" || argument.startsWith("--from="))) {
+        throw new Error("--from is not accepted: a handoff's `from` is the subject the authorization server resolved for this caller, not a value a caller can state. Run the command as the subject handing over.");
+      }
+      rejectUnknownOptions(args.slice(2), new Set(["--to", "--artifact"]));
+      const workspaceId = args[1];
+      const to = optionValue(args, "--to");
+      const artifactRef = optionValue(args, "--artifact");
+      if (!workspaceId || !to || !artifactRef) throw new Error("Usage: keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>");
+      // `from` is filled by the service from the authenticated actor. An
+      // unattributed handoff is the shape this record exists to prevent, so
+      // there is no path that writes one — and no path that writes a
+      // caller-chosen one either.
+      const activity = await createLocalCollaborationService(process.cwd()).record({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, activity: { kind: "handoff-recorded", handoff: { to, artifactRef } } });
+      console.log(JSON.stringify(activity, null, 2));
+      return;
+    }
     if (subcommand === "collaboration") {
       rejectUnknownOptions(args.slice(2), new Set()); const workspaceId = args[1];
       if (!workspaceId) throw new Error("Usage: keryx workspace collaboration <workspace-id>");
@@ -300,7 +347,7 @@ function booleanFlagDefaultTrue(args: string[], name: string): boolean {
 }
 
 function printHelp(): void {
-  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
+  console.log("keryx workspace create --title <title> [--component <workspace-relative-ref>]\nkeryx workspace list [--include-archived]\nkeryx workspace show <workspace-id>\nkeryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]\nkeryx workspace archive <workspace-id>\nkeryx workspace remove-resource <workspace-id> --uri <workspace-relative-ref>\nkeryx workspace rename <workspace-id> --title <title>\nkeryx workspace overview <workspace-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N] [--explain]\nkeryx workspace propose <workspace-id> --kind <" + PROPOSAL_KINDS.join("|") + "> --session <session-id> [--note <one-line note>]\nkeryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]\nkeryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed> [--reason <reason>] [--idempotency-key <key>] [--confirm-token <token>]\nkeryx workspace handoff <workspace-id> --to <subject> --artifact <ref>   (from = the authenticated actor; not settable)\nkeryx workspace collaboration <workspace-id>\nkeryx workspace policy-readiness\nkeryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]\nkeryx workspace list-proposals [<workspace-id>]\nkeryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]");
 }
 
 /**

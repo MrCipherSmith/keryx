@@ -38,9 +38,10 @@
 //    as cleanly.
 //
 // 3. `resolveMachineWrapUp`/`runWrapUp` accept extra, all-OPTIONAL testability
-//    seams beyond plan.md's minimal signature: `now`, `env`, `providerFactory`,
-//    `modelTurnTimeoutMs` — mirroring `runModelTurn`'s (single-turn.ts) own
-//    already-established injected-non-determinism pattern, needed here to
+//    seams beyond plan.md's minimal signature: `now`, `env`, `modelTurn`
+//    (`providerFactory` until flow 239 phase 7 replaced it with the AFC-19
+//    model-turn port), `modelTurnTimeoutMs` — an already-established
+//    injected-non-determinism pattern, needed here to
 //    deterministically exercise the fail-closed-no-credential and
 //    bounded-timeout-mechanical-fallback behaviors plan.md's Risks section
 //    itself calls out, without a real network credential or a real hang.
@@ -66,6 +67,7 @@ import { expect, test } from "bun:test";
 import { mkdtemp, mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 // RED: `./machine-wrap-up` does not exist yet (task-implementer's Track B creates it).
 import { resolveMachineWrapUp, runWrapUp } from "./machine-wrap-up";
@@ -73,76 +75,40 @@ import type { MachineWrapUpResolution, WrapUpOutcome } from "./machine-wrap-up";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
 import type { Slate, SlateSeed } from "../session/slate";
 import { readSlate } from "../session/slate";
-import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
+import type { ModelTurnPort } from "./model-turn-port";
 
 const time = "2026-08-16T00:00:00.000Z";
 
-const DESCRIPTION: ProviderDescription = {
-  capabilities: {
-    streaming: true,
-    toolCalls: false,
-    parallelToolCalls: false,
-    structuredOutput: false,
-    reasoningMetadata: false,
-    promptCaching: false,
-    vision: false,
-    tokenCounting: false,
-    modelListing: false,
-  },
-  descriptor: { providerId: "stub" },
-};
-
-/** A model-turn provider that answers immediately with fixed text. */
-function stubModelProvider(text: string): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: (_req, opts) =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text };
-        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
-      })(),
-  };
+/**
+ * The injected model-turn capability, in its three test shapes. These were
+ * `ProviderPort` stubs behind an injected `providerFactory` until flow 239
+ * phase 7 moved the whole turn behind a port (`./model-turn-port.ts`, AFC-19):
+ * core no longer names a provider, so neither does its test double.
+ */
+function stubModelTurn(text: string): ModelTurnPort {
+  return async () => ({ credentialAvailable: true, text });
 }
 
-/** A model-turn provider that never answers (bounded-timeout fallback probe). */
-function hangingModelProvider(): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: () =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        await new Promise(() => {});
-      })(),
-  };
+/** A port that never answers (bounded-timeout fallback probe). */
+function hangingModelTurn(): ModelTurnPort {
+  return () => new Promise<never>(() => {});
 }
 
 /**
- * A model-turn provider whose `stream()` throws synchronously (inside the
- * async generator body, before any `yield`) for exactly ONE Seed kind —
- * detected via `resolveMachineWrapUp`'s own `--- seeds (<kind>) ---` marker
- * in the user message it builds — and answers normally for every other kind.
- * F-002 regression test seam: `runModelTurn`'s `for await (const event of
- * port.stream(...))` has no try/catch of its own, so a throwing generator
- * propagates all the way out of `resolveMachineWrapUp` uncaught — exactly
- * the "genuinely-thrown, non-conflict failure" class F-002 is about, reached
- * here through the cheapest possible seam (an injected `providerFactory`)
- * rather than a new production-code test hook.
+ * A port that throws synchronously for exactly ONE Seed kind — detected via
+ * `resolveMachineWrapUp`'s own `--- seeds (<kind>) ---` marker in the user
+ * message it builds — and answers normally for every other kind. F-002
+ * regression test seam: nothing between the port call and `resolveMachineWrapUp`
+ * catches, so the throw propagates out uncaught — exactly the
+ * "genuinely-thrown, non-conflict failure" class F-002 is about, reached
+ * through the cheapest possible seam rather than a new production-code hook.
  */
-function perKindThrowingProvider(failingKind: string, okText: string): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: (request, opts) => {
-      const marker = `seeds (${failingKind})`;
-      const isFailingKind = request.messages.some(
-        (message) => typeof message.content === "string" && message.content.includes(marker),
-      );
-      return (async function* (): AsyncGenerator<NormalizedEvent> {
-        if (isFailingKind) {
-          throw new Error(`F-002 test: injected non-conflict failure for kind "${failingKind}"`);
-        }
-        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text: okText };
-        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
-      })();
-    },
+function perKindThrowingModelTurn(failingKind: string, okText: string): ModelTurnPort {
+  return (request) => {
+    if (request.user.includes(`seeds (${failingKind})`)) {
+      throw new Error(`F-002 test: injected non-conflict failure for kind "${failingKind}"`);
+    }
+    return Promise.resolve({ credentialAvailable: true, text: okText });
   };
 }
 
@@ -257,7 +223,7 @@ test("AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.
     slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
     kind: "decision",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("machine-authored summary of the evidence above"),
+    modelTurn: stubModelTurn("machine-authored summary of the evidence above"),
   });
 
   expect(result.ok).toBe(true);
@@ -268,10 +234,10 @@ test("AC5: resolveMachineWrapUp's evidence never points at a session-evidence/*.
   }
 });
 
-// --- Fail-closed: no credential, no injected factory -> typed no-credential
+// --- Fail-closed: a supplied port with no credential -> typed no-credential
 // outcome, no proposal attempted. -------------------------------------------
 
-test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' } when no credential and no providerFactory are available", async () => {
+test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' } when the supplied port reports no credential", async () => {
   const cwd = await tempGitCwd();
   await createWorkspace(cwd, "workspace-a");
 
@@ -282,9 +248,34 @@ test("resolveMachineWrapUp fails closed with { ok: false, code: 'no_credential' 
     kind: "decision",
     now: () => new Date(time),
     env: {}, // deliberately no ANTHROPIC_API_KEY / any provider key
+    // The capability is present and answers honestly that it has no key.
+    modelTurn: async () => ({ credentialAvailable: false, text: "" }),
   });
 
   expect(result).toEqual({ ok: false, code: "no_credential" });
+});
+
+// --- Fail-closed: no port at all -> a DIFFERENT typed outcome, and no
+// mechanical summary presented as if a model had authored one. ---------------
+
+test("resolveMachineWrapUp refuses with { ok: false, code: 'no_model_turn' } when no model-turn port is supplied at all (AFC-19)", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    env: {},
+  });
+
+  expect(result).toEqual({ ok: false, code: "no_model_turn" });
+  // And nothing was written: the refusal happens before the evidence step, so
+  // an unwired client leaves no half-finished wrap-up behind.
+  const evidenceDir = path.join(cwd, ".metaproject", "workspaces", "workspace-a", "machine-evidence");
+  await expect(readdir(evidenceDir)).rejects.toThrow();
 });
 
 // --- Bounded timeout -> mechanical fallback, never a hang. -----------------
@@ -300,7 +291,7 @@ test("resolveMachineWrapUp falls back to a mechanical summary on a bounded model
     slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
     kind: "decision",
     now: () => new Date(time),
-    providerFactory: () => hangingModelProvider(),
+    modelTurn: hangingModelTurn(),
     modelTurnTimeoutMs: 200,
   });
   const elapsed = performance.now() - started;
@@ -340,7 +331,7 @@ test("flow 200: with no workspaceId and a FAILED resolve, runWrapUp writes an un
     slate,
     trigger: "process-termination",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("mechanical or model summary"),
+    modelTurn: stubModelTurn("mechanical or model summary"),
     // Flow 200 lazy binding: resolve-or-create is attempted from Seeds; a
     // failed resolve degrades to the unbound-candidate artifact (AC6).
     resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
@@ -396,7 +387,7 @@ test("flow 200 (lazy binding): with no workspaceId and a SUCCESSFUL resolve, run
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("lazy summary"),
+    modelTurn: stubModelTurn("lazy summary"),
     resolveWorkspace: async (input) => {
       resolveCalls.push(input);
       return { ok: true, workspaceId: "workspace-seed-resolved", action: "bound-existing" };
@@ -440,11 +431,11 @@ test("AC4: two Promise.all-raced runWrapUp calls for the same flow transition pr
     seeds: [seed("s1", "the same finding both racers see", "decision")],
   });
 
-  const providerFactory = () => stubModelProvider("racer summary");
+  const modelTurn = stubModelTurn("racer summary");
 
   const [first, second] = await Promise.all([
-    runWrapUp({ cwd, dir: dirA, slate, trigger: "flow-complete", now: () => new Date(time), providerFactory }),
-    runWrapUp({ cwd, dir: dirB, slate, trigger: "flow-complete", now: () => new Date(time), providerFactory }),
+    runWrapUp({ cwd, dir: dirA, slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
+    runWrapUp({ cwd, dir: dirB, slate, trigger: "flow-complete", now: () => new Date(time), modelTurn }),
   ]);
 
   // AC4's actual invariant, checked directly on disk: at most one accepted
@@ -493,7 +484,7 @@ test("two DIFFERENT non-empty kind groups in the same runWrapUp call produce two
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("two-kind summary"),
+    modelTurn: stubModelTurn("two-kind summary"),
   });
 
   const proposedKinds = outcome.groups.filter((group) => group.outcome === "proposed").map((group) => group.kind).sort();
@@ -530,7 +521,7 @@ test("F-002: a genuinely-thrown, non-conflict failure in ONE kind-group never di
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => perKindThrowingProvider("risk", "decision summary"),
+    modelTurn: perKindThrowingModelTurn("risk", "decision summary"),
   });
 
   const decisionGroup = outcome.groups.find((group) => group.kind === "decision");
@@ -589,7 +580,7 @@ test("AC1/AC2/AC3/AC9: runWrapUp writes a wrap-up-outcome artifact for the unbou
     slate,
     trigger: "process-termination",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("mechanical or model summary"),
+    modelTurn: stubModelTurn("mechanical or model summary"),
     resolveWorkspace: async () => ({ ok: false, reason: "ambiguous" }),
   });
 
@@ -623,7 +614,7 @@ test("AC1/AC2/AC9: runWrapUp writes a wrap-up-outcome artifact recording an 'err
     slate,
     trigger: "explicit",
     now: () => new Date(time),
-    providerFactory: () => perKindThrowingProvider("risk", "unused"),
+    modelTurn: perKindThrowingModelTurn("risk", "unused"),
   });
 
   expect(outcome.groups.length).toBe(1);
@@ -657,7 +648,7 @@ test("AC2: runWrapUp writes a wrap-up-outcome artifact for a fully successful ('
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("summary"),
+    modelTurn: stubModelTurn("summary"),
   });
 
   expect(outcome.groups.length).toBe(1);
@@ -714,7 +705,7 @@ test("AC2/NFR-1: a failing writeWrapUpOutcomeArtifact mkdir never poisons runWra
     slate,
     trigger: "flow-complete",
     now: () => new Date(time),
-    providerFactory: () => stubModelProvider("summary"),
+    modelTurn: stubModelTurn("summary"),
   });
 
   // runWrapUp itself must resolve normally with its correctly-computed
@@ -734,4 +725,502 @@ test("AC2/NFR-1: a failing writeWrapUpOutcomeArtifact mkdir never poisons runWra
   // failure was swallowed, not silently "succeeded".
   const artifacts = await readWrapUpOutcomeArtifacts(dir);
   expect(artifacts.length).toBe(0);
+});
+
+// --- The redaction floor (flow 236 T6) --------------------------------------
+//
+// Measured before this suite existed, on the fixture below: this resolver wrote
+// `aws_key = AKIAIOSFODNN7EXAMPLE` verbatim into
+// `machine-evidence/*.diff.txt` and sent the same bytes to the model provider,
+// while `session-wrap-up.ts` — the sibling producer of the same `kind: "diff"`
+// evidence, from the same `gitDiff` primitive — wrote
+// `aws_key = [REDACTED:secret]`. These tests hold both producers to the second
+// behaviour, and to announcing it when it happens.
+//
+// The trigger is real: a genuine uncommitted working-tree change in a real git
+// repo, collected by the real `gitDiff`, floored by the real `guardOutput`
+// seam. Nothing about the redaction is injected by the test.
+
+const PLANTED_SECRET = "AKIAIOSFODNN7EXAMPLE";
+
+/** Make `git diff` in `cwd` genuinely carry a secret. */
+async function plantSecretInWorkingTree(cwd: string): Promise<void> {
+  await writeFile(path.join(cwd, "README.md"), `seed content\naws_key = ${PLANTED_SECRET}\n`, "utf8");
+}
+
+async function enableSecurity(cwd: string, mode: "advisory" | "enforced"): Promise<void> {
+  await mkdir(path.join(cwd, ".metaproject"), { recursive: true });
+  await writeFile(path.join(cwd, ".metaproject", "metaproject.json"), JSON.stringify({ modules: { security: { enabled: true } } }), "utf8");
+  await writeFile(path.join(cwd, ".metaproject", "security.config.json"), JSON.stringify({ mode }), "utf8");
+}
+
+async function machineEvidence(cwd: string, workspaceId: string): Promise<Map<string, string>> {
+  const dir = path.join(cwd, ".metaproject", "workspaces", workspaceId, "machine-evidence");
+  const names = await readdir(dir);
+  const out = new Map<string, string>();
+  for (const name of names) out.set(name, await readFile(path.join(dir, name), "utf8"));
+  return out;
+}
+
+test("a secret in the working-tree diff never reaches the evidence file OR the model prompt", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await plantSecretInWorkingTree(cwd);
+
+  let promptSentToProvider = "";
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: async (request) => {
+      promptSentToProvider = request.user;
+      return { credentialAvailable: true, text: "summary" };
+    },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+
+  const files = await machineEvidence(cwd, "workspace-a");
+  const diffName = [...files.keys()].find((name) => name.endsWith(".diff.txt"))!;
+  // The diff is still a real diff of the real change — this is not "the floor
+  // ate the evidence", it is "the floor masked the credential in it".
+  expect(files.get(diffName)).toContain("aws_key = ");
+  expect(files.get(diffName)).not.toContain(PLANTED_SECRET);
+  // Egress: the prompt leaves the machine, so it is floored too.
+  expect(promptSentToProvider).toContain("--- git diff ---");
+  expect(promptSentToProvider).not.toContain(PLANTED_SECRET);
+
+  // The recorded revision is the sha256 of what is actually on disk, so a
+  // downstream hash check verifies the bytes that exist rather than bytes that
+  // were never written.
+  const diffItem = result.resolution.evidence.find((item) => item.kind === "diff")!;
+  expect(diffItem.revision).toBe(createHash("sha256").update(files.get(diffName)!).digest("hex"));
+});
+
+// AFC-22 (flow 236 T13, F236-03). This producer is the one that mattered
+// most: its `gitDiff` bytes become `evidence[0]` — the item every owner writer
+// is handed as THE content — with `revision` = sha256 of them, AND the same
+// bytes go into the model prompt below. Before the fix a corrupt repository
+// produced "" for both, so the evidence read as a clean tree, the hash check
+// confirmed it, and the summariser was told the tree was clean.
+//
+// The failure is induced on disk with the real git binary after the workspace
+// exists, so everything else about the run is a normal, passing wrap-up.
+// Revert the tri-state (`gitDiff` back to `catch { return "" }`, or `diffKind`
+// back to a literal "diff") and both tests below go red.
+test("a working-tree diff that could not be taken is recorded as diff-unavailable, never as a clean tree", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  // A real, uncommitted change exists — and is then made unreadable. The worst
+  // case: a diff that genuinely exists and cannot be measured.
+  await writeFile(path.join(cwd, "README.md"), "seed content\nand an unrecorded change\n", "utf8");
+  await writeFile(path.join(cwd, ".git", "HEAD"), "corrupt", "utf8");
+
+  let promptSentToProvider = "";
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: async (request) => {
+      promptSentToProvider = request.user;
+      return { credentialAvailable: true, text: "summary" };
+    },
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+
+  // `evidence[0]` is still the diff slot, but it no longer CLAIMS a diff.
+  expect(result.resolution.evidence[0]!.kind).toBe("diff-unavailable");
+  expect(result.resolution.evidence.map((item) => item.kind)).toEqual(["diff-unavailable", "flow", "seeds"]);
+
+  const files = await machineEvidence(cwd, "workspace-a");
+  const diffName = [...files.keys()].find((name) => name.endsWith(".diff.txt"))!;
+  const body = files.get(diffName)!;
+  expect(body).toContain("NOT MEASURED");
+  expect(body).not.toBe("");
+  // A verifier confirms the marker — and so can never confirm a measurement.
+  expect(result.resolution.evidence[0]!.revision).toBe(createHash("sha256").update(body).digest("hex"));
+  expect(result.resolution.evidence[0]!.revision).not.toBe(createHash("sha256").update("").digest("hex"));
+
+  // Egress: the summariser is never told the tree was clean.
+  expect(promptSentToProvider).toContain("NOT MEASURED");
+  expect(promptSentToProvider).not.toContain("(no working-tree changes)");
+});
+
+test("the mechanical fallback summary says NOT MEASURED rather than describing a clean tree", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFile(path.join(cwd, ".git", "HEAD"), "corrupt", "utf8");
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    // Empty text with a credential present ⇒ the mechanical summary is used.
+    modelTurn: async () => ({ credentialAvailable: true, text: "" }),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.resolution.summary).toContain("NOT MEASURED");
+  expect(result.resolution.summary).not.toContain("no working-tree changes");
+});
+
+test("a genuinely clean git tree is still recorded as a measured diff — the marker is not collateral damage", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  // Nothing edited: the tree really is clean.
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.resolution.evidence[0]!.kind).toBe("diff");
+  const files = await machineEvidence(cwd, "workspace-a");
+  expect(files.get([...files.keys()].find((name) => name.endsWith(".diff.txt"))!)).toBe("");
+});
+
+test("redacted evidence is announced: a redaction-notice item names the rewritten file, and is itself hash-verified", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await enableSecurity(cwd, "advisory");
+  await plantSecretInWorkingTree(cwd);
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+
+  const notice = result.resolution.evidence.find((item) => item.kind === "redaction-notice");
+  expect(notice).toBeDefined();
+  // Appended last: `evidence[0]` is still the diff every owner writer reads.
+  expect(result.resolution.evidence[0]!.kind).toBe("diff");
+  expect(result.resolution.evidence.at(-1)).toBe(notice!);
+
+  const files = await machineEvidence(cwd, "workspace-a");
+  const noticeName = path.posix.basename(notice!.uri);
+  const noticeBody = files.get(noticeName)!;
+  const diffName = [...files.keys()].find((name) => name.endsWith(".diff.txt"))!;
+
+  // It says WHICH body was rewritten, and lists the untouched ones separately
+  // rather than leaving the reader to guess.
+  expect(noticeBody).toContain("## Rewritten");
+  expect(noticeBody).toContain("- decision.diff.txt");
+  expect(noticeBody).toContain("## Byte-preserved");
+  expect(noticeBody).toContain("- decision.flow.json");
+  expect(noticeBody).toContain("- decision.seeds.json");
+  expect(noticeBody).toMatch(/secret:\d/); // leak-safe category count from the engine
+  expect(noticeBody).not.toContain(PLANTED_SECRET);
+  // The notice describes the diff body, and the diff body really is the masked one.
+  expect(files.get(diffName)).not.toContain(PLANTED_SECRET);
+
+  // Hash-verified like every other evidence item, so it travels with the
+  // proposal and cannot be dropped without breaking verification.
+  expect(notice!.revision).toBe(createHash("sha256").update(noticeBody).digest("hex"));
+});
+
+test("a wrap-up whose evidence the floor did NOT touch carries no redaction notice", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await enableSecurity(cwd, "advisory");
+  // No planted secret: the working tree is clean of anything the floor masks.
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "an ordinary finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.resolution.evidence.map((item) => item.kind)).toEqual(["diff", "flow", "seeds"]);
+  const files = await machineEvidence(cwd, "workspace-a");
+  expect([...files.keys()].some((name) => name.endsWith(".redaction.md"))).toBe(false);
+});
+
+test("an enforced workspace refuses the wrap-up outright, writes no evidence, and does not report it as a missing credential", async () => {
+  const cwd = await tempGitCwd();
+  await createWorkspace(cwd, "workspace-a");
+  await enableSecurity(cwd, "enforced");
+  await plantSecretInWorkingTree(cwd);
+
+  const result = await resolveMachineWrapUp({
+    cwd,
+    workspaceId: "workspace-a",
+    slate: baseSlate({ workspaceId: "workspace-a", seeds: [seed("s1", "a real finding", "decision")] }),
+    kind: "decision",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(result.ok).toBe(false);
+  if (result.ok) return;
+  // NOT "no_credential": a security refusal that wears the missing-key label
+  // sends a reviewer looking for an API key that was never the problem.
+  expect(result.code).toBe("security_denied");
+  if (result.code !== "security_denied") return;
+  expect(result.detail).not.toContain(PLANTED_SECRET);
+  // Leak-safe: categories and counts, never the span it matched.
+  expect(result.detail).toMatch(/secret:\d/);
+
+  // Fail-closed: refused before the evidence step, so nothing half-written.
+  const evidenceDir = path.join(cwd, ".metaproject", "workspaces", "workspace-a", "machine-evidence");
+  await expect(readdir(evidenceDir)).rejects.toThrow();
+});
+
+test("a proposal whose evidence carries a redaction notice still validates and persists end to end", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "236-redaction-notice-flow");
+  await enableSecurity(cwd, "advisory");
+  await plantSecretInWorkingTree(cwd);
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ workspaceId: "workspace-a", course: { flowRef: "236" }, seeds: [seed("s1", "a decision finding", "decision")] }),
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  // The notice is an extra `evidence[]` member on a schema-validated
+  // (`workspace-proposal`) record whose `evidence` item is
+  // `additionalProperties: false` — so this proves the marking survives
+  // `create()`'s own validation and containment checks, rather than only
+  // existing in the in-memory resolution.
+  expect(outcome.groups[0]!.outcome).toBe("proposed");
+  const files = await proposalFiles(cwd, "workspace-a");
+  expect(files.length).toBe(1);
+  const record = JSON.parse(await readFile(path.join(cwd, ".metaproject", "workspaces", "workspace-a", "proposals", files[0]!), "utf8")) as {
+    evidence: { kind: string; uri: string; revision: string }[];
+  };
+  const notice = record.evidence.find((item) => item.kind === "redaction-notice")!;
+  expect(notice).toBeDefined();
+  const noticeBody = await readFile(path.join(cwd, notice.uri.slice(2)), "utf8");
+  expect(noticeBody).toContain("## Rewritten");
+  expect(notice.revision).toBe(createHash("sha256").update(noticeBody).digest("hex"));
+});
+
+test("runWrapUp surfaces a floor refusal as an 'error' group outcome, never as 'no_credential'", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "236-redaction-floor-flow");
+  await enableSecurity(cwd, "enforced");
+  await plantSecretInWorkingTree(cwd);
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ workspaceId: "workspace-a", course: { flowRef: "236" }, seeds: [seed("s1", "a decision finding", "decision")] }),
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(outcome.groups.length).toBe(1);
+  const group = outcome.groups[0]!;
+  expect(group.outcome).toBe("error");
+  if (group.outcome !== "error") return;
+  expect(group.message).toContain("security floor");
+  expect(group.message).not.toContain(PLANTED_SECRET);
+});
+
+// --- The floor's SECOND asymmetry (flow 236 T12) ----------------------------
+//
+// The suite above closed the asymmetry BETWEEN the two producers of a
+// `TrustedWrapUpResolution`. This one closes the asymmetry WITHIN this
+// producer, between its two write paths. Measured before this suite existed,
+// on an unbound slate whose only seed read
+// `follow up on the key AKIAIOSFODNN7EXAMPLE in config`:
+//
+//   groups: [{"kind":"follow-up","outcome":"unbound-candidate"}]
+//   --- 2026-09-07T21-56-36-330Z-unbound-candidate.json
+//       contains raw secret: true
+//
+// while the identical bytes through `applyEvidenceRedactionFloor` — the floor
+// the BOUND path of the very same function already ran — came back as
+// `follow up on the key [REDACTED:secret] in config`, `altered: true`.
+// `resolveMachineWrapUp` floored its seeds before hashing, prompting and
+// writing; `writeUnboundCandidateArtifact` wrote the same seed texts verbatim.
+//
+// As with the suite above, nothing here is injected: a real seed, the real
+// `runWrapUp` writer, the real `guardOutput` seam.
+
+/** Everything sitting in a session's `slate-archive/`, by filename. */
+async function slateArchiveFiles(dir: string): Promise<Map<string, string>> {
+  const archiveDir = path.join(dir, "slate-archive");
+  const out = new Map<string, string>();
+  let names: string[];
+  try {
+    names = await readdir(archiveDir);
+  } catch {
+    return out;
+  }
+  for (const name of names) out.set(name, await readFile(path.join(archiveDir, name), "utf8"));
+  return out;
+}
+
+test("a secret in a SEED never reaches the unbound-candidate artifact, and the rewrite is announced", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    // No workspaceId, and the external-slate source, so this takes the
+    // unbound-candidate path unconditionally (AC-38) — the exact path the
+    // reviewer reproduced on.
+    slate: baseSlate({ seeds: [seed("s1", `follow up on the key ${PLANTED_SECRET} in config`)] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  expect(outcome.groups).toEqual([{ kind: "follow-up", outcome: "unbound-candidate" }]);
+
+  const files = await slateArchiveFiles(dir);
+  const candidateName = [...files.keys()].find((name) => name.endsWith("-unbound-candidate.json"))!;
+  const candidate = files.get(candidateName)!;
+  expect(candidate).not.toContain(PLANTED_SECRET);
+  // Not "the floor ate the artifact": the seed is still recorded, and still
+  // attributed, with only the credential masked.
+  expect(candidate).toContain("[REDACTED:secret]");
+  const parsed = JSON.parse(candidate) as { groups: Array<{ kind: string; seeds: Array<{ text: string; source: string }> }> };
+  expect(parsed.groups[0]!.kind).toBe("follow-up");
+  expect(parsed.groups[0]!.seeds[0]!.source).toBe("parent");
+  expect(parsed.groups[0]!.seeds[0]!.text).toContain("follow up on the key");
+
+  // Altered and NOT silent: a sibling notice names the rewritten artifact.
+  const noticeName = `${candidateName}.redaction.md`;
+  const notice = files.get(noticeName);
+  expect(notice).toBeDefined();
+  expect(notice!).toContain("## Rewritten");
+  expect(notice!).toContain(`- ${candidateName}`);
+  expect(notice!).not.toContain(PLANTED_SECRET);
+  // The notice must not be mistaken for a second record by `catch-up.ts`,
+  // which scans this directory by exactly these two filename suffixes.
+  expect(noticeName.endsWith("-unbound-candidate.json")).toBe(false);
+  expect(noticeName.endsWith("-wrap-up-outcome.json")).toBe(false);
+});
+
+test("an unaltered unbound-candidate artifact carries no redaction notice", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+
+  await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ seeds: [seed("s1", "an ordinary follow-up with nothing sensitive in it")] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  const files = await slateArchiveFiles(dir);
+  expect([...files.keys()].some((name) => name.endsWith("-unbound-candidate.json"))).toBe(true);
+  expect([...files.keys()].some((name) => name.endsWith(".redaction.md"))).toBe(false);
+});
+
+test("a floor REFUSAL on the unbound path is its own outcome, never reported as 'unbound-candidate'", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await enableSecurity(cwd, "enforced");
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ seeds: [seed("s1", `follow up on the key ${PLANTED_SECRET} in config`)] }),
+    trigger: "external-slate-close",
+    wrapUpSource: "external-slate",
+    now: () => new Date(time),
+    modelTurn: stubModelTurn("summary"),
+  });
+
+  // "unbound-candidate" means "a durable artifact for these seeds exists on
+  // disk" — and `catch-up.ts` treats it as a completed dispatch that outranks
+  // every failure signal. After a refusal that is simply false, so it must not
+  // be what comes back.
+  expect(outcome.groups.length).toBe(1);
+  const group = outcome.groups[0]!;
+  expect(group.outcome).not.toBe("unbound-candidate");
+  expect(group.outcome).toBe("error");
+  if (group.outcome !== "error") return;
+  expect(group.message).toContain("security floor");
+  expect(group.message).not.toContain(PLANTED_SECRET);
+  // Leak-safe: categories and counts, never the span it matched.
+  expect(group.message).toMatch(/secret:\d/);
+
+  // Fail-closed: nothing half-written, and above all no artifact carrying the
+  // seed text the floor just refused to let through.
+  const files = await slateArchiveFiles(dir);
+  expect([...files.keys()].some((name) => name.endsWith("-unbound-candidate.json"))).toBe(false);
+  for (const body of files.values()) expect(body).not.toContain(PLANTED_SECRET);
+});
+
+test("a secret in a thrown error message never reaches the wrap-up-outcome artifact", async () => {
+  const cwd = await tempGitCwd();
+  const dir = await tempSessionDir();
+  await createWorkspace(cwd, "workspace-a");
+  await writeFlowFixture(cwd, "236-outcome-floor-flow");
+
+  const outcome = await runWrapUp({
+    cwd,
+    dir,
+    slate: baseSlate({ workspaceId: "workspace-a", course: { flowRef: "236" }, seeds: [seed("s1", "a decision finding", "decision")] }),
+    trigger: "flow-complete",
+    now: () => new Date(time),
+    // A provider that rejects by echoing back the request it would not serve
+    // is an ordinary shape, and `proposeOneGroup` puts `error.message`
+    // straight into the group outcome this artifact records. "Thrown-Error
+    // message" is not a category anyone should assume is free of user content.
+    modelTurn: () => {
+      throw new Error(`provider rejected request: aws_key = ${PLANTED_SECRET}`);
+    },
+  });
+
+  expect(outcome.groups.length).toBe(1);
+  expect(outcome.groups[0]!.outcome).toBe("error");
+
+  const artifacts = await readWrapUpOutcomeArtifacts(dir);
+  expect(artifacts.length).toBe(1);
+  const recorded = JSON.stringify(artifacts[0]);
+  expect(recorded).not.toContain(PLANTED_SECRET);
+  // Still a usable failure record — `classifySession` reads these groups to
+  // tell "wrap-up genuinely failed" from "wrap-up never triggered".
+  expect(recorded).toContain("provider rejected request");
+  expect(recorded).toContain("[REDACTED:secret]");
+
+  const files = await slateArchiveFiles(dir);
+  const outcomeName = [...files.keys()].find((name) => name.endsWith("-wrap-up-outcome.json"))!;
+  expect(files.get(`${outcomeName}.redaction.md`)).toBeDefined();
 });

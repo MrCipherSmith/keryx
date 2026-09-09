@@ -5,57 +5,38 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "./workspace-service";
+import type { ModelTurnPort } from "./model-turn-port";
+// Read-back assertions deliberately still go through the CLIENT-side tool
+// (`workspace_list`): `resolveOrCreateWorkspace` stopped calling that tool in
+// flow 239 phase 7 and now drives `WorkspaceService` directly, so listing the
+// result through the tool is the cross-check that the two still see the same
+// workspaces. A test file is not part of any shipped graph, so this import has
+// no packaging consequence (see `core-graph.test.ts`, which measures the
+// artifact rather than the source).
 import { workspaceListTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
-import type { NormalizedEvent, ProviderDescription, ProviderPort } from "../harness/provider/types";
 
 const time = "2026-08-17T00:00:00.000Z";
 
-const DESCRIPTION: ProviderDescription = {
-  capabilities: {
-    streaming: true,
-    toolCalls: false,
-    parallelToolCalls: false,
-    structuredOutput: false,
-    reasoningMetadata: false,
-    promptCaching: false,
-    vision: false,
-    tokenCounting: false,
-    modelListing: false,
-  },
-  descriptor: { providerId: "stub" },
-};
-
-/** A model-turn provider that answers immediately with fixed text. */
-function stubModelProvider(text: string): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: (_req, opts) =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        yield { kind: "text_delta", sequence: 0, attemptId: opts.attemptId, text };
-        yield { kind: "model_end", sequence: 1, attemptId: opts.attemptId };
-      })(),
-  };
+/**
+ * The injected model-turn capability, in its three test shapes. These used to
+ * be `ProviderPort` stubs behind an injected `providerFactory`; since flow 239
+ * phase 7 core takes the whole turn as a port (`./model-turn-port.ts`), so a
+ * stub is one function and names no provider at all.
+ */
+function stubModelTurn(text: string): ModelTurnPort {
+  return async () => ({ credentialAvailable: true, text });
 }
 
-/** A model-turn provider that never answers (bounded-timeout probe). */
-function hangingModelProvider(): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: () =>
-      (async function* (): AsyncGenerator<NormalizedEvent> {
-        await new Promise(() => {});
-      })(),
-  };
+/** A port that never answers (bounded-timeout probe). */
+function hangingModelTurn(): ModelTurnPort {
+  return () => new Promise<never>(() => {});
 }
 
-/** A model-turn provider that throws if invoked at all — proves the "empty
- * list" path never calls the model (nothing to judge over). */
-function unreachableModelProvider(): ProviderPort {
-  return {
-    describe: () => DESCRIPTION,
-    stream: () => {
-      throw new Error("model turn should never run when the workspace list is empty");
-    },
+/** A port that throws if invoked at all — proves the "empty list" path never
+ * calls the model (nothing to judge over). */
+function unreachableModelTurn(): ModelTurnPort {
+  return () => {
+    throw new Error("model turn should never run when the workspace list is empty");
   };
 }
 
@@ -78,7 +59,7 @@ test("an empty workspace list creates directly, never invoking the model", async
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "Investigate the flaky serve-turn tests",
-    providerFactory: () => unreachableModelProvider(),
+    modelTurn: unreachableModelTurn(),
   });
   expect(result).toMatchObject({ ok: true, action: "created" });
   const listed = await workspaceListTool(cwd).invoke({});
@@ -94,7 +75,7 @@ test("a matching existing workspace is bound, not duplicated — AC-24: the mode
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "keep debugging the same fork test flakes",
-    providerFactory: () => stubModelProvider("BIND workspace-fork-tests"),
+    modelTurn: stubModelTurn("BIND workspace-fork-tests"),
   });
   expect(result).toEqual({ ok: true, action: "bound-existing", workspaceId: "workspace-fork-tests" });
   const listed = await workspaceListTool(cwd).invoke({});
@@ -107,7 +88,7 @@ test("a hallucinated id (not in the real list) is never bound — treated as no 
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "something unrelated",
-    providerFactory: () => stubModelProvider("BIND workspace-made-up-id"),
+    modelTurn: stubModelTurn("BIND workspace-made-up-id"),
   });
   expect(result).toEqual({ ok: false, reason: "ambiguous" });
 });
@@ -118,7 +99,7 @@ test("no match among existing workspaces creates a new one with the model's chos
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "a brand new investigation",
-    providerFactory: () => stubModelProvider("CREATE Brand new investigation"),
+    modelTurn: stubModelTurn("CREATE Brand new investigation"),
   });
   expect(result.ok).toBe(true);
   if (!result.ok) return;
@@ -135,7 +116,7 @@ test("an unparseable model response never creates speculatively", async () => {
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "ambiguous case",
-    providerFactory: () => stubModelProvider("I'm not sure, maybe either one?"),
+    modelTurn: stubModelTurn("I'm not sure, maybe either one?"),
   });
   expect(result).toEqual({ ok: false, reason: "ambiguous" });
   const listed = await workspaceListTool(cwd).invoke({});
@@ -148,7 +129,7 @@ test("a hung model turn times out and fails closed, never creating speculatively
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "slow judgment case",
-    providerFactory: () => hangingModelProvider(),
+    modelTurn: hangingModelTurn(),
     modelTurnTimeoutMs: 100,
   });
   expect(result).toEqual({ ok: false, reason: "ambiguous" });
@@ -156,17 +137,33 @@ test("a hung model turn times out and fails closed, never creating speculatively
   expect(JSON.parse(listed.output)).toHaveLength(1);
 });
 
-test("no credential and no injected factory fails closed with no_credential, never creates", async () => {
+test("a supplied port with no credential fails closed with no_credential, never creates", async () => {
   const cwd = await tempCwd();
   await createWorkspace(cwd, "workspace-a", "A");
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "no credential case",
     env: {}, // no ANTHROPIC_API_KEY or any other provider key
+    // The capability exists and answered honestly: "I have no key." That is a
+    // different fact from the capability being absent (the test below), and the
+    // two must not report the same reason.
+    modelTurn: async () => ({ credentialAvailable: false, text: "" }),
   });
   expect(result).toEqual({ ok: false, reason: "no_credential" });
   const listed = await workspaceListTool(cwd).invoke({});
   expect(JSON.parse(listed.output)).toHaveLength(1);
+});
+
+test("no model-turn port at all refuses with no_model_turn — never a guess, never a silent skip", async () => {
+  const cwd = await tempCwd();
+  await createWorkspace(cwd, "workspace-a", "A");
+  // No `modelTurn`, and no process-wide port registered: core has no provider
+  // registry of its own (AFC-19), so the only honest answer is a refusal that
+  // names the missing capability.
+  const result = await resolveOrCreateWorkspace({ cwd, topicHint: "unwired client case", env: {} });
+  expect(result).toEqual({ ok: false, reason: "no_model_turn" });
+  const listed = await workspaceListTool(cwd).invoke({});
+  expect(JSON.parse(listed.output)).toHaveLength(1); // nothing created speculatively
 });
 
 test("an archived workspace is never offered as a bind candidate", async () => {
@@ -184,7 +181,7 @@ test("an archived workspace is never offered as a bind candidate", async () => {
   const result = await resolveOrCreateWorkspace({
     cwd,
     topicHint: "fresh topic",
-    providerFactory: () => unreachableModelProvider(),
+    modelTurn: unreachableModelTurn(),
   });
   expect(result).toMatchObject({ ok: true, action: "created" });
 });

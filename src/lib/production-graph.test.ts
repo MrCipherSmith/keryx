@@ -311,9 +311,17 @@ function releaseBuildsFrom(
  * I wrote it and false of the committed suite: the real release script emits
  * every map at the outdir root, so no committed test could tell the two forms
  * apart. A sentence describing evidence the suite does not hold is the defect
- * this whole exercise is about, so the evidence is now here.
+ * this whole exercise is about, so the evidence is now here — see "a NESTED
+ * artifact's sources resolve against the outdir, not the map's directory"
+ * below, which drives this function directly and asserts the distinguishing
+ * property (flow 239 T6 verified this test exists and is non-vacuous: it
+ * fails if the resolution base is changed to the map's own directory).
+ *
+ * Not exported: the only caller outside this describe block was ever
+ * `graphsOf` below, in the same file; the test that states the property is
+ * also in this file, so nothing outside it needs to import this symbol.
  */
-export function resolveSources(outDir: string, sources: readonly string[]): string[] {
+function resolveSources(outDir: string, sources: readonly string[]): string[] {
   return sources.map((source) => path.resolve(outDir, source));
 }
 

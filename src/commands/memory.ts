@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { createMemoryService } from "../memory/service";
 import { loadMemoryConfig } from "../memory/config";
 import { reflectMemory } from "../memory/reflect";
@@ -6,8 +8,16 @@ import { renderSearchMarkdown } from "../memory/search";
 import { renderMemorySearchReport } from "../memory/report";
 import { computeLifecycle, type LifecycleResult } from "../memory/lifecycle";
 import { optionValue } from "../lib/args";
+import {
+  describeRemovalLookup,
+  loadDeletionTrail,
+  searchRemovals,
+  type RemovalLookup,
+} from "../forgetting/service";
 import { runAssetsSubcommand } from "../assets/command";
-import { MEMORY_CLASS_VALUES } from "../memory/types";
+import { MEMORY_CLASS_VALUES, MEMORY_TYPES } from "../memory/types";
+import { memoryRoot } from "../memory/store";
+import { isNotFound } from "../lib/fs";
 import { MemoryValidationError } from "../memory/validation";
 import type { MemoryClass, MemoryStatus, ScoredEntry, SearchFilters } from "../memory/types";
 
@@ -129,11 +139,60 @@ async function runIndex(args: string[]): Promise<void> {
   }
 }
 
+/**
+ * Flow 242 (forgetting) lane C / AC3: `getService().search()` walks the
+ * memory store the same way the old `wiki/collect.ts` used to walk the wiki
+ * store — a `readdir` that cannot list a type-folder is treated identically
+ * to a folder that simply does not exist yet, so an EACCES store answers
+ * `{ results: [] }` at exit 0. Measured on this repo: `chmod 000
+ * .metaproject/memory` then `keryx memory search <query> --json` prints
+ * `{"query":"...","results":[]}` and exits 0 — a hard read failure reported
+ * as a clean, empty, successful search. `memory/store.ts` is not this lane's
+ * file to change, so this checks the SAME folders it walks, independently,
+ * before trusting an empty result from it.
+ */
+async function detectMemoryStoreUnreadable(cwd: string): Promise<string | null> {
+  const root = memoryRoot(cwd);
+  for (const { folder } of MEMORY_TYPES) {
+    const dir = join(root, folder);
+    try {
+      await readdir(dir);
+    } catch (error) {
+      if (isNotFound(error)) {
+        continue;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      return (
+        `the memory store could not be read (${message}). This is not the same as "no memory": ` +
+        `${dir} may hold entries that could not be listed.`
+      );
+    }
+  }
+  return null;
+}
+
 async function runSearch(args: string[]): Promise<void> {
   const query = positionalArgs(args)[0] ?? "";
   if (!query) {
     console.error('Usage: keryx memory search "<query>" [--module <m>] [--entity <e>] [--status <s>] [--limit <n>]');
     process.exitCode = 1;
+    return;
+  }
+
+  // Checked BEFORE calling the service: the service itself never throws for
+  // this case (see the note on `detectMemoryStoreUnreadable` above), so there
+  // would be nothing for a try/catch below to catch. `store-unreadable` mirrors
+  // `keryx wiki sections resolve`'s exit-code convention (2, not the CLI
+  // default of 1) — reserved for "cannot tell", distinct from both a
+  // completed search and a validation error.
+  const storeError = await detectMemoryStoreUnreadable(process.cwd());
+  if (storeError !== null) {
+    if (args.includes("--json")) {
+      console.log(JSON.stringify({ query, outcome: "store-unreadable", error: storeError }, null, 2));
+    } else {
+      console.error(`store-unreadable: ${storeError}`);
+    }
+    process.exitCode = 2;
     return;
   }
 
@@ -174,6 +233,24 @@ async function runSearch(args: string[]): Promise<void> {
   const report = args.includes("--save-report")
     ? await getService().writeReport({ cwd: process.cwd(), search: result, filters })
     : undefined;
+
+  // Flow 242 T9/F3: a zero-result search said one thing for an entry that was
+  // deleted and for a phrase that never named anything — measured on this repo,
+  // `memory search "charge once"` after deleting the entry and
+  // `memory search "quantum flux capacitor"` printed the identical
+  // `_No matching memory entries._`. The deletion trail is consulted here, and
+  // ONLY on an empty result: a search that found something has already answered
+  // the caller's question, and appending removal history to a hit list would be
+  // noise rather than the distinction this closes.
+  //
+  // A memory query is a phrase, not an identity, so this is `searchRemovals`
+  // (phrase mode) rather than `lookupRemoval` — and every hit it renders carries
+  // its own layer, so a wiki identity surfaced by a memory query reads as a wiki
+  // identity. Where the trail has no record, "never existed" is NOT claimed:
+  // `no-removal-recorded` and its coverage say exactly how little that silence
+  // proves.
+  const removalTrail: RemovalLookup | null =
+    result.results.length === 0 ? searchRemovals(await loadDeletionTrail(process.cwd()), query) : null;
 
   // AFC-06 (flow 234) T22, AC1 second half: `--as-of` is memory's existing
   // explicit historical mode (`SearchFilters.asOf`, `../memory/types.ts` --
@@ -232,6 +309,7 @@ async function runSearch(args: string[]): Promise<void> {
                 : {}),
             };
           }),
+          ...(removalTrail ? { removalTrail } : {}),
           ...(report ? { report } : {}),
         },
         null,
@@ -249,6 +327,13 @@ async function runSearch(args: string[]): Promise<void> {
   // Routed through the shared renderer so the real user-facing search
   // surface actually shows what AC6 requires.
   console.log(renderSearchMarkdown(query, result.results).trimEnd());
+  if (removalTrail) {
+    console.log("");
+    console.log("## Removal trail");
+    for (const line of describeRemovalLookup(removalTrail)) {
+      console.log(line);
+    }
+  }
   if (historicalByPath.size > 0) {
     console.log("");
     console.log("## Historical (--as-of; not current guidance)");

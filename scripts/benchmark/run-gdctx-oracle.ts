@@ -37,7 +37,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { validatePairedBenchmark } from "../../src/metrics/benchmark";
+import { validatePairedBenchmark, type PairedBenchmarkManifestV2 } from "../../src/metrics/benchmark";
 import { buildGdctxManifest, extractFacts, GDCTX_FACT_PRESERVATION_LABEL, type GdctxScoreInput } from "../../src/metrics/oracle-runner";
 
 // Each dogfood input: a shell command whose raw output is a deterministic, fact-bearing
@@ -117,6 +117,47 @@ async function captureOne(cli: string[], command: readonly string[]): Promise<Ca
   };
 }
 
+/** Injectable side effects for {@link finalizeGdctxOracleRun} — real I/O in `main`, spies in tests. */
+export type GdctxOracleEmissionIO = {
+  readonly writeResultsFixture: (contents: string) => Promise<void>;
+  readonly printManifest: (contents: string) => void;
+  readonly logLine: (line: string) => void;
+};
+
+/**
+ * Decide what to emit for the gdctx-oracle run, GATED on validation (same defect shape
+ * fixed across every scripts/benchmark/run-*-oracle.ts producer: previously the captured
+ * raw-vs-compact fact-set fixture was written to disk and the derived manifest printed to
+ * stdout FIRST, and only afterward validated). Choice recorded (same as run-ablation.ts's
+ * finalizeAblationRun): on an invalid run, a previously-written GOOD fixture file is left
+ * ON DISK, UNTOUCHED.
+ */
+export async function finalizeGdctxOracleRun(
+  resultsFixture: unknown,
+  manifest: PairedBenchmarkManifestV2,
+  validation: { readonly valid: boolean; readonly errors: readonly string[] },
+  io: GdctxOracleEmissionIO,
+): Promise<number> {
+  if (validation.valid) {
+    await io.writeResultsFixture(`${JSON.stringify(resultsFixture, null, 2)}\n`);
+    io.printManifest(JSON.stringify(manifest, null, 2));
+  }
+
+  io.logLine(`# layer=gdctx manifest valid: ${validation.valid ? "yes" : "no"}`);
+  for (const err of validation.errors) io.logLine(`- ${err}`);
+
+  if (validation.valid) {
+    io.logLine("wrote fixtures/benchmark/keryx/gdctx-fact-preservation.json");
+    return 0;
+  }
+  io.logLine(
+    "invalid manifest — nothing written to disk and nothing printed to stdout; " +
+      "fixtures/benchmark/keryx/gdctx-fact-preservation.json left unchanged " +
+      "(a previously-written valid fixture, if any, is preserved as-is)",
+  );
+  return 1;
+}
+
 async function main(): Promise<void> {
   const cli = keryxCli();
 
@@ -148,7 +189,6 @@ async function main(): Promise<void> {
       compactFacts: c.compactFacts,
     })),
   };
-  await Bun.write(fixtureUrl, `${JSON.stringify(fixture, null, 2)}\n`);
 
   // Score: compact fact set vs raw fact set per input.
   const inputs: GdctxScoreInput[] = captured.map((c) => ({
@@ -158,18 +198,23 @@ async function main(): Promise<void> {
   }));
 
   const manifest = buildGdctxManifest(inputs, { ladder: "metastore" });
-  console.log(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
-  console.log(JSON.stringify(manifest, null, 2));
   console.error(`# oracle IR result — layer=gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
   for (const runRecord of manifest.runs) {
     const o = runRecord.oracle;
     console.error(`${runRecord.task_id}: factPreservation=${o?.factPreservation?.value}`);
   }
   const result = validatePairedBenchmark(manifest);
-  console.error(`# layer=gdctx manifest valid: ${result.valid ? "yes" : "no"}`);
-  for (const err of result.errors) console.error(`- ${err}`);
-  console.error("wrote fixtures/benchmark/keryx/gdctx-fact-preservation.json");
-  if (!result.valid) process.exit(1);
+  const code = await finalizeGdctxOracleRun(fixture, manifest, result, {
+    writeResultsFixture: async (contents) => {
+      await Bun.write(fixtureUrl, contents);
+    },
+    printManifest: (contents) => {
+      console.log(`# layer: gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
+      console.log(contents);
+    },
+    logLine: (line) => console.error(line),
+  });
+  if (code !== 0) process.exit(code);
 }
 
 if (import.meta.main) {

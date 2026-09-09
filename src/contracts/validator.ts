@@ -195,6 +195,24 @@ function validateNode(
         }
       }
     }
+    // `dependentRequired` — added for common.schema.json's `budget` $def, which
+    // uses it to pair `estimatedTokens` with `estimator` in both directions (an
+    // estimate without a named estimator, or an estimator with nothing estimated,
+    // are each incomplete).
+    if (isPlainObject(schema.dependentRequired)) {
+      for (const [trigger, deps] of Object.entries(schema.dependentRequired)) {
+        if (trigger in value && Array.isArray(deps)) {
+          for (const dep of deps) {
+            if (typeof dep === "string" && !(dep in value)) {
+              errors.push({
+                path: `${valuePath}.${dep}`,
+                message: `Missing property required by dependentRequired["${trigger}"]`,
+              });
+            }
+          }
+        }
+      }
+    }
     const properties = isPlainObject(schema.properties) ? schema.properties : {};
     const additional = schema.additionalProperties;
     for (const [key, nested] of Object.entries(value)) {
@@ -234,6 +252,18 @@ function validateNode(
         path: valuePath,
         message: `Expected exactly one matching schema (oneOf), matched ${matches}`,
       });
+    }
+  }
+
+  // `not` — added for the agent-first-core docpack's operation-response.schema.json,
+  // which uses it (twice, inside an if/then/else) to make `status:"error"` and the
+  // presence of `result` mutually exclusive with `status:"ok"`/`error`. Without this,
+  // a document with BOTH `result` and `error` set validated as clean (validation-cases
+  // "negative-ok-with-error" is the fixture that proves it).
+  if ("not" in schema) {
+    const matchesNot = branchErrors(value, schema.not as JsonSchema, docRoot, ctx).length === 0;
+    if (matchesNot) {
+      errors.push({ path: valuePath, message: "Value must not match schema (not)" });
     }
   }
 

@@ -366,7 +366,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       });
     },
 
-    async taskDone({ cwd, id, taskId, disposition, reason, evidenceRefs, runLink }): Promise<FlowState> {
+    async taskDone({ cwd, id, taskId, disposition, reason, acRefs, evidenceRefs, runLink }): Promise<FlowState> {
       return mutate(cwd, id, async ({ dir, flow }) => {
       await assertAcIntact(cwd, dir, flow);
       const task = flow.tasks.find((item) => item.id.toUpperCase() === taskId.toUpperCase());
@@ -398,6 +398,17 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
       // on the task. Omitted args leave existing behavior untouched.
       if (evidenceRefs !== undefined) {
         task.evidenceRefs = evidenceRefs;
+      }
+      // `acRefs` has been in the task schema since v2 and, until now, NOTHING
+      // read it and nothing wrote it: 97 tasks across eight flows of this
+      // programme, every one of them `acRefs: []`. A field that records which
+      // criterion a task satisfies, which no code path can populate, is the
+      // same defect this programme keeps finding elsewhere — a capability whose
+      // only caller is its own test — sitting in the machinery that governs the
+      // programme. Every flow's AC8 asks for explicit evidence, and the
+      // machine-readable record could not carry any.
+      if (acRefs !== undefined) {
+        task.acRefs = acRefs;
       }
       if (runLink !== undefined) {
         task.runLink = runLink;

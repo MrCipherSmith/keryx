@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { runCommand, toolVersion } from "../util";
 import { NoImportError, makeFinding, resolveBin } from "./helpers";
 import type { Finding, HealthContext, Priority, RawSourceResult, SourceAdapter, SourceStatus } from "../types";
@@ -97,14 +99,55 @@ function decodeAudit(content: string): AuditDecode {
   return { valid: false, error: "dependency audit JSON format was not recognized", advisories };
 }
 
+/**
+ * Which audit to run, decided by the LOCKFILE and only then by which binary
+ * happens to be installed.
+ *
+ * F-240-02's sibling in production code (flow 240 T6). This used to be
+ * `resolveBin(cwd, "bun") ? bun audit : npm audit` -- binary presence, not
+ * project shape. On a developer machine with Bun installed, an npm project
+ * therefore got `bun audit`, which has no `bun.lock` to resolve and fails; the
+ * inverse of the shipped skill's defect, from the same confusion between "this
+ * tool exists" and "this tool can audit THIS project".
+ *
+ * Bun's lockfile is `bun.lock` since 1.2 and `bun.lockb` before it. Both are
+ * checked: a repository pinned to Bun < 1.2, or one that has not re-run `bun
+ * install` since upgrading, still carries the old name.
+ *
+ * When no lockfile is recognised, the previous binary-based choice is kept
+ * rather than refusing to run: the adapter cannot know that a project without a
+ * root lockfile has nothing to audit (workspaces, vendored manifests), and the
+ * honest outcome for a command that then produces no vulnerability data is
+ * already handled -- `runAdapter` folds it to `configured-but-failed`, which is
+ * a WARN and, since T7, also makes `gate.coverage` `partial`. What must never
+ * happen is that path reporting zero advisories, and `decodeAudit` below refuses
+ * to read npm's `{"error":{"code":"ENOLOCK"}}` envelope as an empty result.
+ */
+const LOCKFILE_COMMANDS: ReadonlyArray<{ lockfiles: readonly string[]; bin: string; argv: readonly string[] }> = [
+  { lockfiles: ["bun.lock", "bun.lockb"], bin: "bun", argv: ["audit", "--json"] },
+  { lockfiles: ["package-lock.json", "npm-shrinkwrap.json"], bin: "npm", argv: ["audit", "--json"] },
+  { lockfiles: ["pnpm-lock.yaml"], bin: "pnpm", argv: ["audit", "--json"] },
+];
+
+export function auditCommand(cwd: string): string[] {
+  for (const entry of LOCKFILE_COMMANDS) {
+    if (!entry.lockfiles.some((name) => existsSync(path.join(cwd, name)))) continue;
+    const bin = resolveBin(cwd, entry.bin);
+    if (bin) return [bin, ...entry.argv];
+  }
+  const bun = resolveBin(cwd, "bun");
+  return bun
+    ? [bun, "audit", "--json"]
+    : [resolveBin(cwd, "npm") ?? "npm", "audit", "--json"];
+}
+
 export const dependencyAuditAdapter: SourceAdapter = {
   id: "dependencyAudit",
   async detect(ctx: HealthContext): Promise<SourceStatus> {
     return resolveBin(ctx.cwd, "bun") || resolveBin(ctx.cwd, "npm") ? "available" : "missing";
   },
   async run(ctx: HealthContext): Promise<RawSourceResult> {
-    const bun = resolveBin(ctx.cwd, "bun");
-    const command = bun ? [bun, "audit", "--json"] : [resolveBin(ctx.cwd, "npm") ?? "npm", "audit", "--json"];
+    const command = auditCommand(ctx.cwd);
     const result = await runCommand(command, ctx.cwd);
     return {
       source: "dependencyAudit",

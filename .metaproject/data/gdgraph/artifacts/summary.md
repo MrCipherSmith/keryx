@@ -2,46 +2,46 @@
 
 ## Stats
 
-- Source files indexed: 1197
+- Source files indexed: 1325
 - Imported asset files indexed: 4
-- Total nodes: 1201
-- Edges: 3631
-- Import edges: 3569
-- Asset edges: 9
-- Unresolved imports: 53
-- Import resolution: 98.5%
-- Skipped generated/static directories: 10
+- Total nodes: 1329
+- Edges: 3991
+- Import edges: 3918
+- Asset edges: 10
+- Unresolved imports: 63
+- Import resolution: 98.4%
+- Skipped generated/static directories: 11
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 256 |
-| commands | 127 |
+| harness | 260 |
+| commands | 136 |
+| lib | 100 |
 | tui | 100 |
-| lib | 89 |
-| health | 51 |
-| sac | 51 |
+| sac | 58 |
+| wiki | 57 |
+| health | 52 |
 | security | 50 |
-| wiki | 45 |
-| memory | 43 |
-| gdgraph | 42 |
-| gdskills | 40 |
-| scripts | 37 |
-| flow | 34 |
+| gdgraph | 48 |
+| scripts | 47 |
+| memory | 45 |
+| gdskills | 41 |
+| metrics | 38 |
+| flow | 36 |
 | review | 30 |
-| metrics | 27 |
-| mcp | 25 |
+| fixtures | 29 |
+| mcp | 27 |
+| ctx | 26 |
 | vscode-extension | 22 |
 | session | 16 |
-| ctx | 15 |
-| standard | 15 |
 
 ## Unresolved By Type
 
 | Type | Count |
 |---|---:|
-| relative-code | 39 |
+| relative-code | 49 |
 | package | 7 |
 | . | 2 |
 | .js | 2 |
@@ -60,6 +60,7 @@
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
+- `src/lib/dist`
 - `vscode-extension/node_modules`
 
 ## Generated Files

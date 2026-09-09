@@ -110,6 +110,57 @@ test("AC2.4 — dependencies are the unchanged one-hop forward set", async () =>
 // `importKind` was derived.
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// AC6 (AFC-M04, flow 235) — the IMPACT fixture's half of "важный связанный код
+// не уступает нерелевантной глобальной популярности".
+//
+// This clause was measured as ALREADY HOLDING for `affected`: `rankOrder`
+// sorts hop asc first and only then fanIn desc, so proximity to the target
+// always beats global popularity. But "already holds" is a claim about a sort
+// comparator, and a comparator can be reordered in one line by anyone who
+// thinks fan-in is the more useful primary key. This fixture is the guard: it
+// is built so the plausible-but-wrong ranking — fan-in first, which looks
+// entirely reasonable in isolation — is visibly wrong.
+//
+//   direct.ts    is a hop-1 dependent with fanIn 0   (the file you must read)
+//   celebrity.ts is a hop-2 dependent with fanIn 500 (everybody imports it)
+//
+// Under fan-in-first the celebrity leads the blast radius of a change it is two
+// hops from. Under hop-first it does not.
+// ---------------------------------------------------------------------------
+
+test("AC6 — a direct dependent outranks a distant one no matter how popular it is", () => {
+  const nodes = [
+    { id: "src/target.ts", kind: "file" as const, path: "src/target.ts", language: "typescript" as const },
+    { id: "src/direct.ts", kind: "file" as const, path: "src/direct.ts", language: "typescript" as const },
+    { id: "src/celebrity.ts", kind: "file" as const, path: "src/celebrity.ts", language: "typescript" as const },
+  ];
+  const edges = [
+    // direct.ts → target.ts (hop 1 dependent of target)
+    { id: "e:direct", from: "src/direct.ts", to: "src/target.ts", kind: "imports" as const, specifier: "./target" },
+    // celebrity.ts → direct.ts (hop 2 dependent of target)
+    { id: "e:celeb", from: "src/celebrity.ts", to: "src/direct.ts", kind: "imports" as const, specifier: "./direct" },
+    // …and 500 unrelated files import celebrity.ts.
+    ...Array.from({ length: 500 }, (_, i) => ({
+      id: `e:fan${i}`,
+      from: `src/fan/${i}.ts`,
+      to: "src/celebrity.ts",
+      kind: "imports" as const,
+      specifier: "../celebrity",
+    })),
+  ];
+
+  // Depth 2: the 500 fans are hop-3 and out of scope here — the question is
+  // only whether hop 1 beats a much more popular hop 2.
+  const result = computeAffected({ nodes, edges }, "src/target.ts", { depth: 2, ranked: true });
+  const order = result.ranked.map((entry) => entry.path);
+
+  expect(order).toEqual(["src/direct.ts", "src/celebrity.ts"]);
+  // The candidate's own explanation: hop is the reason, fan-in is the tie-break.
+  expect(result.ranked[0]).toMatchObject({ path: "src/direct.ts", hop: 1, fanIn: 1 });
+  expect(result.ranked[1]).toMatchObject({ path: "src/celebrity.ts", hop: 2, fanIn: 500 });
+});
+
 test("AFC-11 req3 — a file that only type-imports the target is still a visible dependent", () => {
   const graph: GraphData = {
     nodes: [

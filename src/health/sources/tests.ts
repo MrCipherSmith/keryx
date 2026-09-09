@@ -1,6 +1,6 @@
 import { runCommand, toolVersion } from "../util";
 import { NoImportError, makeFinding, resolveBin } from "./helpers";
-import { loadCompatibleTestingReport, loadTestingReport } from "../../testing/service";
+import { loadCompatibleTestingReport } from "../../testing/service";
 import type { TestingReport } from "../../testing/types";
 import type {
   Finding,
@@ -185,6 +185,11 @@ function parseTestingReport(raw: RawSourceResult): Finding[] {
   return findings;
 }
 
+// Flow 237 T6 defect 4 (AFC-28/AC-28): every `scopeSelector.kind` now routes
+// through `loadCompatibleTestingReport`'s gitRef/scope guard — none falls
+// back to the raw, unguarded `loadTestingReport`. Before this, "module" and
+// "file" reached `loadTestingReport(ctx.cwd)` directly, which returns
+// whatever is on disk regardless of which commit it was generated against.
 async function compatibleReportForHealth(ctx: HealthContext): Promise<TestingReport | null> {
   if (ctx.scopeSelector.kind === "changed") {
     return loadCompatibleTestingReport(ctx.cwd, {
@@ -195,5 +200,8 @@ async function compatibleReportForHealth(ctx: HealthContext): Promise<TestingRep
   if (ctx.scopeSelector.kind === "project") {
     return loadCompatibleTestingReport(ctx.cwd, { scope: "project" });
   }
-  return loadTestingReport(ctx.cwd);
+  if (ctx.scopeSelector.kind === "module") {
+    return loadCompatibleTestingReport(ctx.cwd, { scope: "module", name: ctx.scopeSelector.name });
+  }
+  return loadCompatibleTestingReport(ctx.cwd, { scope: "file", name: ctx.scopeSelector.path });
 }

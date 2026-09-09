@@ -29,10 +29,15 @@
 //   already rendered `report.context`) said `context: incomplete`.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { testCommand } from "./test";
+
+function git(gitCwd: string, args: string[]): void {
+  execFileSync("git", args, { cwd: gitCwd, stdio: "ignore" });
+}
 
 let cwd = "";
 let originalCwd = "";
@@ -214,3 +219,209 @@ test("keryx test coverage-map build says whether the file set behind the map was
     chmodSync(path.join(cwd, "src", "locked"), 0o755);
   }
 });
+
+// ---------------------------------------------------------------------------
+// V237-01 (flow 237 T13). `keryx test coverage-map status` computed staleness
+// as `map.gitRef && currentRef && map.gitRef !== currentRef` — and `gitRefOf`
+// answered `null` for BOTH "no repository" and "git ran and refused", so a
+// genuinely stale map printed `stale: no` the moment git broke. The three
+// states are asserted together, against ONE map, because the defect is only
+// visible as the third disagreeing with the second.
+// ---------------------------------------------------------------------------
+
+test("keryx test coverage-map status says `unknown`, not `no`, when the current gitRef cannot be determined (V237-01)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(path.join(cwd, "src", "a.ts"), "export const a = 1;\n");
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+  const head = execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd, encoding: "utf8" }).trim();
+
+  const artifact = path.join(cwd, ".metaproject", "data", "testing", "coverage-map.json");
+  mkdirSync(path.dirname(artifact), { recursive: true });
+  writeFileSync(
+    artifact,
+    JSON.stringify({
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      gitRef: head,
+      map: { "src/a.test.ts": { coveredFiles: ["src/a.ts"] } },
+    }),
+  );
+
+  const statusLine = async (): Promise<string> => {
+    captured = [];
+    await testCommand(["coverage-map", "status"]);
+    return captured.find((line) => line.startsWith("stale:")) ?? "(no stale line)";
+  };
+
+  // 1. The refs match — a confirmed "no".
+  expect(await statusLine()).toBe("stale: no");
+
+  // 2. HEAD genuinely moves — a confirmed "yes".
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "second"]);
+  expect(await statusLine()).toContain("yes (falls back to static selection)");
+
+  // 3. The SAME map, still stale, with git genuinely broken on disk: the
+  //    comparison cannot be made, so it must not be reported as agreement.
+  rmSync(path.join(cwd, ".git"), { recursive: true, force: true });
+  const broken = await statusLine();
+  expect(broken).toContain("unknown");
+  expect(broken).toContain("NOT evidence the map is current");
+  expect(broken).not.toBe("stale: no");
+});
+
+// ---------------------------------------------------------------------------
+// Flow 237 T6 defect 3 (AFC-28/AC-28, "a different checkout or consumer sees
+// changed grounds before it acts"): `keryx test status` (runStatus, ./test.ts)
+// printed `latest status: pass` with no qualifier at all saying whether that
+// pass still corresponds to the tree on disk. A report generated yesterday
+// against a since-modified working tree (or a tree that has moved to a new
+// commit since) read exactly the same as a report generated one second ago
+// against the current tree — a genuinely different set of grounds with no
+// visible difference to the reader acting on it.
+// ---------------------------------------------------------------------------
+
+test("keryx test status flags a report as possibly stale when the working tree has changed since the run (uncommitted changes)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  // The grounds change: a new, uncommitted file appears in the working tree
+  // after the report was generated (HEAD has not moved — a plain gitRef
+  // comparison alone would miss this).
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  // The defect: before the fix there was no line saying the working tree no
+  // longer matches what the report was generated against.
+  expect(output.toLowerCase()).toContain("stale");
+  expect(output.toLowerCase()).toContain("uncommitted");
+});
+
+test("keryx test status flags a report as possibly stale when HEAD has moved since the run (new commit)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  writeFileSync(path.join(cwd, "src", "b.ts"), "export const b = 2;\n");
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "a new commit after the test run"]);
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  expect(output.toLowerCase()).toContain("stale");
+  expect(output).toContain("gitRef");
+});
+
+test("keryx test status reports the report as current when gitRef matches and the tree is clean", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("latest status: pass");
+  expect(output.toLowerCase()).not.toContain("stale");
+});
+
+// Flow 237 T11 (F3): the same defect class, inside the function T6 added to
+// fix it. `isWorkingTreeDirty` returns `boolean | null` and `null` means "the
+// check could not run" — but the caller tested `if (dirty)`, so `null` was
+// falsy, added no reason, and `keryx test status` printed
+// "current (gitRef matches, working tree clean)" about a working tree it had
+// just failed to read.
+//
+// The breakage here is real, not mocked: a corrupt `.git/index` leaves
+// `git rev-parse HEAD` working (so the gitRef half still MATCHES and cannot
+// carry the finding) while `git status` exits 128 — the exact shape that made
+// the old code assert a clean tree.
+test("keryx test status says unknown — not current — when git status cannot run (corrupt .git/index)", async () => {
+  writeFileSync(path.join(cwd, "package.json"), JSON.stringify({ scripts: { test: "bun test" } }));
+  mkdirSync(path.join(cwd, "src"), { recursive: true });
+  writeFileSync(
+    path.join(cwd, "src", "a.test.ts"),
+    "import { expect, test } from 'bun:test';\ntest('a', () => expect(1).toBe(1));\n",
+  );
+  git(cwd, ["init", "-q"]);
+  git(cwd, ["config", "user.email", "test@test.com"]);
+  git(cwd, ["config", "user.name", "test"]);
+  git(cwd, ["add", "-A"]);
+  git(cwd, ["commit", "-q", "-m", "initial"]);
+
+  await testCommand(["run", "--scope", "src/a"]);
+  captured = [];
+
+  writeFileSync(path.join(cwd, ".git", "index"), "GARBAGE-NOT-AN-INDEX");
+  // Precondition of the case: HEAD still resolves, so the gitRef comparison
+  // still succeeds and only the working-tree check is broken.
+  expect(
+    execFileSync("git", ["rev-parse", "--short", "HEAD"], { cwd, encoding: "utf8" }).trim().length,
+  ).toBeGreaterThan(0);
+  let statusExit = 0;
+  try {
+    execFileSync("git", ["status", "--porcelain=v1"], { cwd, stdio: "ignore" });
+  } catch (error) {
+    statusExit = (error as { status?: number }).status ?? -1;
+  }
+  expect(statusExit).not.toBe(0);
+
+  await testCommand(["status"]);
+  const output = captured.join("\n");
+
+  expect(output).toContain("report freshness:");
+  // The defect, verbatim: this line used to read
+  // "current (gitRef matches, working tree clean)".
+  expect(output).not.toContain("working tree clean");
+  expect(output).not.toContain("report freshness: current");
+  expect(output).toContain("report freshness: unknown");
+  expect(output).toContain("could not be determined");
+}, 30_000);

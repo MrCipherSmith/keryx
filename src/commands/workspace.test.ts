@@ -1,10 +1,11 @@
 import { expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, readdir, realpath, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { WorkspaceManifest } from "../sac/workspace-service";
 import { confirmTokenPath } from "../sac/review-confirm-token";
 import { createSession, persistHistory } from "../session/index";
+import { buildToolRegistry } from "../mcp/tools";
 
 const cli = path.join(import.meta.dir, "..", "cli.ts");
 async function invoke(cwd: string, args: string[], dataDir?: string) {
@@ -248,4 +249,94 @@ test("workspace propose refuses a note the security gate blocks, and creates no 
   // Exactly one proposal exists — the clean one. The blocked note added nothing.
   const landed = await readdir(path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals")).catch(() => [] as string[]);
   expect(landed.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);
+});
+
+// --- Flow 242 lane D: what the CLI and MCP say about a reference into deleted
+// --- knowledge, and whether they say the same thing at the same moment. ------
+//
+// Measured before the change, on a real project with one referenced wiki page
+// deleted and a second still readable: `keryx workspace list` returned `[]` and
+// `keryx workspace show` failed with "workspace reference is not resolvable",
+// while `workspace.json` was still on disk at `status: "active"`. MCP
+// `sac.workspaceShow` for an id that never existed threw an unhandled error
+// whose stack trace carried absolute source paths of the machine it ran on.
+
+function mcpTool(name: string) {
+  const found = buildToolRegistry().find((entry) => entry.name === name);
+  if (!found) throw new Error(`tool "${name}" is not registered`);
+  return found;
+}
+
+/** One project, one workspace, two referenced wiki pages — the first deleted. */
+async function projectWithDeletedReference(): Promise<{ cwd: string; workspaceId: string }> {
+  const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-forgetting-cli-")));
+  await mkdir(path.join(cwd, "wiki"), { recursive: true });
+  await writeFile(path.join(cwd, "wiki", "page-a.md"), "Status: accepted\n\nThe retry limit is 3.\n");
+  await writeFile(path.join(cwd, "wiki", "page-b.md"), "Status: accepted\n\nThe second page stays.\n");
+  const created = await invoke(cwd, ["create", "--title", "Forgetting lane D"]);
+  expect(created.exitCode).toBe(0);
+  const { id: workspaceId } = JSON.parse(created.stdout) as { id: string };
+  expect((await invoke(cwd, ["add-resource", workspaceId, "--kind", "wiki", "--uri", "./wiki/page-a.md"])).exitCode).toBe(0);
+  expect((await invoke(cwd, ["add-resource", workspaceId, "--kind", "wiki", "--uri", "./wiki/page-b.md"])).exitCode).toBe(0);
+  await rm(path.join(cwd, "wiki", "page-a.md"));
+  return { cwd, workspaceId };
+}
+
+test("a workspace whose referenced page was deleted is still listed and still shown by the CLI, with the failing reference named", async () => {
+  const { cwd, workspaceId } = await projectWithDeletedReference();
+
+  const listed = await invoke(cwd, ["list"]);
+  expect(listed.exitCode).toBe(0);
+  const entries = JSON.parse(listed.stdout) as Array<{ id: string; status: string; references: { ok: boolean; unresolvable: string[] } }>;
+  expect(entries.map((entry) => entry.id)).toEqual([workspaceId]);
+  expect(entries[0]!.status).toBe("active");
+  expect(entries[0]!.references.ok).toBe(false);
+  expect(entries[0]!.references.unresolvable).toEqual(["./wiki/page-a.md"]);
+
+  const shown = await invoke(cwd, ["show", workspaceId]);
+  expect(shown.exitCode).toBe(0);
+  const manifest = JSON.parse(shown.stdout) as { id: string; references: { unresolvable: string[]; resources: Array<{ uri: string; state: string }> } };
+  expect(manifest.id).toBe(workspaceId);
+  expect(manifest.references.unresolvable).toEqual(["./wiki/page-a.md"]);
+  expect(manifest.references.resources.find((entry) => entry.uri === "./wiki/page-b.md")!.state).toBe("resolved");
+
+  // "It exists and one reference is gone", "it never existed" and "it exists
+  // and I cannot read it" stay THREE different answers on this surface — the
+  // collapse of the three into one is the defect this lane exists to close.
+  const never = await invoke(cwd, ["show", "workspace-never-existed00"]);
+  expect(never.exitCode).toBe(1);
+  expect(never.stderr).toContain("not-found");
+
+  await mkdir(path.join(cwd, ".metaproject", "workspaces", "workspace-corrupt0000"), { recursive: true });
+  await writeFile(path.join(cwd, ".metaproject", "workspaces", "workspace-corrupt0000", "workspace.json"), "{ not json");
+  const unreadable = await invoke(cwd, ["show", "workspace-corrupt0000"]);
+  expect(unreadable.exitCode).toBe(1);
+  expect(unreadable.stderr).toContain("unreadable");
+  expect(unreadable.stderr).not.toContain("not-found");
+});
+
+test("CLI and MCP do not disagree about the same workspace at the same moment, and MCP names a missing workspace instead of throwing a stack trace", async () => {
+  const { cwd, workspaceId } = await projectWithDeletedReference();
+
+  const cliList = JSON.parse((await invoke(cwd, ["list"])).stdout) as Array<{ id: string; references: { unresolvable: string[] } }>;
+  const mcpList = await mcpTool("sac.workspaceList").invoke(cwd, {}, { transport: "stdio" }) as Array<{ id: string; references: { unresolvable: string[] } }>;
+  expect(mcpList.map((entry) => entry.id)).toEqual(cliList.map((entry) => entry.id));
+  expect(mcpList.map((entry) => entry.id)).toEqual([workspaceId]);
+  expect(mcpList[0]!.references.unresolvable).toEqual(cliList[0]!.references.unresolvable);
+
+  const cliShow = JSON.parse((await invoke(cwd, ["show", workspaceId])).stdout) as { id: string; references: { unresolvable: string[] } };
+  const mcpShow = await mcpTool("sac.workspaceShow").invoke(cwd, { workspaceId }, { transport: "stdio" }) as { id: string; references: { unresolvable: string[] } };
+  expect(mcpShow.id).toBe(cliShow.id);
+  expect(mcpShow.references.unresolvable).toEqual(cliShow.references.unresolvable);
+
+  // An id that never existed is an ordinary named result on this surface — not
+  // a throw, and above all not a stack trace naming this machine's own paths.
+  let threw: unknown;
+  const missing = await mcpTool("sac.workspaceShow")
+    .invoke(cwd, { workspaceId: "workspace-never-existed00" }, { transport: "stdio" })
+    .catch((error: unknown) => { threw = error; return undefined; });
+  expect(threw).toBeUndefined();
+  expect(missing).toMatchObject({ code: "sac_workspace_not_found", workspaceId: "workspace-never-existed00" });
+  expect(JSON.stringify(missing)).not.toContain("workspace-service.ts");
+  expect(JSON.stringify(missing)).not.toContain(import.meta.dir);
 });

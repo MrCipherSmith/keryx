@@ -338,7 +338,7 @@ function checkSkillDirectory(skill: string, dir: string): SkillParityReport {
     comparisons += 1;
     const variant = readLines(path.join(dir, name));
     for (const hunk of diffLines(canonical, variant)) {
-      const key = `${hunk.kind} ${hunk.lines.join("\n")}`;
+      const key = `${hunk.kind}\u0000${hunk.lines.join("\n")}`;
       const existing = grouped.get(key);
       if (existing) {
         existing.builds.push(name);

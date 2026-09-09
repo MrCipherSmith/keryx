@@ -723,8 +723,22 @@ export function renderMetaprojectDashboardHtml({
   const graphStatus = graph ? `${graph.files} files` : (enableGdgraph ? "missing" : "disabled");
   const healthClass = health ? healthTone(health) : "";
   const healthScoreTone = health ? healthTone(health) : "";
-  const wikiStatus = wikiPages.length > 0 ? `${wikiPages.length} pages` : (enableGdwiki ? "needs content" : "disabled");
-  const memoryStatus = memoryEntries.length > 0 ? `${memoryEntries.length} entries` : (enableMemory ? "needs content" : "disabled");
+  // A count is not coverage, and this slot in particular said it was.
+  //
+  // The alternative value here is "needs content", so any non-zero count read
+  // as "does not need content" — while five of the wiki's page types hold no
+  // pages at all. The number and the judgement were the same field, so the
+  // number was doing the judging. They are separated now: the count says what
+  // it counts, and the phrase that means "nothing more is needed" is not one
+  // this slot is able to imply.
+  const wikiStatus =
+    wikiPages.length > 0 ? `${wikiPages.length} pages on file` : enableGdwiki ? "no pages yet" : "disabled";
+  const memoryStatus =
+    memoryEntries.length > 0
+      ? `${memoryEntries.length} entries on file`
+      : enableMemory
+        ? "no entries yet"
+        : "disabled";
   const healthSources = health?.sources.map((source) => `
             <tr class="health-row" data-search="${escapeHtml(`${source.source} ${source.status} ${source.findings}`)}">
               <td>${escapeHtml(source.source)}</td>
@@ -1073,8 +1087,12 @@ export function renderMetaprojectDashboardHtml({
           <div class="kpis">
             <div class="kpi ${health ? (health.findings === 0 ? "good" : "warn") : ""}"><b>${health?.findings ?? "—"}</b><span>findings</span></div>
             <div class="kpi"><b>${graph ? graph.files : "—"}</b><span>graph files</span></div>
-            <div class="kpi"><b>${wikiPages.length || "—"}</b><span>wiki pages</span></div>
-            <div class="kpi"><b>${memoryEntries.length || "—"}</b><span>memory entries</span></div>
+            <div class="kpi" title="A count of files, not a coverage measure — several wiki page types can hold none">
+              <b>${wikiPages.length || "—"}</b><span>wiki pages</span>
+            </div>
+            <div class="kpi" title="A count of files, not a coverage measure">
+              <b>${memoryEntries.length || "—"}</b><span>memory entries</span>
+            </div>
           </div>
         </div>
       </section>
@@ -2023,7 +2041,7 @@ export function renderGdgraphPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
     return 0
   fi
 
@@ -2358,7 +2376,7 @@ export function renderHealthPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
+  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$|^\\.metaproject/health\\.config\\.json$)' >/dev/null 2>&1; then
     return 0
   fi
 

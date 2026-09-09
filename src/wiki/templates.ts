@@ -3,13 +3,221 @@ import { WIKI_PAGE_TYPES, type WikiPageType } from "./types";
 export const WIKI_INDEX_BEGIN = "<!-- keryx:wiki-index:begin -->";
 export const WIKI_INDEX_END = "<!-- keryx:wiki-index:end -->";
 
+// --- explanation templates (AFC-W02, wiki-specification.md §4) ---------------
+//
+// Four templates, each with the mandatory content the spec's §4 table names,
+// plus the thing that table's prose insists on and no heading list can supply:
+// the questions the page was written to close, and a per-question verdict.
+// «Количество заполненных headings не заменяет проверку ответа» — so the
+// coverage table is part of every template, not an optional extra.
+//
+// The placeholder body is `Main content.` on purpose: it is a member of the
+// section index's own PLACEHOLDERS set (`section-index.ts`), so a freshly
+// created page classifies as `contentClass: "scaffold"` through the classifier
+// that already exists rather than through a second one written here.
+
+export type WikiTemplateKind = "scenario" | "rule" | "decision" | "change-guide";
+
+export type WikiTemplateField = {
+  /** The `## ` heading, verbatim. */
+  heading: string;
+  /** What this section must answer, shown once in the page's guide comment. */
+  prompt: string;
+  /**
+   * True when "nobody wrote the reason down" is a real possible state. Such a
+   * field must then say `unknown - <why there is no source>`; reconstructing an
+   * author's intent from code is explicitly forbidden by §4.
+   */
+  reasonBearing?: boolean;
+};
+
+export type WikiTemplateContract = {
+  kind: WikiTemplateKind;
+  label: string;
+  /** §4's own verification question for this template. */
+  checkQuestion: string;
+  /** Page types that select this template; empty when no page type maps to it. */
+  pageTypes: WikiPageType[];
+  fields: WikiTemplateField[];
+};
+
+/** The closed verdict vocabulary from §4. A count is not one of them. */
+export const WIKI_COVERAGE_VERDICTS = [
+  "covered",
+  "partial",
+  "unknown",
+  "not-applicable",
+] as const;
+export type WikiCoverageVerdict = (typeof WIKI_COVERAGE_VERDICTS)[number];
+
+export const WIKI_QUESTIONS_HEADING = "Questions this page must close";
+
+export const WIKI_TEMPLATE_CONTRACTS: WikiTemplateContract[] = [
+  {
+    kind: "scenario",
+    label: "Scenario",
+    checkQuestion: "How does the operation run, and what is left behind after a failure?",
+    pageTypes: ["user-scenario"],
+    fields: [
+      { heading: "Trigger", prompt: "What starts this, and who or what starts it." },
+      {
+        heading: "Inputs and preconditions",
+        prompt: "What must already be true, and what the operation is given.",
+      },
+      { heading: "Result", prompt: "The observable outcome when it succeeds." },
+      { heading: "Sequence", prompt: "The ordered steps, each attributable to real code." },
+      { heading: "Side effects", prompt: "What is written, sent or changed outside the caller." },
+      {
+        heading: "Exceptions and errors",
+        prompt: "Every failure mode, and the state left behind by each.",
+      },
+      {
+        heading: "Code and test references",
+        prompt: "The files and tests that make the sequence checkable.",
+      },
+    ],
+  },
+  {
+    kind: "rule",
+    label: "Rule",
+    checkQuestion: "Which rule applies in exactly this situation?",
+    pageTypes: ["business-rule"],
+    fields: [
+      { heading: "Scope", prompt: "The situations the rule governs, and the ones it does not." },
+      { heading: "The rule", prompt: "The rule itself, in one statement a reader can apply." },
+      { heading: "Applicability", prompt: "The conditions under which it binds." },
+      { heading: "Exceptions", prompt: "The sanctioned ways out, and what each one requires." },
+      {
+        heading: "Authority and acceptance basis",
+        prompt: "Who decided this, where it is recorded, and on what basis it was accepted.",
+        reasonBearing: true,
+      },
+      {
+        heading: "Enforcement references",
+        prompt: "The code, hook or gate that enforces it, and what a reader sees when it fires.",
+      },
+    ],
+  },
+  {
+    kind: "decision",
+    label: "Decision",
+    checkQuestion: "Why was this approach chosen, and when does the decision stop applying?",
+    pageTypes: ["decision"],
+    fields: [
+      { heading: "Problem", prompt: "The problem the decision was taken against." },
+      { heading: "Chosen option", prompt: "What was chosen, stated plainly." },
+      {
+        heading: "Rejected alternatives and known reasons",
+        prompt: "What else was considered and the recorded reason each lost.",
+        reasonBearing: true,
+      },
+      { heading: "Consequences", prompt: "What this costs and what it buys." },
+      { heading: "Constraints", prompt: "What the decision now forbids or requires." },
+      {
+        heading: "Supersession",
+        prompt: "What would end this decision, and what supersedes it if anything does.",
+      },
+    ],
+  },
+  {
+    kind: "change-guide",
+    label: "Change guide",
+    checkQuestion: "Where is it safe to change behaviour, and what has to be checked?",
+    // No page type maps to a change guide today — the eight `WikiPageType`
+    // values predate this template. It is reachable through the shipped
+    // template file (`wiki/templates/page.md`) that `keryx init` / `keryx
+    // update` write, which is why that file carries all four shapes.
+    pageTypes: [],
+    fields: [
+      { heading: "Behaviour before and after", prompt: "What changes, observably." },
+      { heading: "Owner and boundary", prompt: "Who owns this and where the boundary runs." },
+      { heading: "Change points", prompt: "The specific places a change lands." },
+      { heading: "Consumers and tests", prompt: "Who depends on it and what proves it still works." },
+      { heading: "Invariants", prompt: "What must remain true through the change." },
+      {
+        heading: "Rollback and compatibility",
+        prompt: "How to undo it, and what stays compatible while it is half-applied.",
+      },
+    ],
+  },
+];
+
+/**
+ * The template a page type selects, or null for the types that have no
+ * explanation shape (architecture, component, service, integration,
+ * domain-model — most of which are machine-collected, not authored).
+ */
+export function templateKindForPageType(type: WikiPageType): WikiTemplateKind | null {
+  return (
+    WIKI_TEMPLATE_CONTRACTS.find((contract) => contract.pageTypes.includes(type))?.kind ?? null
+  );
+}
+
+export function wikiTemplateContract(kind: WikiTemplateKind): WikiTemplateContract {
+  const contract = WIKI_TEMPLATE_CONTRACTS.find((entry) => entry.kind === kind);
+  if (!contract) {
+    throw new Error(`Unknown wiki template: ${kind}`);
+  }
+  return contract;
+}
+
+const TEMPLATE_PLACEHOLDER = "Main content.";
+
+function renderQuestionsBlock(contract: WikiTemplateContract): string {
+  const guide = [
+    "<!--",
+    `  ${contract.label} template (wiki-specification.md §4).`,
+    `  Check question: ${contract.checkQuestion}`,
+    "",
+    "  Fix these questions BEFORE writing the body, then answer them.",
+    "  A filled heading is not an answer, and a count of filled headings — or of",
+    "  pages — is never the completeness check. Every question carries one of",
+    `  ${WIKI_COVERAGE_VERDICTS.join(" | ")} AND the basis for that verdict.`,
+    "",
+    "  A reason nobody wrote down is `unknown - <why there is no source>`.",
+    "  Never reconstruct an author's intent from the code.",
+    "",
+    "  What each section must answer:",
+    ...contract.fields.map((field) => `  - ${field.heading}: ${field.prompt}`),
+    "-->",
+  ].join("\n");
+
+  return [
+    `## ${WIKI_QUESTIONS_HEADING}`,
+    "",
+    guide,
+    "",
+    "| # | Question | Coverage | Basis |",
+    "|---|----------|----------|-------|",
+    `| Q1 | ${TEMPLATE_PLACEHOLDER} | unknown | ${TEMPLATE_PLACEHOLDER} |`,
+  ].join("\n");
+}
+
+function renderTemplateBody(contract: WikiTemplateContract): string {
+  return [
+    renderQuestionsBlock(contract),
+    "",
+    ...contract.fields.flatMap((field) => [`## ${field.heading}`, "", TEMPLATE_PLACEHOLDER, ""]),
+  ]
+    .join("\n")
+    .trimEnd();
+}
+
 export function renderWikiPage({
   title,
   type,
+  template,
 }: {
   title: string;
   type: WikiPageType;
+  /** Overrides the type's default template; `change-guide` has no type. */
+  template?: WikiTemplateKind;
 }): string {
+  const kind = template ?? templateKindForPageType(type);
+  const body = kind
+    ? renderTemplateBody(wikiTemplateContract(kind))
+    : ["## Details", "", TEMPLATE_PLACEHOLDER].join("\n");
+
   return `# ${title}
 
 Version: 0.1.0
@@ -20,9 +228,7 @@ Status: draft
 
 One paragraph summary.
 
-## Details
-
-Main content.
+${body}
 
 ## Related Code
 
@@ -39,6 +245,18 @@ Main content.
 }
 
 export function renderWikiPageTemplate(): string {
+  const explanations = WIKI_TEMPLATE_CONTRACTS.map(
+    (contract) => `## ${contract.label} — \`${contract.kind}\`
+
+Check question: ${contract.checkQuestion}
+Page types: ${contract.pageTypes.length > 0 ? contract.pageTypes.map((t) => `\`${t}\``).join(", ") : "none — author it by hand"}
+
+Mandatory sections:
+
+${contract.fields.map((field) => `- \`## ${field.heading}\` — ${field.prompt}`).join("\n")}
+`,
+  ).join("\n");
+
   return `# <Title>
 
 Version: 0.1.0
@@ -48,6 +266,19 @@ Status: draft
 ## Summary
 
 One paragraph summary.
+
+## ${WIKI_QUESTIONS_HEADING}
+
+<!-- Fix the questions BEFORE writing the body. A filled heading is not an
+     answer, and a count of filled headings — or of pages — is never the
+     completeness check. Every question carries one of
+     ${WIKI_COVERAGE_VERDICTS.join(" | ")} AND the basis for that verdict.
+     A reason nobody wrote down is \`unknown - <why there is no source>\`;
+     never reconstruct an author's intent from the code. -->
+
+| # | Question | Coverage | Basis |
+|---|----------|----------|-------|
+| Q1 | Main content. | unknown | Main content. |
 
 ## Details
 
@@ -64,7 +295,16 @@ Main content.
 ## Changelog
 
 - 0.1.0 - Initial version.
-`;
+
+---
+
+# Explanation templates (AFC-W02)
+
+Four shapes, from \`docs/requirements/keryx-agent-first-core/wiki-specification.md\` §4.
+Replace the \`## Details\` section above with the mandatory sections of the shape
+that fits, and keep the question table either way.
+
+${explanations}`;
 }
 
 export function renderWikiIndexScaffold(): string {
@@ -83,6 +323,15 @@ outlive a single task: architecture, domain models, business rules, user
 scenarios, components, services, integrations, and known decisions.
 
 Read this index first. Do not read every page unless necessary.
+
+## How complete is this wiki
+
+The page count below is a count of files. It is not a completeness measure —
+nothing here knows which questions the wiki cannot answer. Read the per-type
+counts from \`keryx wiki status\` instead: a type at \`0\` means no page of that
+kind exists, and each authored page carries its own
+\`## Questions this page must close\` table saying which questions it actually
+closed.
 
 ## Page Types
 
@@ -182,6 +431,27 @@ Repairing is a separate act from reading, and it belongs to a person:
 model, and \`keryx wiki verify --page <p>\` records that someone reviewed a
 page. Do not stamp provenance on a human's behalf — the field means a person
 looked.
+
+## A page count is not coverage
+
+\`keryx wiki status\` prints \`total pages: N\`, \`keryx wiki index\` reports
+\`(N pages)\`, and the orientation block injected each turn opens with
+\`pages: N\`. Every one of those is a **count of files**, not a completeness
+claim: none of them knows which questions the wiki cannot answer, so **it is
+not a completeness measure** and must never be quoted as one.
+
+What to read instead:
+
+- The **per-type** breakdown under \`## Pages by type\`. A type at \`0\` means no
+  page of that kind exists at all — on this repository, \`business-rule\`,
+  \`user-scenario\`, \`domain-model\`, \`service\` and \`integration\` have all
+  been \`0\` while the total read \`50\`.
+- The page's own \`## Questions this page must close\` table, where each
+  question is \`covered\`, \`partial\`, \`unknown\` or \`not-applicable\` with a
+  basis. A filled heading is not an answer.
+- \`keryx wiki ask\`'s status. \`no-match\` and \`insufficient-evidence\` are
+  answers about the corpus; treat them as "the wiki does not cover this", not
+  as a gap in your own reading.
 
 Use this skill for project knowledge that is not a literal code detail:
 architecture, domain models, business rules, user scenarios, service/component

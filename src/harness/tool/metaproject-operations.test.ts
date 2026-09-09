@@ -34,6 +34,10 @@ const OPERATION_SCHEMA = JSON.parse(
 const EXPECTED_NAMES = [
   "flow_status",
   "graph_affected",
+  // AFC (flow 240): `keryx gdgraph find`'s explainable outcome — code, reason,
+  // bounded next actions, per-candidate matched/discriminating — was CLI-only
+  // until this descriptor existed. See `graph-find-projection.test.ts`.
+  "graph_find",
   "graph_path",
   "graph_query",
   "graph_symbol",
@@ -47,7 +51,16 @@ const EXPECTED_NAMES = [
   "test_related",
   "wiki_ask",
   "wiki_backlinks",
+  // AFC (flow 240): the AFC-W04 evidence envelope, whose only caller was its
+  // own test. See `wiki-evidence-projection.test.ts`.
+  "wiki_evidence",
   "wiki_freshness",
+  // Flow 242 (forgetting) lane C / AC5: `keryx wiki sections resolve`'s
+  // named-outcome vocabulary (found/tombstoned/pending-tombstone/reoccupied/
+  // unknown/registry-unreadable, plus store-unreadable) had no agent or MCP
+  // equivalent — this closes that gap. See `metaproject-adapter.test.ts` and
+  // `mcp.test.ts` for the store-unreadable proof (a real `chmod`, not a fake).
+  "wiki_resolve",
 ];
 
 interface PortCalls {

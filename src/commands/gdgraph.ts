@@ -6,15 +6,25 @@ import { runAssetsSubcommand } from "../assets/command";
 import { buildGraph } from "../gdgraph/build";
 import { getCycles, getOrphans, loadGraph } from "../gdgraph/query";
 import { computeAffected, type AffectedResult } from "../gdgraph/affected";
-import { findNodes, findSymbols } from "../gdgraph/find";
-import { querySymbol, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
+import { findCandidates } from "../gdgraph/find";
+import { querySymbol, resolveSymbolCandidates, resolveSymbols, transitiveCallers } from "../gdgraph/symbol";
+import {
+  RANKING_SCORE_LABEL,
+  RETRIEVAL_NEXT_ACTIONS,
+  formatRankingScore,
+  formatRetrievalOutcome,
+  retrievalOutcome,
+  retrievalStatus,
+} from "../lib/retrieval-codes";
 import { findPath, labelNode } from "../gdgraph/path";
-import { graphMaybeStale, STALE_NOTE } from "../gdgraph/staleness";
+import { checkGraphStaleness, STALE_NOTE, UNKNOWN_NOTE } from "../gdgraph/staleness";
 import { isCapabilityEnabled } from "../capability/seam";
 import { loadGdgraphConfig } from "../gdgraph/config";
 import { writeRepomap } from "../gdgraph/repomap";
 import { requireSymbols, SymbolsUnavailableError } from "../gdgraph/symbols-capability";
 import { createTreesitterSpec, type GrammarDiagnosis } from "../gdgraph/treesitter/adapter";
+// Through the owner's facade, not its internals — `src/lib/import-policy.ts`.
+import { explainAbsentGraphTarget, loadDeletionTrail } from "../forgetting/service";
 
 export async function gdgraphCommand(args: string[]): Promise<void> {
   if (process.env.KERYX_GDGRAPH_LOCAL !== "1") {
@@ -273,6 +283,15 @@ async function probeSymbolDiagnoses(cwd: string): Promise<GrammarDiagnosis[]> {
   }
 }
 
+/**
+ * How many symbol rows `keryx gdgraph symbol` prints. A DISPLAY limit and
+ * nothing else: it may never reach a count, a distinct-name tally, or an
+ * outcome code. Named rather than inlined so a reader can see that the 25 in
+ * the slice and the 25 in the "+N more" line are one decision, which is what
+ * made the old `matches.length > 25` check silently unreachable.
+ */
+const SYMBOL_PAGE_SIZE = 25;
+
 async function runSymbol(rest: string[]): Promise<void> {
   const name = rest.filter((a) => !a.startsWith("--")).join(" ").trim();
   const asJson = rest.includes("--json");
@@ -305,11 +324,17 @@ async function runSymbol(rest: string[]): Promise<void> {
       if (!(error instanceof SymbolsUnavailableError)) {
         throw error;
       }
+      // AC5 (AFC-M03): the norm's cause for this is `capability-unavailable`.
+      // `error` keeps the finer-grained `SymbolsUnavailableCode`
+      // (`no-symbol-layer` / `grammar-missing` / `grammar-incompatible`),
+      // which says WHICH capability failed and how — a strict refinement of
+      // the shared code, not a competing spelling for it.
       if (asJson) {
         console.log(
           JSON.stringify(
             {
               schemaVersion: 1,
+              code: "capability-unavailable",
               error: error.code,
               message: error.message,
               remedy: error.remedy,
@@ -319,6 +344,7 @@ async function runSymbol(rest: string[]): Promise<void> {
           ),
         );
       } else {
+        console.error("code: capability-unavailable");
         console.error(error.message);
         console.error(error.remedy);
       }
@@ -336,26 +362,79 @@ async function runSymbol(rest: string[]): Promise<void> {
     return;
   }
 
-  const matches = resolveSymbols(graph.symbols, name);
+  // SCAN, not page (flow 235 T18 — the fifth instance of the shape T14/T15
+  // closed inside `gdgraph find`).
+  //
+  // `resolveSymbolCandidates`'s `limit` defaults to 25, and this command took
+  // that default. Every statement below was then computed from twenty-five
+  // rows: the count in the reason, the number of distinct names, and — the one
+  // that matters — the OUTCOME CODE. Reproduced on 2026-09-08 against a
+  // synthetic built graph of 30 symbols named `handleAlpha` followed by 10
+  // named `handleBeta`:
+  //
+  //   $ keryx gdgraph symbol "handle"
+  //   code: ok
+  //   ## Definitions (25, matched by name-contains-query)
+  //
+  // Forty symbols matched under two different names; the ambiguity guard
+  // (`insufficient-evidence`) never saw the second name because the slice had
+  // already removed it, so a query that cannot be answered was rendered as a
+  // confident one. The same slice made the loose-query reason say
+  // `"handle" matches 25 symbols across 25 different names` when sixty matched
+  // under sixty names — and made the `… +N more` truncation notice below
+  // structurally unable to fire, because `matches` had already been cut to 25
+  // and `matches.length > 25` is then never true.
+  //
+  // So the resolve is unlimited and drives the classification and every count;
+  // the 25 is applied HERE, once, purely to the rows printed, and is stated.
+  const candidates = resolveSymbolCandidates(graph.symbols, name, Number.MAX_SAFE_INTEGER);
+  const matches = candidates.map((candidate) => candidate.symbol);
   if (matches.length === 0) {
+    // AC5: a completed lookup that found nothing is `no-match` — a real
+    // answer, at exit 0 — and it escalates to exactly one bounded next step.
     console.log(`# gdgraph symbol: ${name}`);
     console.log("");
-    console.log("No matching symbol. Try `keryx gdgraph find` or `keryx ctx rg`.");
+    for (const line of formatRetrievalOutcome(
+      retrievalOutcome(
+        "no-match",
+        `the symbol layer holds ${graph.symbols.length} symbols; none is named "${name}" or contains it.`,
+      ),
+    )) {
+      console.log(line);
+    }
+    await printStaleNote();
     return;
   }
 
   // Ambiguity guard: a loose query (e.g. "clone") matches several DIFFERENT
   // names, and unioning their callers/callees/impact is noise. List the matches
   // and ask for an exact name. Same-name overloads (one name, N defs) proceed.
+  //
+  // AC5: this is exactly `insufficient-evidence` — "кандидаты есть, но
+  // недостаточны для заявленного контекста" — and naming it as such is what
+  // lets a caller tell it apart from a no-match without parsing the prose.
   const distinctNames = [...new Set(matches.map((m) => m.name))];
   if (distinctNames.length > 1) {
     console.log(`# gdgraph symbol: ${name}`);
     console.log("");
-    console.log(`"${name}" matches ${matches.length} symbols across ${distinctNames.length} names — pick an exact one:`);
-    for (const m of matches.slice(0, 25)) {
-      console.log(`- ${m.name} (${m.kind}) — ${m.path}:${m.startLine}`);
+    for (const line of formatRetrievalOutcome(
+      retrievalOutcome(
+        "insufficient-evidence",
+        `"${name}" matches ${matches.length} symbols across ${distinctNames.length} different names — ` +
+          "pick an exact one rather than unioning their callers and callees.",
+      ),
+    )) {
+      console.log(line);
     }
-    if (matches.length > 25) console.log(`- … +${matches.length - 25} more`);
+    console.log("");
+    for (const candidate of candidates.slice(0, SYMBOL_PAGE_SIZE)) {
+      const m = candidate.symbol;
+      console.log(`- ${m.name} (${m.kind}) — ${m.path}:${m.startLine}  [${candidate.tier}]`);
+    }
+    if (matches.length > SYMBOL_PAGE_SIZE) {
+      console.log(`- … +${matches.length - SYMBOL_PAGE_SIZE} more (a display limit, not the end of the matches)`);
+    }
+    await printStaleNote();
     return;
   }
 
@@ -363,7 +442,28 @@ async function runSymbol(rest: string[]): Promise<void> {
 
   console.log(`# gdgraph symbol: ${name}`);
   console.log("");
-  console.log(`## Definitions (${result.definitions.length})`);
+  console.log("code: ok");
+  console.log("");
+  // AC6 (AFC-M04) — an explainable candidate. The tier is WHY this definition
+  // is here: an exact name is an answer, a substring capture may be a
+  // coincidence, and the two used to render identically.
+  // `querySymbol` resolves through the same 25-row default, so `definitions` is
+  // a page whenever one name has more than 25 definitions — measured at 40
+  // same-named functions, where this header read "## Definitions (25, matched
+  // by exact-name)" with nothing saying fifteen were cut. `matches` is the
+  // unlimited scan, so the two counts can be stated apart instead of collapsed.
+  const shownDefinitions = result.definitions.length;
+  console.log(
+    shownDefinitions < matches.length
+      ? `## Definitions (showing ${shownDefinitions} of ${matches.length} matched, matched by ${result.matchTier})`
+      : `## Definitions (${shownDefinitions}, matched by ${result.matchTier})`,
+  );
+  if (shownDefinitions < matches.length) {
+    console.log(
+      `Display limit: ${matches.length - shownDefinitions} further definition(s) of this name are not listed, ` +
+        "and the callers/callees below are those of the definitions shown.",
+    );
+  }
   for (const def of result.definitions) {
     const container = def.container ? ` in ${def.container}` : "";
     console.log(`- ${def.name} (${def.kind})${container} — ${def.path}:${def.startLine}`);
@@ -419,10 +519,21 @@ async function printDocumentedIn(files: string[]): Promise<void> {
   }
 }
 
+// Flow 237 T6 (AFC-28/AC-28): route through the tri-state result
+// (`checkGraphStaleness`) instead of the boolean wrapper (`graphMaybeStale`),
+// which collapsed "stale" and "unknown" into the same `STALE_NOTE` wording
+// and discarded the reasons entirely. "unknown" (a git failure — staleness
+// could not be determined) must never read as the confident "repo moved"
+// claim that `STALE_NOTE` makes.
 async function printStaleNote(): Promise<void> {
-  if (await graphMaybeStale(process.cwd())) {
-    console.log("");
-    console.log(STALE_NOTE);
+  const check = await checkGraphStaleness(process.cwd());
+  if (check.status === "fresh") {
+    return;
+  }
+  console.log("");
+  console.log(check.status === "unknown" ? UNKNOWN_NOTE : STALE_NOTE);
+  for (const reason of check.reasons) {
+    console.log(`  - ${reason}`);
   }
 }
 
@@ -439,46 +550,88 @@ function printRefs(refs: Array<{ label: string; resolved: boolean }>): void {
   }
 }
 
+// AC5 (AFC-M03) + AC6 (AFC-M04), flow 235.
+//
+// The measured defect: this renderer printed the identical
+// "No files or symbols matched" line for a genuine no-match AND for a
+// directory with no graph at all — both at exit 0 — and printed a confident
+// ranked list for a query whose only matching term was in most of the corpus.
+// It also discarded `FindResult.matched`, the reason each candidate was
+// chosen, which was computed on every call and never rendered.
+//
+// `findCandidates` (gdgraph/find.ts) now classifies the outcome and carries
+// the reason; this function's job is only to render one or the other.
 async function runFind(rest: string[]): Promise<void> {
+  const asJson = rest.includes("--json");
   const query = positionals(rest).join(" ").trim() || rest.filter((a) => !a.startsWith("--")).join(" ").trim();
-  if (!query) {
-    console.error('Usage: keryx gdgraph find "<terms>"');
-    process.exitCode = 1;
-    return;
-  }
 
   const graph = await loadGraph(process.cwd());
-  const symbols = findSymbols(graph, query);
-  const results = findNodes(graph, query);
+  const outcome = findCandidates(graph, query);
+  // A completed search is exit 0 even when it found nothing: "результат с
+  // нулём элементов не стирает coverage". Only `error` — the operation
+  // produced no result — is non-zero.
+  process.exitCode = retrievalStatus(outcome.code) === "error" ? 1 : 0;
 
-  if (results.length === 0 && symbols.length === 0) {
-    console.log(`# gdgraph find: ${query}`);
-    console.log("");
-    console.log("No files or symbols matched. For content search use:");
-    console.log(`  keryx ctx rg "<pattern>"`);
+  if (asJson) {
+    console.log(
+      JSON.stringify(
+        {
+          schemaVersion: 1,
+          query,
+          code: outcome.code,
+          reason: outcome.reason,
+          nextActions: outcome.nextActions,
+          queryTerms: outcome.queryTerms,
+          ubiquitousTerms: outcome.ubiquitousTerms,
+          // `score` keeps its field name (a caller may already read it); the
+          // NOUN for it, wherever it is rendered for a human, is "ranking
+          // score" and never a probability (specification.md §3).
+          scoreKind: RANKING_SCORE_LABEL,
+          symbols: outcome.symbols,
+          files: outcome.files,
+        },
+        null,
+        2,
+      ),
+    );
     return;
   }
 
-  console.log(`# gdgraph find: ${query}`);
+  console.log(`# gdgraph find: ${query || "<empty>"}`);
   console.log("");
+  for (const line of formatRetrievalOutcome(outcome)) {
+    console.log(line);
+  }
 
-  if (symbols.length > 0) {
-    console.log(`## Symbols (${symbols.length})`);
-    for (const symbol of symbols) {
-      console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
-    }
+  // `outcome.files` / `outcome.symbols` are the RANKED PAGE — ballast dropped
+  // and sliced to the default 20/15 limits — while `outcome.reason` states what
+  // matched and, when the two differ, carries `findCandidates`'s own labelled
+  // "Showing N of M" clause. These headers counted the page under a bare noun,
+  // so `## Files (20)` sat directly beneath a reason saying forty matched.
+  if (outcome.symbols.length > 0) {
     console.log("");
+    console.log(`## Symbols (${outcome.symbols.length} shown)`);
+    for (const symbol of outcome.symbols) {
+      console.log(`- ${symbol.name} (${symbol.kind}) — ${symbol.path}:${symbol.startLine}`);
+      console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(symbol.score)} · ${symbol.reason}`);
+    }
   }
 
-  console.log(`## Files (${results.length})`);
-  if (results.length === 0) {
-    console.log("- none");
+  if (outcome.files.length > 0) {
+    console.log("");
+    console.log(`## Files (${outcome.files.length} shown)`);
+    for (const result of outcome.files) {
+      console.log(`- ${result.path}`);
+      console.log(`  ${RANKING_SCORE_LABEL} ${formatRankingScore(result.score)} · ${result.reason}`);
+    }
   }
-  for (const result of results) {
-    console.log(`- ${result.path}  (score ${result.score}, dependents ${result.dependents})`);
+
+  if (outcome.code === "ok" || outcome.code === "insufficient-evidence") {
+    console.log("");
+    console.log('Next: keryx gdgraph symbol "<name>" · keryx gdgraph affected <file>');
   }
-  console.log("");
-  console.log('Next: keryx gdgraph symbol "<name>" · keryx gdgraph affected <file>');
+  // Staleness is reported on EVERY outcome now, not only on a hit: a caller
+  // told "nothing matched" most needs to know the index predates the tree.
   await printStaleNote();
 }
 
@@ -542,8 +695,63 @@ async function runAffected(rest: string[]): Promise<void> {
   // input unchanged when nothing matched, so membership in the loaded node set
   // is exactly the signal that distinguishes "never indexed" from "indexed,
   // zero edges".
+  // AC5 (AFC-M03, flow 235): "index-incomplete — индекс не позволяет ответить"
+  // is a DIFFERENT cause from "target-not-indexed", and it must be checked
+  // first. An index with no file nodes has no standing to say a target was
+  // never indexed — it cannot say anything about any target. Before this,
+  // running `affected` in a directory with no graph reported every target as
+  // not-a-node, which reads as "your path is wrong" when the truth is "there
+  // is no index here".
+  if (graph.nodes.length === 0) {
+    const outcome = retrievalOutcome(
+      "index-incomplete",
+      "the graph index holds no file nodes — it was never built here, or its storage is unreadable. " +
+        "No claim is being made about whether this target exists.",
+    );
+    if (asJson) {
+      console.log(
+        JSON.stringify(
+          {
+            schemaVersion: 1,
+            code: outcome.code,
+            error: outcome.code,
+            reason: outcome.reason,
+            nextActions: outcome.nextActions,
+            target,
+            dependencies: [],
+            dependents: [],
+          },
+          null,
+          2,
+        ),
+      );
+    } else {
+      for (const line of formatRetrievalOutcome(outcome)) {
+        console.error(line);
+      }
+    }
+    process.exitCode = 1;
+    return;
+  }
+
   const isKnownNode = graph.nodes.some((node) => node.path === affected.target);
   if (!isKnownNode) {
+    // Flow 242 T9/F3: `target-not-indexed` was the whole answer for a file that
+    // was DELETED and for one that never existed — measured on a scratch
+    // project, `affected src/billing.ts` (deleted) and `affected
+    // src/nonexistent.ts` printed the same code and the same prose.
+    //
+    // The code stays `target-not-indexed`. It is a closed vocabulary
+    // (`src/lib/retrieval-codes.ts`, verbatim from the norm) and inventing a
+    // `target-removed` member here would fork it — the exact defect that module
+    // exists to prevent. The distinction travels in an ADDITIVE `removal` field
+    // instead, which a caller can branch on and a transport can carry, and which
+    // no existing consumer of `code`/`error`/`reason` is affected by.
+    const absence = explainAbsentGraphTarget(
+      graph,
+      affected.target,
+      await loadDeletionTrail(process.cwd()),
+    );
     // A caller error (typo, wrong path, or a new file the graph has not been
     // rebuilt for), not an empty-but-valid answer — exit 1, matching this
     // file's own convention for a bad argument (missing-argument usage above,
@@ -558,22 +766,41 @@ async function runAffected(rest: string[]): Promise<void> {
     // `commands/modules.ts`'s own convention (its "not-initialized" branch):
     // a structured error object on stdout under `--json`, prose on stderr
     // otherwise — never both for the same failure.
+    //
+    // AC5 (AFC-M03, flow 235): the DISTINCTION this branch makes was already
+    // right; what it lacked was a stable code. `unknown-graph-target` was a
+    // spelling private to this file — a caller could not branch on it and a
+    // transport could not preserve it, because it is not in the norm's closed
+    // vocabulary. `code` is now that vocabulary's `target-not-indexed`;
+    // `error` keeps carrying a value for existing consumers, and carries the
+    // same one so the two can never disagree.
     if (asJson) {
       console.log(
         JSON.stringify(
           {
             schemaVersion: 1,
-            error: "unknown-graph-target",
+            code: "target-not-indexed",
+            error: "target-not-indexed",
+            reason: message,
+            nextActions: RETRIEVAL_NEXT_ACTIONS["target-not-indexed"],
             target,
             dependencies: [],
             dependents: [],
+            removal: {
+              verdict: absence.verdict,
+              reason: absence.reason,
+              referencedBy: absence.referencedBy,
+              trailPath: absence.removal.path,
+            },
           },
           null,
           2,
         ),
       );
     } else {
+      console.error("code: target-not-indexed");
       console.error(message);
+      console.error(`removal: [${absence.verdict}] ${absence.reason}`);
     }
     process.exitCode = 1;
     return;
@@ -628,9 +855,45 @@ async function runRepomap(rest: string[]): Promise<void> {
     ...(seed.length > 0 ? { seed } : {}),
   });
 
+  // AFC-12 already made `computeRepomap` refuse rather than truncate a required
+  // set, and `formatRepomap` (the agent boundary) already renders that refusal.
+  // This surface never got it: measured on 2026-09-08, a `--seed` whose
+  // required set did not fit printed
+  //
+  //   gdgraph repomap complete: 0 entries, ~0 tokens
+  //   omitted (over budget): 2
+  //
+  // at exit 0 — the word "complete" applied to a map that was refused, and the
+  // seed the caller explicitly asked to protect never named. Same vocabulary as
+  // the agent boundary so the two surfaces cannot drift.
+  if (result.overflow !== undefined) {
+    console.error(
+      `gdgraph repomap ${result.overflow.code}: the required entry "${result.overflow.requiredId}" does not fit ` +
+        "within the token budget.",
+    );
+    console.error("No entries were written: a partial required set is never reported as a map.");
+    console.error("Raise --budget, or narrow --seed, and retry.");
+    process.exitCode = 1;
+    return;
+  }
+
   console.log(`gdgraph repomap complete: ${result.entries.length} entries, ~${result.tokens} tokens`);
   if (result.omitted > 0) {
+    // `omitted` alone is a scalar a reader cannot check. `omittedOptional`
+    // names the paths and has always been on the result; only the agent
+    // boundary printed them.
     console.log(`omitted (over budget): ${result.omitted}`);
+    for (const path of result.omittedOptional.slice(0, 40)) {
+      console.log(`  - ${path}`);
+    }
+    if (result.omittedOptional.length > 40) {
+      console.log(`  - … +${result.omittedOptional.length - 40} more`);
+    }
+  }
+  if (result.entries.length === 0 && result.omitted > 0) {
+    console.log(
+      "0 entries is a budget decision about this map, not a claim that the graph holds no ranked files.",
+    );
   }
   console.log(`repomap: ${result.path}`);
 }

@@ -28,14 +28,36 @@
 // as ask_user/spawn_subagent" (spec): the judgment itself is delivered via
 // ONE bounded, structured single-shot model turn (mirrors
 // `machine-wrap-up.ts`'s `resolveMachineWrapUp` — same
-// `runModelTurn`/`Promise.race`/timeout shape), not a live multi-round
+// port/`Promise.race`/timeout shape), not a live multi-round
 // tool-calling loop from the model and not a hardcoded text-similarity
-// heuristic. Fails CLOSED on no credential, timeout, or an unparseable
-// response — an unresolved `workspaceId` simply retries at the next
+// heuristic. Fails CLOSED on no port, no credential, timeout, or an
+// unparseable response — an unresolved `workspaceId` simply retries at the next
 // action-intent open; it never blocks or degrades the user's actual turn.
+//
+// AFC-19 (flow 239, phase 7): this module used to reach the model through
+// `runModelTurn` (`../harness/provider/single-turn`) and the workspace store
+// through `workspaceCreateTool`/`workspaceListTool`
+// (`../harness/tool/builtin/workspace-lifecycle-tool`). Between them those two
+// imports put the whole provider registry — six providers, `make-provider`, the
+// SSE reader, the policy engine and `src/commands/providers.ts` — into the
+// public SAC facade's shipped graph (measured; see `core-graph.test.ts`). Both
+// are gone:
+//   * the model turn is now an INJECTED port (`./model-turn-port.ts`), and
+//   * the two workspace calls go straight to SAC's own `WorkspaceService`
+//     (`./workspace-service.ts`) with the same constructor arguments and the
+//     same call arguments the tool used — the tool is a JSON wrapper around
+//     exactly this, and `workspace-resolve` never passed it a `getSessionDir`,
+//     so its slate-binding branch never ran from here.
+// Nothing moved directories; the client-zone modules are simply no longer named.
+import { randomUUID } from "node:crypto";
 import { redactSensitiveText } from "../security/redact";
-import { workspaceCreateTool, workspaceListTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
-import { runModelTurn, type ModelTurnResult, type ProviderFactory } from "../harness/provider/single-turn";
+import { WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId } from "./workspace-service";
+import {
+  resolveModelTurnPort,
+  warnModelTurnUnavailable,
+  type ModelTurnOutcome,
+  type ModelTurnPort,
+} from "./model-turn-port";
 
 /**
  * Shorter than `machine-wrap-up.ts`'s 30s: this runs at the START of a turn,
@@ -58,29 +80,50 @@ export type ResolveOrCreateInput = {
   topicHint: string;
   /**
    * The session's ALREADY-ACTIVE provider/model (`AgentDeps.providerId`/
-   * `.modelId` at the real call site). Passed through to `runModelTurn`
+   * `.modelId` at the real call site). Passed through to the model-turn port
    * verbatim so this judgment reuses the exact credential the session is
-   * already authenticated with — never `runModelTurn`'s own independent
-   * `resolveAutoProvider` auto-selection, which could silently pick a
-   * DIFFERENT provider than the one the user actually selected for this
-   * session. Omitted only by tests that inject their own `providerFactory`.
+   * already authenticated with — never the port's own independent
+   * auto-selection, which could silently pick a DIFFERENT provider than the one
+   * the user actually selected for this session. Omitted only by tests that
+   * inject their own `modelTurn`.
    */
   provider?: string;
   model?: string;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /**
+   * The injected single-turn capability (`./model-turn-port.ts`). Core holds no
+   * provider registry of its own (AFC-19): without this — and without a
+   * process-wide default registered via `setModelTurnPort` — the judgment
+   * REFUSES with `no_model_turn` rather than guessing.
+   */
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
 };
 
 export type ResolveOrCreateResult =
   | { ok: true; workspaceId: string; action: "bound-existing" | "created" }
-  | { ok: false; reason: "no_credential" | "ambiguous" | "error" };
+  /**
+   * `no_model_turn` (no capability was supplied to core at all) is deliberately
+   * NOT folded into `no_credential` (a supplied capability reported it has no
+   * key): the two have different fixes — wire the client, versus add a key —
+   * and every caller so far only reads `ok`, so widening this union is safe.
+   */
+  | { ok: false; reason: "no_credential" | "no_model_turn" | "ambiguous" | "error" };
 
 type ExistingWorkspace = { id: string; title: string; status: string };
 
-function parseWorkspaceList(output: string): ExistingWorkspace[] {
-  const parsed = JSON.parse(output) as Array<{ id: string; title: string; status: string }>;
-  return parsed.map((w) => ({ id: w.id, title: w.title, status: w.status }));
+/**
+ * SAC's own workspace store, constructed exactly as
+ * `harness/tool/builtin/workspace-lifecycle-tool.ts` constructs it — same
+ * authorization server, same strict guard, same offline policy revision — so
+ * moving off that tool changed the caller, not the behaviour.
+ */
+function workspaceStore(cwd: string): WorkspaceService {
+  return new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+  });
 }
 
 /**
@@ -106,13 +149,16 @@ function parseDecision(
 export async function resolveOrCreateWorkspace(input: ResolveOrCreateInput): Promise<ResolveOrCreateResult> {
   const topicHint = redactSensitiveText(input.topicHint).trim().slice(0, TOPIC_HINT_MAX_LENGTH) || "Untitled session";
 
-  // AC-24: workspace_list is ALWAYS the first step, unconditionally — no
-  // path below can bind an id without this call having happened first.
-  const listed = await workspaceListTool(input.cwd).invoke({});
-  if (listed.isError) return { ok: false, reason: "error" };
+  const store = workspaceStore(input.cwd);
+
+  // AC-24: the list is ALWAYS the first step, unconditionally — no path below
+  // can bind an id without this call having happened first.
   let existing: ExistingWorkspace[];
   try {
-    existing = parseWorkspaceList(listed.output).filter((w) => w.status === "active");
+    const listed = await store.list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived: false });
+    existing = listed
+      .filter((w) => w.status === "active")
+      .map((w) => ({ id: w.id, title: w.title, status: w.status }));
   } catch {
     return { ok: false, reason: "error" };
   }
@@ -120,10 +166,7 @@ export async function resolveOrCreateWorkspace(input: ResolveOrCreateInput): Pro
   // Nothing to compare against — create directly, no model call needed (no
   // judgment is possible or useful over an empty list).
   if (existing.length === 0) {
-    const created = await workspaceCreateTool(input.cwd).invoke({ title: topicHint });
-    if (created.isError) return { ok: false, reason: "error" };
-    const { id } = JSON.parse(created.output) as { id: string };
-    return { ok: true, workspaceId: id, action: "created" };
+    return createWorkspace(store, topicHint);
   }
 
   const knownIds = new Set(existing.map((w) => w.id));
@@ -134,9 +177,18 @@ export async function resolveOrCreateWorkspace(input: ResolveOrCreateInput): Pro
     "an id that is not in the list below.";
   const user = `--- new task ---\n${topicHint}\n\n--- existing workspaces ---\n${existing.map((w) => `${w.id}: ${w.title}`).join("\n")}`;
 
-  let modelResult: ModelTurnResult | undefined;
+  // The judgment needs a model. Core does not have one (AFC-19) — it has a
+  // seam. No port supplied means REFUSE, loudly and by its own name: never a
+  // silent "ambiguous", which would read like a model that answered unclearly.
+  const modelTurn = resolveModelTurnPort(input.modelTurn);
+  if (modelTurn === undefined) {
+    warnModelTurnUnavailable("workspace-resolve");
+    return { ok: false, reason: "no_model_turn" };
+  }
+
+  let modelResult: ModelTurnOutcome | undefined;
   const modelTurnTimeoutMs = input.modelTurnTimeoutMs ?? DEFAULT_MODEL_TURN_TIMEOUT_MS;
-  const turn = runModelTurn({
+  const turn = modelTurn({
     system,
     user,
     requestId: "workspace-resolve",
@@ -144,7 +196,6 @@ export async function resolveOrCreateWorkspace(input: ResolveOrCreateInput): Pro
     ...(input.provider !== undefined ? { provider: input.provider } : {}),
     ...(input.model !== undefined ? { model: input.model } : {}),
     ...(input.env !== undefined ? { env: input.env } : {}),
-    ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
   }).then((result) => {
     modelResult = result;
     return "done" as const;
@@ -180,8 +231,24 @@ export async function resolveOrCreateWorkspace(input: ResolveOrCreateInput): Pro
     return { ok: true, workspaceId: decision.workspaceId, action: "bound-existing" };
   }
 
-  const created = await workspaceCreateTool(input.cwd).invoke({ title: decision.title });
-  if (created.isError) return { ok: false, reason: "error" };
-  const { id } = JSON.parse(created.output) as { id: string };
-  return { ok: true, workspaceId: id, action: "created" };
+  return createWorkspace(store, decision.title);
+}
+
+/**
+ * Create one workspace and report it, mirroring `workspace_create`'s own
+ * arguments (a fresh `newWorkspaceId()`, no `component`). A store failure is an
+ * `error` result, exactly as the tool's `isError` output was before.
+ */
+async function createWorkspace(store: WorkspaceService, title: string): Promise<ResolveOrCreateResult> {
+  try {
+    const workspace = await store.create({
+      request: undefined,
+      requestCorrelationId: randomUUID(),
+      id: newWorkspaceId(),
+      title,
+    });
+    return { ok: true, workspaceId: workspace.id, action: "created" };
+  } catch {
+    return { ok: false, reason: "error" };
+  }
 }

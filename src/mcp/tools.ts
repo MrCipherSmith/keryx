@@ -20,13 +20,63 @@ import { runValidate } from "../standard/service";
 import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
+
+/**
+ * The one `WorkspaceService` construction every `sac.workspace*` tool uses —
+ * identical to `src/commands/workspace.ts`'s `service()` factory (same
+ * authorization server, same offline strict-guard literal), so the CLI and MCP
+ * read the same store under the same policy.
+ */
+function sacWorkspaceService(cwd: string): WorkspaceService {
+  return new WorkspaceService({
+    workspaceRoot: cwd,
+    authorizationServer: localWorkspaceAuthorizationServer(),
+    strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" },
+  });
+}
+
+/**
+ * Named, branchable results for the workspace lookups that do not return a
+ * workspace. Each names a DIFFERENT answer — "no such workspace", "not yours",
+ * "cannot be parsed", "the guard refused" — and none of them is an empty
+ * result or a thrown stack trace.
+ */
+const SAC_WORKSPACE_LOOKUP_CODE: Record<Exclude<WorkspaceLookup["outcome"], "workspace">, string> = {
+  "not-found": "sac_workspace_not_found",
+  "access-denied": "sac_workspace_access_denied",
+  unreadable: "sac_workspace_unreadable",
+  "guard-denied": "sac_workspace_guard_denied",
+};
 
 function stringParam(params: Record<string, unknown>, key: string): string | undefined {
   const value = params[key];
   return typeof value === "string" ? value : undefined;
+}
+
+/**
+ * A page-size argument: absent, or a positive integer. Anything else throws.
+ *
+ * `inputSchema` alone does not enforce this — a JSON Schema is a description
+ * MCP clients may or may not validate against, so the boundary has to check the
+ * value it actually received. Silently dropping the bad value would be worse
+ * than the schema: the caller asked for zero results, would get twenty, and
+ * would be told nothing about it.
+ */
+function pageLimitParam(params: Record<string, unknown>, key: string): number | undefined {
+  const value = params[key];
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new Error(
+      `${key} must be an integer of at least 1 — received ${JSON.stringify(value)}. ` +
+        "It is the maximum number of candidates to show; a zero or negative page size is not a query.",
+    );
+  }
+  return value;
 }
 
 /**
@@ -276,24 +326,34 @@ export function buildToolRegistry(): ToolEntry[] {
     // `sac.propose`/`sac.review` already are — local-stdio only, since v1 SAC has no
     // verified HTTP principal policy.
     {
-      name: "sac.workspaceList", module: "sac", description: "List Shared Agent Context (SAC) workspaces visible to this actor — call this before sac.workspaceCreate to check whether an existing workspace already fits.",
+      name: "sac.workspaceList", module: "sac", description: "List Shared Agent Context (SAC) workspaces visible to this actor — call this before sac.workspaceCreate to check whether an existing workspace already fits. Each entry carries a `references` report: a workspace whose referenced target has been deleted is still listed, with the failing reference named under `references.unresolvable`, rather than silently dropped — an absent entry means \"no such workspace\", never \"a workspace that is damaged\".",
       inputSchema: OBJECT_SCHEMA({ includeArchived: { type: "boolean" } }, []),
       mutating: false,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const includeArchived = params.includeArchived === true;
-        const workspaces = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).list({ request: undefined, requestCorrelationId: randomUUID(), includeArchived });
-        return workspaces;
+        // Same helper `keryx workspace list` calls (src/commands/workspace.ts),
+        // so the two surfaces cannot report different workspaces for the same
+        // project at the same moment.
+        const views = await listWorkspaceViews(sacWorkspaceService(cwd), includeArchived);
+        return views.map((view) => ({ ...view.manifest, references: view.references }));
       },
     },
     {
-      name: "sac.workspaceShow", module: "sac", description: "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via sac.workspaceList.",
+      name: "sac.workspaceShow", module: "sac", description: "Show one Shared Agent Context (SAC) workspace's manifest (title, members, resources, status) by id, discovered via sac.workspaceList, together with a `references` report saying which of its references still resolve and which changed since they were added. A workspace this actor cannot be shown is a named result, not an error: `{ code: \"sac_workspace_not_found\" | \"sac_workspace_access_denied\" | \"sac_workspace_unreadable\" | \"sac_workspace_guard_denied\" }` — branch on `code` before reading the manifest.",
       inputSchema: OBJECT_SCHEMA({ workspaceId: { type: "string" } }, ["workspaceId"]),
       mutating: false,
       async invoke(cwd, params, context) {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const workspaceId = stringParam(params, "workspaceId") ?? "";
-        return await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).show({ request: undefined, requestCorrelationId: randomUUID(), workspaceId });
+        // `lookupWorkspace` is the same call `keryx workspace show` makes, and
+        // it never throws. It used to: an id that never existed threw out of
+        // this tool, and the answer the caller got was a stack trace carrying
+        // absolute source paths of this machine. "There is no such workspace"
+        // is an ordinary outcome and now says so by name.
+        const found = await lookupWorkspace(sacWorkspaceService(cwd), workspaceId);
+        if (found.outcome === "workspace") return { ...found.manifest, references: found.references };
+        return { code: SAC_WORKSPACE_LOOKUP_CODE[found.outcome], workspaceId: found.workspaceId, detail: found.detail };
       },
     },
     {
@@ -305,7 +365,7 @@ export function buildToolRegistry(): ToolEntry[] {
         const title = stringParam(params, "title")?.trim() ?? "";
         if (title.length === 0) throw new Error("sac.workspaceCreate requires a non-empty 'title'");
         const component = stringParam(params, "component");
-        const workspace = await new WorkspaceService({ workspaceRoot: cwd, authorizationServer: localWorkspaceAuthorizationServer(), strictGuard: { mode: "strict", availability: "available", decision: "pass", policyRevision: "local-offline-v1" } }).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
+        const workspace = await sacWorkspaceService(cwd).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
         return workspace;
       },
     },
@@ -483,7 +543,18 @@ export function buildToolRegistry(): ToolEntry[] {
       inputSchema: OBJECT_SCHEMA(
         {
           file: { type: "string", description: "Project-relative file path." },
-          depth: { type: "number", description: "Reserved; traversal depth." },
+          // Flow 235 T8: this parameter is DECLARED and never read — `invoke`
+          // below calls `getAffected(graph, file)`, which has no depth notion
+          // at all. Saying "reserved" read as "supported, maybe capped"; a
+          // caller passing depth: 3 silently got depth 1. Kept (removing a
+          // declared public parameter would break any client that sends it)
+          // but described honestly, with the operation that does implement it.
+          depth: {
+            type: "number",
+            description:
+              "ACCEPTED AND IGNORED: this tool returns direct dependents/dependencies only. " +
+              "Use the `graph_affected` tool for a transitive, ranked closure with a real depth.",
+          },
         },
         ["file"],
       ),
@@ -638,17 +709,36 @@ export function buildToolRegistry(): ToolEntry[] {
         "so an empty result means nothing accepted matched, not that the project has no memory on " +
         "the topic. The query must be non-empty and at most 4096 UTF-8 bytes, and the result count " +
         "is capped. Invalid input comes back as an `error` field on a normal result with empty " +
-        "`hits` — it does not throw, so check `error` before reading `hits`.",
+        "`hits` — it does not throw, so check `error` before reading `hits`. Narrow with `module`, " +
+        "`class` and `limit` rather than re-querying: the backing accepts all three.",
+      // Flow 235 T8: the backing (`createMetaprojectAdapter(cwd).memorySearch`)
+      // has accepted module/class/limit since flow 037 and validates each one;
+      // this schema exposed `query` alone, so the narrowing was unreachable
+      // through the tool even though `keryx memory search --module/--class/
+      // --limit` offers it. `status` is deliberately still absent: automatic
+      // recall admits `accepted` only, so a knob with one legal value would be
+      // a false affordance.
       inputSchema: OBJECT_SCHEMA(
         {
           query: { type: "string" },
+          module: { type: "string" },
+          class: { type: "string", description: "semantic | episodic | procedural" },
+          limit: { type: "number", description: "Max hits; capped by the recall bound." },
         },
         ["query"],
       ),
       mutating: false,
       async invoke(cwd, params) {
         const query = stringParam(params, "query") ?? "";
-        return createMetaprojectAdapter(cwd).memorySearch({ query });
+        const module = stringParam(params, "module");
+        const memoryClass = stringParam(params, "class");
+        const limit = typeof params.limit === "number" ? params.limit : undefined;
+        return createMetaprojectAdapter(cwd).memorySearch({
+          query,
+          ...(module !== undefined && module.length > 0 ? { module } : {}),
+          ...(memoryClass !== undefined && memoryClass.length > 0 ? { class: memoryClass } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        });
       },
     },
     {
@@ -731,6 +821,99 @@ export function buildToolRegistry(): ToolEntry[] {
         const question = stringParam(params, "question") ?? "";
         const k = typeof params.k === "number" ? params.k : undefined;
         return createGdWikiService().ask({ cwd, question, ...(k ? { k } : {}) });
+      },
+    },
+    {
+      name: "wiki.evidence",
+      module: "wiki",
+      description:
+        "Ask the wiki for a structured EVIDENCE ENVELOPE instead of prose. Each item carries its " +
+        "section identity and version, the excerpt whole (never shortened to fit), lifecycle, " +
+        "freshness WITH the reason it is not `fresh`, provenance, its mandatory `caveats`, and " +
+        "`conflictRefs` naming any section that disagrees with it — with the version and section " +
+        "fragment of that other side, so a contested claim can never be read as settled. A " +
+        "declared caveat that cannot be resolved REFUSES the item (see `refused`) rather than " +
+        "returning the rule without its qualification. Branch on `status` before reading `items`: " +
+        "`budget-exceeded` means a REQUIRED item did not fit the token budget and `items` is empty " +
+        "— raise `budgetTokens` or narrow the question, and never treat it as a shorter answer. " +
+        "`no-match` and `insufficient-evidence` are completed searches with no usable evidence, " +
+        "not failures. The envelope is returned verbatim, not summarised.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          question: { type: "string", description: "The natural-language question." },
+          k: { type: "number", description: "Max citations seeded into the envelope." },
+          budgetTokens: { type: "number", description: "Whole-package token budget." },
+          maxItems: { type: "number", description: "Max items; the required set is never trimmed to it." },
+        },
+        ["question"],
+      ),
+      mutating: false,
+      async invoke(cwd, params) {
+        const question = stringParam(params, "question") ?? "";
+        const k = typeof params.k === "number" ? params.k : undefined;
+        const budgetTokens = typeof params.budgetTokens === "number" ? params.budgetTokens : undefined;
+        const maxItems = typeof params.maxItems === "number" ? params.maxItems : undefined;
+        // The live service object this file already constructs for `wiki.ask`
+        // and `wiki.query`. The envelope is returned as-is: a re-map here would
+        // be a second place for fields to go missing, which is the exact defect
+        // this tool was added to close.
+        return createGdWikiService().evidence({
+          cwd,
+          question,
+          ...(k !== undefined ? { k } : {}),
+          ...(budgetTokens !== undefined ? { budgetTokens } : {}),
+          ...(maxItems !== undefined ? { maxItems } : {}),
+        });
+      },
+    },
+    {
+      name: "gdgraph.find",
+      module: "gdgraph",
+      description:
+        "Find the files and symbols a plain-language question is about, over the code graph. Use " +
+        "this when you do not yet know a path — `gdgraph.affected` needs one. READ `code` BEFORE " +
+        "the candidates: `ok` means the ranking is evidence; `no-match` means the search ran over " +
+        "the index and no path or symbol contains your terms; `insufficient-evidence` means every " +
+        "candidate matched only on terms that appear across this whole corpus, so the list is NOT " +
+        "evidence for the question asked; `index-incomplete` means the graph could not answer at " +
+        "all and says nothing about whether the code exists; `invalid-input` means the query was " +
+        "empty. Each candidate carries `matched` and `discriminating` — an empty `discriminating` " +
+        "means it matched only noise — plus a one-line `reason`. `score` is a ranking score, never " +
+        "a probability, and fan-in (`dependents`) is a tie-break, never evidence. Reads the built " +
+        "graph, so results are as old as the last `keryx gdgraph build`; check `staleness`.",
+      inputSchema: OBJECT_SCHEMA(
+        {
+          query: { type: "string", description: "Plain-language description of what you are looking for." },
+          fileLimit: { type: "integer", minimum: 1, description: "Max file candidates (at least 1)." },
+          symbolLimit: { type: "integer", minimum: 1, description: "Max symbol candidates (at least 1)." },
+        },
+        ["query"],
+      ),
+      mutating: false,
+      async invoke(cwd, params) {
+        const query = stringParam(params, "query") ?? "";
+        // Rejected, never silently coerced. Unbounded below, `fileLimit: 0`
+        // reached `Array.slice(0, 0)` and came back as `code: ok` with
+        // "0 files and 0 symbols matched." over a corpus holding forty — and
+        // `-1` as a confident list one short of the truth. The sibling boundary
+        // (`../harness/tool/metaproject-operations.ts`, `graph_find`) already
+        // declares `minimum: 1` and checks `> 0`; this one now does too. A
+        // nonsensical page size is a caller mistake and must read as one.
+        const fileLimit = pageLimitParam(params, "fileLimit");
+        const symbolLimit = pageLimitParam(params, "symbolLimit");
+        const port = createMetaprojectAdapter(cwd);
+        if (port.graphFind === undefined) {
+          throw new Error("gdgraph.find is not backed by this MetaprojectPort");
+        }
+        // Through the port rather than importing `../gdgraph/find` directly:
+        // the import boundary (`boundary.test.ts`) allows the metaproject
+        // adapter and not gdgraph internals, and routing through it also means
+        // the outcome code crosses `normalizeRetrievalCode` on the way here.
+        return port.graphFind({
+          query,
+          ...(fileLimit !== undefined ? { fileLimit } : {}),
+          ...(symbolLimit !== undefined ? { symbolLimit } : {}),
+        });
       },
     },
     {

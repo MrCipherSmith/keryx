@@ -94,6 +94,36 @@ test("optional skipped source does not affect gate", () => {
   expect(computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true }).status).toBe("pass");
 });
 
+// Flow 237 T6 defect 2 (AFC-28/AC-28): an inventory measured that a MISSING
+// health source (SourceStatus "missing", e.g. tests and coverage both
+// absent) printed no reason line at all, even though a SKIPPED optional
+// source does get one (`OPTIONAL: <source> source skipped`, right above).
+// Whether a missing optional source should BLOCK is a separate policy
+// question the required/optional distinction already answers (see the
+// "missing required source is incomplete" test above) — this only asserts
+// its absence stops being invisible in the reasons a reader actually acts
+// on. The gate's pass/fail verdict must be unaffected (same as the
+// pre-existing skipped-source behavior right above).
+test("an optional missing source is named in reasons, the same way a skipped one already is (verdict unaffected)", () => {
+  const sources = [source({ source: "coverage", required: false, status: "missing" })];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+
+  expect(g.status).toBe("pass");
+  expect(g.reasons.some((r) => r.includes("coverage") && /missing/i.test(r))).toBe(true);
+});
+
+test("two optional missing sources (tests and coverage) are each named, not silently merged away", () => {
+  const sources = [
+    source({ source: "tests", required: false, status: "missing" }),
+    source({ source: "coverage", required: false, status: "missing" }),
+  ];
+  const g = computeGate({ findings: [], projectMetrics: project(), sources, config: C, strict: true });
+
+  expect(g.status).toBe("pass");
+  expect(g.reasons.some((r) => r.includes("tests") && /missing/i.test(r))).toBe(true);
+  expect(g.reasons.some((r) => r.includes("coverage") && /missing/i.test(r))).toBe(true);
+});
+
 test("coverage below soft floor warns", () => {
   const g = computeGate({ findings: [], projectMetrics: project({ coverage: 50 }), sources: [], config: C, strict: false });
   expect(g.status).toBe("warn");

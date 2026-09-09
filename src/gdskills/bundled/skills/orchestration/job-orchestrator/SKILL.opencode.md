@@ -686,7 +686,7 @@ git -C <project_dir> worktree add ../<branch-slug> -b feature/<branch-slug> orig
 # Result branch:   feature/pipeline-validation
 
 # Auto-detect package manager and install dependencies
-if [ -f <worktree_path>/bun.lockb ]; then
+if [ -f <worktree_path>/bun.lock ] || [ -f <worktree_path>/bun.lockb ]; then
   PM="bun"; RUNNER="bun run"; bun install --cwd <worktree_path>
 elif [ -f <worktree_path>/pnpm-lock.yaml ]; then
   PM="pnpm"; RUNNER="pnpm run"; pnpm install --prefix <worktree_path>

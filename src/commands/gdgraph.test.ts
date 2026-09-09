@@ -11,10 +11,12 @@
 // reset `process.exitCode`).
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { gdgraphCommand } from "./gdgraph";
+import { recordProvenance } from "../sync/provenance";
 
 describe("keryx gdgraph affected — unknown target vs. indexed-with-no-edges", () => {
   let root = "";
@@ -235,5 +237,280 @@ describe("keryx gdgraph symbol — explicit symbol requirement (AFC-13/AC5, T19 
     expect(payload.message.length).toBeGreaterThan(0);
     expect(payload.remedy.length).toBeGreaterThan(0);
     expect(loggedErr.join("\n")).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC5 (AFC-M03, flow 235) — "Missing file, broken index, nonsense и слабый
+// lexical сигнал дают разные коды".
+//
+// What was already true before this block, measured on 2026-09-08 against the
+// live repo: `gdgraph affected` DID separate a target the graph never indexed
+// from an indexed target with zero edges — distinct exit codes (1 vs 0) and
+// distinct output. What it did not have was a code from the norm's closed
+// vocabulary: the JSON said `error: "unknown-graph-target"`, a spelling that
+// appears nowhere in specification.md §3.
+//
+// What was NOT true: `keryx gdgraph find` printed the identical
+// "No files or symbols matched" line in a directory with no graph at all and
+// for a genuine no-match (both exit 0), and printed a confident ranked list
+// for a query whose only matching term was in most of the corpus. Three
+// different situations, one answer.
+// ---------------------------------------------------------------------------
+
+describe("keryx gdgraph — the four AC5 conditions carry four different codes", () => {
+  let root = "";
+  let emptyRoot = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let loggedErr: string[] = [];
+  let originalLog: typeof console.log;
+  let originalError: typeof console.error;
+
+  beforeEach(async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-codes-"));
+    // A second root with NO gdgraph storage at all — a broken/unbuilt index.
+    emptyRoot = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-noindex-"));
+    cwd = process.cwd();
+    process.chdir(root);
+
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    // 20 file nodes: enough corpus for document frequency to mean something
+    // (see MIN_WEIGHTED_CORPUS in gdgraph/find.ts). "search" is in 18 of them
+    // — a term with no discriminating power here; "wiki" is in one.
+    const nodes = [
+      '{"id":"src/wiki/ask.ts","kind":"file","path":"src/wiki/ask.ts","language":"typescript"}',
+      '{"id":"src/memory/search.ts","kind":"file","path":"src/memory/search.ts","language":"typescript"}',
+    ];
+    for (let i = 0; i < 18; i += 1) {
+      nodes.push(
+        `{"id":"src/mod${i}/search-helper-${i}.ts","kind":"file","path":"src/mod${i}/search-helper-${i}.ts","language":"typescript"}`,
+      );
+    }
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      `${nodes.join("\n")}\n`,
+      "utf8",
+    );
+
+    loggedOut = [];
+    loggedErr = [];
+    originalLog = console.log;
+    originalError = console.error;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    console.error = (...parts: unknown[]) => {
+      loggedErr.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    console.error = originalError;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    await rm(root, { recursive: true, force: true });
+    await rm(emptyRoot, { recursive: true, force: true });
+  });
+
+  function payload(): { code?: string; nextActions?: string[]; reason?: string } {
+    return JSON.parse(loggedOut.join("\n")) as { code?: string; nextActions?: string[] };
+  }
+
+  test("a missing file is target-not-indexed", async () => {
+    await gdgraphCommand(["affected", "src/does-not-exist.ts", "--json"]);
+    expect(payload().code).toBe("target-not-indexed");
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("a broken or unbuilt index is index-incomplete, not a cheerful no-match", async () => {
+    process.chdir(emptyRoot);
+    await gdgraphCommand(["find", "wiki ask", "--json"]);
+    expect(payload().code).toBe("index-incomplete");
+    // The operation produced no result — status `error` in the norm's terms.
+    expect(process.exitCode).toBe(1);
+  });
+
+  test("a nonsense query is no-match — a search that completed, so exit 0", async () => {
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    expect(payload().code).toBe("no-match");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("a weak lexical signal is insufficient-evidence, not a confident ranking", async () => {
+    await gdgraphCommand(["find", "search", "--json"]);
+    expect(payload().code).toBe("insufficient-evidence");
+    expect(process.exitCode).toBe(0);
+  });
+
+  // T14 (flow 235). Reproduced through the real CLI on 2026-09-08 in a temp
+  // project of 14 files all under `alpha/`, after a real `keryx gdgraph build`:
+  //
+  //   keryx gdgraph find "alpha" --json
+  //     → code "no-match", reason "…no path or symbol contains any of: alpha.",
+  //       ubiquitousTerms ["alpha"], exit 0
+  //
+  // Every path contained `alpha`. A ranking filter (a term in every document
+  // scores zero, and zero-score candidates are dropped) emptied the list before
+  // the classifier could see there had been fourteen matches, and the command
+  // then printed a false statement about the corpus at exit 0.
+  //
+  // Every path in this fixture starts with `src/`, so it reproduces the same
+  // condition at the command boundary a caller actually reads.
+  test("a term in every indexed path is insufficient-evidence, not a false no-match", async () => {
+    await gdgraphCommand(["find", "src", "--json"]);
+    const result = payload() as { code?: string; reason?: string; ubiquitousTerms?: string[] };
+    expect(result.code).toBe("insufficient-evidence");
+    expect(result.ubiquitousTerms).toContain("src");
+    // The half that made the old payload self-contradictory: the reason denied
+    // what the very next field asserted.
+    expect(result.reason).not.toContain("no path or symbol contains");
+    expect(process.exitCode).toBe(0);
+  });
+
+  test("the four conditions really are four different codes", async () => {
+    const codes: string[] = [];
+
+    await gdgraphCommand(["affected", "src/does-not-exist.ts", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    process.chdir(emptyRoot);
+    await gdgraphCommand(["find", "wiki", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    process.chdir(root);
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    codes.push(payload().code!);
+
+    loggedOut = [];
+    await gdgraphCommand(["find", "search", "--json"]);
+    codes.push(payload().code!);
+
+    expect(new Set(codes).size).toBe(4);
+  });
+
+  test("the suggested next action is bounded — it never orders a tour of every layer", async () => {
+    await gdgraphCommand(["find", "kubernetes helm chart", "--json"]);
+    const actions = payload().nextActions ?? [];
+    expect(actions.length).toBeGreaterThanOrEqual(1);
+    expect(actions.length).toBeLessThanOrEqual(3);
+    expect(actions.join(" ").toLowerCase()).not.toMatch(/all layers|every layer|full (tour|traversal)/);
+  });
+
+  test("a successful find calls its number a ranking score, never a probability", async () => {
+    await gdgraphCommand(["find", "wiki ask"]);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("ranking score");
+    expect(output.toLowerCase()).not.toMatch(/probability|likelihood|confidence/);
+  });
+
+  test("a find candidate is rendered with the reason it was chosen", async () => {
+    await gdgraphCommand(["find", "wiki ask"]);
+    const output = loggedOut.join("\n");
+    expect(output).toContain("src/wiki/ask.ts");
+    // AC6: explainable candidates — which terms hit, and which of them narrowed.
+    expect(output).toContain("matched");
+    expect(output).toContain("narrowing on");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Flow 237 T6 defect 1 (AFC-28/AC-28, "a check that could not run is unknown
+// rather than passed"): `checkGraphStaleness` (src/gdgraph/staleness.ts)
+// returns a tri-state {fresh, stale, unknown} result with reasons — written
+// exactly so a git failure never collapses into the same answer as a
+// confirmed stale graph. Before this fix, `printStaleNote` (this file) only
+// ever called the boolean wrapper `graphMaybeStale`, which maps BOTH "stale"
+// and "unknown" to `true` and then always printed the same
+// "repo moved since the last graph build" `STALE_NOTE` — so a git failure
+// (graph freshness genuinely unknown) read to the CLI's own reader as a
+// confident, specific claim ("repo moved") that was not actually established,
+// and the structured reasons were discarded outright.
+// ---------------------------------------------------------------------------
+
+describe("keryx gdgraph find/path/symbol — staleness note carries the tri-state result, not a collapsed boolean", () => {
+  let root = "";
+  let cwd = "";
+  let loggedOut: string[] = [];
+  let originalLog: typeof console.log;
+
+  beforeEach(async () => {
+    cwd = process.cwd();
+    loggedOut = [];
+    originalLog = console.log;
+    console.log = (...parts: unknown[]) => {
+      loggedOut.push(parts.map(String).join(" "));
+    };
+    process.exitCode = 0;
+  });
+
+  afterEach(async () => {
+    console.log = originalLog;
+    process.chdir(cwd);
+    process.exitCode = 0;
+    if (root) {
+      await rm(root, { recursive: true, force: true });
+      root = "";
+    }
+  });
+
+  test("a git failure (graph freshness genuinely unknown) is never reported as the confident 'repo moved' claim", async () => {
+    // Deliberately NOT a git repository (and not nested inside one via
+    // mkdtemp under the OS tmp dir) — `git rev-parse HEAD` fails here, which
+    // is exactly the trigger `checkGraphStaleness` maps to `status: "unknown"`
+    // (see gdgraph/staleness.ts's own doc comment: "a git failure never
+    // becomes fresh" — and, per this task, must never silently become the
+    // stale wording either).
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-stale-unknown-"));
+    process.chdir(root);
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
+
+    await gdgraphCommand(["find", "a.ts"]);
+
+    const output = loggedOut.join("\n");
+    // The defect: this exact string is what the pre-fix code printed for
+    // EVERY non-fresh result, including a plain git failure.
+    expect(output).not.toContain("note: repo moved since the last graph build");
+    // The tri-state's own reason must reach this surface instead of being
+    // discarded by the boolean collapse.
+    expect(output).toContain("git rev-parse HEAD failed");
+  });
+
+  test("a real stale trigger (untracked file) surfaces checkGraphStaleness's specific reason, not just a generic note", async () => {
+    root = await mkdtemp(path.join(tmpdir(), "keryx-gdgraph-stale-reason-"));
+    process.chdir(root);
+    execFileSync("git", ["init", "-q"], { cwd: root });
+    execFileSync("git", ["config", "user.email", "test@test.com"], { cwd: root });
+    execFileSync("git", ["config", "user.name", "test"], { cwd: root });
+    await mkdir(path.join(root, "src"), { recursive: true });
+    await mkdir(path.join(root, ".metaproject", "data", "gdgraph", "storage"), { recursive: true });
+    await writeFile(path.join(root, "src", "a.ts"), "export const a = 1;\n");
+    await writeFile(
+      path.join(root, ".metaproject", "data", "gdgraph", "storage", "nodes.jsonl"),
+      '{"id":"src/a.ts","kind":"file","path":"src/a.ts","language":"typescript"}\n',
+      "utf8",
+    );
+    execFileSync("git", ["add", "-A"], { cwd: root });
+    execFileSync("git", ["commit", "-q", "-m", "initial build fixture"], { cwd: root });
+    await recordProvenance(root, "gdgraph", new Date().toISOString());
+    // The trigger: an untracked file added to the working tree after the
+    // graph was built — `checkGraphStaleness`'s reason for this is specific
+    // ("an untracked or newly added file exists in the working tree"), not
+    // just the generic STALE_NOTE wording.
+    await writeFile(path.join(root, "src", "untracked.ts"), "export const u = 1;\n");
+
+    await gdgraphCommand(["find", "a.ts"]);
+
+    const output = loggedOut.join("\n");
+    expect(output).toContain("an untracked or newly added file exists in the working tree");
   });
 });

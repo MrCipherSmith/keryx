@@ -36,9 +36,9 @@
 //      TrustedWrapUpResolution>` that throws — `runWrapUp` below must keep
 //      going across MULTIPLE Seed-kind groups even when one group's model
 //      turn fails closed, which a thrown exception does not compose with.
-//   3. `now`/`env`/`providerFactory`/`modelTurnTimeoutMs` are extra,
-//      all-optional testability seams (mirroring `runModelTurn`'s own
-//      injected-non-determinism pattern in single-turn.ts).
+//   3. `now`/`env`/`modelTurn`/`modelTurnTimeoutMs` are extra, all-optional
+//      injection seams (`modelTurn` was `providerFactory` until flow 239
+//      phase 7 — see the import block below).
 //   4. `runWrapUp` takes BOTH `cwd` (project root — git diff, the SAC
 //      workspace tree) AND `dir` (the session dir where `slate.json`/
 //      `slate-archive/` actually live) — two different filesystem
@@ -54,12 +54,22 @@ import { readCourse, type CourseProjection } from "../session/slate-course";
 import { createTrustedWrapUpAuthority, type TrustedWrapUpResolution, type WrapUpEvidence, type WrapUpSource } from "./trusted-wrap-up";
 import { createHarnessProposalLifecycleService, ProposalLifecycleError } from "./proposal-lifecycle";
 import { resolveOrCreateWorkspace } from "./workspace-resolve";
-import { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff, type AttributedSeed } from "./wrap-up-evidence";
-import type { ProviderFactory, ModelTurnResult } from "../harness/provider/single-turn";
-import { runModelTurn } from "../harness/provider/single-turn";
+import { applyEvidenceRedactionFloor, courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, DIFF_UNAVAILABLE_KIND, gitDiff, REDACTION_NOTICE_KIND, unmeasurableDiffBody, type AttributedSeed, type WorkingTreeDiff } from "./wrap-up-evidence";
+// AFC-19 (flow 239, phase 7): the model turn used to arrive as a static
+// `runModelTurn` import from `../harness/provider/single-turn`, which put the
+// entire provider registry into the public SAC facade's shipped graph. It is
+// now an INJECTED port that core declares and a client supplies; absence is a
+// refusal with its own code, never a summary nobody asked a model for. See
+// `./model-turn-port.ts` and `./core-graph.test.ts`.
+import {
+  resolveModelTurnPort,
+  warnModelTurnUnavailable,
+  type ModelTurnOutcome,
+  type ModelTurnPort,
+} from "./model-turn-port";
 
-export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, gitDiff } from "./wrap-up-evidence";
-export type { AttributedSeed } from "./wrap-up-evidence";
+export { courseStatusLine, dedupedAttributedSeeds, describeSource, diffStatLine, DIFF_UNAVAILABLE_KIND, gitDiff, unmeasurableDiffBody } from "./wrap-up-evidence";
+export type { AttributedSeed, WorkingTreeDiff } from "./wrap-up-evidence";
 
 /**
  * Same TTL `session-wrap-up.ts` uses for its own `TrustedWrapUpResolution`.
@@ -86,13 +96,43 @@ export type MachineWrapUpInput = {
   kind: SlateSeedKind;
   now?: () => Date;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /**
+   * The injected single-turn capability (`./model-turn-port.ts`). Core carries
+   * no provider registry of its own (AFC-19); without this — and without a
+   * process-wide default from `setModelTurnPort` — this resolver refuses with
+   * `no_model_turn` instead of writing an unauthored summary.
+   */
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
 };
 
 export type MachineWrapUpResolution =
   | { ok: true; resolution: TrustedWrapUpResolution }
-  | { ok: false; code: "no_credential" };
+  /**
+   * `no_credential`: a port was supplied and reported it has no key.
+   * `no_model_turn`: no port was supplied at all — a wiring gap, not a key gap.
+   * Kept distinct HERE, at the boundary that knows the difference. Note that
+   * `proposeOneGroup` still folds both into the existing
+   * `WrapUpGroupOutcome`'s `"no_credential"`, because that union is consumed by
+   * `./catch-up.ts` and `../tui/review-inspector.ts` — files this change does
+   * not own — and widening it would break their exhaustive reads. The
+   * distinction survives at this boundary and on stderr (warn-once); widening
+   * the group union is left to the lane that owns those two files.
+   */
+  | { ok: false; code: "no_credential" | "no_model_turn" }
+  /**
+   * The redaction floor refused one of the evidence bodies outright (an
+   * `enforced`/`ci` workspace whose gate came back `fail`/`needs-approval`/
+   * `incomplete`, or a body with no format-safe representation at all). Kept
+   * as its OWN code, and carried through `proposeOneGroup` as the existing
+   * `"error"` group outcome rather than folded into `"no_credential"`: a
+   * security refusal that reports itself as a missing credential is a failure
+   * disguised as a different, benign failure, and a reviewer would go looking
+   * for an API key that was never the problem. `detail` is
+   * `prepareOutputForPersistence`'s own reason, which is already leak-safe
+   * (categories and counts, never spans).
+   */
+  | { ok: false; code: "security_denied"; detail: string };
 
 /** A Seed together with which slate it actually came from — a child's Seed is
  * NEVER laundered as the parent's own (spec: "attributed, not merged"). Exported
@@ -130,8 +170,8 @@ function sha256(value: string): string {
  * reuses this exact best-effort git-diff primitive for its own evidence. */
 /** Bounded-timeout fallback template — "git diff stat + flow status line"
  * per plan.md, never a hang and never an invented fact. */
-function mechanicalSummary(diffText: string, course: CourseProjection): string {
-  return `Mechanical wrap-up summary (model turn unavailable or timed out):\n${diffStatLine(diffText)}\n${courseStatusLine(course)}`;
+function mechanicalSummary(diff: WorkingTreeDiff, course: CourseProjection): string {
+  return `Mechanical wrap-up summary (model turn unavailable or timed out):\n${diffStatLine(diff)}\n${courseStatusLine(course)}`;
 }
 
 /**
@@ -149,7 +189,15 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   const now = input.now ?? (() => new Date());
 
   // 1. Pure, local evidence content — no model call, no disk write yet.
-  const diffText = await gitDiff(input.cwd);
+  //
+  //    AFC-22 (flow 236 T13, F236-03): `diff` is tri-state at this seam. When
+  //    no diff could be taken, the body persisted is an explicit
+  //    not-measured marker and the evidence item's `kind` says so, so nothing
+  //    downstream — reader, hash check, or model — can read an unmeasurable
+  //    tree as a clean one.
+  const diff = await gitDiff(input.cwd);
+  const diffBody = diff.kind === "measured" ? diff.text : unmeasurableDiffBody(diff.detail);
+  const diffKind = diff.kind === "measured" ? "diff" : DIFF_UNAVAILABLE_KIND;
   const course = await readCourse(input.cwd, input.slate.course.flowRef);
   const seedsForKind = dedupedAttributedSeeds(input.slate).filter((seed) => seed.kind === input.kind);
   const flowSnapshotJson = `${JSON.stringify(course, null, 2)}\n`;
@@ -159,8 +207,36 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     2,
   )}\n`;
 
-  // 2. A deterministic content hash. Baking it into the evidence file NAMES
-  //    below (step 4) is what lets AC4's two near-simultaneous racers safely
+  // 2. The redaction floor, BEFORE the content is hashed, prompted or written.
+  //    `session-wrap-up.ts` — the sibling producer of this same diff/flow/seeds
+  //    evidence taxonomy — has always run this seam; this resolver did not, so
+  //    `gitDiff`'s raw bytes reached both the workspace tree and the model
+  //    prompt below unscrubbed. See `applyEvidenceRedactionFloor` for the
+  //    measured asymmetry. Running it here rather than just before
+  //    `writeFileAtomic` is deliberate: the model prompt in step 3 is an
+  //    egress of the same bytes, and a floor the prompt goes around is not a
+  //    floor.
+  //
+  //    The `path` given to the guard is the hash-free evidence path: the real
+  //    file names below embed `shortHash`, which is derived FROM the floored
+  //    content, and a path hint is not worth an ordering cycle.
+  const evidenceRelBase = path.posix.join(".metaproject", "workspaces", input.workspaceId, "machine-evidence");
+  const floor = await applyEvidenceRedactionFloor(input.cwd, [
+    { name: `${input.kind}.diff.txt`, content: diffBody, path: path.posix.join(evidenceRelBase, `${input.kind}.diff.txt`), source: "tool-output" },
+    { name: `${input.kind}.flow.json`, content: flowSnapshotJson, path: path.posix.join(evidenceRelBase, `${input.kind}.flow.json`), source: "generated" },
+    { name: `${input.kind}.seeds.json`, content: seedsJson, path: path.posix.join(evidenceRelBase, `${input.kind}.seeds.json`), source: "generated" },
+  ]);
+  if (!floor.ok) return { ok: false, code: "security_denied", detail: floor.reason };
+  const [safeDiff, safeFlow, safeSeeds] = floor.bodies as [
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+    { name: string; content: string; altered: boolean },
+  ];
+
+  // 3. A deterministic content hash — over the FLOORED bodies, which are the
+  //    bytes that actually get recorded, so the dedup identity and the evidence
+  //    it stands for can never disagree. Baking it into the evidence file NAMES
+  //    below (step 5) is what lets AC4's two near-simultaneous racers safely
   //    "collide" onto the SAME bytes when their evidence is genuinely
   //    identical (the common case this AC targets), while two racers that
   //    legitimately observe DIFFERENT evidence (a real flow-snapshot change
@@ -170,33 +246,52 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
   //    folds into the deterministic PROPOSAL id (AC4's actual dedup
   //    mechanism, via `ProposalLifecycleService.create()`'s existing
   //    same-path `"conflict"` rejection — no new lock invented here).
-  const sourceRevision = sha256([diffText, flowSnapshotJson, seedsJson].join(" "));
+  const sourceRevision = sha256([safeDiff.content, safeFlow.content, safeSeeds.content].join("\u0000"));
   const shortHash = sourceRevision.slice(0, 16);
 
-  // 3. Model summary, raced against a bounded timeout — mirrors
+  // The stat line the mechanical fallback prints describes the FLOORED bytes
+  // (what was actually recorded), and stays unmeasurable when no diff was
+  // taken — the floor cannot turn a missing measurement into a clean tree.
+  const summaryDiff: WorkingTreeDiff = diff.kind === "measured" ? { kind: "measured", text: safeDiff.content } : diff;
+
+  // 4. Model summary, raced against a bounded timeout — mirrors
   //    spawn-subagent-tool.ts's own child-deadline `Promise.race` exactly,
   //    including safely ignoring the abandoned promise on timeout (`void
   //    turn.catch(...)`) rather than leaving an unhandled rejection.
-  //    `runModelTurn` itself resolves as fast as any other call
-  //    (immediately, with `credentialAvailable: false` and empty text) when
-  //    no credential/factory is available, so the fail-closed path below
-  //    never actually waits out the timeout.
+  //    A supplied port resolves as fast as any other call (immediately, with
+  //    `credentialAvailable: false` and empty text) when it has no credential,
+  //    so the fail-closed path below never actually waits out the timeout — and
+  //    an ABSENT port never starts a timer at all.
   const system =
     "Summarize ONLY the machine evidence provided below — a git diff, a Flow snapshot, and the Seeds captured " +
     "this session for one proposal kind. Never invent facts that are not present in the evidence.";
+  // The floored bodies, not the raw ones: this prompt leaves the machine.
+  // The unmeasurable case reaches the model as the marker body itself, never
+  // as "(no working-tree changes)" — a summariser told the tree was clean
+  // will say so, and that sentence then travels as the wrap-up's own summary.
   const user =
-    `--- git diff ---\n${diffText.length > 0 ? diffText : "(no working-tree changes)"}\n\n` +
-    `--- flow snapshot ---\n${flowSnapshotJson}\n` +
-    `--- seeds (${input.kind}) ---\n${seedsJson}`;
+    `--- git diff ---\n${safeDiff.content.length > 0 ? safeDiff.content : "(no working-tree changes)"}\n\n` +
+    `--- flow snapshot ---\n${safeFlow.content}\n` +
+    `--- seeds (${input.kind}) ---\n${safeSeeds.content}`;
 
-  let modelResult: ModelTurnResult | undefined;
+  // No port, no summary: refuse before any evidence is written (step 4 below
+  // is the only writer, and it is never reached from here), exactly as the
+  // no-credential path already did. A mechanical summary is NOT substituted —
+  // that is reserved for a real model turn that timed out, and using it here
+  // would present an unrequested summary as a wrap-up the model authored.
+  const modelTurn = resolveModelTurnPort(input.modelTurn);
+  if (modelTurn === undefined) {
+    warnModelTurnUnavailable("machine-wrap-up");
+    return { ok: false, code: "no_model_turn" };
+  }
+
+  let modelResult: ModelTurnOutcome | undefined;
   const modelTurnTimeoutMs = input.modelTurnTimeoutMs ?? DEFAULT_MODEL_TURN_TIMEOUT_MS;
-  const turn = runModelTurn({
+  const turn = modelTurn({
     system,
     user,
     requestId: `machine-wrap-up-${shortHash}`,
     ...(input.env !== undefined ? { env: input.env } : {}),
-    ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
   }).then((result) => {
     modelResult = result;
     return "done" as const;
@@ -218,7 +313,7 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
     // Abandoned model-turn promise — safely ignored, never an unhandled
     // rejection (mirrors spawn-subagent-tool.ts's `void turn.catch(...)`).
     void turn.catch(() => {});
-    summary = mechanicalSummary(diffText, course);
+    summary = mechanicalSummary(summaryDiff, course);
   } else {
     const result = modelResult!;
     if (result.text.trim().length === 0 && !result.credentialAvailable) {
@@ -227,31 +322,46 @@ export async function resolveMachineWrapUp(input: MachineWrapUpInput): Promise<M
       // proceed with an empty or fabricated summary.
       return { ok: false, code: "no_credential" };
     }
-    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(diffText, course);
+    summary = result.text.trim().length > 0 ? result.text.trim() : mechanicalSummary(summaryDiff, course);
   }
 
-  // 4. Only now — with a real summary in hand — persist evidence under the
+  // 5. Only now — with a real summary in hand — persist evidence under the
   //    WORKSPACE's own tree (never the session dir; that's `runWrapUp`'s
   //    unbound-candidate path, below) and NEVER under `session-evidence/`
   //    (AC5 — that directory name is `session-wrap-up.ts`'s own full-archive
   //    dump, a structurally different evidence shape this module must never
-  //    produce or reference).
+  //    produce or reference). The bytes written and the `revision` recorded for
+  //    them are the FLOORED ones, so a hash check downstream verifies exactly
+  //    what is on disk.
   const evidenceDir = path.join(input.cwd, ".metaproject", "workspaces", input.workspaceId, "machine-evidence");
   await mkdir(evidenceDir, { recursive: true });
   const diffFile = `${input.kind}.${shortHash}.diff.txt`;
   const flowFile = `${input.kind}.${shortHash}.flow.json`;
   const seedsFile = `${input.kind}.${shortHash}.seeds.json`;
-  await writeFileAtomic(path.join(evidenceDir, diffFile), diffText);
-  await writeFileAtomic(path.join(evidenceDir, flowFile), flowSnapshotJson);
-  await writeFileAtomic(path.join(evidenceDir, seedsFile), seedsJson);
+  await writeFileAtomic(path.join(evidenceDir, diffFile), safeDiff.content);
+  await writeFileAtomic(path.join(evidenceDir, flowFile), safeFlow.content);
+  await writeFileAtomic(path.join(evidenceDir, seedsFile), safeSeeds.content);
 
   const observedAt = now().toISOString();
   const relBase = `./.metaproject/workspaces/${input.workspaceId}/machine-evidence`;
   const evidence: WrapUpEvidence[] = [
-    { kind: "diff", uri: `${relBase}/${diffFile}`, revision: sha256(diffText), observedAt },
-    { kind: "flow", uri: `${relBase}/${flowFile}`, revision: sha256(flowSnapshotJson), observedAt },
-    { kind: "seeds", uri: `${relBase}/${seedsFile}`, revision: sha256(seedsJson), observedAt },
+    // `diffKind`, not a literal "diff": an item labelled `diff` asserts a
+    // measurement, and a verifier confirming its hash would then be
+    // confirming one that never happened (AFC-22, T13, F236-03).
+    { kind: diffKind, uri: `${relBase}/${diffFile}`, revision: sha256(safeDiff.content), observedAt },
+    { kind: "flow", uri: `${relBase}/${flowFile}`, revision: sha256(safeFlow.content), observedAt },
+    { kind: "seeds", uri: `${relBase}/${seedsFile}`, revision: sha256(safeSeeds.content), observedAt },
   ];
+  // Appended LAST so `evidence[0]` — the item `readVerifiedProposalEvidence`
+  // hands every owner writer as THE content — is still the diff. Present only
+  // when the floor actually changed something, so its presence is itself the
+  // signal, and hash-verified like every other item so it travels with the
+  // proposal instead of sitting beside it as a strippable footnote.
+  if (floor.notice !== undefined) {
+    const noticeFile = `${input.kind}.${shortHash}.redaction.md`;
+    await writeFileAtomic(path.join(evidenceDir, noticeFile), floor.notice);
+    evidence.push({ kind: REDACTION_NOTICE_KIND, uri: `${relBase}/${noticeFile}`, revision: sha256(floor.notice), observedAt });
+  }
 
   return {
     ok: true,
@@ -317,7 +427,8 @@ export type RunWrapUpInput = {
   wrapUpSource?: WrapUpSource;
   now?: () => Date;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  /** Injected model-turn capability, threaded to every group (see above). */
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
   /**
    * Flow 200 test seam: overrides the real `resolveOrCreateWorkspace`
@@ -330,10 +441,92 @@ export type RunWrapUpInput = {
     cwd: string;
     topicHint: string;
     env?: Record<string, string | undefined>;
-    providerFactory?: ProviderFactory;
+    modelTurn?: ModelTurnPort;
     modelTurnTimeoutMs?: number;
   }) => Promise<{ ok: true; workspaceId: string; action: "bound-existing" | "created" } | { ok: false; reason: string }>;
 };
+
+/**
+ * The outcome of writing ONE `slate-archive/` artifact through the redaction
+ * floor. `security_denied` is kept as its own code — never collapsed into
+ * "written" — for the same reason `MachineWrapUpResolution` keeps it: a
+ * refusal that reports itself as the ordinary result is a failure disguised as
+ * a success, and here the ordinary result (`"unbound-candidate"`) means
+ * "a durable artifact for this session already exists", which after a refusal
+ * is simply false. `detail` is `prepareOutputForPersistence`'s own reason,
+ * already leak-safe (categories and counts, never spans).
+ */
+type ArchiveArtifactResult =
+  | { ok: true; altered: boolean }
+  | { ok: false; code: "security_denied"; detail: string };
+
+/**
+ * Every `slate-archive/` write in this module goes through here, and here
+ * goes through `applyEvidenceRedactionFloor` — the SAME floor
+ * `resolveMachineWrapUp` runs over its diff/flow/seeds bodies, not a second
+ * implementation of it.
+ *
+ * This seam exists because the floor used to be applied to only ONE of this
+ * producer's two write paths. `resolveMachineWrapUp` floored its bodies before
+ * hashing, prompting and writing; the `slate-archive/` writers below wrote the
+ * same seed texts — and, in the outcome record, thrown-`Error` messages —
+ * verbatim. Measured on an unbound slate whose single seed read `follow up on
+ * the key AKIAIOSFODNN7EXAMPLE in config`, the artifact on disk contained that
+ * key in the clear while the identical bytes through this floor came back as
+ * `follow up on the key [REDACTED:secret] in config`. Same producer, same
+ * user-authored content, opposite outcome — which is the asymmetry the
+ * previous lane closed BETWEEN the two producers, reappearing WITHIN one of
+ * them.
+ *
+ * Alteration is never silent: when the floor rewrites the body, a sibling
+ * `<artifact>.redaction.md` notice lands next to it carrying the same
+ * `renderRedactionNotice` text the evidence path attaches as a
+ * `redaction-notice` evidence item. There is no `evidence[]` to append to
+ * here — these artifacts are read back by filename suffix
+ * (`catch-up.ts`'s `*-unbound-candidate.json` / `*-wrap-up-outcome.json`
+ * scans) — so the notice is a sibling FILE instead, deliberately named so it
+ * matches neither suffix and cannot be mistaken for a second record.
+ *
+ * The `path` handed to the guard is a best-effort workspace-relative hint for
+ * its path-scoped policies. A session dir is not necessarily under `cwd` at
+ * all (`runWrapUp` takes the two separately for exactly that reason), so this
+ * names the artifact's location within the archive rather than inventing an
+ * absolute path the policy layer would not recognise.
+ */
+async function writeFlooredArchiveArtifact(params: {
+  cwd: string;
+  dir: string;
+  filename: string;
+  content: string;
+}): Promise<ArchiveArtifactResult> {
+  const floor = await applyEvidenceRedactionFloor(params.cwd, [
+    {
+      name: params.filename,
+      content: params.content,
+      path: path.posix.join("slate-archive", params.filename),
+      source: "generated",
+    },
+  ]);
+  if (!floor.ok) return { ok: false, code: "security_denied", detail: floor.reason };
+  const body = floor.bodies[0]!;
+
+  const archiveDir = path.join(params.dir, "slate-archive");
+  await mkdir(archiveDir, { recursive: true });
+  await writeFileAtomic(path.join(archiveDir, params.filename), body.content);
+  if (floor.notice !== undefined) {
+    await writeFileAtomic(path.join(archiveDir, `${params.filename}${ARCHIVE_REDACTION_NOTICE_SUFFIX}`), floor.notice);
+  }
+  return { ok: true, altered: body.altered };
+}
+
+/**
+ * Suffix for the sibling notice a floored archive artifact gets. Chosen so it
+ * ends in neither `-unbound-candidate.json` nor `-wrap-up-outcome.json` —
+ * `catch-up.ts` scans `slate-archive/` by exactly those suffixes, and a notice
+ * that matched one would be parsed as a malformed record instead of read as
+ * what it is.
+ */
+const ARCHIVE_REDACTION_NOTICE_SUFFIX = ".redaction.md";
 
 /**
  * AC6: the unbound-candidate degrade — never a guessed/default workspaceId,
@@ -341,16 +534,21 @@ export type RunWrapUpInput = {
  * tree, which does not exist to write into when there is no workspaceId at
  * all), one artifact per `runWrapUp` call covering every non-empty kind
  * group at once.
+ *
+ * The seed texts this records are user-authored session content — the same
+ * category `resolveMachineWrapUp` floors into `<kind>.seeds.json` — so this
+ * write goes through the same floor (`writeFlooredArchiveArtifact`). The JSON
+ * is floored as a whole serialized body, exactly as `seedsJson` already is on
+ * the bound path, rather than field by field.
  */
 async function writeUnboundCandidateArtifact(
+  cwd: string,
   dir: string,
   trigger: WrapUpTrigger,
   now: () => Date,
   grouped: Map<SlateSeedKind, AttributedSeed[]>,
   nonEmptyKinds: SlateSeedKind[],
-): Promise<void> {
-  const archiveDir = path.join(dir, "slate-archive");
-  await mkdir(archiveDir, { recursive: true });
+): Promise<ArchiveArtifactResult> {
   const nowIso = now().toISOString();
   const filename = `${nowIso.replace(/[:.]/g, "-")}-unbound-candidate.json`;
   const content = {
@@ -362,7 +560,7 @@ async function writeUnboundCandidateArtifact(
       seeds: (grouped.get(kind) ?? []).map((seed) => ({ text: seed.text, source: describeSource(seed.source) })),
     })),
   };
-  await writeFileAtomic(path.join(archiveDir, filename), `${JSON.stringify(content, null, 2)}\n`);
+  return writeFlooredArchiveArtifact({ cwd, dir, filename, content: `${JSON.stringify(content, null, 2)}\n` });
 }
 
 /**
@@ -379,20 +577,66 @@ async function writeUnboundCandidateArtifact(
  * transiently — this write must never become a NEW way for that to happen).
  * `classifySession` (`catch-up.ts`) reads this artifact back to distinguish
  * "wrap-up genuinely failed" from "wrap-up never triggered" in the Review UI.
+ *
+ * Floored like every other archive write. The reviewer who found the unbound
+ * -candidate leak measured this record clean on their probe — it carries only
+ * kinds, outcomes, proposal ids and thrown-`Error` messages — but "clean on
+ * one probe" is not a category. `WrapUpGroupOutcome`'s `message` is
+ * `error.message` from ANY throw inside `proposeOneGroup`, including one
+ * raised by the injected `ModelTurnPort`, whose prompt is built from the
+ * working-tree diff and the session's seeds; a provider that echoes the
+ * request it rejected puts that content straight into this field. Flooring it
+ * costs one guard call and removes the assumption.
  */
 async function writeWrapUpOutcomeArtifact(
+  cwd: string,
   dir: string,
   trigger: WrapUpTrigger,
   now: () => Date,
   groups: WrapUpGroupOutcome[],
 ): Promise<void> {
   try {
-    const archiveDir = path.join(dir, "slate-archive");
-    await mkdir(archiveDir, { recursive: true });
     const nowIso = now().toISOString();
     const filename = `${nowIso.replace(/[:.]/g, "-")}-wrap-up-outcome.json`;
     const content = { recordType: "wrap-up-outcome", trigger, generatedAt: nowIso, groups };
-    await writeFileAtomic(path.join(archiveDir, filename), `${JSON.stringify(content, null, 2)}\n`);
+    const written = await writeFlooredArchiveArtifact({
+      cwd,
+      dir,
+      filename,
+      content: `${JSON.stringify(content, null, 2)}\n`,
+    });
+    if (written.ok) return;
+
+    // The floor refused this record outright. Writing nothing would be the
+    // easy answer and the wrong one: `classifySession` reads the ABSENCE of
+    // this artifact as "wrap-up never triggered", so a silent refusal would
+    // erase a session that did run from the Review UI entirely — the same
+    // "an alteration rendered indistinguishable from a legitimate result"
+    // shape this programme keeps closing. So a refusal marker goes down
+    // instead: the record type, trigger and timestamp are preserved (they are
+    // this module's own values, never session content), `groups` is empty
+    // because none of it could be recorded, and `redaction` says why. The
+    // reason is `prepareOutputForPersistence`'s own, already leak-safe
+    // (categories and counts, never spans) — the same string
+    // `proposeOneGroup` already puts on a group's `message`.
+    const refusalIso = now().toISOString();
+    const refusalFilename = `${refusalIso.replace(/[:.]/g, "-")}-wrap-up-outcome.json`;
+    const archiveDir = path.join(dir, "slate-archive");
+    await mkdir(archiveDir, { recursive: true });
+    await writeFileAtomic(
+      path.join(archiveDir, refusalFilename),
+      `${JSON.stringify(
+        {
+          recordType: "wrap-up-outcome",
+          trigger,
+          generatedAt: refusalIso,
+          groups: [],
+          redaction: { refused: true, reason: written.detail },
+        },
+        null,
+        2,
+      )}\n`,
+    );
   } catch {
     // Best-effort — a failure to record the outcome (including the `mkdir`
     // above) must not itself throw and must not prevent runWrapUp from
@@ -424,7 +668,7 @@ async function proposeOneGroup(params: {
   now: () => Date;
   wrapUpSource?: WrapUpSource;
   env?: Record<string, string | undefined>;
-  providerFactory?: ProviderFactory;
+  modelTurn?: ModelTurnPort;
   modelTurnTimeoutMs?: number;
 }): Promise<WrapUpGroupOutcome> {
   const wrapUpSource: WrapUpSource = params.wrapUpSource ?? "flow";
@@ -454,10 +698,25 @@ async function proposeOneGroup(params: {
       kind: params.kind,
       now: params.now,
       ...(params.env !== undefined ? { env: params.env } : {}),
-      ...(params.providerFactory !== undefined ? { providerFactory: params.providerFactory } : {}),
+      ...(params.modelTurn !== undefined ? { modelTurn: params.modelTurn } : {}),
       ...(params.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: params.modelTurnTimeoutMs } : {}),
     });
-    if (!resolved.ok) return { kind: params.kind, outcome: "no_credential" };
+    if (!resolved.ok) {
+      // A refusal by the redaction floor is NOT a credential problem, and must
+      // not arrive at the Review UI wearing that label — a reviewer would go
+      // looking for an API key that was never missing. `"error"` is the
+      // existing `WrapUpGroupOutcome` slot for "this group failed, here is
+      // why", already consumed exhaustively by `catch-up.ts` and
+      // `tui/review-inspector.ts`, so this needs no union widening either.
+      if (resolved.code === "security_denied") {
+        return { kind: params.kind, outcome: "error", message: `wrap-up evidence refused by the security floor: ${resolved.detail}` };
+      }
+      // Both `no_credential` and `no_model_turn` land on the existing
+      // `"no_credential"` group outcome — see `MachineWrapUpResolution`'s own
+      // comment for why that union is not widened here. `resolveMachineWrapUp`
+      // has already said which it was, once, on stderr.
+      return { kind: params.kind, outcome: "no_credential" };
+    }
 
     const flowEvidence = resolved.resolution.evidence.find((item) => item.kind === "flow");
     const sourceRef = (flowEvidence ?? resolved.resolution.evidence[0])!.uri;
@@ -551,15 +810,41 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
     return { groups: [] };
   }
 
+  /**
+   * The unbound degrade, shared by the two branches below. A floor refusal
+   * must NOT come back as `"unbound-candidate"`: that outcome means "a durable
+   * artifact for this session's seeds already exists on disk", which is
+   * exactly what a refusal makes untrue, and `catch-up.ts`'s `classifySession`
+   * treats it as a completed dispatch that outranks every failure signal — so
+   * reporting it after a refusal would hide the refusal behind a success.
+   *
+   * It lands on the existing `"error"` outcome rather than a new union member
+   * for the reason `MachineWrapUpResolution` already documents for
+   * `security_denied`: `WrapUpGroupOutcome` is read exhaustively by
+   * `./catch-up.ts` and `../tui/review-inspector.ts`, files this change does
+   * not own, and `"error"` is their existing "this group failed, here is why"
+   * slot. The message names the security floor, so it is never mistaken for
+   * the generic-throw case that shares the slot.
+   */
+  const unboundDegrade = async (): Promise<WrapUpOutcome> => {
+    const written = await writeUnboundCandidateArtifact(input.cwd, input.dir, input.trigger, now, grouped, nonEmptyKinds);
+    const groups: WrapUpGroupOutcome[] = written.ok
+      ? nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }))
+      : nonEmptyKinds.map((kind) => ({
+          kind,
+          outcome: "error" as const,
+          message: `unbound-candidate artifact refused by the security floor: ${written.detail}`,
+        }));
+    await writeWrapUpOutcomeArtifact(input.cwd, input.dir, input.trigger, now, groups);
+    return { groups };
+  };
+
   let workspaceId = input.slate.workspaceId;
   if (workspaceId === undefined && input.wrapUpSource === "external-slate") {
     // AC-38 (flow 182): an EXTERNAL slate that never bound a workspaceId
     // must never have one created for it at close — the artifact path is
     // the ONLY outcome, unconditionally.
-    await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-    const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
-    await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
-    return { groups };
+    return unboundDegrade();
   }
   if (workspaceId === undefined) {
     // Flow 200 (lazy binding): a SESSION with REAL Seeds but no bound
@@ -581,14 +866,11 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
       cwd: input.cwd,
       topicHint: topicHint.length > 0 ? topicHint : "Untitled session wrap-up",
       ...(input.env !== undefined ? { env: input.env } : {}),
-      ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
+      ...(input.modelTurn !== undefined ? { modelTurn: input.modelTurn } : {}),
       ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
     });
     if (!resolved.ok) {
-      await writeUnboundCandidateArtifact(input.dir, input.trigger, now, grouped, nonEmptyKinds);
-      const groups = nonEmptyKinds.map((kind) => ({ kind, outcome: "unbound-candidate" as const }));
-      await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
-      return { groups };
+      return unboundDegrade();
     }
     workspaceId = resolved.workspaceId;
     // Bind the resolved workspace to the slate so future wrap-ups reuse it
@@ -616,11 +898,11 @@ export async function runWrapUp(input: RunWrapUpInput): Promise<WrapUpOutcome> {
         now,
         ...(input.wrapUpSource !== undefined ? { wrapUpSource: input.wrapUpSource } : {}),
         ...(input.env !== undefined ? { env: input.env } : {}),
-        ...(input.providerFactory !== undefined ? { providerFactory: input.providerFactory } : {}),
+        ...(input.modelTurn !== undefined ? { modelTurn: input.modelTurn } : {}),
         ...(input.modelTurnTimeoutMs !== undefined ? { modelTurnTimeoutMs: input.modelTurnTimeoutMs } : {}),
       }),
     ),
   );
-  await writeWrapUpOutcomeArtifact(input.dir, input.trigger, now, groups);
+  await writeWrapUpOutcomeArtifact(input.cwd, input.dir, input.trigger, now, groups);
   return { groups };
 }

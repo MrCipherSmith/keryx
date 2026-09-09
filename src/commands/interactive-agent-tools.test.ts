@@ -55,6 +55,8 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "flow_status",
     "get_cwd",
     "graph_affected",
+    // AFC (flow 240): the explainable graph seed search, previously CLI-only.
+    "graph_find",
     "graph_path",
     "graph_query",
     "graph_symbol",
@@ -78,7 +80,14 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "web_search",
     "wiki_ask",
     "wiki_backlinks",
+    // AFC (flow 240): the AFC-W04 evidence envelope, previously reachable only
+    // from its own test.
+    "wiki_evidence",
     "wiki_freshness",
+    // Flow 242 (forgetting) lane C / AC5: the same named-outcome vocabulary
+    // `keryx wiki sections resolve` answers on, now reachable from the
+    // interactive agent (see `metaproject-operations.test.ts` EXPECTED_NAMES).
+    "wiki_resolve",
     "workspace_create",
     "workspace_list",
     "workspace_overview",

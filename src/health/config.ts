@@ -32,6 +32,28 @@ export const DEFAULT_HEALTH_CONFIG: HealthConfig = {
     typescript: { mode: "auto", required: true },
     tests: { mode: "auto", required: false },
     coverage: { mode: "import", required: false },
+    // F-240-03 (flow 240 T7) asked whether this should become `required: true`.
+    // It stays optional, deliberately, and the reason is that `required` here
+    // means "block every `keryx health` run in every checkout when this source
+    // does not produce a result". `dependencyAudit` runs `bun audit` / `npm
+    // audit`, which resolve advisories over the NETWORK. Requiring it would
+    // turn an aeroplane, a locked-down runner, or a registry outage into
+    // `gate.status = incomplete` on work that has nothing to do with
+    // dependencies -- a gate that fails for reasons the author cannot fix
+    // teaches people to bypass gates, which costs more than it buys.
+    //
+    // What the finding actually names is a truthfulness defect, not a
+    // strictness one: an audit that never ran was being recorded as an audit
+    // that found nothing. That is fixed where it belongs, in `computeGate`
+    // (`gate.ts`), which now reports `coverage: "partial"` for an enabled
+    // optional source that produced no result -- so a run without an audit can
+    // no longer claim a complete picture, whatever its status.
+    //
+    // The regression guard the zero-advisory state was missing is a CI job
+    // (`.github/workflows/ci.yml`, `dependency-audit`), which runs the real
+    // audit on a networked runner and fails on an advisory. That is where a
+    // scheduled, blocking dependency check belongs: one place, with network,
+    // that a human can act on -- not on every local invocation.
     dependencyAudit: { mode: "auto", required: false },
     sonarqube: { mode: "disabled", required: false },
     complexity: { mode: "auto", required: false },

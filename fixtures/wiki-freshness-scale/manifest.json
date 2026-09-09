@@ -1,0 +1,22 @@
+{
+  "note": "Descriptor for the GENERATED (not committed byte-by-byte) wiki-freshness-scale corpus. See README.md. scripts/benchmark/wiki-freshness-scale-fixture.ts's generateFreshnessScaleCorpus(size, seed) reads these exact numbers, so the same seed against these proportions always yields the same corpus.",
+  "seed": 236100,
+  "scales": [50, 500, 2000],
+  "categoryShares": {
+    "gitLogReachable": 0.74,
+    "gitLogUnreachable": 0.14,
+    "scopeHashOnly": 0.06,
+    "undecidable": 0.06
+  },
+  "changedShareWithinGitLike": 0.7,
+  "changedShareWithinScopeHashOnly": 0.5,
+  "checkpointBucketing": {
+    "formula": "clamp(round(sqrt(size)), 1, 20)",
+    "purpose": "clusters VerifiedAt values onto a small number of shared base-revision commits rather than one distinct commit per page, so the fixture can distinguish a batching-by-base-revision implementation from a per-page one"
+  },
+  "dirtyCheckout": {
+    "reserved": true,
+    "used": false,
+    "note": "AFC-22 requires batching/caching to account for a dirty/untracked working tree. This task does not implement or budget for it (see the calibration profile's outOfScope); the flag is reserved so a later fixture extension does not have to renegotiate the manifest shape."
+  }
+}

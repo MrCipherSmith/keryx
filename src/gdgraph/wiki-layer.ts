@@ -18,6 +18,7 @@ import path from "node:path";
 import { collectPages } from "../wiki/collect";
 import { computeModuleKeyFiles } from "../wiki/collect";
 import { resolveDescribeSet } from "../wiki/describes";
+import { resolveWikiPageIdentity, type PageIdentity } from "../wiki/section-index";
 import type { DescribesEdge, FileFingerprint, GraphData, WikiLayer, WikiPageNode } from "./types";
 
 export const WIKI_PAGES_FILE = "wiki-pages.jsonl";
@@ -28,9 +29,39 @@ function storageDir(projectRoot: string): string {
   return path.join(projectRoot, ".metaproject", "data", "gdgraph", "storage");
 }
 
-/** Stable id for a page node. */
+/**
+ * Path-derived page id. **Not stable across a rename**, despite what this
+ * function's doc comment claimed for two phases.
+ *
+ * Measured on a real page of this repository's wiki (flow 235, T5), before any
+ * change: renaming `architecture/os-sandbox.md` to
+ * `architecture/operating-system-sandbox.md` with byte-identical content turned
+ * `wiki:architecture/os-sandbox.md` into
+ * `wiki:architecture/operating-system-sandbox.md`, and a DIFFERENT page written
+ * at the vacated path then answered to the old id — a stale reference resolving
+ * to whatever now occupies the position, with no diagnostic anywhere.
+ *
+ * Kept because it is the correct answer for a page that has never been given an
+ * identity, and because it is the id shape already written into
+ * `storage/wiki-pages.jsonl`. Use {@link wikiPageIdFor} when the page's content
+ * is available: it prefers the authored `keryx:page` marker, which does survive
+ * a rename.
+ */
 export function wikiPageId(relativePath: string): string {
   return `wiki:${relativePath}`;
+}
+
+/**
+ * The page's identity, preferring the authored marker over the path.
+ *
+ * This is the single resolver — `../wiki/section-index.ts`'s
+ * `resolveWikiPageIdentity` — rather than a second copy of the rule living in
+ * the graph layer. A page with a `keryx:page` marker keeps its id through a
+ * file rename; a page without one is still addressed by path, and the returned
+ * `stability` says so out loud instead of letting a caller assume otherwise.
+ */
+export function wikiPageIdFor(relativePath: string, content: string): PageIdentity {
+  return resolveWikiPageIdentity(relativePath, content);
 }
 
 export interface BuildWikiLayerInput {

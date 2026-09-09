@@ -119,19 +119,47 @@ it already tried. The flow package does.
       attempts from your own context** — a resumed session's context starts at
       zero while the real count does not, and a loop bound computed from zero
       is not a bound.
-   3. Resume at the first task whose `status` is not `done`, respecting
-      `dependsOn` order.
-   4. Before dispatching a worker for that task, record the attempt:
+   3. Ask the record which task is next, rather than deriving it:
+
+      ```bash
+      keryx flow next <id> --json
+      ```
+
+      This is the first task whose `status` is not `done` and whose declared
+      `dependsOn` are all `done` — the ordering computed from the package
+      instead of re-derived by you from prose.
+
+   4. **Read the `resume` field before dispatching anything.** It has three
+      answers and they are not interchangeable:
+
+      - `never-started` — nothing has been tried. Dispatch normally.
+      - `ended` — a previous attempt reported how it finished. This is a retry;
+        the budget in step 6 applies.
+      - `unresolved` — an attempt was opened and **no end was ever recorded**.
+        Whether its work already landed is UNKNOWN. Do NOT treat this as
+        `never-started`. Inspect the working tree and the task's
+        `evidenceRefs` first, decide whether the work is there, and only then
+        either close the stale attempt
+        (`keryx flow task attempt <id> <Tn> --outcome failed --detail "<what you found>"`)
+        or close the task (`keryx flow task done <id> <Tn>`). Re-dispatching
+        over an unresolved attempt is how the same work gets done twice.
+
+      `keryx flow next` also lists every OTHER not-done task carrying an
+      unresolved attempt, under `unresolved`. Those are parallel dispatches that
+      never reported back; resolve them the same way before assuming the flow is
+      idle.
+
+   5. Before dispatching a worker for that task, record the attempt:
 
       ```bash
       keryx flow task attempt <id> <Tn> --outcome started --detail "resumed after session restart"
       ```
 
-   5. Apply the Phase 4 attempt budget against the **persisted** count. If
+   6. Apply the Phase 4 attempt budget against the **persisted** count. If
       `attempts.count` for the task has already reached **three**, do not
       re-dispatch the same approach: go to the re-planning step (Phase 4, PR
       review/fix loop, step 4) and record the decision in `journal.md`.
-   6. Run the repetition check before spending an attempt, whatever the count
+   7. Run the repetition check before spending an attempt, whatever the count
       says:
 
       ```bash
@@ -142,7 +170,7 @@ it already tried. The flow package does.
       rounds produced identical output. Go straight to the re-planning step.
       Do not spend the remaining attempts on the same approach because the
       budget has some left — that is the failure this check exists to catch.
-   7. If the flow is `blocked`, read the blocking reason from `journal.md`,
+   8. If the flow is `blocked`, read the blocking reason from `journal.md`,
       resolve or escalate it, then `keryx flow unblock <id>`.
 4. If the user wants a new flow, continue at 0.1.
 

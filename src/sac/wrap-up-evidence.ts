@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { dedupeSeeds, type Slate, type SlateChildDispatch, type SlateSeed, type SlateSeedKind } from "../session/slate";
 import type { CourseProjection } from "../session/slate-course";
+import { formatGuardWarning, guardOutput, prepareOutputForPersistence } from "../security/guard";
 
 const execFileAsync = promisify(execFile);
 
@@ -28,17 +29,197 @@ export function dedupedAttributedSeeds(slate: Slate): AttributedSeed[] {
   return result;
 }
 
-export async function gitDiff(cwd: string): Promise<string> {
-  try { return (await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 })).stdout; }
-  catch { return ""; }
+// AFC-22 (flow 236 T13, F236-03): a working-tree diff that could not be taken
+// is NOT an empty one.
+//
+// `gitDiff` was `try { … } catch { return ""; }`, and `diffStatLine` renders
+// an empty string as "no working-tree changes". Measured on three cwds:
+//
+//   <not a git repo>                     bytes=0     "no working-tree changes"
+//   <.git/HEAD replaced with "corrupt">  bytes=0     "no working-tree changes"
+//   <a genuinely clean git tree>         bytes=0     "no working-tree changes"
+//   <the real repo, dirty>               bytes=29635 "working-tree diff: +187/-32 line(s)"
+//
+// The first three are byte-identical — sha256 `e3b0c442…`, the hash of the
+// empty string — so a corrupt repository was recorded as evidence of a clean
+// tree. Those bytes become `<kind>.diff.txt`, `evidence[0]` (the item every
+// owner writer is handed as THE content), with `revision` = sha256("") — and
+// every downstream verifier then confirms an intact record of a measurement
+// that never happened. The same string went into the model prompt.
+//
+// So the primitive answers the question it was actually asked: was a diff
+// MEASURED, or not? An unmeasurable one is recorded under its own evidence
+// kind, with a body that says so in words, so a hash check verifies a marker
+// and can never verify a measurement that did not occur.
+export type WorkingTreeDiff =
+  | { kind: "measured"; text: string }
+  | { kind: "unmeasurable"; detail: string };
+
+export async function gitDiff(cwd: string): Promise<WorkingTreeDiff> {
+  try {
+    return { kind: "measured", text: (await execFileAsync("git", ["diff"], { cwd, maxBuffer: 16 * 1024 * 1024 })).stdout };
+  } catch (error) {
+    const stderr = typeof (error as { stderr?: unknown }).stderr === "string" ? (error as { stderr: string }).stderr.trim().split("\n")[0] ?? "" : "";
+    const message = error instanceof Error ? error.message.split("\n")[0] ?? "" : String(error);
+    return { kind: "unmeasurable", detail: stderr.length > 0 ? stderr : message };
+  }
 }
 
-export function diffStatLine(diffText: string): string {
-  if (diffText.trim().length === 0) return "no working-tree changes";
-  return `working-tree diff: +${(diffText.match(/^\+(?!\+\+)/gm) ?? []).length}/-${(diffText.match(/^-(?!--)/gm) ?? []).length} line(s)`;
+/** The `WrapUpEvidence.kind` recorded in place of `diff` when none was taken. */
+export const DIFF_UNAVAILABLE_KIND = "diff-unavailable";
+
+/**
+ * The body persisted in place of a diff. Deliberately prose, deliberately not
+ * empty: the file itself has to refuse the reading "the tree was clean", both
+ * for a human opening it and for anything that only checks the hash.
+ */
+export function unmeasurableDiffBody(detail: string): string {
+  return [
+    "# Working-tree diff NOT MEASURED",
+    "",
+    "`git diff` could not be run for this workspace, so no working-tree diff",
+    "was taken. This file is not a diff, and it is NOT evidence that the tree",
+    "was clean — an unmeasured tree and a clean tree are different facts, and",
+    "this record deliberately cannot be mistaken for the second.",
+    "",
+    `reason: ${detail.length > 0 ? detail : "git exited non-zero and gave no reason"}`,
+    "",
+  ].join("\n");
+}
+
+export function diffStatLine(diff: WorkingTreeDiff): string {
+  if (diff.kind === "unmeasurable") return `working-tree diff NOT MEASURED (${diff.detail})`;
+  if (diff.text.trim().length === 0) return "no working-tree changes";
+  return `working-tree diff: +${(diff.text.match(/^\+(?!\+\+)/gm) ?? []).length}/-${(diff.text.match(/^-(?!--)/gm) ?? []).length} line(s)`;
 }
 
 export function courseStatusLine(course: CourseProjection): string {
   if (course.state !== "bound") return "flow: unbound";
   return `flow ${course.flowRef.uri} snapshot=${course.flowRef.snapshot} completed=${course.completed.length} next=${course.next.length} blocked=${course.blocked.length}`;
+}
+
+// ---------------------------------------------------------------------------
+// The redaction floor for wrap-up evidence, shared by BOTH producers of a
+// `TrustedWrapUpResolution` — `session-wrap-up.ts` (`WrapUpSource === "session"`)
+// and `machine-wrap-up.ts` (`"flow"`/`"external-slate"`).
+//
+// Two things were wrong before this existed.
+//
+// (1) Only one of the two producers ran the floor at all. `session-wrap-up.ts`
+//     put every body through `guardOutput` + `prepareOutputForPersistence`
+//     before writing it; `machine-wrap-up.ts` wrote `gitDiff`'s bytes straight
+//     to the workspace tree with `writeFileAtomic` and sent the same bytes to a
+//     model provider in its summary prompt. Measured on the same planted AWS
+//     key in the same working tree, the session producer recorded
+//     `aws_key = [REDACTED:secret]` and the machine producer recorded
+//     `aws_key = AKIAIOSFODNN7EXAMPLE`. Same evidence taxonomy, same `gitDiff`
+//     primitive, opposite outcome — which made the floor advisory rather than a
+//     floor. Routing both producers through this one function is what makes the
+//     two comparable claims in their own headers ("reuses this exact
+//     best-effort git-diff primitive", "looks identical regardless of which of
+//     the two wrap-up sources produced it") actually true.
+//
+// (2) When the floor DID fire, nothing said so. The floor's own "did anything
+//     change" answer (`bytesPreserved`) was read by no one, the bytes written
+//     were the altered ones, and `revision` was the sha256 OF the altered
+//     bytes — so every downstream verifier (`readVerifiedProposalEvidence`,
+//     `validateEvidence`, `scanEvidenceSecurityGate`) re-verified successfully
+//     against the scrubbed form and reported a clean, intact record. A reviewer
+//     reading evidence a proposal describes as the real observation could not
+//     tell an untouched record from a rewritten one. That is the shape this
+//     programme keeps closing: an alteration rendered indistinguishable from a
+//     legitimate result.
+//
+// So: evidence either goes out with its bytes preserved, or it goes out with a
+// `redaction-notice` evidence item beside it saying which bodies were rewritten
+// and, as far as the seam can truthfully answer, why. Never altered and silent.
+// ---------------------------------------------------------------------------
+
+/** The `WrapUpEvidence.kind` of the notice — appended last, never `evidence[0]`. */
+export const REDACTION_NOTICE_KIND = "redaction-notice";
+
+/** One evidence body on its way to disk. */
+export type EvidenceBody = Readonly<{
+  /** The file name this body is persisted under; the notice names it. */
+  name: string;
+  content: string;
+  /** Workspace-relative path, for the guard's path-scoped policies. */
+  path: string;
+  source: "generated" | "tool-output";
+}>;
+
+export type FlooredEvidenceBody = Readonly<{ name: string; content: string; altered: boolean }>;
+
+export type EvidenceFloorResult =
+  | Readonly<{ ok: true; bodies: readonly FlooredEvidenceBody[]; notice: string | undefined }>
+  | Readonly<{ ok: false; reason: string }>;
+
+/**
+ * What the notice can say about a body the floor rewrote while the security
+ * module is disabled for this workspace. The deterministic floor inside
+ * `guardOutput` runs regardless of module enablement, but its per-span reasons
+ * are not carried on `GuardResult` (only the cleaned text is), and
+ * `prepareOutputForPersistence`'s own second pass sees text that is already
+ * clean — so with the engine off there is no finding list to report. Saying
+ * that plainly is the honest answer; reporting "no findings" would read as
+ * "nothing was removed", which is the exact confusion this notice exists to
+ * prevent.
+ */
+const FLOOR_ONLY_DETAIL =
+  "rewritten by the deterministic output floor (no finding detail: the security module is disabled or reported none for this workspace)";
+
+function renderRedactionNotice(bodies: readonly FlooredEvidenceBody[], details: ReadonlyMap<string, string>): string {
+  const altered = bodies.filter((body) => body.altered);
+  const preserved = bodies.filter((body) => !body.altered);
+  return [
+    "# Evidence redaction notice",
+    "",
+    "The keryx security redaction floor rewrote part of this wrap-up's recorded",
+    "content before it was written. The files listed under \"Rewritten\" are NOT",
+    "the raw observation. Where one of them carries a recorded `revision` (the",
+    "proposal-evidence path does; the `slate-archive/` artifacts do not), that",
+    "revision is the sha256 of the REWRITTEN bytes — so a successful hash check",
+    "proves the scrubbed form is intact, never that nothing was removed. Read",
+    "them as scrubbed.",
+    "",
+    "## Rewritten",
+    ...altered.map((body) => `- ${body.name} — ${details.get(body.name) ?? FLOOR_ONLY_DETAIL}`),
+    "",
+    "## Byte-preserved",
+    ...(preserved.length > 0 ? preserved.map((body) => `- ${body.name}`) : ["- (none)"]),
+    "",
+    "This notice never names the removed content. It records only that removal",
+    "happened, which files it happened to, and whatever leak-safe category counts",
+    "the security engine produced.",
+    "",
+  ].join("\n");
+}
+
+/**
+ * Put every wrap-up evidence body through the floor before it is persisted,
+ * hashed, or handed to a model.
+ *
+ * Refusal is fail-closed and first-wins in the order given: a blocked body
+ * means no evidence is written at all, matching the posture
+ * `session-wrap-up.ts` already took for its own three bodies.
+ */
+export async function applyEvidenceRedactionFloor(
+  cwd: string,
+  bodies: readonly EvidenceBody[],
+): Promise<EvidenceFloorResult> {
+  const floored: FlooredEvidenceBody[] = [];
+  const details = new Map<string, string>();
+  for (const body of bodies) {
+    const guard = await guardOutput({ cwd, content: body.content, target: "report", source: body.source, path: body.path });
+    const output = prepareOutputForPersistence(guard, body.content);
+    if (!output.allowed) return { ok: false, reason: output.reason };
+    floored.push({ name: body.name, content: output.content, altered: !output.bytesPreserved });
+    if (!output.bytesPreserved) {
+      // Leak-safe by construction: categories and counts only, never spans.
+      const warning = formatGuardWarning(guard.decision, "security");
+      if (warning !== null) details.set(body.name, warning);
+    }
+  }
+  const anyAltered = floored.some((body) => body.altered);
+  return { ok: true, bodies: floored, notice: anyAltered ? renderRedactionNotice(floored, details) : undefined };
 }

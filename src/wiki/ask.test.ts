@@ -104,24 +104,49 @@ test("falls back to translation when Russian query matches English corpus", asyn
   expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/gate.md" }));
 });
 
-test("persists dynamic translation after successful russian fallback", async () => {
+// AFC-30 (flow 235) T5 — "pure search не пишет history".
+//
+// These three tests replace the ones that asserted the OPPOSITE: that a
+// Russian fallback persisted the user's own query text, its derived
+// translation and a timestamp into
+// `.metaproject/runtime/wiki-ask/translations.json`, and that a later query
+// read that file back. Measured on this repository before the change:
+// `keryx wiki ask "какая политика безопасности"` created that file containing
+// `{"phrases":{"какая политика безопасности":"which policy безопасности"},…}`.
+// The writer ran from `wikiAsk` itself, so it fired from the CLI, from MCP
+// `wiki.ask` (declared `mutating: false`) and from the agent `wiki_ask` op
+// (declared `risk: "read"`) alike — a tool-contract violation as well as an
+// AC-30 one. The learned dictionary was also derived from this same heuristic's
+// own output, which `wiki-specification.md` §3 excludes for aliases: they must
+// be explicit versioned data, "не скрытая LLM-генерация". The capability is
+// removed rather than reworked, and the fixed RU→EN table below still carries
+// the cross-lingual case (see the fallback test above).
+test("a Russian fallback answers without writing anything", async () => {
   await writeFile(
     path.join(root, ".metaproject", "wiki", "architecture", "session.md"),
     "# Session lifecycle\n\nStatus: accepted\n\n## Summary\n\nHow work session keeps command context after pause.\n",
     "utf8",
   );
   const result = await wikiAsk({ cwd: root, question: "Как работают сессии" });
-  expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/session.md" }));
+  expect(result.citations).toContainEqual(
+    expect.objectContaining({ path: "wiki/architecture/session.md" }),
+  );
 
-  const dictionary = await readRuntimeDictionary();
-  expect(dictionary).not.toBeNull();
-  expect((dictionary as { phrases?: Record<string, string> })?.phrases).toBeDefined();
-  expect(
-    (dictionary as { phrases?: Record<string, string> })?.phrases?.["как работают сессии"],
-  ).toBeTruthy();
+  expect(await readRuntimeDictionary()).toBeNull();
 });
 
-test("uses persisted runtime translations without rebuilding fallback", async () => {
+test("no wiki ask, in any language, creates the runtime directory at all", async () => {
+  await wikiAsk({ cwd: root, question: "какая политика безопасности" });
+  await wikiAsk({ cwd: root, question: "how are failed payments retried" });
+  await wikiAsk({ cwd: root, question: "the of and is a" });
+
+  expect(
+    await Bun.file(path.join(root, ".metaproject", "runtime", "wiki-ask", "translations.json")).exists(),
+  ).toBe(false);
+  expect(await Bun.file(path.join(root, ".metaproject", "runtime")).exists()).toBe(false);
+});
+
+test("a pre-existing runtime dictionary is neither read nor rewritten", async () => {
   const runtimeDictionaryPath = path.join(
     root,
     ".metaproject",
@@ -130,28 +155,25 @@ test("uses persisted runtime translations without rebuilding fallback", async ()
     "translations.json",
   );
   await mkdir(path.join(root, ".metaproject", "runtime", "wiki-ask"), { recursive: true });
-  await writeFile(
-    runtimeDictionaryPath,
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        phrases: {
-          "квазифраза для проверки": "validation token check",
-        },
-        terms: {},
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
+  const seeded = `${JSON.stringify(
+    { schemaVersion: 1, phrases: { "квазифраза для проверки": "validation token check" }, terms: {} },
+    null,
+    2,
+  )}\n`;
+  await writeFile(runtimeDictionaryPath, seeded, "utf8");
   await writeFile(
     path.join(root, ".metaproject", "wiki", "architecture", "validation.md"),
     "# Validation token check\n\nStatus: accepted\n\nUse this for internal validation tokens.\n",
     "utf8",
   );
+
   const result = await wikiAsk({ cwd: root, question: "Квазифраза для проверки" });
-  expect(result.citations).toContainEqual(expect.objectContaining({ path: "wiki/architecture/validation.md" }));
+  // The phrase is not in the fixed table, so it does not resolve — and that is
+  // the honest outcome. A hidden, self-generated dictionary answering it was
+  // the defect, not the feature.
+  expect(result.status).not.toBe("ok");
+  // Byte-identical: the file was not rewritten either.
+  expect(await readFile(runtimeDictionaryPath, "utf8")).toBe(seeded);
 });
 
 // AFC-06 (flow 234, T14, defect 1): the local `isCurrent` used to gate
@@ -249,51 +271,23 @@ test("AC1 (wiki): a hyphenated Valid-From, the memory spelling, is honoured on t
   expect(paths).not.toContain("wiki/architecture/hyphenated-future.md");
 });
 
-test("learns term translations from fallback and reuses them on later similar questions", async () => {
-  const runtimeDictionaryPath = path.join(
-    root,
-    ".metaproject",
-    "runtime",
-    "wiki-ask",
-    "translations.json",
-  );
-  await mkdir(path.join(root, ".metaproject", "runtime", "wiki-ask"), { recursive: true });
-  await writeFile(
-    runtimeDictionaryPath,
-    `${JSON.stringify(
-      {
-        schemaVersion: 1,
-        phrases: {
-          "какая режим сессии": "which mode session",
-        },
-        terms: {},
-      },
-      null,
-      2,
-    )}\n`,
-    "utf8",
-  );
-
+test("repeated identical questions are byte-identical and leave the tree untouched", async () => {
   await writeFile(
     path.join(root, ".metaproject", "wiki", "architecture", "session-mode.md"),
     "# Session mode\n\nStatus: accepted\n\nSession mode configures context switching between command runs.\n",
     "utf8",
   );
 
-  const first = await wikiAsk({ cwd: root, question: "Какая режим сессии" });
+  const first = await wikiAsk({ cwd: root, question: "session mode context switching" });
   expect(first.citations).toContainEqual(
     expect.objectContaining({ path: "wiki/architecture/session-mode.md" }),
   );
 
-  const dictionary = await readRuntimeDictionary();
-  expect((dictionary as { terms?: Record<string, string> })?.terms).toBeDefined();
-  expect((dictionary as { terms?: Record<string, string> })?.terms?.["режим"]).toBe("mode");
-  expect((dictionary as { terms?: Record<string, string> })?.terms?.["сессии"]).toBe("session");
-
-  const second = await wikiAsk({ cwd: root, question: "Какой режим сессии" });
-  expect(second.citations).toContainEqual(
-    expect.objectContaining({ path: "wiki/architecture/session-mode.md" }),
-  );
+  const second = await wikiAsk({ cwd: root, question: "session mode context switching" });
+  // Determinism is what makes "the second run reused something it learned"
+  // observable at all: with nothing persisted, both runs must be identical.
+  expect(second).toEqual(first);
+  expect(await readRuntimeDictionary()).toBeNull();
 });
 
 // AFC-06 (flow 234) T22 -- AC1's second half: "historical режим явно

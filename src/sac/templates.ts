@@ -37,6 +37,7 @@ All commands are under \`keryx workspace <subcommand>\` (the module key is
 - \`keryx workspace read <workspace-id> <item-id> [--max-items N] [--max-tokens N]\`
 - \`keryx workspace propose <workspace-id> --kind <kind> --session <session-id> [--note <note>]\`
 - \`keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed>\`
+- \`keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>\`
 - \`keryx workspace collaboration <workspace-id>\`
 - \`keryx workspace policy-readiness\`
 
@@ -106,8 +107,16 @@ agent proposes becomes readable context until it is accepted.
    \`wiki-update\`, \`memory-entry\`, \`follow-up\`, \`contract-change\`, \`risk\`.
    The proposal is inert until a reviewer runs \`keryx workspace review
    <workspace-id> <proposal-id> --decision <accepted|rejected|dismissed>\`.
-4. \`keryx workspace collaboration <workspace-id>\` shows cross-session
-   collaboration state for the workspace; \`keryx workspace policy-readiness\`
+4. \`keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>\`
+   records that work moved from one participant to another. The recorded
+   \`from\` is always the authenticated actor the authorization server
+   resolved — there is no flag that sets it, so a handoff is always attributed
+   and the attribution is never a string the caller typed. Recording a handoff
+   on someone else's behalf is not supported: run the command as that subject.
+5. \`keryx workspace collaboration <workspace-id>\` shows cross-session
+   collaboration state for the workspace — the references, and the handoffs
+   step 4 recorded. An empty \`activity\` now means none were recorded; until
+   step 4 existed it meant none could be. \`keryx workspace policy-readiness\`
    checks whether the local policy/authorization setup is ready for
    propose/review.
 

@@ -749,11 +749,19 @@ keryx wiki freshness
 keryx wiki refresh
 keryx wiki verify --page <path> | --baseline
 keryx wiki migrate-markers
+keryx wiki sections list [--json]
+keryx wiki sections resolve <section-ref> [--json]
+keryx wiki sections sync [--dry-run] [--accept-reoccupation <ref>[,<ref>...]] [--json]
+keryx wiki sections migrate [--dry-run]
 ```
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
 | `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
+| `sections list` | `--json` | List every indexed section with its identity, its stability, and the page it belongs to. |
+| `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, reoccupied, pending-tombstone, stale-locator, registry-unreadable or unknown, and never redirects a deleted identity to a same-named section elsewhere. A `found` identity that was once removed also prints its removal history and the basis on which its tombstone was lifted — `byte-identical` (a genuine restoration) or `accepted-substitution` (an operator accepted a different document at that address). Exits `0` when live, `1` for any answer about a dead identity, `2` when the registry cannot be read. |
+| `sections sync` | `--dry-run`, `--accept-reoccupation <ref>[,<ref>...]`, `--json` | Rebuild the section index from the pages on disk: register the current stable identities and tombstone the ones that disappeared. The only command in this area that writes. Exits `1` when any identity is *reoccupied* — removed, then re-minted at the same address by a different document — because a tombstone and a live document claiming one address is a contradiction, not a completed sync. `--accept-reoccupation` is the only exit from that state: it lifts the named tombstones and records permanently that the content was substituted rather than restored, which `sections resolve` then reports on every read. Accepting a page ref also accepts the sections inside that page. |
+| `sections migrate` | `--dry-run` | Insert versioned identity markers into pages that have none. Content is preserved byte for byte apart from the markers, and the round trip is asserted before anything is written. |
 | `new` | `<type> <slug>`, `--title "<t>"`, `--force` | Scaffold a page from template. Refuses to overwrite unless `--force`. |
 | `collect` | `--force`, `--changed`, `--since <ref>`, `--limit <n>` | Generate a hierarchical, full-coverage draft scaffold from graph/health/testing data, rebuild the index, and report the remaining draft-enrichment work front. `--changed` can scope collection to changes since a ref. |
 | `index` | — | Rebuild the managed page-index block in `wiki/index.md`. |
@@ -1060,7 +1068,7 @@ keryx flow schema [--out <path>]
 | `freeze <id>` | — | Record the AC checksum; transition `initializing → ready`. |
 | `plan <id>` | `--provider <p>`, `--json` | **Needs a model credential.** Break the flow's frozen acceptance criteria into a proposed task breakdown. Exits `1` without a credential. |
 | `start <id>` | — | Transition `ready → in-progress`. |
-| `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. |
+| `next <id>` | `--json` | The first task that is not `done` and whose declared `dependsOn` are all `done` — the resume decision, computed from the record rather than re-derived from prose. Exits `1` when work remains and nothing can start (an unsatisfiable dependency or a cycle); `keryx flow check` names which. Also reports the task's **resume state** — `never-started`, `ended` (a prior attempt reported how it finished), or `unresolved` (an attempt was opened and no end was recorded, so whether its work landed cannot be told from the record) — plus every other not-done task carrying an unresolved attempt. `--json` carries this as `resume` and `unresolved`. |
 | `task add <id>` | `--title "<t>"` (required), `--kind context\|implement\|test\|review\|docs`, `--depends T1,T2` | Append a task. `--depends` is read by `flow next` and validated by `flow check`. |
 | `task done <id> <taskId>` | `--disposition completed\|blocked\|failed\|skipped`, `--reason "<why>"` | Mark a task `done`. A `failed` or `blocked` close **records an attempt automatically** — those two dispositions are attempts by definition, and requiring a second command is why the counter read zero across seven flows. |
 | `task attempt <id> <taskId>` | `--outcome started\|failed\|blocked` (required), `--detail "<what happened>"` | Record one execution attempt explicitly. Appends to the same append-only log `task done` writes to. |
@@ -2243,6 +2251,109 @@ only. See [Slate for external agents](./guides/slate.md).
 
 ---
 
+## retention
+
+Bounds stores that grow with every routed command or refused write and that
+nothing else prunes: `.metaproject/data/gdctx/raw` and `artifacts` (one file
+per `keryx ctx rg`/`ctx read`/`ctx run` invocation — see [`ctx`](#ctx)), and
+the per-refused-write conflict sidecars each SAC owner writer leaves under
+`.metaproject/workspaces/<id>/<owner>-write-conflicts/` when a proposal's base
+version no longer matches the target (see [`workspace`](#workspace) `review`).
+Neither store had any retention logic before this command shipped, and gdctx's
+was measured at over 300 MiB and growing across two flow reports taken hours
+apart.
+
+```
+keryx retention status [--json]
+keryx retention sweep [--apply] [--target <id>]... [--max-age-days <n>] [--max-bytes <n>] [--json]
+```
+
+| Subcommand | Flags / args | Description |
+|---|---|---|
+| `status` | `--json` | Read-only inventory: for each target, its directory, entry count, bytes on disk, and what the policy would remove right now. Touches nothing. |
+| `sweep` | `--apply`, `--target <id>` (repeatable), `--max-age-days <n>`, `--max-bytes <n>`, `--json` | Applies the retention policy. **Dry run by default** — without `--apply`, nothing is removed and the report shows exactly what would go. `--target` restricts the run to one or more target ids from `status`. `--max-age-days`/`--max-bytes` override every target's own cap uniformly for this run only. |
+
+**Policy.** Two axes, oldest-first, the same shape the [wiki freshness
+queue](#wiki) already caps a single growing file by (lines + bytes) — adapted
+here for a directory of many small immutable files instead of one log:
+
+- **Age** is primary. gdctx raw logs and artifacts are the evidence behind
+  routed-search summaries an agent may still want to open, so retention
+  trades recoverability against size deliberately: 14 days by default for
+  gdctx, 30 days for owner write-conflict sidecars (an actual refused write an
+  operator may want to reconcile, not routine search chatter).
+- **Total bytes** is the backstop, applied only after the age cutoff, evicting
+  the oldest remaining entries until the target is back under its cap. Age
+  alone does not bound a burst — a single day of heavy `ctx rg` use can add
+  gigabytes inside the age window regardless of how old anything else is.
+  Defaults: 200 MiB for `gdctx-raw`, 50 MiB for `gdctx-artifacts`, 20 MiB per
+  discovered `owner-write-conflicts` directory.
+
+Entry count is deliberately not its own axis — for these stores it never fires
+before the byte cap already would.
+
+**Unreachable stores.** A target directory that cannot be listed, an entry
+that cannot be sized, or an entry that cannot be removed marks that target
+`incomplete` with the specific reason — never folded into a clean success. A
+problem discovering targets at all (e.g. `.metaproject/workspaces/` itself
+unreadable) is reported separately as a discovery issue and also folds the
+whole report to `incomplete`, since a target that was never found is not the
+same thing as a target with nothing in it. Either way the command then exits
+`1`.
+
+**Scope.** This sweeps the local stores named above only. Content already
+relayed to an agent, copies exported elsewhere, and git history are out of
+scope and are never touched or promised erased by it — this command bounds
+size, it does not implement AC-29's tombstone/forget semantics.
+
+---
+
+## forgetting
+
+Read the deletion trail at `.metaproject/data/forgetting/journal.jsonl` — what
+was removed, when, at whose request, and on what basis. Read-only; this command
+never writes to the trail. `keryx sync --apply` is the only thing that appends
+to it.
+
+```bash
+keryx forgetting trail [--limit <n>] [--json]
+keryx forgetting lookup "<ref-or-path>" [--layer <layer>] [--search] [--json]
+```
+
+`trail` prints the records newest first, with the coverage measured from the
+file itself: how many records exist, which layers have ever had a removal
+recorded, and which layers every record names as untouched.
+
+`lookup` answers one identity. By default the match is exact on a removal's
+`ref` or `page` — there is no fuzzy fallback, because a lookup that silently
+answers with an adjacent record is worse than one that says it has none.
+`--search` is the separate phrase-matching mode (over `ref`, `page` and
+`title`); every hit reports which field matched and which layer it came from.
+`--layer` narrows an identity lookup to one knowledge layer.
+
+**Verdicts.**
+
+| Verdict | Meaning | Exit |
+|---|---|---|
+| `recorded-removed` | the trail names this as removed, with when/who/why | 0 |
+| `no-removal-recorded` | the trail was read and names no removal of it | 0 |
+| `trail-absent` | nothing has ever been appended to the trail here | 0 |
+| `trail-unreadable` | the trail exists and could not be read — removed and never-recorded cannot be told apart | 2 |
+
+**The bound on a negative answer.** The trail records removals a reconcile
+*observed*. An entry deleted with `rm` and never reconciled leaves no record, and
+neither does any layer the reconcile does not write for. So
+`no-removal-recorded` means exactly "nothing here records a removal" and never
+"this never existed"; every rendering of it carries that caveat plus the
+coverage that bounds it.
+
+**Who else reads this trail.** `keryx memory search` (when a search returns
+nothing), `keryx wiki check-links` (for each broken link) and `keryx gdgraph
+affected` (for a target that is not a node) all consult the same module, so the
+trail is read whether or not this verb is typed.
+
+---
+
 ## workspace
 
 Shared Agent Context operator surface. Thin argv adapter over `src/sac/`
@@ -2266,6 +2377,7 @@ keryx workspace review <workspace-id> <proposal-id> --decision <accepted|rejecte
 keryx workspace confirm-review <workspace-id> <proposal-id> [--acknowledge-security]
 keryx workspace catch-up [--workspace <workspace-id>] [--json] [--include-lifecycle-flags]
 keryx workspace dismiss-candidate <evidence-path|session-id> [--reason <reason>] [--evidence <path>]
+keryx workspace handoff <workspace-id> --to <subject> --artifact <ref>
 keryx workspace collaboration <workspace-id>
 keryx workspace policy-readiness
 ```
@@ -2287,7 +2399,8 @@ keryx workspace policy-readiness
 | `confirm-review` | `<workspace-id>`, `<proposal-id>`, `--acknowledge-security` | Mint the `--confirm-token` a `review --decision accepted` call needs. Run this yourself in a real, approval-gated shell — no tool call (MCP or `keryx-shell`) can mint one. **When the proposal's security gate is `needs-approval`, it prints what the scan found and in which evidence, and then refuses unless `--acknowledge-security` is passed** — the flag is the record that a human read the findings, and the token carries that fact to `review`. A clean proposal claims no acknowledgement; a proposal whose gate cannot be read is refused rather than assumed to have passed. Before 0.2.75 the flag did not exist and a `needs-approval` proposal could not be accepted by any route; 0.2.74 briefly passed the acknowledgement unconditionally, which made the gate unfirable. |
 | `dismiss-candidate` | `<evidence-path\|session-id>`, `--reason`, `--evidence` | Dismiss an `unbound-candidate` that `catch-up` surfaced — a wrap-up whose session never bound to a workspace. Takes either the evidence path directly or a session id, which resolves to that session's newest slate archive. |
 | `catch-up` | `--workspace`, `--json`, `--include-lifecycle-flags` (default on) | Pull-based `cwd`-scoped digest: pending proposals, blocked runs, unbound-candidate wrap-ups, sessions of unknown fate, and a lifecycle-flags section for any workspace/memory-entry/wiki-decision whose recorded module no longer resolves in the code graph. Report-only — never writes. |
-| `collaboration` | `<workspace-id>` | Read-only collaboration overview. No public `record` writer. |
+| `handoff` | `<workspace-id>`, `--to`, `--artifact` | Record that work moved to another participant. The recorded `from` is always the subject the authorization server resolved for the caller — there is no flag that sets it (`--from` is refused by name), so `handoff.from` can never be a string a caller typed; a payload missing `to` or `artifact` is refused rather than written empty. |
+| `collaboration` | `<workspace-id>` | Read-only collaboration overview: references, plus the handoffs `handoff` recorded. An empty `activity` means none were recorded — before `handoff` existed it meant none could be. |
 | `policy-readiness` | — | Diagnose the opt-in policy-experiment chain. Exit `1` when `!integrityReady`. |
 
 Unknown options are rejected. Propose/review use

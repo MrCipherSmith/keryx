@@ -17,7 +17,7 @@ import type {
   SourceRunInfo,
 } from "./types";
 
-type GateWithCoverage = GateResult & { coverage?: "complete" | "incomplete" };
+type GateWithCoverage = GateResult & { coverage?: "complete" | "partial" | "incomplete" };
 
 function project(): ScopeMetrics {
   return {
@@ -89,7 +89,7 @@ function compute(sources: SourceRunInfo[], findings: Finding[] = []): GateWithCo
   }) as GateWithCoverage;
 }
 
-test("required missing, skipped, disabled, and failed checks are incomplete while optional skips stay visible and complete", () => {
+test("required missing, skipped, disabled, and failed checks are incomplete while an optional skip stays visible and non-blocking", () => {
   const requiredCases: SourceRunInfo[] = [
     source({ status: "missing" }),
     source({ status: "skipped" }),
@@ -107,9 +107,92 @@ test("required missing, skipped, disabled, and failed checks are incomplete whil
   const optional = compute([
     source({ source: "coverage", required: false, mode: "import", status: "skipped" }),
   ]);
+  // Unchanged, and the point of the required/optional split: an optional
+  // source's absence must not BLOCK.
   expect(optional.status).toBe("pass");
-  expect(optional.coverage).toBe("complete");
   expect(optional.reasons.join("\n")).toMatch(/optional.*coverage.*skipped/i);
+  // Changed by F-240-03 (flow 240 T7), deliberately. This used to assert
+  // `"complete"`. A coverage import that was ENABLED (`mode: "import"`, not
+  // `"disabled"`) and produced nothing is a check that did not run, and the
+  // report may not describe the resulting picture as complete. `partial` is the
+  // word for "nothing required is broken, but something enabled went
+  // unmeasured".
+  expect(optional.coverage).toBe("partial");
+});
+
+/**
+ * F-240-03 (flow 240 T7). Measured against the production `computeGate` and
+ * `DEFAULT_HEALTH_CONFIG` before the fix:
+ *
+ *   dependencyAudit MISSING (no bun, no npm) -> status=pass coverage=complete
+ *     reasons=["OPTIONAL: dependencyAudit source missing",
+ *              "PASS: no gate conditions triggered"]
+ *   dependencyAudit configured-but-failed    -> status=warn coverage=complete
+ *
+ * `coverage` was computed from broken REQUIRED sources alone, so a dependency
+ * audit that never ran — the tool absent, or `npm audit` returning
+ * `{"error":{"code":"ENOLOCK"}}` — was recorded as a run that found nothing.
+ * Combined with there being no scheduled audit anywhere in `.github/workflows/`,
+ * the zero-advisory state this phase reached had no guard at all.
+ *
+ * The status column is unchanged on purpose: whether a missing optional source
+ * should BLOCK is answered by `sources[*].required`, and that answer (optional,
+ * with a networked tool) is argued in `src/health/config.ts`. What changes is
+ * that the gate can no longer call the picture complete.
+ */
+test("F-240-03: an optional source that never ran makes coverage partial, without blocking", () => {
+  const audit = (overrides: Partial<SourceRunInfo>): SourceRunInfo =>
+    source({ source: "dependencyAudit", required: false, mode: "auto", ...overrides });
+
+  const missing = compute([audit({ status: "missing" })]);
+  expect(missing.status).toBe("pass");
+  expect(missing.coverage).toBe("partial");
+  expect(missing.reasons.join("\n")).toContain("OPTIONAL: dependencyAudit source missing");
+  expect(missing.reasons.join("\n")).toMatch(/COVERAGE: partial.*dependencyAudit/);
+
+  const failed = compute([audit({ status: "configured-but-failed", error: "synthetic" })]);
+  expect(failed.status).toBe("warn");
+  expect(failed.coverage).toBe("partial");
+
+  const excludedByFilter = compute([audit({ status: "skipped", error: "excluded by source filter" })]);
+  expect(excludedByFilter.coverage).toBe("partial");
+});
+
+test("F-240-03: a source that RAN and found nothing is complete, and a disabled one does not count against it", () => {
+  const ran = compute([
+    source({
+      source: "dependencyAudit",
+      required: false,
+      mode: "auto",
+      status: "available",
+      execution: "completed",
+      parse: "parsed",
+      findings: 0,
+    }),
+  ]);
+  expect(ran.status).toBe("pass");
+  // The distinction the vocabulary now carries: ran-and-clean, not never-ran.
+  expect(ran.coverage).toBe("complete");
+  expect(ran.reasons.join("\n")).not.toContain("COVERAGE: partial");
+
+  // An operator switching a check off is a configuration fact, not an
+  // unmeasured check — otherwise `sonarqube` (disabled by default) would make
+  // every run in every checkout permanently `partial`, and a status nothing can
+  // ever clear is a status nobody reads.
+  const disabled = compute([
+    source({ source: "sonarqube", required: false, mode: "disabled", status: "skipped" }),
+  ]);
+  expect(disabled.status).toBe("pass");
+  expect(disabled.coverage).toBe("complete");
+});
+
+test("F-240-03: a broken REQUIRED source still outranks partial", () => {
+  const gate = compute([
+    source({ source: "eslint", required: true, status: "missing" }),
+    source({ source: "dependencyAudit", required: false, mode: "auto", status: "missing" }),
+  ]);
+  expect(String(gate.status)).toBe("incomplete");
+  expect(gate.coverage).toBe("incomplete");
 });
 
 test("blocking findings dominate an incomplete required check without hiding incomplete coverage", () => {
