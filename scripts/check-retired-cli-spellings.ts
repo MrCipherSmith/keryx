@@ -61,7 +61,6 @@ const PATTERNS = [
 const EXCLUDED_ROOTS = [".metaproject/data/", ".metaproject/flows/"];
 
 const RETIRED = /keryx mcp (serve|install|uninstall)\b/g;
-const REPLACEMENTS = /keryx (serve-mcp|integrate)\b/;
 const MARKER =
   /(?:<!--|\/\/)\s*retired-spellings-ok:\s*(\w+)\s*[—:-]\s*([^>\n]*?)\s*(?:-->|$)/;
 // Two comment syntaxes, one meaning. Markdown cannot carry a `//` comment and
