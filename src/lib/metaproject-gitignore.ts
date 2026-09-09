@@ -99,6 +99,13 @@ export function renderMetaprojectGitignoreBlock(): string {
 .metaproject/data/security/raw/**
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
+# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
+# gdctx write path on every call, not a project artifact. These lines were added
+# to this repository's .gitignore by hand INSIDE the managed block, where the
+# next \`keryx update\` regenerated them away — which is how they came to belong
+# here instead.
+.metaproject/data/forgetting/
+.metaproject/data/retention/
 .metaproject/reports/
 `;
 }

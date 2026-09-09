@@ -85,5 +85,6 @@ refreshed by `update` without touching `data/security`.
 - `update` refreshes service files (this manifest, core README, config if
   missing) without touching `data/security`.
 - Raw retention defaults to `off`; the module operates without persisting raw
-  content. A `configChecksum` mismatch or a mode downgrade is always surfaced
-  as a finding plus an incident entry (self-protection, specification.md §14).
+  content. A `configChecksum` mismatch is surfaced as a finding plus an
+  incident entry; a mode downgrade or a disabled policy is surfaced as a
+  warning plus an incident entry (self-protection, specification.md §14).
