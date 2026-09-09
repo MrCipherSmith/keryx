@@ -45,6 +45,8 @@ export interface KeryxTurn {
   readonly sawTurnEnd: boolean;
   /** True when any field this metric reads was truncated before the first gold hit. */
   readonly clippedBeforeGold: boolean;
+  /** Provider calls the turn made. `inputTokens` is a sum over exactly these. */
+  readonly providerCalls: number;
 }
 
 const CLIP_MARK = " chars]";
@@ -57,15 +59,32 @@ const CLIP_MARK = " chars]";
  * definition the other adapters use, for the same reason: counting inputs alone
  * penalises exactly the behaviour a code graph is supposed to produce, where
  * the agent asks about a symptom and receives paths.
+ *
+ * `inputTokens` is summed over every `usage` event, one per provider call. It
+ * previously read `turn_end.usage`, which is `lastUsage` in the shell — a plain
+ * assignment on each call, so the LAST request won and a multi-call turn
+ * reported one prompt. The claude and grok legs report the sum over a turn's
+ * requests, so the two were never the same quantity: on a 25-tool-call task the
+ * keryx leg understated its own context cost by an order of magnitude, in
+ * keryx's favour, on the metric the cost half of the verdict is computed from.
+ * `run-ablation-mutating.ts` already accumulates; this brings the retrieval leg
+ * to the same convention.
+ *
+ * `turn_end.usage` remains a fallback for transcripts recorded before per-call
+ * `usage` events existed. A turn that emitted neither still yields `null`,
+ * which `interpretKeryxTurn` treats as a broken arm rather than a free one.
  */
 export function parseKeryxEvents(lines: readonly string[], gold: readonly string[]): KeryxTurn {
   let text = "";
   let toolCalls = 0;
   let stepsToFirstGold: number | null = null;
-  let inputTokens: number | null = null;
   let errorMessage: string | undefined;
   let sawTurnEnd = false;
   let clippedBeforeGold = false;
+  let providerCalls = 0;
+  let summedInputTokens = 0;
+  let sawInputTokenCount = false;
+  let turnEndInputTokens: number | null = null;
 
   const goldNames = gold.map((file) => file.toLowerCase());
   const namesGold = (value: string): boolean => {
@@ -95,20 +114,34 @@ export function parseKeryxEvents(lines: readonly string[], gold: readonly string
       if (stepsToFirstGold === null && toolCalls > 0 && namesGold(output)) stepsToFirstGold = toolCalls;
       noteClip(output);
     }
+    if (event.type === "usage") {
+      const usage = event.usage as { inputTokens?: unknown } | undefined;
+      providerCalls += 1;
+      if (typeof usage?.inputTokens === "number") {
+        summedInputTokens += usage.inputTokens;
+        sawInputTokenCount = true;
+      }
+    }
     if (event.type === "turn_end") {
       sawTurnEnd = true;
       text = typeof event.text === "string" ? event.text : "";
       toolCalls = typeof event.toolCalls === "number" ? event.toolCalls : toolCalls;
       const usage = event.usage as { inputTokens?: unknown } | undefined;
-      inputTokens = typeof usage?.inputTokens === "number" ? usage.inputTokens : null;
+      turnEndInputTokens = typeof usage?.inputTokens === "number" ? usage.inputTokens : null;
       if (typeof event.errorMessage === "string") errorMessage = event.errorMessage;
     }
   }
+
+  // Calls that reported no number are not free calls. Falling back to the sum
+  // would turn "we cannot say" into a zero, which is the failure the refusal in
+  // `interpretKeryxTurn` exists to prevent.
+  const inputTokens = sawInputTokenCount ? summedInputTokens : turnEndInputTokens;
 
   return {
     text,
     toolCalls,
     inputTokens,
+    providerCalls,
     stepsToFirstGold,
     ...(errorMessage === undefined ? {} : { errorMessage }),
     sawTurnEnd,
@@ -160,12 +193,16 @@ export function interpretKeryxTurn(
   return {
     text: turn.text,
     toolCalls: turn.toolCalls,
-    // keryx's OpenAI-compatible path maps `prompt_tokens` to `inputTokens`, and
-    // that field counts the whole prompt including any cached prefix — which is
-    // the same quantity the other legs compute as input + cache_read +
-    // cache_creation. Stated as an assumption rather than a fact about x.ai's
-    // accounting; `scripts/benchmark/run-retrieval.ts --check-usage` compares a
-    // keryx turn against a grok-CLI turn on one prompt to hold it to account.
+    // Summed over the turn's provider calls, so it is the same SHAPE as the
+    // other legs' input + cache_read + cache_creation over a turn's requests.
+    //
+    // What remains an assumption is the per-call quantity: keryx's
+    // OpenAI-compatible path maps `prompt_tokens` to `inputTokens`, and
+    // `NormalizedUsage` carries no cache fields, so if x.ai excludes a cached
+    // prefix from `prompt_tokens` this leg still undercounts. That residual is
+    // bounded by running one prompt through both this leg and the grok CLI and
+    // comparing; an order of magnitude apart means the cost half is not
+    // comparable and only recall is reportable.
     contextTokens: turn.inputTokens,
     // keryx does not price its own turns. Null, never zero: a zero understates
     // this leg's cost in the write-up while looking like a measurement.

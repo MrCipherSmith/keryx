@@ -10,6 +10,7 @@ const ok: KeryxTurn = {
   stepsToFirstGold: 2,
   sawTurnEnd: true,
   clippedBeforeGold: false,
+  providerCalls: 1,
 };
 
 function ndjson(events: readonly Record<string, unknown>[]): string[] {
@@ -70,6 +71,53 @@ describe("parseKeryxEvents", () => {
   test("absent usage is null, not zero", () => {
     const turn = parseKeryxEvents(ndjson([{ type: "turn_end", text: "x", toolCalls: 0 }]), []);
     expect(turn.inputTokens).toBeNull();
+  });
+
+  test("input tokens are SUMMED over provider calls, not taken from the last one", () => {
+    // The defect this replaces: `turn_end.usage` is the shell's `lastUsage`, a
+    // plain assignment per call, so a multi-call turn reported one request's
+    // prompt while the claude and grok legs reported a sum over the turn. On a
+    // long task that understated this leg by an order of magnitude, in keryx's
+    // favour, on the metric the cost half of the verdict is computed from.
+    const turn = parseKeryxEvents(
+      ndjson([
+        { type: "usage", usage: { inputTokens: 10_000 } },
+        { type: "tool_call", name: "search_code", input: "{}" },
+        { type: "usage", usage: { inputTokens: 14_000 } },
+        { type: "tool_call", name: "read_file", input: "{}" },
+        { type: "usage", usage: { inputTokens: 19_000 } },
+        // What the old code would have reported, alone:
+        { type: "turn_end", text: "src/a.ts", toolCalls: 2, usage: { inputTokens: 19_000 } },
+      ]),
+      [],
+    );
+    expect(turn.inputTokens).toBe(43_000);
+    expect(turn.providerCalls).toBe(3);
+  });
+
+  test("turn_end usage is the fallback when no per-call usage events exist", () => {
+    // Transcripts recorded before per-call `usage` events must still parse.
+    const turn = parseKeryxEvents(
+      ndjson([{ type: "turn_end", text: "src/a.ts", toolCalls: 0, usage: { inputTokens: 777 } }]),
+      [],
+    );
+    expect(turn.inputTokens).toBe(777);
+    expect(turn.providerCalls).toBe(0);
+  });
+
+  test("calls that carry no token count stay null rather than summing to zero", () => {
+    // A zero here would read as a free arm and slip past the refusal that
+    // exists to catch the offline fake provider.
+    const turn = parseKeryxEvents(
+      ndjson([
+        { type: "usage", usage: {} },
+        { type: "usage", usage: {} },
+        { type: "turn_end", text: "src/a.ts", toolCalls: 0 },
+      ]),
+      [],
+    );
+    expect(turn.inputTokens).toBeNull();
+    expect(turn.providerCalls).toBe(2);
   });
 
   test("a torn line is skipped rather than fatal", () => {
