@@ -7,9 +7,9 @@
   "id": "243",
   "slug": "mcp-naming-rename-the-publisher-surface-",
   "title": "MCP naming: rename the publisher surface so keryx mcp can mean the consumer (serve-mcp, integrate, /integrations)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-09T13:21:44.094Z",
-  "updatedAt": "2026-09-09T18:01:06.027Z",
+  "updatedAt": "2026-09-09T19:48:02.788Z",
   "source": {
     "type": "description",
     "ref": null
@@ -644,6 +644,61 @@
       "at": "2026-09-09T18:01:06.027Z",
       "event": "completion-failed",
       "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 2026-09-09-ingest-499-r03#R1-LOGIC-001 (major, round 2026-09-09-ingest-499-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-09-ingest-499-r03#R1-LOGIC-002 (major, round 2026-09-09-ingest-499-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-09-ingest-499-r02#R2-LOGIC-001 (major, round 2026-09-09-ingest-499-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-09T19:42:29.429Z",
+      "event": "completing",
+      "detail": "merged commit: d15052d8"
+    },
+    {
+      "at": "2026-09-09T19:42:31.954Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 2026-09-09-ingest-499-r04#R1-LOGIC-001 (major, round 2026-09-09-ingest-499-r04): marked fixed at d5bb7005, d15052d8, e718d905, 2a875184 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-09-ingest-499-r04#R1-LOGIC-002 (major, round 2026-09-09-ingest-499-r04): marked fixed at d5bb7005, d15052d8 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-09-ingest-499-r02#R2-LOGIC-001 (major, round 2026-09-09-ingest-499-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-09T19:46:35.493Z",
+      "event": "completing",
+      "detail": "merged commit: d15052d8"
+    },
+    {
+      "at": "2026-09-09T19:46:37.568Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-09-ingest-499-r05#R2-LOGIC-001 (major, round 2026-09-09-ingest-499-r05): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-09T19:46:54.006Z",
+      "event": "completing",
+      "detail": "merged commit: d15052d8"
+    },
+    {
+      "at": "2026-09-09T19:46:56.200Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-09-ingest-499-r05#R2-LOGIC-001 (major, round 2026-09-09-ingest-499-r05): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-09T19:47:38.332Z",
+      "event": "completing",
+      "detail": "merged commit: d15052d8"
+    },
+    {
+      "at": "2026-09-09T19:47:40.600Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-09-ingest-499-r02#R2-LOGIC-001 (major, round 2026-09-09-ingest-499-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-09T19:48:00.497Z",
+      "event": "completing",
+      "detail": "merged commit: d15052d8"
+    },
+    {
+      "at": "2026-09-09T19:48:02.788Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "d15052d8",
+    "ref": "origin/main",
+    "at": "2026-09-09T19:48:02.787Z"
+  }
 }
