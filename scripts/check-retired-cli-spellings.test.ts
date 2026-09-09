@@ -94,6 +94,19 @@ describe("was->is rows are exempt by shape, not by filename", () => {
     expect(violations).toEqual([]);
     expect(occurrences).toBe(2); // seen and deliberately allowed, not invisible
   });
+
+  test("a genuine pair does not excuse an instruction sharing its row", () => {
+    // The first fix asked "is this row a was->is row?" and exempted the whole
+    // row on one boolean. Independent verification of that fix found this: a
+    // legitimate pair plus an unrelated instructional cell, and the instruction
+    // rode out on the pair's exemption. The exemption is per cell, so the third
+    // cell is still a violation while the first two stay excused.
+    const row = "| `keryx mcp install` | `keryx integrate` | Also run `keryx mcp uninstall --runtime cursor` |";
+    const { violations, occurrences } = scanText("mixed.md", row);
+
+    expect(occurrences).toBe(2);
+    expect(violations.map((v) => v.spelling)).toEqual(["keryx mcp uninstall"]);
+  });
 });
 
 describe("declared historical passages", () => {

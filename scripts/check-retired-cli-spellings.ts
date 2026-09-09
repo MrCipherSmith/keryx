@@ -74,13 +74,18 @@ const HEADING = /^#{1,6}\s/;
 export type Violation = { file: string; line: number; spelling: string; text: string };
 
 /**
- * A row that names a retired spelling alongside its replacement is the record
- * of the rename, not an instruction. Recognised by shape so that a document
+ * Character ranges of the cells that ARE a was->is record: a cell whose subject
+ * is a retired spelling, sitting directly beside a cell whose subject is that
+ * spelling's replacement. Such a cell records the rename rather than
+ * instructing anyone, so it is exempt — recognised by shape, so a document
  * written tomorrow needs no entry in any allowlist.
+ *
+ * Ranges rather than a boolean, so the exemption can be applied to the cell
+ * that earned it instead of to every cell that happens to share its row.
  */
-export function isWasIsRow(line: string): boolean {
+export function pairedCellRanges(line: string): Array<{ start: number; end: number }> {
   const trimmed = line.trim();
-  if (!trimmed.startsWith("|")) return false;
+  if (!trimmed.startsWith("|")) return [];
 
   // Cells must PAIR, not merely co-occur. Requiring only "a retired spelling
   // and some replacement appear somewhere on a line starting with |" exempted
@@ -93,26 +98,56 @@ export function isWasIsRow(line: string): boolean {
   // retired name" failure this file exists to prevent, so the shape rule has to
   // be a shape rule — a cell that IS the old spelling beside a cell that IS its
   // own replacement.
-  const cells = trimmed
-    .split("|")
-    .map((cell) => cell.trim().replace(/`/g, "").replace(/\s+/g, " ").trim())
-    .filter((cell) => cell.length > 0);
+  // Offsets into the ORIGINAL line are kept, because the exemption is decided
+  // per OCCURRENCE, not per row. Returning one boolean for the whole row was a
+  // second hole of the same shape as the first, found by independent
+  // verification of the first fix:
+  //
+  //   | keryx mcp install | keryx integrate | Also run `keryx mcp uninstall` |
+  //
+  // The first two cells are a genuine was->is pair, so the row was exempt
+  // wholesale — and the third cell, a live instruction to run a retired
+  // spelling, rode out on their exemption. Confirmed by running it: occurrences
+  // rose 59 -> 61 while undeclared stayed 0. A pair excuses the cells that ARE
+  // the pair, and nothing else on the line.
+  const cells: Array<{ start: number; end: number; text: string }> = [];
+  let cursor = 0;
+  for (const raw of line.split("|")) {
+    const start = cursor;
+    cursor += raw.length + 1; // + the delimiter that split consumed
+    const text = raw.replace(/`/g, "").replace(/\s+/g, " ").trim();
+    if (text.length === 0) continue;
+    cells.push({ start, end: start + raw.length, text });
+  }
 
+  const paired: Array<{ start: number; end: number }> = [];
   for (let i = 0; i < cells.length; i += 1) {
-    const cell = cells[i] as string;
+    const cell = cells[i] as { start: number; end: number; text: string };
     // startsWith, not equality: real rows carry argument suffixes such as
     // `keryx mcp uninstall --runtime <editor>`. Not `includes` either — that is
     // the hole. In the instruction that slipped through, the cell begins "run",
     // and a cell whose subject is the command begins with the command.
-    const entry = [...RETIREMENTS].find(([retired]) => cell.startsWith(retired));
+    const entry = [...RETIREMENTS].find(([retired]) => cell.text.startsWith(retired));
     if (entry === undefined) continue;
     const replacement = entry[1];
     // The pair may run either way round; some tables read "is | was".
     for (const neighbour of [cells[i - 1], cells[i + 1]]) {
-      if (neighbour !== undefined && neighbour.startsWith(replacement)) return true;
+      if (neighbour !== undefined && neighbour.text.startsWith(replacement)) {
+        paired.push({ start: cell.start, end: cell.end });
+        break;
+      }
     }
   }
-  return false;
+  return paired;
+}
+
+/**
+ * True when the row contains at least one genuine was->is pair. Kept for the
+ * tests that ask about a row as a whole; the scan itself asks the narrower
+ * question — which cell is the occurrence sitting in.
+ */
+export function isWasIsRow(line: string): boolean {
+  return pairedCellRanges(line).length > 0;
 }
 
 /**
@@ -185,9 +220,14 @@ export function scanText(file: string, text: string): ScanResult {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i]!;
     RETIRED.lastIndex = 0;
+    const paired = pairedCellRanges(line);
     for (const hit of line.matchAll(RETIRED)) {
       occurrences += 1;
-      if (declared.whole || declared.lines.has(i + 1) || isWasIsRow(line)) continue;
+      // The occurrence is excused only if IT sits inside a paired cell — not
+      // because some other cell on the same row is a was->is record.
+      const at = hit.index ?? 0;
+      const inPairedCell = paired.some((range) => at >= range.start && at < range.end);
+      if (declared.whole || declared.lines.has(i + 1) || inPairedCell) continue;
       violations.push({ file, line: i + 1, spelling: hit[0]!, text: line.trim().slice(0, 160) });
     }
   }
