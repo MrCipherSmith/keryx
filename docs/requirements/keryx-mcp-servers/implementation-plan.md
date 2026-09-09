@@ -59,14 +59,14 @@ Work:
 
 ACs: 3, 8, 19.
 
-## P2 — TUI `/mcps`
+## P2 — TUI `/mcp` (consumer) and `/integrations` (publisher)
 
 **Goal.** Operator can see and toggle consumed servers without the CLI.
 
 Work:
 
 1. New modal sibling of `mcp-inspector.ts` (do not overload it).
-2. Slash `/mcps` / `/mcp-servers`.
+2. Slash `/mcp` becomes the consumer modal; the installer view moves to `/integrations`. `/mcps` is never registered (D-04).
 3. Replace the Tools-tab "doesn't consume" caption (AC17).
 4. Confirm `/mcp` installer tests still pass (AC9).
 
@@ -113,7 +113,7 @@ src/mcp-servers/
   oauth.ts
 src/mcp-client/      # add generic stdio+HTTP listTools; keep Codex
 src/commands/mcp.ts  # additive subcommands
-src/tui/mcps-inspector.ts
+src/tui/mcp-servers-inspector.ts
 ```
 
 ## Out of this plan (named follow-ups)

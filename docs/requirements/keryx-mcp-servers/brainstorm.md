@@ -13,7 +13,7 @@ A live question ("does keryx consume third-party MCP?") against
 `src/mcp`, `src/mcp-client`, and `/mcp` showed two existing directions
 and not the third:
 
-1. **Inbound.** `keryx mcp serve` / `keryx mcp install` — keryx is the
+1. **Inbound.** `keryx serve-mcp` / `keryx integrate` — keryx is the
    server, editors are clients (`src/mcp/`, `src/mcp/client-config.ts`).
 2. **Codex elicitation.** `src/mcp-client/` + `gatedSuperviseCodexMcpRun`
    — keryx is the client of one keryx-spawned `codex mcp-server`.

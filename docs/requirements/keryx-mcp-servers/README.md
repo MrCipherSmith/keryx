@@ -58,7 +58,7 @@ the runtime. Verified against current code on this branch:
   provider tool list.
 - CLI: `keryx mcp add|list|remove|enable|disable|doctor` alongside the
   existing `serve|install|uninstall`.
-- TUI: `/mcps` (consumer). Existing `/mcp` (keryx-as-server installer)
+- TUI: `/mcp` (consumer). The keryx-as-server installer view moves to `/integrations`
   stays.
 - OAuth for remote servers, owner-only credential store.
 - Compat readers for Cursor, Claude Code, project `.mcp.json`, and Grok
@@ -68,7 +68,7 @@ the runtime. Verified against current code on this branch:
 
 ## Non-goals (this version)
 
-- Changing `keryx mcp serve` / `keryx mcp install` (keryx as an MCP **server**
+- Changing the *behaviour* of the publisher surface, now `keryx serve-mcp` / `keryx integrate` (keryx as an MCP **server**
   for Cursor/Claude/OpenCode/VS Code).
 - Replacing or widening `keryx-mcp-client`'s Codex elicitation supervisor.
   That path stays. This package reuses generalized transport primitives; it

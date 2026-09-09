@@ -33,7 +33,7 @@ Config schema: [schemas/mcp-servers-config.schema.json](schemas/mcp-servers-conf
 | Compat sources (read-only) | `.cursor/mcp.json`, `~/.cursor/mcp.json`, project `.mcp.json`, `~/.claude.json` `mcpServers` / `projects.<cwd>.mcpServers`, Grok `~/.grok/config.toml` and `<repo>/.grok/config.toml` `[mcp_servers.*]`. |
 
 Do **not** write into `.metaproject/core/mcp/mcp.config.json`. That file is
-the inbound `keryx mcp serve` config (`src/mcp/config.ts`).
+the inbound `keryx serve-mcp` config (`src/mcp/config.ts`).
 
 Native config is JSON, not TOML. Grok TOML is a compat *reader*. Writes from
 `keryx mcp add` go to native JSON (`--scope user` default, `--scope project`
@@ -90,10 +90,19 @@ Build documents for `grok mcp add`.
 
 ## 4. CLI / skill / TUI surface
 
-### 4.1 Existing `keryx mcp` (unchanged)
+### 4.1 The publisher surface, renamed (D-04)
 
-`serve`, `install`, `uninstall`, and bare `keryx mcp` → serve, as in
-`src/commands/mcp.ts` today.
+`keryx mcp` no longer means "keryx is the server". That surface moves:
+
+| was | is |
+|---|---|
+| `keryx mcp serve` | `keryx serve-mcp` |
+| `keryx mcp install --runtime <editor>` | `keryx integrate <editor>` |
+| `keryx mcp uninstall --runtime <editor>` | `keryx integrate --remove <editor>` |
+
+Behaviour is unchanged; only the names are. Every retired spelling still runs
+and prints one line naming its replacement — no removals, no broken scripts.
+`src/commands/mcp.ts` keeps the implementation and gains the aliases.
 
 ### 4.2 New subcommands (this package)
 
@@ -113,14 +122,14 @@ are additive.
 
 ### 4.3 TUI
 
-- New slash command `/mcps` (and `/mcp-servers`). Modal on the existing
+- `/mcp` becomes the consumer view. Modal on the existing
   `openModal` host (`src/tui/modal-host.ts`): per-server rows (name, source,
   status, tool count), Space toggles, `i` starts OAuth, `r` reloads config.
 - `/mcp` stays the keryx-as-server installer (`MCP_TOOLS_COMMAND` in
   `src/tui/mcp-inspector.ts`).
 - When this package is implemented, replace the Tools-tab caption
   `"keryx doesn't consume MCP servers as a client yet"` with copy that
-  points at `/mcps`.
+  points at `/mcp`.
 
 ### 4.4 Model tools
 
@@ -180,7 +189,7 @@ is `__` (Grok `MCP_TOOL_NAME_DELIMITER`), not OpenCode's `_`.
 
 `connected` | `disabled` | `failed` | `needs_auth` | `connecting`
 
-A failed server does not fail the session. Doctor and `/mcps` show the
+A failed server does not fail the session. Doctor and `/mcp` show the
 error string; no secrets.
 
 ### 5.3 Client port (generalized)
@@ -218,7 +227,7 @@ status `needs_auth`, no browser, no hang.
 | `src/security/detect/mcp.ts` `scanMcpManifest` | Run on each server's `tools/list` result before catalog insert. |
 | `src/lib/config-dir.ts` | User files and owner-only writes. |
 | `src/commands/mcp.ts` | Add subcommands; do not change serve/install/uninstall. |
-| `src/tui/mcp-inspector.ts` | Leave installer behavior; update the "doesn't consume" caption when implemented; new `/mcps` modal is a sibling file. |
+| `src/tui/mcp-inspector.ts` | Becomes `/integrations` (D-04); behavior unchanged. Update the "doesn't consume" caption when implemented; new `/mcps` modal is a sibling file. |
 | `src/capability/` | **No new capability ceiling.** Configured servers are on when present, like search providers. MCP is not a Metaproject module flag. |
 | OS sandbox | v1 stdio MCP spawn is not wrapped in `sandbox-exec`/`bwrap` unless the operator sets an explicit opt-in env (name TBD at implementation, default off). Remote HTTP is not a child process. |
 | `src/harness/external/supervise-mcp.ts` | Untouched. |
@@ -258,11 +267,16 @@ grow.
   returns content (fixture MCP server, no network).
 - **AC7 Truncation.** A tool result larger than the cap is truncated in
   the model-visible output and the test asserts the cap constant.
-- **AC8 CLI additive.** Existing `mcp serve` / `install` / `uninstall`
+- **AC8 Publisher renamed, nothing broken.** `keryx serve-mcp` and
+  `keryx integrate` carry the previous `mcp serve` / `install` / `uninstall`
+  behaviour, asserted by the existing tests retargeted at the new names. Each
+  retired spelling still runs and prints its replacement exactly once.
+  Superseded text: "Existing `mcp serve` / `install` / `uninstall`
   tests pass unmodified. `keryx mcp list` does not start `serve`.
-- **AC9 `/mcp` vs `/mcps`.** `isMcpToolsCommand("/mcp")` remains true;
-  `/mcps` is a different command. Installer connect/disconnect still only
-  writes keryx-as-server entries.
+- **AC9 `/mcps` is never registered.** `agent-commands.confusable.test.ts`
+  fails the build on a slash command differing from another only by a trailing
+  `s`, unless declared with a written reason. `/mcp` resolves to the consumer
+  view; the installer view is `/integrations`.
 - **AC10 Compat.** A fixture `.cursor/mcp.json` with one stdio server
   appears in `list` tagged `(cursor)` without being copied into native
   JSON.
@@ -303,7 +317,7 @@ See [implementation-plan.md](implementation-plan.md). ACs by phase:
 |---|---|
 | P0 config + stdio + builtins | 1, 2, 4, 5, 6, 7, 11, 15, 16, 18 |
 | P1 HTTP + CLI | 3, 8, 19 |
-| P2 TUI `/mcps` | 9, 17 |
+| P2 TUI `/mcp` (consumer) + `/integrations` | 9, 17 |
 | P3 OAuth + compat | 10, 14, 20 |
 | P4 scan + doctor polish | 12, 13 |
 

@@ -7,8 +7,12 @@ Numbering is local to this package.
 
 **Decision.** Behavioral reference is Grok Build's MCP client: namespaced
 `server__tool` catalog, model access via `search_tool` / `use_tool`, CLI
-`mcp add|list|remove|enable|disable|doctor`, TUI `/mcps`, stdio + HTTP,
-OAuth, compat import of editor configs.
+`mcp add|list|remove|enable|disable|doctor`, stdio + HTTP, OAuth, compat
+import of editor configs.
+
+Parity is behavioural, not literal: Grok's consumer modal is `/mcps`, and
+keryx uses `/mcp` for it instead (D-04). Grok has only the consumer side, so
+`/mcp` was free for it; keryx has both and must say which is which.
 
 **Reasoning.** The operator request is "keryx should work like grok-build."
 OpenCode (and Kilocode on the same runtime) register every MCP tool as a
@@ -50,17 +54,59 @@ via `writeOwnerOnlyFile`. Do not write Grok TOML. Do not extend
 (`src/lib/search-config.ts`). The inbound MCP server config
 (`src/mcp/config.ts`) is about *exposing* Metaproject, include/exclude
 lists, and redaction — a different document. Mixing them would make
-`keryx mcp install` and "add Playwright" collide. TOML would be a third
+`keryx integrate` and "add Playwright" collide. TOML would be a third
 config language in a JSON codebase; Grok TOML is imported, not authored.
 
-## D-04: `/mcps` consumes; `/mcp` still installs keryx-as-server
+## D-04 (superseded 2026-09-09): `/mcp` consumes; the publisher is renamed
 
-**Decision.** New slash command `/mcps`. Do not overload `/mcp`.
+**Decision.** The consumer surface keeps `mcp` — `keryx mcp add|list|remove|
+enable|disable|doctor|auth` and TUI `/mcp`. The publisher surface is renamed
+to say what it does:
 
-**Reasoning.** `src/tui/mcp-inspector.ts` already warns that the MCP tab is
-easy to misread as "servers this agent is connected to." Overloading `/mcp`
-would make that bug the product. Grok's consumer modal is `/mcps`. Keryx
-keeps `/mcp` as `keryx mcp install` UI.
+| was | is |
+|---|---|
+| `keryx mcp serve` | `keryx serve-mcp` |
+| `keryx mcp install --runtime <editor>` | `keryx integrate <editor>` |
+| `keryx mcp uninstall --runtime <editor>` | `keryx integrate --remove <editor>` |
+| `/mcp` (installer view) | `/integrations` |
+
+Retired spellings keep working and print one line naming the replacement.
+Nothing is removed.
+
+**`/mcps` is not introduced.** Guarded by
+`src/commands/agent-commands.confusable.test.ts`: a slash command differing
+from another only by a trailing `s` fails the build unless declared with a
+written reason why a mistype is harmless.
+
+**What this replaces.** The original D-04 read: *"New slash command `/mcps`. Do
+not overload `/mcp`."* Its reasoning was sound as far as it went — the MCP tab
+is easy to misread as "servers this agent is connected to", and overloading
+`/mcp` would make that bug the product.
+
+**Why it was reversed.** That argument treats the misreading as a thing to
+route around. It is better read as evidence the name is already wrong: users
+expect `/mcp` to mean the servers they are connected to, because that is what
+it means in Claude Code and in every other harness with only the consumer side.
+Adding `/mcps` for the thing they meant makes today's surprise permanent
+instead of fixing it.
+
+And it is the one collision on this surface with **no disambiguator**. A slash
+command carries no flags and no arguments; `/mcp` and `/mcps` are one character
+apart and, under the original decision, opposite roles. Nothing tells the
+operator which ran until it has.
+
+The risk was already recorded in `prd.md` under *"`/mcp` vs `/mcps`
+confusion"*, with rewriting the installer copy as the mitigation. Renaming the
+installer is the same mitigation carried to its conclusion.
+
+Grok's consumer modal being `/mcps` is not a reason for keryx: Grok has only
+the consumer side, so `/mcp` was free and `/mcps` was a stylistic choice. Keryx
+has both sides and must say which is which.
+
+**Cost, counted not estimated.** 414 references across `docs/`, `README.md`,
+`src/` and `.metaproject/` — `serve` 266, `install` 132, `uninstall` 16. Full
+analysis, including a cheaper variant that was considered and not taken, is in
+[naming-collision.md](naming-collision.md).
 
 ## D-05: `use_tool` is gated, never silent-read
 
@@ -134,7 +180,7 @@ providers are the precedent, not `gdskills.external-agents`.
 are hard-disabled in CI/remote. MCP servers are tools the operator added,
 closer to SearXNG. A ceiling would mean `keryx init --mcp-servers` plus a
 manifest bit before Playwright works — unlike Grok, where adding a server
-is sufficient. `keryx mcp serve` remains its own `modules.mcp.enabled` flag;
+is sufficient. `keryx serve-mcp` remains its own `modules.mcp.enabled` flag;
 that flag is inbound and is not reused here.
 
 ## D-11: Subagents do not inherit MCP in v1

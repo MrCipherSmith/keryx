@@ -9,11 +9,11 @@ add GitHub, Linear, Playwright, Context7, or any other MCP server and have
 those tools available in the agent loop. Grok Build is the reference this
 package copies: `~/.grok/config.toml` `[mcp_servers.<name>]`, stdio and
 remote HTTP, `server__tool` names, model access through `search_tool` /
-`use_tool`, `/mcps`, `grok mcp add|list|doctor`, OAuth, and compat import of
+`use_tool`, `grok mcp add|list|doctor`, OAuth, and compat import of
 Claude/Cursor/`.mcp.json`.
 
 Keryx does not. It **serves** Metaproject over MCP so *other* agents can use
-keryx (`keryx mcp serve`, `keryx mcp install`). Its own shell cannot consume
+keryx (`keryx serve-mcp`, `keryx integrate`). Its own shell cannot consume
 a server the operator configured. The TUI `/mcp` tab is easy to misread as
 the opposite: it installs keryx into an editor, and the caption in
 `src/tui/mcp-inspector.ts` still says so.
@@ -74,7 +74,7 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
    lists connected server names/counts, not every schema.
 6. **CLI.** `keryx mcp add|list|remove|enable|disable|doctor|auth` without
    breaking `serve|install|uninstall`. Default `keryx mcp` remains serve.
-7. **TUI.** `/mcps` lists/toggles/diagnoses consumed servers. `/mcp` remains
+7. **TUI.** `/mcp` lists/toggles/diagnoses consumed servers. `/integrations` becomes
    the installer of keryx-as-server. The misleading "keryx doesn't consume
    MCP servers" caption is updated only when this package is implemented.
 8. **Auth.** Stdio `env`; HTTP `headers` and `bearer_token_env_var`;
@@ -106,13 +106,13 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
 ## Success Criteria
 
 - A live stdio server (e.g. `@modelcontextprotocol/server-filesystem`) added
-  with `keryx mcp add`, visible in `keryx mcp list` and `/mcps`, searchable
+  with `keryx mcp add`, visible in `keryx mcp list` and `/mcp`, searchable
   via `search_tool`, callable via `use_tool` in `keryx shell`.
 - A live remote HTTP server reachable with a header or completed OAuth
   round-trip, same model path.
 - Cursor/Claude `.mcp.json` servers appear in `keryx mcp list` without being
   copied by hand, tagged with their source.
-- `keryx mcp serve` and `keryx mcp install` behavior is unchanged (existing
+- `keryx serve-mcp` and `keryx integrate` carry the previous behavior (existing
   tests still pass).
 - Codex elicitation fixtures and `gatedSuperviseCodexMcpRun` tests still
   pass unmodified.
@@ -123,10 +123,12 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
 
 ## Risks
 
-- **`/mcp` vs `/mcps` confusion.** The installer tab already looks like a
-  consumer. Shipping `/mcps` without rewriting the installer copy will make
-  the two surfaces indistinguishable. Mitigated by D-04: separate slash
-  command, separate copy, no overload.
+- **`/mcp` vs `/mcps` confusion — resolved, not mitigated.** The installer tab
+  already looks like a consumer, which is evidence the name was wrong rather
+  than a caption to fix. `/mcps` is not introduced: `/mcp` becomes the consumer
+  view and the installer moves to `/integrations` (D-04). Enforced by
+  `src/commands/agent-commands.confusable.test.ts`, which fails the build on a
+  slash command differing from another only by a trailing `s`.
 - **Scope creep to a full MCP client.** Sampling, elicitation, resources as
   model tools, MCP Apps. Grok Build itself treats most of these as gaps.
   Mitigated by copying Grok's *shipped* surface, not the MCP spec.
@@ -141,7 +143,7 @@ on `@modelcontextprotocol/sdk` and native JSON config next to
   unsandboxed unless the operator opts in; remote HTTP is out of the FS
   sandbox by construction.
 - **64-character FQN cap.** Grok silently skips invalid names. Operators
-  will think a server is "up" with zero tools. Mitigated by doctor + `/mcps`
+  will think a server is "up" with zero tools. Mitigated by doctor + `/mcp`
   showing skipped names.
 - **Credential store vs D-01.** MCP OAuth tokens are easy to confuse with
   provider/CLI logins. Mitigated by storing them like search credentials,
