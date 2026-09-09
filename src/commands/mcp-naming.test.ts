@@ -207,7 +207,11 @@ async function serveOverStdio(args: string[]): Promise<StdioSession> {
   transport.stderr?.on("data", (chunk: unknown) => {
     chunks.push(String(chunk));
   });
-  let tools: string[] = [];
+  // Declared without an initialiser: the `[]` was never read, because the try
+  // block either assigns or throws. Assigning it anyway tripped
+  // `no-useless-assignment`, and a placeholder that can never be observed would
+  // also mask a listTools() that silently returned nothing.
+  let tools: string[];
   try {
     const listed = await client.listTools();
     tools = listed.tools.map((tool) => tool.name).sort();
