@@ -29,7 +29,7 @@
 
 import { readFileSync, mkdirSync } from "node:fs";
 import path from "node:path";
-import { gitCmd } from "../../src/sync/provenance";
+import { gitCmdResult } from "../../src/sync/provenance";
 import { evaluatePageFreshness, type GitRunner, type PageFreshness } from "../../src/wiki/freshness/page-freshness";
 import {
   generateFreshnessScaleCorpus,
@@ -91,10 +91,10 @@ function makeCountingGitRunner(mode: "healthy" | "broken-git"): { runner: GitRun
       // — no real subprocess, matching how the flow-236-T7 fix's own probe
       // established `gitAvailable`. This is NOT a real-git non-zero-exit case;
       // it is the wholly-unavailable case.
-      return null;
+      return { kind: "spawn-error", message: "git could not be started (benchmark: broken-git mode)" };
     }
     const t0 = performance.now();
-    const result = await gitCmd(cwd, args);
+    const result = await gitCmdResult(cwd, args);
     sumMs += performance.now() - t0;
     return result;
   };
@@ -103,7 +103,7 @@ function makeCountingGitRunner(mode: "healthy" | "broken-git"): { runner: GitRun
 
 export async function runPass(corpus: FreshnessFixtureCorpus, mode: "healthy" | "broken-git"): Promise<PassResult> {
   const probe = makeCountingGitRunner(mode);
-  const gitAvailable = mode === "healthy" ? (await probe.runner(corpus.root, ["rev-parse", "HEAD"])) !== null : false;
+  const gitAvailable = mode === "healthy" ? (await probe.runner(corpus.root, ["rev-parse", "HEAD"])).kind === "ok" : false;
 
   const mismatches: Mismatch[] = [];
   let agreementCount = 0;
@@ -145,10 +145,15 @@ export interface ScaleResult {
   repeated: PassResult;
   brokenGit: PassResult;
   budget: {
-    coldTargetMs: number;
-    repeatedTargetMs: number;
-    coldWithinBudget: boolean;
-    repeatedWithinBudget: boolean;
+    // `null` means NO budget was agreed for this scale in the calibration profile
+    // (`latencyBudgetMs.perScale` has no entry for it) — distinct from a real
+    // target that was measured and found OVER. Absent-and-therefore-infinitely-
+    // generous was the bug: an unbudgeted scale must report "not evaluated", not
+    // "WITHIN".
+    coldTargetMs: number | null;
+    repeatedTargetMs: number | null;
+    coldWithinBudget: boolean | null;
+    repeatedWithinBudget: boolean | null;
     hardCeilingMs?: number;
     withinHardCeiling?: boolean;
     measuredSpawnsPerPage: number;
@@ -176,8 +181,11 @@ export async function runScale(
     const brokenGit = await runPass(corpus, "broken-git");
 
     const perScale = calibration.latencyBudgetMs.perScale[String(size)];
-    const coldTargetMs = perScale?.cold ?? Number.POSITIVE_INFINITY;
-    const repeatedTargetMs = perScale?.repeated ?? Number.POSITIVE_INFINITY;
+    // Absent from the calibration profile ⇒ no budget was agreed for this scale.
+    // Do NOT default to Infinity: that silently made every unbudgeted scale
+    // report "WITHIN budget" against a target nothing was ever measured against.
+    const coldTargetMs = perScale?.cold ?? null;
+    const repeatedTargetMs = perScale?.repeated ?? null;
     const isHardCeilingScale = calibration.latencyBudgetMs.hardCeiling.scale === size;
     const measuredSpawnsPerPage = cold.gitOperations / size;
 
@@ -190,8 +198,8 @@ export async function runScale(
       budget: {
         coldTargetMs,
         repeatedTargetMs,
-        coldWithinBudget: cold.wallClockMs <= coldTargetMs,
-        repeatedWithinBudget: repeated.wallClockMs <= repeatedTargetMs,
+        coldWithinBudget: coldTargetMs === null ? null : cold.wallClockMs <= coldTargetMs,
+        repeatedWithinBudget: repeatedTargetMs === null ? null : repeated.wallClockMs <= repeatedTargetMs,
         ...(isHardCeilingScale
           ? {
               hardCeilingMs: calibration.latencyBudgetMs.hardCeiling.ms,
@@ -244,9 +252,17 @@ function printReport(profileVersion: string, outcome: RunOutcome): void {
       );
     }
     const b = s.budget;
+    const coldClause =
+      b.coldTargetMs === null
+        ? `cold ${s.cold.wallClockMs.toFixed(0)}ms — NO BUDGET AGREED for ${s.size} pages (not evaluated)`
+        : `cold ${s.cold.wallClockMs.toFixed(0)}ms vs target ${b.coldTargetMs}ms (${b.coldWithinBudget ? "WITHIN" : "OVER"})`;
+    const repeatedClause =
+      b.repeatedTargetMs === null
+        ? `repeated ${s.repeated.wallClockMs.toFixed(0)}ms — NO BUDGET AGREED for ${s.size} pages (not evaluated)`
+        : `repeated ${s.repeated.wallClockMs.toFixed(0)}ms vs target ${b.repeatedTargetMs}ms (${b.repeatedWithinBudget ? "WITHIN" : "OVER"})`;
     console.log(
-      `  budget: cold ${s.cold.wallClockMs.toFixed(0)}ms vs target ${b.coldTargetMs}ms (${b.coldWithinBudget ? "WITHIN" : "OVER"}); ` +
-        `repeated ${s.repeated.wallClockMs.toFixed(0)}ms vs target ${b.repeatedTargetMs}ms (${b.repeatedWithinBudget ? "WITHIN" : "OVER"}); ` +
+      `  budget: ${coldClause}; ` +
+        `${repeatedClause}; ` +
         `spawns/page ${b.measuredSpawnsPerPage.toFixed(2)} vs worst-case ceiling ${b.worstCaseCeilingPerPage} (${b.withinWorstCaseCeiling ? "WITHIN" : "OVER"})` +
         (b.hardCeilingMs !== undefined
           ? `; hard ceiling ${b.hardCeilingMs}ms (${b.withinHardCeiling ? "WITHIN" : "OVER"})`
@@ -254,6 +270,25 @@ function printReport(profileVersion: string, outcome: RunOutcome): void {
     );
   }
   console.log(`\n# oracle agreement: ${outcome.allAgree ? "ALL PAGES AGREE" : `${outcome.totalMismatches} MISMATCHES`}`);
+}
+
+/**
+ * The tracked `fixtures/wiki-freshness-scale/results.json` is the phase's evidence
+ * artifact: it is meant to record the full calibrated 50/500/2000 measurement, the
+ * only run the versioned calibration profile actually budgets. An ad-hoc
+ * `--sizes` run (a 7-page scratch check, say) is a legitimate thing to do, but it
+ * must NOT silently replace that evidence artifact with a run that covers a
+ * different — and possibly unbudgeted — set of scales while the artifact's own
+ * `note` field keeps claiming 50/500/2000. Compare as a SET, not by array order:
+ * `--sizes 2000,500,50` is still the full calibrated run.
+ */
+export function isFullCalibratedRun(sizes: readonly number[], calibrationScales: readonly number[]): boolean {
+  if (sizes.length !== calibrationScales.length) return false;
+  const want = new Set(calibrationScales);
+  const got = new Set(sizes);
+  if (want.size !== got.size) return false;
+  for (const s of want) if (!got.has(s)) return false;
+  return true;
 }
 
 async function main(): Promise<void> {
@@ -271,25 +306,36 @@ async function main(): Promise<void> {
   const outcome = summarizeOutcome(scaleResults);
   printReport(calibration.profileVersion, outcome);
 
-  mkdirSync(path.dirname(RESULTS_PATH), { recursive: true });
-  await Bun.write(
-    RESULTS_PATH,
-    `${JSON.stringify(
-      {
-        note:
-          "Measured this run: evaluatePageFreshness cost & per-page oracle agreement at 50/500/2000 pages, cold/repeated/git-broken, against the versioned calibration profile. Regenerate with `bun scripts/benchmark/run-wiki-freshness-scale.ts`.",
-        generatedAt: new Date().toISOString(),
-        calibrationProfileVersion: calibration.profileVersion,
-        manifestSeed: manifest.seed,
-        scales: scaleResults,
-        allAgree: outcome.allAgree,
-        totalMismatches: outcome.totalMismatches,
-      },
-      null,
-      2,
-    )}\n`,
-  );
-  console.log(`\nwrote fixtures/wiki-freshness-scale/results.json`);
+  if (isFullCalibratedRun(sizes, calibration.scales)) {
+    mkdirSync(path.dirname(RESULTS_PATH), { recursive: true });
+    await Bun.write(
+      RESULTS_PATH,
+      `${JSON.stringify(
+        {
+          note:
+            `Measured this run: evaluatePageFreshness cost & per-page oracle agreement at ` +
+            `${sizes.join("/")} pages, cold/repeated/git-broken, against the versioned ` +
+            `calibration profile. Regenerate with \`bun scripts/benchmark/run-wiki-freshness-scale.ts\`.`,
+          generatedAt: new Date().toISOString(),
+          calibrationProfileVersion: calibration.profileVersion,
+          manifestSeed: manifest.seed,
+          scales: scaleResults,
+          allAgree: outcome.allAgree,
+          totalMismatches: outcome.totalMismatches,
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    console.log(`\nwrote fixtures/wiki-freshness-scale/results.json`);
+  } else {
+    console.log(
+      `\nad-hoc run at [${sizes.join(", ")}] pages (not the full calibrated ${calibration.scales.join("/")} set) — ` +
+        `fixtures/wiki-freshness-scale/results.json left unchanged. That file is the phase's ` +
+        `evidence artifact for the calibrated run only; re-run without --sizes (or with ` +
+        `--sizes ${calibration.scales.join(",")}) to refresh it.`,
+    );
+  }
 
   if (!outcome.allAgree) process.exit(1);
 }

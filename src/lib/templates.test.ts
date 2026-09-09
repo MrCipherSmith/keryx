@@ -12,6 +12,7 @@ import {
   renderIndexMarkdown,
   ROUTING_FILENAME,
   renderMetaprojectGitignoreBlock,
+  renderMetaprojectDashboardHtml,
 } from "./templates";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
@@ -286,3 +287,28 @@ test("T19 finding 5 — the emitted runner's `affected` command rejects a target
     await rm(root, { recursive: true, force: true });
   }
 }, 20000);
+
+// docs/verification/page-count-is-not-coverage.md rows 15/16: the dashboard's
+// hero KPI strip prints `wikiPages.length` / `memoryEntries.length` as a bare
+// number — the same "count presented with nothing naming what is absent" shape
+// documented for rows 1 and 5, in the very file where rows 6/7 were fixed. The
+// fix here is a `title` caveat on each tile (verified below); this is a
+// regression tripwire, not a UI redesign — losing the caveat should make this
+// test fail, not silently regress to a bare, unqualified count.
+test("dashboard hero KPI tiles for wiki pages and memory entries carry a 'not coverage' caveat", () => {
+  const html = renderMetaprojectDashboardHtml({
+    ...ALL_MODULES,
+    data: {
+      wiki: { pages: [{ title: "Auth flow", href: "wiki/auth.md", group: "domain" }] },
+      memory: { entries: [{ title: "Lesson one", href: "memory/lesson.md", group: "lessons" }] },
+    },
+  });
+
+  const wikiKpi = /<div class="kpi" title="([^"]*)">\s*<b>1<\/b><span>wiki pages<\/span>/.exec(html);
+  const memoryKpi = /<div class="kpi" title="([^"]*)">\s*<b>1<\/b><span>memory entries<\/span>/.exec(html);
+
+  expect(wikiKpi).not.toBeNull();
+  expect(memoryKpi).not.toBeNull();
+  expect(wikiKpi?.[1]).toMatch(/not a coverage measure/i);
+  expect(memoryKpi?.[1]).toMatch(/not a coverage measure/i);
+});

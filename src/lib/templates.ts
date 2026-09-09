@@ -1087,8 +1087,12 @@ export function renderMetaprojectDashboardHtml({
           <div class="kpis">
             <div class="kpi ${health ? (health.findings === 0 ? "good" : "warn") : ""}"><b>${health?.findings ?? "—"}</b><span>findings</span></div>
             <div class="kpi"><b>${graph ? graph.files : "—"}</b><span>graph files</span></div>
-            <div class="kpi"><b>${wikiPages.length || "—"}</b><span>wiki pages</span></div>
-            <div class="kpi"><b>${memoryEntries.length || "—"}</b><span>memory entries</span></div>
+            <div class="kpi" title="A count of files, not a coverage measure — several wiki page types can hold none">
+              <b>${wikiPages.length || "—"}</b><span>wiki pages</span>
+            </div>
+            <div class="kpi" title="A count of files, not a coverage measure">
+              <b>${memoryEntries.length || "—"}</b><span>memory entries</span>
+            </div>
           </div>
         </div>
       </section>

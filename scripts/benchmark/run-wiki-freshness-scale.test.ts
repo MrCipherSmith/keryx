@@ -11,6 +11,7 @@
 
 import { describe, expect, test } from "bun:test";
 import {
+  isFullCalibratedRun,
   runPass,
   runScale,
   summarizeOutcome,
@@ -132,6 +133,47 @@ describe("runScale end-to-end", () => {
     expect(result.budget.coldTargetMs).toBe(60_000);
     expect(result.budget.coldWithinBudget).toBe(true); // generous fake budget
     expect(result.budget.measuredSpawnsPerPage).toBeCloseTo(result.cold.gitOperations / 12, 5);
+  });
+
+  test("a scale with NO entry in the calibration profile reports null, not an infinite pass", async () => {
+    // Regression test for the "unbudgeted scale reports WITHIN budget" defect:
+    // `perScale` has no key for size 12 here (only "999" is budgeted), so the
+    // scale being measured has no agreed target at all.
+    const unbudgetedCalibration: CalibrationProfile = {
+      ...FAKE_CALIBRATION,
+      latencyBudgetMs: {
+        ...FAKE_CALIBRATION.latencyBudgetMs,
+        perScale: { "999": { cold: 1, repeated: 1 } },
+      },
+    };
+    const result = await runScale(12, MANIFEST.seed, MANIFEST, unbudgetedCalibration);
+    expect(result.budget.coldTargetMs).toBeNull();
+    expect(result.budget.repeatedTargetMs).toBeNull();
+    // Must NOT silently pass as "within an infinite budget".
+    expect(result.budget.coldWithinBudget).toBeNull();
+    expect(result.budget.repeatedWithinBudget).toBeNull();
+  });
+});
+
+describe("isFullCalibratedRun", () => {
+  test("the default (no --sizes) run over the calibrated scales is a full run", () => {
+    expect(isFullCalibratedRun([50, 500, 2000], [50, 500, 2000])).toBe(true);
+  });
+
+  test("order does not matter — it is a set comparison", () => {
+    expect(isFullCalibratedRun([2000, 50, 500], [50, 500, 2000])).toBe(true);
+  });
+
+  test("an ad-hoc --sizes run is NOT a full calibrated run", () => {
+    expect(isFullCalibratedRun([7], [50, 500, 2000])).toBe(false);
+  });
+
+  test("a subset of the calibrated scales is NOT a full calibrated run", () => {
+    expect(isFullCalibratedRun([50, 500], [50, 500, 2000])).toBe(false);
+  });
+
+  test("extra sizes beyond the calibrated set are NOT a full calibrated run", () => {
+    expect(isFullCalibratedRun([50, 500, 2000, 3000], [50, 500, 2000])).toBe(false);
   });
 });
 
