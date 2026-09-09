@@ -13,6 +13,8 @@
 // guard in `src/capability/no-optional-imports` is a regex over file TEXT, so
 // the forbidden static import form must not be spelled out in a comment either.
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createChatBridge, mountChatShell, type ChatShellHandle } from "./chat-shell";
 import { runShell, type ShellDeps, type ShellIO } from "../commands/shell";
 import type { NormalizedEvent, ProviderPort, ProviderDescription } from "../harness/provider/types";
@@ -516,4 +518,13 @@ test("a reply whose FIRST chunk is the separator keeps its leading blank line", 
   bridge.io.onTurnStart?.();
   bridge.io.write("plain");
   expect(text).toEqual(["\n\n", "indented block follows", "\n\n", "plain"]);
+});
+
+test("chat paintLabels refreshes the live balance panel for the NEW provider", () => {
+  const src = readFileSync(join(import.meta.dir, "chat-shell.ts"), "utf8");
+  expect(src).toContain("const balancePanel = mountBalancePanel(");
+  const paint = src.indexOf("const paintLabels = (): void => {");
+  expect(paint).toBeGreaterThanOrEqual(0);
+  const block = src.slice(paint, paint + 400);
+  expect(block).toContain("void balancePanel.setProvider(selection.provider)");
 });

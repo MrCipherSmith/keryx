@@ -2306,7 +2306,7 @@ export async function launchTuiAgentShell(opts: {
     // balance endpoint (Z.AI/Cerebras/Groq/…).
     // Default fetch + merged shell auth keys; the active provider resolves
     // from `sel.provider`. Clicking the value re-fetches.
-    mountBalancePanel(sidebar, otui, r, {
+    const balancePanel = mountBalancePanel(sidebar, otui, r, {
       provider: sel.provider,
     });
     // The directory the agent's tools act on — directly under Model, matching the
@@ -3647,6 +3647,7 @@ export async function launchTuiAgentShell(opts: {
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
       );
       updateModelLabels();
+      void balancePanel.setProvider(ns.provider);
       input.focus();
       chrome.showToast(`Switched to ${ns.provider}/${ns.model}`);
     };

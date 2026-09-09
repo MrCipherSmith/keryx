@@ -615,6 +615,32 @@ otuiTest("AC4: setBusyPhase is reflected in the footer, and stopBusy restores th
   h.destroy();
 });
 
+otuiTest("setStatus survives stopBusy: footer-right keeps the new provider/model", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const footerRow = (): string => {
+    const lines = nonEmptyLines(h.captureCharFrame());
+    return lines[lines.length - 1] ?? "";
+  };
+  expect(footerRow()).toContain(STATUS);
+
+  h.chrome.setStatus("grok/grok-4.6");
+  await h.flush();
+  expect(footerRow()).toContain("grok/grok-4.6");
+  expect(footerRow()).not.toContain(STATUS);
+
+  // The next busy/idle cycle used to restore the launch-time `opts.status`,
+  // so a mid-session `/model` switch looked updated until the turn ended.
+  h.chrome.startBusy("waiting for model");
+  await h.flush();
+  h.chrome.stopBusy();
+  await h.flush();
+  expect(footerRow()).toContain(FOOTER_HINT);
+  expect(footerRow()).toContain("grok/grok-4.6");
+  expect(footerRow()).not.toContain(STATUS);
+  h.destroy();
+});
+
 otuiTest("AC4b: the in-transcript busy line is re-pinned to the end when content is added after it", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 30 });

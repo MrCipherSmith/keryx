@@ -2100,6 +2100,14 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
   });
 
+  test("switchTo refreshes the live balance panel for the NEW provider", () => {
+    expect(fnBody).toContain("const balancePanel = mountBalancePanel(");
+    const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
+    expect(switchToIndex).toBeGreaterThanOrEqual(0);
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 800);
+    expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
+  });
+
   test("the read-only side-worker deps rebuild passes the same live getter", () => {
     const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
     expect(baseIndex).toBeGreaterThanOrEqual(0);
