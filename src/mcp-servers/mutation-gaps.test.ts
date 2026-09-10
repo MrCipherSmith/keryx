@@ -126,6 +126,31 @@ describe("socket errors that are not the first one in the list", () => {
     ).toContain("nothing is listening");
   });
 
+  test("ETIMEDOUT says it did not answer in time", () => {
+    // Found by the sweep's new deletion operator, immediately after the
+    // ECONNREFUSED fix — and it is the recurring defect one more time.
+    // A reviewer reported ECONNREFUSED, I fixed ECONNREFUSED, and I did
+    // not walk the other arms of the same `if`/`else` chain. Deleting
+    // this branch was invisible for exactly the reason deleting that one
+    // was: control falls through to the generic fallback and no test
+    // distinguishes them.
+    expect(
+      explainConnectFailure("http", server({ url: "https://x/mcp" }), syscallError("ETIMEDOUT")),
+    ).toContain("did not answer in time");
+  });
+
+  test("BOUNDARY — an unrecognised code gets the generic wording, and only it", () => {
+    // The fallback the branches above must NOT be mistaken for. Without
+    // this, every branch could return the generic sentence and the whole
+    // chain would read as covered.
+    const message = explainConnectFailure("http", server({ url: "https://x/mcp" }), syscallError("EHOSTDOWN"));
+    expect(message).toContain("could not be reached");
+    expect(message).toContain("EHOSTDOWN");
+    expect(message).not.toContain("nothing is listening");
+    expect(message).not.toContain("did not answer in time");
+    expect(message).not.toContain("does not resolve");
+  });
+
   test("ENOTFOUND says the host does not resolve", () => {
     expect(explainConnectFailure("http", server({ url: "https://x/mcp" }), syscallError("ENOTFOUND"))).toContain(
       "does not resolve",
