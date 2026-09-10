@@ -1,0 +1,157 @@
+{
+  "kind": "arena-t1",
+  "repoRoot": "/Users/tsaitler.aleksandr/sandbox/arena/clear/vantage-frontend",
+  "ref": "HEAD",
+  "before": "2026-09-09",
+  "limit": 600,
+  "seed": 20260909,
+  "frozenAt": "2026-09-10T07:21:08.041Z",
+  "pool": 113,
+  "dropped": {
+    "notPullRequest": 91,
+    "choreOrDocs": 58,
+    "goldSetSize": 242,
+    "answerLeak": 96,
+    "noParent": 0
+  },
+  "goldSizeHistogram": {
+    "1": 6,
+    "2": 1,
+    "3": 4,
+    "4": 2
+  },
+  "tasks": [
+    {
+      "id": "1405959d",
+      "sha": "1405959d44d5857a724c35f25dacb56274631677",
+      "parent": "be595216602e9a6e1bb32b368896b69f36c324a7",
+      "query": "perf(lint): move import cycles to oxlint, stop running Prettier as a lint rule (#6118)",
+      "gold": [
+        "eslint.config.mjs"
+      ]
+    },
+    {
+      "id": "5dde4b04",
+      "sha": "5dde4b0437fb81e55d3f1505846beae38eb07227",
+      "parent": "2ee0ee227c49c2c70848ea0438b702faa3f4873c",
+      "query": "fix: wrap colorset functionality in try/catch (#5846)",
+      "gold": [
+        "src/components/media/imageColorset.ts"
+      ]
+    },
+    {
+      "id": "7ede9520",
+      "sha": "7ede9520d72253cdd98498ad371375c14f6882d9",
+      "parent": "e1e98d73b1cba15e16424adb392ddf7e609cf84e",
+      "query": "test(temporal): pin that the zoneAwareDisplay lever arrives through /init (#6670)\n\nvantage-backend#4539 item 5 asks to wire or delete `zoneAwareDisplay` because \"the\nbackend never emits it\". Its 2026-08-27 audit repeated that. Both are wrong, and\nthis adds the cover that makes the mistake unrepeatable.",
+      "gold": [
+        "src/core/settings/model.ts"
+      ]
+    },
+    {
+      "id": "6151fea2",
+      "sha": "6151fea232ec314832bf67279a41bd2554facd8c",
+      "parent": "91edc9e7e319fd328bd328e121626f915cbe7667",
+      "query": "test(e2e): deflake profile-search + content-tree menu clusters (#6061) (#6156)\n\n* test(e2e): deflake profile-search + content-tree menu clusters (#6061)",
+      "gold": [
+        "e2e/app/component/profileSearch.component.ts",
+        "e2e/app/page/workspace.page.ts"
+      ]
+    },
+    {
+      "id": "71916287",
+      "sha": "71916287d56900cca614d65a2406c781e9c38d30",
+      "parent": "75b8717cec4529027cafa463f3259844bfb94beb",
+      "query": "test(integration): migrate 14 synergy e2e flows to MSW integration tests (#5843)\n\n* fix(e2e): migrate stale geo-list-item selector to drawn-polygon-row",
+      "gold": [
+        "e2e/app/component/mapExplorer.component.ts",
+        "src/core/map/features/polygon-drawer/library/LibraryBrowsePanel.msw.ts",
+        "src/core/map/features/polygon-drawer/test-helpers.ts"
+      ]
+    },
+    {
+      "id": "acade8ab",
+      "sha": "acade8abd47581318fe18fe507f3cd0db33114f3",
+      "parent": "23b1ac3512bdc12065dfa820f83838eecfd0d756",
+      "query": "fix(graph): restore the graph canvas — drop the Node `events` import (#6137)",
+      "gold": [
+        "eslint.config.mjs",
+        "src/wrappers/sigma/programs/shared/texture/texture-events.ts",
+        "src/wrappers/sigma/programs/shared/texture/texture-manager.ts",
+        "src/wrappers/sigma/programs/shared/texture/texture-node-program.ts"
+      ]
+    },
+    {
+      "id": "8078d774",
+      "sha": "8078d774143a6075ad5207bed27214e03e75e815",
+      "parent": "4fdc5ef3732a02961f0c97cd6db0b17e0a12c267",
+      "query": "test(e2e): fix virtualized identifier-select + un-quarantine identifier-search test (#6061) (#6254)\n\n* test(e2e): un-quarantine 3 repaired profile-search + folders tests (#6061)",
+      "gold": [
+        "e2e/app/component/profileSearch.component.ts"
+      ]
+    },
+    {
+      "id": "e57e110f",
+      "sha": "e57e110f3f9a84c9cc8df29e1b846f68e9ebe4cd",
+      "parent": "dac496be4ec29decc73d7e077670d1de3bd5c5f2",
+      "query": "ci(component): re-enable behavioral component tests (screenshots stay parked) (#6027)\n\n* ci(component): re-enable behavioral component tests (screenshots stay parked)",
+      "gold": [
+        "e2e/playwright.config.ts",
+        "src/data-catalog/schema-editor/components/RoleMappingsSection.tsx",
+        "src/pipelines/components/state-management/PipelineRightToolbar.stories.tsx"
+      ]
+    },
+    {
+      "id": "89f8dc02",
+      "sha": "89f8dc02662263e08d88286b2124626d9c043ece",
+      "parent": "2524c53322579612b98484913fb61f6df36cc6c1",
+      "query": "fix(pdf): paint the pages instead of a blank sheet (#6089)",
+      "gold": [
+        "src/wrappers/pdf/PdfViewer.tsx"
+      ]
+    },
+    {
+      "id": "57f92d67",
+      "sha": "57f92d67e9a27cf3c3602376300784e5b4b7e3a1",
+      "parent": "5063b59b11a8c868c322fb5eda9ccec8e3a1545e",
+      "query": "select seeded schemas and profile types by what the UI renders (#6525)",
+      "gold": [
+        "e2e/app/component/profileSearch.component.ts"
+      ]
+    },
+    {
+      "id": "feca1074",
+      "sha": "feca10748452efa4eed6b8b69079adc215ac556c",
+      "parent": "fef590160c23534005db30a08e0c8d470411f560",
+      "query": "refdata csv import in production build (#6428)\n\n* refdata csv import in production build",
+      "gold": [
+        "src/reference-data/csv-import.ts",
+        "src/reference-data/csv-parse-core.ts",
+        "src/reference-data/csv-parse.worker.ts"
+      ]
+    },
+    {
+      "id": "83c363d2",
+      "sha": "83c363d2def294f3d7806f357a2e83e2c7455c66",
+      "parent": "31e5bb92785f020c5c0daebada42dae7d9c091b5",
+      "query": "controls fixes (#6594)",
+      "gold": [
+        "src/media/components/media-page/media-page-store.ts",
+        "src/media/components/playback-controls/MediaPlaybackControls.stories.tsx",
+        "src/media/components/playback-controls/MediaPlaybackControls.tsx"
+      ]
+    },
+    {
+      "id": "53254e0e",
+      "sha": "53254e0e3cac06ac3f849c6cae42f435bfe9def7",
+      "parent": "51e5ac763c9004665d86052ce952b8f11ebab956",
+      "query": "fix(data-catalog): treat the system pseudo-case as global in the schema editor (#6435)\n\n* fix(data-catalog): treat the system pseudo-case as global in the schema editor",
+      "gold": [
+        "src/context/case-context.ts",
+        "src/data-catalog/dc-service.msw.ts",
+        "src/data-catalog/dc-service.ts",
+        "src/data-catalog/schema-editor/dc-schema-editor-store.ts"
+      ]
+    }
+  ]
+}
