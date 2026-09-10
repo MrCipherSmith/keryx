@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, test, describe } from "bun:test";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,7 +6,12 @@ import { createDefaultSearchProviderController } from "../harness/search";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
-import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
+import {
+  assertDeniableTools,
+  buildInteractiveAgentTools,
+  denyInteractiveTools,
+  interactiveAgentToolNames,
+} from "./interactive-agent-tools";
 
 /**
  * A minimal, fully injectable fake `JobRegistry` — no real subprocess, no
@@ -195,4 +200,78 @@ test("F-010: WITH jobRegistry, shell_job_output/shell_job_kill ARE registered", 
   const names = interactiveAgentToolNames(tools);
   expect(names).toContain("shell_job_output");
   expect(names).toContain("shell_job_kill");
+});
+
+describe("--deny-tools withholds a capability rather than gating it", () => {
+  async function build(denyTools?: readonly string[]) {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-deny-"));
+    return buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+      jobRegistry: stubJobRegistry(),
+      ...(denyTools === undefined ? {} : { denyTools }),
+    });
+  }
+
+  test("a denied tool is absent from the roster, not merely unapproved", async () => {
+    // Distinct from `--permission-mode`, which decides whether a call is allowed.
+    // A denied tool is never offered, so it cannot be attempted, reasoned about,
+    // or approved by mistake.
+    const names = interactiveAgentToolNames(await build(["web_search", "web_fetch"]));
+    expect(names).not.toContain("web_search");
+    expect(names).not.toContain("web_fetch");
+  });
+
+  test("everything else survives, so a denial is not a blunt instrument", async () => {
+    const full = interactiveAgentToolNames(await build());
+    const narrowed = interactiveAgentToolNames(await build(["web_search", "web_fetch"]));
+    expect(narrowed).toEqual(full.filter((name) => name !== "web_search" && name !== "web_fetch"));
+  });
+
+  test("no denial leaves the roster exactly as it was", async () => {
+    expect(interactiveAgentToolNames(await build([]))).toEqual(interactiveAgentToolNames(await build()));
+  });
+
+  test("a misspelled name is REFUSED, not ignored", async () => {
+    // `--deny-tools web_serch` must not leave the session with web search and a
+    // clear conscience: the operator believes a capability is gone and it is not.
+    await expect(build(["web_serch"])).rejects.toThrow(/unknown tool name/);
+  });
+
+  test("the refusal lists what is deniable, so the name can be looked up", async () => {
+    await expect(build(["nope"])).rejects.toThrow(/deniable tools are: .*web_search/);
+  });
+
+  test("the roster reported afterwards is the one the turn actually ran with", async () => {
+    // `interactiveAgentToolNames` is what a consumer reads back; if the filter ran
+    // anywhere later, it would report a capability the session did not have.
+    const tools = await build(["web_fetch"]);
+    expect(tools.some((tool) => tool.definition.name === "web_fetch")).toBe(false);
+  });
+});
+
+describe("denyInteractiveTools", () => {
+  const tool = (name: string) => ({
+    definition: { name, description: "", inputSchema: { type: "object" as const, properties: {} }, risk: "read" as const },
+    invoke: async () => ({ output: "", isError: false }),
+  });
+
+  test("removes only the names given", () => {
+    const kept = denyInteractiveTools([tool("a"), tool("b"), tool("c")], ["b"]);
+    expect(kept.map((t) => t.definition.name)).toEqual(["a", "c"]);
+  });
+
+  test("an empty denial is a copy, not the same array", () => {
+    const original = [tool("a")];
+    const kept = denyInteractiveTools(original, []);
+    expect(kept).toEqual(original);
+    expect(kept).not.toBe(original);
+  });
+
+  test("assertDeniableTools passes a known name and refuses an unknown one", () => {
+    expect(() => assertDeniableTools([tool("a")], ["a"])).not.toThrow();
+    expect(() => assertDeniableTools([tool("a")], ["z"])).toThrow(/z/);
+  });
 });

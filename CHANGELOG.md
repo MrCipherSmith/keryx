@@ -3,6 +3,32 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.89] — 2026-09-10
+
+### Added
+
+- **`keryx shell --deny-tools <a,b>`** — withhold named tools from a session
+  entirely. There was no way to say "this session does not need the web". Both
+  other agent CLIs offer one (`claude --disallowedTools`,
+  `grok --disable-web-search`), and keryx already treats egress as a product
+  concern elsewhere — `keryx harness exec --allowed-domains`, `sandbox.json` — so
+  a session-level roster that could not be narrowed was the inconsistent part.
+
+  Distinct from `--permission-mode`, which governs whether a call is APPROVED. A
+  denied tool is never offered to the model, so it cannot be attempted, reasoned
+  about, or approved by mistake — and the roster read back afterwards is the one
+  the turn actually ran with.
+
+  An unknown name is refused rather than ignored, and the error lists what is
+  deniable: `--deny-tools web_serch` must not leave the session with web search
+  and a clear conscience. Repeated use accumulates rather than replacing, since
+  silently dropping the first list would be the worse surprise for a flag whose
+  whole job is removing a capability.
+
+  Written for two cases: a sensitive checkout where a tool that fetches from
+  outside it is a liability, and any comparison that needs the roster to match
+  another tool's.
+
 ## [0.2.88] — 2026-09-10
 
 Two defects that together made `keryx shell` unusable with a subscription-based
