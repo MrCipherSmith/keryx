@@ -56,10 +56,13 @@ const OPERATORS: Array<readonly [RegExp, string]> = [
   [/ !== /g, " === "],
   [/ && /g, " || "],
   [/ \|\| /g, " && "],
+  // `>=` → `>` and `<=` → `<` only, never the reverse. Widening `>` to
+  // `>=` rewrote `Promise<SdkHttpModules>` as `Promise<SdkHttpModules>=`,
+  // and a file that does not parse fails every test — which the sweep
+  // scores as "killed" and reports as coverage the suite does not have.
+  // A mutant that cannot compile measures nothing.
   [/ >= /g, " > "],
   [/ <= /g, " < "],
-  [/([^-<>=])> /g, "$1>= "],
-  [/([^-<>=])< /g, "$1<= "],
   [/\breturn true\b/g, "return false"],
   [/\breturn false\b/g, "return true"],
   [/\?\? /g, "|| "],
@@ -166,25 +169,45 @@ async function main(): Promise<void> {
   const restore = (): void => {
     for (const [file, source] of originals) writeFileSync(file, source);
   };
+  // A SIGKILL cannot be caught, and the first run of this script was
+  // killed mid-mutation and left a mutant on disk. Nothing was lost —
+  // the tree was committed and `git checkout` undid it, and the
+  // dirty-tree guard refused the next run rather than compounding it —
+  // but "recovery depends on remembering which file" is not a plan. The
+  // journal is written BEFORE each edit, so the last line names the file
+  // that may still be mutated.
+  const journal = `${process.cwd()}/.mutation-sweep-journal`;
   process.on("SIGINT", () => {
     restore();
     process.exit(130);
   });
 
+  // Progress goes to a file as it happens. Bun buffers stdout to a pipe,
+  // so a backgrounded run shows nothing at all until it exits — which for
+  // a sweep measured in tens of minutes is indistinguishable from a hang.
+  const progress = `${process.cwd()}/.mutation-sweep-progress`;
+  writeFileSync(progress, `0/${chosen.length}\n`);
+
   try {
     for (const [index, mutant] of chosen.entries()) {
+      writeFileSync(journal, `${mutant.file}\n`);
       writeFileSync(mutant.file, mutant.mutated);
       const { code } = await sh(["bun", "test", ...testPath.split(" ")]);
       writeFileSync(mutant.file, mutant.source);
+      writeFileSync(journal, "");
 
       const killed = code !== 0;
       if (!killed) survivors.push(mutant);
-      const mark = killed ? "." : "S";
-      process.stdout.write(mark);
-      if ((index + 1) % 50 === 0) process.stdout.write(` ${index + 1}/${chosen.length}\n`);
+      process.stdout.write(killed ? "." : "S");
+      writeFileSync(
+        progress,
+        `${index + 1}/${chosen.length} — ${survivors.length} survived\n` +
+          survivors.map((s) => `${s.file}:${s.line}  ${s.from}  ->  ${s.to}`).join("\n"),
+      );
     }
   } finally {
     restore();
+    writeFileSync(journal, "");
   }
 
   console.log(`\n\n${chosen.length - survivors.length} killed, ${survivors.length} SURVIVED\n`);
