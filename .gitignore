@@ -66,10 +66,6 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/testing/artifacts/latest.md
 .metaproject/data/testing/artifacts/latest.json
 .metaproject/data/tasks/runtime/
-# The auto-sweep stamp: runtime state rewritten by the gdctx write path, not
-# a project artifact. Tracking it would churn on every `keryx ctx` call.
-.metaproject/data/forgetting/
-.metaproject/data/retention/
 .metaproject/data/tasks/logs/
 .metaproject/flows/.flow-init.lock/
 .metaproject/flows/.flow-lock-*/
@@ -83,5 +79,12 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/security/raw/**
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
+# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
+# gdctx write path on every call, not a project artifact. These lines were added
+# to this repository's .gitignore by hand INSIDE the managed block, where the
+# next `keryx update` regenerated them away — which is how they came to belong
+# here instead.
+.metaproject/data/forgetting/
+.metaproject/data/retention/
 .metaproject/reports/
 # keryx:end

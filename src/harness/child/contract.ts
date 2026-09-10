@@ -3,9 +3,16 @@
 // Adapts the canonical gdskills `subagent-dispatch`/`subagent-result` contracts
 // (`.metaproject/core/gdskills/contracts/`) with harness parent/session/attempt
 // extension metadata and STATUS-first prose framing. The extension object is
-// metadata OVER the canonical contracts (validates against the frozen
-// `harness-child-contract-extension.schema.json`), NOT a replacement wire
+// metadata OVER the canonical contracts — SHAPED to mirror the frozen
+// `harness-child-contract-extension.schema.json`, NOT a replacement wire
 // contract.
+//
+// Shaped, not validated. This comment said "validates against" until flow 213
+// checked whether anything loads that schema: nothing does, on this path or any
+// other. The shape is held by the TypeScript types below. See
+// `harness/extension/execute.ts` for the same correction, and
+// `gdskills/contracts.ts` for why `subagent-dispatch` is recorded as
+// unenforced while `subagent-result` is not.
 //
 // STATUS-first prose is adapter framing: a worker's reply whose first line is
 // `STATUS: <TOKEN>` is converted to a canonical `subagent-result` object BEFORE
