@@ -285,6 +285,28 @@ export function userinfoProblem(url: string | undefined): string | undefined {
 }
 
 /**
+ * Everything wrong with a remote server's TARGET, before any socket.
+ *
+ * The two url checks existed and were called from exactly one place —
+ * `doctor` — while the dial the shell actually uses called neither. So
+ * `keryx mcp doctor` reported "url needs TENANT, which is unset" and the
+ * session it was pre-flighting went on to connect to `https://host//mcp`
+ * anyway. A pre-flight STRICTER than the flight is worse than no
+ * pre-flight: it reports a problem the operator then cannot reproduce,
+ * and it hides one they will meet.
+ *
+ * This function exists so there is one list of target problems and two
+ * callers of it, rather than two lists that drift. It is the same lesson
+ * the duplicated `defaultConnect` taught one file over.
+ */
+export function remoteTargetProblem(
+  raw: McpServerEntry,
+  env: Readonly<Record<string, string | undefined>>,
+): string | undefined {
+  return urlProblem(raw.url, env) ?? userinfoProblem(raw.url);
+}
+
+/**
  * A URL safe to print.
  *
  * Query strings carry `?api_key=`. Printing the RAW url keeps `${VAR}`

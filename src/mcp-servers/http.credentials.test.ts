@@ -130,6 +130,65 @@ describe("AC4 — an unset variable means NO REQUEST, not a rejected one", () =>
   }, 30_000);
 });
 
+describe("an unresolved ${VAR} in the URL stops the SESSION, not just doctor", () => {
+  // The recurring shape, found by a reviewer: `urlProblem` exists, has a
+  // docstring explaining exactly why an unset `${TENANT}` must be refused
+  // — `https://api.example/${TENANT}/mcp` becomes `https://api.example//mcp`,
+  // a VALID url addressing the wrong path — and was called from ONE place.
+  // `doctor` checked it. The dial the shell actually uses did not.
+  //
+  // So `keryx mcp doctor` said "url needs TENANT, which is unset" and the
+  // session it was pre-flighting connected to the wrong path anyway. A
+  // pre-flight that is stricter than the flight is worse than none: it
+  // reports a problem the operator then cannot reproduce.
+
+  test("the runtime refuses, naming the variable", async () => {
+    const server = await mock();
+    // A real listener, so a pass cannot mean "nothing was reachable".
+    const configDir = workspace({ url: `${server.url}/${"${TENANT}"}/mcp` });
+
+    const runtime = createMcpRuntime({ cwd: configDir, gitRoot: configDir, configDir, env: {} });
+    await runtime.ready();
+    const state = runtime.servers()[0];
+    await runtime.close();
+
+    expect(state?.status).toBe("failed");
+    expect(state?.error).toContain("TENANT");
+    expect(server.requests()).toEqual([]);
+  }, 30_000);
+
+  test("BOUNDARY — with the variable set it dials", async () => {
+    const server = await mock();
+    const configDir = workspace({ url: server.url.replace("/mcp", "/${SEG}") });
+
+    const runtime = createMcpRuntime({
+      cwd: configDir,
+      gitRoot: configDir,
+      configDir,
+      env: { SEG: "mcp" },
+    });
+    await runtime.ready();
+    const state = runtime.servers()[0];
+    await runtime.close();
+
+    expect(state?.status).toBe("connected");
+    expect(server.requests().length).toBeGreaterThan(0);
+  }, 30_000);
+
+  test("and a credential in the url is refused by the runtime too", async () => {
+    const configDir = workspace({ url: "https://alice:hunter2@api.example/mcp" });
+    const runtime = createMcpRuntime({ cwd: configDir, gitRoot: configDir, configDir, env: {} });
+    await runtime.ready();
+    const state = runtime.servers()[0];
+    await runtime.close();
+
+    expect(state?.status).toBe("failed");
+    expect(state?.error).toContain("username/password");
+    // And the secret is not in the message that reports it.
+    expect(state?.error).not.toContain("hunter2");
+  }, 30_000);
+});
+
 describe("AC4 — doctor says which variable, and does not dial", () => {
   test("a hollow credential is needs_auth and names the variable", async () => {
     const server = await mock();

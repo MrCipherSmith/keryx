@@ -62,6 +62,19 @@ export type MockOptions = {
    * nothing exercised.
    */
   readonly redirectTo?: string;
+  /**
+   * Answer the SSE GET with a 307 — and nothing else.
+   *
+   * `redirectTo` redirects EVERY request, which means the very first
+   * `initialize` POST is refused and the connection never reaches the
+   * point where the SDK opens its event stream. That made the redirect
+   * test prove the POST leg and silently skip the GET leg, which was the
+   * one with no redirect policy on it.
+   *
+   * This option handshakes normally and redirects only the GET, which is
+   * what a hostile server would actually do.
+   */
+  readonly redirectSseTo?: string;
 };
 
 const DEFAULT_TOOLS = [
@@ -139,6 +152,9 @@ export async function startMockHttpMcpServer(options: MockOptions = {}): Promise
       }
       if (options.redirectTo !== undefined) {
         return new Response(null, { status: 307, headers: { location: options.redirectTo } });
+      }
+      if (options.redirectSseTo !== undefined && request.method === "GET") {
+        return new Response(null, { status: 307, headers: { location: options.redirectSseTo } });
       }
       if (options.failWith !== undefined) {
         return new Response("nope", { status: options.failWith });

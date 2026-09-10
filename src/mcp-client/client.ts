@@ -547,6 +547,35 @@ export async function connectHttpMcpServer(
 
   const sdk = await loadHttpSdk();
   const transport = new sdk.StreamableHTTPClientTransport(parsed, {
+    // EVERY fetch the transport makes, not the two that happen to read
+    // `requestInit`.
+    //
+    // `redirect: "error"` below was set on `requestInit`, and a reviewer
+    // found that the SDK spreads `requestInit` into exactly two of its
+    // three fetch calls — `send()` (POST) and `terminateSession()`
+    // (DELETE). The third, `_startOrAuthSse()`, builds its GET by hand:
+    //
+    //     const response = await (this._fetch ?? fetch)(this._url, {
+    //       method: 'GET', headers, signal: ...
+    //     });
+    //
+    // That GET opens the SSE stream. It runs automatically after
+    // `notifications/initialized`, and again on every reconnection. And
+    // `_commonHeaders()` DOES merge `requestInit.headers` into it — so the
+    // configured credential rode on the one call with no redirect policy,
+    // at the platform default of following up to twenty hops.
+    //
+    // A server could therefore answer the handshake normally and then
+    // 307 that GET to `169.254.169.254` or anywhere else, and keryx would
+    // hand over `X-Api-Key` — `fetch` strips only `Authorization`, and
+    // only across origins. The existing test could not see this: its
+    // fixture redirected EVERY request, so the very first POST was
+    // refused and the GET leg never ran.
+    //
+    // Wrapping `fetch` covers all three legs and stays correct if the SDK
+    // adds a fourth.
+    fetch: ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      fetch(input, { ...init, redirect: "error" })) as typeof fetch,
     requestInit: {
       ...(Object.keys(headers).length > 0 ? { headers } : {}),
       // NO REDIRECTS. `fetch` defaults to following up to 20 hops, and

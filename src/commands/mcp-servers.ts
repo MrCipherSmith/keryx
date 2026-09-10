@@ -21,6 +21,7 @@ import {
 } from "../mcp-servers/config";
 import {
   formatDoctorReport,
+  redactHeaders,
   redactValues,
   runDoctor,
   transportOf,
@@ -112,11 +113,14 @@ function projectRootOf(deps: McpConsumerDeps): string {
 
 function load(deps: McpConsumerDeps): ResolvedMcpConfig {
   const root = projectRootOf(deps);
-  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir });
+  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir, env: deps.env });
 }
 
 /** Redacted view of one server, safe to print or paste into an issue. */
-function publicView(server: ResolvedMcpServer): Record<string, unknown> {
+function publicView(
+  server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
+): Record<string, unknown> {
   return {
     name: server.name,
     source: server.source,
@@ -126,7 +130,14 @@ function publicView(server: ResolvedMcpServer): Record<string, unknown> {
     // The same rule `doctor` follows, for the same reason: `env` and `headers`
     // hold tokens, and `--json` output is what gets pasted into a bug report.
     env: redactValues(server.env),
-    headers: redactValues(server.headers),
+    // `redactHeaders`, NOT `redactValues`. This said `redactValues` and
+    // `doctor.ts`'s own docstring for `redactHeaders` explains why that is
+    // wrong: `Bearer ${NOPE}` expands to `"Bearer "`, which is non-empty,
+    // so the naive check reads `set` for a header that will not be sent.
+    // `doctor` therefore said `unset` and `list --json` said `set` for the
+    // same config — the self-contradicting report `doctor` fixed, still
+    // shipping from the sibling command.
+    headers: redactHeaders(server, env),
   };
 }
 
@@ -135,7 +146,14 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
   const wantJson = splitAtSeparator(args).own.includes("--json");
 
   if (wantJson) {
-    deps.log(JSON.stringify({ servers: config.servers.map(publicView), problems: config.problems }, null, 2));
+    const env = deps.env ?? process.env;
+    deps.log(
+      JSON.stringify(
+        { servers: config.servers.map((s) => publicView(s, env)), problems: config.problems },
+        null,
+        2,
+      ),
+    );
     return config.problems.length > 0 ? 1 : 0;
   }
 

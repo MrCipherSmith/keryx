@@ -70,6 +70,25 @@ const OPERATORS: Array<readonly [RegExp, string]> = [
 ];
 
 /**
+ * DELETE a single-line guard clause.
+ *
+ * Inversion is not enough, and a reviewer proved it on a branch this
+ * sweep had already passed: `if (syscall === "ECONNREFUSED") return ...`
+ * inside a dispatch chain. Inverting `===` to `!==` makes the branch fire
+ * for every OTHER code, which a sibling's exact-wording test catches — so
+ * the mutant died and the line read as covered. REMOVING the branch is
+ * invisible: control falls through to the generic fallback, and the only
+ * test behind it accepted the fallback's wording as an alternative.
+ *
+ * Restricted to lines that are entirely `if (…) <single statement>;`,
+ * which is the one shape that can be deleted whole and still parse. This
+ * sweep does not delete arbitrary statements — a file that fails to
+ * compile fails every test, which scores as "killed" and reports
+ * coverage that does not exist.
+ */
+const DELETABLE_GUARD = /^\s*if \(.+\) (return|throw|continue|break)\b[^;]*;\s*$/;
+
+/**
  * Mutants that cannot change behaviour, skipped so the report stays read.
  *
  * `x ?? {}` and `x || {}` differ only when `x` is falsy-but-not-nullish.
@@ -163,17 +182,26 @@ async function main(): Promise<void> {
       const text = lines[lineNo - 1];
       if (text === undefined || !isMutable(text)) continue;
 
+      const variants: Array<{ line: string; label: string }> = [];
+      if (DELETABLE_GUARD.test(text)) {
+        variants.push({ line: "", label: "DELETED (guard clause)" });
+      }
       for (const [pattern, replacement] of OPERATORS) {
-        const mutatedLine: string = text.replace(pattern, replacement);
-        if (mutatedLine === text) continue;
-        if (isEquivalent(text, mutatedLine)) continue;
+        const swapped: string = text.replace(pattern, replacement);
+        if (swapped !== text && !isEquivalent(text, swapped)) {
+          variants.push({ line: swapped, label: swapped.trim() });
+        }
+      }
+
+      for (const variant of variants) {
+        const mutatedLine: string = variant.line;
         const copy = [...lines];
         copy[lineNo - 1] = mutatedLine;
         mutants.push({
           file,
           line: lineNo,
           from: text.trim(),
-          to: mutatedLine.trim(),
+          to: variant.label,
           source,
           mutated: copy.join("\n"),
         });

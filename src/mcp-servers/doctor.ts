@@ -24,7 +24,7 @@ import type {
 import type { SkippedTool } from "./catalog";
 import { catalogForServer } from "./catalog";
 import type { ConnectFn, ServerStatus } from "./manager";
-import { describeHollow, displayUrl, resolveHttpHeaders, urlProblem, userinfoProblem } from "./http-headers";
+import { describeHollow, displayUrl, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
 import { sanitiseForDisplay } from "./tools";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
@@ -220,7 +220,8 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
     // from somebody else's server, which reads as "their server is broken"
     // rather than "your variable is unset".
     const env = options.env ?? process.env;
-    const urlIssue = urlProblem(server.raw.url, env) ?? userinfoProblem(server.raw.url);
+    // The SAME list the session dial uses, not a second copy of it.
+    const urlIssue = remoteTargetProblem(server.raw, env);
     if (urlIssue !== undefined) {
       return { ...base, status: "needs_auth", toolCount: 0, skipped: [], detail: urlIssue };
     }

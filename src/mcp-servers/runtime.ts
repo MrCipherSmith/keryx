@@ -22,7 +22,7 @@ import { mergeCatalogs, type ServerCatalog } from "./catalog";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "./manager";
 import { loadTrustStore, requiresApproval } from "./trust";
 import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
-import { describeHollow, resolveHttpHeaders } from "./http-headers";
+import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
 import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
 
@@ -248,6 +248,15 @@ async function connectRemote(
   env: Record<string, string | undefined>,
   signal?: AbortSignal,
 ): ReturnType<ConnectFn> {
+  // The TARGET first, then the credential. Both refusals happen before a
+  // socket, and both are shared with `doctor` rather than reimplemented:
+  // the url checks lived only in `doctor` until a reviewer noticed the
+  // session dial called neither, so a config `doctor` refused would
+  // connect to the wrong path in the shell it was pre-flighting.
+  const target = remoteTargetProblem(server.raw, env);
+  if (target !== undefined) {
+    throw new Error(`server "${server.name}": ${target}`);
+  }
   const resolved = resolveHttpHeaders(server, server.raw, env);
   if (!resolved.ok) {
     throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);

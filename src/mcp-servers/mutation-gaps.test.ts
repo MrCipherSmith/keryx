@@ -106,6 +106,26 @@ describe("socket errors that are not the first one in the list", () => {
   // survived. `&&` can never be true, so NEITHER branch fired — and the
   // DNS test passed anyway because it accepted the fallback wording too.
   // A test written to tolerate two answers cannot tell you which it got.
+  test("ECONNREFUSED says nothing is listening, in those words", () => {
+    // Caught by a reviewer, and it is the same criticism this file makes
+    // of the DNS test one line down — applied to a test I wrote in this
+    // very file's spirit and then failed to apply here. The live test in
+    // `doctor.failures.test.ts` asserts
+    // `/nothing is listening|could not be reached/`, and the second
+    // alternative is the GENERIC fallback: delete the ECONNREFUSED branch
+    // entirely and that regex still matches. Verified — 41 tests stayed
+    // green with the branch removed.
+    //
+    // The mutation sweep missed it too, and the reason is worth keeping:
+    // inverting `===` to `!==` makes the branch fire for every OTHER
+    // syscall, which a sibling's exact test catches. Only DELETING the
+    // branch is invisible, and deletion was not one of the sweep's
+    // operators. It is now.
+    expect(
+      explainConnectFailure("http", server({ url: "https://x/mcp" }), syscallError("ECONNREFUSED")),
+    ).toContain("nothing is listening");
+  });
+
   test("ENOTFOUND says the host does not resolve", () => {
     expect(explainConnectFailure("http", server({ url: "https://x/mcp" }), syscallError("ENOTFOUND"))).toContain(
       "does not resolve",

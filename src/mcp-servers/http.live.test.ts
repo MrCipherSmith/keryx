@@ -297,6 +297,41 @@ describe("a redirect is refused, and the target is never contacted", () => {
     expect(redirector.requests().length).toBeGreaterThan(0);
   }, 30_000);
 
+  test("including the SSE stream's GET, which the POST test could not reach", async () => {
+    // The finding this test exists for. `redirect: "error"` was set on
+    // `requestInit`, and the SDK spreads `requestInit` into only two of
+    // its three fetch calls — `send()` and `terminateSession()`. The
+    // third, `_startOrAuthSse()`, hand-builds the GET that opens the
+    // event stream, so it ran at the platform default of following up to
+    // twenty hops. `_commonHeaders()` merges `requestInit.headers` into
+    // it, so the CREDENTIAL was on the one call with no policy.
+    //
+    // The test above could not see this: its fixture redirected every
+    // request, so the first POST was refused and the GET never ran. This
+    // one handshakes cleanly and redirects only the GET — what a hostile
+    // server would actually do.
+    const target = await mock();
+    const server = await mock({ redirectSseTo: target.url });
+
+    const connection = await connectHttpMcpServer(server.url, {
+      headers: { "X-Api-Key": "sk-live-must-not-follow" },
+      handshakeTimeoutMs: 10_000,
+    });
+    try {
+      // The handshake succeeds — a failed SSE open is non-fatal per the
+      // spec, so this is not a test about the connection breaking.
+      await connection.listTools();
+    } finally {
+      await connection.close();
+    }
+
+    // The assertion. Not "it failed": the credential must not arrive.
+    expect(target.requests()).toEqual([]);
+    // And the GET really was attempted, so this cannot pass by the SSE
+    // leg never running at all — which is exactly how the gap survived.
+    expect(server.requests().some((r) => r.method === "GET")).toBe(true);
+  }, 30_000);
+
   test("and the operator is told it was a redirect, not that the server is broken", async () => {
     const target = await mock();
     const redirector = await mock({ redirectTo: target.url });
