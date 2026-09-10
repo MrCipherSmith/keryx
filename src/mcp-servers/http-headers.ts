@@ -125,15 +125,6 @@ function duplicateHeaderNames(headers: Record<string, string> | undefined): stri
   return [...seen.values()].filter((names) => names.length > 1).flat();
 }
 
-/** Header name comparison is case-insensitive, per RFC 9110. */
-function findHeader(headers: Record<string, string> | undefined, name: string): string | undefined {
-  const wanted = name.toLowerCase();
-  for (const [key, value] of Object.entries(headers ?? {})) {
-    if (key.toLowerCase() === wanted) return value;
-  }
-  return undefined;
-}
-
 function hasHeader(headers: Record<string, string> | undefined, name: string): boolean {
   const wanted = name.toLowerCase();
   return Object.keys(headers ?? {}).some((key) => key.toLowerCase() === wanted);
@@ -183,11 +174,21 @@ export function resolveHttpHeaders(
   for (const [name, value] of Object.entries(expanded.headers ?? {})) {
     if (duplicates.some((d) => d.toLowerCase() === name.toLowerCase())) continue;
 
-    // The EXACT key. `findHeader` returns the first case-insensitive
-    // match, which for two keys differing only in case read the wrong
-    // entry's raw value — the duplicate guard above now refuses that
-    // config outright, and this makes the lookup unambiguous regardless.
-    const rawValue = raw.headers?.[name] ?? findHeader(raw.headers, name);
+    // The EXACT key, and only the exact key.
+    //
+    // This used to fall back to a case-insensitive `findHeader`, which was
+    // dead code: `config.ts` expands header VALUES and copies the keys
+    // through unchanged, so `expanded.headers` and `raw.headers` always
+    // have identical keys and the fallback could never fire. The mutation
+    // sweep found it by inverting `findHeader`'s comparison and watching
+    // nothing fail — an unreachable branch is not a covered one, and it
+    // read as a deliberate case-insensitive lookup that a future change
+    // might have relied on.
+    //
+    // (Case-insensitive matching between two DIFFERENT keys is still
+    // handled: the duplicate guard above refuses that config outright,
+    // because there is no correct answer to pick.)
+    const rawValue = raw.headers?.[name];
     const missing = unresolvedVariables(rawValue, env);
     if (missing.length > 0) {
       // The variable is what the operator can act on, so name it — even

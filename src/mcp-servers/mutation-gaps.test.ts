@@ -146,8 +146,13 @@ describe("socket errors that are not the first one in the list", () => {
 
 describe("finding a header by name", () => {
   // MUTANT: `key.toLowerCase() === wanted` -> `!==` in `findHeader`,
-  // survived. The function returns the FIRST match; inverted it returns
-  // the first NON-match, and every test happened to have one header.
+  // survived — and survived again after this test was written, which is
+  // what identified the real problem. `findHeader` was DEAD: it existed
+  // only as the `??` fallback on the raw lookup, and `config.ts` copies
+  // header keys through expansion unchanged, so the exact key always hit
+  // and the fallback could never fire. No test can kill a mutant in
+  // unreachable code. The function is gone; this test now pins the
+  // behaviour the lookup does have.
   test("with several headers, the raw value looked up is the RIGHT one", () => {
     // `X-Other` is literal and fine; `Authorization` names an unset
     // variable. If the lookup returns the wrong entry, the hollow check
@@ -171,9 +176,11 @@ describe("finding a header by name", () => {
 
   // MUTANT: `raw.headers?.[name] ?? findHeader(...)` -> `||`, survived.
   // NOT an equivalent mutant, unlike the other `??` survivors: an exact
-  // key whose raw value is the EMPTY STRING is falsy, so `||` discards it
-  // and falls through to the case-insensitive search. Empty header values
-  // are the entire subject of this module.
+  // key whose raw value is the EMPTY STRING is falsy, so `||` discarded
+  // it and fell through to the case-insensitive search. Empty header
+  // values are the entire subject of this module. With the dead fallback
+  // removed the `??` is gone too, and this pins the behaviour so it
+  // cannot come back.
   test("an exact key holding an empty string is used, not skipped over", () => {
     const raw: McpServerEntry = { url: "https://x", headers: { "X-Api-Key": "" } };
     const result = resolveHttpHeaders(raw, raw, {});

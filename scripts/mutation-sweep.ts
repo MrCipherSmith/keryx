@@ -69,6 +69,26 @@ const OPERATORS: Array<readonly [RegExp, string]> = [
   [/!([a-zA-Z_$][\w$.]*)\b/g, "$1"],
 ];
 
+/**
+ * Mutants that cannot change behaviour, skipped so the report stays read.
+ *
+ * `x ?? {}` and `x || {}` differ only when `x` is falsy-but-not-nullish.
+ * For an object, array, boolean or empty-string default there is no such
+ * value, so the mutant is EQUIVALENT — it survives every possible test
+ * suite. The first run reported eighteen of them among thirty-nine
+ * survivors, and a report that is half noise is a report nobody reads to
+ * the end, which would waste the two real findings sitting in it.
+ *
+ * `?? findHeader(...)`, `?? process.env` and `?? 3` are NOT skipped: a
+ * falsy left-hand side is reachable there, and one of them was a genuine
+ * gap.
+ */
+const EQUIVALENT = [/\?\? \{\}/, /\?\? \[\]/, /\?\? ""/, /\?\? false/, /\?\? null/];
+
+function isEquivalent(original: string, mutated: string): boolean {
+  return EQUIVALENT.some((p) => p.test(original)) && mutated.includes("|| ");
+}
+
 function arg(name: string, fallback?: string): string | undefined {
   const index = process.argv.indexOf(`--${name}`);
   return index === -1 ? fallback : process.argv[index + 1];
@@ -146,6 +166,7 @@ async function main(): Promise<void> {
       for (const [pattern, replacement] of OPERATORS) {
         const mutatedLine: string = text.replace(pattern, replacement);
         if (mutatedLine === text) continue;
+        if (isEquivalent(text, mutatedLine)) continue;
         const copy = [...lines];
         copy[lineNo - 1] = mutatedLine;
         mutants.push({
