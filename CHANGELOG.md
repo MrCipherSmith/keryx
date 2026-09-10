@@ -3,6 +3,43 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.87] — 2026-09-10
+
+### Added
+
+- **`keryx flow init --base <branch>`, and a completion condition that reads
+  it.** The flow record held a pull-request url and no branch of any kind, so
+  `flow complete` had no recorded answer to "where was this supposed to land".
+
+  Narrower than it sounds, and worth stating precisely: the review gate's
+  condition 3 already compares CONTENT, so a branch cut from `feature/x` and
+  merged to `main` is refused today — the trees differ. What survives that is a
+  target that has CONVERGED with the intended one, where a squash onto either
+  yields the same tree. `review-pr-feedback --fix` makes exactly that shape: it
+  cuts from another pull request's head and must land back inside it, or the
+  reviewer's diff is unchanged while the run reports success to every reviewer.
+
+  Three states, kept distinct: `not recorded` (no base named — not a pass),
+  `unobserved` (recorded but unresolvable — fails, and names
+  `git fetch origin <branch>`), and pass/violated. The base is also captured at
+  `flow implemented` from the pull request's own base, but only when the record
+  is still empty: overwriting it would let a retargeted PR pass itself.
+
+### Fixed
+
+- **A Force keypress guard that no test could fail.** The rule stopping a
+  second queue-Force press from double-dispatching lived in the TUI shell,
+  which has no headless seam, so it was covered by a test that reads the file
+  as text. Deleting the guard left every assertion passing and the whole
+  101-test file green. The rules moved into `forceForegroundQueueItem`, where
+  three behavioural tests drive two overlapping presses.
+
+### Internal
+
+- The routing guard now pins the reachable trigger set by NAME rather than by
+  count, and one-word triggers have their own inflection test — the property an
+  earlier regression cost 29 of them, which a reachability count could not see.
+
 ## [0.2.86] — 2026-09-10
 
 Two defects in the machinery that is supposed to notice defects, both found by
