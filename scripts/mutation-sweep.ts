@@ -144,7 +144,7 @@ async function main(): Promise<void> {
       if (text === undefined || !isMutable(text)) continue;
 
       for (const [pattern, replacement] of OPERATORS) {
-        const mutatedLine = text.replace(pattern, replacement);
+        const mutatedLine: string = text.replace(pattern, replacement);
         if (mutatedLine === text) continue;
         const copy = [...lines];
         copy[lineNo - 1] = mutatedLine;

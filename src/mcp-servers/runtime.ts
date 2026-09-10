@@ -265,7 +265,20 @@ function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): num
   return server.tool_timeouts?.[rawName] ?? server.tool_timeout_sec;
 }
 
-async function defaultConnect(
+/**
+ * Dial a configured server the way the session dials it.
+ *
+ * Exported because `keryx mcp doctor` had its OWN copy of this function,
+ * hand-duplicated down to the comments — and the copies had already
+ * drifted: the doctor's resolved credentials from `process.env` while its
+ * caller passed `options.env` everywhere else, so the command whose entire
+ * job is to tell you whether a server will work could dial with a
+ * different environment than the session would.
+ *
+ * A pre-flight that does not run the real procedure is not a pre-flight.
+ * There is one procedure now, and both callers pass their `env` into it.
+ */
+export async function defaultConnect(
   server: ResolvedMcpServer,
   env: Record<string, string | undefined>,
   signal?: AbortSignal,

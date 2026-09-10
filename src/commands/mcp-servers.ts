@@ -12,7 +12,7 @@
 
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
-import { connectHttpMcpServer, connectStdioMcpServer, type McpServerConnection } from "../mcp-client/client";
+import type { McpServerConnection } from "../mcp-client/client";
 import {
   loadMcpServers,
   parseConfigFile,
@@ -26,10 +26,8 @@ import {
   runDoctor,
   transportOf,
 } from "../mcp-servers/doctor";
-import { describeHollow, resolveHttpHeaders } from "../mcp-servers/http-headers";
 import type { ConnectFn } from "../mcp-servers/manager";
-import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
-import { defaultServerCwd, handshakeBudgetMs, KILL_GRACE_MS } from "../mcp-servers/runtime";
+import { defaultConnect, KILL_GRACE_MS } from "../mcp-servers/runtime";
 import {
   addServer,
   projectConfigFile,
@@ -72,6 +70,14 @@ export type McpConsumerDeps = {
   readonly projectRoot?: string | undefined;
   /** Overridden in tests; otherwise spawns the server. */
   readonly connect?: ConnectFn | undefined;
+  /**
+   * Overridden in tests; otherwise the process environment.
+   *
+   * `doctor` used `process.env` for the dial and `options.env` for the
+   * redaction, in two different functions, so a test could inject an
+   * environment and have half the command ignore it.
+   */
+  readonly env?: Record<string, string | undefined> | undefined;
   readonly log: (line: string) => void;
   readonly err: (line: string) => void;
 };
@@ -492,10 +498,16 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   const approvals = loadTrustStore(deps.configDir);
   let report;
   try {
+    // ONE env for the whole command. `defaultConnect` is imported from the
+    // runtime now rather than copied here, so the pre-flight runs the
+    // procedure the session runs — the two copies had already drifted on
+    // exactly this point.
+    const env = deps.env ?? process.env;
     report = await runDoctor(config, {
       only,
-      connect: deps.connect ?? ((server) => defaultConnect(server, dialling.signal, kills)),
+      connect: deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills)),
       heldForApproval: (server) => requiresApproval(server, approvals),
+      env,
     });
   } finally {
     // Removed only once the dialling is done. Printing happens after this,
@@ -512,46 +524,6 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   return report.healthy ? 0 : 1;
 }
 
-async function defaultConnect(
-  server: ResolvedMcpServer,
-  signal?: AbortSignal,
-  kills?: Array<Promise<void>>,
-): Promise<McpServerConnection> {
-  if (transportOf(server) === "http") {
-    const resolved = resolveHttpHeaders(server, server.raw, process.env);
-    if (!resolved.ok) {
-      // Same refusal the shell makes, and the same message. `doctor` is a
-      // pre-flight; a pre-flight that dials on a credential the session
-      // would refuse is testing something else.
-      throw new Error(describeHollow(resolved.hollow));
-    }
-    return connectHttpMcpServer(server.url as string, {
-      headers: resolved.headers,
-      handshakeTimeoutMs: handshakeBudgetMs(server),
-      ...(signal === undefined ? {} : { signal }),
-    });
-  }
-
-  const command = server.command;
-  if (command === undefined || command === "") {
-    throw new Error(`server "${server.name}" sets neither command nor url`);
-  }
-  return connectStdioMcpServer(
-    [command, ...(server.args ?? [])],
-    {
-      // The SAME resolution the shell uses (`defaultServerCwd`). These two
-      // disagreed: the shell ran a project server from its project root and
-      // `doctor` ran it from the process cwd, so a server that resolves
-      // relative paths behaved differently under the command whose whole job
-      // is to tell you whether it will work.
-      cwd: server.cwd ?? defaultServerCwd(server),
-      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
-    },
-    handshakeBudgetMs(server),
-    signal,
-    kills,
-  );
-}
 
 /**
  * `--scope user|project`, defaulting to user.

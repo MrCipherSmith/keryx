@@ -326,7 +326,7 @@ export function explainConnectFailure(
     if (syscall === "ENOTFOUND" || syscall === "EAI_AGAIN") {
       return `the host in ${url} does not resolve (${syscall})`;
     }
-    if (syscall.includes("CERT") || syscall.includes("SSL") || syscall.includes("TLS")) {
+    if (isTlsCode(syscall)) {
       return `the TLS certificate for ${url} was rejected (${syscall})`;
     }
     if (syscall === "ETIMEDOUT") return `${url} did not answer in time (${syscall})`;
@@ -353,6 +353,36 @@ export function explainConnectFailure(
     return `${url} redirected, which keryx does not follow for MCP. Configure the final URL. (${message})`;
   }
   return `${url}: ${message}`;
+}
+
+/**
+ * A TLS failure, by code.
+ *
+ * This was `code.includes("CERT") || includes("SSL") || includes("TLS")`,
+ * which is a guess at OpenSSL's naming, and the mutation sweep showed the
+ * branch had never been executed at all. Run against real codes it misses
+ * `UNABLE_TO_VERIFY_LEAF_SIGNATURE` and `HOSTNAME_MISMATCH` — the two an
+ * operator behind a corporate TLS-intercepting proxy actually gets, which
+ * is precisely the case where "could not be reached" sends them to debug
+ * the wrong end.
+ *
+ * The named set first, the substrings after, so an unlisted OpenSSL code
+ * still lands somewhere sensible.
+ */
+const TLS_CODES = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "HOSTNAME_MISMATCH",
+  "EPROTO",
+]);
+
+function isTlsCode(code: string): boolean {
+  return TLS_CODES.has(code) || code.includes("CERT") || code.includes("SSL") || code.includes("TLS");
 }
 
 /** The HTTP status the SDK carries on `StreamableHTTPError.code`. */
