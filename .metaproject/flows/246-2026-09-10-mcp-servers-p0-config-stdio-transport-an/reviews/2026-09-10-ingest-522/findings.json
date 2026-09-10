@@ -1,0 +1,819 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "security-reviewer",
+    "severity": "blocker",
+    "problem": "createMcpRuntime ran at session start and dialled every enabled server in <project>/.keryx/mcp-servers.json, a COMMITTED file, so `git clone && cd && keryx` executed whatever command the repository's author wrote. No approval, no folder-trust mechanism anywhere in src/, and neither the model nor use_tool involved.",
+    "impact": "Arbitrary code execution on the machine of anyone who clones a repository and opens a keryx shell in it. entryProblems placed no constraint on `command`, so `npx -y evil-mcp` runs before the prompt paints.",
+    "suggested_fix": "src/mcp-servers/trust.ts holds project-scoped servers at status needs-approval until `keryx mcp trust <name>`. Approval keyed by a hash of what is EXECUTED (command/args/env/cwd) so a later commit revokes it; stored owner-only outside the repository; an unreadable store grants nothing. Recorded as D-14.",
+    "evidence": "Reviewer searched trustProject|projectTrust|isTrustedProject|trusted-workspace across src/: zero hits. runtime.test.ts and manager.test.ts inject a fake connect, so no test exercised a real spawn from a project file.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:1886 (TUI createMcpRuntime)",
+        "src/commands/shell.ts:2173 (readline createMcpRuntime)",
+        "src/mcp-servers/runtime.ts (startServers call)"
+      ],
+      "enumeration_method": "Both createMcpRuntime call sites enumerated by `keryx ctx rg 'createMcpRuntime' src`; they are the only two entry points that start servers, and both now filter through requiresApproval before startServers is reached."
+    },
+    "global_id": "2026-09-10-ingest-522#F-001",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "trust.test.ts 'the clone-and-run scenario spawns NOTHING' asserts a dial COUNTER of 0, not a status; removing the requiresApproval filter makes it fail. 11 tests, 0 fail.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "correctness-reviewer",
+    "severity": "blocker",
+    "problem": "entryProblems validated only the name, command/url exclusivity and two timeouts. expandEntry then called .map on args and .replace on every env/headers value, so a wrongly typed field threw a TypeError out of loadMcpServers and through createMcpRuntime, whose docstring says it never throws.",
+    "impact": "One committed typo — `\"args\": \"oops\"` — stopped `keryx shell` opening for everyone who checked the repository out. Both shell.ts call sites are unguarded.",
+    "suggested_fix": "Full type validation in entryProblems: args, env, headers, command, url, cwd, bearer_token_env_var, enabled, type, tool_timeouts. Each rejection reported rather than silently skipped.",
+    "evidence": "Reviewer ran it directly: `createMcpRuntime THREW: entry.args.map is not a function`. config.test.ts only ever wrote well-typed entries.",
+    "confidence": "high",
+    "file": "src/mcp-servers/config.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/config.ts:120 expandEntry command",
+        "src/mcp-servers/config.ts:121 url",
+        "src/mcp-servers/config.ts:122 args.map",
+        "src/mcp-servers/config.ts:123-127 env values",
+        "src/mcp-servers/config.ts:128-132 headers values"
+      ],
+      "enumeration_method": "Every field expandEntry touches, read off the function body; entryProblems now type-checks each one plus the fields the schema declares."
+    },
+    "global_id": "2026-09-10-ingest-522#F-002",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "config.types.test.ts, 15 cases, each asserting BOTH that nothing throws AND that the problem is reported, plus one driving createMcpRuntime end to end. 15 pass.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "security-reviewer",
+    "severity": "major",
+    "problem": "use_tool returns the third-party server's isError verbatim, and both untrusted-content sites in agent.ts were conjoined with !result.isError.",
+    "impact": "A hostile server answering {isError: true, content: '<instructions>'} put its prose into provider-bound history with no untrusted banner AND without latching untrustedContentSeen, leaving the next shell_exec in the same turn ungated. The one control use_tool had was switchable by the content's own author.",
+    "suggested_fix": "`untrusted` alone decides. No behaviour change for web_fetch/web_search, which only ever set the flag on their success path.",
+    "evidence": "agent.ts:1588 and :1595, both `result.untrusted === true && !result.isError`. tools.test.ts asserted only result.untrusted on a fixture hardcoded to isError:false.",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts:1588 history banner",
+        "src/commands/agent.ts:1595 untrustedContentSeen latch"
+      ],
+      "enumeration_method": "`keryx ctx rg 'untrustedContentSeen|Untrusted external content' src` enumerates every consumer of the flag; both were guarded by !isError and both were changed."
+    },
+    "global_id": "2026-09-10-ingest-522#F-003",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mcp-untrusted.test.ts drives runAgentTurn and asserts the banner for isError:true, for false, and its ABSENCE for a non-untrusted tool. 4 pass.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "security-reviewer",
+    "severity": "major",
+    "problem": "search_tool returned server-authored tool descriptions with no untrusted marker, and it is risk:read so it is auto-approved.",
+    "impact": "A server could put a paragraph of instructions in a tool description and have the model read it with no prompt and no provenance marker; use_tool is never invoked so the destructive gate never fires. It also survives the read-only side worker's risk===read filter.",
+    "suggested_fix": "search_tool output marked untrusted:true, and both use_tool error paths too, since they embed server-supplied text.",
+    "evidence": "tools.ts returned `{ output: JSON.stringify(hits), isError: false }` with no untrusted field; descriptions come verbatim from toToolDescriptors.",
+    "confidence": "high",
+    "file": "src/mcp-servers/tools.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/tools.ts search_tool hits",
+        "src/mcp-servers/tools.ts use_tool timeout path",
+        "src/mcp-servers/tools.ts use_tool error path"
+      ],
+      "enumeration_method": "Every return statement in createMcpInteractiveTools that carries server-derived text, read off the function body."
+    },
+    "global_id": "2026-09-10-ingest-522#F-004",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mcp-untrusted.test.ts drives a search_tool call whose hit description carries an injection and asserts the banner arrives with it.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "security-reviewer",
+    "severity": "major",
+    "problem": "spawn-env.ts reused EXTERNAL_ENV_DENY as a security boundary. That list's own docstring says ANTHROPIC_API_KEY is on it 'to make the SUBSCRIPTION work, not for secrecy'.",
+    "impact": "Every third-party MCP server received OPENAI_API_KEY, GEMINI_API_KEY, GOOGLE_API_KEY, GITHUB_TOKEN, GH_TOKEN, NPM_TOKEN, AWS_SECRET_ACCESS_KEY and SSH_AUTH_SOCK — a live agent socket, so the server can sign with the operator's SSH keys and push to their repositories, with no file to steal and nothing in the process list.",
+    "suggested_fix": "Three layers: the shared list, an MCP-specific name list (agent sockets, provider keys, forge and cloud tokens), and a sweep for secret-SHAPED names. Still copy-then-strip so a toolchain keeps its environment; an explicit -e still overrides.",
+    "evidence": "spawn-env.test.ts asserted against EXTERNAL_ENV_DENY itself, which makes it vacuous for every name not on that list. keryx maintains a broader provider list in mask-resolve.ts that spawn-env.ts did not use.",
+    "confidence": "high",
+    "file": "src/mcp-servers/spawn-env.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/spawn-env.ts buildMcpChildEnv",
+        "src/commands/mcp-servers.ts defaultConnect",
+        "src/mcp-servers/runtime.ts defaultConnect"
+      ],
+      "enumeration_method": "`keryx ctx rg 'buildMcpChildEnv' src` enumerates both spawn paths; both route through the one builder, so fixing it covers the class."
+    },
+    "global_id": "2026-09-10-ingest-522#F-005",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "spawn-env.test.ts asserts each previously-leaked name is gone, an un-enumerated secret-shaped name is swept, and near-miss names (KEYBOARD_LAYOUT, MONKEY_PATCH) survive. 12 pass.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "correctness-reviewer",
+    "severity": "major",
+    "problem": "addCommand sliced the POSITIONALS at `--` but read its own FLAGS from the whole argv, so flags belonging to the server being launched were consumed by keryx.",
+    "impact": "Four silent wrong results, all exit 0: `add fs -- mycmd --scope project` wrote to the committed project file; `add mail -- newcmd --force` overwrote an existing server; `add mail -- mysrv -e SMTP=host:25` invented a child environment variable; `add gw -- mycmd --transport http` failed naming flags nobody typed. addCommand's own doc comment claimed the separator prevented exactly this.",
+    "suggested_fix": "splitAtSeparator once; every flag read from the part before `--`. Unknown options refused rather than becoming the server NAME. Malformed -e and a trailing --header refuse instead of dropping.",
+    "evidence": "Reviewer reproduced all four against the real CLI with XDG_DATA_HOME pointed at a temp directory, and quoted the resulting JSON.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "parseScope",
+        "optionValue(--transport)",
+        "parseEnv",
+        "parseHeaders",
+        "args.includes(--force)",
+        "args.includes(--json) in list and doctor"
+      ],
+      "enumeration_method": "Every read of `args` in src/commands/mcp-servers.ts enumerated by reading the module; each now takes the pre-separator slice."
+    },
+    "global_id": "2026-09-10-ingest-522#F-006",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mcp-servers.argv.test.ts, 10 cases, each asserting the FILE that was written, plus anti-vacuity that keryx's own flags before the separator still work. 10 pass.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "correctness-reviewer",
+    "severity": "major",
+    "problem": "Both shell call sites passed `gitRoot: cwd`, which collapses projectConfigFiles to a single directory, while `keryx mcp list` passes resolveProjectRoot and does walk.",
+    "impact": "A server configured at the repository root was listed by `keryx mcp list` and invisible to a shell started in a subdirectory. Two surfaces, two answers, and the operator's debugging starts at the server rather than at the walk.",
+    "suggested_fix": "Both sites pass resolveProjectRoot, and both honour cacheDir so tests stop reading the developer's real MCP config.",
+    "evidence": "Reproduced: projectConfigFiles('/repo/a/b','/repo/a/b') returns one path; with '/repo' it returns three.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts TUI createMcpRuntime",
+        "src/commands/shell.ts readline createMcpRuntime"
+      ],
+      "enumeration_method": "`keryx ctx rg 'createMcpRuntime' src` — two production call sites, both corrected."
+    },
+    "global_id": "2026-09-10-ingest-522#F-007",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Direct reproduction of projectConfigFiles before and after; the shell suite (64 tests) stays green.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "major",
+    "problem": "startServers recorded status:failed with no `connection` field when listTools failed after a successful dial, so closeServers could never reach the child; and Promise.race cancels nothing, so a dial abandoned by the timeout orphaned the connection it later produced.",
+    "impact": "One resident child process per occurrence, outliving the keryx process, each still holding whatever environment F-005 gave it. The operator is also told `failed` about a server that is actually running.",
+    "suggested_fix": "Close in the catch; withTimeout gained an onAbandoned hook so a late-landing dial is closed.",
+    "evidence": "Reviewer's probe against the real module recorded 0 closes in both cases. manager.test.ts built exactly the listTools-fails fixture and asserted only the status — one assertion short. doctor.ts already had the finally for the same two calls.",
+    "confidence": "high",
+    "file": "src/mcp-servers/manager.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/manager.ts connect+listTools worker",
+        "src/mcp-servers/doctor.ts diagnose (already correct, checked)"
+      ],
+      "enumeration_method": "Both places in the codebase that dial and then list, found by reading every caller of connectStdioMcpServer."
+    },
+    "global_id": "2026-09-10-ingest-522#F-008",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Four tests including anti-vacuity that a dial winning the race is NOT closed behind the caller's back. 14 pass.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-009",
+    "reviewer": "test-quality-auditor",
+    "severity": "major",
+    "problem": "The AC11 SDK-import guard scanned line by line for a line starting with `import` that contains the SDK path.",
+    "impact": "Two ordinary syntaxes walked straight past it: a multi-line import (the `from` line does not start with `import`) and `export * from`. Combined with the companion test — which asserts `keryx mcp --help` exits 0 on a machine that HAS the optional SDK installed — a static SDK dependency could be added to the --help path with both AC11 tests green.",
+    "suggested_fix": "Guards read the real module graph via Bun.Transpiler.scan and walk it from cli.ts, so a static edge anywhere on the --help path fails. Dynamic imports are distinguished and allowed.",
+    "evidence": "Auditor applied both syntaxes to src/mcp-servers/runtime.ts; both survived at 8 pass / 0 fail. The single-line control did fail correctly.",
+    "confidence": "high",
+    "file": "src/mcp-servers/constraints.test.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/constraints.test.ts SDK import scan",
+        "src/mcp-servers/constraints.test.ts --help exit-code test",
+        "src/mcp-servers/constraints.test.ts capability import scan"
+      ],
+      "enumeration_method": "Every text-scanning assertion in the file, enumerated by reading it; all three replaced with graph or behavioural checks."
+    },
+    "global_id": "2026-09-10-ingest-522#F-009",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Both of the auditor's bypasses replayed against the rebuilt guards; each now fails two tests.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-010",
+    "reviewer": "test-quality-auditor",
+    "severity": "major",
+    "problem": "The test named 'the only files the store writes are the two native ones plus the overlay' asserted that three path-builder functions exist.",
+    "impact": "An exhaustiveness claim backed by presence checks. A fourth writer to a genuinely foreign third-party config (claude_desktop_config.json) was invisible. The neighbouring foreign-path scan matched contiguous string literals only, so a path built with path.join — which is how real code builds paths — did not trip it.",
+    "suggested_fix": "Behavioural: drive every writer against a temp directory and assert the exact set of files that appeared.",
+    "evidence": "Auditor added the fourth writer and it survived at 8 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/mcp-servers/constraints.test.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/constraints.test.ts store-writers test",
+        "src/mcp-servers/constraints.test.ts foreign-path scan"
+      ],
+      "enumeration_method": "Both assertions in the 'writes no config it does not own' describe block."
+    },
+    "global_id": "2026-09-10-ingest-522#F-010",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The auditor's fourth-writer mutation replayed; it now fails.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 68f2c19d (first fix batch) with a regression test verified against the mutation it prevents; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-011",
+    "reviewer": "test-quality-auditor",
+    "severity": "minor",
+    "problem": "Comment-stripping in constraints.test.ts was two regex replaces, which is not a tokenizer.",
+    "impact": "A `\"/*\"` inside a string literal opened a comment that ran to the next real `*/` and swallowed the violation after it; `\"a//b\"` deleted the rest of its line. Both bypasses verified to survive — the mechanism could not establish the property it reported.",
+    "suggested_fix": "Replaced with a character-walking stripper that tracks whether it is inside a string, template or comment.",
+    "evidence": "Auditor's two bypasses each survived at 8 pass / 0 fail while the undisguised control failed correctly.",
+    "confidence": "high",
+    "file": "src/mcp-servers/constraints.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-011",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The `/*`-in-a-string bypass replayed against the new stripper; it now fails.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-012",
+    "reviewer": "security-reviewer",
+    "severity": "minor",
+    "problem": "StdioClientTransport defaults `stderr` to inherit, so the MCP child writes directly to the operator's terminal.",
+    "impact": "A server can emit cursor-positioning and colour escapes and paint a convincing auto-approval line into the running TUI transcript, or flood stderr and make the shell unusable. No per-server prefix and no attribution.",
+    "suggested_fix": "stderr: 'pipe', drained and discarded — an unread pipe fills and blocks the child mid-write, which would trade noise for a hang.",
+    "evidence": "SDK source: dist/esm/client/stdio.js uses `this._serverParams.stderr ?? 'inherit'`. No test asserted anything about the child's stderr disposition.",
+    "confidence": "high",
+    "file": "src/mcp-client/client.ts",
+    "global_id": "2026-09-10-ingest-522#F-012",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "stdio.stderr.test.ts spawns a real child keryx against a fixture that writes an ANSI forgery and captures the parent's stderr; a second test proves the fixture really writes it. Reverting to inherit fails the first.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-013",
+    "reviewer": "security-reviewer",
+    "severity": "minor",
+    "problem": "describeTarget printed command/args/url AFTER ${VAR} expansion.",
+    "impact": "`keryx mcp list` echoed a live token for an ordinary config like `--token=${GITHUB_TOKEN}`. doctor follows the redaction rule for env/headers; list followed it nowhere, and list output is at least as likely to be pasted into an issue.",
+    "suggested_fix": "ResolvedMcpServer carries the raw entry; all human output prints from it. Safer and more informative — the variable name says what the server needs.",
+    "evidence": "doctor.ts:14-16 states the rule; there was no equivalent assertion over listCommand's human output.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "global_id": "2026-09-10-ingest-522#F-013",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mcp-servers.test.ts sets a real env var, lists a server whose args reference it, and asserts the value is absent while the ${NAME} form is present.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-014",
+    "reviewer": "security-reviewer",
+    "severity": "minor",
+    "problem": "classifyToolRisk read inputSchema.annotations, but `annotations` is a SIBLING of inputSchema on Tool, and toToolDescriptors dropped it entirely.",
+    "impact": "No honest server could ever be classified `read` — the advisory column was permanently `destructive` and carried no information — while a hostile server could nest the field where the spec says it does not go and claim `read`. The test encoded the same wrong assumption as the code, so both agreed and neither matched the protocol.",
+    "suggested_fix": "annotations carried through descriptor and catalog; classifyToolRisk reads the protocol location.",
+    "evidence": "MCP spec types (dist/esm/spec.types.d.ts) declare annotations beside inputSchema on Tool. tools.test.ts built entries with annotations nested inside inputSchema, matching the bug.",
+    "confidence": "high",
+    "file": "src/mcp-servers/tools.ts",
+    "global_id": "2026-09-10-ingest-522#F-014",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "A test asserts the nested placement does NOT grant read while the correct one does; stdio.live.test.ts now asserts a real server earns `read` over the wire, which was previously unreachable.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-015",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "minor",
+    "problem": "createMcpRuntime was called before the surface branch, but `keryx shell --chat` never calls makeAgentDeps and has no tool list.",
+    "impact": "Every configured server was spawned, held for the session and closed at exit, having been consulted by nothing.",
+    "suggested_fix": "Lazy creation, which also moves it inside the try that closes it (closing the separate window where a throw between creation and the try leaked every child).",
+    "evidence": "shell.ts: createMcpRuntime at the top of the `surface !== readline` block, which covers tui-chat; the chat branch builds makeShellDeps with no mcp binding.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "global_id": "2026-09-10-ingest-522#F-015",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "The chat branch is verified by reading it to make no call to getMcpRuntime; the shell suite (64 tests) stays green.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-016",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "minor",
+    "problem": "close() awaited every outstanding dial before closing anything.",
+    "impact": "Quitting a session, or the TUI failing to init and falling through to readline, blocked for the full startup budget — startup_timeout_sec has no upper bound in the config, at concurrency 4. Eight unreachable servers at the 15s default is thirty seconds of blank terminal.",
+    "suggested_fix": "Bounded grace, then close what is known; late arrivals still closed, not awaited. Closing made idempotent so the two sweeps cannot double-count.",
+    "evidence": "runtime.ts close(): `await settled; await closeServers(states)`. config.ts validates startup_timeout_sec as 'a number greater than 0' with no maximum.",
+    "confidence": "high",
+    "file": "src/mcp-servers/runtime.ts",
+    "global_id": "2026-09-10-ingest-522#F-016",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The existing in-flight-dial test still passes and now also proves close-once: the double-close it exposed was fixed rather than the test relaxed.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-017",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "minor",
+    "problem": "SIGINT ran process.exit, which runs no finally, and on a TTY no handler was registered at all.",
+    "impact": "Ctrl-C skipped mcpRuntime.close() and left one child process per connected server.",
+    "suggested_fix": "A handler for both cases that closes first. This readline interface is created without an output, so it is not in terminal mode and raises no SIGINT of its own — there was no confirmation flow to preserve.",
+    "evidence": "shell.ts registered `process.on('SIGINT')` only under `if (!process.stdin.isTTY)`, and that handler called process.exit(130) directly.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "global_id": "2026-09-10-ingest-522#F-017",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Not driven end to end: sending a real SIGINT to a child keryx and observing its grandchildren needs process-tree inspection that this suite has no harness for. The close call is present on the path and close() itself is covered by runtime.test.ts.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-018",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "minor",
+    "problem": "reportMcpProblems wrote to stderr about 170 lines before the OpenTUI renderer mounts.",
+    "impact": "The alternate screen buffer wipes it, so on the default surface the operator never saw 'your mcp-servers.json has a trailing comma' — the exact bargain the function's own docstring exists to honour.",
+    "suggested_fix": "Reported after teardown on the TUI path.",
+    "evidence": "shell.ts: reportMcpProblems at runtime creation, renderer mounted much later in the same function.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "global_id": "2026-09-10-ingest-522#F-018",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Whether a line survives the alternate screen buffer is not observable from the test suite. The call was moved after teardown, which is verifiable by reading the control flow, and the problems themselves are covered by config.types.test.ts.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-019",
+    "reviewer": "lifecycle-reviewer",
+    "severity": "minor",
+    "problem": "The two defaultConnect implementations disagreed on cwd: the shell used defaultServerCwd (project root for a project server), doctor used process.cwd().",
+    "impact": "A server that resolves relative paths behaved differently under `keryx mcp doctor` than in the shell — making doctor an unreliable pre-flight for exactly the class of misconfiguration it exists to catch.",
+    "suggested_fix": "Both use defaultServerCwd.",
+    "evidence": "Reviewer compared runtime.ts:121 with commands/mcp-servers.ts:347; env handling was already consistent, only cwd diverged.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "global_id": "2026-09-10-ingest-522#F-019",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "Both call sites now reference the same exported helper; `keryx ctx rg 'defaultServerCwd' src` shows one definition and two uses.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-020",
+    "reviewer": "test-quality-auditor",
+    "severity": "minor",
+    "problem": "config.schema-parity.test.ts wrapped every case in a fixed {schemaVersion:1, servers:{...}}, so no top-level rule was ever compared, and the corpus only varied the four fields entryProblems happened to check.",
+    "impact": "Nine divergences passed under a test written specifically to catch drift, two of which crashed the shell (F-002). The test reported a property it could not establish.",
+    "suggested_fix": "Corpus widened; a document-level corpus added; `type` now enforced. The two remaining disagreements (schemaVersion optional at runtime, unknown keys round-tripped for forward compatibility) are asserted in BOTH directions with the reason, so they cannot quietly become licence.",
+    "evidence": "Auditor ran nine cases through validateAgainstSchemaObject and parseConfigFile and tabulated schema-rejects / runtime-accepts for all nine.",
+    "confidence": "high",
+    "file": "src/mcp-servers/config.schema-parity.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-020",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The widened corpus fails against the pre-fix entryProblems and passes after; 26 tests, 0 fail.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-021",
+    "reviewer": "correctness-reviewer",
+    "severity": "minor",
+    "problem": "`enabled` was never type-checked, and every non-empty string is truthy.",
+    "impact": "`\"enabled\": \"false\"` — a plausible YAML or env habit — started the server the operator meant to switch off, with no (disabled) tag and no problem reported anywhere. The JSON schema rejects the document.",
+    "suggested_fix": "Covered by F-002's type validation, with its own regression test.",
+    "evidence": "Reviewer: `enabled:\"false\" resolves to: \"false\"  problems: []`.",
+    "confidence": "high",
+    "file": "src/mcp-servers/config.ts",
+    "global_id": "2026-09-10-ingest-522#F-021",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "config.types.test.ts asserts the string form is rejected and the boolean form still works.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-022",
+    "reviewer": "correctness-reviewer",
+    "severity": "minor",
+    "problem": "SERVER_NAME_PATTERN allows a leading digit or hyphen; catalog.ts's FQN_PATTERN requires a leading letter or underscore.",
+    "impact": "`1password` is a name specification §3 explicitly blesses. It was accepted at write time, connected, reported a tool count, and had every one of its tools skipped from the catalog with nothing warning anywhere.",
+    "suggested_fix": "Refused at load with a message naming the cause.",
+    "evidence": "Reviewer: `server \"1password\": store/config accept=true  catalog entries=0 skipped=1`.",
+    "confidence": "high",
+    "file": "src/mcp-servers/config.ts",
+    "global_id": "2026-09-10-ingest-522#F-022",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "config.types.test.ts asserts a leading digit and a leading hyphen are refused and that a leading underscore and an ordinary name are not.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-023",
+    "reviewer": "test-quality-auditor",
+    "severity": "minor",
+    "problem": "The source-inspection guards in connection.test.ts sliced a flat 2 000 characters from the function signature, and one did not check its indexOf result.",
+    "impact": "Thirty lines of filler pushed a real transport.onmessage tap past the window and it survived. And a rename would make slice(-1, 1999) return the file's last character, so the test would pass over an effectively empty body.",
+    "suggested_fix": "Brace-matched to the function, plus a precondition test that the body was found and is non-trivial.",
+    "evidence": "Auditor inserted 30 filler statements before a real tap at offset 3566; it survived at 10 pass / 0 fail, while the same tap without filler failed correctly.",
+    "confidence": "high",
+    "file": "src/mcp-servers/connection.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-023",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The filler bypass replayed against the brace-matched window; it now fails.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-024",
+    "reviewer": "test-quality-auditor",
+    "severity": "minor",
+    "problem": "'Both paths share one tool-call outcome helper' asserted `occurrences >= 3`.",
+    "impact": "Monotone the wrong way: it detects the helper being deleted and never detects a path quietly inlining its own copy, which is the drift the test names in its own comment.",
+    "suggested_fix": "Exactly one definition, AND both connect functions reach it.",
+    "evidence": "Auditor added a duplicate wrapper and it survived.",
+    "confidence": "high",
+    "file": "src/mcp-servers/connection.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-024",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Both halves verified against their mutations: inlining the outcome in one connect function fails the second assertion; a second definition of the same name fails the first.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-025",
+    "reviewer": "test-quality-auditor",
+    "severity": "minor",
+    "problem": "The CLI test 'removes from the only scope that defines it' asserted that the USER config file throws on read — which was already true at setup, since that test never creates one.",
+    "impact": "Nothing asserted the entry left the PROJECT file. Deleting the writeDocument call from removeServer left this test passing; only store.test.ts caught it. The user-scope arm of definingScopes had no CLI-level coverage at all.",
+    "suggested_fix": "Asserts the entry present before and absent after; the user-scope arm gets its own test.",
+    "evidence": "Auditor deleted writeDocument from removeServer and this test passed.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-025",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "24 tests in the file, 0 fail, with the removal now asserted on the file that was actually written.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-026",
+    "reviewer": "test-quality-auditor",
+    "severity": "info",
+    "problem": "Three further tests could not fail for the reason they name: the concurrency test asserted DEFAULT_CONNECT_CONCURRENCY > 0; the advisory-classification test used a read-classified tool so the interesting branch was unreachable; the project-file mode test read the ambient umask.",
+    "impact": "Coverage counted for properties nothing established, and one of the three would fail under `umask 077` for an environmental reason that says nothing about the code.",
+    "suggested_fix": "The concurrency test measures the observed peak; the advisory test uses a destructive tool; the mode test asserts the mode the umask implies, which is the actual claim.",
+    "evidence": "Auditor: inlining 4 in startServers while keeping the export passed; making use_tool refuse on a destructive classification left the advisory test passing while four other tests caught it.",
+    "confidence": "high",
+    "file": "src/mcp-servers/manager.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-026",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "All three rewritten and green; the concurrency test now fails if the cap is inlined.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-027",
+    "reviewer": "test-quality-auditor",
+    "severity": "info",
+    "problem": "AC8's live test comments that 'the failure comes from the operating system rather than from the test' and asserts nothing about the error.",
+    "impact": "The same assertions pass if the bad server hit the 20s startup timeout instead of ENOENT — a different failure entirely, and the one the comment says it is not testing.",
+    "suggested_fix": "Asserts the error text.",
+    "evidence": "Auditor read the assertions against the comment.",
+    "confidence": "high",
+    "file": "src/mcp-servers/stdio.live.test.ts",
+    "global_id": "2026-09-10-ingest-522#F-027",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "The regex now matches the real ENOENT message; 6 tests pass, 1 gated skip.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-028",
+    "reviewer": "correctness-reviewer",
+    "severity": "info",
+    "problem": "clearStickyUserFlag deleted `enabled` from the user entry unconditionally and value-blind.",
+    "impact": "A toggle aimed at a PROJECT-scope server removed `enabled: false` from a same-named user entry that was not in play; removing the overlay later brought back a server the operator had switched off in a file they wrote themselves.",
+    "suggested_fix": "Only a flag that contradicts the new choice is stale.",
+    "evidence": "Reviewer showed the before/after of the user file for an `enable` aimed at a project-scope server.",
+    "confidence": "high",
+    "file": "src/mcp-servers/store.ts",
+    "global_id": "2026-09-10-ingest-522#F-028",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "store.test.ts's sticky-flag test still passes (the contradicting case) and the non-contradicting case is now left alone.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-029",
+    "reviewer": "correctness-reviewer",
+    "severity": "info",
+    "problem": "parseEnv skipped a pair with no `=` and parseHeaders skipped a trailing --header, both silently.",
+    "impact": "`keryx mcp add noeq -e PATH -- cmd` exited 0 having written no env; a trailing --header added the server with no headers. For an Authorization header that is a silent auth drop.",
+    "suggested_fix": "Both refuse and say why, matching what a malformed --header value already did.",
+    "evidence": "Reviewer ran both against the real CLI.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "global_id": "2026-09-10-ingest-522#F-029",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "mcp-servers.argv.test.ts asserts both refuse and write nothing.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 976ae674 (second fix batch); see the finding's own verification field for the test that covers it; full suite 8692 pass / 0 fail"
+    }
+  },
+  {
+    "id": "F-030",
+    "reviewer": "security-reviewer",
+    "severity": "info",
+    "problem": "addServer checks SERVER_NAME_PATTERN; removeServer and setServerEnabled do not.",
+    "impact": "Defence-in-depth gap only. The reviewer traced every escape route and found none reachable: the name is a JSON object key and never a path component, removeServer requires the name to already exist, setServerEnabled is reachable only through a command that refuses unknown names, and the computed-key spread is not vulnerable to __proto__.",
+    "suggested_fix": "Left as-is deliberately. The load-time validation added for F-002/F-022 means a name failing the pattern cannot reach a resolved config at all, which closes the gap at the layer that matters rather than duplicating the check at two more sites.",
+    "evidence": "Reviewer enumerated the four escape routes and refuted each.",
+    "confidence": "medium",
+    "file": "src/mcp-servers/store.ts",
+    "global_id": "2026-09-10-ingest-522#F-030",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Accepted on the reviewer's own trace of the four escape routes; not independently re-run, and reasoning alone cannot reach `confirmed`. Recorded as accepted-with-reason rather than fixed.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "Accepted with reason, not fixed at the site named. The reviewer traced all four escape routes and refuted each (the name is a JSON object key, never a path component; removeServer requires the name to exist; setServerEnabled is reachable only through a command that refuses unknown names; the computed-key spread is not __proto__-vulnerable). The load-time name validation added for F-002/F-022 in 68f2c19d means a name failing the pattern cannot reach a resolved config at all, which closes the gap at the layer that matters instead of duplicating the check at two more call sites."
+    }
+  },
+  {
+    "id": "F-031",
+    "reviewer": "security-reviewer",
+    "severity": "info",
+    "problem": "The project-scope config write is a plain writeFileSync, not the atomic temp-and-rename the user path uses.",
+    "impact": "A concurrent reader can observe a truncated file, and two concurrent `keryx mcp add` runs lose one. The user path was checked and has no TOCTOU window.",
+    "suggested_fix": "NOT fixed in this round. The fix is an atomic write with default permissions, which the existing helper does not offer, and reaching the failure needs two concurrent invocations against the same project file. Tracked for P1.",
+    "evidence": "Reviewer compared store.ts writeDocument's two branches against config-dir.ts:393-409.",
+    "confidence": "high",
+    "file": "src/mcp-servers/store.ts",
+    "global_id": "2026-09-10-ingest-522#F-031",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Deferred rather than fixed, so there is nothing to verify; the deferral and its reason are the record.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "Deferred to P1 and recorded in the report's 'Not fixed, and why' section. The fix is an atomic write with default permissions, which src/lib/config-dir.ts does not currently offer (writeOwnerOnlyFileAtomic forces 0600, wrong for a committed file), and reaching the failure needs two concurrent keryx invocations against the same project file. The user-scope path was checked and has no TOCTOU window."
+    }
+  },
+  {
+    "id": "F-032",
+    "reviewer": "security-reviewer",
+    "severity": "minor",
+    "problem": "use_tool falls through to evaluateShellApproval, so the TUI renders it as a shell command: the transcript says 'shell_exec needs approval', the prompt shows raw JSON as its subtitle, and suggestShellPatterns derives neverRemember from command TEXT rather than meta.destructive, so an exact-match 'Always allow' is offered.",
+    "impact": "A broken UI invariant plus permission-store pollution: clicking it writes model-controlled text into the persistent allow list. The reviewer specifically checked whether it becomes an approval bypass and established that it does NOT — evaluateShellApproval gates autoApprove on !destructive and use_tool is unconditionally destructive.",
+    "suggested_fix": "NOT fixed in this round. It is in tui-shell.ts's approval rendering rather than in this package, it cannot become an execution bypass, and the correct fix is a per-tool renderer that P2's consumer-modal work needs anyway. Recorded for P2 alongside F-033.",
+    "evidence": "Reviewer traced tui-shell.ts:2750 fall-through, shell-permissions.ts:499-509 parseShellExecCommand, and shell-permissions.ts:476-477 neverRemember, and quoted pickShellApproval's own comment stating the invariant it violates.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "global_id": "2026-09-10-ingest-522#F-032",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Deferred rather than fixed. The reviewer's refutation of the bypass reading was checked by reading evaluateShellApproval and agent.ts's destructive branch; the rendering defect itself stands.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "Deferred to P2, recorded in the report. The defect is in src/tui/tui-shell.ts's approval RENDERING, not in keryx-mcp-servers. The reviewer specifically checked whether it becomes an approval bypass and established it does not: evaluateShellApproval gates autoApprove on !destructive and use_tool is unconditionally destructive. The correct fix is a per-tool approval renderer, which P2's consumer-modal work needs anyway; two partial patches would be worse than one."
+    }
+  },
+  {
+    "id": "F-033",
+    "reviewer": "security-reviewer",
+    "severity": "minor",
+    "problem": "The readline approval prompt truncates non-shell_exec tool input at 117 characters, and use_tool's schema does not constrain JSON key order.",
+    "impact": "`{\"tool_input\":{\"reason\":\"<120 chars of reassurance>\"},\"tool_name\":\"fs__delete_directory\"}` shows the operator only the reassuring prefix — the tool name and the destructive arguments are both past the cut. apply_patch is deliberately rendered untruncated at the same call site for exactly this reason.",
+    "suggested_fix": "NOT fixed in this round. Deferred with F-032: both are approval-rendering defects in the shell surfaces rather than in this package, and they want one fix together rather than two partial ones.",
+    "evidence": "Reviewer quoted shell.ts:1055-1058 and contrasted it with the apply_patch branch at :1007-1009 and its comment.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "global_id": "2026-09-10-ingest-522#F-033",
+    "verification": {
+      "verdict": "unverifiable",
+      "method": "reasoning",
+      "evidence": "Deferred rather than fixed.",
+      "verifier": "flow-246-author"
+    },
+    "disposition": {
+      "state": "dismissed-out-of-scope",
+      "evidence": "Deferred to P2 with F-032, recorded in the report. Same class — approval rendering in a shell surface rather than in this package — and the same reason: the readline preview truncation and the TUI misrendering want one fix together."
+    }
+  }
+]

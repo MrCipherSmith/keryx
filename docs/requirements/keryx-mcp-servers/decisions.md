@@ -241,3 +241,44 @@ exists, but which name wins is a choice this note does not make.
 so the behaviour is the one that was reviewed. The evidence above is
 reproducible: `keryx mcp add self -- keryx serve-mcp --cwd <repo>`, then
 `keryx mcp doctor self`. Resolving D-13 is P1 work.
+
+## D-14: a project-scoped server is not started until the operator approves it
+
+**Decision.** A server defined in `<project>/.keryx/mcp-servers.json` is held
+at status `needs-approval` and never dialled until `keryx mcp trust <name>`
+records the operator's consent. User-scoped servers are unaffected.
+
+**Why this was not in the specification.** §2 treats the project file as an
+ordinary config layer that is committed and shared. The P0 review asked what
+that means on a machine that has just cloned the repository, and the answer
+was: `git clone … && cd … && keryx` executes whatever command the
+repository's author wrote, before the prompt paints, with no approval, and
+without the model or `use_tool` being involved at all. There was no
+folder-trust mechanism anywhere in keryx to fall back on.
+
+That is the same hazard VS Code answers with Workspace Trust and Claude Code
+with folder trust, and it is not a hazard the approval gate on `use_tool`
+touches — the code runs at session start, long before any tool call.
+
+**Shape.** Two properties follow from approving *the exact command*:
+
+- the record is keyed by what will be EXECUTED (command, args, env, cwd),
+  not by the server's name. Getting a harmless `docs` approved and changing
+  it in a later commit does not carry the approval forward.
+- the record lives in the operator's config directory, owner-only. A trust
+  marker a repository can commit is not a trust marker.
+
+An unreadable trust store grants nothing.
+
+**What it costs.** One command, once per project server, per machine. The
+alternative price is that adding keryx to a repository becomes a way to run
+code on every contributor's laptop.
+
+**Not applied to user scope**, deliberately. The operator wrote that file
+themselves with `keryx mcp add`; asking them to confirm their own action is
+the kind of prompt people learn to dismiss unread, which makes the prompts
+that matter worth less.
+
+**Status.** Implemented in P0 (`src/mcp-servers/trust.ts`). The
+specification's §2 and §4.2 should be amended to describe it; this note is
+the decision record until they are.

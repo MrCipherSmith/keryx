@@ -2307,6 +2307,7 @@ keryx mcp add <name> [-e KEY=value]… [--scope user|project] [--force] -- <comm
 keryx mcp add --transport http|sse <name> <url> [--header "K: V"]…
 keryx mcp remove <name> [--scope user|project]
 keryx mcp enable | disable <name>
+keryx mcp trust | untrust <name>
 keryx mcp doctor [name] [--json]
 ```
 
@@ -2317,6 +2318,7 @@ keryx mcp doctor [name] [--json]
 | `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http`. **Configurable in this release, not yet connected** — remote transports arrive in P1, and `doctor` reports such a server as `not-attempted` rather than pretending it failed. |
 | `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |
 | `enable` / `disable` | A personal overlay in the keryx config dir, never an edit to the config file. Disabling a server your project committed produces no diff for your colleagues; enabling one the project disabled works for the same reason. |
+| `trust` / `untrust` | Approve (or withdraw approval for) a PROJECT-scoped server. See "Project servers need approval" below. Prints the command it would launch before recording anything. |
 | `doctor` | Config problems, a real connection attempt, the tool count, and every tool that had to be skipped with the reason why. `--json` for the machine-readable form. Exits non-zero when anything needs you. |
 
 **Config files.**
@@ -2337,16 +2339,37 @@ searches for a tool by description, then calls it by qualified name
 grow with your server list; the cost is that the model cannot see a tool it
 has not searched for.
 
-**Approval.** Every `use_tool` call goes through the same approval gate as
+**Project servers need approval.** A server in `<project>/.keryx/mcp-servers.json`
+is committed, which means it is a command *someone else wrote* the moment you
+clone the repository. keryx will not start one until you have said so:
+
+```
+$ keryx mcp list
+docs (project) (needs approval) stdio — npx -y some-docs-mcp
+
+1 project server(s) are not started until approved — a committed config is code someone else wrote.
+Read what it launches above, then: keryx mcp trust <name>
+```
+
+The approval is bound to the exact command, so a later commit that changes
+what `docs` runs needs approving again. It is stored in your own config
+directory, never in the repository. Your own `keryx mcp add` servers
+(user scope) need none of this.
+
+**Approval of tool calls.** Every `use_tool` call goes through the same approval gate as
 `shell_exec` and `apply_patch`. Under `--trust` a call still asks, and with no
 approver present (headless) it is denied rather than allowed. A server's own
 "this tool is read-only" annotation is shown to the model as a hint and is
 never allowed to skip the prompt.
 
-**Environment.** A server is spawned with your environment minus the
-credential-shaped variables keryx strips from every child it launches
-(`ANTHROPIC_API_KEY` and its family, plus the whole `KERYX_*` namespace). A
-server that genuinely needs one takes it explicitly via `-e`.
+**Environment.** A server is spawned with your environment minus anything
+credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
+`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
+`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
+whose name says it holds a token, key, password or credential. A server that
+genuinely needs one takes it explicitly with `-e`, which is a decision you
+made rather than a default you inherited. Its stderr is captured, not
+inherited, so it cannot write to your terminal.
 
 ```
 $ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes

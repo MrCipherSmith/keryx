@@ -7,17 +7,66 @@
   "id": "246",
   "slug": "mcp-servers-p0-config-stdio-transport-an",
   "title": "MCP servers P0: config, stdio transport, and search_tool/use_tool in the shell",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-10T08:49:21.941Z",
-  "updatedAt": "2026-09-10T09:27:39.893Z",
+  "updatedAt": "2026-09-10T11:09:37.674Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:e1ef5532985d344709d24fabac34ea8655f725a20628d97caadc57b261108326",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-10T11:05:41.901Z",
+      "note": "config.test.ts + config.schema-parity.test.ts (29 tests). Project-beats-user merge asserted on loadMcpServers directly; the cwd→git-root walk asserted with a fixture nested two directories deep (projectConfigFiles); overlay and ${VAR}/${VAR:-default} expansion asserted at load. Round-tripped through the READER in store.test.ts, not just re-read as JSON."
+    },
+    "AC2": {
+      "at": "2026-09-10T11:05:42.019Z",
+      "note": "stdio.live.test.ts, gated block. RAN against the real @modelcontextprotocol/server-filesystem fetched by npx: status connected, non-zero tool count, 7 pass with KERYX_ALLOW_REAL_SUBPROCESS=1. Gated and excluded from CI per the keryx-mcp-client precedent; the gating is recorded in the file header rather than the criterion dropped."
+    },
+    "AC3": {
+      "at": "2026-09-10T11:05:42.131Z",
+      "note": "BOTH halves: catalog.test.ts asserts the over-long/invalid FQN is absent from entries, and doctor.test.ts asserts doctor lists it as skipped WITH the reason (formatDoctorReport output checked too). Mutation: dropping the skipped array fails the doctor test. Real-world instance found by pointing doctor at keryx serve-mcp — 26 skipped, recorded as D-13."
+    },
+    "AC4": {
+      "at": "2026-09-10T11:05:51.044Z",
+      "note": "mcp-tool-surface.test.ts, asserted against buildInteractiveAgentTools output — the definitions the agent actually gets, not the catalog. search_tool and use_tool present; none of the three FQNs present. Also: without a runtime the pair is absent entirely, and adding one adds exactly two. shell.test.ts's exact TUI tool-name list now includes both. Mutation: registering the pair unconditionally fails two tests."
+    },
+    "AC5": {
+      "at": "2026-09-10T11:05:51.162Z",
+      "note": "stdio.live.test.ts against a REAL fixture MCP server over stdio, no network (fixtures/mcp-servers/echo-server.ts, hand-rolled JSON-RPC so a framing bug cannot cancel out against the SDK on both sides). search_tool returns fx__echo; use_tool performs tools/call and returns the content the other process produced; result marked untrusted. Handshake and tools/list asserted separately."
+    },
+    "AC6": {
+      "at": "2026-09-10T11:05:51.275Z",
+      "note": "Two levels. tools.test.ts asserts the cap CONSTANT itself (MAX_TOOL_RESULT_BYTES === 20_000) so a silently raised cap fails rather than passes. stdio.live.test.ts makes a real server return 40,000 bytes and asserts the model-visible output carries the truncation marker and stays under cap+200."
+    },
+    "AC7": {
+      "at": "2026-09-10T11:06:04.461Z",
+      "note": "All three arms driven through runAgentTurn — the REAL gate, not a substitute (mcp-tool-surface.test.ts). ask: requestApproval called with use_tool, server reached only after yes; refusal: server never reached; trust: STILL asks; headless (no requestApproval): denied, no call. Anti-vacuity: auto mode does NOT ask — that test caught my first attempt passing permissionMode on the wrong object, which had made the other three assert ask-mode four times. NOTE: implemented WITHOUT a per-tool approval layer. My first cut added approveMcpCall inside use_tool; D-05 forbids a fourth decision layer and it would have double-prompted, since use_tool's static destructive risk already routes every call through resolveApprovalDecision. Deleted. classifyToolRisk is now advisory output in search_tool hits only — de-escalating on a third-party readOnlyHint is precisely what ADR-0009 forbids."
+    },
+    "AC8": {
+      "at": "2026-09-10T11:06:04.572Z",
+      "note": "Twice. runtime.test.ts: two configured servers, one connect throws — good is connected with its tools in the catalog, bad is failed with the message, createMcpRuntime never throws and never blocks (asserted: it returns with the dial outstanding). stdio.live.test.ts: same shape with a command that genuinely does not exist, so the failure comes from the OS rather than the test. Malformed config also carried, not thrown."
+    },
+    "AC9": {
+      "at": "2026-09-10T11:06:04.681Z",
+      "note": "runtime.test.ts, both routes to disabled (file enabled:false, and personal overlay). The ABSENCE OF THE PROCESS is asserted directly — a dial counter that must be 0 — not inferred from the reported status. Plus an anti-vacuity test that an enabled server IS dialled, so the counter can move. store.test.ts asserts disable leaves the config file intact, and byte-identical for a committed project file."
+    },
+    "AC10": {
+      "at": "2026-09-10T11:06:15.922Z",
+      "note": "constraints.test.ts: CAPABILITY_REGISTRY holds no id containing 'mcp', asserted against the real imported array; plus a non-empty check so the filter is not vacuous; plus no file in src/mcp-servers/ imports capability/ at all."
+    },
+    "AC11": {
+      "at": "2026-09-10T11:06:16.037Z",
+      "note": "constraints.test.ts, each checked rather than asserted. No static @modelcontextprotocol/sdk import in any production file here, AND the stronger end-to-end form: 'bun src/cli.ts mcp --help' is spawned and must exit 0. No foreign config path named in code (mcp.config.json, .cursor/mcp.json, .claude.json, .mcp.json) — comments stripped first, so a file is not failed for documenting the rule it obeys. Store writes only via userConfigFile/projectConfigFile/overlayFile. No Codex import (D-12). connectCodexMcpClient/gatedSuperviseCodexMcpRun suites still green in the full run. Bare 'keryx mcp' still serves: mcp.ts routes only the six consumer verbs and leaves the no-subcommand path on serveMcpCommand; mcp-servers.test.ts asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    "AC12": {
+      "at": "2026-09-10T11:06:16.148Z",
+      "note": "All four from SOURCE, none from the installed binary. bun test: 8623 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass. One order-dependent flake observed in src/sac/session-wrap-up.test.ts on an earlier full run (passes in isolation and on re-run, untouched by this work) — recorded, not silently ignored."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/522"
   },
   "baseBranch": "main",
   "tasks": [
@@ -26,7 +75,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +83,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context was the package itself: specification.md §2-§5, implementation-plan.md P0 items 1-8, decisions.md D-01..D-12. D-05 in particular decided the approval design, after a first cut violated it."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,14 +100,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All 8 P0 items, plus the shell wiring item 5 required and I had initially skipped. New modules: config, store, catalog, manager, tools, doctor, runtime, spawn-env; CLI in src/commands/mcp-servers.ts routed from mcp.ts."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -64,14 +117,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "191 tests across 12 files in src/mcp-servers/ + src/commands/. Includes a real stdio fixture server, a flag-gated real-npx run, and the agent gate driven through runAgentTurn. 13 mutations applied and all 13 killed by the tests that name them."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,7 +134,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review found two real defects in my own work, both fixed before the PR left draft: (1) the tool pair had zero production callers — built and tested but never wired, so AC4/AC8/AC9 could not have been met; (2) the in-tool approval gate violated D-05's 'no fourth decision layer' and would have double-prompted, while adding de-escalation on a third-party readOnlyHint that ADR-0009 forbids. PR #522 ready for review, CI green."
     }
   ],
   "history": [
@@ -95,6 +152,91 @@
     {
       "at": "2026-09-10T09:27:39.893Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-10T11:05:41.901Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: config.test.ts + config.schema-parity.test.ts (29 tests). Project-beats-user merge asserted on loadMcpServers directly; the cwd→git-root walk asserted with a fixture nested two directories deep (projectConfigFiles); overlay and ${VAR}/${VAR:-default} expansion asserted at load. Round-tripped through the READER in store.test.ts, not just re-read as JSON."
+    },
+    {
+      "at": "2026-09-10T11:05:42.019Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: stdio.live.test.ts, gated block. RAN against the real @modelcontextprotocol/server-filesystem fetched by npx: status connected, non-zero tool count, 7 pass with KERYX_ALLOW_REAL_SUBPROCESS=1. Gated and excluded from CI per the keryx-mcp-client precedent; the gating is recorded in the file header rather than the criterion dropped."
+    },
+    {
+      "at": "2026-09-10T11:05:42.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: BOTH halves: catalog.test.ts asserts the over-long/invalid FQN is absent from entries, and doctor.test.ts asserts doctor lists it as skipped WITH the reason (formatDoctorReport output checked too). Mutation: dropping the skipped array fails the doctor test. Real-world instance found by pointing doctor at keryx serve-mcp — 26 skipped, recorded as D-13."
+    },
+    {
+      "at": "2026-09-10T11:05:51.044Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mcp-tool-surface.test.ts, asserted against buildInteractiveAgentTools output — the definitions the agent actually gets, not the catalog. search_tool and use_tool present; none of the three FQNs present. Also: without a runtime the pair is absent entirely, and adding one adds exactly two. shell.test.ts's exact TUI tool-name list now includes both. Mutation: registering the pair unconditionally fails two tests."
+    },
+    {
+      "at": "2026-09-10T11:05:51.162Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: stdio.live.test.ts against a REAL fixture MCP server over stdio, no network (fixtures/mcp-servers/echo-server.ts, hand-rolled JSON-RPC so a framing bug cannot cancel out against the SDK on both sides). search_tool returns fx__echo; use_tool performs tools/call and returns the content the other process produced; result marked untrusted. Handshake and tools/list asserted separately."
+    },
+    {
+      "at": "2026-09-10T11:05:51.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Two levels. tools.test.ts asserts the cap CONSTANT itself (MAX_TOOL_RESULT_BYTES === 20_000) so a silently raised cap fails rather than passes. stdio.live.test.ts makes a real server return 40,000 bytes and asserts the model-visible output carries the truncation marker and stays under cap+200."
+    },
+    {
+      "at": "2026-09-10T11:06:04.461Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: All three arms driven through runAgentTurn — the REAL gate, not a substitute (mcp-tool-surface.test.ts). ask: requestApproval called with use_tool, server reached only after yes; refusal: server never reached; trust: STILL asks; headless (no requestApproval): denied, no call. Anti-vacuity: auto mode does NOT ask — that test caught my first attempt passing permissionMode on the wrong object, which had made the other three assert ask-mode four times. NOTE: implemented WITHOUT a per-tool approval layer. My first cut added approveMcpCall inside use_tool; D-05 forbids a fourth decision layer and it would have double-prompted, since use_tool's static destructive risk already routes every call through resolveApprovalDecision. Deleted. classifyToolRisk is now advisory output in search_tool hits only — de-escalating on a third-party readOnlyHint is precisely what ADR-0009 forbids."
+    },
+    {
+      "at": "2026-09-10T11:06:04.572Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Twice. runtime.test.ts: two configured servers, one connect throws — good is connected with its tools in the catalog, bad is failed with the message, createMcpRuntime never throws and never blocks (asserted: it returns with the dial outstanding). stdio.live.test.ts: same shape with a command that genuinely does not exist, so the failure comes from the OS rather than the test. Malformed config also carried, not thrown."
+    },
+    {
+      "at": "2026-09-10T11:06:04.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: runtime.test.ts, both routes to disabled (file enabled:false, and personal overlay). The ABSENCE OF THE PROCESS is asserted directly — a dial counter that must be 0 — not inferred from the reported status. Plus an anti-vacuity test that an enabled server IS dialled, so the counter can move. store.test.ts asserts disable leaves the config file intact, and byte-identical for a committed project file."
+    },
+    {
+      "at": "2026-09-10T11:06:15.923Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: constraints.test.ts: CAPABILITY_REGISTRY holds no id containing 'mcp', asserted against the real imported array; plus a non-empty check so the filter is not vacuous; plus no file in src/mcp-servers/ imports capability/ at all."
+    },
+    {
+      "at": "2026-09-10T11:06:16.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: constraints.test.ts, each checked rather than asserted. No static @modelcontextprotocol/sdk import in any production file here, AND the stronger end-to-end form: 'bun src/cli.ts mcp --help' is spawned and must exit 0. No foreign config path named in code (mcp.config.json, .cursor/mcp.json, .claude.json, .mcp.json) — comments stripped first, so a file is not failed for documenting the rule it obeys. Store writes only via userConfigFile/projectConfigFile/overlayFile. No Codex import (D-12). connectCodexMcpClient/gatedSuperviseCodexMcpRun suites still green in the full run. Bare 'keryx mcp' still serves: mcp.ts routes only the six consumer verbs and leaves the no-subcommand path on serveMcpCommand; mcp-servers.test.ts asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    {
+      "at": "2026-09-10T11:06:16.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: All four from SOURCE, none from the installed binary. bun test: 8623 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass. One order-dependent flake observed in src/sac/session-wrap-up.test.ts on an earlier full run (passes in isolation and on re-run, untouched by this work) — recorded, not silently ignored."
+    },
+    {
+      "at": "2026-09-10T11:06:25.219Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-10T11:06:25.327Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-10T11:06:25.439Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-10T11:09:34.404Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-10T11:09:37.674Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
     }
   ]
 }
