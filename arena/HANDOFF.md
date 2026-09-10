@@ -9,6 +9,67 @@ Branch: `arena/measurement`. Pushed to `origin`. Based on
 
 ---
 
+## 00. Where it stopped, 2026-09-11 ~00:10 — read this first
+
+**Blocked on the x.ai balance.** Both grok-4.6 legs (`keryx-shell`, `grok-build`)
+fail until it is topped up. `grok` says it plainly — `402 Payment Required: Grok
+Build usage balance exhausted`; keryx says `Ollama API returned HTTP 403` (a defect
+in itself, K-005). `keryx auth status grok` is `active`, so it is not the token. The
+claude leg is a different account and works.
+
+**Done this session:**
+
+- Synced to `origin/arena/measurement` (fast-forward to `0a0eece`).
+- Dry run passes: isolation proven for all three legs, context arm provisions 503
+  wiki pages + graph + routing index, control arm has none and cannot resolve
+  `keryx`.
+- **The smoke completed for the first time — 6/6 arms, 0 failures**, task
+  `t1-53254e0e` (4 gold files). Results in `/tmp/arena/results.jsonl`. The claude
+  credential path works under the isolated home (§7 is closed in fact, not only in
+  code). Token accounting cross-check (§8 step 4) passes: keryx-shell 994k vs
+  grok-build 1.50M on the control arm, same order of magnitude.
+
+  | leg | arm | recall | tokens | tool calls |
+  |---|---|---|---|---|
+  | grok-build | on | 1.00 | 308k | 24 |
+  | grok-build | off | 1.00 | 1.50M | 83 |
+  | keryx-shell | on | 0.25 | 977k | 76 |
+  | keryx-shell | off | 0.25 | 994k | 62 |
+  | claude-sonnet | on | 0.25 | 726k | 16 |
+  | claude-sonnet | off | 0.25 | 515k | 12 |
+
+  One task, no statistical claim. The signal worth chasing: the same `.metaproject/`
+  cut grok's tokens 4.9× at equal recall, and did nothing for keryx's own shell on
+  the same model.
+- `b4baefa` — every arm's raw stream is now kept at `<out>/transcripts/`, written
+  before interpretation so refused arms keep their evidence; stderr drained and kept.
+- **`arena/keryx-shell-defects.md`** — the running log of why keryx-shell loses,
+  worked from transcripts. K-004…K-009 plus code-level suspects S-1…S-4. Read it
+  before touching the shell.
+
+**Not done, in order:**
+
+1. **Top up the x.ai balance** (operator).
+2. **Wire the watchdog into `runArenaArm`** (§6.4) — needs no model; was next when
+   this stopped. The adapters own the child process, so they have to expose its pid
+   and a last-activity signal (the keryx events file's mtime; stdout activity for
+   grok and claude) to a poll loop that calls `evaluate`.
+3. **Rerun the diagnostic** to close K-006 — does grok-build, on the same model,
+   also hunt for the commit in git history, or is that keryx's prompt?
+   ```bash
+   bun scripts/arena/run-arena.ts --repo ~/sandbox/arena/clear/vantage-frontend \
+     --out /tmp/arena-diag2 --task t1-53254e0e --harness keryx-shell,grok-build
+   bun scripts/arena/arena-trace-keryx.ts /tmp/arena-diag2/transcripts/<file> <gold,…>
+   ```
+   (`/tmp/arena-diag` holds the balance-killed attempt; its keryx context-off
+   transcript, 43 calls, is the evidence behind K-005…K-009.) The trace script
+   prints each tool call, result size, clipping, and the step each gold path first
+   appeared. It reads the keryx events format only; grok and claude transcripts are
+   stream-json and need their own reader.
+4. Full sweep (§8 step 8), then T2 judging.
+
+---
+
 ## 0. Update, 2026-09-10 — what changed after this document was written
 
 Three items in §8 moved. Read this before §6 and §7, which are otherwise still
