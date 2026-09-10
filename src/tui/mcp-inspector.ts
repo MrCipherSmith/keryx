@@ -39,11 +39,24 @@ export const MCP_INSPECTOR_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
-export const MCP_TOOLS_COMMAND = "/mcp";
+export const MCP_TOOLS_COMMAND = "/integrations";
+
+/**
+ * The retired spelling, still accepted.
+ *
+ * `/mcp` opened this view before the rename. It keeps working rather than
+ * becoming an error, because a user mid-session should not have a command
+ * vanish under them — the same promise the CLI aliases make.
+ *
+ * It is deliberately NOT repointed at the MCP-server consumer: that surface
+ * does not exist yet, and a slash command aimed at nothing is worse than one
+ * aimed at the old thing.
+ */
+export const MCP_TOOLS_COMMAND_RETIRED = "/mcp";
 
 export function isMcpToolsCommand(line: string): boolean {
   const token = line.trim().split(/\s+/)[0] ?? "";
-  return token === MCP_TOOLS_COMMAND;
+  return token === MCP_TOOLS_COMMAND || token === MCP_TOOLS_COMMAND_RETIRED;
 }
 
 export type ModalTab = { id: string; label: string };

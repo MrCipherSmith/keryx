@@ -151,6 +151,24 @@ export type FlowState = {
   acChecksum: string | null;
   acConfirmed: Record<string, { at: string; note?: string | undefined }>;
   pr: { url: string | null };
+  /**
+   * The branch this flow was told to land on, when something told it.
+   *
+   * Optional and additive on the TM-01 precedent: every package written before
+   * this field must keep loading, and a flow that never named a base is a real
+   * state rather than a corruption. See `baseBranchCondition` for why the three
+   * states are three.
+   *
+   * Recorded rather than derived at completion time, deliberately. Reading the
+   * pull request's base when the gate runs answers a different question — where
+   * the PR points NOW — so a retargeted PR would pass. The stored intent is the
+   * whole value: the gate's existing condition 3 already compares CONTENT and
+   * catches a merge whose tree differs, and what survives that is a target
+   * whose content has converged with the intended one. `review-pr-feedback
+   * --fix` makes exactly that shape, cutting a branch from another pull
+   * request's head and needing to land back inside it.
+   */
+  baseBranch?: string | undefined;
   merged?: { commit: string; ref: "origin/main"; at: string } | undefined;
   tasks: FlowTask[];
   history: FlowHistoryEvent[];
@@ -186,6 +204,15 @@ export interface TrackerAdapter {
      * match (flow 204, §2.2 condition 3).
      */
     headSha?: string | null | undefined;
+    /**
+     * The branch the pull request is opened against.
+     *
+     * Optional for the same reason as `headSha`: an adapter written before this
+     * must still satisfy the interface, and `undefined`/`null` means the base is
+     * UNKNOWN — which the completion gate reports as `unobserved`, and fails,
+     * rather than treating an unread value as a match.
+     */
+    baseRefName?: string | null | undefined;
   }>;
   comment(ref: TrackerRef, body: string): Promise<boolean>;
 }
@@ -200,7 +227,8 @@ export type GateOutcome = {
     | "tasks"
     | "health"
     | "security"
-    | "review";
+    | "review"
+    | "base-branch";
   status: "pass" | "fail" | "skipped";
   detail: string;
 };
@@ -240,6 +268,8 @@ export type FlowInitInput = {
   title?: string | undefined;
   issue?: string | undefined;
   slug?: string | undefined;
+  /** The branch this flow is told to land on. See `FlowState.baseBranch`. */
+  baseBranch?: string | undefined;
 };
 export type FlowInitResult = {
   flow: FlowState;

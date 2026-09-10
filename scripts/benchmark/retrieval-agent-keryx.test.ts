@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
+
+const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
 import {
+  KERYX_DENIED_TOOLS,
+  KERYX_FORBIDDEN_TOOL_MARKERS,
   assertKeryxRoster,
   buildKeryxArgs,
   buildKeryxEnv,
@@ -259,5 +264,76 @@ describe("buildKeryxEnv", () => {
     const env = buildKeryxEnv({ PATH: "/usr/bin", GH_TOKEN: "t", MCP_TIMEOUT: "5000" }, "/tmp/h", "/tmp/h/d");
     expect("GH_TOKEN" in env).toBe(false);
     expect("MCP_TIMEOUT" in env).toBe(false);
+  });
+});
+
+describe("the keryx leg's denied tools", () => {
+  test("the flag is passed, with the names comma-separated", () => {
+    const args = buildKeryxArgs("find it", "grok-4.6", "grok", "/tmp/e.jsonl", 1000);
+    const index = args.indexOf("--deny-tools");
+    expect(index).toBeGreaterThan(-1);
+    expect(args[index + 1]).toBe(KERYX_DENIED_TOOLS.join(","));
+  });
+
+  test("every denied name is one keryx actually offers", () => {
+    // `--deny-tools` refuses an unknown name rather than ignoring it, so a name
+    // outside keryx's registry kills the arm at startup — and an arm that dies
+    // at startup scores as one that searched and found nothing.
+    //
+    // Checked against the real CLI rather than a copy of its tool list. A copy
+    // is the thing that goes stale, and the registry is assembled from a dozen
+    // constructors that a benchmark test has no business rebuilding. No model is
+    // reached: the name check runs before any provider call.
+    const proc = Bun.spawnSync(
+      [
+        "bun",
+        path.join(REPO_ROOT, "src", "cli.ts"),
+        "shell",
+        "--provider",
+        "deepseek",
+        "--model",
+        "unused",
+        "--no-tui",
+        "--deny-tools",
+        KERYX_DENIED_TOOLS.join(","),
+        "-p",
+        "x",
+      ],
+      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = `${proc.stdout.toString()}${proc.stderr.toString()}`;
+    expect(output).not.toContain("unknown tool name(s) in --deny-tools");
+  });
+
+  test("and a name keryx does NOT offer is refused, so the check above is not vacuous", () => {
+    const proc = Bun.spawnSync(
+      [
+        "bun",
+        path.join(REPO_ROOT, "src", "cli.ts"),
+        "shell",
+        "--provider",
+        "deepseek",
+        "--model",
+        "unused",
+        "--no-tui",
+        "--deny-tools",
+        "web_serch",
+        "-p",
+        "x",
+      ],
+      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+    );
+    const output = `${proc.stdout.toString()}${proc.stderr.toString()}`;
+    expect(output).toContain("unknown tool name(s) in --deny-tools");
+  });
+
+  test("the roster markers still name something the denied list covers", () => {
+    // The two lists are different shapes — substrings for judging a roster after
+    // the fact, exact names for the flag. This holds them to each other: every
+    // denied name must be one the roster check would have refused, so denying
+    // and refusing cannot drift apart into denying the wrong thing.
+    for (const name of KERYX_DENIED_TOOLS) {
+      expect(KERYX_FORBIDDEN_TOOL_MARKERS.some((marker) => name.toLowerCase().includes(marker))).toBe(true);
+    }
   });
 });

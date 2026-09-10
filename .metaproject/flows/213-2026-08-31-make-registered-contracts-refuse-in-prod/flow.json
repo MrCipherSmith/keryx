@@ -7,17 +7,42 @@
   "id": "213",
   "slug": "make-registered-contracts-refuse-in-prod",
   "title": "Make registered contracts refuse in production, not only when an agent remembers to validate",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T23:32:32.688Z",
-  "updatedAt": "2026-08-31T23:34:28.808Z",
+  "updatedAt": "2026-09-10T06:50:38.872Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d4e40fc55d08a34b141cd2938677d1fc3167ef1b82b605bd096f89a0f2ed8f55",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-10T05:31:18.155Z",
+      "note": "src/gdskills/contracts.ts carries a required discriminated ContractEnforcement per contract — machine-readable, not prose. Every kind:production entry names a real non-test module, and the guard opens that module and requires the actual loadSchema(\"<name>\") call: a claim naming a file that does not load the schema fails. Proved by pointing the claim at src/lib/templates.ts, which the guard rejected by name."
+    },
+    "AC2": {
+      "at": "2026-09-10T05:31:18.403Z",
+      "note": "keryx review comments reply --result <file> validates against review-pr-feedback-output before the pass is built and before any network call. Demonstrated by running the real CLI from source in review-result-contract.test.ts: the AC2 payload (mode analyze with a populated fix) exits non-zero with '$.fix: Expected type null, got object', and the success header never prints. Required expressing the rule as a conditional first — it lived in the fix property's DESCRIPTION, the same defect this skill's input contract had. Mutation-proved: removing the gate call fails the tests."
+    },
+    "AC3": {
+      "at": "2026-09-10T05:31:18.648Z",
+      "note": "All seven unenforced contracts carry kind:none plus a written reason, and the guard rejects an empty one. The reasons distinguish 'no keryx process is on this path' (agent-to-agent payloads) from 'keryx does not read this file back' (task-implementer-output vs subagent-result), so the reader can tell the two apart."
+    },
+    "AC4": {
+      "at": "2026-09-10T05:31:32.420Z",
+      "note": "contract-enforcement.test.ts derives the split from CONTRACTS and checks the discriminant at runtime as well as in the type, because a cast can land in neither group while the compiler is satisfied. Verified with in-memory fake registrations: no enforcement declared, a production claim naming a non-loading file, a claim naming a file that does not exist, a test file as the enforcement point, and an empty reason — five negatives, each failing with its own message. Plus an anti-vacuity test pinning that both groups are non-empty and the registry has at least 11 entries."
+    },
+    "AC5": {
+      "at": "2026-09-10T05:31:32.691Z",
+      "note": "Swept the three phrasings the AC names. 'refuses a malformed one. Validate before dispatching' in review-pr-feedback's SKILL.md is ACCURATE and left alone: it says the validate COMMAND refuses, then instructs the agent to run it, which matches the recorded kind:none. 'is BLOCKED' matched only gdctx transcripts. Two unbacked claims were found outside the listed phrasings and corrected: harness/child/contract.ts and harness/extension/execute.ts said the extension metadata 'validates against' harness-child-contract-extension.schema.json, which nothing loads — now stated as SHAPED by the TypeScript types."
+    },
+    "AC6": {
+      "at": "2026-09-10T05:31:32.947Z",
+      "note": "Full suite 8416 pass, 18 skip, 0 fail. tsc --noEmit 0 errors. bun run lint clean. keryx skills verify --bundled clean — run FROM SOURCE, because the installed 0.2.86 reported parity while the working tree's schema copy was stale; both generated copies resynced. One rejecting payload per enforced contract pinned in contract-enforcement-regression.test.ts, with a conforming value asserted to pass so the rejections are not a validator broken shut."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/510"
   },
   "tasks": [
     {
@@ -88,7 +113,7 @@
       "id": "T5",
       "title": "Enumerate the enforcement point of every registered contract and record it machine-readably (AC1)",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -96,13 +121,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Refuse review-pr-feedback-output at the keryx-owned write path, on the job/store.ts precedent (AC2)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -110,13 +136,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Record enforcement: none plus its reason for every contract with no keryx-owned path (AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -124,13 +151,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Guard deriving the split from CONTRACTS; verify by adding a fake registration in memory (AC4)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -138,13 +166,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Sweep skills and schemas for enforcement claims the recorded state does not back (AC5)",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -152,13 +181,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Run one rejecting payload per already-enforced contract to prove nothing regressed (AC6)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -166,7 +196,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -232,6 +263,85 @@
     {
       "at": "2026-08-31T23:34:28.808Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-10T05:31:04.283Z",
+      "event": "task-done",
+      "detail": "T5: Enumerate the enforcement point of every registered contract and record it machine-readably (AC1)"
+    },
+    {
+      "at": "2026-09-10T05:31:04.542Z",
+      "event": "task-done",
+      "detail": "T6: Refuse review-pr-feedback-output at the keryx-owned write path, on the job/store.ts precedent (AC2)"
+    },
+    {
+      "at": "2026-09-10T05:31:04.777Z",
+      "event": "task-done",
+      "detail": "T7: Record enforcement: none plus its reason for every contract with no keryx-owned path (AC3)"
+    },
+    {
+      "at": "2026-09-10T05:31:05.029Z",
+      "event": "task-done",
+      "detail": "T8: Guard deriving the split from CONTRACTS; verify by adding a fake registration in memory (AC4)"
+    },
+    {
+      "at": "2026-09-10T05:31:05.284Z",
+      "event": "task-done",
+      "detail": "T9: Sweep skills and schemas for enforcement claims the recorded state does not back (AC5)"
+    },
+    {
+      "at": "2026-09-10T05:31:05.561Z",
+      "event": "task-done",
+      "detail": "T10: Run one rejecting payload per already-enforced contract to prove nothing regressed (AC6)"
+    },
+    {
+      "at": "2026-09-10T05:31:18.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/gdskills/contracts.ts carries a required discriminated ContractEnforcement per contract — machine-readable, not prose. Every kind:production entry names a real non-test module, and the guard opens that module and requires the actual loadSchema(\"<name>\") call: a claim naming a file that does not load the schema fails. Proved by pointing the claim at src/lib/templates.ts, which the guard rejected by name."
+    },
+    {
+      "at": "2026-09-10T05:31:18.403Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: keryx review comments reply --result <file> validates against review-pr-feedback-output before the pass is built and before any network call. Demonstrated by running the real CLI from source in review-result-contract.test.ts: the AC2 payload (mode analyze with a populated fix) exits non-zero with '$.fix: Expected type null, got object', and the success header never prints. Required expressing the rule as a conditional first — it lived in the fix property's DESCRIPTION, the same defect this skill's input contract had. Mutation-proved: removing the gate call fails the tests."
+    },
+    {
+      "at": "2026-09-10T05:31:18.649Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: All seven unenforced contracts carry kind:none plus a written reason, and the guard rejects an empty one. The reasons distinguish 'no keryx process is on this path' (agent-to-agent payloads) from 'keryx does not read this file back' (task-implementer-output vs subagent-result), so the reader can tell the two apart."
+    },
+    {
+      "at": "2026-09-10T05:31:32.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: contract-enforcement.test.ts derives the split from CONTRACTS and checks the discriminant at runtime as well as in the type, because a cast can land in neither group while the compiler is satisfied. Verified with in-memory fake registrations: no enforcement declared, a production claim naming a non-loading file, a claim naming a file that does not exist, a test file as the enforcement point, and an empty reason — five negatives, each failing with its own message. Plus an anti-vacuity test pinning that both groups are non-empty and the registry has at least 11 entries."
+    },
+    {
+      "at": "2026-09-10T05:31:32.691Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Swept the three phrasings the AC names. 'refuses a malformed one. Validate before dispatching' in review-pr-feedback's SKILL.md is ACCURATE and left alone: it says the validate COMMAND refuses, then instructs the agent to run it, which matches the recorded kind:none. 'is BLOCKED' matched only gdctx transcripts. Two unbacked claims were found outside the listed phrasings and corrected: harness/child/contract.ts and harness/extension/execute.ts said the extension metadata 'validates against' harness-child-contract-extension.schema.json, which nothing loads — now stated as SHAPED by the TypeScript types."
+    },
+    {
+      "at": "2026-09-10T05:31:32.947Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Full suite 8416 pass, 18 skip, 0 fail. tsc --noEmit 0 errors. bun run lint clean. keryx skills verify --bundled clean — run FROM SOURCE, because the installed 0.2.86 reported parity while the working tree's schema copy was stale; both generated copies resynced. One rejecting payload per enforced contract pinned in contract-enforcement-regression.test.ts, with a conforming value asserted to pass so the rejections are not a validator broken shut."
+    },
+    {
+      "at": "2026-09-10T06:50:25.702Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/510 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T06:50:36.948Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T06:50:38.872Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "a9cbc590",
+    "ref": "origin/main",
+    "at": "2026-09-10T06:50:38.871Z"
+  }
 }

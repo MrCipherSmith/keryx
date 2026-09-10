@@ -12,8 +12,10 @@
       "bun-types"
     ]
   },
-  "include": [
-    "src/**/*.ts",
-    "scripts/**/*.ts"
-  ]
+  // `scripts/` is included because leaving it out does not merely skip a
+  // convenience check — it lets broken code look fine. A leakage check in the
+  // benchmark harness read a property its own result type does not have, and
+  // typechecked clean for weeks, because `include` stopped at `src/`. The gates
+  // this repository relies on are written here.
+  "include": ["src/**/*.ts", "scripts/**/*.ts"]
 }

@@ -31,7 +31,7 @@ The architecture is a flat command-dispatch shell over a collection of independe
 
 **`keryx <module> <subcommand>`** — For any other command (e.g. `keryx gdgraph build`, `keryx wiki collect`, `keryx health run`), `main()` matches the first argument and delegates to the corresponding handler in `src/commands/`. The handler parses the remaining `args` slice and calls the appropriate function from the module's own subdirectory (e.g. `src/gdgraph/`, `src/wiki/`). Output is written to `.metaproject/data/<module>/` for later agent consumption.
 
-**`keryx mcp serve`** — `main()` routes to `mcpCommand`, which starts an MCP server that exposes metaproject capabilities (graph queries, wiki reads, health status, memory search) as structured tool calls for connected agents, without requiring any CLI invocation.
+**`keryx serve-mcp`** — `main()` routes to `mcpCommand`, which starts an MCP server that exposes metaproject capabilities (graph queries, wiki reads, health status, memory search) as structured tool calls for connected agents, without requiring any CLI invocation.
 
 ---
 

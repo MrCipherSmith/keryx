@@ -42,7 +42,17 @@ const EXCLUSIONS: ReadonlyArray<{ verb: string; reason: string }> = [
   },
   { verb: "dash", reason: "alias of dashboard open; opens a browser, no machine-consumable result" },
   { verb: "dashboard", reason: "build writes a human artifact and open launches a browser; neither is an agent operation" },
-  { verb: "mcp", reason: "installs and serves an MCP endpoint; changes client configuration outside this project" },
+  {
+    verb: "serve-mcp",
+    reason:
+      "binds a transport and runs until signalled, like serve and shell; under stdio it owns stdout as a JSON-RPC channel, so it has no machine-consumable result a descriptor could describe",
+  },
+  {
+    verb: "integrate",
+    reason:
+      "writes MCP client configuration into editor/agent files outside this project's managed surface — the same reason `mcp`, whose spelling it replaces, is excluded",
+  },
+  { verb: "mcp", reason: "retired spelling of serve-mcp and integrate; excluded for the same reasons as both" },
   { verb: "sync", reason: "writes into external runtime directories outside the project" },
   { verb: "skills", reason: "skill lifecycle incl. install/export/sync writing outside the project; needs its own review before exposure" },
   { verb: "skill-verify-skill", reason: "standalone alias of skills verify; not part of the agent surface" },

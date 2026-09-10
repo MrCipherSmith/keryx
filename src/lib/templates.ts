@@ -2041,7 +2041,33 @@ export function renderGdgraphPostCommitHook(): string {
     return 0
   fi
 
-  if ! printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+  # Two questions, because the graph is fed by two different things.
+  #
+  # The second one is here because the first one alone was wrong. It lists
+  # directory prefixes — src/, lib/, app/ and so on — while the builder indexes
+  # any source file anywhere except the directories it never walks. Everything
+  # in between was indexed AND undetected: a commit to \`vscode-extension/src/\`,
+  # to a source file at the repository root, or to any directory not on the
+  # list left the graph stale and printed NOTHING. Every other path in this
+  # function says something when the graph may be stale; that one returned 0 in
+  # silence, which is the failure this hook exists to end.
+  #
+  # The prefix list is kept rather than replaced, so nothing that rebuilt
+  # before stops rebuilding: it covers paths that change how the graph resolves
+  # without being indexed themselves, such as docs/ and the metaproject rules.
+  # The extension test only widens.
+  #
+  # The exclusion mirrors IGNORE_DIRS in src/gdgraph/build.ts. It has to: a
+  # rebuild triggered by a file the builder never reads is a rebuild that
+  # cannot change the answer, and every dependency bump would pay for it.
+  if printf '%s\\n' "$changed_files" | grep -E '(^src/|^lib/|^app/|^packages/|^services/|^scripts/|^docs/|^\\.metaproject/(modules|skills|rules)/|package\\.json$|tsconfig.*\\.json$|bun\\.lockb?$|pnpm-lock\\.yaml$|yarn\\.lock$|package-lock\\.json$)' >/dev/null 2>&1; then
+    :
+  elif printf '%s\\n' "$changed_files" \\
+    | grep -E '\\.(ts|tsx|js|jsx|java|py)$' \\
+    | grep -Ev '(^|/)(\\.git|\\.claude|\\.metaproject|node_modules|\\.cache|\\.docusaurus|\\.next|\\.turbo|dist|build|coverage|generated|out|public|storybook-static)/' \\
+      >/dev/null 2>&1; then
+    :
+  else
     return 0
   fi
 

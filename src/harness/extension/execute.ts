@@ -87,9 +87,21 @@ export type DispatchExtensionResult =
   | { ok: false; reason: string };
 
 /**
- * Build a canonical child dispatch (validates as `subagent-dispatch`) plus the
- * frozen extension metadata (validates as `harness-child-contract-extension`),
- * bounded to the extension's granted capabilities.
+ * Build a canonical child dispatch SHAPED as `subagent-dispatch` plus the frozen
+ * extension metadata SHAPED as `harness-child-contract-extension`, bounded to
+ * the extension's granted capabilities.
+ *
+ * Shaped, not validated. Neither schema is loaded on this path — the names
+ * appear here and on `canonicalContract` as labels, and the shapes are held by
+ * the TypeScript types alone. This said "validates as" until flow 213 checked:
+ * `loadSchema("subagent-dispatch")` occurs in no non-test file, and nothing
+ * reads `harness-child-contract-extension.schema.json` either. A comment
+ * claiming a validation that does not happen is the same defect the contract
+ * registry now guards against, so it is stated accurately instead.
+ *
+ * The sibling `subagent-result` IS validated, in `harness/external/runtime.ts`,
+ * because the harness reads a child's reply back and must decide whether it is
+ * well-formed. Nothing performs the equivalent act on the way out.
  *
  * Fail-closed: `registration.ok === false` refuses immediately with NO dispatch
  * or extension built (the denied result carries only `{ok,reason}`). The

@@ -1,7 +1,12 @@
 import { expect, test } from "bun:test";
 import type { McpRuntimeStatus } from "../mcp/client-config";
 import type { NormalizedToolDefinition } from "../harness/provider/types";
-import { formatMcpListLines, formatToolsListLines, presentMcpTools } from "./mcp-inspector";
+import {
+  formatMcpListLines,
+  formatToolsListLines,
+  isMcpToolsCommand,
+  presentMcpTools,
+} from "./mcp-inspector";
 
 const TOOLS: readonly NormalizedToolDefinition[] = [
   { name: "gdgraph_affected", description: "blast radius", inputSchema: {}, risk: "read" },
@@ -364,4 +369,15 @@ test("[d] never arms for generic (no file to disconnect)", () => {
       },
     },
   );
+});
+
+test("both /integrations and the retired /mcp open this view", () => {
+  // The rename must not make a command vanish under someone mid-session. The
+  // CLI aliases make the same promise; the TUI has to keep it too.
+  expect(isMcpToolsCommand("/integrations")).toBe(true);
+  expect(isMcpToolsCommand("/mcp")).toBe(true);
+
+  // And `/mcps` is still nobody's command — it would differ from `/mcp` by one
+  // character while meaning the opposite, with no flags to say which ran.
+  expect(isMcpToolsCommand("/mcps")).toBe(false);
 });

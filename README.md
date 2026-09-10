@@ -425,7 +425,7 @@ or substitute an ancestor Metaproject.
 ```bash
 keryx orient install-hook --runtime codex   # graph + wiki map at turn start
 keryx agents bootstrap install --runtime claude
-keryx mcp install --runtime cursor          # opt-in read-only MCP server
+keryx integrate cursor                      # opt-in read-only MCP server
 ```
 
 Each of those commands has its own `--runtime` vocabulary — run

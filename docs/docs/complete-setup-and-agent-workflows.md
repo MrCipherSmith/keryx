@@ -344,32 +344,32 @@ keryx init --yes --mcp
 ### Wire Cursor
 
 ```bash
-keryx mcp install --runtime cursor
+keryx integrate cursor
 ```
 
 ### Wire Claude Code
 
 ```bash
-keryx mcp install --runtime claude
+keryx integrate claude
 ```
 
 ### Preview MCP configuration
 
 ```bash
-keryx mcp install --runtime all --dry-run
+keryx integrate all --dry-run
 ```
 
 ### Start the server manually
 
 ```bash
-keryx mcp serve --cwd /absolute/path/to/project
+keryx serve-mcp --cwd /absolute/path/to/project
 ```
 
 The default transport is stdio. HTTP/SSE is isolated, localhost-only, and must
 also be enabled by capability configuration:
 
 ```bash
-keryx mcp serve --http --cwd /absolute/path/to/project
+keryx serve-mcp --http --cwd /absolute/path/to/project
 ```
 
 ## 8. Configure the optional symbol layer
@@ -708,11 +708,11 @@ Operator guide: [Shared Agent Context](guides/shared-agent-context.md).
 
 | Command | Description |
 |---|---|
-| `keryx mcp serve [--cwd <root>]` | Serve MCP over stdio. |
-| `keryx mcp serve --http [--cwd <root>]` | Serve isolated localhost HTTP/SSE. |
-| `keryx mcp install --runtime <id|all>` | Merge keryx into client configuration. |
-| `keryx mcp install --runtime <id|all> --dry-run` | Preview client changes. |
-| `keryx mcp uninstall --runtime <id|all>` | Remove only the managed keryx server. |
+| `keryx serve-mcp [--cwd <root>]` | Serve MCP over stdio. |
+| `keryx serve-mcp --http [--cwd <root>]` | Serve isolated localhost HTTP/SSE. |
+| `keryx integrate <id|all>` | Merge keryx into client configuration. |
+| `keryx integrate <id|all> --dry-run` | Preview client changes. |
+| `keryx integrate --remove <id|all>` | Remove only the managed keryx server. |
 
 ### Keeping the derived layers in sync
 
@@ -1060,7 +1060,7 @@ keryx standard capabilities
 
 ```bash
 bun add @modelcontextprotocol/sdk
-keryx mcp serve --cwd /absolute/path/to/project
+keryx serve-mcp --cwd /absolute/path/to/project
 ```
 
 ### Update cannot write Git hooks

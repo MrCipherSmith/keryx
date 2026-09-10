@@ -119,8 +119,18 @@ test("the installed index names every registered contract, and no others", () =>
   // So: find the one bullet, parse its list, compare SETS. Set equality also
   // catches the reverse — a name left behind after a contract is renamed —
   // which no containment test can see.
-  const index = readFileSync(path.join(METAPROJECT, "index.md"), "utf8");
-  const bullet = index
+  // Reads routing.md, not index.md. Since #487 index.md is a ~277-token gate
+  // carrying pointers only; the inventories moved one line away into routing.md.
+  //
+  // That weakens what this test can promise, and the weakening is the honest
+  // part: the original point was that a contract missing from the file every
+  // agent is hard-gated to read is a contract nobody uses. Agents are now gated
+  // to the gate. A contract listed here is one hop further away than it was.
+  //
+  // The hop is itself guarded — templates.test.ts asserts the gate names
+  // routing.md — so nothing is unreachable, only less immediate.
+  const routing = readFileSync(path.join(METAPROJECT, "routing.md"), "utf8");
+  const bullet = routing
     .split("\n")
     .find((line) => line.startsWith("- `core/gdskills/contracts/`"));
   expect(bullet).toBeDefined();

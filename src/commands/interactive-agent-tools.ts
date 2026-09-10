@@ -64,14 +64,68 @@ export type InteractiveAgentToolsInput = {
    * rather than silently using a registry nothing else can see or clean up.
    */
   jobRegistry?: JobRegistry;
+  /**
+   * Tool names this session must not have, by exact name.
+   *
+   * Exists because there was no way to say "this session does not need the web".
+   * Both other agent CLIs offer one — `claude --disallowedTools`,
+   * `grok --disable-web-search` — and keryx already treats egress as a product
+   * concern elsewhere (`keryx harness exec --allowed-domains`, `sandbox.json`),
+   * so a session-level roster it cannot narrow was the inconsistent part.
+   *
+   * Two uses it was written for: running against a sensitive checkout where a tool
+   * that fetches from outside it is a liability, and any comparison that needs the
+   * roster to be the same as another tool's.
+   */
+  denyTools?: readonly string[];
 };
+
+/**
+ * Remove tools a caller asked this session not to have.
+ *
+ * Filtered after the list is built rather than threaded through every factory:
+ * the factories are the place where a tool's construction lives, and a denial is
+ * a property of the SESSION, not of any one tool. Built once and filtered once
+ * also means `interactiveAgentToolNames` reports what the turn actually ran with
+ * rather than what it would have run with.
+ *
+ * An unknown name is not silently ignored — see `assertDeniableTools`. A typo in a
+ * denial is the failure mode that matters here: the operator believes a capability
+ * is gone and it is not.
+ */
+export function denyInteractiveTools(
+  tools: readonly InteractiveTool[],
+  denied: readonly string[],
+): InteractiveTool[] {
+  if (denied.length === 0) return [...tools];
+  const deny = new Set(denied);
+  return tools.filter((tool) => !deny.has(tool.definition.name));
+}
+
+/**
+ * Refuse a denial naming a tool that does not exist.
+ *
+ * `--deny-tools web_serch` must not leave the session with web search and a clear
+ * conscience. The error lists what is deniable, because a name the operator cannot
+ * look up is a name they will get wrong again.
+ */
+export function assertDeniableTools(tools: readonly InteractiveTool[], denied: readonly string[]): void {
+  const known = new Set(tools.map((tool) => tool.definition.name));
+  const unknown = denied.filter((name) => !known.has(name));
+  if (unknown.length > 0) {
+    throw new Error(
+      `unknown tool name(s) in --deny-tools: ${unknown.sort().join(", ")} — ` +
+        `deniable tools are: ${[...known].sort().join(", ")}`,
+    );
+  }
+}
 
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
   const getSessionDir = input.getSessionDir ?? (() => undefined);
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const jobRegistry = input.jobRegistry;
-  return [
+  const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
     ...builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort),
     webFetchTool(),
@@ -90,6 +144,9 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     slateWriteSeedTool(getSessionDir, idSeq, clock),
     input.spawnTool,
   ];
+  const denied = input.denyTools ?? [];
+  assertDeniableTools(built, denied);
+  return denyInteractiveTools(built, denied);
 }
 
 export function interactiveAgentToolNames(tools: readonly InteractiveTool[]): string[] {

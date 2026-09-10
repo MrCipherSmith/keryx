@@ -203,6 +203,11 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           acChecksum: null,
           acConfirmed: {},
           pr: { url: null },
+          // Spread rather than assigned: under exactOptionalPropertyTypes an
+          // explicit `undefined` is a different value from an absent key, and
+          // an absent key is what "no base was named" has to look like on disk
+          // for the not-recorded state to stay distinguishable from a pass.
+          ...(input.baseBranch === undefined ? {} : { baseBranch: input.baseBranch }),
           tasks: DEFAULT_TASKS.map((task) => ({ ...task, status: "todo" })),
           history: [{ at: createdAt, event: "created" }],
         };
@@ -540,6 +545,15 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         if (!pr.isDraft) {
           detail += " (warning: PR is not a draft)";
         }
+        // Recorded only when the flow does not already name a base. An init
+        // that was told where to land stated an INTENT; the pull request states
+        // where it currently points, and letting the second overwrite the first
+        // would turn a retargeted PR into a passing one — which is the whole
+        // thing the recorded base exists to catch.
+        if (flow.baseBranch === undefined && typeof pr.baseRefName === "string" && pr.baseRefName !== "") {
+          flow.baseBranch = pr.baseRefName;
+          detail += ` (base: ${pr.baseRefName})`;
+        }
       } else {
         detail += " (tracker unavailable: existence not verified)";
       }
@@ -614,6 +628,25 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           detail: "tracker unavailable; verify PR checks manually",
         });
       }
+
+      // Gate 2b: base branch. Asks the one question the others do not — where
+      // was this SUPPOSED to land — against the base the flow recorded rather
+      // than wherever the pull request points now.
+      //
+      // Placed after the merge evidence because it consumes it, and reported
+      // even when the flow named no base, as `not recorded`. Silence there
+      // would be indistinguishable from a pass.
+      gates.push(
+        await baseBranchCondition(
+          cwd,
+          flow,
+          mergedCommit ?? undefined,
+          flow.pr.url && deps.tracker && (await deps.tracker.detect())
+            ? (await deps.tracker.prStatus(flow.pr.url)).baseRefName
+            : undefined,
+          commitContainedIn,
+        ),
+      );
 
       // Gate 3: tasks. Opt-in per package (`gates.tasks`, set by `flow init`):
       // 24 packages completed before this gate existed while carrying an open
@@ -1170,6 +1203,117 @@ function buildIssueComment(flow: FlowState, gates: GateOutcome[]): string {
     `- Acceptance criteria: ${Object.keys(flow.acConfirmed).length} confirmed`,
     `- Gates: ${gateLine}`,
   ].join("\n");
+}
+
+/**
+ * Did the merge land on the branch this flow was told to target?
+ *
+ * The gate's condition 3 already compares CONTENT — it asks whether the tree
+ * the reviewers read is the tree that merged, falling back to tree equality
+ * where squash breaks ancestry — so the canonical wrong-target merge is
+ * already caught: a branch cut from `feature/x` and merged to `main` produces
+ * a different tree and is refused. This condition exists for what content
+ * cannot separate: two targets that have CONVERGED, where a squash onto either
+ * yields the same tree and nothing recorded which one was meant.
+ *
+ * `review-pr-feedback --fix` makes precisely that shape. It cuts a branch from
+ * another pull request's head and must land back inside that pull request,
+ * because the point is for the fix to be in the diff the reviewer is reading.
+ * Landing it elsewhere leaves their diff unchanged while the run replies
+ * "acted-on, fixed in <sha>" to every reviewer — a change nobody reviewed,
+ * reported as success, with a durable record saying otherwise.
+ *
+ * THREE states, and they stay three:
+ *   - `not recorded` — the flow never named a base. Neither a pass nor a
+ *     failure, because plenty of flows legitimately never name one, and
+ *     collapsing this into `pass` is how a condition stops meaning anything.
+ *   - `unobserved` — a base is recorded but could not be resolved. FAILS, per
+ *     the module's rule that a condition nobody could observe has not passed.
+ *     The message names the tracker or the ref, not the flow, because that is
+ *     what the operator has to go and fix.
+ *   - `pass`/`violated` — the base resolved and the merge either is or is not
+ *     contained in it.
+ */
+export async function baseBranchCondition(
+  cwd: string,
+  flow: { baseBranch?: string | undefined },
+  mergedCommit: string | undefined,
+  prBase: string | null | undefined,
+  containedIn: (cwd: string, commit: string, ref: string) => Promise<boolean | null>,
+): Promise<GateOutcome> {
+  const recorded = flow.baseBranch;
+  if (recorded === undefined || recorded.trim() === "") {
+    return {
+      name: "base-branch",
+      status: "skipped",
+      detail:
+        "not recorded: this flow never named a base branch, so there is nothing to compare the merge against. Not a pass — `keryx flow init --base <branch>` or `flow implemented --pr <url>` records one.",
+    };
+  }
+
+  if (mergedCommit !== undefined) {
+    const contained = await containedIn(cwd, mergedCommit, `origin/${recorded}`);
+    if (contained === null) {
+      return {
+        name: "base-branch",
+        status: "fail",
+        detail: `unobserved: origin/${recorded} could not be resolved, so whether ${mergedCommit} landed there is unknown. Fetch the remote (\`git fetch origin ${recorded}\`) and re-run; an unresolvable base is not a passing one.`,
+      };
+    }
+    return contained
+      ? {
+          name: "base-branch",
+          status: "pass",
+          detail: `${mergedCommit} is contained in origin/${recorded}, the base this flow recorded`,
+        }
+      : {
+          name: "base-branch",
+          status: "fail",
+          detail: `violated: this flow recorded base ${recorded}, but ${mergedCommit} is not contained in origin/${recorded}. The merge landed somewhere else.`,
+        };
+  }
+
+  // No merge commit: the pull request is the only evidence of where this is
+  // headed, and a retargeted PR is exactly what the recorded intent catches.
+  if (prBase === undefined || prBase === null || prBase === "") {
+    return {
+      name: "base-branch",
+      status: "fail",
+      detail: `unobserved: this flow recorded base ${recorded}, but the tracker did not report the pull request's base. An unread base is not a matching one.`,
+    };
+  }
+  return prBase === recorded
+    ? {
+        name: "base-branch",
+        status: "pass",
+        detail: `the pull request targets ${prBase}, the base this flow recorded`,
+      }
+    : {
+        name: "base-branch",
+        status: "fail",
+        detail: `violated: this flow recorded base ${recorded}, but the pull request now targets ${prBase}. It was retargeted after the base was recorded.`,
+      };
+}
+
+/** Whether `commit` is contained in `ref`, or null when the ref cannot be resolved. */
+async function commitContainedIn(cwd: string, commit: string, ref: string): Promise<boolean | null> {
+  if (!/^[0-9a-f]{7,64}$/i.test(commit)) {
+    return null;
+  }
+  const resolved = Bun.spawn(["git", "rev-parse", "--verify", `${ref}^{commit}`], {
+    cwd,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  if ((await resolved.exited) !== 0) {
+    return null;
+  }
+  const process = Bun.spawn(["git", "merge-base", "--is-ancestor", commit, ref], {
+    cwd,
+    stdout: "ignore",
+    stderr: "ignore",
+  });
+  return (await process.exited) === 0;
 }
 
 async function verifyCommitOnMain(

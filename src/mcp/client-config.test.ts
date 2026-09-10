@@ -76,7 +76,7 @@ test("AC1: install writes .cursor/mcp.json with a sentinel-marked keryx server",
   const config = await readConfig(file);
   const entry = config.mcpServers?.[MCP_SERVER_NAME];
   expect(entry?.command).toBe("keryx");
-  expect(entry?.args).toEqual(["mcp", "serve", "--cwd", root]);
+  expect(entry?.args).toEqual(["serve-mcp", "--cwd", root]);
   expect((entry as Record<string, unknown>)?.[MCP_MANAGED_KEY]).toBe(MCP_MANAGED_SENTINEL);
   expect(report.outcomes[0]?.errors).toEqual([]);
 });
@@ -108,8 +108,7 @@ test("AC1: generic prints a ready snippet and writes no file", async () => {
   expect(outcome?.wrote).toBe(false);
   expect(outcome?.snippet).toBe(renderMcpClientSnippet(root));
   expect(JSON.parse(outcome?.snippet ?? "{}").mcpServers?.[MCP_SERVER_NAME]?.args).toEqual([
-    "mcp",
-    "serve",
+    "serve-mcp",
     "--cwd",
     root,
   ]);
@@ -274,7 +273,7 @@ test("AC1: --runtime opencode writes opencode.json with the combined command arr
   const config = await readOpencodeConfig(file);
   const entry = config.mcp?.[MCP_SERVER_NAME];
   expect(entry?.type).toBe("local");
-  expect(entry?.command).toEqual(["keryx", "mcp", "serve", "--cwd", root]);
+  expect(entry?.command).toEqual(["keryx", "serve-mcp", "--cwd", root]);
   expect(entry?.enabled).toBe(true);
   expect((entry as Record<string, unknown>)?.[MCP_MANAGED_KEY]).toBe(MCP_MANAGED_SENTINEL);
   expect(report.outcomes[0]?.errors).toEqual([]);
@@ -365,7 +364,7 @@ test("AC1: --runtime vscode writes .vscode/mcp.json with the servers/type:stdio 
   const entry = config.servers?.[MCP_SERVER_NAME];
   expect(entry?.type).toBe("stdio");
   expect(entry?.command).toBe("keryx");
-  expect(entry?.args).toEqual(["mcp", "serve", "--cwd", root]);
+  expect(entry?.args).toEqual(["serve-mcp", "--cwd", root]);
   expect((entry as Record<string, unknown>)?.[MCP_MANAGED_KEY]).toBe(MCP_MANAGED_SENTINEL);
   expect(report.outcomes[0]?.errors).toEqual([]);
 });

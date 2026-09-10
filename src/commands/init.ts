@@ -1047,7 +1047,7 @@ export async function initCommand(args: string[]): Promise<void> {
       }
     }
     if (!report.sdk.available) {
-      note(`Optional MCP SDK not found — install it to run \`keryx mcp serve\`: ${report.sdk.hint}`);
+      note(`Optional MCP SDK not found — install it to run \`keryx serve-mcp\`: ${report.sdk.hint}`);
     }
   }
 
@@ -1164,7 +1164,7 @@ export async function initCommand(args: string[]): Promise<void> {
   // Interactive-only: never under `--yes`/non-interactive, so the default floor
   // output stays byte-identical to today (golden rule, AC6).
   if (!enableMcp && !options.yes) {
-    note(`Wire an editor/agent to the MCP server later with ${style.cyan("keryx mcp install")}.`);
+    note(`Wire an editor/agent to the MCP server later with ${style.cyan("keryx integrate <editor>")}.`);
   }
 }
 
@@ -1512,8 +1512,11 @@ async function installManagedHook(
   const blockPattern = new RegExp(
     `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
   );
+  // `() => managedBlock`, not `managedBlock`: the string form of
+  // String.replace reads `$'`, "$`", `$&` and `$$` as substitution patterns,
+  // and these blocks are shell. See the twin in update.ts.
   const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
+    ? existing.replace(blockPattern, () => managedBlock)
     : `${existing.trimEnd()}\n\n${managedBlock}\n`;
 
   await writeFile(hookPath, next, "utf8");

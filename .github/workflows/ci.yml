@@ -32,8 +32,17 @@ jobs:
       # shape `parseRgMatches` depends on. That assertion is an oracle about an
       # external tool, so skipping it when the tool is absent would leave the
       # assumption unverified while the job stayed green. Install it instead.
+      # `apt-get update` exits non-zero when ANY configured repository fails,
+      # including third-party ones this project never uses. The runner image
+      # ships Google's Chrome repository; on 2026-09-09 it served a bad index
+      # and every job here failed at this step without reaching the code. The
+      # condition worth gating on is whether ripgrep installs, so let `update`
+      # report and let `install` decide — it exits non-zero on its own if the
+      # package cannot be fetched.
       - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y ripgrep
 
       - name: Confirm ripgrep is present
         run: rg --version
@@ -107,8 +116,16 @@ jobs:
       # reason `typecheck-and-tests` installs it: an assertion about an external
       # tool's output shape is not worth having if the tool can be absent and the
       # job still go green.
+      # Non-fatal `update` for the reason given at the `typecheck-and-tests`
+      # copy of this step: a broken third-party repository must not be able to
+      # fail a job that only needs ripgrep.
       - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y ripgrep
+
+      - name: Confirm ripgrep is present
+        run: rg --version
 
       # `bun test` exits non-zero when a filter matches no test file, so a leg
       # whose paths were renamed away fails here rather than passing vacuously.
@@ -443,8 +460,12 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # Non-fatal `update` for the reason given at the first `Install ripgrep`
+      # step: `bwrap --version` below is what proves the launcher is there.
       - name: Install bubblewrap
-        run: sudo apt-get update && sudo apt-get install -y bubblewrap
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y bubblewrap
 
       - name: Confirm the launcher is present
         run: bwrap --version

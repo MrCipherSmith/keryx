@@ -32,13 +32,13 @@ coverage/
 # `.keryx/`.
 .keryx/external-slates/
 
-# MCP client config, written by `keryx mcp install`. It embeds the ABSOLUTE path
+# MCP client config, written by `keryx integrate`. It embeds the ABSOLUTE path
 # of the project on the machine that ran the install (`--cwd /home/you/keryx`),
 # so a committed copy is correct on exactly one machine and silently dead on
 # every other. It was committed once, with a macOS path, and sat broken on Linux
 # from 2026-08-13 until it was noticed on 2026-09-02 — the server simply never
-# started, and nothing said so. Re-run `keryx mcp install --runtime claude` to
-# regenerate it locally.
+# started, and nothing said so. Re-run `keryx integrate claude` to regenerate it
+# locally.
 .mcp.json
 
 # keryx-shell-benchmark harness: raw run output (thousands of per-scenario
@@ -46,6 +46,13 @@ coverage/
 docs/requirements/keryx-shell-benchmark/harness/logs/
 docs/requirements/keryx-shell-benchmark/harness/runs/
 docs/requirements/keryx-shell-benchmark/harness/__pycache__/
+
+# Context-measurement run output, written by scripts/benchmark/retrieval-*.ts.
+# Per-arm transcripts and per-task artifacts, some of them checkouts of OTHER
+# repositories the measurement ran against. Untracked but not ignored is not a
+# safe state for that: one `git add -A` puts another project's material into
+# this public repository's history, where deleting it later does not remove it.
+.benchmark-runs/
 
 # keryx:begin
 # Metaproject: keep agent-facing context versioned, ignore executable/generated internals.
@@ -66,10 +73,6 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/testing/artifacts/latest.md
 .metaproject/data/testing/artifacts/latest.json
 .metaproject/data/tasks/runtime/
-# The auto-sweep stamp: runtime state rewritten by the gdctx write path, not
-# a project artifact. Tracking it would churn on every `keryx ctx` call.
-.metaproject/data/forgetting/
-.metaproject/data/retention/
 .metaproject/data/tasks/logs/
 .metaproject/flows/.flow-init.lock/
 .metaproject/flows/.flow-lock-*/
@@ -83,5 +86,12 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/security/raw/**
 .metaproject/data/security/artifacts/latest.md
 .metaproject/data/security/artifacts/latest.json
+# Forgetting/retention runtime state: the auto-sweep stamp is rewritten by the
+# gdctx write path on every call, not a project artifact. These lines were added
+# to this repository's .gitignore by hand INSIDE the managed block, where the
+# next `keryx update` regenerated them away — which is how they came to belong
+# here instead.
+.metaproject/data/forgetting/
+.metaproject/data/retention/
 .metaproject/reports/
 # keryx:end

@@ -47,9 +47,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Normalize the target into module, entity, files, symbols, and wiki references.",
     "Collect evidence from gdgraph, gdctx, gdwiki, health, and memory when available.",
     "Run `keryx skills create <target> --module <module> --name <skill-name>`; infer module/name from the target when the user did not provide them.",
+    "When the user points at an existing SKILL.md, a folder of them, or a GitHub SKILL.md URL, run `keryx skills import --from <that> --module <module>` instead of scaffolding an empty skill.",
+    "To refresh a project-skill from its Origin (or a new file), run `keryx skills update <module>/<name> [--from <origin>]`.",
     "Run `keryx skills route <target>` and `keryx skills inspect <module>/<skill-name>` to confirm registration and routing.",
     "Run `keryx skills verify <module>/<skill-name>` and finish with `keryx skills status`.",
-  ], ["create skill", "generate project skill", "new entity skill", "создай скил", "создай скилл для <path>"]),
+  ], ["create skill", "generate project skill", "new entity skill", "создай скил", "создай скилл для <path>", "import skill", "import skills from", "update skill from", "подтяни скилы", "обнови скил"]),
   skill("reviewer-skill-creator", "core", ["recommended", "full"], "Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.", [
     "Read the source in full and sort it into method, convention, and persona before writing anything.",
     "Scaffold with `keryx skills create <target> --module review --name <reviewer> --note <gist> --origin <source file>`; the target is a routing key, the note is the prose.",
@@ -57,7 +59,8 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Write the reviewer against the orchestrated review contract; point at the canonical severity rubric instead of inventing one.",
     "Drop the persona, keep the method, and state the reason beside every rule kept.",
     "Confirm with `keryx review reviewers` — creating files is not registration, and registration is not discovery.",
-  ], ["create a reviewer", "new reviewer for review-orchestrator", "make a reviewer from this profile", "создай ревьюера", "создай нового ревьюера на основании"]),
+    "For existing SKILL.md packages, run `keryx skills import --from <dir|file|https-url> --module <module>`; `keryx review import` is the review-shaped alias with the review-vantage-* prefix.",
+  ], ["create a reviewer", "new reviewer for review-orchestrator", "make a reviewer from this profile", "создай ревьюера", "создай нового ревьюера на основании", "import vantage reviewers", "import overlay reviewers"]),
   skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.", [
     "Resolve candidate skills through ownership and gdgraph affected context.",
     "Compare skill claims with current code, wiki decisions, health reports, and memory.",

@@ -15,7 +15,7 @@ operating system" that makes an AI coding agent more effective and more
 governable inside an existing repository.
 
 Two HTTP surfaces do exist, and both are **opt-in and off until you start
-them**: `keryx mcp serve --http` (localhost-only, additionally gated on
+them**: `keryx serve-mcp --http` (localhost-only, additionally gated on
 `http.enabled` in the module manifest) and `keryx serve`, the loopback-bound
 remote entry over the agent harness. Neither runs unless configured and
 launched. Earlier revisions of this document said "no HTTP server, and no

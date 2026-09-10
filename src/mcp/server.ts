@@ -1,3 +1,4 @@
+// retired-spellings-ok: file — one comment naming the entry point's former spelling; history, not instruction
 // stdio-first MCP server loop (specification.md §3, §9; T5, AC1, AC2, AC8, AC10).
 //
 // THE ONLY place the MCP SDK is loaded, and ONLY via lazy `await import()`
@@ -28,7 +29,7 @@ export class McpSdkMissingError extends Error {
         "Install it (it is an optional dependency):",
         "  bun add @modelcontextprotocol/sdk",
         "",
-        "Then re-run `keryx mcp serve`. All other commands run without the SDK.",
+        "Then re-run `keryx serve-mcp`. All other commands run without the SDK.",
       ].join("\n"),
     );
     this.name = "McpSdkMissingError";

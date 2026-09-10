@@ -3,6 +3,7 @@ import path, { join } from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { learnProjectSkill } from "../gdskills/learn";
+import { loadSchema, validateJson } from "../gdskills/contracts";
 import {
   learningRecordPath,
   learningSourcePath,
@@ -24,6 +25,7 @@ import {
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
+import { runImportReviewers } from "../review/import-reviewers";
 import {
   checkCrossFamilyReview,
   parseCrossFamilyReviewInput,
@@ -189,6 +191,9 @@ const COMMENTS_REPLY_FLAGS = [
   // from the collection it is answering.
   "--self",
   "--outcomes",
+  // The skill's own result, checked against `review-pr-feedback-output` before
+  // anything is posted. See `refuseInvalidResult`.
+  "--result",
   "--sha",
   "--round",
   "--final",
@@ -256,6 +261,7 @@ const COMPLETE_FLAGS = ["--finding", "--disposition", "--evidence"] as const;
 
 const STACK_FLAGS = ["--json"] as const;
 const REVIEWERS_FLAGS = ["--json"] as const;
+const IMPORT_FLAGS = ["--from", "--dry-run", "--force", "--json", "--help"] as const;
 
 /**
  * The `--name`s present in `args`, in order, with their values.
@@ -354,6 +360,11 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "reviewers") {
       await runReviewers(args.slice(1));
+      return;
+    }
+    if (command === "import") {
+      rejectUnknownFlags(args.slice(1), IMPORT_FLAGS, "import");
+      await runImportReviewers(args.slice(1));
       return;
     }
     if (command === "status") {
@@ -914,6 +925,13 @@ async function runCommentsReply(args: string[]): Promise<void> {
   const round = parseNonNegativeInteger(optionValue(args, "--round"), "--round") ?? 1;
   const isFinal = args.includes("--final");
   const dryRun = args.includes("--dry-run");
+
+  // Before any network call, not merely before the post. A self-contradictory
+  // result is refusable from the file alone, and making the caller wait on a
+  // comment collection to be told so would hide the refusal behind whatever
+  // else can fail first — including, on an unreachable tracker, forever.
+  await refuseInvalidResult(optionValue(args, "--result"), optionValue(args, "--outcomes"));
+
   const cwd = process.cwd();
   const port = await resolvePort(args);
   const state = await readPrCommentState(cwd, repo, number);
@@ -1014,6 +1032,60 @@ async function resolveSelfLogin(args: string[]): Promise<string> {
     );
   }
   return login;
+}
+
+/**
+ * The `review-pr-feedback` result, refused here or nowhere.
+ *
+ * This is the contract's only enforcement point, and it exists because the
+ * skill's own SKILL.md said the quiet part: "Nothing refuses a dispatch that
+ * ignores them — no production code loads either file". A schema nothing loads
+ * describes a shape rather than requiring one.
+ *
+ * It sits on `comments reply` rather than anywhere cheaper because this is the
+ * command that acts OUTWARD — it writes into someone else's pull request. A
+ * result that contradicts itself is worth refusing at the last moment before
+ * that, not after. So the check runs before the pass is built, and its failure
+ * posts nothing.
+ *
+ * Optional, deliberately: the flag is how a caller offers the result for
+ * checking, and making it required would break every existing invocation to no
+ * benefit. A caller that omits it gets the behaviour it had before — which the
+ * registry records honestly as the limit of this enforcement rather than
+ * rounding up to "the contract is enforced".
+ */
+async function refuseInvalidResult(source: string | undefined, outcomesSource: string | undefined): Promise<void> {
+  if (source === undefined) {
+    return;
+  }
+  if (source === "-" && outcomesSource === "-") {
+    throw new Error(
+      "`--result -` and `--outcomes -` both read standard input, which can only be consumed once. Pass at least one of them as a file path.",
+    );
+  }
+
+  const raw = source === "-" ? await Bun.stdin.text() : await readFile(source, "utf8");
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw) as unknown;
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- Surface the parse position without the raw stack.
+    throw new Error(
+      `\`--result ${source}\` is not JSON: ${error instanceof Error ? error.message : String(error)}. Nothing was posted.`,
+    );
+  }
+
+  const schema = await loadSchema("review-pr-feedback-output");
+  const errors = await validateJson(parsed, schema);
+  if (errors.length > 0) {
+    // Every failing field named, not just the count: a refusal that says "3
+    // errors" sends the reader back to the schema to find out which three.
+    throw new Error(
+      `\`--result ${source}\` does not satisfy the review-pr-feedback-output contract, so nothing was posted:\n${errors
+        .map((error) => `  ${error.path}: ${error.message}`)
+        .join("\n")}`,
+    );
+  }
 }
 
 async function readOutcomes(source: string | undefined): Promise<CommentOutcome[]> {
@@ -1943,6 +2015,8 @@ Usage:
   keryx review learn --pr <n> [--dry-run] [--json]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
+  keryx review reviewers [--json]
+  keryx review import --from <dir> [--dry-run] [--force] [--json]
   keryx review status <review-id-or-path>
   keryx review complete <review-id-or-path>
                         [--finding <id> --disposition <state> --evidence <text>]...

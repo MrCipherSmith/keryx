@@ -191,9 +191,9 @@ Feature: Autonomous keryx installation and project configuration
   Scenario: Enable MCP integration
     Given ENABLE_MCP is true
     When the selected runtime is "cursor" or "claude"
-    Then the agent previews `keryx mcp install --runtime <runtime> --dry-run`
+    Then the agent previews `keryx integrate <runtime> --dry-run`
     And the agent requests approval if the preview modifies project client configuration
-    And after approval the agent runs `keryx mcp install --runtime <runtime>`
+    And after approval the agent runs `keryx integrate <runtime>`
     And the agent verifies `keryx standard capabilities`
     And the agent verifies that the selected client configuration contains the managed keryx server
     But the agent must not start a long-running MCP server during setup verification

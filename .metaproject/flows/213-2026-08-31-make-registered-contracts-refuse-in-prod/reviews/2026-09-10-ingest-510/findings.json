@@ -1,0 +1,96 @@
+[
+  {
+    "id": "R1-LOGIC-001",
+    "reviewer": "review-pr510",
+    "severity": "blocker",
+    "problem": "The allOf conditional added to review-pr-feedback-output's schema (analyze mode implies fix must be null) was fully redundant with a pre-existing top-level if/then/else whose else branch already required it. The commit's central claim - that the rule lived only in a description no validator reads - was false.",
+    "impact": "The PR's flagship demonstration did not demonstrate what it claimed: the AC2 payload was already refused at the parent commit. None of the sixteen new tests could tell the difference - removing the conditional left them all green - so a change that altered no behaviour shipped described as closing a gap, in a PR whose whole subject is unverified claims.",
+    "suggested_fix": "Remove the redundant conditional and correct the narrative, or rewrite it to constrain something the existing else branch does not, with a test proving the new code is load-bearing.",
+    "evidence": "Read the schema at parent commit ea0b396c: it already carried if mode==fix then fix:object else fix:null. Validated the AC2 payload against that PRE-PR schema with the project's own validateJson: already rejected with $.fix: Expected type null, got object. Deleted only the new allOf item and re-ran all three new test files: 16 pass, 0 fail.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+        ".metaproject/core/gdskills/contracts/review-pr-feedback-output-contract.schema.json",
+        ".metaproject/skills/gdskills/review/review-pr-feedback/output-contract.schema.json"
+      ],
+      "enumeration_method": "Diffed the three schema copies for byte parity, read the full pre-PR schema at the parent commit, and validated payloads against it directly."
+    },
+    "global_id": "2026-09-10-ingest-510#R1-LOGIC-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a9cbc590, which contains the fix a9cbc590, and could not make it reproduce. All three schema copies diff empty against ea0b396c. The new rule test passes; deleting the pre-existing top-level else fails two of its assertions, so it guards the live mechanism rather than a dead block.",
+      "verifier": "independent-verifier-510"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in a9cbc590: the redundant conditional removed, all three schema copies byte-identical to pre-#510, and the rule guarded by a test on the rule. Independently re-checked at a9cbc590 and no longer reproducing."
+    }
+  },
+  {
+    "id": "R1-ARCH-002",
+    "reviewer": "review-pr510",
+    "severity": "major",
+    "problem": "The enforcement guard checked its production claim with a raw substring match for loadSchema(\"<name>\"), which is satisfied by a commented-out call, a docstring example, or a call inside dead code.",
+    "impact": "The registry's central promise - that a production claim is checked rather than trusted - was weaker than stated. Proved on live code: inserting return; above the real loadSchema call left it unreachable and fully disabled the new enforcement, and the guard still passed every assertion.",
+    "suggested_fix": "Strip comments before searching, and pair every enforced contract with a test that drives the refusal through the real path, since static reading cannot establish reachability.",
+    "evidence": "Handed enforcementProblems three fabricated modules - comment, docstring, dead branch - and got zero problems from all three. Then inserted return; at the top of refuseInvalidResult in src/commands/review.ts: contract-enforcement.test.ts still passed, and only review-result-contract.test.ts, which spawns the real CLI, failed.",
+    "confidence": "high",
+    "file": "src/gdskills/contract-enforcement.test.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/contract-enforcement.test.ts - enforcementProblems, the loadSchema substring check"
+      ],
+      "enumeration_method": "Read the guard's implementation, then verified empirically with synthetic registrations and a real mutation of the module backing the new claim."
+    },
+    "global_id": "2026-09-10-ingest-510#R1-ARCH-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a9cbc590, which contains the fix a9cbc590. The comment-only and docstring-only fooling cases are now caught with 'no live loadSchema'. The dead-branch case still passes the static check, as the fix states rather than hides: with return; inserted above the real loadSchema call, contract-enforcement.test.ts and the regression file both stayed green and only the CLI-spawning review-result-contract.test.ts failed. The claimed layering holds.",
+      "verifier": "independent-verifier-510"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in a9cbc590: comments stripped before the match, plus a required LIVE_REFUSAL_TESTS pairing because static reading cannot establish reachability. Independently re-checked at a9cbc590; the residual dead-branch limit is stated in the guard rather than closed silently."
+    }
+  },
+  {
+    "id": "R1-ARCH-003",
+    "reviewer": "review-pr510",
+    "severity": "major",
+    "problem": "review-pr-feedback-output was recorded as kind: production while its enforcement sits behind an optional --result flag that no documented invocation passed.",
+    "impact": "The registry used one word for two different guarantees. job-orchestrator-state, review-finding and subagent-result validate on every real call because keryx performs the write; this one validated only if a caller remembered a flag that nothing told them to pass - so in the documented workflow a self-contradictory result was never actually refused.",
+    "suggested_fix": "Wire --result into the documented invocations, or introduce a distinct enforcement kind so the registry stops labelling always-checked and checked-on-request identically.",
+    "evidence": "Enumerated every documented comments reply invocation - review-pr-feedback, review-orchestrator and job-orchestrator's five per-agent copies, seven in total - and found --result in none. Confirmed the check itself is real when the flag IS passed: the CLI refused with $.fix: Expected type null, got object, exit 1, while a conforming payload passed the contract check and failed later on an unrelated 404.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/review/review-pr-feedback/SKILL.md",
+        "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md and its four per-agent copies"
+      ],
+      "enumeration_method": "keryx ctx rg over src for every file referencing the command; each documented invocation block read directly to check for the flag."
+    },
+    "global_id": "2026-09-10-ingest-510#R1-ARCH-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a9cbc590, which contains the fix a9cbc590. The registration is kind opt-in with switchedOnBy recorded; --result appears in the documented Step 10 invocation and in the mirrored .metaproject copy; the real CLI refuses an analyze-mode payload carrying a populated fix with exit 1 and $.fix: Expected type null, got object. The only place the two kinds are grouped is the schema-regression pin, whose comment states why.",
+      "verifier": "independent-verifier-510"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in a9cbc590: a third kind opt-in carrying what switches it on, and --result wired into the documented Step 10 invocation. Independently re-checked at a9cbc590 and no longer reproducing."
+    }
+  }
+]

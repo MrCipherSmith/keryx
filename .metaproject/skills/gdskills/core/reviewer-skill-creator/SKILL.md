@@ -17,6 +17,8 @@ triggers:
   - "make a reviewer from this profile"
   - "создай ревьюера"
   - "создай нового ревьюера на основании"
+  - "import vantage reviewers"
+  - "import overlay reviewers"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
@@ -48,6 +50,31 @@ The parallel is the whole convention. A project reviewer is a project-skill whos
 **module is `review`**; nothing else marks it, and `keryx review reviewers`
 finds it by that alone. Anyone who knows where bundled reviewers live knows where
 these go.
+
+## Bulk import of overlay reviewers
+
+When the overlays already exist as `review-vantage-*` skill packages (for
+example an overlay skill tree with `review-vantage-*` packages), do not recreate them one by one.
+
+```bash
+keryx skills import --from <overlay-home> --module review
+# alias: keryx review import --from <overlay-home>
+```
+
+That copies every `review-vantage-*` package into
+`.metaproject/project-skills/review/`, stamps Origin on each SKILL.md, and is
+the same discovery `review-orchestrator` uses. Generic copies of keryx
+reviewers (`review-logic`, `review-frontend`, …) are skipped on purpose —
+those would shadow the bundled engine.
+
+One overlay package:
+
+```bash
+keryx review import --from <overlay-home>/skills/review-vantage-frontend
+```
+
+Then `keryx review reviewers`. Until that list shows the names, they are not
+wired.
 
 ---
 
@@ -212,3 +239,5 @@ undocumented is drift that will be silently "fixed" by whoever refreshes next.
 | Change a reviewer keryx ships | NO | edit `src/gdskills/bundled/skills/review/` and open a PR |
 | Update a skill from review findings | NO | `entity-skill-learner`, `keryx skills learn` |
 | Decide which reviewers a round dispatches | NO | `review-orchestrator` |
+| Import a tree of overlay reviewers | YES — `keryx skills import --from <dir> --module review` (`keryx review import` alias) | — |
+| Import a non-review SKILL.md / GitHub URL | NO | `entity-skill-creator` / `keryx skills import` |

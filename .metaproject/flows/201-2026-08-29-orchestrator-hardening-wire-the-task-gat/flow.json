@@ -3,9 +3,9 @@
   "id": "201",
   "slug": "orchestrator-hardening-wire-the-task-gat",
   "title": "Orchestrator hardening: wire the task gate, make review precise, add deep rounds / clean-round completion / PR-comment handling / adaptive models",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-29T09:30:41.636Z",
-  "updatedAt": "2026-08-29T12:41:35.970Z",
+  "updatedAt": "2026-09-10T04:14:09.272Z",
   "source": {
     "type": "description",
     "ref": null
@@ -642,6 +642,15 @@
       "at": "2026-08-29T12:41:35.970Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/408 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T04:14:07.142Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T04:14:09.272Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

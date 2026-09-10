@@ -8,7 +8,7 @@ initialized and offers to run `keryx init` if not, registers `keryx mcp
 serve` as a native MCP server so Copilot Chat gets keryx's 21-tool surface
 for free, and adds a lightweight visual layer (status bar, tree view,
 output channel, editor hover cards) built entirely on top of the already-
-shipped `keryx serve` (HTTP+SSE) and `keryx mcp serve` (MCP) backends — no
+shipped `keryx serve` (HTTP+SSE) and `keryx serve-mcp` (MCP) backends — no
 new backend work, a client-building effort.
 
 ## Status
@@ -60,7 +60,7 @@ which landed.)
   workspace open, with an explicit user confirmation prompt (never silent),
   and a deliberate auto-reveal of the tree view immediately after a
   successful init so the very first thing a new user sees has content.
-- Register `keryx mcp serve` as keryx's VS Code MCP runtime target
+- Register `keryx serve-mcp` as keryx's VS Code MCP runtime target
   (`src/mcp/client-config.ts` gains a `vscode` entry) — Copilot Chat's
   native MCP client gets all 21 tools with no extension-authored UI.
 - Status bar item: base status (`GET /v1/status`) plus an ambient

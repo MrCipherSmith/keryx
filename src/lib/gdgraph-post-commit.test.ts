@@ -139,6 +139,50 @@ test("does not rebuild after a commit that touched no graph-relevant path", asyn
   });
 });
 
+// The detector used a hand-written list of directory prefixes — src/, lib/,
+// app/, packages/, services/, scripts/, docs/ — while the builder indexes any
+// source file anywhere except the directories it never walks. Everything in
+// between was indexed AND undetected: committed, stale, and silent. Silent is
+// the part that matters. Every other path in this hook says something when the
+// graph may be stale; this one returned 0 with no output, which is the exact
+// failure the hook was written to end.
+//
+// keryx's own tree holds three shapes of it, so these are real paths, not
+// hypotheticals.
+test.each([
+  ["a nested package's source", "vscode-extension/src/extension.ts", "export const activate = () => {};\n"],
+  ["a source file at the repository root", "install.ts", "export const install = 1;\n"],
+  ["a source file under an unlisted directory", "fixtures/sample/leaf.ts", "export const leaf = 1;\n"],
+  ["Python, which the builder also indexes", "tools/report.py", "VALUE = 1\n"],
+])("rebuilds after committing %s, which the graph indexes", async (_label, relPath, body) => {
+  await withRepo(async ({ root, git, runHook }) => {
+    await commitFile(root, git, relPath, body);
+
+    const result = await runHook();
+
+    expect(result.calls.trim()).toBe("gdgraph build");
+    expect(result.stdout).toContain("rebuilding gdgraph");
+  });
+});
+
+// The widening must stop where the builder stops. `node_modules` and the rest
+// are never walked, so a commit touching them leaves the graph correct, and
+// rebuilding on every dependency bump would be a rebuild that proves nothing.
+test.each([
+  ["node_modules", "node_modules/left-pad/index.js"],
+  ["dist", "dist/cli.js"],
+  ["a nested node_modules", "vscode-extension/node_modules/dep/index.ts"],
+])("does not rebuild for source under %s, which the builder never walks", async (_label, relPath) => {
+  await withRepo(async ({ root, git, runHook }) => {
+    await commitFile(root, git, relPath, "export const x = 1;\n");
+
+    const result = await runHook();
+
+    expect(result.calls).toBe("");
+    expect(result.exitCode).toBe(0);
+  });
+});
+
 test("KERYX_GDGRAPH_HOOK_REBUILD=0 falls back to the printed reminder", async () => {
   await withRepo(async ({ root, git, runHook }) => {
     await commitFile(root, git, "src/a.ts", "export const a = 1;\n");

@@ -187,11 +187,21 @@ test("full happy path: start -> tasks -> implemented -> confirm -> complete(done
   expect(result.gates.map((gate) => gate.name)).toEqual([
     "acceptance-criteria",
     "pull-request",
+    "base-branch",
     "tasks",
     "review",
     "health",
   ]);
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
+  // `skipped`: no base recorded on this fixture. See the merged-completion
+  // test above for why that is neither a pass nor a failure.
+  expect(result.gates.map((gate) => gate.status)).toEqual([
+    "pass",
+    "pass",
+    "skipped",
+    "pass",
+    "pass",
+    "pass",
+  ]);
   expect(result.commented).toBe(true);
   expect(tracker.commented[0]).toContain("Flow 001");
   expect(tracker.commented[0]).toContain("pull/43");
@@ -260,11 +270,22 @@ test("merged completion closes a flow without a PR when main contains the commit
   expect(result.gates.map((gate) => gate.name)).toEqual([
     "acceptance-criteria",
     "main-merge",
+    "base-branch",
     "tasks",
     "review",
     "health",
   ]);
-  expect(result.gates.map((gate) => gate.status)).toEqual(["pass", "pass", "pass", "pass", "pass"]);
+  // `base-branch` is `skipped`, not `pass`: this fixture's flow records no base
+  // branch, and "nothing to compare against" must not read as "compared and
+  // matched". The three states are three — see `baseBranchCondition`.
+  expect(result.gates.map((gate) => gate.status)).toEqual([
+    "pass",
+    "pass",
+    "skipped",
+    "pass",
+    "pass",
+    "pass",
+  ]);
 });
 
 // T35 F-005 / T45 regression: a healthGate that THROWS is a check that could

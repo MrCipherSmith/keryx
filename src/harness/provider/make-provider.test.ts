@@ -260,18 +260,21 @@ test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for strea
 
 describe("stream usage is opt-in per provider", () => {
   test("grok asks for it, because x.ai is confirmed to honour the field", () => {
-    // Verified directly: the same request returns zero usage chunks without
-    // `stream_options` and `prompt_tokens: 638, cached_tokens: 512` with it.
-    const provider = makeProvider("grok", "grok-4.6", makeOpts({ env: { XAI_API_KEY: "k" } }));
-    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    // Verified directly against the API: the same request returns zero usage chunks
+    // without `stream_options` and `prompt_tokens: 638, cached_tokens: 512` with it.
+    // Without it `onUsage` never fires and a session cannot report what it spent.
+    expect(providerByName("grok")?.streamUsage).toBe(true);
+    expect(makeProvider("grok", "grok-4.6", makeOpts({ env: { XAI_API_KEY: "k" } }))).toBeInstanceOf(
+      OpenAiCompatEngine,
+    );
   });
 
   test("an unchecked gateway does not ask — absent means unverified, not unsupported", () => {
     // A non-conformant gateway may reject an unknown top-level field outright and
     // break a path that works today, so the flag is confirmed per provider rather
-    // than switched on for the family.
-    expect(providerByName("deepseek")?.streamUsage).toBeUndefined();
-    expect(providerByName("openrouter")?.streamUsage).toBeUndefined();
-    expect(providerByName("grok")?.streamUsage).toBe(true);
+    // than switched on for the whole family.
+    for (const name of ["deepseek", "openrouter", "cerebras", "groq", "moonshot", "zai"]) {
+      expect(providerByName(name)?.streamUsage).toBeUndefined();
+    }
   });
 });

@@ -67,7 +67,7 @@ const CLIP_MARK = " chars]";
  * public and a task's query is a merged pull request's subject line, so a web
  * search or a GitHub tool answers the question without reading the checkout.
  */
-const KERYX_FORBIDDEN_TOOL_MARKERS: readonly string[] = [
+export const KERYX_FORBIDDEN_TOOL_MARKERS: readonly string[] = [
   "websearch",
   "webfetch",
   "web_search",
@@ -75,6 +75,23 @@ const KERYX_FORBIDDEN_TOOL_MARKERS: readonly string[] = [
   "github__",
   "gitkraken__",
 ];
+
+/**
+ * The exact tool names passed to `keryx shell --deny-tools`.
+ *
+ * Separate from the markers above and NOT derived from them by string surgery:
+ * those are case-insensitive substrings used to judge a roster after the fact
+ * (`websearch`, `github__`), while this flag takes names from keryx's own
+ * registry and refuses an unknown one. Feeding it a marker would kill every arm
+ * on `unknown tool name(s) in --deny-tools`.
+ *
+ * Two lists that must agree is exactly how a guard rots, so they are held to
+ * each other by a test rather than by care: every name here must match a marker,
+ * and every tool keryx offers that matches a marker must appear here — derived
+ * from the real registry, so a tool added later is caught without anyone
+ * remembering to look.
+ */
+export const KERYX_DENIED_TOOLS: readonly string[] = ["web_search", "web_fetch"];
 
 /**
  * Fold the NDJSON transcript into the numbers the measurement needs.
@@ -301,6 +318,16 @@ export function buildKeryxArgs(
     // in a headless sweep is a hang, not a safeguard — and `auto` is what an
     // unattended keryx run means, which is the thing being compared.
     "--auto",
+    // The roster the other two legs already have. keryx is the last of the three
+    // to be able to say "this session does not need the web", and until it could,
+    // `assertKeryxRoster` refused every arm — correctly: the target repository's
+    // task text is a real pull request's, and a web tool can reach the answer
+    // from outside the checkout. Denied rather than merely disapproved: a denied
+    // tool is not offered to the model, so it cannot be attempted or reasoned
+    // about. Names come from `--deny-tools`' own list, which refuses an unknown
+    // one instead of leaving the session with web search and a clear conscience.
+    "--deny-tools",
+    KERYX_DENIED_TOOLS.join(","),
     "--events-file",
     eventsFile,
     "--events-max-field",

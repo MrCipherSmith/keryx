@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.83",
+  "version": "0.2.89",
   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {
@@ -54,6 +54,7 @@
     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
     "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",
     "check:doc-links": "bun scripts/check-doc-links.ts",
+    "check:retired-spellings": "bun scripts/check-retired-cli-spellings.ts",
     "baseline:review-precision": "bun scripts/review-precision-baseline.ts",
     "test:guards": "bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts",
     "lint": "eslint ."

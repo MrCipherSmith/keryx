@@ -1,0 +1,62 @@
+[
+  {
+    "id": "R1-TEST-001",
+    "reviewer": "review-pr513",
+    "severity": "minor",
+    "problem": "reachableOutOfOrder's one-word probe (please <word> it now) is satisfied by containsPhrase's verbatim word-boundary scan, never by the order-free fallback the file exists to watch. Its docstring claimed that branch exercised the inflected-matching property an earlier regression cost 29 one-word triggers.",
+    "impact": "For the twenty one-word triggers in the catalog, the guard measured a different path from the one it named. A regression confined to the order-free handling of short triggers would not be caught there, reproducing the invisible-loss failure mode AC5 exists to prevent, for a narrower class.",
+    "suggested_fix": "State what each branch actually measures, and give the inflected property its own test rather than assuming it from a reachability set that would stay green through exactly that regression.",
+    "evidence": "containsPhrase reimplemented standalone, without the fallback, satisfies the probe for all 20 one-word triggers. Cross-checked from the other side: none of the 36 triggers stranded by reinstating the historical rule is one word, so that branch had never exercised the mechanism it claimed.",
+    "confidence": "high",
+    "file": "src/commands/trigger-reachability.test.ts",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/trigger-reachability.test.ts - reachableOutOfOrder, the one-word branch"
+      ],
+      "enumeration_method": "Reimplemented containsPhrase verbatim and ran it against the one-word probe for every one-word trigger in BUNDLED_GDSKILLS, then cross-referenced the 36 stranded triggers reproduced by mutation."
+    },
+    "global_id": "2026-09-10-ingest-513#R1-TEST-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at dfb2bb9c, which contains the fix, and could not make it reproduce. The docstring no longer claims the one-word branch exercises inflected matching. Disabling matchesInflected fails only the new inflection test (18 triggers listed) while the reachability snapshot still passes - proving the old guard was blind to this regression and the new one is not. The test examines 19 of the 20 one-word triggers; the single exclusion is `tdd`, three characters, below the stem length the mechanism requires.",
+      "verifier": "independent-verifier-217"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in dfb2bb9c: the docstring states what each branch measures, and the inflected property has its own test. Independently re-checked at dfb2bb9c and no longer reproducing."
+    }
+  },
+  {
+    "id": "R2-TEST-001",
+    "reviewer": "independent-verifier-514",
+    "severity": "minor",
+    "problem": "The inflection test added for R1-TEST-001 scored its probe against the whole skill entry, and scoreBundledSkillRoute computes its trigger hit across ALL of an entry's triggers - so a sibling trigger could answer for the one under test.",
+    "impact": "review-orchestrator::ревью passes through RU synonym expansion, which injects `review` and satisfies the sibling ENGLISH trigger by the order-free path - a different mechanism from the inflection the test names. That trigger would have stayed 'not lost' with matchesInflected broken for it: a case counted as measured while something else did the answering, which is the same defect the test was written to catch.",
+    "suggested_fix": "Score against an entry carrying only the trigger under test.",
+    "evidence": "With matchesInflected disabled, 18 of 19 one-word triggers landed in the lost set and the single survivor was review-orchestrator::ревью.",
+    "confidence": "high",
+    "file": "src/commands/trigger-reachability.test.ts",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/trigger-reachability.test.ts - the one-word inflection test's scoring call"
+      ],
+      "enumeration_method": "Disabled matchesInflected and diffed the full one-word trigger set against the reported lost set, isolating the single survivor."
+    },
+    "global_id": "2026-09-10-ingest-513#R2-TEST-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 847cdb3c, which contains the fix, and could not make it reproduce. Reproduced both numbers: reverting the isolation with matchesInflected disabled gives lost=18 of 19 with review-orchestrator::ревью the lone survivor; restoring the isolation gives 19 of 19. Judged the isolation itself for new wrong-reason passes: narrowing entry.triggers affects only the tokens: reason, which the assertion never inspects, and does not touch containsPhrase, triggerFires or matchesInflected.",
+      "verifier": "independent-verifier-217"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 847cdb3c: scored against an entry carrying only the trigger under test. Independently re-checked at 847cdb3c, 18 of 19 caught before and 19 of 19 after, and no longer reproducing."
+    }
+  }
+]

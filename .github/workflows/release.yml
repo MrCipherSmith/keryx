@@ -94,8 +94,15 @@ jobs:
       # published nothing, but the omission is the same shape as the defects
       # this repository keeps recording: a requirement satisfied in one place
       # and not written down as belonging to the suite.
+      # Non-fatal `update` for the reason given in `ci.yml`: a third-party
+      # repository this project never uses must not be able to fail a release.
       - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
+        run: |
+          sudo apt-get update || echo "apt-get update reported errors; the install below is the gate"
+          sudo apt-get install -y ripgrep
+
+      - name: Confirm ripgrep is present
+        run: rg --version
 
       # The same gates CI runs. A tag must not be able to ship something a pull
       # request could not.

@@ -14,7 +14,7 @@ polls `/v1/status`; tree view from `/v1/projects`/turns; output channel for
 SSE stream + CLI shell-out stdout. Zero webview.
 
 **B. MCP registration + narrow "Turn Monitor" webview** (Pragmatist, M) —
-`keryx mcp serve` registered for Copilot Chat (near-zero cost) + one small
+`keryx serve-mcp` registered for Copilot Chat (near-zero cost) + one small
 webview for live turn-stream viewing only.
 
 **C. Full multi-panel dashboard webview** (Pragmatist, L) — status+projects+
