@@ -53,9 +53,9 @@ export function assertProvisionAncestry(repoRoot: string, provisionCommit: strin
 
 export interface BaseTreeCache {
   /** A tree at `commit`, fetched once. Never given to an arm directly. */
-  ensure(commit: string): string;
+  ensure(commit: string): Promise<string>;
   /** Copy-on-write clone for one arm. */
-  materialize(commit: string, armPath: string): void;
+  materialize(commit: string, armPath: string): Promise<void>;
   dispose(): void;
 }
 
@@ -92,10 +92,14 @@ export function createBaseTreeCache(options: BaseTreeCacheOptions): BaseTreeCach
   const pathFor = (commit: string): string => path.join(options.cacheDir, commit);
 
   return {
-    ensure(commit: string): string {
+    async ensure(commit: string): Promise<string> {
       const target = pathFor(commit);
       if (built.has(commit) && existsSync(target)) return target;
-      createIsolatedCheckout({
+      // Awaited. `createIsolatedCheckout` is async — it runs five git steps — and a
+      // missing await here produced an arm materialized from a directory that did
+      // not exist yet, which failed as an ENOENT on lstat rather than as anything
+      // resembling its cause.
+      await createIsolatedCheckout({
         repoRoot: options.repoRoot,
         path: target,
         ref: commit,
@@ -105,8 +109,8 @@ export function createBaseTreeCache(options: BaseTreeCacheOptions): BaseTreeCach
       return target;
     },
 
-    materialize(commit: string, armPath: string): void {
-      const source = this.ensure(commit);
+    async materialize(commit: string, armPath: string): Promise<void> {
+      const source = await this.ensure(commit);
       rmSync(armPath, { recursive: true, force: true });
       const copy = cloneDirectory(source, armPath);
       if (!copy.cloned) options.onFallbackCopy?.(source, armPath);
