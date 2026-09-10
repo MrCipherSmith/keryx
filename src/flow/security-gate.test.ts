@@ -86,13 +86,19 @@ async function driveToComplete(deps: FlowServiceDeps): Promise<ReturnType<Return
 test("no securityGate dep: no security gate runs (no regression)", async () => {
   await fresh();
   const result = await driveToComplete(makeDeps());
-  expect(result.gates.map((g) => g.name)).toEqual([
+  // What this test is about is the ABSENCE of `security`, not the exact
+  // membership of the rest — `base-branch` joined the list in flow 214 and is
+  // spelled out so the assertion keeps failing for its own reason.
+  const names = result.gates.map((g) => g.name);
+  expect(names).toEqual([
     "acceptance-criteria",
     "pull-request",
+    "base-branch",
     "tasks",
     "review",
     "health",
   ]);
+  expect(names).not.toContain("security");
   expect(result.passed).toBe(true);
 });
 

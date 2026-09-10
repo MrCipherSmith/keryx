@@ -1339,13 +1339,20 @@ test("the gate runs where the specification puts it: sixth, after tasks", async 
 
   const result = await service.complete({ cwd: ROOT, id });
 
-  expect(result.gates.map((gate) => gate.name)).toEqual([
+  const names = result.gates.map((gate) => gate.name);
+  expect(names).toEqual([
     "acceptance-criteria",
     "pull-request",
+    // Added by flow 214, between the merge evidence it consumes and the task
+    // gate. The relationship this test is named for — review AFTER tasks — is
+    // unchanged, and is asserted below rather than left to the reader to
+    // recount when the list grows again.
+    "base-branch",
     "tasks",
     "review",
     "health",
   ]);
+  expect(names.indexOf("review")).toBeGreaterThan(names.indexOf("tasks"));
 });
 
 // --- configuration ---------------------------------------------------------
