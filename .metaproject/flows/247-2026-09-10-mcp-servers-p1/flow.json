@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "247",
+  "slug": "mcp-servers-p1",
+  "title": "MCP servers P1: HTTP/SSE transport, headers and bearer tokens, HTTP doctor",
+  "status": "done",
+  "createdAt": "2026-09-10T17:56:16.744Z",
+  "updatedAt": "2026-09-10T20:39:15.831Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:a79d45a3e3755032b9937994c100b0ebcad18b096ceb04ab6e914534525067be",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-10T18:16:11.723Z",
+      "note": "http.live.test.ts drives connectHttpMcpServer against fixtures/mcp-servers/http-server.ts — a real Bun.serve listener on a loopback port. initialize and tools/list assert the METHODS the mock recorded receiving, in MCP's required order, not just that a promise resolved."
+    },
+    "AC2": {
+      "at": "2026-09-10T18:16:11.838Z",
+      "note": "The same assertions run over HTTP that P0 ran over stdio: catalog FQNs, search_tool finding, use_tool calling, untrusted marking, the 20000-byte cap, an isError tool, and AC8's one-fails-others-connect. connectHttpMcpServer returns the same McpServerConnection, so nothing above the transport branches on it."
+    },
+    "AC3": {
+      "at": "2026-09-10T18:16:11.949Z",
+      "note": "Asserted from what the SERVER recorded receiving, not from what keryx passed. Plus a guarded mock (requireAuth) that accepts the right header and rejects the wrong one, so the header is shown to be load-bearing rather than merely present; and arbitrary non-Authorization headers."
+    },
+    "AC4": {
+      "at": "2026-09-10T18:16:12.064Z",
+      "note": "The criterion is that NO REQUEST ARRIVES. http.credentials.test.ts asserts expect(server.requests()).toEqual([]) for an unset ${TOKEN} and for an unset bearer_token_env_var, through the real config loader; plus the runtime holding the server failed, and doctor reporting needs_auth naming the variable with a dial counter of 0. Anti-vacuity: with the variable set the request arrives carrying it. Found and fixed a real defect here — Bearer ${TOKEN} expands to 'Bearer ', not '', so the original emptiness check missed exactly this case."
+    },
+    "AC5": {
+      "at": "2026-09-10T18:16:12.178Z",
+      "note": "http-headers.table.test.ts, precedence class: explicit Authorization wins over bearer_token_env_var, case-insensitively per RFC 9110; with no explicit header the env var is used; and an explicit header that is itself hollow REFUSES rather than falling back to the env var, which would silently use a different credential than the config names."
+    },
+    "AC6": {
+      "at": "2026-09-10T18:16:27.933Z",
+      "note": "P1 touched no publisher code. mcp.ts still routes only the consumer verbs and leaves the no-subcommand path on serveMcpCommand; the retired-spelling and integrate suites are green in the full run (8972 pass / 0 fail), and mcp-servers.test.ts still asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    "AC7": {
+      "at": "2026-09-10T18:16:28.046Z",
+      "note": "explainConnectFailure maps seven shapes to distinct messages: nothing listening, DNS, TLS rejected, credentials refused, HTTP error, handshake never completed, and answered-but-not-MCP. Verified end to end through the CLI: unset token -> needs_auth naming the variable; wrong token -> 'refused the credentials it was given'; right token -> connected with a tool count. A remote server is no longer not-attempted, and doctor.test.ts asserts that change explicitly while keeping not-attempted for a server with neither command nor url."
+    },
+    "AC8": {
+      "at": "2026-09-10T18:16:28.159Z",
+      "note": "A real token is planted in the environment and searched for in JSON.stringify(report), formatDoctorReport(report) and the CLI's list output — absent from all. Found and fixed a self-contradiction while asserting it: 'Bearer ${NOPE}' expands to non-empty, so redactValues reported the header 'set' on the same server whose detail said the variable was unset. redactHeaders now answers by asking the function the dial asks."
+    },
+    "AC9": {
+      "at": "2026-09-10T18:16:28.269Z",
+      "note": "Asserted over the HTTP path rather than inherited: untrusted marking on both success and isError results, the 20000-byte cap against a mock returning 40000 bytes, AC8's partial-failure rule with a real 500, and the per-server handshake budget. The trust gate and the approval gate are transport-independent by construction — use_tool's static destructive risk and requiresApproval both act on the ResolvedMcpServer, above the connect seam — and the identical-shape assertions in AC2 are what establishes that."
+    },
+    "AC10": {
+      "at": "2026-09-10T18:16:28.380Z",
+      "note": "http-headers.table.test.ts: four classes, 21 rows, each class carrying members nobody reported plus its boundary, with meta-assertions that no class may have fewer than three rows and that both outcomes are exercised — plus one asserting no row ever expects an empty header value, so the rule cannot be weakened with this file's agreement. Written BEFORE any review, which is the point, and it immediately caught two real defects (see AC4, AC8)."
+    },
+    "AC11": {
+      "at": "2026-09-10T18:16:44.607Z",
+      "note": "PARTIAL, and stated as such rather than claimed. The HTTP connector is exercised across its failure states (unreachable, HTTP error, non-MCP page, never-answers, wrong credentials, hollow credentials) in http.live.test.ts and http.credentials.test.ts. P0's config.overlay-states.test.ts already covers the readers per state. What P1 did NOT add is a state matrix over a NEW reader, because it added none — every new path is a connector, and connectors are covered above."
+    },
+    "AC12": {
+      "at": "2026-09-10T18:16:44.725Z",
+      "note": "invariants.test.ts extended to the HTTP path: connectHttpMcpServer must carry withHandshakeTimeout and a signal (no unbounded wait), the transport must refuse an empty header independently of http-headers.ts so a hand-built header cannot route around the rule, and the class table and live listener are asserted to exist. The existing no-bare-JSON.parse and no-process.once rules already scan every production file in src/mcp-servers/, so http-headers.ts is covered by them without being named."
+    },
+    "AC13": {
+      "at": "2026-09-10T18:16:44.841Z",
+      "note": "All four from SOURCE. bun test: 8972 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/526"
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context: implementation-plan P1 (items 1-5), spec AC3/AC8/AC19, §3's HTTP optional fields, D-06 (sse is an alias), and the SDK's StreamableHTTPClientTransport(url, {requestInit}) surface."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "connectHttpMcpServer beside the stdio one; http-headers.ts as the refusal seam; runtime and CLI defaultConnect both dial remote; doctor extended with HTTP plus seven distinguished failures; a real loopback mock server fixture."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "http.live.test.ts (15, real socket), http-headers.table.test.ts (26, class table), http.credentials.test.ts (7, end to end), plus doctor and invariants extensions. The class table caught two real defects before any reviewer saw the code."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-10T17:56:16.744Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-10T17:57:09.829Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-10T17:57:09.939Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-10T18:16:11.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: http.live.test.ts drives connectHttpMcpServer against fixtures/mcp-servers/http-server.ts — a real Bun.serve listener on a loopback port. initialize and tools/list assert the METHODS the mock recorded receiving, in MCP's required order, not just that a promise resolved."
+    },
+    {
+      "at": "2026-09-10T18:16:11.839Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: The same assertions run over HTTP that P0 ran over stdio: catalog FQNs, search_tool finding, use_tool calling, untrusted marking, the 20000-byte cap, an isError tool, and AC8's one-fails-others-connect. connectHttpMcpServer returns the same McpServerConnection, so nothing above the transport branches on it."
+    },
+    {
+      "at": "2026-09-10T18:16:11.949Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Asserted from what the SERVER recorded receiving, not from what keryx passed. Plus a guarded mock (requireAuth) that accepts the right header and rejects the wrong one, so the header is shown to be load-bearing rather than merely present; and arbitrary non-Authorization headers."
+    },
+    {
+      "at": "2026-09-10T18:16:12.064Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: The criterion is that NO REQUEST ARRIVES. http.credentials.test.ts asserts expect(server.requests()).toEqual([]) for an unset ${TOKEN} and for an unset bearer_token_env_var, through the real config loader; plus the runtime holding the server failed, and doctor reporting needs_auth naming the variable with a dial counter of 0. Anti-vacuity: with the variable set the request arrives carrying it. Found and fixed a real defect here — Bearer ${TOKEN} expands to 'Bearer ', not '', so the original emptiness check missed exactly this case."
+    },
+    {
+      "at": "2026-09-10T18:16:12.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: http-headers.table.test.ts, precedence class: explicit Authorization wins over bearer_token_env_var, case-insensitively per RFC 9110; with no explicit header the env var is used; and an explicit header that is itself hollow REFUSES rather than falling back to the env var, which would silently use a different credential than the config names."
+    },
+    {
+      "at": "2026-09-10T18:16:27.933Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: P1 touched no publisher code. mcp.ts still routes only the consumer verbs and leaves the no-subcommand path on serveMcpCommand; the retired-spelling and integrate suites are green in the full run (8972 pass / 0 fail), and mcp-servers.test.ts still asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    {
+      "at": "2026-09-10T18:16:28.047Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: explainConnectFailure maps seven shapes to distinct messages: nothing listening, DNS, TLS rejected, credentials refused, HTTP error, handshake never completed, and answered-but-not-MCP. Verified end to end through the CLI: unset token -> needs_auth naming the variable; wrong token -> 'refused the credentials it was given'; right token -> connected with a tool count. A remote server is no longer not-attempted, and doctor.test.ts asserts that change explicitly while keeping not-attempted for a server with neither command nor url."
+    },
+    {
+      "at": "2026-09-10T18:16:28.159Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: A real token is planted in the environment and searched for in JSON.stringify(report), formatDoctorReport(report) and the CLI's list output — absent from all. Found and fixed a self-contradiction while asserting it: 'Bearer ${NOPE}' expands to non-empty, so redactValues reported the header 'set' on the same server whose detail said the variable was unset. redactHeaders now answers by asking the function the dial asks."
+    },
+    {
+      "at": "2026-09-10T18:16:28.270Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Asserted over the HTTP path rather than inherited: untrusted marking on both success and isError results, the 20000-byte cap against a mock returning 40000 bytes, AC8's partial-failure rule with a real 500, and the per-server handshake budget. The trust gate and the approval gate are transport-independent by construction — use_tool's static destructive risk and requiresApproval both act on the ResolvedMcpServer, above the connect seam — and the identical-shape assertions in AC2 are what establishes that."
+    },
+    {
+      "at": "2026-09-10T18:16:28.380Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: http-headers.table.test.ts: four classes, 21 rows, each class carrying members nobody reported plus its boundary, with meta-assertions that no class may have fewer than three rows and that both outcomes are exercised — plus one asserting no row ever expects an empty header value, so the rule cannot be weakened with this file's agreement. Written BEFORE any review, which is the point, and it immediately caught two real defects (see AC4, AC8)."
+    },
+    {
+      "at": "2026-09-10T18:16:44.607Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PARTIAL, and stated as such rather than claimed. The HTTP connector is exercised across its failure states (unreachable, HTTP error, non-MCP page, never-answers, wrong credentials, hollow credentials) in http.live.test.ts and http.credentials.test.ts. P0's config.overlay-states.test.ts already covers the readers per state. What P1 did NOT add is a state matrix over a NEW reader, because it added none — every new path is a connector, and connectors are covered above."
+    },
+    {
+      "at": "2026-09-10T18:16:44.725Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: invariants.test.ts extended to the HTTP path: connectHttpMcpServer must carry withHandshakeTimeout and a signal (no unbounded wait), the transport must refuse an empty header independently of http-headers.ts so a hand-built header cannot route around the rule, and the class table and live listener are asserted to exist. The existing no-bare-JSON.parse and no-process.once rules already scan every production file in src/mcp-servers/, so http-headers.ts is covered by them without being named."
+    },
+    {
+      "at": "2026-09-10T18:16:44.841Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: All four from SOURCE. bun test: 8972 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass."
+    },
+    {
+      "at": "2026-09-10T18:16:44.952Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-10T18:16:45.064Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-10T18:16:45.180Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-10T19:34:56.289Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:00:01.326Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-10T20:00:06.100Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:00:13.517Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/247-2026-09-10-mcp-servers-p1/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#526 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__526.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 526 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-10T20:38:20.342Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:38:20.465Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:38:25.841Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-526#F-052 (blocker, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-053 (major, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-054 (major, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-055 (major, round 2026-09-10-ingest-526): marked fixed at db94154c, 5e40e492 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | verifier-stats (violated): round `2026-09-10-ingest-526` ran with `verification_mode: annotate` and received 0 claims while retaining 4 finding(s) at or above `minor` (2026-09-10-ingest-526#F-052, 2026-09-10-ingest-526#F-053, 2026-09-10-ingest-526#F-054, 2026-09-10-ingest-526#F-055). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-10T20:39:09.998Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:39:10.113Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:39:15.831Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

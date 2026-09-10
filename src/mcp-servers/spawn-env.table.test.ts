@@ -31,6 +31,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { isDeniedForMcpChild } from "./spawn-env";
+import { classTableProblems } from "./class-table";
 
 type Row = [name: string, value: string | undefined, denied: boolean];
 
@@ -231,6 +232,25 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
       ["npm_package_version", "1.0.0", false],
       ["PYTHONPATH", "/usr/lib/python3", false],
       ["VIRTUAL_ENV", "/home/u/.venv", false],
+      // The BOUNDARY this class was missing, found when the shape rule was
+      // made two-sided. A class of eleven keeps proves a filter that keeps
+      // everything, which is the failure mode opposite to the one the rest
+      // of the table guards — and the one nobody writes a row for, because
+      // "these all work" feels like the safe direction.
+      //
+      // The edge is a name that reads like toolchain configuration and is
+      // not: `npm_config_//registry.npmjs.org/:_authToken` is npm's own
+      // spelling for a registry credential, and it sits in the same
+      // `npm_config_*` space as `npm_config_registry` two rows up.
+      ["npm_config_//registry.npmjs.org/:_authToken", "npm_abc123", true],
+      // `NODE_OPTIONS=--require /tmp/x.js` was the other candidate for
+      // this boundary and is deliberately NOT here. It is code execution,
+      // but the value comes from the OPERATOR'S OWN shell — this filter
+      // decides what an inherited environment hands a child, not what an
+      // untrusted config may set — and stripping it breaks nvm, corepack
+      // and `--max-old-space-size`. Asserting it must be denied would be
+      // asserting a rule that is wrong, which is how `DATABASE_URL`
+      // briefly became a credential earlier in this package.
     ],
   },
 ];
@@ -247,23 +267,16 @@ describe("the environment filter, by CLASS", () => {
     });
   }
 
-  test("every class carries a BOUNDARY — a nearby name that must survive", () => {
-    // A class with only positive rows is a class whose filter could be
-    // `() => true` and pass. This is the property that makes the table
-    // worth more than the list it replaced.
-    for (const { klass, rows } of TABLE) {
-      const kept = rows.filter(([, , denied]) => !denied).length;
-      expect({ klass, hasBoundary: kept > 0 }).toEqual({ klass, hasBoundary: true });
-    }
-  });
-
-  test("every class carries at least three rows", () => {
-    // Two examples is how a class gets 'closed' by handling the reported
-    // one and its nearest neighbour, which is the pattern this file exists
-    // to break.
-    for (const { klass, rows } of TABLE) {
-      expect({ klass, rows: rows.length >= 3 }).toEqual({ klass, rows: true });
-    }
+  test("every class has three rows and a BOUNDARY", () => {
+    // Two properties, and both were checked one-sidedly here: `kept > 0`
+    // passes a class that is entirely kept, just as the sibling table's
+    // `refused > 0 || allowed > 0` passed anything at all. A class with
+    // only one outcome is a class whose filter could be a constant, which
+    // is the whole thing the table replaced a list to avoid.
+    //
+    // The rule is `class-table.ts` now, shared with the HTTP header table,
+    // so there is one copy of it to get wrong.
+    expect(classTableProblems(TABLE, ([, , denied]) => (denied ? "denied" : "kept"))).toEqual([]);
   });
 
   test("the table is large enough to be doing work", () => {

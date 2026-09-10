@@ -12,7 +12,6 @@
 
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
-import { connectStdioMcpServer, type McpServerConnection } from "../mcp-client/client";
 import {
   loadMcpServers,
   parseConfigFile,
@@ -22,13 +21,13 @@ import {
 } from "../mcp-servers/config";
 import {
   formatDoctorReport,
+  redactHeaders,
   redactValues,
   runDoctor,
   transportOf,
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
-import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
-import { defaultServerCwd, handshakeBudgetMs, KILL_GRACE_MS } from "../mcp-servers/runtime";
+import { defaultConnect, KILL_GRACE_MS } from "../mcp-servers/runtime";
 import {
   addServer,
   projectConfigFile,
@@ -71,6 +70,14 @@ export type McpConsumerDeps = {
   readonly projectRoot?: string | undefined;
   /** Overridden in tests; otherwise spawns the server. */
   readonly connect?: ConnectFn | undefined;
+  /**
+   * Overridden in tests; otherwise the process environment.
+   *
+   * `doctor` used `process.env` for the dial and `options.env` for the
+   * redaction, in two different functions, so a test could inject an
+   * environment and have half the command ignore it.
+   */
+  readonly env?: Record<string, string | undefined> | undefined;
   readonly log: (line: string) => void;
   readonly err: (line: string) => void;
 };
@@ -106,11 +113,14 @@ function projectRootOf(deps: McpConsumerDeps): string {
 
 function load(deps: McpConsumerDeps): ResolvedMcpConfig {
   const root = projectRootOf(deps);
-  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir });
+  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir, env: deps.env });
 }
 
 /** Redacted view of one server, safe to print or paste into an issue. */
-function publicView(server: ResolvedMcpServer): Record<string, unknown> {
+function publicView(
+  server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
+): Record<string, unknown> {
   return {
     name: server.name,
     source: server.source,
@@ -120,7 +130,14 @@ function publicView(server: ResolvedMcpServer): Record<string, unknown> {
     // The same rule `doctor` follows, for the same reason: `env` and `headers`
     // hold tokens, and `--json` output is what gets pasted into a bug report.
     env: redactValues(server.env),
-    headers: redactValues(server.headers),
+    // `redactHeaders`, NOT `redactValues`. This said `redactValues` and
+    // `doctor.ts`'s own docstring for `redactHeaders` explains why that is
+    // wrong: `Bearer ${NOPE}` expands to `"Bearer "`, which is non-empty,
+    // so the naive check reads `set` for a header that will not be sent.
+    // `doctor` therefore said `unset` and `list --json` said `set` for the
+    // same config — the self-contradicting report `doctor` fixed, still
+    // shipping from the sibling command.
+    headers: redactHeaders(server, env),
   };
 }
 
@@ -129,7 +146,14 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
   const wantJson = splitAtSeparator(args).own.includes("--json");
 
   if (wantJson) {
-    deps.log(JSON.stringify({ servers: config.servers.map(publicView), problems: config.problems }, null, 2));
+    const env = deps.env ?? process.env;
+    deps.log(
+      JSON.stringify(
+        { servers: config.servers.map((s) => publicView(s, env)), problems: config.problems },
+        null,
+        2,
+      ),
+    );
     return config.problems.length > 0 ? 1 : 0;
   }
 
@@ -491,10 +515,16 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   const approvals = loadTrustStore(deps.configDir);
   let report;
   try {
+    // ONE env for the whole command. `defaultConnect` is imported from the
+    // runtime now rather than copied here, so the pre-flight runs the
+    // procedure the session runs — the two copies had already drifted on
+    // exactly this point.
+    const env = deps.env ?? process.env;
     report = await runDoctor(config, {
       only,
-      connect: deps.connect ?? ((server) => defaultConnect(server, dialling.signal, kills)),
+      connect: deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills)),
       heldForApproval: (server) => requiresApproval(server, approvals),
+      env,
     });
   } finally {
     // Removed only once the dialling is done. Printing happens after this,
@@ -511,31 +541,6 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   return report.healthy ? 0 : 1;
 }
 
-async function defaultConnect(
-  server: ResolvedMcpServer,
-  signal?: AbortSignal,
-  kills?: Array<Promise<void>>,
-): Promise<McpServerConnection> {
-  const command = server.command;
-  if (command === undefined || command === "") {
-    throw new Error(`server "${server.name}" has no command; only stdio servers are dialled in this release`);
-  }
-  return connectStdioMcpServer(
-    [command, ...(server.args ?? [])],
-    {
-      // The SAME resolution the shell uses (`defaultServerCwd`). These two
-      // disagreed: the shell ran a project server from its project root and
-      // `doctor` ran it from the process cwd, so a server that resolves
-      // relative paths behaved differently under the command whose whole job
-      // is to tell you whether it will work.
-      cwd: server.cwd ?? defaultServerCwd(server),
-      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
-    },
-    handshakeBudgetMs(server),
-    signal,
-    kills,
-  );
-}
 
 /**
  * `--scope user|project`, defaulting to user.

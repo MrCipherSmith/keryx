@@ -9,7 +9,20 @@ import type { McpServerConnection, McpToolDescriptor } from "../mcp-client/clien
 import type { ResolvedMcpServer } from "./config";
 import { catalogForServer, mergeCatalogs, type ServerCatalog } from "./catalog";
 
-/** Specification §5.2. `needs_auth` belongs to P3 and is not produced here. */
+/**
+ * Specification §5.2.
+ *
+ * `needs_auth` is snake_case and `needs-approval` is kebab-case, which is
+ * ugly and is deliberately left alone. `needs_auth` is the spelling the
+ * specification's status enum gives; `needs-approval` shipped in 0.2.90 and
+ * is printed by `keryx mcp list`, so either rename breaks a surface that is
+ * already released, for cosmetics. Noted here so the next reader does not
+ * spend the change discovering that.
+ *
+ * `needs_auth` was documented as belonging to P3. P1 produces it: a hollow
+ * credential or an unresolved `${VAR}` in the url is diagnosed by `doctor`
+ * before the socket. P3 adds the OAuth flow that RESOLVES it.
+ */
 export type ServerStatus =
   | "connected"
   | "disabled"

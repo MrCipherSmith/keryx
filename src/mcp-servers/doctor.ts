@@ -24,6 +24,8 @@ import type {
 import type { SkippedTool } from "./catalog";
 import { catalogForServer } from "./catalog";
 import type { ConnectFn, ServerStatus } from "./manager";
+import { describeHollow, displayUrl, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
+import { sanitiseForDisplay } from "./tools";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
 /**
@@ -66,6 +68,46 @@ export function redactValues(values: Record<string, string> | undefined): Record
   return out;
 }
 
+/**
+ * `set`/`unset` for HEADERS, judged the way the dial judges them.
+ *
+ * `redactValues` alone is wrong here and the report said so out loud:
+ * `Bearer ${NOPE}` expands to `"Bearer "`, which is non-empty, so the
+ * headers map read `set` while the detail on the same server read "NOPE is
+ * unset". A report that contradicts itself in two adjacent fields teaches
+ * the reader to trust neither.
+ *
+ * The question is the same one `resolveHttpHeaders` answers — would this
+ * header be sent — so it is answered by asking that.
+ */
+export function redactHeaders(
+  server: ResolvedMcpServer,
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, "set" | "unset"> {
+  const out: Record<string, "set" | "unset"> = {};
+  const resolution = resolveHttpHeaders(server, server.raw, env);
+  const hollow = new Set(resolution.ok ? [] : resolution.hollow.map((h) => h.header.toLowerCase()));
+
+  for (const key of Object.keys(server.headers ?? {})) {
+    out[key] = hollow.has(key.toLowerCase()) ? "unset" : "set";
+  }
+  // `bearer_token_env_var` produces an Authorization header that is not in
+  // the config's own `headers`, so it would otherwise be absent from the
+  // report entirely — and absent reads as "not configured".
+  const tokenVar = server.bearer_token_env_var;
+  // Case-INSENSITIVELY, because HTTP header names are. `out.Authorization
+  // === undefined` was true for a config that wrote `"authorization"` in
+  // lowercase, so the report grew a second Authorization row — for a
+  // credential that `resolveHttpHeaders` does not send, since the explicit
+  // header wins. The operator saw the header listed twice and had no way
+  // to tell which of the two was on the wire.
+  const alreadyReported = Object.keys(out).some((key) => key.toLowerCase() === "authorization");
+  if (tokenVar !== undefined && tokenVar !== "" && !alreadyReported) {
+    out.Authorization = hollow.has("authorization") ? "unset" : "set";
+  }
+  return out;
+}
+
 export function transportOf(server: ResolvedMcpServer): "stdio" | "http" | "unknown" {
   if (typeof server.command === "string" && server.command.length > 0) return "stdio";
   if (typeof server.url === "string" && server.url.length > 0) return "http";
@@ -79,6 +121,8 @@ export type DoctorOptions = {
   readonly connectTimeoutMs?: number | undefined;
   /** Injected so `doctor` does not dial a project server nobody approved. */
   readonly heldForApproval?: ((server: ResolvedMcpServer) => boolean) | undefined;
+  /** Overridden in tests; otherwise the process environment. */
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
 };
 
 const DEFAULT_DOCTOR_TIMEOUT_MS = 10_000;
@@ -122,9 +166,15 @@ export async function runDoctor(
   return {
     problems,
     servers,
-    // A held server is not a failure — it is a decision waiting. It must
-    // still be visible, which is what `status` carries.
-    healthy: problems.length === 0 && servers.every((s) => s.status !== "failed"),
+    // Healthy means NOTHING NEEDS THE OPERATOR, which is what the exit
+    // code says. Three statuses need them and only one of the three is a
+    // failure: a server awaiting approval and one whose credential
+    // variable is unset are both decisions waiting, and reporting them
+    // with exit 0 tells a script — and a person skimming — that the
+    // configuration is fine when two commands are outstanding.
+    healthy:
+      problems.length === 0 &&
+      servers.every((s) => s.status !== "failed" && s.status !== "needs_auth" && s.status !== "needs-approval"),
   };
 }
 
@@ -136,7 +186,7 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
     transport: transportOf(server),
     enabled: server.enabled,
     env: redactValues(server.env),
-    headers: redactValues(server.headers),
+    headers: redactHeaders(server, options.env ?? process.env),
   } as const;
 
   if (!server.enabled) {
@@ -154,17 +204,37 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
       detail: `project server not approved; run \`keryx mcp trust ${server.name}\` after reading what it launches`,
     };
   }
-  if (base.transport !== "stdio") {
+  if (base.transport === "unknown") {
     return {
       ...base,
       status: "not-attempted",
       toolCount: 0,
       skipped: [],
-      detail:
-        base.transport === "http"
-          ? "remote (url) servers are not connected in this release; stdio only"
-          : "sets neither command nor url",
+      detail: "sets neither command nor url",
     };
+  }
+
+  if (base.transport === "http") {
+    // A hollow credential is a CONFIG problem, and saying so is the whole
+    // of AC19's second half: dialling with `Bearer ` would produce a 401
+    // from somebody else's server, which reads as "their server is broken"
+    // rather than "your variable is unset".
+    const env = options.env ?? process.env;
+    // The SAME list the session dial uses, not a second copy of it.
+    const urlIssue = remoteTargetProblem(server.raw, env);
+    if (urlIssue !== undefined) {
+      return { ...base, status: "needs_auth", toolCount: 0, skipped: [], detail: urlIssue };
+    }
+    const resolved = resolveHttpHeaders(server, server.raw, env);
+    if (!resolved.ok) {
+      return {
+        ...base,
+        status: "needs_auth",
+        toolCount: 0,
+        skipped: [],
+        detail: describeHollow(resolved.hollow),
+      };
+    }
   }
 
   const timeoutMs =
@@ -176,7 +246,13 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
   try {
     connection = await withTimeout(options.connect(server), timeoutMs, server.name);
   } catch (error) {
-    return { ...base, status: "failed", toolCount: 0, skipped: [], detail: messageOf(error) };
+    return {
+      ...base,
+      status: "failed",
+      toolCount: 0,
+      skipped: [],
+      detail: explainConnectFailure(base.transport, server, error),
+    };
   }
 
   try {
@@ -200,6 +276,138 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
       // replace the diagnosis with an error about ending the diagnosis.
     }
   }
+}
+
+/**
+ * Say WHICH failure, not that there was one.
+ *
+ * AC7: unreachable, wrong status, a non-MCP endpoint and a TLS problem are
+ * four different things an operator does four different things about, and
+ * the SDK reports all of them as an exception. Collapsing them into
+ * "failed: <whatever the SDK said>" is the shape of report that sends
+ * someone to restart a server that is running fine on a URL with a typo.
+ */
+export function explainConnectFailure(
+  transport: "stdio" | "http" | "unknown",
+  server: ResolvedMcpServer,
+  error: unknown,
+): string {
+  const message = sanitiseForDisplay(messageOf(error));
+  if (transport !== "http") return message;
+
+  // The URL, from the RAW entry and with its query elided. The expanded
+  // form carries whatever `${API_KEY}` resolved to.
+  const url = displayUrl(server.raw.url);
+
+  // CLASSIFY ON THE CODE, NOT THE MESSAGE.
+  //
+  // The first version matched regexes against the message text and four of
+  // its seven branches could never fire, which a reviewer proved by
+  // deleting the whole function and watching 505 tests stay green. The
+  // reason is structural: the SDK throws
+  // `new StreamableHTTPError(response.status, "Error POSTing to endpoint: " + body)`
+  // — the status is on `.code` and is NEVER in the message. So the
+  // credentials branch fired only when the SERVER'S RESPONSE BODY happened
+  // to contain the word "unauthorized", and the same 401 was classified
+  // two different ways depending on what the server wrote.
+  const status = httpStatusOf(error);
+  if (status !== undefined) {
+    if (status === 401 || status === 403) {
+      return `${url} rejected the credentials it was given (HTTP ${status}). Check the header or bearer_token_env_var.`;
+    }
+    if (status === 404) return `${url} has no MCP endpoint there (HTTP 404). Check the path.`;
+    if (status >= 500) return `${url} answered HTTP ${status} — the server is failing, not the config.`;
+    return `${url} answered HTTP ${status}.`;
+  }
+
+  // Then the system error code, which is where a socket failure lives.
+  const syscall = syscallCodeOf(error);
+  if (syscall !== undefined) {
+    if (syscall === "ECONNREFUSED") return `nothing is listening at ${url} (${syscall})`;
+    if (syscall === "ENOTFOUND" || syscall === "EAI_AGAIN") {
+      return `the host in ${url} does not resolve (${syscall})`;
+    }
+    if (isTlsCode(syscall)) {
+      return `the TLS certificate for ${url} was rejected (${syscall})`;
+    }
+    if (syscall === "ETIMEDOUT") return `${url} did not answer in time (${syscall})`;
+    if (syscall === "UnexpectedRedirect") {
+      // Bun reports the refusal from `redirect: "error"` as a CODE, so the
+      // message branch below could never see it — the third branch on this
+      // diff written from a guess at a library's wording and never
+      // executed. This is the one failure keryx causes on purpose, and it
+      // was reported as "could not be reached", which sends the operator
+      // to check a server that is up and answering.
+      return `${url} redirected, which keryx does not follow for MCP. Configure the final URL. (${syscall})`;
+    }
+    return `${url} could not be reached (${syscall})`;
+  }
+
+  // Only then the message, and only for the cases that have no code.
+  const lower = message.toLowerCase();
+  if (lower.includes("unexpected content type")) {
+    // The commonest misconfiguration: a URL that serves a web page. The
+    // SDK reports it exactly this way and the old regex list had no
+    // branch that matched it.
+    return `${url} answered, but not with MCP — is that the server endpoint and not a web page? (${message})`;
+  }
+  if (lower.includes("did not complete the handshake") || lower.includes("did not answer")) {
+    return `${url} accepted the connection and never completed the MCP handshake (${message})`;
+  }
+  if (lower.includes("unable to connect")) {
+    // Bun collapses refused and unresolvable into one message with no
+    // code. Say both rather than guess.
+    return `${url} could not be reached — nothing listening, or the host does not resolve (${message})`;
+  }
+  if (lower.includes("redirect")) {
+    return `${url} redirected, which keryx does not follow for MCP. Configure the final URL. (${message})`;
+  }
+  return `${url}: ${message}`;
+}
+
+/**
+ * A TLS failure, by code.
+ *
+ * This was `code.includes("CERT") || includes("SSL") || includes("TLS")`,
+ * which is a guess at OpenSSL's naming, and the mutation sweep showed the
+ * branch had never been executed at all. Run against real codes it misses
+ * `UNABLE_TO_VERIFY_LEAF_SIGNATURE` and `HOSTNAME_MISMATCH` — the two an
+ * operator behind a corporate TLS-intercepting proxy actually gets, which
+ * is precisely the case where "could not be reached" sends them to debug
+ * the wrong end.
+ *
+ * The named set first, the substrings after, so an unlisted OpenSSL code
+ * still lands somewhere sensible.
+ */
+const TLS_CODES = new Set([
+  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+  "UNABLE_TO_GET_ISSUER_CERT",
+  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+  "SELF_SIGNED_CERT_IN_CHAIN",
+  "DEPTH_ZERO_SELF_SIGNED_CERT",
+  "CERT_HAS_EXPIRED",
+  "CERT_NOT_YET_VALID",
+  "HOSTNAME_MISMATCH",
+  "EPROTO",
+]);
+
+function isTlsCode(code: string): boolean {
+  return TLS_CODES.has(code) || code.includes("CERT") || code.includes("SSL") || code.includes("TLS");
+}
+
+/** The HTTP status the SDK carries on `StreamableHTTPError.code`. */
+export function httpStatusOf(error: unknown): number | undefined {
+  const code = (error as { code?: unknown } | undefined)?.code;
+  return typeof code === "number" && code >= 100 && code <= 599 ? code : undefined;
+}
+
+/** The system error code, on the error or its cause. */
+export function syscallCodeOf(error: unknown): string | undefined {
+  for (const candidate of [error, (error as { cause?: unknown } | undefined)?.cause]) {
+    const code = (candidate as { code?: unknown } | undefined)?.code;
+    if (typeof code === "string" && code.length > 0) return code;
+  }
+  return undefined;
 }
 
 function messageOf(error: unknown): string {

@@ -21,7 +21,9 @@ import { loadMcpServers, type McpConfigProblem, type ResolvedMcpServer } from ".
 import { mergeCatalogs, type ServerCatalog } from "./catalog";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "./manager";
 import { loadTrustStore, requiresApproval } from "./trust";
-import { connectStdioMcpServer } from "../mcp-client/client";
+import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
+import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
+import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
 
 /**
@@ -133,7 +135,16 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   // the first signal never went out and the child was reparented to init —
   // on all four exit paths a verifier tried.
   const kills: Array<Promise<void>> = [];
-  const connect = options.connect ?? ((server) => defaultConnect(server, dialling.signal, kills));
+  // `options.env` is threaded all the way to the dial, not just to
+  // `loadMcpServers`. It was read back from `process.env` inside
+  // `connectRemote`, which made the runtime's own env option a half-truth:
+  // the config was resolved against the injected environment and the
+  // CREDENTIALS were resolved against the real one. A test could inject
+  // `{}` and watch the refusal happen for the wrong reason — because the
+  // developer's shell had no `TOKEN` either — and the same test would go
+  // green on a machine where it did, having proved nothing about the code.
+  const env = options.env ?? process.env;
+  const connect = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills));
   const settled = startServers(launchable, connect)
     .then((result) => {
       catalog = result.catalog;
@@ -225,28 +236,74 @@ export function handshakeBudgetMs(server: ResolvedMcpServer): number {
 export const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_HANDSHAKE_MS = 15_000;
 
+/**
+ * Dial a remote server, refusing before the socket if a credential is hollow.
+ *
+ * The refusal is the whole of AC19 and it happens HERE rather than inside
+ * the transport, so the message names the variable the operator has to set
+ * instead of reporting a 401 from somebody else's server.
+ */
+async function connectRemote(
+  server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
+  signal?: AbortSignal,
+): ReturnType<ConnectFn> {
+  // The TARGET first, then the credential. Both refusals happen before a
+  // socket, and both are shared with `doctor` rather than reimplemented:
+  // the url checks lived only in `doctor` until a reviewer noticed the
+  // session dial called neither, so a config `doctor` refused would
+  // connect to the wrong path in the shell it was pre-flighting.
+  const target = remoteTargetProblem(server.raw, env);
+  if (target !== undefined) {
+    throw new Error(`server "${server.name}": ${target}`);
+  }
+  const resolved = resolveHttpHeaders(server, server.raw, env);
+  if (!resolved.ok) {
+    throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
+  }
+  return connectHttpMcpServer(server.url as string, {
+    headers: resolved.headers,
+    handshakeTimeoutMs: handshakeBudgetMs(server),
+    ...(signal === undefined ? {} : { signal }),
+  });
+}
+
 /** Per-tool override first, then the server-wide one. Seconds, as configured. */
 function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): number | undefined {
   if (server === undefined) return undefined;
   return server.tool_timeouts?.[rawName] ?? server.tool_timeout_sec;
 }
 
-async function defaultConnect(
+/**
+ * Dial a configured server the way the session dials it.
+ *
+ * Exported because `keryx mcp doctor` had its OWN copy of this function,
+ * hand-duplicated down to the comments — and the copies had already
+ * drifted: the doctor's resolved credentials from `process.env` while its
+ * caller passed `options.env` everywhere else, so the command whose entire
+ * job is to tell you whether a server will work could dial with a
+ * different environment than the session would.
+ *
+ * A pre-flight that does not run the real procedure is not a pre-flight.
+ * There is one procedure now, and both callers pass their `env` into it.
+ */
+export async function defaultConnect(
   server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
   signal?: AbortSignal,
   kills?: Array<Promise<void>>,
 ): ReturnType<ConnectFn> {
+  if (transportOf(server) === "http") return connectRemote(server, env, signal);
+
   const command = server.command;
   if (command === undefined || command === "") {
-    // Reached only for a `url` server, which P0 does not dial. Thrown rather
-    // than silently skipped so it lands as a `failed` state with a reason.
-    throw new Error(`server "${server.name}" is not stdio; remote servers arrive in a later release`);
+    throw new Error(`server "${server.name}" sets neither command nor url`);
   }
   return connectStdioMcpServer(
     [command, ...(server.args ?? [])],
     {
       cwd: server.cwd ?? defaultServerCwd(server),
-      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
+      env: buildMcpChildEnv({ parent: env, serverEnv: server.env }),
     },
     // Bounded at the transport, so a server that never handshakes has its
     // child KILLED rather than merely abandoned by the caller's race. See

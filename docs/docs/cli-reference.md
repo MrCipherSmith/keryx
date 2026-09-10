@@ -2315,7 +2315,7 @@ keryx mcp doctor [name] [--json]
 |---|---|
 | `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. |
 | `add` | Writes a native entry. The stdio form REQUIRES `--` before the server's command: without it, `keryx mcp add fs -- npx pkg --json` could not tell whose `--json` that is. `-e` is repeatable. `--scope user` (default) writes `mcp-servers.json` in the keryx config dir, owner-only; `--scope project` writes `<root>/.keryx/mcp-servers.json`, which is meant to be committed. An existing name is refused unless `--force`. |
-| `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http`. **Configurable in this release, not yet connected** — remote transports arrive in P1, and `doctor` reports such a server as `not-attempted` rather than pretending it failed. |
+| `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http` — streamable HTTP negotiates it, so it is not a separate transport. |
 | `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |
 | `enable` / `disable` | A personal overlay in the keryx config dir, never an edit to the config file. Disabling a server your project committed produces no diff for your colleagues; enabling one the project disabled works for the same reason. |
 | `trust` / `untrust` | Approve (or withdraw approval for) a PROJECT-scoped server. See "Project servers need approval" below. Prints the command it would launch before recording anything. |
@@ -2356,6 +2356,54 @@ what `docs` runs needs approving again. It is stored in your own config
 directory, never in the repository. Your own `keryx mcp add` servers
 (user scope) need none of this.
 
+**Remote servers and their credentials.** A `url` server is dialled over
+streamable HTTP and is otherwise identical to a local one: same catalog,
+same `search_tool`/`use_tool`, same approval gate, same result cap, same
+trust rule for project scope.
+
+Credentials come from the environment, two ways:
+
+```bash
+keryx mcp add linear --transport http https://mcp.linear.app/mcp \
+  --header 'Authorization: Bearer ${LINEAR_TOKEN}'
+
+# or, equivalently
+keryx mcp add linear --transport http https://mcp.linear.app/mcp \
+  --header 'X-Whatever: v'   # plus, in the config file: "bearer_token_env_var": "LINEAR_TOKEN"
+```
+
+If the variable is **unset**, keryx does not dial. It does not send
+`Bearer ` and let the server reject it — a hollow credential produces a 401
+that reads as the server being broken, and on a server that treats an empty
+bearer as anonymous it may be accepted as the wrong identity. Instead:
+
+```
+$ keryx mcp doctor linear
+linear [user] http: needs_auth — header "Authorization" needs LINEAR_TOKEN, which is unset
+  unset: Authorization
+```
+
+An explicit `Authorization` header wins over `bearer_token_env_var` if you
+somehow write both.
+
+**Three things keryx refuses on purpose.** Each of these is a working
+configuration elsewhere and a refusal here, so `doctor` names it rather
+than reporting a generic failure:
+
+| Refused | Why |
+|---|---|
+| A **redirect** (`3xx`) | `fetch` follows up to twenty hops and only strips `Authorization` across origins — a custom credential header, which is the common MCP pattern, follows all the way. Configure the final URL. |
+| A **username or password in the URL** (`https://user:pw@host/mcp`) | It appears in every message that names the URL, and the HTTP client drops it anyway: you would get the secret on screen and an unauthenticated connection. Put it in a header or `bearer_token_env_var`. |
+| An **unset `${VAR}` in the `url`** | `https://api.example/${TENANT}/mcp` with `TENANT` unset is a *valid* URL addressing the wrong path, which otherwise reports as "nothing is listening" and sends you to check a server that is fine. |
+
+**What `doctor` tells apart.** For a remote server, "failed" is not one
+thing: nothing listening, a host that does not resolve, a rejected TLS
+certificate (including the self-signed one a corporate TLS-intercepting
+proxy presents), an HTTP error by status, credentials the server refused, a
+handshake that never completed, a redirect, and a URL that serves a web
+page rather than MCP each get their own message. `doctor` exits non-zero whenever something needs
+you — including a server awaiting `trust` or a variable you have not set.
+
 **Approval of tool calls.** Every `use_tool` call goes through the same approval gate as
 `shell_exec` and `apply_patch`. Under `--trust` a call still asks, and with no
 approver present (headless) it is denied rather than allowed. A server's own
@@ -2382,8 +2430,8 @@ fs [user] stdio: connected
   tools: 14
 ```
 
-Not yet in this release: HTTP/SSE connection, OAuth, importing servers you
-already configured in Cursor/Claude/`.mcp.json`, and a TUI view. See
+Not yet in this release: OAuth, importing servers you already configured in
+Cursor/Claude/`.mcp.json`, and a TUI view. See
 `docs/requirements/keryx-mcp-servers/`.
 
 Tool and resource exposure is filtered by the manifest's `expose.modules` list — a

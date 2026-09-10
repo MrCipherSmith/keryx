@@ -20,6 +20,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { classTableProblems } from "./class-table";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -145,6 +146,56 @@ describe("every signal handler survives the signal arriving twice", () => {
   });
 });
 
+describe("P1 additions obey the same module rules", () => {
+  test("no unbounded wait was introduced on the HTTP path", () => {
+    // `connectHttpMcpServer` takes a handshake budget for the same reason
+    // the stdio one does: a server that accepts a socket and never answers
+    // must not hold a session open. Asserted structurally because the
+    // behavioural proof needs a listener, and lives in `http.live.test.ts`.
+    const client = code(readFileSync(path.join(HERE, "..", "mcp-client", "client.ts"), "utf8"));
+    const start = client.indexOf("export async function connectHttpMcpServer");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = client.slice(start, client.indexOf("\n}", start));
+    expect(body).toContain("withHandshakeTimeout");
+    expect(body).toContain("signal");
+  });
+
+  test("the HTTP path refuses an empty header value in its own right", () => {
+    // A rule enforced in one place is a rule with one bug between it and
+    // failure. `http-headers.ts` produces the actionable message; the
+    // transport refuses independently so a caller that builds headers by
+    // hand cannot route around it.
+    // `keepStrings`, because the refusal IS a string literal and the
+    // default stripper blanks it.
+    const client = code(readFileSync(path.join(HERE, "..", "mcp-client", "client.ts"), "utf8"), true);
+    expect(client).toContain("refusing to send an empty");
+  });
+
+  test("header resolution is covered by a CLASS table, like the environment filter", () => {
+    // AC10. This asserted the STRING `"every class carries a BOUNDARY"`
+    // appeared in the file — the P0 pattern verbatim, correct at the site
+    // it was given: renaming the test satisfied it, and gutting the
+    // assertion inside the test did not break it. It was also true at the
+    // moment it was written of a table whose boundary check was a
+    // tautology.
+    //
+    // What can be checked cheaply from here is WIRING: that the table
+    // hands its rows to the shared rule rather than re-deriving one. The
+    // rule itself is enforced when the table runs, and proven to have
+    // teeth by "the shared class-table rule bites" below.
+    const table = readFileSync(path.join(HERE, "http-headers.table.test.ts"), "utf8");
+    expect(table).toContain("classTableProblems");
+  });
+
+  test("the HTTP handshake is proved against a real listener, not a stub", () => {
+    const live = readFileSync(path.join(HERE, "http.live.test.ts"), "utf8");
+    expect(live).toContain("startMockHttpMcpServer");
+    // And the mock records what it RECEIVED, which is the half that makes
+    // a header assertion mean anything.
+    expect(live).toContain("server.requests()");
+  });
+});
+
 describe("the class-based tests exist and are load-bearing", () => {
   test("spawn-env is covered by a class table, not a list of reported names", () => {
     // Recorded as an invariant because the lesson was learned three times:
@@ -152,7 +203,80 @@ describe("the class-based tests exist and are load-bearing", () => {
     // names in the next one.
     const table = readFileSync(path.join(HERE, "spawn-env.table.test.ts"), "utf8");
     expect(table).toContain("klass");
-    expect(table).toContain("every class carries a BOUNDARY");
+    expect(table).toContain("classTableProblems");
+  });
+
+  test("the shared class-table rule BITES — it is not a function returning []", () => {
+    // The point of the two assertions above is that both tables submit to
+    // one rule. That is worth nothing if the rule accepts everything, and
+    // the two hand-written versions it replaced did very nearly that: one
+    // read `refused > 0 || allowed > 0`, true of any non-empty class; the
+    // other read `kept > 0`, which passes a class that is entirely kept.
+    //
+    // So: give it tables that violate each rule and require it to say so.
+    // This is the assertion a string match cannot make.
+    const outcome = (row: { ok: boolean }): string => (row.ok ? "allowed" : "refused");
+    const ok = { ok: true };
+    const no = { ok: false };
+
+    // A class with only one outcome — the tautology, caught.
+    expect(
+      classTableProblems([{ klass: "all-allowed", rows: [ok, ok, ok] }], outcome),
+    ).toEqual(["all-allowed: every row comes out \"allowed\" — no BOUNDARY, so the rule could be a constant"]);
+    expect(classTableProblems([{ klass: "all-refused", rows: [no, no, no] }], outcome)).toHaveLength(1);
+
+    // A class too small to be a class.
+    expect(classTableProblems([{ klass: "thin", rows: [ok, no] }], outcome)).toEqual([
+      "thin: 2 row(s), fewer than the 3 a class needs",
+    ]);
+
+    // Both at once are both reported, rather than the first stopping the
+    // check — an operator fixing one problem per run is the pattern this
+    // package keeps producing.
+    expect(classTableProblems([{ klass: "both", rows: [ok] }], outcome)).toHaveLength(2);
+
+    // An empty table is not a passing table.
+    expect(classTableProblems([], outcome)).toHaveLength(1);
+
+    // Two classes with one name are one class with a spelling mistake.
+    expect(
+      classTableProblems(
+        [
+          { klass: "same", rows: [ok, no, ok] },
+          { klass: "same", rows: [ok, no, no] },
+        ],
+        outcome,
+      ),
+    ).toHaveLength(1);
+
+    // BOUNDARY — a table that satisfies every rule passes clean. Without
+    // this, `classTableProblems = () => ["problem"]` passes everything
+    // above.
+    expect(classTableProblems([{ klass: "good", rows: [ok, no, ok] }], outcome)).toEqual([]);
+  });
+
+  test("and its two defaults are `??`, not `||` — the mutation sweep's last two survivors", () => {
+    // The sweep's final run left nine survivors, and eight were `?? -> ||`
+    // on an object or function default where no falsy non-nullish value
+    // exists. These two are the exception: both left-hand sides CAN be
+    // falsy, so the operators genuinely differ and nothing was watching.
+    //
+    // `minRows: 0` under `||` silently becomes 3 — a caller asking for no
+    // minimum gets the default they were overriding.
+    const ok = { ok: true };
+    const no = { ok: false };
+    expect(
+      classTableProblems([{ klass: "tiny", rows: [ok, no] }], (r: { ok: boolean }) => (r.ok ? "y" : "n"), {
+        minRows: 0,
+      }),
+    ).toEqual([]);
+
+    // And an outcome label that is the empty string is still a label. Under
+    // `||` the message reads `every row comes out "—"` for a class whose
+    // rows all came out `""`, which describes a table that does not exist.
+    expect(classTableProblems([{ klass: "blank", rows: [ok, ok, ok] }], () => "")).toEqual([
+      'blank: every row comes out "" — no BOUNDARY, so the rule could be a constant',
+    ]);
   });
 
   test("readOverlay is covered per STATE, not only on its success path", () => {

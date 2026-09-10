@@ -54,8 +54,27 @@ export function serverFingerprint(server: ResolvedMcpServer): string {
     url: server.url ?? null,
     env: server.env ?? {},
     cwd: server.cwd ?? null,
+    // P1: the fields a REMOTE server uses to obtain a credential.
+    //
+    // Omitting them was the stdio/HTTP asymmetry a reviewer found. `env`
+    // was hashed and `headers`/`bearer_token_env_var` were not, so a
+    // repository could commit a harmless `{"docs": {"url": "..."}}`, have
+    // the operator read it and run `keryx mcp trust docs`, and then add
+    // `"bearer_token_env_var": "GITHUB_TOKEN"` in a later commit — the
+    // fingerprint stayed byte-identical and the next shell handed that
+    // host the operator's token with no second prompt.
+    //
+    // Sorted, because object key order is not stable across a rewrite and
+    // an approval must not be invalidated by a reformat.
+    headers: sortedKeys(server.headers),
+    bearer_token_env_var: server.bearer_token_env_var ?? null,
   });
   return createHash("sha256").update(material).digest("hex").slice(0, 32);
+}
+
+/** Key-order-independent, so reformatting a config does not revoke trust. */
+function sortedKeys(values: Record<string, string> | undefined): Array<[string, string]> {
+  return Object.entries(values ?? {}).sort(([a], [b]) => a.localeCompare(b));
 }
 
 /** The key a decision is filed under: the file it came from, plus the name. */
@@ -135,6 +154,31 @@ export function revokeServer(server: ResolvedMcpServer, configDir?: string): Tru
  */
 export function describeForApproval(server: ResolvedMcpServer): string {
   const raw = server.raw;
-  if (raw.url !== undefined && raw.url.length > 0) return raw.url;
+  if (raw.url !== undefined && raw.url.length > 0) {
+    // The URL is not the whole story for a remote server. Approving it
+    // approves handing a credential to that host, and the first prompt
+    // never said which one — so an operator could read the line, see a
+    // plausible vendor URL, and approve sending their GitHub token there.
+    const credentials = credentialSummary(raw);
+    return credentials === undefined ? raw.url : `${raw.url}  [sends ${credentials}]`;
+  }
   return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
+}
+
+/** Which VARIABLES a remote server would read. Never their values. */
+function credentialSummary(raw: ResolvedMcpServer["raw"]): string | undefined {
+  const named = new Set<string>();
+  if (raw.bearer_token_env_var !== undefined && raw.bearer_token_env_var !== "") {
+    named.add(raw.bearer_token_env_var);
+  }
+  for (const value of Object.values(raw.headers ?? {})) {
+    for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/g)) named.add(match[1] as string);
+  }
+  const headerNames = Object.keys(raw.headers ?? {});
+  if (named.size === 0 && headerNames.length === 0) return undefined;
+  const parts: string[] = [];
+  if (named.size > 0) parts.push([...named].sort().join(", "));
+  const literal = headerNames.filter((n) => !/\$\{/.test(raw.headers?.[n] ?? ""));
+  if (literal.length > 0) parts.push(`literal header(s) ${literal.sort().join(", ")}`);
+  return parts.join(" + ");
 }

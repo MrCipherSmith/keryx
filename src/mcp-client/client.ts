@@ -150,6 +150,10 @@ interface SdkProtocolRequestHandlerRegistrar {
  * failing to connect because an elicitation internal moved would be a failure
  * with no relationship to its cause.
  */
+interface SdkHttpModules extends SdkCoreModules {
+  StreamableHTTPClientTransport: new (url: URL, options?: unknown) => SdkTransport;
+}
+
 interface SdkCoreModules {
   Client: new (info: unknown, options: unknown) => SdkClient;
   StdioClientTransport: new (options: unknown) => SdkTransport;
@@ -180,6 +184,28 @@ async function loadCoreSdk(): Promise<SdkCoreModules> {
       Client: clientModule.Client as unknown as new (info: unknown, options: unknown) => SdkClient,
       StdioClientTransport: stdioModule.StdioClientTransport as unknown as new (options: unknown) => SdkTransport,
       CallToolResultSchema: typesModule.CallToolResultSchema,
+    };
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
+}
+
+/**
+ * The core modules plus the streamable-HTTP transport.
+ *
+ * A separate loader from {@link loadCoreSdk} on the same principle that one
+ * exists at all: a stdio server must not fail to start because the HTTP
+ * module moved, and neither should the reverse. Both stay clear of
+ * `shared/protocol.js`.
+ */
+async function loadHttpSdk(): Promise<SdkHttpModules> {
+  const core = await loadCoreSdk();
+  try {
+    const httpModule = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+    return {
+      ...core,
+      StreamableHTTPClientTransport:
+        httpModule.StreamableHTTPClientTransport as unknown as new (url: URL, options?: unknown) => SdkTransport,
     };
   } catch (error) {
     throw new McpClientSdkMissingError(error);
@@ -457,6 +483,184 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
       },
     ];
   });
+}
+
+/**
+ * Connect to a remote MCP server over streamable HTTP.
+ *
+ * The sibling of {@link connectStdioMcpServer}, and deliberately the same
+ * shape: same handshake bound, same abort handling, same
+ * `callToolWithOutcome`, same `McpServerConnection` back. Everything above
+ * this function — the catalog, the tool pair, the approval gate, the trust
+ * gate, truncation, timeouts — cannot tell the two apart, which is the
+ * property AC2 asserts and the reason a remote server inherits every
+ * control a local one has instead of needing them re-implemented.
+ *
+ * The differences are the two the transport forces:
+ *
+ *   - there is no child process, so an abort closes a socket rather than
+ *     killing a PID, and nothing can be orphaned;
+ *   - `headers` are resolved BEFORE this is called (`http-headers.ts`) so a
+ *     hollow credential never reaches the wire. This function refuses an
+ *     empty `Authorization` if one arrives anyway, because a rule enforced
+ *     in exactly one place is a rule with one bug between it and failure.
+ *
+ * `sse` is not a separate transport (D-06): it is what the server chooses
+ * when it responds, and streamable HTTP negotiates it.
+ */
+export async function connectHttpMcpServer(
+  url: string,
+  options: {
+    readonly headers?: Record<string, string> | undefined;
+    readonly handshakeTimeoutMs?: number | undefined;
+    readonly signal?: AbortSignal | undefined;
+  } = {},
+): Promise<McpServerConnection> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // The url is NOT echoed. It is the expanded form, and an expanded
+    // `?api_key=${KEY}` put a live secret into `doctor --json` and
+    // `ServerState.error` through exactly this message. The caller knows
+    // the raw form and reports it.
+    throw new Error("mcp-client: the server url is not a valid URL");
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new Error("mcp-client: refusing a url that carries a username/password");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    // `file:` and friends would be read through fetch with no server at the
+    // other end and no useful error.
+    throw new Error(`mcp-client: ${parsed.protocol} is not an MCP transport; use http or https`);
+  }
+
+  const headers = options.headers ?? {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === "") {
+      // Second line of defence, not the first. `resolveHttpHeaders` is the
+      // one that produces the actionable message; this one exists so the
+      // rule cannot be bypassed by a caller that builds headers itself.
+      throw new Error(`mcp-client: refusing to send an empty "${name}" header`);
+    }
+  }
+
+  const sdk = await loadHttpSdk();
+  const transport = new sdk.StreamableHTTPClientTransport(parsed, {
+    // EVERY fetch the transport makes, not the two that happen to read
+    // `requestInit`.
+    //
+    // `redirect: "error"` below was set on `requestInit`, and a reviewer
+    // found that the SDK spreads `requestInit` into exactly two of its
+    // three fetch calls — `send()` (POST) and `terminateSession()`
+    // (DELETE). The third, `_startOrAuthSse()`, builds its GET by hand:
+    //
+    //     const response = await (this._fetch ?? fetch)(this._url, {
+    //       method: 'GET', headers, signal: ...
+    //     });
+    //
+    // That GET opens the SSE stream. It runs automatically after
+    // `notifications/initialized`, and again on every reconnection. And
+    // `_commonHeaders()` DOES merge `requestInit.headers` into it — so the
+    // configured credential rode on the one call with no redirect policy,
+    // at the platform default of following up to twenty hops.
+    //
+    // A server could therefore answer the handshake normally and then
+    // 307 that GET to `169.254.169.254` or anywhere else, and keryx would
+    // hand over `X-Api-Key` — `fetch` strips only `Authorization`, and
+    // only across origins. The existing test could not see this: its
+    // fixture redirected EVERY request, so the very first POST was
+    // refused and the GET leg never ran.
+    //
+    // Wrapping `fetch` covers all three legs and stays correct if the SDK
+    // adds a fourth.
+    fetch: ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      fetch(input, { ...init, redirect: "error" })) as typeof fetch,
+    requestInit: {
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      // NO REDIRECTS. `fetch` defaults to following up to 20 hops, and
+      // `fetch` only strips `Authorization` across origins — a custom
+      // credential header, which is the common MCP pattern, follows. A
+      // 307 to a loopback or link-local address was followed and the
+      // target's body came back into `doctor` and, through `use_tool`'s
+      // error branch, into the model's context.
+      //
+      // keryx already sets the house standard for fetching third-party
+      // content in `src/harness/web/sandboxed-web-transport.ts`: bounded
+      // hops, each validated. Until this path can do the same, it does
+      // not redirect at all — a server that needs one can be configured
+      // with its real URL.
+      redirect: "error",
+    },
+    // The reconnection bound, stated rather than inherited.
+    //
+    // A review asked whether an SSE stream that drops can reconnect
+    // without limit. In this SDK version it cannot — the default is
+    // `maxRetries: 2` — so there is no storm to fix, and adding a
+    // supervisor for one would be machinery for a problem that does not
+    // exist. What was wrong is that the bound was a LIBRARY DEFAULT: a
+    // minor-version bump could raise it, and nothing here would notice or
+    // fail. These values are today's defaults, pinned so the policy is
+    // keryx's and a change to it shows up in this diff.
+    reconnectionOptions: {
+      initialReconnectionDelay: 1_000,
+      maxReconnectionDelay: 30_000,
+      reconnectionDelayGrowFactor: 1.5,
+      maxRetries: 2,
+    },
+  });
+
+  const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
+
+  const kill = (): Promise<void> =>
+    (async (): Promise<void> => {
+      try {
+        await transport.close();
+      } catch {
+        // Already closed; the error below is the one worth having.
+      }
+    })();
+
+  let aborted = options.signal?.aborted ?? false;
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted before it began");
+  }
+  const onAbort = (): void => {
+    aborted = true;
+    void kill();
+  };
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await withHandshakeTimeout(client.connect(transport), options.handshakeTimeoutMs, kill);
+  } finally {
+    options.signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted");
+  }
+
+  return {
+    async listTools(opts): Promise<McpToolDescriptor[]> {
+      const result = await client.listTools(
+        {},
+        undefined,
+        opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+      );
+      return toToolDescriptors(result.tools);
+    },
+
+    async callTool(name, callArgs, opts): Promise<McpToolCallOutcome> {
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
+    },
+
+    async close(): Promise<void> {
+      await client.close();
+    },
+  };
 }
 
 /**
