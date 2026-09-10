@@ -7,9 +7,9 @@
   "id": "213",
   "slug": "make-registered-contracts-refuse-in-prod",
   "title": "Make registered contracts refuse in production, not only when an agent remembers to validate",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-08-31T23:32:32.688Z",
-  "updatedAt": "2026-09-10T05:31:32.947Z",
+  "updatedAt": "2026-09-10T06:50:38.872Z",
   "source": {
     "type": "description",
     "ref": null
@@ -42,7 +42,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/510"
   },
   "tasks": [
     {
@@ -323,6 +323,25 @@
       "at": "2026-09-10T05:31:32.947Z",
       "event": "ac-confirmed",
       "detail": "AC6: Full suite 8416 pass, 18 skip, 0 fail. tsc --noEmit 0 errors. bun run lint clean. keryx skills verify --bundled clean — run FROM SOURCE, because the installed 0.2.86 reported parity while the working tree's schema copy was stale; both generated copies resynced. One rejecting payload per enforced contract pinned in contract-enforcement-regression.test.ts, with a conforming value asserted to pass so the rejections are not a validator broken shut."
+    },
+    {
+      "at": "2026-09-10T06:50:25.702Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/510 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T06:50:36.948Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T06:50:38.872Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "a9cbc590",
+    "ref": "origin/main",
+    "at": "2026-09-10T06:50:38.871Z"
+  }
 }
