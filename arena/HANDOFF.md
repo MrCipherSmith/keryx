@@ -9,6 +9,65 @@ Branch: `arena/measurement`. Pushed to `origin`. Based on
 
 ---
 
+## 0. Update, 2026-09-10 — what changed after this document was written
+
+Three items in §8 moved. Read this before §6 and §7, which are otherwise still
+accurate.
+
+**Step 6 (§6.3, extract the events-file feature to `main`) is DONE.** It landed
+as PR #524, squash `1c482abc`, together with a second fix described below.
+`src/commands/shell-events.ts` and `--print` / `--events-file` /
+`--events-max-field` are on `main` now. The keryx leg still runs from source
+(`bun <repo>/src/cli.ts`), because `main` is ahead of the last npm release — but
+the caveat §6.3 asks the report to carry is now about a release lag rather than
+about an unreleasable feature.
+
+That PR also carried a **defect in the redaction floor** found while writing the
+transcript's tests: `redactSensitiveText` masked `AKIAIOSFODNN7EXAMPLE` and
+printed the `aws_secret_access_key` on the next line in full, in both the
+uppercase and the lowercase form — the exact `cat ~/.aws/credentials` case its
+own contract names. Fixed, with prose and camelCase identifiers tested to stay
+untouched.
+
+**Step 1 (§7, the claude credential path) is FIXED IN CODE and still BLOCKED in
+fact.** The grant is now materialised from the Keychain into the isolated home
+at 0600, `~/.claude.json` is synthesised rather than linked, and the Linux link
+is required rather than optional. The observable change: `claude -p` under an
+isolated home no longer answers `Not logged in · Please run /login` — it answers
+`Failed to authenticate: OAuth session expired and could not be refreshed`,
+which means the grant was found, read and recognised.
+
+**The same call under the REAL home fails identically.** That removes isolation
+from the picture entirely: this operator's Claude Code OAuth session is expired
+on this machine. Nothing in this repository can fix that. **The operator must
+run `claude` and sign in again before the claude leg can be verified end to
+end**, and until then no run should be read as evidence about that leg.
+
+**Step 2 (§6.1, PR #525 `--deny-tools`) is unblocked but not landed.** The PR
+had gone `CONFLICTING`: #524 took the same four places in `ShellCliFlags` and
+its parser an hour earlier. Every conflict was two additions with no overlap, so
+both sides were kept, and the branch now carries `--deny-tools`, `--print`,
+`--events-file` and `--events-max-field` together — verified from
+`keryx shell --help` and by an unknown name still being refused with the list of
+deniable tools. CI was reporting nothing on that branch before this push; it
+runs now.
+
+**Ordering trap for whoever wires §6.1.** Do not add
+`--deny-tools web_search,web_fetch` to `buildKeryxArgs` until this branch's own
+`src/` carries the flag. The keryx leg runs `bun <repo>/src/cli.ts` from THIS
+checkout, and `arena/measurement` is behind `main`, so the flag would be passed
+to a build that does not have it and every keryx arm would die on
+`Unknown shell argument`. Either land #525 and bring `main` in first (§6.5), or
+do both in one change.
+
+**Steps 6 and 7 of §6.5 are still open**, and deliberately: `arena/measurement`
+is not rebased and `measurement/context-2026-09` is not marked archival. The
+operator has since confirmed the second — that branch is archival and work
+continues here — so what remains is the rebase, which needs a force-push and
+therefore a decision rather than an initiative.
+
+---
+
 ## 1. What this measures, and what it cannot
 
 **The question:** does keryx's project-local context make an agent better, and what
@@ -302,8 +361,9 @@ This is why both claude arms failed in both smoke runs. A separate, earlier bug 
 
 ## 8. Next steps, in order
 
-1. **Fix the claude credential path** (§7) and correct the defects note. Unblocks
-   one of three legs.
+1. ~~**Fix the claude credential path** (§7) and correct the defects note.~~ Done
+   in code; the leg is still blocked by an expired session the operator must
+   renew. See §0.
 2. **Land PR #525, then add `--deny-tools web_search,web_fetch` to
    `buildKeryxArgs`** (§6.1). Unblocks the second leg.
 3. **Re-run the smoke** — one T1 task, three legs, two arms, 6 sessions, ~$2. It has
@@ -314,8 +374,8 @@ This is why both claude arms failed in both smoke runs. A separate, earlier bug 
    is reportable. (The `cached_tokens`-is-a-subset-of-`prompt_tokens` finding in
    `v0.2.88`'s changelog says they should agree; this confirms it empirically.)
 5. **Wire the watchdog into `runArenaArm`** (§6.4) before any long sweep.
-6. **Extract the events-file feature to `main`** (§6.3), then repoint
-   `KERYX_DEV_COMMAND` at the release.
+6. ~~**Extract the events-file feature to `main`** (§6.3)~~ — done, PR #524.
+   Repointing `KERYX_DEV_COMMAND` at a release still waits on the next publish.
 7. **Rebase onto `main`, force-push** (§6.5).
 8. **Full sweep:** 84 arms, ~$22, hours, one leg at a time, resumable.
 9. **T2 judging** — `arena-judge.ts` is written and tested against a scripted model;
