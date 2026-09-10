@@ -12,6 +12,7 @@
 // it workable.
 
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import type { McpApprovalOutcome } from "./approval";
 import type { ServerCatalog } from "./catalog";
 import { resolveFqn } from "./catalog";
 import type { ServerState } from "./manager";
@@ -131,6 +132,21 @@ export type McpToolDeps = {
   readonly servers: () => readonly ServerState[];
   /** Per-tool timeout from config, in seconds. */
   readonly toolTimeoutSec?: (server: string, rawName: string) => number | undefined;
+  /**
+   * The approval gate, injected.
+   *
+   * Optional ONLY so tests that are about search ranking need not construct
+   * one. Absent means every call is allowed, which is why the call path must
+   * always be given one — see "use_tool consults the gate before it calls
+   * anything" in `tools.test.ts`. A default that silently permits is
+   * acceptable in a helper nobody ships; it is not acceptable in the path
+   * that reaches a third-party server.
+   */
+  readonly approve?: (
+    fqn: string,
+    args: Record<string, unknown>,
+    risk: "read" | "destructive",
+  ) => Promise<McpApprovalOutcome>;
 };
 
 /**
@@ -216,6 +232,17 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
         typeof input.tool_input === "object" && input.tool_input !== null
           ? (input.tool_input as Record<string, unknown>)
           : {};
+
+      // Classified per CALL, then gated. The static definition says
+      // `destructive` because one tool covers every MCP tool; this is where
+      // the specific one is judged, and an unannotated tool stays
+      // destructive.
+      const risk = classifyToolRisk(entry);
+      const verdict = await deps.approve?.(entry.fqn, args, risk);
+      if (verdict !== undefined && !verdict.allowed) {
+        return { output: verdict.reason, isError: true };
+      }
+
       const timeoutSec = deps.toolTimeoutSec?.(entry.server, entry.rawName);
 
       // The RAW name, not the FQN: the qualified name is keryx's, and the

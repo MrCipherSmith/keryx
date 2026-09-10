@@ -223,6 +223,69 @@ describe("failures say which failure", () => {
   });
 });
 
+describe("use_tool consults the gate before it calls anything", () => {
+  test("a denied call never reaches the server", async () => {
+    // The gate being correct is `approval.test.ts`. This is the other half:
+    // that `use_tool` asks it, and asks BEFORE dispatching. A gate beside the
+    // call path is not a gate.
+    const calls: Call[] = [];
+    const catalog = catalogWith("srv", [{ name: "write_file" }]);
+    const [, use] = createMcpInteractiveTools({
+      catalog: () => catalog,
+      servers: () => [connectedServer("srv", calls)],
+      approve: async () => ({ allowed: false, reason: "denied by test" }),
+    });
+
+    const result = await use?.invoke({ tool_name: "srv__write_file", tool_input: { path: "x" } });
+
+    expect(calls).toEqual([]);
+    expect(result?.isError).toBe(true);
+    expect(result?.output).toBe("denied by test");
+  });
+
+  test("the gate is given the per-call risk, not the tool's static one", async () => {
+    // `use_tool` is statically `destructive` because one definition covers
+    // every MCP tool. What the gate must see is the classification of the
+    // tool actually named.
+    const seen: Array<{ fqn: string; risk: string }> = [];
+    const catalog = catalogWith("srv", [
+      { name: "list_things", inputSchema: { annotations: { readOnlyHint: true } } },
+      { name: "delete_things" },
+    ]);
+    const [, use] = createMcpInteractiveTools({
+      catalog: () => catalog,
+      servers: () => [connectedServer("srv", [])],
+      approve: async (fqn, _args, risk) => {
+        seen.push({ fqn, risk });
+        return { allowed: true };
+      },
+    });
+
+    await use?.invoke({ tool_name: "srv__list_things", tool_input: {} });
+    await use?.invoke({ tool_name: "srv__delete_things", tool_input: {} });
+
+    expect(seen).toEqual([
+      { fqn: "srv__list_things", risk: "read" },
+      { fqn: "srv__delete_things", risk: "destructive" },
+    ]);
+  });
+
+  test("an allowed call proceeds to the server", async () => {
+    // Anti-vacuity: the denial test above would pass just as well if
+    // `use_tool` never called anything at all.
+    const calls: Call[] = [];
+    const catalog = catalogWith("srv", [{ name: "read" }]);
+    const [, use] = createMcpInteractiveTools({
+      catalog: () => catalog,
+      servers: () => [connectedServer("srv", calls)],
+      approve: async () => ({ allowed: true }),
+    });
+
+    await use?.invoke({ tool_name: "srv__read", tool_input: {} });
+    expect(calls).toHaveLength(1);
+  });
+});
+
 describe("search ranking and bounds", () => {
   test("a name hit outranks a description-only hit", () => {
     const catalog = mergeCatalogs([
