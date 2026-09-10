@@ -9,7 +9,7 @@
   "title": "Make TUI foreground operations cancellable and preserve wiki enrich command semantics",
   "status": "in-progress",
   "createdAt": "2026-09-02T20:25:57.044Z",
-  "updatedAt": "2026-09-10T08:14:22.025Z",
+  "updatedAt": "2026-09-10T08:16:04.813Z",
   "source": {
     "type": "description",
     "ref": null
@@ -49,8 +49,8 @@
       "note": "All five named areas have a test tagged 'flow 219': provider signal propagation, pool scheduling and persistence fences, light and deep wiki cancellation, TUI interrupt/Force/exit lifecycle, explicit command routing. Eleven tests, later fourteen with the seam extraction."
     },
     "AC9": {
-      "at": "2026-09-10T08:14:05.871Z",
-      "note": "PARTIAL, recorded as partial. Verifiable now and holding: tsc 0 errors, lint clean, 1137 tests pass across src/tui, src/wiki and src/harness/provider. NOT verifiable after the fact: that the managed review loop ran to no findings BEFORE the 2026-09-03 merge. The flow had no review package at all, which is why the gate demanded one. The round recorded now is a RETROSPECTIVE review of the merged diff — and it found a major: the source-text audit held while the behaviour broke. Confirmed on the evidence that exists, not on the claim that the loop ran."
+      "at": "2026-09-10T08:16:04.813Z",
+      "note": "CORRECTED, and partial. My first note claimed 'there was no review package at all' — that is FALSE and I asserted it without looking. Six rounds exist from 2026-09-02: five branch rounds plus an ingest. The managed review loop DID run before the merge. What is verifiable today holds: tsc clean, lint clean, 1137 tests green. What the record shows about the historical clause is worse than 'unverifiable': the pre-merge ingest round carries F-T001, 'The new TUI lifecycle tests read source text and do not execute queue/lifecycle', marked acted-on — and today's retrospective review deleted the Force guard and watched all four of those source-text assertions still pass. So a finding of exactly this defect was raised, marked fixed, and the defect was still live. Confirmed on that evidence, stated as it is."
     },
     "AC10": {
       "at": "2026-09-10T08:14:06.087Z",
@@ -58,7 +58,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/433"
   },
   "tasks": [
     {
@@ -383,6 +383,25 @@
       "at": "2026-09-10T08:14:22.025Z",
       "event": "task-done",
       "detail": "T8: Write change report and metrics, confirm AC evidence, and complete flow"
+    },
+    {
+      "at": "2026-09-10T08:15:07.358Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/433 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T08:15:17.266Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T08:15:19.455Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-001 (blocker, round 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-002 (blocker, round 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio#F-T001 (minor, round 2026-09-02-ingest-fix-tui-foreground-operation-cancellatio): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-NEW-001 (major, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-ARCH-HL-001 (major, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-ARCH-HL-002 (major, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02#F-T001 (minor, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03#F-NEW-002 (major, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03#F-T001 (minor, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r03): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r04#F-T001 (minor, round 2026-09-02-branch-fix-tui-foreground-operation-cancellatio-r04): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-10T08:16:04.813Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: CORRECTED, and partial. My first note claimed 'there was no review package at all' — that is FALSE and I asserted it without looking. Six rounds exist from 2026-09-02: five branch rounds plus an ingest. The managed review loop DID run before the merge. What is verifiable today holds: tsc clean, lint clean, 1137 tests green. What the record shows about the historical clause is worse than 'unverifiable': the pre-merge ingest round carries F-T001, 'The new TUI lifecycle tests read source text and do not execute queue/lifecycle', marked acted-on — and today's retrospective review deleted the Force guard and watched all four of those source-text assertions still pass. So a finding of exactly this defect was raised, marked fixed, and the defect was still live. Confirmed on that evidence, stated as it is."
     }
   ]
 }
