@@ -8,6 +8,7 @@ import {
   MAX_TOOL_RESULT_BYTES,
   searchCatalog,
   truncateResult,
+  type SearchHit,
 } from "./tools";
 
 type Call = { name: string; args: Record<string, unknown>; timeoutMs?: number | undefined };
@@ -223,65 +224,43 @@ describe("failures say which failure", () => {
   });
 });
 
-describe("use_tool consults the gate before it calls anything", () => {
-  test("a denied call never reaches the server", async () => {
-    // The gate being correct is `approval.test.ts`. This is the other half:
-    // that `use_tool` asks it, and asks BEFORE dispatching. A gate beside the
-    // call path is not a gate.
-    const calls: Call[] = [];
-    const catalog = catalogWith("srv", [{ name: "write_file" }]);
-    const [, use] = createMcpInteractiveTools({
-      catalog: () => catalog,
-      servers: () => [connectedServer("srv", calls)],
-      approve: async () => ({ allowed: false, reason: "denied by test" }),
-    });
-
-    const result = await use?.invoke({ tool_name: "srv__write_file", tool_input: { path: "x" } });
-
-    expect(calls).toEqual([]);
-    expect(result?.isError).toBe(true);
-    expect(result?.output).toBe("denied by test");
+describe("use_tool is gated by the agent's own branch, not by a second one here", () => {
+  test("use_tool declares risk 'destructive', which is what routes it to the gate", async () => {
+    // D-05: no fourth decision layer. The approval decision belongs to
+    // `agent.ts`, and this declaration is the whole of how `use_tool` gets
+    // there. `mcp-tool-surface.test.ts` drives the gate end to end; this
+    // pins the declaration it depends on.
+    const catalog = catalogWith("srv", [{ name: "read" }]);
+    const [, use] = createMcpInteractiveTools({ catalog: () => catalog, servers: () => [] });
+    expect(use?.definition.risk).toBe("destructive");
   });
 
-  test("the gate is given the per-call risk, not the tool's static one", async () => {
-    // `use_tool` is statically `destructive` because one definition covers
-    // every MCP tool. What the gate must see is the classification of the
-    // tool actually named.
-    const seen: Array<{ fqn: string; risk: string }> = [];
+  test("search_tool is 'read', because searching a local catalog reaches nothing", () => {
+    const [search] = createMcpInteractiveTools({ catalog: () => mergeCatalogs([]), servers: () => [] });
+    expect(search?.definition.risk).toBe("read");
+  });
+
+  test("the classification is advisory output, never a decision", async () => {
+    // It rides along in `search_tool` hits so the model can prefer a read
+    // tool. It must not be able to skip anything: `readOnlyHint` is the
+    // third-party server asserting its own safety, which ADR-0009 says can
+    // never read as a grant.
+    const calls: Call[] = [];
     const catalog = catalogWith("srv", [
       { name: "list_things", inputSchema: { annotations: { readOnlyHint: true } } },
-      { name: "delete_things" },
     ]);
-    const [, use] = createMcpInteractiveTools({
-      catalog: () => catalog,
-      servers: () => [connectedServer("srv", [])],
-      approve: async (fqn, _args, risk) => {
-        seen.push({ fqn, risk });
-        return { allowed: true };
-      },
-    });
-
-    await use?.invoke({ tool_name: "srv__list_things", tool_input: {} });
-    await use?.invoke({ tool_name: "srv__delete_things", tool_input: {} });
-
-    expect(seen).toEqual([
-      { fqn: "srv__list_things", risk: "read" },
-      { fqn: "srv__delete_things", risk: "destructive" },
-    ]);
-  });
-
-  test("an allowed call proceeds to the server", async () => {
-    // Anti-vacuity: the denial test above would pass just as well if
-    // `use_tool` never called anything at all.
-    const calls: Call[] = [];
-    const catalog = catalogWith("srv", [{ name: "read" }]);
-    const [, use] = createMcpInteractiveTools({
+    const [search, use] = createMcpInteractiveTools({
       catalog: () => catalog,
       servers: () => [connectedServer("srv", calls)],
-      approve: async () => ({ allowed: true }),
     });
 
-    await use?.invoke({ tool_name: "srv__read", tool_input: {} });
+    const hits = JSON.parse((await search?.invoke({ query: "list" }))?.output ?? "[]") as SearchHit[];
+    expect(hits[0]?.risk).toBe("read");
+
+    // Advisory: a `read` verdict changes nothing about how the call runs —
+    // the tool still dispatches through the same path, and the gate it
+    // already passed was the agent's.
+    await use?.invoke({ tool_name: "srv__list_things", tool_input: {} });
     expect(calls).toHaveLength(1);
   });
 });

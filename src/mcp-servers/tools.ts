@@ -12,7 +12,6 @@
 // it workable.
 
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import type { McpApprovalOutcome } from "./approval";
 import type { ServerCatalog } from "./catalog";
 import { resolveFqn } from "./catalog";
 import type { ServerState } from "./manager";
@@ -44,15 +43,24 @@ const WRITE_VERBS = [
 /**
  * Read or destructive, and destructive whenever it is not clearly read.
  *
- * `read` requires BOTH halves the specification names: the tool's own schema
- * annotates it read-only, AND neither its name nor its description matches a
- * write verb. Anything else — including a tool that says nothing about itself
- * — is `destructive`.
+ * ADVISORY, NOT A GATE. What actually gates an MCP call is `use_tool`'s
+ * static `risk: "destructive"` going through the agent's own approval branch
+ * in `agent.ts` — the same one `shell_exec` and `apply_patch` go through.
+ * D-05 is explicit that there is to be no fourth decision layer, and an
+ * in-tool gate on top of the agent's would both duplicate the policy and
+ * prompt the operator twice for one call.
  *
- * This is a fail-closed default, not a belief that MCP servers annotate
- * honestly. An unannotated tool is the common case, and treating "did not
- * say" as "safe" would route the majority of third-party tools around the
- * approval prompt.
+ * It is advisory for a second reason worth stating plainly: the `read` half
+ * of this judgement rests on `readOnlyHint`, which is the THIRD-PARTY SERVER
+ * asserting its own safety. Letting that assertion skip a prompt is exactly
+ * the pattern ADR-0009 forbids — "a 'safe' verdict from an incomplete list
+ * must never read as a grant". So the verdict is shown to the model in
+ * `search_tool` output, where it helps it choose, and is never allowed to
+ * decide anything.
+ *
+ * `read` still requires BOTH halves the specification names — annotated
+ * read-only AND no write verb in the name or description — so the advice
+ * errs the same direction the gate does.
  */
 export function classifyToolRisk(entry: {
   readonly rawName: string;
@@ -91,6 +99,12 @@ export type SearchHit = {
   readonly tool_name: string;
   readonly server: string;
   readonly description?: string | undefined;
+  /**
+   * The advisory classification (see {@link classifyToolRisk}), shown so the
+   * model can prefer a read tool when either would do and can expect a
+   * prompt when it picks the other. It decides nothing.
+   */
+  readonly risk: "read" | "destructive";
 };
 
 /** Rank catalog entries against a free-text query, by name, server and description. */
@@ -123,6 +137,7 @@ export function searchCatalog(catalog: ServerCatalog, query: string): SearchHit[
     tool_name: entry.fqn,
     server: entry.server,
     description: entry.description,
+    risk: classifyToolRisk(entry),
   }));
 }
 
@@ -132,21 +147,6 @@ export type McpToolDeps = {
   readonly servers: () => readonly ServerState[];
   /** Per-tool timeout from config, in seconds. */
   readonly toolTimeoutSec?: (server: string, rawName: string) => number | undefined;
-  /**
-   * The approval gate, injected.
-   *
-   * Optional ONLY so tests that are about search ranking need not construct
-   * one. Absent means every call is allowed, which is why the call path must
-   * always be given one — see "use_tool consults the gate before it calls
-   * anything" in `tools.test.ts`. A default that silently permits is
-   * acceptable in a helper nobody ships; it is not acceptable in the path
-   * that reaches a third-party server.
-   */
-  readonly approve?: (
-    fqn: string,
-    args: Record<string, unknown>,
-    risk: "read" | "destructive",
-  ) => Promise<McpApprovalOutcome>;
 };
 
 /**
@@ -204,9 +204,17 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
           tool_input: { type: "object" },
         },
       },
-      // The advertised risk is the worst case, because one definition covers
-      // every MCP tool. The per-call classification is what the approval
-      // prompt actually consults.
+      // `destructive`, always, and this is load-bearing twice over.
+      //
+      // It is what routes every MCP call into the agent's own approval
+      // branch, which is fail-closed when there is no approver and still
+      // asks under `trust` — the whole of AC7, satisfied by the gate keryx
+      // already hardened rather than by a second one here (D-05).
+      //
+      // It is ALSO what keeps `use_tool` out of a read-only side worker:
+      // `tui-shell.ts` filters that tool list by `risk === "read"`, so
+      // relaxing this to get fewer prompts would hand every third-party MCP
+      // tool to a worker that is supposed to be unable to change anything.
       risk: "destructive",
     },
     invoke: async (input): Promise<InteractiveToolResult> => {
@@ -233,15 +241,11 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
           ? (input.tool_input as Record<string, unknown>)
           : {};
 
-      // Classified per CALL, then gated. The static definition says
-      // `destructive` because one tool covers every MCP tool; this is where
-      // the specific one is judged, and an unannotated tool stays
-      // destructive.
-      const risk = classifyToolRisk(entry);
-      const verdict = await deps.approve?.(entry.fqn, args, risk);
-      if (verdict !== undefined && !verdict.allowed) {
-        return { output: verdict.reason, isError: true };
-      }
+      // No approval check here, deliberately. By the time `invoke` runs,
+      // `agent.ts` has already put this call through `resolveApprovalDecision`
+      // and `requestApproval` on the strength of the `destructive` risk
+      // above. Asking again would be D-05's forbidden fourth layer and a
+      // second prompt for one action.
 
       const timeoutSec = deps.toolTimeoutSec?.(entry.server, entry.rawName);
 

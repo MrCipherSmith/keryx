@@ -38,6 +38,24 @@ import type { SearchProviderDescriptor, SearchProviderId } from "../harness/sear
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
+import { createMcpRuntime, type McpRuntime } from "../mcp-servers/runtime";
+
+/**
+ * Say so when an MCP config file could not be read.
+ *
+ * On stderr, once, at session start. A malformed `mcp-servers.json` yields
+ * zero servers, and zero servers is indistinguishable from "MCP was never
+ * configured" — the operator then looks for a bug in the server they just
+ * added rather than a comma in the file they just wrote. `createMcpRuntime`
+ * carries these instead of throwing precisely so the shell can still open;
+ * carrying them and never printing them would be the worse half of that
+ * bargain.
+ */
+function reportMcpProblems(runtime: McpRuntime): void {
+  for (const problem of runtime.problems()) {
+    console.error(`keryx mcp: ${problem.file} ${problem.message}`);
+  }
+}
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
@@ -1860,6 +1878,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // inspector live (flow 173, AC8) via `job-bridge.ts`'s module-level
     // listener; a safe no-op whenever no TUI is mounted to register one.
     const jobRegistry = createJobRegistry({ cwd, onEvent: emitBackgroundJob });
+    // Session-scoped for exactly the reason spelled out above for the
+    // registry: `makeAgentDeps` runs again on every `/model` or `/connect`
+    // rebuild, and a runtime built inside it would spawn a second set of
+    // server processes and orphan the first.
+    const mcpRuntime = createMcpRuntime({ cwd, gitRoot: cwd });
+    reportMcpProblems(mcpRuntime);
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -1962,6 +1986,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           spawnTool,
           getSessionDir,
           jobRegistry,
+          mcp: mcpRuntime,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -1997,6 +2022,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
 
+    try {
     if (surface === "tui-chat") {
       // Chat: the SAME `runShell` the readline fallback below runs, rendered
       // through the shared chrome.
@@ -2048,6 +2074,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       return;
     }
     // else: optional dep absent / init failed → fall through to the readline shell.
+    } finally {
+      // Runs on every exit from the TUI branch — the two `return`s above and
+      // the fall-through to readline alike. Each connected server is a child
+      // process holding a pipe; on fall-through the readline path builds its
+      // own runtime, so not closing here would leave two sets alive.
+      await mcpRuntime.close();
+    }
   }
 
   const rl = readline.createInterface({ input: process.stdin });
@@ -2134,6 +2167,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const metaprojectPort = createMetaprojectAdapter(process.cwd());
       const agentCwd = process.cwd();
       const jobRegistry = createJobRegistry({ cwd: agentCwd });
+      // One MCP runtime per session, for the same reason as `jobRegistry`
+      // above: server processes must not be re-spawned and orphaned on every
+      // tool-list rebuild. Non-blocking — the dials run behind the prompt.
+      const mcpRuntime = createMcpRuntime({ cwd: agentCwd, gitRoot: agentCwd });
+      reportMcpProblems(mcpRuntime);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the
       // CURRENT session dir at tool-invoke time, not whatever was true when
@@ -2179,6 +2217,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           spawnTool,
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
+          mcp: mcpRuntime,
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
@@ -2198,11 +2237,19 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
-      await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
-        cwd: process.cwd(),
-        ...(flags.continueLast === true ? { continueLast: true } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-      }, flags.permissionModeFlag, slateSessionBox);
+      try {
+        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
+          cwd: process.cwd(),
+          ...(flags.continueLast === true ? { continueLast: true } : {}),
+          ...(resumeId !== undefined ? { resumeId } : {}),
+        }, flags.permissionModeFlag, slateSessionBox);
+      } finally {
+        // Each connected server is a child process holding a pipe. Exiting
+        // without closing them leaks one per session — and `closeServers`
+        // already swallows a close that throws, so this cannot turn a clean
+        // exit into an error about exiting.
+        await mcpRuntime.close();
+      }
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {

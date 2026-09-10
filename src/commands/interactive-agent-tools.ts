@@ -19,6 +19,9 @@ import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builti
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
 import type { SearchProviderController } from "../harness/search";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import type { ServerCatalog } from "../mcp-servers/catalog";
+import type { ServerState } from "../mcp-servers/manager";
+import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 
 export type InteractiveAgentToolsInput = {
@@ -64,6 +67,36 @@ export type InteractiveAgentToolsInput = {
    * rather than silently using a registry nothing else can see or clean up.
    */
   jobRegistry?: JobRegistry;
+  /**
+   * The session's MCP runtime, if the surface built one.
+   *
+   * Session-scoped for the same measured reason as `jobRegistry`: this
+   * function is called again on every tool-list rebuild, and a runtime
+   * created inside it would spawn a fresh set of server processes each time
+   * and orphan the previous ones. It is created once by the surface that
+   * owns the session and closed when that session ends.
+   *
+   * Omitted → `search_tool` and `use_tool` are NOT registered at all, on the
+   * same principle `jobRegistry` established: advertising a tool backed by
+   * nothing is worse than not offering the capability.
+   */
+  mcp?: McpToolBinding;
+};
+
+/**
+ * What the MCP pair needs from the session, and nothing more.
+ *
+ * Declared here rather than importing `McpRuntime` so this factory does not
+ * depend on how the runtime is built — a test can bind a catalog directly.
+ *
+ * There is no approval hook, on purpose. `use_tool` is declared
+ * `risk: "destructive"`, so every call already goes through the agent's own
+ * gate; a hook here would be the fourth decision layer D-05 rules out.
+ */
+export type McpToolBinding = {
+  readonly catalog: () => ServerCatalog;
+  readonly servers: () => readonly ServerState[];
+  readonly toolTimeoutSec?: ((server: string, rawName: string) => number | undefined) | undefined;
 };
 
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
@@ -88,6 +121,16 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    // Two tools of fixed cost, whatever the operator has connected — never
+    // one registered tool per MCP tool. That refusal is the package's whole
+    // shape, and `mcp-tool-surface.test.ts` is what keeps it true from here.
+    ...(input.mcp === undefined
+      ? []
+      : createMcpInteractiveTools({
+          catalog: input.mcp.catalog,
+          servers: input.mcp.servers,
+          ...(input.mcp.toolTimeoutSec === undefined ? {} : { toolTimeoutSec: input.mcp.toolTimeoutSec }),
+        })),
     input.spawnTool,
   ];
 }
