@@ -14,6 +14,7 @@
 import { homedir } from "node:os";
 import path from "node:path";
 import { assertRoster, interpretRun, parseStream } from "./retrieval-agent-claude";
+import { writeTranscript } from "./retrieval-transcript";
 import {
   assertEnvIsolated,
   buildIsolatedEnv,
@@ -126,7 +127,7 @@ export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
 
   return {
     harness,
-    async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
+    async run({ cwd, prompt, model, gold, transcriptFile }): Promise<AgentAnswer> {
       const isolated = createIsolatedHome(options.realHome ?? homedir());
       try {
         const proc = Bun.spawn(["grok", ...buildGrokArgs(prompt, model)], {
@@ -141,13 +142,15 @@ export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
           proc.kill();
         }, timeoutMs);
         let stdout: string;
+        let stderr: string;
         try {
-          stdout = await new Response(proc.stdout).text();
+          [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
           await proc.exited;
         } finally {
           clearTimeout(timer);
         }
 
+        writeTranscript(transcriptFile, stdout, stderr);
         const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
         const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd, harness });
         assertRoster(parsed, harness);

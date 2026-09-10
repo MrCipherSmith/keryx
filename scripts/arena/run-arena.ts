@@ -226,6 +226,7 @@ async function sweep(args: Args, tasks: readonly ArenaTask[]): Promise<void> {
           cache,
           provisioner: createArenaProvisioner({ commitFor: () => full.base }),
           checkLeakage,
+          transcriptsDir: path.join(args.out, "transcripts"),
         });
       },
     });

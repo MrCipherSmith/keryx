@@ -47,7 +47,14 @@ export interface AgentPort {
    * harness and a task id alone cannot tell two harnesses' arms apart.
    */
   readonly harness: string;
-  run(input: { cwd: string; prompt: string; model: string; gold: readonly string[] }): Promise<AgentAnswer>;
+  run(input: {
+    cwd: string;
+    prompt: string;
+    model: string;
+    gold: readonly string[];
+    /** Where to keep the raw stream. Optional: the pilot never asked for one. */
+    transcriptFile?: string;
+  }): Promise<AgentAnswer>;
 }
 
 /**

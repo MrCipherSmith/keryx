@@ -75,6 +75,14 @@ export interface ArenaRunOptions {
   readonly cache: BaseTreeCache;
   readonly provisioner?: ArenaProvisioner;
   readonly checkLeakage?: LeakageCheck;
+  /**
+   * Where each arm's raw stream is kept, as `<task>-<harness>-<arm>.jsonl`.
+   *
+   * The tree is deleted after every arm and the adapters used to discard their
+   * streams, so a surprising score could not be explained afterwards. Optional so
+   * the tests' fake runs stay free of filesystem side effects.
+   */
+  readonly transcriptsDir?: string;
   /** Gates and diff statistics for an `implement` task. Absent for `research`. */
   readonly evaluateImplementation?: (treePath: string) => Promise<{
     readonly gates: import("./arena-gates").GateVerdict;
@@ -142,7 +150,15 @@ export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOp
 
     const prompt = buildArenaPrompt(task);
     const started = Date.now();
-    const answer = await options.agent.run({ cwd: treePath, prompt, model: options.model, gold: task.gold });
+    const answer = await options.agent.run({
+      cwd: treePath,
+      prompt,
+      model: options.model,
+      gold: task.gold,
+      ...(options.transcriptsDir === undefined
+        ? {}
+        : { transcriptFile: path.join(options.transcriptsDir, `${task.id}-${options.agent.harness}-${arm}.jsonl`) }),
+    });
     const wallClockMs = Date.now() - started;
 
     const implementation =

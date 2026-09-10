@@ -16,6 +16,7 @@ import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { assertEnvIsolated, buildIsolatedEnv, createIsolatedHome, type IsolatedHome } from "./retrieval-isolation";
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
+import { writeTranscript } from "./retrieval-transcript";
 
 export const KERYX_HARNESS = "keryx";
 
@@ -397,7 +398,7 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
 
   return {
     harness,
-    async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
+    async run({ cwd, prompt, model, gold, transcriptFile }): Promise<AgentAnswer> {
       const dir = mkdtempSync(path.join(tmpdir(), "keryx-events-"));
       const eventsFile = path.join(dir, "events.jsonl");
       const { isolated, dataHome } = createKeryxHome(options.realHome ?? homedir());
@@ -414,16 +415,20 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
           timedOut = true;
           proc.kill();
         }, timeoutMs);
+        // stderr is drained alongside stdout: left unread, a child that fills the
+        // pipe buffer simply stops, and it is also where a shell error is printed.
+        let stderr = "";
         try {
-          await new Response(proc.stdout).text();
+          [, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
           await proc.exited;
         } finally {
           clearTimeout(timer);
         }
 
-        const lines = existsSync(eventsFile)
-          ? readFileSync(eventsFile, "utf8").split("\n").filter((line) => line.trim().length > 0)
-          : [];
+        const raw = existsSync(eventsFile) ? readFileSync(eventsFile, "utf8") : "";
+        // Kept before interpretation, so a refused arm still leaves its evidence.
+        writeTranscript(transcriptFile, raw, stderr);
+        const lines = raw.split("\n").filter((line) => line.trim().length > 0);
         const turn = parseKeryxEvents(lines, gold);
         // interpretKeryxTurn first, so a timeout is reported as a timeout rather
         // than as "no turn_start" — a killed process can lose the transcript

@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
+import { writeTranscript } from "./retrieval-transcript";
 import {
   assertEnvIsolated,
   assertNoManagedSettings,
@@ -484,7 +485,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
 
   return {
     harness,
-    async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
+    async run({ cwd, prompt, model, gold, transcriptFile }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
       assertNoManagedSettings();
       const isolated = createClaudeHome(options.realHome ?? homedir());
@@ -501,13 +502,15 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
           proc.kill();
         }, timeoutMs);
         let stdout: string;
+        let stderr: string;
         try {
-          stdout = await new Response(proc.stdout).text();
+          [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
           await proc.exited;
         } finally {
           clearTimeout(timer);
         }
 
+        writeTranscript(transcriptFile, stdout, stderr);
         const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
         // interpretRun first, so a timeout is reported as a timeout rather than
         // as "no init event" — a killed process can lose the transcript entirely,
