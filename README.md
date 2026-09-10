@@ -451,8 +451,13 @@ server is spawned without keryx's own credentials in its environment, and
 `--scope project` writes a `.keryx/mcp-servers.json` you can commit while
 `keryx mcp disable` stays personal to you.
 
-stdio servers today; HTTP/SSE, OAuth, and importing what you already
-configured in Cursor or Claude are next.
+Remote servers work the same way — `keryx mcp add linear --transport http
+<url> --header 'Authorization: Bearer ${LINEAR_TOKEN}'` — and if that
+variable is unset keryx refuses to dial rather than sending an empty bearer
+and letting the server answer 401.
+
+OAuth and importing what you already configured in Cursor or Claude are
+next.
 
 ## Requirements and compatibility
 

@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 1394
+- Source files indexed: 1401
 - Imported asset files indexed: 4
-- Total nodes: 1398
-- Edges: 4175
-- Import edges: 4102
+- Total nodes: 1405
+- Edges: 4200
+- Import edges: 4127
 - Asset edges: 10
 - Unresolved imports: 63
 - Import resolution: 98.5%
@@ -17,7 +17,7 @@
 | Module | Source Files |
 |---|---:|
 | harness | 260 |
-| commands | 152 |
+| commands | 154 |
 | lib | 114 |
 | tui | 100 |
 | sac | 58 |
@@ -31,8 +31,8 @@
 | flow | 38 |
 | metrics | 38 |
 | review | 32 |
-| fixtures | 30 |
-| mcp-servers | 27 |
+| fixtures | 31 |
+| mcp-servers | 31 |
 | mcp | 27 |
 | ctx | 26 |
 | vscode-extension | 22 |

@@ -32,6 +32,7 @@
     "fixtures/import-policy/tree-shaken-unused-binding/gdgraph/entry.ts",
     "fixtures/import-policy/tree-shaken-unused-binding/harness/leaf.ts",
     "fixtures/mcp-servers/echo-server.ts",
+    "fixtures/mcp-servers/http-server.ts",
     "fixtures/symbol-graph/source.ts"
   ],
   "install.ts": [
@@ -249,6 +250,8 @@
     "src/commands/shell-approval.test.ts",
     "src/commands/shell-approval.ts",
     "src/commands/shell-cli-validation.test.ts",
+    "src/commands/shell-events.test.ts",
+    "src/commands/shell-events.ts",
     "src/commands/shell-headless-sigint.test.ts",
     "src/commands/shell-launch.test.ts",
     "src/commands/shell-pty-launch.smoke.test.ts",
@@ -941,6 +944,10 @@
     "src/mcp-servers/constraints.test.ts",
     "src/mcp-servers/doctor.test.ts",
     "src/mcp-servers/doctor.ts",
+    "src/mcp-servers/http-headers.table.test.ts",
+    "src/mcp-servers/http-headers.ts",
+    "src/mcp-servers/http.credentials.test.ts",
+    "src/mcp-servers/http.live.test.ts",
     "src/mcp-servers/invariants.test.ts",
     "src/mcp-servers/manager.test.ts",
     "src/mcp-servers/manager.ts",

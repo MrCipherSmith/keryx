@@ -158,9 +158,15 @@ export async function runDoctor(
   return {
     problems,
     servers,
-    // A held server is not a failure — it is a decision waiting. It must
-    // still be visible, which is what `status` carries.
-    healthy: problems.length === 0 && servers.every((s) => s.status !== "failed"),
+    // Healthy means NOTHING NEEDS THE OPERATOR, which is what the exit
+    // code says. Three statuses need them and only one of the three is a
+    // failure: a server awaiting approval and one whose credential
+    // variable is unset are both decisions waiting, and reporting them
+    // with exit 0 tells a script — and a person skimming — that the
+    // configuration is fine when two commands are outstanding.
+    healthy:
+      problems.length === 0 &&
+      servers.every((s) => s.status !== "failed" && s.status !== "needs_auth" && s.status !== "needs-approval"),
   };
 }
 

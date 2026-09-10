@@ -118,6 +118,10 @@ describe("AC4 — doctor says which variable, and does not dial", () => {
     expect(report.servers[0]?.status).toBe("needs_auth");
     expect(report.servers[0]?.detail).toContain("MY_TOKEN");
     expect(dialled).toBe(0);
+    // And the exit code says so. `healthy` means nothing needs the
+    // operator; a missing variable is a command they still have to run,
+    // and reporting it with exit 0 tells a script the config is fine.
+    expect(report.healthy).toBe(false);
     expect(server.requests()).toEqual([]);
     expect(formatDoctorReport(report)).toContain("MY_TOKEN");
   }, 30_000);
