@@ -4,7 +4,7 @@ target: report
 ref: 522
 mode: ingest
 flow: 246 (explicit-flow-id)
-created_at: 2026-09-10T12:01:23.904Z
+created_at: 2026-09-10T16:19:04.187Z
 context_mode: light
 
 ## Stage counts
@@ -21,20 +21,22 @@ This is NOT `dropped 0`: nothing ran, so nothing is known.
 ### Refuted by the verifier
 
 verification_mode: annotate
-claims_received: 0
-claims_applied: 0
+claims_received: 51
+claims_applied: 51
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
 confirmed: 0
-refuted: 0
-unverifiable: 0
-unverified: 33
+refuted: 47
+unverifiable: 4
+unverified: 0
 
 ### Retained
 
-findings_in: 33
+findings_in: 51
 findings_removed_by_verifier: 0
-findings_retained: 33
+findings_retained: 51
+
+`annotate` records verdicts and removes nothing: 47 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 
@@ -49,11 +51,11 @@ cap that dropped nothing are different facts.
 
 ### Findings cap
 
-limit_per_reviewer: 10
-findings_seen: 33
-findings_retained: 33
+limit_per_reviewer: 60
+findings_seen: 51
+findings_retained: 51
 findings_truncated: 0
-blockers_exempt: 10
+blockers_exempt: 17
 reviewers_truncated: 0
 
 _the findings cap ran and truncated nothing_
@@ -78,14 +80,14 @@ The machine-readable copy is `filter_stats` in `manifest.json`; this block is
 rendered from the same record, never re-parsed out of the prose above.
 `null` means the stage did not run. It never means `0`.
 
-total: 33
+total: 51
 dropped_prefilter: null — no `--scope` was supplied to this ingest. Nothing ran, so nothing is known — this is NOT `dropped 0`.
 dropped_low_confidence: null — this pipeline has no confidence threshold: `confidence` is recorded on every finding and no stage filters on it. The field is declared because the roadmap names it, and reports `null` so that a threshold added later cannot be mistaken for one that had always dropped nothing.
 dropped_refuted: 0
 dropped_scope_b: null — no blast-radius record reached this ingest, so the scope-B screen did not run. `rejected: 0` after a screen that ran is a different fact, and the record keeps them apart.
 dropped_findings_cap: 0
 dismissed_by_round: null — the round recorded no dismissals channel (`--refuted` was not supplied). This is NOT `dismissed 0`: what survives to findings.json is then the survivors of an unlogged triage, which is why measuring such a corpus returns 100% precision by construction.
-retained: 33
+retained: 51
 
 ### by_reason
 
