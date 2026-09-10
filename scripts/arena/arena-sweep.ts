@@ -128,8 +128,17 @@ export interface ArenaSweepProgress {
 export interface ArenaSweepOptions extends ArenaSweepPaths {
   readonly harness: string;
   readonly tasks: readonly { readonly id: string }[];
-  /** Runs both arms of one task, or throws. */
-  readonly runTask: (task: { readonly id: string }) => Promise<ArenaArmResult[]>;
+  /**
+   * Runs ONE arm, or throws.
+   *
+   * Per arm rather than per task, and the smoke run is why. Driving a pair meant a
+   * second arm that threw discarded the first arm's result — already run, already
+   * paid for — because nothing was appended until both returned. An arm is the unit
+   * that costs money, so an arm is the unit that gets recorded.
+   */
+  readonly runArm: (task: { readonly id: string }, arm: Arm) => Promise<ArenaArmResult>;
+  /** Which arm goes first for this (harness, task). Recorded, so the order cannot hide. */
+  readonly firstArm: (task: { readonly id: string }) => Arm;
   readonly onProgress?: ArenaSweepProgress;
 }
 
@@ -142,13 +151,13 @@ export interface ArenaSweepReport {
 }
 
 /**
- * One leg, appending as it goes.
+ * One leg, appending after every arm.
  *
- * Appended per task rather than at the end, for the pilot's reason: an interrupted
- * sweep should cost one task, not the whole leg. A task that throws is recorded as
- * a failure for BOTH arms, because without knowing which arm died the pair cannot
- * be settled arm by arm — and leaving it unsettled is the bug this module exists
- * to close.
+ * Per arm rather than per task: an interrupted sweep should cost one arm, not a
+ * pair, and an arm that succeeded beside one that died must keep its row. The pair
+ * is still settled either way — a result on one side and a recorded failure on the
+ * other settles the key — so a resume neither re-runs the survivor nor averages it
+ * against nothing.
  */
 export async function runArenaSweep(options: ArenaSweepOptions): Promise<ArenaSweepReport> {
   const say = options.onProgress ?? ((): void => {});
@@ -168,17 +177,19 @@ export async function runArenaSweep(options: ArenaSweepOptions): Promise<ArenaSw
       say(`${options.harness} ${task.id}: settled, skipping`);
       continue;
     }
-    try {
-      const armResults = await options.runTask(task);
-      for (const result of armResults) {
+    const first = options.firstArm(task);
+    const order: readonly Arm[] = first === "context-on" ? ["context-on", "context-off"] : ["context-off", "context-on"];
+
+    let anyRecorded = false;
+    for (const arm of order) {
+      try {
+        const result = await options.runArm(task, arm);
         appendJsonl(options.resultsPath, result);
         results.push(result);
-      }
-      ran.push(task.id);
-      say(`${options.harness} ${task.id}: both arms recorded`);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : String(error);
-      for (const arm of ["context-on", "context-off"] as const) {
+        anyRecorded = true;
+        say(`${options.harness} ${task.id} ${arm}: recorded`);
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
         const failure: ArenaFailure = {
           taskId: task.id,
           arm,
@@ -188,9 +199,10 @@ export async function runArenaSweep(options: ArenaSweepOptions): Promise<ArenaSw
         };
         appendJsonl(options.failuresPath, failure);
         failed.push(failure);
+        say(`${options.harness} ${task.id} ${arm}: FAILED — ${reason}`);
       }
-      say(`${options.harness} ${task.id}: FAILED — ${reason}`);
     }
+    if (anyRecorded) ran.push(task.id);
   }
 
   return { harness: options.harness, ran, skipped, failed, results };

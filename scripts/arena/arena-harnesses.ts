@@ -47,9 +47,19 @@ export const GROK_BUILD: ArenaHarnessSpec = {
   note: "the grok CLI on grok-4.6 — the control for the wrapper comparison",
 };
 
+/**
+ * Model ids are the explicit ones, not the short aliases.
+ *
+ * `sonnet-5` is rejected outright — `[claude-code:unrecognized_model]` — which the
+ * smoke run discovered by failing both claude arms. And the bare alias `sonnet` is
+ * worse than wrong: it resolves, but on the same two-token prompt it billed $0.105
+ * against `claude-sonnet-5`'s $0.0088, so it is not the model this leg claims to
+ * measure. A leg whose model id is an alias is a leg whose cost and quality belong
+ * to whatever that alias pointed at on the day.
+ */
 export const CLAUDE_SONNET: ArenaHarnessSpec = {
   id: "claude-sonnet",
-  model: "sonnet-5",
+  model: "claude-sonnet-5",
   createAgent: ({ timeoutMs }) => createClaudeAgent({ timeoutMs, harnessId: "claude-sonnet" }),
   note: "a second vendor, so the result is not a claim about one model family",
 };
@@ -63,7 +73,7 @@ export const CLAUDE_SONNET: ArenaHarnessSpec = {
  */
 export const CLAUDE_OPUS_DEFERRED: ArenaHarnessSpec = {
   id: "claude-opus",
-  model: "opus-5",
+  model: "claude-opus-5",
   createAgent: ({ timeoutMs }) => createClaudeAgent({ timeoutMs, harnessId: "claude-opus" }),
   note: "deferred on cost: ~$25 for the strong-versus-weak-model axis; resume is per harness, so this appends",
 };

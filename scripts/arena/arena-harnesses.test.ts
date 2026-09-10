@@ -15,6 +15,15 @@ describe("ARENA_HARNESSES", () => {
     expect(peers.sort()).toEqual(["grok-build", "keryx-shell"]);
   });
 
+  test("model ids are explicit, never short aliases", () => {
+    // `sonnet-5` is rejected as `unrecognized_model`, and the bare alias `sonnet`
+    // resolves but billed $0.105 against `claude-sonnet-5`'s $0.0088 on the same
+    // two-token prompt — so it is not the model the leg claims to measure.
+    for (const spec of [...ARENA_HARNESSES, CLAUDE_OPUS_DEFERRED]) {
+      if (spec.id.startsWith("claude")) expect(spec.model.startsWith("claude-")).toBe(true);
+    }
+  });
+
   test("a model is pinned per leg, never chosen from task difficulty", () => {
     // The pilot picks hard/easy from the gold-set size, which is right across 50
     // varied tasks and wrong here: a leg whose model changes between tasks cannot
@@ -30,7 +39,7 @@ describe("harnessById", () => {
   });
 
   test("resolves the deferred leg too, so adding it is a flag and not an edit", () => {
-    expect(harnessById("claude-opus").model).toBe("opus-5");
+    expect(harnessById("claude-opus").model).toBe("claude-opus-5");
   });
 
   test("an unknown id names what is known rather than failing blankly", () => {

@@ -116,7 +116,8 @@ describe("runArenaSweep", () => {
       tasks: [{ id: "a" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async (task) => [row(task.id, "context-on"), row(task.id, "context-off")],
+      firstArm: () => "context-on",
+      runArm: async (task, arm) => row(task.id, arm),
     });
     expect(report.ran).toEqual(["a"]);
     expect(loadArenaResults(paths.results)).toHaveLength(2);
@@ -130,25 +131,27 @@ describe("runArenaSweep", () => {
       tasks: [{ id: "a" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async (task: { id: string }) => {
+      firstArm: () => "context-on" as Arm,
+      runArm: async (task: { id: string }, arm: Arm) => {
         calls += 1;
-        return [row(task.id, "context-on"), row(task.id, "context-off")];
+        return row(task.id, arm);
       },
     };
     await runArenaSweep(options);
     const second = await runArenaSweep(options);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     expect(second.skipped).toEqual(["a"]);
   });
 
-  test("a throwing task is recorded as a failure for both arms, never dropped", async () => {
+  test("a throwing arm is recorded as a failure, never dropped", async () => {
     const paths = workspace();
     const report = await runArenaSweep({
       harness: "keryx-shell",
       tasks: [{ id: "a" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async () => {
+      firstArm: () => "context-on",
+      runArm: async () => {
         throw new Error("killed: silence");
       },
     });
@@ -164,14 +167,15 @@ describe("runArenaSweep", () => {
       tasks: [{ id: "a" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async () => {
+      firstArm: () => "context-on" as Arm,
+      runArm: async () => {
         calls += 1;
         throw new Error("killed: silence");
       },
     };
     await runArenaSweep(options);
     const second = await runArenaSweep(options);
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     expect(second.skipped).toEqual(["a"]);
   });
 
@@ -186,13 +190,57 @@ describe("runArenaSweep", () => {
       tasks: [{ id: "a" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async (task) => {
+      firstArm: () => "context-on",
+      runArm: async (task, arm) => {
         calls += 1;
-        return [row(task.id, "context-on"), row(task.id, "context-off")];
+        return row(task.id, arm);
       },
     });
-    expect(calls).toBe(1);
+    // Two arms, so two calls; the half-recorded pair was not settled.
+    expect(calls).toBe(2);
     expect(report.ran).toEqual(["a"]);
+  });
+
+  test("a surviving arm KEEPS its row when its partner dies", async () => {
+    // The smoke run's lesson. Driving a pair meant a second arm that threw
+    // discarded the first arm's result — already run, already paid for. An arm is
+    // the unit that costs money, so an arm is the unit that gets recorded.
+    const paths = workspace();
+    const report = await runArenaSweep({
+      harness: "keryx-shell",
+      tasks: [{ id: "a" }],
+      resultsPath: paths.results,
+      failuresPath: paths.failures,
+      firstArm: () => "context-on",
+      runArm: async (task, arm) => {
+        if (arm === "context-off") throw new Error("killed: silence");
+        return row(task.id, arm);
+      },
+    });
+    expect(loadArenaResults(paths.results)).toHaveLength(1);
+    expect(loadArenaFailures(paths.failures)).toHaveLength(1);
+    expect(report.failed.map((f) => f.arm)).toEqual(["context-off"]);
+    // Settled, so a resume does not pay for the survivor again …
+    expect(settledKeys(loadArenaResults(paths.results), loadArenaFailures(paths.failures)).has("keryx-shell a")).toBe(true);
+    // … and not comparable, so it is never averaged against nothing.
+    expect(comparableRows(loadArenaResults(paths.results), loadArenaFailures(paths.failures))).toHaveLength(0);
+  });
+
+  test("the recorded order is honoured, so the control arm is not always second", async () => {
+    const paths = workspace();
+    const seen: Arm[] = [];
+    await runArenaSweep({
+      harness: "keryx-shell",
+      tasks: [{ id: "a" }],
+      resultsPath: paths.results,
+      failuresPath: paths.failures,
+      firstArm: () => "context-off",
+      runArm: async (task, arm) => {
+        seen.push(arm);
+        return row(task.id, arm);
+      },
+    });
+    expect(seen).toEqual(["context-off", "context-on"]);
   });
 
   test("one task failing does not stop the leg", async () => {
@@ -202,9 +250,10 @@ describe("runArenaSweep", () => {
       tasks: [{ id: "a" }, { id: "b" }],
       resultsPath: paths.results,
       failuresPath: paths.failures,
-      runTask: async (task) => {
+      firstArm: () => "context-on",
+      runArm: async (task, arm) => {
         if (task.id === "a") throw new Error("killed: ceiling");
-        return [row(task.id, "context-on"), row(task.id, "context-off")];
+        return row(task.id, arm);
       },
     });
     expect(report.ran).toEqual(["b"]);

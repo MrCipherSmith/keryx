@@ -27,7 +27,7 @@ import { buildArenaPrompt } from "./arena-prompts";
 import { decideResearch, pairByTask } from "./arena-scoring";
 import { runArenaSweep, comparableRows, loadArenaFailures, loadArenaResults } from "./arena-sweep";
 import { loadFrozenT1, loadTaskFile, type ArenaTask } from "./arena-tasks";
-import { firstArmFor, runArenaTask, type Arm } from "./arena-run";
+import { firstArmFor, runArenaArm, type Arm } from "./arena-run";
 import { thresholdsFor } from "./arena-watchdog";
 
 const USAGE = `
@@ -211,11 +211,12 @@ async function sweep(args: Args, tasks: readonly ArenaTask[]): Promise<void> {
       resultsPath,
       failuresPath,
       onProgress: (message) => console.log(`  ${message}`),
-      runTask: async (task) => {
+      firstArm: (task) => firstArmFor(harness.id, task.id),
+      runArm: async (task, arm) => {
         const full = tasks.find((candidate) => candidate.id === task.id);
         if (full === undefined) throw new Error(`task ${task.id} vanished between planning and running`);
         const ceiling = thresholdsFor(full.type).ceilingMs;
-        return runArenaTask(full, {
+        return runArenaArm(full, arm, {
           repoRoot: args.repo,
           worktreesDir: path.join(args.out, "arms"),
           // The adapter's own timeout sits ABOVE the watchdog ceiling so the
