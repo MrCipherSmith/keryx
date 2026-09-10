@@ -10,7 +10,8 @@
 // other arm does not have. The `keryx` binary is on PATH for both; in
 // `context-off` it simply has no workspace to read.
 
-import { homedir } from "node:os";
+import { readFileSync } from "node:fs";
+import { homedir, userInfo } from "node:os";
 import path from "node:path";
 import {
   assertEnvIsolated,
@@ -317,20 +318,132 @@ export function buildClaudeArgs(
  */
 const SESSION_HOOK_PORT_SINK = "1";
 
+/** The macOS Keychain item Claude Code stores its OAuth grant in. */
+export const CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials";
+
+/**
+ * Read the Claude Code grant out of the login Keychain.
+ *
+ * The secret is JSON with a single key `claudeAiOauth` — the same shape as
+ * `~/.claude/.credentials.json` on Linux, which is why materialising it at that
+ * path works.
+ *
+ * Nothing here quotes the value. `security` writes the secret to stdout, so the
+ * error path deliberately reports only the exit status and stderr.
+ */
+export function readClaudeKeychainSecret(account: string): string {
+  const result = Bun.spawnSync(["security", "find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE, "-a", account, "-w"], {
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    const stderr = result.stderr.toString().trim();
+    throw new Error(
+      `security exited ${result.exitCode}${stderr.length > 0 ? `: ${stderr}` : ""} ` +
+        `(service ${CLAUDE_KEYCHAIN_SERVICE}, account ${account}) — run \`claude\` once and sign in`,
+    );
+  }
+  return result.stdout.toString();
+}
+
+/**
+ * The four fields `~/.claude.json` must carry for a session to start, and
+ * nothing else.
+ *
+ * Synthesised rather than linked, deliberately. The real file also holds
+ * `mcpServers` — on this machine `backend-graph`, `context7` and `playwright` —
+ * which is precisely the contamination an isolated HOME exists to remove. A
+ * link would restore it through the back door.
+ *
+ * A missing or unreadable file is not fatal: `oauthAccount` and `userID` are
+ * identity, not authorisation, and the grant above is what authenticates.
+ */
+export function minimalClaudeConfig(realHome: string): string {
+  let oauthAccount: unknown;
+  let userID: unknown;
+  try {
+    const parsed = JSON.parse(readFileSync(path.join(realHome, ".claude.json"), "utf8")) as Record<string, unknown>;
+    oauthAccount = parsed.oauthAccount;
+    userID = parsed.userID;
+  } catch {
+    // Left undefined below.
+  }
+  return `${JSON.stringify(
+    {
+      ...(oauthAccount === undefined ? {} : { oauthAccount }),
+      ...(userID === undefined ? {} : { userID }),
+      hasCompletedOnboarding: true,
+      mcpServers: {},
+    },
+    null,
+    2,
+  )}\n`;
+}
+
 /**
  * A HOME holding nothing this operator configured.
  *
- * macOS Claude Code keeps its credential in the Keychain, which is scoped to
- * the user rather than to HOME, so a temporary HOME authenticates normally and
- * there is nothing to link. On Linux the same leg reads
- * `~/.claude/.credentials.json`; the link is declared optional so one call
- * covers both without branching on platform.
+ * The credential is MATERIALISED, not linked, because on macOS there is no file
+ * to link: Claude Code keeps the grant in the Keychain. An earlier version of
+ * this function recorded the opposite — that the Keychain is scoped to the user
+ * rather than to HOME, so an isolated HOME authenticates normally — and
+ * declared the link optional on that basis. It is false, and it is why both
+ * claude arms failed both smoke runs: under an isolated HOME `claude -p`
+ * answers "Not logged in · Please run /login" and the arm is then scored as one
+ * that searched and found nothing.
+ *
+ * On Linux the grant is already a file, so it is linked and the Keychain is not
+ * consulted. `readSecret` and `readConfig` are injectable so the tests exercise
+ * this without a Keychain and without a credential.
  */
-export function createClaudeHome(realHome: string = homedir()): IsolatedHome {
+export function createClaudeHome(
+  realHome: string = homedir(),
+  options: {
+    readonly platform?: NodeJS.Platform;
+    readonly account?: string;
+    readonly readSecret?: (account: string) => string;
+    readonly readConfig?: (realHome: string) => string;
+  } = {},
+): IsolatedHome {
+  const platform = options.platform ?? process.platform;
+  const readSecret = options.readSecret ?? readClaudeKeychainSecret;
+  const readConfig = options.readConfig ?? minimalClaudeConfig;
+  const account = options.account ?? userInfo().username;
+
+  const secrets = [
+    {
+      to: ".claude.json",
+      read: () => readConfig(realHome),
+      describe: "the minimal Claude Code config",
+    },
+    ...(platform === "darwin"
+      ? [
+          {
+            to: ".claude/.credentials.json",
+            read: () => readSecret(account),
+            describe: `the Claude Code grant in the ${CLAUDE_KEYCHAIN_SERVICE} Keychain item`,
+          },
+        ]
+      : []),
+  ];
+
   return createIsolatedHome({
     prefix: "keryx-claude-home-",
     realHome,
-    credentials: [{ from: path.join(".claude", ".credentials.json"), to: ".claude/.credentials.json", required: false }],
+    secrets,
+    // Linux keeps the grant in a file. Required there, because a missing one is
+    // an arm that cannot authenticate rather than a platform difference.
+    credentials:
+      platform === "darwin"
+        ? []
+        : [
+            {
+              from: path.join(".claude", ".credentials.json"),
+              to: ".claude/.credentials.json",
+              required: true,
+              hint: "run `claude` once and sign in",
+            },
+          ],
   });
 }
 

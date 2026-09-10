@@ -99,9 +99,26 @@ refused by name and by prefix so the next `MCP_*` variable is caught without
 anyone remembering to add it. Managed settings, which live outside HOME entirely
 and which no temporary HOME can hide, are refused rather than silently inherited.
 
-Claude Code on macOS keeps its credential in the Keychain — scoped to the user,
-not to HOME — so an isolated HOME authenticates normally and there is nothing to
-link. The Linux file is linked when present.
+**Corrected 2026-09-10.** This paragraph used to say that Claude Code on macOS
+keeps its credential in the Keychain, scoped to the user rather than to HOME, so
+an isolated HOME authenticates normally and there is nothing to link. That is
+false, and it is why both claude arms failed both smoke runs: under an isolated
+HOME `claude -p` answers `Not logged in · Please run /login`. The claim was
+never tested — it was reasoned from how Keychain scoping works and written down
+as though it had been observed.
+
+What is actually true. The Keychain item is service `Claude Code-credentials`,
+account `<os-user>`, and its secret is JSON with a single key `claudeAiOauth` —
+the same shape as `~/.claude/.credentials.json` on Linux. Written to that path
+inside the isolated HOME at mode 0600, it is read and accepted. The credential
+is therefore MATERIALISED on macOS and LINKED on Linux, and the link is required
+there rather than optional: an optional credential is how this mistake hid, by
+producing a home that looked fine and an arm that could not authenticate.
+
+`~/.claude.json` is synthesised rather than linked — identity fields plus
+`hasCompletedOnboarding` and an empty `mcpServers`. The real file carries the
+operator's MCP servers, which is exactly the contamination the isolated HOME
+exists to remove; linking it would restore them through the back door.
 
 The grok leg's own environment was still `{...process.env, HOME}`, the same hole
 minus one variable, and moved onto the same builder: the two legs should differ

@@ -19,7 +19,7 @@
 // relocates the whole configuration and defeats a temporary HOME alone. So the
 // rule here is an allowlist — an arm gets what it is given and nothing else.
 
-import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 
@@ -175,14 +175,40 @@ export interface CredentialLink {
   /**
    * When false, a missing source is tolerated.
    *
-   * macOS Claude Code keeps its credential in the Keychain, which is scoped to
-   * the user and not to HOME, so there is no file to link and an isolated HOME
-   * authenticates normally. On Linux the same leg reads a file. One optional
-   * link covers both rather than branching on platform.
+   * Used where a leg genuinely has an alternative source. It is NOT a way to
+   * paper over a credential that could not be found: an arm that starts
+   * unauthenticated answers nothing, which scores as zero recall and is
+   * indistinguishable from an arm that searched honestly and found nothing.
+   * See `MaterialisedSecret` for the macOS Claude Code case, which this flag
+   * previously hid.
    */
   readonly required: boolean;
   /** Shown when a required link is missing. */
   readonly hint?: string;
+}
+
+/**
+ * A secret written into the isolated home rather than linked to a file.
+ *
+ * Some credentials do not live in a file at all. macOS Claude Code keeps its
+ * OAuth grant in the Keychain, under service `Claude Code-credentials`, and an
+ * earlier version of this module recorded — in a docblock and in a commit
+ * message — that the Keychain is scoped to the user rather than to HOME, so a
+ * temporary HOME authenticates normally. That is false. Under an isolated HOME
+ * `claude -p` answers "Not logged in", and both claude arms failed both smoke
+ * runs because of it.
+ *
+ * `read` returns the secret text. It must never reach an error message, a log
+ * line or a thrown value: this file exists so a credential does not end up in a
+ * benchmark artifact.
+ */
+export interface MaterialisedSecret {
+  /** Path relative to the isolated home. */
+  readonly to: string;
+  /** Produces the secret text, or throws WITHOUT quoting it. */
+  readonly read: () => string;
+  /** What this is, for an error message. Never the value. */
+  readonly describe: string;
 }
 
 export interface IsolatedHome {
@@ -200,6 +226,8 @@ export interface IsolatedHome {
 export function createIsolatedHome(request: {
   readonly prefix: string;
   readonly credentials?: readonly CredentialLink[];
+  /** Written into the home at 0600 inside 0700 directories. See MaterialisedSecret. */
+  readonly secrets?: readonly MaterialisedSecret[];
   readonly realHome?: string;
 }): IsolatedHome {
   const realHome = request.realHome ?? homedir();
@@ -218,6 +246,36 @@ export function createIsolatedHome(request: {
     const target = path.join(home, credential.to);
     mkdirSync(path.dirname(target), { recursive: true });
     symlinkSync(source, target);
+  }
+
+  for (const secret of request.secrets ?? []) {
+    let value: string;
+    try {
+      value = secret.read();
+    } catch (error) {
+      dispose();
+      // The reader's own message is deliberately NOT interpolated here. The
+      // interface forbids a reader from quoting the secret, but this message is
+      // the one that reaches a log, a CI transcript and a results file, and a
+      // contract nobody enforces is not a guard. It is composed only from text
+      // this module owns; the reader's error is attached as `cause`, so a
+      // contract violation is confined to one place instead of being copied
+      // into the line everything prints.
+      throw new Error(
+        `could not read ${secret.describe} — the arm cannot authenticate and ` +
+          "would be scored as one that found nothing (original failure attached as cause)",
+        { cause: error },
+      );
+    }
+    if (value.trim().length === 0) {
+      dispose();
+      throw new Error(`${secret.describe} came back empty — refusing to start an arm that cannot authenticate`);
+    }
+    const target = path.join(home, secret.to);
+    mkdirSync(path.dirname(target), { recursive: true, mode: 0o700 });
+    // 0600 from the first byte: writing and then chmod leaves a window in which
+    // the file is world-readable, and a sweep writes these many times an hour.
+    writeFileSync(target, value, { encoding: "utf8", mode: 0o600 });
   }
 
   return { home, dispose };

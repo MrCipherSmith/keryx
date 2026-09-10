@@ -1,5 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { buildClaudeArgs, buildClaudeEnv, contextTokensOf, interpretRun, parseStream } from "./retrieval-agent-claude";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import {
+  buildClaudeArgs,
+  buildClaudeEnv,
+  contextTokensOf,
+  createClaudeHome,
+  interpretRun,
+  minimalClaudeConfig,
+  parseStream,
+} from "./retrieval-agent-claude";
 
 describe("buildClaudeArgs", () => {
   test("web tools are refused, because the repository under test is public", () => {
@@ -307,5 +318,162 @@ describe("parseStream", () => {
     const parsed = parseStream([line, resultEvent()], ["src/a.ts"]);
     expect(parsed.toolCalls).toBe(1);
     expect(parsed.stepsToFirstGold).toBe(1);
+  });
+});
+
+describe("createClaudeHome — the credential path", () => {
+  const SECRET = '{"claudeAiOauth":{"accessToken":"tok-do-not-log-me","refreshToken":"r"}}';
+
+  function fakeRealHome(): string {
+    const home = mkdtempSync(path.join(tmpdir(), "keryx-claude-real-"));
+    writeFileSync(
+      path.join(home, ".claude.json"),
+      JSON.stringify({
+        oauthAccount: { emailAddress: "someone@example.invalid" },
+        userID: "user-123",
+        hasCompletedOnboarding: true,
+        // The reason the real file is never linked.
+        mcpServers: { "backend-graph": { command: "x" }, context7: { command: "y" } },
+        history: ["a previous prompt"],
+      }),
+      "utf8",
+    );
+    return home;
+  }
+
+  test("on macOS the grant is written into the isolated home, at 0600", () => {
+    // There is no file to link on macOS: the grant lives in the Keychain. An
+    // earlier version of this function recorded the opposite and declared the
+    // link optional, so an unauthenticated arm started, answered nothing, and
+    // scored as one that searched and found nothing.
+    const realHome = fakeRealHome();
+    const isolated = createClaudeHome(realHome, {
+      platform: "darwin",
+      account: "someone",
+      readSecret: () => SECRET,
+    });
+    try {
+      const written = path.join(isolated.home, ".claude", ".credentials.json");
+      expect(readFileSync(written, "utf8")).toBe(SECRET);
+      expect(statSync(written).mode & 0o777).toBe(0o600);
+      expect(statSync(path.dirname(written)).mode & 0o777).toBe(0o700);
+    } finally {
+      isolated.dispose();
+    }
+  });
+
+  test("the config carries identity and NOT the operator's MCP servers", () => {
+    // The real `~/.claude.json` holds `mcpServers` — on this machine
+    // backend-graph, context7 and playwright — which is exactly the
+    // contamination an isolated HOME exists to remove. Linking it would restore
+    // that through the back door.
+    const realHome = fakeRealHome();
+    const isolated = createClaudeHome(realHome, { platform: "darwin", readSecret: () => SECRET });
+    try {
+      const config = JSON.parse(readFileSync(path.join(isolated.home, ".claude.json"), "utf8")) as Record<
+        string,
+        unknown
+      >;
+      expect(config.userID).toBe("user-123");
+      expect(config.hasCompletedOnboarding).toBe(true);
+      expect(config.mcpServers).toEqual({});
+      expect(config.history).toBeUndefined();
+    } finally {
+      isolated.dispose();
+    }
+  });
+
+  test("a Keychain read that fails refuses the arm rather than starting it", () => {
+    const realHome = fakeRealHome();
+    expect(() =>
+      createClaudeHome(realHome, {
+        platform: "darwin",
+        readSecret: () => {
+          throw new Error("The specified item could not be found in the keychain.");
+        },
+      }),
+    ).toThrow(/would be scored as one that found nothing/);
+  });
+
+  test("the secret never appears in the error when the read fails afterwards", () => {
+    // The failure path is the one that reaches a log, a CI transcript and a
+    // results file at once. A reader that leaks into its own error would put
+    // the grant in all three.
+    const realHome = fakeRealHome();
+    let message = "";
+    let cause: unknown;
+    try {
+      createClaudeHome(realHome, {
+        platform: "darwin",
+        readSecret: () => {
+          throw new Error(`could not use ${SECRET}`);
+        },
+      });
+    } catch (error) {
+      message = error instanceof Error ? error.message : String(error);
+      cause = error instanceof Error ? error.cause : undefined;
+    }
+    // The composed message is ours and carries none of the reader's text, so a
+    // reader that leaks into its own error cannot leak through this one. The
+    // cause still holds the original for diagnosis.
+    expect(message).not.toContain("tok-do-not-log-me");
+    expect(message).toContain("cannot authenticate");
+    expect(String(cause)).toContain("could not use");
+  });
+
+  test("an empty grant is refused, because an empty file authenticates nothing", () => {
+    const realHome = fakeRealHome();
+    expect(() => createClaudeHome(realHome, { platform: "darwin", readSecret: () => "   " })).toThrow(
+      /came back empty/,
+    );
+  });
+
+  test("on Linux the grant is a file and is required, not optional", () => {
+    // Optional was how the macOS mistake hid: a missing credential produced a
+    // home that looked fine and an arm that could not authenticate.
+    const realHome = fakeRealHome();
+    expect(() => createClaudeHome(realHome, { platform: "linux", readSecret: () => SECRET })).toThrow(
+      /no credentials at/,
+    );
+  });
+
+  test("on Linux an existing grant file is linked and the Keychain is never consulted", () => {
+    const realHome = fakeRealHome();
+    mkdirSync(path.join(realHome, ".claude"), { recursive: true });
+    writeFileSync(path.join(realHome, ".claude", ".credentials.json"), SECRET, "utf8");
+    let keychainCalls = 0;
+    const isolated = createClaudeHome(realHome, {
+      platform: "linux",
+      readSecret: () => {
+        keychainCalls += 1;
+        return SECRET;
+      },
+    });
+    try {
+      expect(keychainCalls).toBe(0);
+      expect(readFileSync(path.join(isolated.home, ".claude", ".credentials.json"), "utf8")).toBe(SECRET);
+    } finally {
+      isolated.dispose();
+    }
+  });
+
+  test("disposing takes the materialised grant with it", () => {
+    const realHome = fakeRealHome();
+    const isolated = createClaudeHome(realHome, { platform: "darwin", readSecret: () => SECRET });
+    const written = path.join(isolated.home, ".claude", ".credentials.json");
+    expect(existsSync(written)).toBe(true);
+    isolated.dispose();
+    expect(existsSync(isolated.home)).toBe(false);
+  });
+});
+
+describe("minimalClaudeConfig", () => {
+  test("a missing or unreadable real config still yields a usable one", () => {
+    // Identity is not authorisation: the grant is what authenticates, so a
+    // missing `~/.claude.json` must not stop an arm.
+    const empty = mkdtempSync(path.join(tmpdir(), "keryx-claude-noconfig-"));
+    const config = JSON.parse(minimalClaudeConfig(empty)) as Record<string, unknown>;
+    expect(config.hasCompletedOnboarding).toBe(true);
+    expect(config.mcpServers).toEqual({});
   });
 });
