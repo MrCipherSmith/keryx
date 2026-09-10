@@ -36,6 +36,11 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
+import {
+  describeUseToolApproval,
+  isMcpToolCall,
+  MAX_ARGUMENT_CHARS,
+} from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -1088,6 +1093,49 @@ async function runAgentRepl(
         if (meta?.credentials === true) {
           out(`${GUTTER}${style.yellow("touches the agent's own permission/credential files")}\n`);
         }
+        out(`\n${GUTTER}${style.dim("[y/N] ")}`);
+        const answer = ((await readLine()) ?? "").trim();
+        const approved = /^y(es)?$/i.test(answer);
+        out(approved ? style.green("approved\n") : style.red("denied\n"));
+        if (!approved) {
+          return false;
+        }
+        return meta?.fingerprint !== undefined
+          ? { approved: true, fingerprint: meta.fingerprint }
+          : true;
+      }
+      if (isMcpToolCall(tool)) {
+        // F-032/F-033, deferred from P0 to P2 by operator decision.
+        //
+        // `use_tool` used to reach the `tool !== "shell_exec"` branch
+        // below, which truncates the whole tool input at 117 characters.
+        // `use_tool`'s schema does not constrain JSON key order, so a
+        // call whose first key is a reassuring `reason` showed the
+        // operator the reassurance and put the tool name and the
+        // destructive arguments past the cut. `apply_patch` and the Codex
+        // elicitation each already had their own branch here for exactly
+        // that reason; this is the one `use_tool` was missing.
+        //
+        // The description comes from a shared module, so this surface and
+        // the TUI cannot drift — they had already drifted once.
+        const described = describeUseToolApproval(input);
+        out(`\n${GUTTER}${style.yellow(described.title)}\n`);
+        // The server and the tool FIRST, on their own lines, above
+        // anything the model wrote. Nothing in the payload can push them
+        // out of view because they are not in the payload.
+        out(`${GUTTER}${style.yellow(`  server: ${described.server}`)}\n`);
+        out(`${GUTTER}${style.yellow(`  tool:   ${described.tool}`)}\n`);
+        for (const line of described.argumentLines) {
+          out(`${GUTTER}${style.dim(`  ${line}`)}\n`);
+        }
+        if (described.argumentsTruncated) {
+          out(`${GUTTER}${style.dim(`  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}\n`);
+        }
+        if (meta?.destructive === true) {
+          out(`${GUTTER}${style.yellow("  this tool is treated as destructive — it is a third party's code")}\n`);
+        }
+        // No `A=always`. The grant pattern would be a qualified tool name
+        // the MODEL supplied, stored in the operator's permission file.
         out(`\n${GUTTER}${style.dim("[y/N] ")}`);
         const answer = ((await readLine()) ?? "").trim();
         const approved = /^y(es)?$/i.test(answer);
