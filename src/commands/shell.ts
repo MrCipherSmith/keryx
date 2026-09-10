@@ -1692,6 +1692,24 @@ export interface ShellCliFlags {
    * leftover flag from a shell alias should not fail the whole launch.
    */
   permissionModeFlag?: PermissionMode;
+  /**
+   * `--deny-tools <a,b>` — tool names this session must not have.
+   *
+   * There was no way to say "this session does not need the web". Both other
+   * agent CLIs offer one (`claude --disallowedTools`,
+   * `grok --disable-web-search`), and keryx already treats egress as a product
+   * concern elsewhere — `keryx harness exec --allowed-domains`, `sandbox.json` —
+   * so a session-level roster that could not be narrowed was the inconsistent
+   * part.
+   *
+   * Distinct from `--permission-mode`, which governs whether a tool call is
+   * APPROVED. A denied tool is not offered to the model at all, so it cannot be
+   * attempted, reasoned about, or approved by mistake.
+   *
+   * An unknown name is refused rather than ignored: `--deny-tools web_serch`
+   * must not leave the session with web search and a clear conscience.
+   */
+  denyTools?: readonly string[];
 }
 
 /**
@@ -1722,6 +1740,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let resumeId: string | undefined;
   let resumePick: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
+  let denyTools: string[] | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -1756,6 +1775,17 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else if (arg === "--deny-tools") {
+      // Comma-separated, like every other value-taking flag here. Repeated use
+      // ACCUMULATES rather than replacing, so `--deny-tools a --deny-tools b`
+      // denies both — silently dropping the first would be the worse surprise
+      // for a flag whose whole job is removing a capability.
+      const names = valueAfter(i++)
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+      if (names.length === 0) invalid("--deny-tools needs at least one tool name");
+      denyTools = [...(denyTools ?? []), ...names];
     } else {
       invalid("Unknown shell argument");
     }
@@ -1773,6 +1803,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
+    ...(denyTools !== undefined ? { denyTools } : {}),
   };
 }
 
@@ -1841,6 +1872,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --continue, -c                Continue the latest project session
   --resume, -r [id-or-title]     Resume a session, or open the session picker
   --permission-mode <mode>      Agent permissions: ask, trust or auto
+  --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
 
 Session continuation and resume are mutually exclusive. Permission flags
@@ -1994,6 +2026,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           spawnTool,
           getSessionDir,
           jobRegistry,
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -2211,6 +2244,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           spawnTool,
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,

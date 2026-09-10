@@ -1442,3 +1442,48 @@ describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-
     expect(agentSource).toContain("sweepBackgroundJobs?: () => Promise<void>;");
   });
 });
+
+describe("--deny-tools", () => {
+  test("parses a comma-separated list", () => {
+    expect(parseShellCliFlags(["--deny-tools", "web_search,web_fetch"]).denyTools).toEqual([
+      "web_search",
+      "web_fetch",
+    ]);
+  });
+
+  test("trims whitespace and drops empty entries", () => {
+    expect(parseShellCliFlags(["--deny-tools", " web_search , ,web_fetch "]).denyTools).toEqual([
+      "web_search",
+      "web_fetch",
+    ]);
+  });
+
+  test("repeated use ACCUMULATES rather than replacing", () => {
+    // Silently dropping the first would be the worse surprise for a flag whose
+    // whole job is removing a capability.
+    expect(parseShellCliFlags(["--deny-tools", "web_search", "--deny-tools", "web_fetch"]).denyTools).toEqual([
+      "web_search",
+      "web_fetch",
+    ]);
+  });
+
+  test("absent means no denial, not an empty denial", () => {
+    expect(parseShellCliFlags([]).denyTools).toBeUndefined();
+  });
+
+  test("refuses a value that names nothing", () => {
+    expect(() => parseShellCliFlags(["--deny-tools", ","])).toThrow(/at least one tool name/);
+  });
+
+  test("refuses a missing value rather than swallowing the next flag", () => {
+    expect(() => parseShellCliFlags(["--deny-tools", "--no-tui"])).toThrow(/Missing value/);
+  });
+
+  test("composes with the other flags", () => {
+    const flags = parseShellCliFlags(["--provider", "grok", "--no-tui", "--deny-tools", "web_search", "--auto"]);
+    expect(flags.providerArg).toBe("grok");
+    expect(flags.wantTui).toBe(false);
+    expect(flags.permissionModeFlag).toBe("auto");
+    expect(flags.denyTools).toEqual(["web_search"]);
+  });
+});
