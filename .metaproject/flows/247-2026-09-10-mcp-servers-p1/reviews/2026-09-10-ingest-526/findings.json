@@ -1,0 +1,128 @@
+[
+  {
+    "id": "F-052",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "`redirect: \"error\"` was set on the SDK transport's `requestInit`, and the SDK spreads `requestInit` into only two of its three fetch calls. The third, `_startOrAuthSse()`, hand-builds the GET that opens the SSE stream and spreads nothing, so it ran at the platform default of following up to twenty hops — while `_commonHeaders()` merged the configured credential header into it.",
+    "impact": "Credential exfiltration and SSRF. A server answers the handshake normally, then answers the SSE GET with `307 Location: http://169.254.169.254/...`; keryx follows it and sends `X-Api-Key` to that host. `fetch` strips only `Authorization`, and only across origins, so a custom header — which this code's own comment calls the common MCP pattern — is not stripped at all. The GET runs automatically after `notifications/initialized` and again on every reconnection.",
+    "suggested_fix": "Pass a `fetch` wrapper via the transport's `opts.fetch` that forces `redirect: \"error\"` on every call, rather than relying on `requestInit`, which is provably not honoured by all of the transport's fetches.",
+    "evidence": "node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js: line 90 `(this._fetch ?? fetch)(this._url, {method:'GET',headers,signal})` with no requestInit spread; lines 301 and 440 do spread it. Measured both directions: with the wrapper removed the redirect target records `x-api-key: sk-live-must-not-follow`; with it, the target records zero requests while the redirector still records the GET.",
+    "confidence": "high",
+    "file": "src/mcp-client/client.ts",
+    "line": 549,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js:90 (_startOrAuthSse GET — unprotected)",
+        "node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js:301 (send POST — protected by requestInit)",
+        "node_modules/@modelcontextprotocol/sdk/dist/esm/client/streamableHttp.js:440 (terminateSession DELETE — protected by requestInit)"
+      ],
+      "enumeration_method": "Grepped every `(this._fetch ?? fetch)(` call site and every `...this._requestInit` spread in the installed SDK transport; three fetches, two spreads. The fix wraps `fetch` itself so the count cannot drift."
+    },
+    "global_id": "2026-09-10-ingest-526#F-052",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit db94154c — fetch wrapper in connectHttpMcpServer, `redirectSseTo` fixture mode, and the test 'including the SSE stream's GET, which the POST test could not reach' in src/mcp-servers/http.live.test.ts"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit db94154c, the tree that will merge. Removed the `fetch` wrapper introduced by db94154c from src/mcp-client/client.ts and re-ran `bun test src/mcp-servers/http.live.test.ts`: 1 failure, the redirect target having recorded `x-api-key: sk-live-must-not-follow`. Restored db94154c's version: 25 pass, 0 fail, target records zero requests while the redirector still records the GET. The finding does not reproduce at db94154c.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-053",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`urlProblem` and `userinfoProblem` were called only from `diagnose()` in doctor.ts. `connectRemote` — the dial every real shell session uses — called neither.",
+    "impact": "`keryx mcp doctor` refuses a config with an unset `${TENANT}` in the url, while the session it is pre-flighting connects to `https://api.example.com//mcp`: a valid URL addressing the wrong path. A pre-flight stricter than the flight reports a problem the operator cannot reproduce and hides one they will meet.",
+    "suggested_fix": "One `remoteTargetProblem(raw, env)` in http-headers.ts, called by both `connectRemote` and `diagnose`.",
+    "evidence": "`keryx ctx rg urlProblem src/` returned doctor.ts:223 and the definition only; runtime.ts had no reference. Reproduced by test 'the runtime refuses, naming the variable' in http.credentials.test.ts.",
+    "confidence": "high",
+    "file": "src/mcp-servers/runtime.ts",
+    "line": 246,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/runtime.ts:connectRemote",
+        "src/mcp-servers/doctor.ts:diagnose",
+        "src/commands/mcp-servers.ts (uses the shared defaultConnect, so covered by the runtime site)"
+      ],
+      "enumeration_method": "Enumerated every caller that reaches connectHttpMcpServer with a ResolvedMcpServer in hand: the runtime dial, doctor's diagnose, and the CLI — which had already been deduplicated onto the runtime's defaultConnect earlier in this branch."
+    },
+    "global_id": "2026-09-10-ingest-526#F-053",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit db94154c — remoteTargetProblem added to http-headers.ts and called from both connectRemote and diagnose"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit db94154c, the tree that will merge. db94154c adds `remoteTargetProblem` and calls it from `connectRemote`; `bun test src/mcp-servers/http.credentials.test.ts` at that commit passes 14/14, including 'the runtime refuses, naming the variable' (zero requests reach a real listener), the BOUNDARY case that connects with the variable set, and the userinfo refusal. The finding does not reproduce at db94154c.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-054",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "`publicView` redacted headers with `redactValues`, the function doctor.ts's own docstring states is wrong for headers: `Bearer ${NOPE}` expands to a non-empty `\"Bearer \"`, so the naive check reads `set` for a header that will never be sent. `load()` also resolved config without the injected environment.",
+    "impact": "`keryx mcp doctor` reports `headers: {\"Authorization\": \"unset\"}` and `keryx mcp list --json` reports `\"set\"` for the identical config — the self-contradicting report `redactHeaders` was written to fix, still shipping from the sibling command.",
+    "suggested_fix": "`publicView` takes `env` and calls `redactHeaders`; `load()` threads `deps.env`.",
+    "evidence": "src/commands/mcp-servers.ts:129 called redactValues(server.headers) while doctor.ts:182 called redactHeaders(server, env) for the same field.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "line": 129,
+    "class_scope": {
+      "sites": [
+        "src/commands/mcp-servers.ts:publicView (list --json)",
+        "src/mcp-servers/doctor.ts:diagnose (doctor, already correct)"
+      ],
+      "enumeration_method": "Grepped every call site of redactValues and redactHeaders across src/; two surfaces emit a `headers` field to an operator, and only one used the hollow-aware function."
+    },
+    "global_id": "2026-09-10-ingest-526#F-054",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit db94154c — publicView now takes env and calls redactHeaders; load() threads deps.env"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit db94154c, the tree that will merge. db94154c changes `publicView` to take `env` and call `redactHeaders`, and threads `deps.env` through `load()`; `bun test src/mcp-servers/ src/mcp-client/ src/commands/mcp-servers` at that commit passes 635/635. `keryx ctx rg redactValues src/commands/mcp-servers.ts` no longer matches the headers field. The finding does not reproduce at db94154c.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-055",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "The ECONNREFUSED test asserted `/nothing is listening|could not be reached/`, and the second alternative is the generic fallback for any unrecognised syscall code. Deleting the ECONNREFUSED branch entirely leaves the assertion true — verbatim the criticism mutation-gaps.test.ts makes of the DNS test four lines away.",
+    "impact": "The syscall dispatch chain in explainConnectFailure read as covered while its arms could be removed silently. Following the class up found ETIMEDOUT in the same state.",
+    "suggested_fix": "Exact-wording unit tests per arm in mutation-gaps.test.ts, plus a BOUNDARY test pinning the generic fallback so no arm can be mistaken for it. Teach the mutation sweep to DELETE single-line guard clauses, not only invert them.",
+    "evidence": "Deleted the ECONNREFUSED branch from doctor.ts and ran `bun test src/mcp-servers/doctor.failures.test.ts src/mcp-servers/mutation-gaps.test.ts`: 41 pass, 0 fail. Measured, not argued.",
+    "confidence": "high",
+    "file": "src/mcp-servers/doctor.failures.test.ts",
+    "line": 84,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/doctor.ts ECONNREFUSED arm (reported)",
+        "src/mcp-servers/doctor.ts ENOTFOUND/EAI_AGAIN arm (already had an exact test)",
+        "src/mcp-servers/doctor.ts TLS arm (already had exact tests)",
+        "src/mcp-servers/doctor.ts ETIMEDOUT arm (found by following the class; had no exact test)",
+        "src/mcp-servers/doctor.ts generic fallback (had no test pinning it as distinct)"
+      ],
+      "enumeration_method": "Enumerated every arm of the syscall if-chain in explainConnectFailure and checked each for an exact-wording test. Then re-ran the mutation sweep with a guard-deletion operator, which independently surfaced the ETIMEDOUT arm."
+    },
+    "global_id": "2026-09-10-ingest-526#F-055",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commits db94154c (ECONNREFUSED exact test, guard-deletion operator) and 5e40e492 (ETIMEDOUT exact test and the fallback BOUNDARY test)"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commits db94154c and 5e40e492, the tree that will merge. db94154c adds the exact-wording ECONNREFUSED test and the guard-deletion operator; 5e40e492 adds ETIMEDOUT and the fallback BOUNDARY test. At 5e40e492, deleting the ETIMEDOUT branch from doctor.ts makes 1 test fail where 0 failed before; restoring gives 29 pass. The fourth mutation sweep at that tree leaves 12 survivors, all equivalent mutants. The finding does not reproduce at 5e40e492.",
+      "verifier": "author-mutation-check"
+    }
+  }
+]

@@ -1,0 +1,519 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".gitignore",
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/acceptance-criteria.md",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/context.md",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/description.md",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/flow.json",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/journal.md",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/plan.md",
+    ".metaproject/flows/247-2026-09-10-mcp-servers-p1/tasks.md",
+    "README.md",
+    "docs/docs/cli-reference.md",
+    "fixtures/mcp-servers/http-server.ts",
+    "scripts/mutation-sweep.ts",
+    "src/commands/mcp-servers.ts",
+    "src/mcp-client/client.ts",
+    "src/mcp-servers/class-table.ts",
+    "src/mcp-servers/doctor.failures.test.ts",
+    "src/mcp-servers/doctor.test.ts",
+    "src/mcp-servers/doctor.ts",
+    "src/mcp-servers/http-headers.table.test.ts",
+    "src/mcp-servers/http-headers.ts",
+    "src/mcp-servers/http.credentials.test.ts",
+    "src/mcp-servers/http.live.test.ts",
+    "src/mcp-servers/invariants.test.ts",
+    "src/mcp-servers/manager.ts",
+    "src/mcp-servers/mutation-gaps.test.ts",
+    "src/mcp-servers/runtime.ts",
+    "src/mcp-servers/spawn-env.table.test.ts",
+    "src/mcp-servers/tools.ts",
+    "src/mcp-servers/trust.ts"
+  ],
+  "files": [
+    {
+      "file": "src/mcp-servers/catalog.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/catalog.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/mcp-servers/manager.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.ts",
+        "src/mcp-servers/manager.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/harness/external/supervise-mcp.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp-servers.argv.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp-servers.argv.test.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp-servers.test.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/manager.ts",
+      "path": [
+        "src/commands/mcp-tool-surface.test.ts",
+        "src/mcp-servers/manager.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/manager.ts",
+      "path": [
+        "src/commands/mcp-untrusted.test.ts",
+        "src/mcp-servers/manager.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-client/client.smoke.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-client/client.smoke.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-client/live-elicitation.smoke.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-client/live-elicitation.smoke.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.types.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/mcp-servers/config.types.test.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/connection.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/connection.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/trust.ts",
+      "path": [
+        "src/mcp-servers/constraints.test.ts",
+        "src/mcp-servers/trust.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/manager.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/manager.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/runtime.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/runtime.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/stdio.live.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/stdio.live.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/manager.ts",
+      "path": [
+        "src/mcp-servers/tools.test.ts",
+        "src/mcp-servers/manager.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/trust.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/trust.test.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 2,
+      "fanIn": 6,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/mcp.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/manager.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.test.ts",
+        "src/commands/interactive-agent-tools.ts",
+        "src/mcp-servers/manager.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp-install.test.ts",
+        "src/commands/mcp.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/select.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/shell-cli-validation.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/shell-launch.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/shell-slash-registry.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/commands/shell.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/harness/external/supervise-mcp.test.ts",
+        "src/harness/external/supervise-mcp.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/catalog.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-client/client.ts",
+      "path": [
+        "src/mcp-servers/catalog.test.ts",
+        "src/mcp-servers/catalog.ts",
+        "src/mcp-client/client.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/tui/chat-shell.test.ts",
+        "src/commands/shell.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".gitignore",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/247-2026-09-10-mcp-servers-p1/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 33,
+    "changedFilesResolved": 19,
+    "changedFilesUnresolved": 14,
+    "candidates": 31,
+    "retained": 31,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 25,
+    "hopHistogram": {
+      "1": 19,
+      "2": 12
+    }
+  },
+  "graph": {
+    "nodes": 1409,
+    "edges": 4213
+  }
+}

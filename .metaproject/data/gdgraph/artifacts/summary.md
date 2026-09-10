@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 1401
+- Source files indexed: 1405
 - Imported asset files indexed: 4
-- Total nodes: 1405
-- Edges: 4200
-- Import edges: 4127
+- Total nodes: 1409
+- Edges: 4213
+- Import edges: 4140
 - Asset edges: 10
 - Unresolved imports: 63
 - Import resolution: 98.5%
@@ -23,16 +23,16 @@
 | sac | 58 |
 | wiki | 57 |
 | health | 52 |
+| scripts | 50 |
 | security | 50 |
-| scripts | 49 |
 | gdgraph | 48 |
 | gdskills | 46 |
 | memory | 45 |
 | flow | 38 |
 | metrics | 38 |
+| mcp-servers | 34 |
 | review | 32 |
 | fixtures | 31 |
-| mcp-servers | 31 |
 | mcp | 27 |
 | ctx | 26 |
 | vscode-extension | 22 |

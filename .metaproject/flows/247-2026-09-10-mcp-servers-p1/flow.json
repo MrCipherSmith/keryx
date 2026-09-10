@@ -7,9 +7,9 @@
   "id": "247",
   "slug": "mcp-servers-p1",
   "title": "MCP servers P1: HTTP/SSE transport, headers and bearer tokens, HTTP doctor",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-10T17:56:16.744Z",
-  "updatedAt": "2026-09-10T18:16:45.180Z",
+  "updatedAt": "2026-09-10T20:39:15.831Z",
   "source": {
     "type": "description",
     "ref": null
@@ -70,7 +70,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/526"
   },
   "baseBranch": "main",
   "tasks": [
@@ -130,7 +130,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -138,7 +138,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -234,6 +235,53 @@
       "at": "2026-09-10T18:16:45.180Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-10T19:34:56.289Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:00:01.326Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-10T20:00:06.100Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:00:13.517Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/247-2026-09-10-mcp-servers-p1/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#526 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__526.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 526 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-10T20:38:20.342Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:38:20.465Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:38:25.841Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 2 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-526#F-052 (blocker, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-053 (major, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-054 (major, round 2026-09-10-ingest-526): marked fixed at db94154c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-526#F-055 (major, round 2026-09-10-ingest-526): marked fixed at db94154c, 5e40e492 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | verifier-stats (violated): round `2026-09-10-ingest-526` ran with `verification_mode: annotate` and received 0 claims while retaining 4 finding(s) at or above `minor` (2026-09-10-ingest-526#F-052, 2026-09-10-ingest-526#F-053, 2026-09-10-ingest-526#F-054, 2026-09-10-ingest-526#F-055). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-10T20:39:09.998Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/526 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T20:39:10.113Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T20:39:15.831Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
