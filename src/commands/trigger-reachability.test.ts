@@ -20,16 +20,25 @@ import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
 import { normalizeRouteText, scoreBundledSkillRoute } from "./skills";
 
 /**
- * Whether this trigger can still fire when its words arrive in another order,
- * with other words between them.
+ * Whether this trigger can still fire when it is not typed as the whole query.
  *
- * That is the property "order-free path" names, and it is what a real request
- * needs: nobody types a trigger phrase verbatim. The probe reverses the
- * trigger's words and pads between them with a token the tokenizer discards, so
- * a verbatim substring match cannot be what answers.
+ * For a MULTI-word trigger the probe reverses the words and pads between them
+ * with a token the tokenizer discards, so the verbatim scan cannot be what
+ * answers and the order-free path is being measured.
  *
- * A one-word trigger has no order to vary, so the probe instead surrounds it —
- * which is the inflected-matching property the earlier attempt cost 29 of them.
+ * For a ONE-word trigger it is not. A single word has no order to vary, and
+ * `please <word> it now` is answered by `containsPhrase`'s word-boundary scan —
+ * the verbatim path — not by the order-free fallback. Review established this
+ * by reimplementing `containsPhrase` standalone and finding all twenty one-word
+ * triggers satisfied by it alone, and cross-checked it: none of the 36 triggers
+ * stranded by the historical regression is one word.
+ *
+ * The docstring here used to claim that branch exercised the inflected matching
+ * the earlier attempt cost 29 one-word triggers. It does not, and saying so was
+ * the same defect this file guards against — a measurement described as
+ * something it is not. What this function measures is REACHABILITY: the trigger
+ * fires when it is not the entire query. Which path delivers it differs by
+ * arity, and the inflected property has its own test below.
  */
 function reachableOutOfOrder(entry: (typeof BUNDLED_GDSKILLS)[number], trigger: string): boolean {
   const words = normalizeRouteText(trigger).split(" ").filter(Boolean);
@@ -85,6 +94,34 @@ describe("no trigger loses a matching path it had", () => {
     const triggers = BUNDLED_GDSKILLS.flatMap((entry) => entry.triggers);
     const unreachable = unreachableTriggers();
     expect(unreachable.length).toBeLessThan(triggers.length / 2);
+  });
+
+  test("one-word triggers still match an inflected form, the property the earlier attempt cost 29 of them", () => {
+    // The loss this flow exists to prevent, measured directly rather than
+    // assumed from the reachability set above — which, for one-word triggers,
+    // is answered by the verbatim scan and would stay green through exactly
+    // this regression.
+    //
+    // `matchesInflected` allows a suffix on the LAST word of a trigger with a
+    // stem of at least four characters, so `-ing` on a long enough trigger is
+    // the honest probe. Triggers too short to inflect are excluded rather than
+    // asserted, because the mechanism does not claim them.
+    const oneWord = BUNDLED_GDSKILLS.flatMap((entry) =>
+      entry.triggers
+        .map((trigger) => ({ entry, trigger: normalizeRouteText(trigger) }))
+        .filter(({ trigger }) => trigger.split(" ").filter(Boolean).length === 1 && trigger.length >= 4),
+    );
+
+    expect(oneWord.length).toBeGreaterThan(5);
+
+    const lost = oneWord
+      .filter(({ entry, trigger }) => {
+        const { reasons } = scoreBundledSkillRoute(entry, `${trigger}ing the thing now`);
+        return !reasons.some((reason) => reason.startsWith("trigger"));
+      })
+      .map(({ entry, trigger }) => `${entry.name}::${trigger}`);
+
+    expect(lost).toEqual([]);
   });
 
   test("a two-word trigger is reached with its words reversed", () => {
