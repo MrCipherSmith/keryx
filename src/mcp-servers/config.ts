@@ -37,6 +37,16 @@ export type ResolvedMcpServer = McpServerEntry & {
   file: string;
   /** After the entry's own `enabled` and the personal overlay. */
   enabled: boolean;
+  /**
+   * The entry EXACTLY as written, before `${VAR}` expansion.
+   *
+   * Everything human-readable prints from this, and nothing else may. The
+   * expanded fields above are what gets executed; they hold the resolved
+   * value of `--token=${GITHUB_TOKEN}`, and `keryx mcp list` used to echo
+   * that to the terminal. `${GITHUB_TOKEN}` is both safer to print and more
+   * useful to read — it says which variable the server needs.
+   */
+  raw: McpServerEntry;
 };
 
 /**
@@ -180,6 +190,9 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
     if (entry[field] !== undefined && typeof entry[field] !== "string") {
       problems.push(`server "${name}" ${field} must be a string`);
     }
+  }
+  if (entry.type !== undefined && !["stdio", "http", "sse"].includes(entry.type)) {
+    problems.push(`server "${name}" type must be stdio, http or sse`);
   }
   if (entry.enabled !== undefined && typeof entry.enabled !== "boolean") {
     // `"enabled": "false"` is a string, and every non-empty string is truthy
@@ -340,6 +353,7 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
         name,
         source,
         file,
+        raw: entry,
         // The personal overlay wins over the file, in both directions. That is
         // what lets `enable` lift a committed `enabled: false` without editing
         // the project file.

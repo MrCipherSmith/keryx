@@ -54,6 +54,34 @@ describe("tools/list normalization", () => {
   });
 });
 
+/**
+ * The body of a top-level `export function`, to its closing brace.
+ *
+ * The first version of these guards sliced a flat 2 000 characters from the
+ * signature. The audit of PR #522 pushed a violation past that window with
+ * thirty lines of filler and it survived — a guard that silently stops
+ * covering the tail of the thing it guards. And in one test the `indexOf`
+ * result was not checked, so a rename made `slice(-1, 1999)` return the
+ * file's last character and the assertion passed over an empty body.
+ *
+ * Brace-matched instead, so the window is the function.
+ */
+function functionBody(source: string, signature: string): string {
+  const start = source.indexOf(signature);
+  if (start === -1) return "";
+  const open = source.indexOf("{", start);
+  if (open === -1) return "";
+  let depth = 0;
+  for (let i = open; i < source.length; i++) {
+    if (source[i] === "{") depth++;
+    else if (source[i] === "}") {
+      depth--;
+      if (depth === 0) return source.slice(start, i + 1);
+    }
+  }
+  return source.slice(start);
+}
+
 describe("the generic connection stays separate from the Codex specialist", () => {
   // These read the source, which is weaker than executing it — and this
   // repository spent today proving how much weaker. They are here because the
@@ -62,10 +90,20 @@ describe("the generic connection stays separate from the Codex specialist", () =
   // claim the module header makes, so a claim that stops being true fails
   // rather than merely becoming wrong.
 
+  const SIGNATURE = "export async function connectStdioMcpServer";
+
+  test("the body this suite inspects is actually found", () => {
+    // The precondition every assertion below depends on. Without it a
+    // rename turns them all into claims about an empty string.
+    const body = functionBody(CLIENT_SOURCE, SIGNATURE);
+    expect(body.length).toBeGreaterThan(200);
+    expect(body).toContain(SIGNATURE);
+    // And it ends where the function does, rather than at a fixed offset.
+    expect(body.endsWith("}")).toBe(true);
+  });
+
   test("connectStdioMcpServer loads the core SDK, not the Protocol internals", () => {
-    const start = CLIENT_SOURCE.indexOf("export async function connectStdioMcpServer");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const body = CLIENT_SOURCE.slice(start, start + 2_000);
+    const body = functionBody(CLIENT_SOURCE, SIGNATURE);
 
     expect(body).toContain("await loadCoreSdk()");
     // `loadSdk` reaches into `Protocol.prototype`, which the SDK's `^1.0.0`
@@ -75,8 +113,7 @@ describe("the generic connection stays separate from the Codex specialist", () =
   });
 
   test("it installs no transport.onmessage tap", () => {
-    const start = CLIENT_SOURCE.indexOf("export async function connectStdioMcpServer");
-    const body = CLIENT_SOURCE.slice(start, start + 2_000);
+    const body = functionBody(CLIENT_SOURCE, SIGNATURE);
 
     // The Codex path taps this because it must correlate an elicitation
     // before the SDK consumes it. A user server has no such requirement, and
@@ -92,11 +129,21 @@ describe("the generic connection stays separate from the Codex specialist", () =
     expect(CLIENT_SOURCE).toContain("sdk.ProtocolPrototype.setRequestHandler.call");
   });
 
-  test("both paths share one tool-call outcome helper", () => {
+  test("both paths share ONE tool-call outcome helper — exactly one definition", () => {
     // Two copies would drift on the distinction that matters — a wire
     // timeout versus a refusal, which the SDK reports with the same code.
-    const calls = CLIENT_SOURCE.split("callToolWithOutcome(").length - 1;
-    // One definition, two call sites.
-    expect(calls).toBeGreaterThanOrEqual(3);
+    //
+    // The old assertion counted OCCURRENCES and required `>= 3`, which is
+    // monotone the wrong way: it notices the helper being deleted and never
+    // notices a path quietly stopping using it. Both halves are asserted
+    // now, and both were verified to fail — inlining the outcome in one
+    // connect function fails the second assertion, and a second definition
+    // of the same name fails the first.
+    const definitions = CLIENT_SOURCE.match(/\bfunction\s+callToolWithOutcome\b/g) ?? [];
+    expect(definitions).toHaveLength(1);
+
+    for (const signature of [SIGNATURE, "export async function connectCodexMcpClient"]) {
+      expect(functionBody(CLIENT_SOURCE, signature)).toContain("callToolWithOutcome(");
+    }
   });
 });

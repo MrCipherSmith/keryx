@@ -103,6 +103,13 @@ interface SdkTransport {
   onmessage?: (message: unknown, extra?: unknown) => void;
   onclose?: () => void;
   onerror?: (error: Error) => void;
+  /**
+   * The child's stderr, present only when the transport was constructed with
+   * `stderr: "pipe"` — which `connectStdioMcpServer` does, so the stream has
+   * to be drained. `readonly` and optional: the Codex path leaves it
+   * inherited and has no such stream.
+   */
+  readonly stderr?: { resume(): void } | undefined;
 }
 
 interface SdkRequestHandlerExtra {
@@ -369,6 +376,14 @@ export interface McpToolDescriptor {
   readonly name: string;
   readonly description?: string | undefined;
   readonly inputSchema?: Record<string, unknown> | undefined;
+  /**
+   * `ToolAnnotations` — `readOnlyHint`, `destructiveHint`, and friends.
+   *
+   * A SIBLING of `inputSchema` in the protocol, not a member of it. Carried
+   * because a consumer that wants the hint has nowhere else to read it, and
+   * dropping it here is indistinguishable from a server that sent none.
+   */
+  readonly annotations?: Record<string, unknown> | undefined;
 }
 
 /**
@@ -409,7 +424,12 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
   }
   return raw.flatMap((tool): McpToolDescriptor[] => {
     if (typeof tool !== "object" || tool === null) return [];
-    const record = tool as { name?: unknown; description?: unknown; inputSchema?: unknown };
+    const record = tool as {
+      name?: unknown;
+      description?: unknown;
+      inputSchema?: unknown;
+      annotations?: unknown;
+    };
     if (typeof record.name !== "string" || record.name === "") return [];
     return [
       {
@@ -420,6 +440,19 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
           record.inputSchema !== null &&
           !Array.isArray(record.inputSchema)
             ? (record.inputSchema as Record<string, unknown>)
+            : undefined,
+        // `annotations` is a SIBLING of `inputSchema` on `Tool`, never nested
+        // inside it. Dropping it here meant `classifyToolRisk` — which was
+        // reading it from inside `inputSchema`, a place the protocol never
+        // puts it — could never see a real server's `readOnlyHint`. Every
+        // honest read-only tool was advertised to the model as destructive,
+        // and the only way to be classified `read` was to nest the field
+        // where the spec says it does not go.
+        annotations:
+          typeof record.annotations === "object" &&
+          record.annotations !== null &&
+          !Array.isArray(record.annotations)
+            ? (record.annotations as Record<string, unknown>)
             : undefined,
       },
     ];
@@ -454,7 +487,21 @@ export async function connectStdioMcpServer(
     args,
     cwd: options.cwd,
     env: options.env,
+    // PIPED, not inherited. The SDK defaults this to `inherit`, which hands
+    // a third-party server a direct writer to the operator's terminal: it
+    // can emit cursor-positioning and colour escapes and paint a convincing
+    // `✓ auto-approved shell: git status` line into the running TUI
+    // transcript, or simply flood the screen. Neither needs the model's
+    // cooperation and neither is attributable to the server that did it.
+    stderr: "pipe",
   });
+
+  // Drained and discarded. A piped stream nobody reads fills its buffer and
+  // then blocks the child mid-write, which would turn "the server is noisy"
+  // into "the server hangs" — a worse failure than the one being fixed.
+  // `resume()` puts it in flowing mode with no consumer, so the bytes are
+  // read and dropped.
+  transport.stderr?.resume();
 
   // No `capabilities.elicitation`: this client does not implement it, and
   // advertising a capability it cannot serve invites requests it will fail.

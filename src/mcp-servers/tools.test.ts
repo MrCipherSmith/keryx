@@ -79,7 +79,7 @@ describe("risk is destructive unless a tool proves otherwise", () => {
 
   test("a read-only annotation with a harmless name is read", () => {
     expect(
-      classifyToolRisk({ rawName: "list_issues", inputSchema: { annotations: { readOnlyHint: true } } }),
+      classifyToolRisk({ rawName: "list_issues", annotations: { readOnlyHint: true } }),
     ).toBe("read");
   });
 
@@ -87,7 +87,7 @@ describe("risk is destructive unless a tool proves otherwise", () => {
     // A server that annotates `delete_issue` read-only is wrong or lying, and
     // the outcome is the same either way.
     expect(
-      classifyToolRisk({ rawName: "delete_issue", inputSchema: { annotations: { readOnlyHint: true } } }),
+      classifyToolRisk({ rawName: "delete_issue", annotations: { readOnlyHint: true } }),
     ).toBe("destructive");
   });
 
@@ -96,15 +96,26 @@ describe("risk is destructive unless a tool proves otherwise", () => {
       classifyToolRisk({
         rawName: "issues",
         description: "Create a new issue in the tracker",
-        inputSchema: { annotations: { readOnlyHint: true } },
+        annotations: { readOnlyHint: true },
       }),
     ).toBe("destructive");
   });
 
   test("a non-boolean annotation does not count as read-only", () => {
     expect(
-      classifyToolRisk({ rawName: "peek", inputSchema: { annotations: { readOnlyHint: "yes" } } }),
+      classifyToolRisk({ rawName: "peek", annotations: { readOnlyHint: "yes" } }),
     ).toBe("destructive");
+  });
+
+  test("the hint is read where the PROTOCOL puts it, beside inputSchema", () => {
+    // This used to read `inputSchema.annotations`, a location the MCP spec
+    // never populates. Two consequences, both wrong: no honest server could
+    // ever be classified `read`, and a hostile one could nest the field
+    // there — somewhere real servers do not — to claim it.
+    expect(
+      classifyToolRisk({ rawName: "peek", inputSchema: { annotations: { readOnlyHint: true } } }),
+    ).toBe("destructive");
+    expect(classifyToolRisk({ rawName: "peek", annotations: { readOnlyHint: true } })).toBe("read");
   });
 });
 
@@ -241,27 +252,29 @@ describe("use_tool is gated by the agent's own branch, not by a second one here"
   });
 
   test("the classification is advisory output, never a decision", async () => {
-    // It rides along in `search_tool` hits so the model can prefer a read
-    // tool. It must not be able to skip anything: `readOnlyHint` is the
-    // third-party server asserting its own safety, which ADR-0009 says can
-    // never read as a grant.
+    // The DESTRUCTIVE case, deliberately: with a read-classified tool the
+    // "does the verdict block anything?" branch is unreachable and the test
+    // asserts the boring arm. `use_tool` must dispatch a tool its own
+    // classifier calls destructive, because the decision is not its to
+    // make — `agent.ts` already made it.
     const calls: Call[] = [];
     const catalog = catalogWith("srv", [
-      { name: "list_things", inputSchema: { annotations: { readOnlyHint: true } } },
+      { name: "list_things", annotations: { readOnlyHint: true } },
+      { name: "delete_things" },
     ]);
     const [search, use] = createMcpInteractiveTools({
       catalog: () => catalog,
       servers: () => [connectedServer("srv", calls)],
     });
 
-    const hits = JSON.parse((await search?.invoke({ query: "list" }))?.output ?? "[]") as SearchHit[];
-    expect(hits[0]?.risk).toBe("read");
+    const hits = JSON.parse((await search?.invoke({ query: "things" }))?.output ?? "[]") as SearchHit[];
+    const byName = new Map(hits.map((hit) => [hit.tool_name, hit.risk]));
+    expect(byName.get("srv__list_things")).toBe("read");
+    expect(byName.get("srv__delete_things")).toBe("destructive");
 
-    // Advisory: a `read` verdict changes nothing about how the call runs —
-    // the tool still dispatches through the same path, and the gate it
-    // already passed was the agent's.
-    await use?.invoke({ tool_name: "srv__list_things", tool_input: {} });
-    expect(calls).toHaveLength(1);
+    // The one the classifier calls destructive still runs.
+    await use?.invoke({ tool_name: "srv__delete_things", tool_input: {} });
+    expect(calls.map((c) => c.name)).toEqual(["delete_things"]);
   });
 });
 

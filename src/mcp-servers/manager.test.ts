@@ -4,7 +4,8 @@ import type { ResolvedMcpServer } from "./config";
 import { closeServers, DEFAULT_CONNECT_CONCURRENCY, startServers } from "./manager";
 
 function server(name: string, over: Partial<ResolvedMcpServer> = {}): ResolvedMcpServer {
-  return { name, command: "cmd", source: "user", file: "/x", enabled: true, ...over };
+  const base = { name, command: "cmd", source: "user" as const, file: "/x", enabled: true, ...over };
+  return { ...base, raw: { command: base.command, ...(base.args === undefined ? {} : { args: base.args }) } };
 }
 
 function connection(tools: string[], hooks: { onClose?: () => void } = {}): McpServerConnection {
@@ -194,8 +195,23 @@ describe("bounded concurrency", () => {
     expect(result.catalog.entries).toHaveLength(7);
   });
 
-  test("the default cap is a named constant, not an inline number", () => {
-    expect(DEFAULT_CONNECT_CONCURRENCY).toBeGreaterThan(0);
+  test("the DEFAULT cap is the one applied when no concurrency is given", async () => {
+    // The old assertion was `DEFAULT_CONNECT_CONCURRENCY > 0`, which passes
+    // with the number inlined in `startServers` and the export left behind
+    // as decoration. Measure the peak instead.
+    let inFlight = 0;
+    let peak = 0;
+    const servers = Array.from({ length: DEFAULT_CONNECT_CONCURRENCY + 4 }, (_v, i) => server(`d${i}`));
+
+    await startServers(servers, async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      inFlight -= 1;
+      return connection([]);
+    });
+
+    expect(peak).toBe(DEFAULT_CONNECT_CONCURRENCY);
   });
 });
 

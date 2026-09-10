@@ -172,6 +172,31 @@ describe("list", () => {
     expect(result.out).toContain("b (project)");
   });
 
+  test("an expanded ${VAR} in args is NOT echoed to the terminal", async () => {
+    // `keryx mcp list` printed `command`/`args` AFTER expansion, so
+    // `--token=${GITHUB_TOKEN}` put a live token on screen and into
+    // whatever the operator pastes. `doctor` followed the redaction rule
+    // for env/headers; `list` followed it nowhere.
+    const h = harness();
+    const file = userConfigFile(h.configDir);
+    writeFileSync(
+      file,
+      JSON.stringify({
+        schemaVersion: 1,
+        servers: { gh: { command: "npx", args: ["gh-mcp", "--token=${SECRET_FOR_TEST}"] } },
+      }),
+    );
+    process.env.SECRET_FOR_TEST = "sk-live-do-not-print";
+    try {
+      const result = await h.run("list", []);
+      expect(result.out).not.toContain("sk-live-do-not-print");
+      // And it still says something useful — which variable it needs.
+      expect(result.out).toContain("${SECRET_FOR_TEST}");
+    } finally {
+      delete process.env.SECRET_FOR_TEST;
+    }
+  });
+
   test("--json never prints an env value", async () => {
     const { run } = harness();
     await run("add", ["a", "-e", "TOKEN=sk-live-secret", "--", "cmd"]);
@@ -193,12 +218,28 @@ describe("list", () => {
 
 describe("remove", () => {
   test("removes from the only scope that defines it, without --scope", async () => {
-    const { run, configDir } = harness();
+    const { run, projectRoot } = harness();
     await run("add", ["a", "--scope", "project", "--", "cmd"]);
+    // The entry is really there before — the old version of this test
+    // asserted only that the USER file does not exist, which was already
+    // true at setup and stayed true whether the removal persisted or not.
+    expect(readFileSync(projectConfigFile(projectRoot), "utf8")).toContain('"a"');
 
     const result = await run("remove", ["a"]);
+
     expect(result.code).toBe(0);
-    expect(() => readFileSync(userConfigFile(configDir), "utf8")).toThrow();
+    expect(readFileSync(projectConfigFile(projectRoot), "utf8")).not.toContain('"a"');
+  });
+
+  test("and from the USER scope when that is the only one — the other arm", async () => {
+    // `definingScopes`' user branch had no CLI-level coverage at all.
+    const { run, configDir } = harness();
+    await run("add", ["a", "--", "cmd"]);
+
+    const result = await run("remove", ["a"]);
+
+    expect(result.code).toBe(0);
+    expect(readFileSync(userConfigFile(configDir), "utf8")).not.toContain('"a"');
   });
 
   test("a name in BOTH scopes refuses to guess", async () => {

@@ -28,6 +28,7 @@ import {
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
 import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
+import { defaultServerCwd } from "../mcp-servers/runtime";
 import {
   addServer,
   projectConfigFile,
@@ -170,9 +171,19 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
   return config.problems.length > 0 ? 1 : 0;
 }
 
+/**
+ * The one-line summary `list` prints — from the RAW entry, never the
+ * expanded one.
+ *
+ * `{"args": ["--token=${GITHUB_TOKEN}"]}` printed expanded put a live token
+ * on the terminal and into whatever the operator pastes. `doctor` already
+ * followed the redaction rule for `env`/`headers`; `command`, `args` and
+ * `url` expand too, and `list` followed it nowhere.
+ */
 function describeTarget(server: ResolvedMcpServer): string {
-  if (typeof server.url === "string" && server.url.length > 0) return server.url;
-  return [server.command, ...(server.args ?? [])].filter(Boolean).join(" ");
+  const raw = server.raw;
+  if (typeof raw.url === "string" && raw.url.length > 0) return raw.url;
+  return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
 }
 
 /**
@@ -441,7 +452,12 @@ async function defaultConnect(server: ResolvedMcpServer): Promise<McpServerConne
     throw new Error(`server "${server.name}" has no command; only stdio servers are dialled in this release`);
   }
   return connectStdioMcpServer([command, ...(server.args ?? [])], {
-    cwd: server.cwd ?? process.cwd(),
+    // The SAME resolution the shell uses (`defaultServerCwd`). These two
+    // disagreed: the shell ran a project server from its project root and
+    // `doctor` ran it from the process cwd, so a server that resolves
+    // relative paths behaved differently under the command whose whole job
+    // is to tell you whether it will work.
+    cwd: server.cwd ?? defaultServerCwd(server),
     env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
   });
 }

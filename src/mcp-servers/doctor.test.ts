@@ -11,6 +11,7 @@ function server(over: Partial<Record<keyof ResolvedMcpServer, unknown>> = {}): R
     enabled: true,
     command: "npx",
     ...over,
+    raw: { command: (over.command as string | undefined) ?? "npx", ...(over.url === undefined ? {} : { url: over.url as string }) },
   } as ResolvedMcpServer;
 }
 

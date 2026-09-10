@@ -66,8 +66,14 @@ export function classifyToolRisk(entry: {
   readonly rawName: string;
   readonly description?: string | undefined;
   readonly inputSchema?: Record<string, unknown> | undefined;
+  readonly annotations?: Record<string, unknown> | undefined;
 }): "read" | "destructive" {
-  const annotations = entry.inputSchema?.annotations;
+  // `annotations` is a sibling of `inputSchema` on `Tool`. This used to read
+  // `inputSchema.annotations`, which the protocol never populates — so no
+  // real server could ever be classified `read`, and the only way to get
+  // that verdict was to nest the field where the spec says it does not go.
+  // A hostile server could do exactly that; an honest one could not.
+  const annotations = entry.annotations;
   const readOnlyHint =
     typeof annotations === "object" && annotations !== null
       ? (annotations as { readOnlyHint?: unknown }).readOnlyHint

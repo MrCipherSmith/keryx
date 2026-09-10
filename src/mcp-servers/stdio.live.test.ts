@@ -22,7 +22,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { connectStdioMcpServer } from "../mcp-client/client";
 import { catalogForServer } from "./catalog";
-import { createMcpInteractiveTools, MAX_TOOL_RESULT_BYTES } from "./tools";
+import { classifyToolRisk, createMcpInteractiveTools, MAX_TOOL_RESULT_BYTES } from "./tools";
 import type { ServerState } from "./manager";
 import { startServers } from "./manager";
 import type { ResolvedMcpServer } from "./config";
@@ -125,11 +125,13 @@ describe("a real stdio MCP server, over a real pipe", () => {
     try {
       const catalog = catalogForServer("fx", await connection.listTools());
       const echo = catalog.entries.find((entry) => entry.rawName === "echo");
-      // `readOnlyHint` survived the round trip; without it the classifier
-      // would be judging every real tool on its name alone.
-      expect((echo?.inputSchema as { annotations?: { readOnlyHint?: boolean } })?.annotations?.readOnlyHint).toBe(
-        true,
-      );
+      // `readOnlyHint` survived the round trip FROM WHERE THE PROTOCOL PUTS
+      // IT — beside `inputSchema`, not inside it. Without this the
+      // classifier judges every real tool on its name alone.
+      expect((echo?.annotations as { readOnlyHint?: boolean } | undefined)?.readOnlyHint).toBe(true);
+      // And the classification a real server earns is `read`, which was
+      // unreachable before: nothing on the wire could produce it.
+      expect(classifyToolRisk({ rawName: echo?.rawName ?? "", ...echo })).toBe("read");
     } finally {
       await connection.close();
     }
@@ -154,6 +156,10 @@ describe("AC8, against real processes", () => {
       const byName = new Map(servers.map((server) => [server.name, server]));
       expect(byName.get("good")?.status).toBe("connected");
       expect(byName.get("bad")?.status).toBe("failed");
+      // The comment above claims the failure comes from the operating
+      // system. Without this the same assertions pass if `bad` merely hit
+      // the 20s startup timeout, which is a different failure entirely.
+      expect(byName.get("bad")?.error).toMatch(/ENOENT|spawn|not found|No such file/i);
       expect((byName.get("good")?.toolCount ?? 0) > 0).toBe(true);
       expect(catalog.entries.some((entry) => entry.server === "good")).toBe(true);
     } finally {

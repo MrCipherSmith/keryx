@@ -1879,21 +1879,31 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // inspector live (flow 173, AC8) via `job-bridge.ts`'s module-level
     // listener; a safe no-op whenever no TUI is mounted to register one.
     const jobRegistry = createJobRegistry({ cwd, onEvent: emitBackgroundJob });
-    // Session-scoped for exactly the reason spelled out above for the
-    // registry: `makeAgentDeps` runs again on every `/model` or `/connect`
-    // rebuild, and a runtime built inside it would spawn a second set of
-    // server processes and orphan the first.
-    const mcpRuntime = createMcpRuntime({
-      cwd,
-      // The PROJECT root, not `cwd`. `projectConfigFiles` walks cwd → the
-      // root it is given, so passing `cwd` collapsed the walk to a single
-      // directory: a server configured at the repo root was invisible to a
-      // shell started in `packages/web`, while `keryx mcp list` — which does
-      // resolve the root — listed it. Two surfaces, two answers.
-      gitRoot: resolveProjectRoot(cwd),
-      ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
-    });
-    reportMcpProblems(mcpRuntime);
+    // Session-scoped, and LAZY.
+    //
+    // Session-scoped for the reason spelled out above for the registry:
+    // `makeAgentDeps` runs again on every `/model` or `/connect` rebuild, and
+    // a runtime built inside it would spawn a second set of server processes
+    // and orphan the first. So it is created at most once and captured.
+    //
+    // Lazy because `keryx shell --chat` never calls `makeAgentDeps` at all —
+    // it has no tool list. Creating eagerly here spawned every configured
+    // server for a surface that cannot use one, held them for the session,
+    // and closed them at exit having consulted none.
+    let mcpRuntime: McpRuntime | undefined;
+    const getMcpRuntime = (): McpRuntime => {
+      mcpRuntime ??= createMcpRuntime({
+        cwd,
+        // The PROJECT root, not `cwd`. `projectConfigFiles` walks cwd → the
+        // root it is given, so passing `cwd` collapsed the walk to a single
+        // directory: a server configured at the repo root was invisible to a
+        // shell started in `packages/web`, while `keryx mcp list` — which
+        // does resolve the root — listed it. Two surfaces, two answers.
+        gitRoot: resolveProjectRoot(cwd),
+        ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+      });
+      return mcpRuntime;
+    };
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
@@ -1996,7 +2006,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           spawnTool,
           getSessionDir,
           jobRegistry,
-          mcp: mcpRuntime,
+          mcp: getMcpRuntime(),
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -2089,18 +2099,49 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // the fall-through to readline alike. Each connected server is a child
       // process holding a pipe; on fall-through the readline path builds its
       // own runtime, so not closing here would leave two sets alive.
-      await mcpRuntime.close();
+      // `mcpRuntime` is undefined when nothing ever asked for it, which is
+      // the `--chat` case.
+      if (mcpRuntime !== undefined) {
+        await mcpRuntime.close();
+        // AFTER the alternate screen is gone. Printed at start-up it lands
+        // ~170 lines before the renderer mounts and is wiped by it, so the
+        // operator never sees "your mcp-servers.json has a trailing comma"
+        // — the exact bargain `reportMcpProblems` exists to honour.
+        reportMcpProblems(mcpRuntime);
+      }
     }
   }
 
   const rl = readline.createInterface({ input: process.stdin });
-  // SIGINT handling for non-TTY: exit immediately on SIGINT, not wait for confirmation.
-  if (!process.stdin.isTTY) {
-    process.on("SIGINT", () => {
+
+  // The readline agent session's MCP runtime, reachable from the signal
+  // handler below. Assigned when the agent branch builds one.
+  let readlineMcp: McpRuntime | undefined;
+
+  // SIGINT: exit, but CLOSE FIRST.
+  //
+  // Registered for TTY as well as non-TTY now. `process.exit` runs no
+  // `finally`, so Ctrl-C used to skip `mcpRuntime.close()` entirely and
+  // leave a child process per connected server behind; on a TTY there was
+  // no handler at all, so Node's default disposition did the same thing
+  // faster. This interface is created without an `output`, so it is not in
+  // terminal mode and readline raises no SIGINT of its own — there is no
+  // confirmation flow here to preserve, and the observable outcome is
+  // unchanged apart from the cleanup.
+  //
+  // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
+  // into a hang.
+  process.on("SIGINT", () => {
+    void (async (): Promise<void> => {
+      try {
+        await readlineMcp?.close();
+      } catch {
+        // Exiting; a failed close must not become the last thing printed.
+      }
       rl.close();
       process.exit(130);
-    });
-  }
+    })();
+  });
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
@@ -2185,6 +2226,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         gitRoot: resolveProjectRoot(agentCwd),
         ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
       });
+      // Reachable from the SIGINT handler above, which is registered before
+      // this point and would otherwise have nothing to close.
+      readlineMcp = mcpRuntime;
       reportMcpProblems(mcpRuntime);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the

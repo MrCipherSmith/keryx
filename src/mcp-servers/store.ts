@@ -235,7 +235,7 @@ export function setServerEnabled(options: SetEnabledOptions): StoreResult {
   const overrides = { ...overlay.overrides, [options.name]: options.enabled };
   writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ ...overlay, overrides }, null, 2)}\n`);
 
-  clearStickyUserFlag(options.name, options.configDir);
+  clearStickyUserFlag(options.name, options.enabled, options.configDir);
   return { ok: true, file, created: !read.ok };
 }
 
@@ -246,12 +246,19 @@ export function setServerEnabled(options: SetEnabledOptions): StoreResult {
  * hygiene. A user file that cannot be parsed is left exactly as it is rather
  * than failing a toggle that already succeeded.
  */
-function clearStickyUserFlag(name: string, configDir?: string): void {
+function clearStickyUserFlag(name: string, enabled: boolean, configDir?: string): void {
   const file = userConfigFile(configDir);
   const loaded = readForWrite(file);
   if ("error" in loaded) return;
   const entry = loaded.doc.servers[name];
-  if (entry === undefined || entry.enabled === undefined) return;
+  if (entry === undefined) return;
+  // Only a flag that CONTRADICTS the new choice is stale. Deleting
+  // `enabled` whatever its value destroyed a user-scope preference that was
+  // not even in play — `enable` aimed at a project-scope server of the same
+  // name removed `enabled: false` from the user entry, so removing the
+  // overlay later brought a server back that the operator had switched off
+  // in a file they wrote.
+  if (entry.enabled === undefined || entry.enabled === enabled) return;
   delete entry.enabled;
   writeDocument(file, loaded.doc, "user");
 }

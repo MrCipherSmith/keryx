@@ -125,8 +125,16 @@ export function revokeServer(server: ResolvedMcpServer, configDir?: string): Tru
   return { ok: true, file };
 }
 
-/** One line describing what approving this server would allow to run. */
+/**
+ * One line describing what approving this server would allow to run.
+ *
+ * The RAW form. An operator deciding whether to trust a command needs to see
+ * `--token=${GITHUB_TOKEN}` — which tells them what it reads — not the
+ * token itself, which tells them nothing they did not know and puts a
+ * secret on the screen.
+ */
 export function describeForApproval(server: ResolvedMcpServer): string {
-  if (server.url !== undefined && server.url.length > 0) return server.url;
-  return [server.command, ...(server.args ?? [])].filter(Boolean).join(" ");
+  const raw = server.raw;
+  if (raw.url !== undefined && raw.url.length > 0) return raw.url;
+  return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
 }

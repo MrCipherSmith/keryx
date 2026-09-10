@@ -92,6 +92,7 @@ describe("a committed project server is not launched on sight", () => {
       enabled: true,
       command: "npx",
       args: ["-y", "docs-mcp"],
+      raw: { command: "npx", args: ["-y", "docs-mcp"] },
     };
 
     expect(approveServer(server, configDir).ok).toBe(true);
@@ -118,6 +119,7 @@ describe("approval is bound to the COMMAND, not to the name", () => {
     enabled: true,
     command: "npx",
     args: ["-y", "docs-mcp"],
+    raw: { command: "npx", args: ["-y", "docs-mcp"] },
   };
 
   test("changing the command revokes the approval", async () => {
@@ -180,7 +182,14 @@ describe("the store fails closed", () => {
     if (process.platform === "win32") return;
     const { configDir } = clonedRepo({});
     approveServer(
-      { name: "d", source: "project", file: "/r/.keryx/mcp-servers.json", enabled: true, command: "x" },
+      {
+        name: "d",
+        source: "project",
+        file: "/r/.keryx/mcp-servers.json",
+        enabled: true,
+        command: "x",
+        raw: { command: "x" },
+      },
       configDir,
     );
     const { statSync } = require("node:fs") as typeof import("node:fs");
@@ -191,7 +200,14 @@ describe("the store fails closed", () => {
     // A trust marker a repository can commit is not a trust marker.
     const { configDir, projectRoot } = clonedRepo({});
     const result = approveServer(
-      { name: "d", source: "project", file: "/r/.keryx/mcp-servers.json", enabled: true, command: "x" },
+      {
+        name: "d",
+        source: "project",
+        file: "/r/.keryx/mcp-servers.json",
+        enabled: true,
+        command: "x",
+        raw: { command: "x" },
+      },
       configDir,
     );
     expect(result.ok && result.file.startsWith(configDir)).toBe(true);

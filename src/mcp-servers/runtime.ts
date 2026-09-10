@@ -24,6 +24,17 @@ import { loadTrustStore, requiresApproval } from "./trust";
 import { connectStdioMcpServer } from "../mcp-client/client";
 import { buildMcpChildEnv } from "./spawn-env";
 
+/**
+ * How long `close()` waits for outstanding dials before closing what it has.
+ *
+ * Short on purpose: the operator is quitting, and every millisecond past
+ * this is a terminal that has stopped responding for a reason they cannot
+ * see. Late arrivals are still closed, just not awaited.
+ */
+export const CLOSE_GRACE_MS = 750;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
 export type McpRuntimeOptions = {
   readonly cwd: string;
   readonly gitRoot?: string | undefined;
@@ -111,6 +122,27 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
       // `connecting`, which is visible, rather than an unhandled rejection.
     });
 
+  /**
+   * Close each connection at most once.
+   *
+   * `close()` sweeps twice — immediately, and again when a dial that
+   * outlived the grace lands. Without this the first sweep's connections
+   * are closed a second time by the second, which is harmless for a real
+   * SDK client and still wrong: a "closed" count that double-counts cannot
+   * be used to prove anything about leaks, which is exactly what the tests
+   * here do.
+   */
+  const closedAlready = new WeakSet<object>();
+  const closeOnce = async (list: readonly ServerState[]): Promise<void> => {
+    const fresh = list.filter(
+      (state) => state.connection !== undefined && !closedAlready.has(state.connection),
+    );
+    for (const state of fresh) {
+      if (state.connection !== undefined) closedAlready.add(state.connection);
+    }
+    await closeServers(fresh);
+  };
+
   return {
     catalog: () => catalog,
     servers: () => states,
@@ -120,8 +152,17 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
       await settled;
     },
     close: async () => {
-      await settled;
-      await closeServers(states);
+      // Bounded. `close()` used to `await settled` outright, so quitting a
+      // session — or the TUI failing to init and falling through to readline
+      // — blocked for as long as the outstanding dials took. That is the
+      // per-server `startup_timeout_sec`, which has no upper bound in the
+      // config, times the concurrency batches: eight unreachable servers at
+      // the 15s default is thirty seconds of blank terminal.
+      await Promise.race([settled, delay(CLOSE_GRACE_MS)]);
+      await closeOnce(states);
+      // Whatever lands after the grace is still closed — just not waited
+      // for. Dropping it would trade the hang for a leak.
+      void settled.then(() => closeOnce(states)).catch(() => {});
     },
   };
 }

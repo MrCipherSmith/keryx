@@ -97,8 +97,18 @@ describe("add", () => {
     addServer({ name: "a", entry: { command: "x" }, scope: "user", configDir });
     addServer({ name: "b", entry: { command: "x" }, scope: "project", configDir, projectRoot });
 
+    // The user file is forced, so this is an absolute claim.
     expect(statSync(userConfigFile(configDir)).mode & 0o777).toBe(0o600);
-    expect(statSync(projectConfigFile(projectRoot)).mode & 0o777).not.toBe(0o600);
+
+    // The project file is NOT forced, so its mode is whatever the umask
+    // gives — asserting `!== 0o600` would fail under `umask 077` for an
+    // environmental reason that says nothing about this code. What is
+    // actually being claimed is that the project path does not go through
+    // the owner-only writer, so claim that: it is at least as permissive as
+    // the umask allows, group/other bits included.
+    const projectMode = statSync(projectConfigFile(projectRoot)).mode & 0o777;
+    const umask = process.umask();
+    expect(projectMode).toBe(0o666 & ~umask);
   });
 });
 

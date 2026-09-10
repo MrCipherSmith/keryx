@@ -34,6 +34,8 @@ export type CatalogEntry = {
   readonly rawName: string;
   readonly description?: string | undefined;
   readonly inputSchema?: Record<string, unknown> | undefined;
+  /** `ToolAnnotations`, beside the schema — where the protocol puts it. */
+  readonly annotations?: Record<string, unknown> | undefined;
 };
 
 /**
@@ -102,6 +104,7 @@ export function catalogForServer(server: string, tools: readonly McpToolDescript
       rawName: tool.name,
       description: tool.description,
       inputSchema: tool.inputSchema,
+      annotations: tool.annotations,
     });
   }
 
