@@ -60,11 +60,31 @@ to a build that does not have it and every keryx arm would die on
 `Unknown shell argument`. Either land #525 and bring `main` in first (§6.5), or
 do both in one change.
 
-**Steps 6 and 7 of §6.5 are still open**, and deliberately: `arena/measurement`
-is not rebased and `measurement/context-2026-09` is not marked archival. The
-operator has since confirmed the second — that branch is archival and work
-continues here — so what remains is the rebase, which needs a force-push and
-therefore a decision rather than an initiative.
+**Step 2 is now DONE.** #525 merged (`ed026b9b`), `main` merged into this branch,
+and `--deny-tools` is wired into `buildKeryxArgs`. Not the way §6.1 describes:
+the constant beside `--auto` is a list of case-insensitive SUBSTRINGS for
+judging a roster, while the flag takes exact names from keryx's registry and
+refuses an unknown one — passing the markers would have killed every arm at
+startup on `unknown tool name(s)`. The exact names are their own list, held to
+the markers by a test, and their agreement with keryx's registry is checked by
+running the CLI rather than by keeping a copy of its tool list.
+
+**§6.5 is resolved by merge, not rebase.** `arena/measurement` is level with
+`main` and was never force-pushed: a merge reaches the same tree without
+rewriting what anyone may have fetched. The duplicated provider commits are
+untidy and harmless. `measurement/context-2026-09` is archival, confirmed by
+the operator.
+
+**A fourth NUL byte, from `42d13dfe` rather than from the pilot work.**
+`arena-run.ts` held a literal NUL between two interpolations, so ripgrep skipped
+the file silently and every search for it read as "not present" — in the code
+that decides which arm runs first. Now written as `\u0000`, which keeps the
+digest and therefore the arm ordering byte-for-byte unchanged. The guard that
+caught it has been in the suite since phase 5 and is on this branch, so its
+silence until now means the full suite was not run after that commit. Two
+different sessions produced the same corruption in the same shape of
+expression; treat `${a} ${b}` between two interpolations as a construct to
+avoid rather than a mistake one agent made.
 
 ---
 
@@ -364,8 +384,8 @@ This is why both claude arms failed in both smoke runs. A separate, earlier bug 
 1. ~~**Fix the claude credential path** (§7) and correct the defects note.~~ Done
    in code; the leg is still blocked by an expired session the operator must
    renew. See §0.
-2. **Land PR #525, then add `--deny-tools web_search,web_fetch` to
-   `buildKeryxArgs`** (§6.1). Unblocks the second leg.
+2. ~~**Land PR #525, then add `--deny-tools` to `buildKeryxArgs`**~~ — done, and
+   not literally as written; see §0.
 3. **Re-run the smoke** — one T1 task, three legs, two arms, 6 sessions, ~$2. It has
    never completed all three legs. Same command as §9, without `--dry-run`.
 4. **Cross-check token accounting** on that smoke: `keryx-shell` and `grok-build`
@@ -376,7 +396,7 @@ This is why both claude arms failed in both smoke runs. A separate, earlier bug 
 5. **Wire the watchdog into `runArenaArm`** (§6.4) before any long sweep.
 6. ~~**Extract the events-file feature to `main`** (§6.3)~~ — done, PR #524.
    Repointing `KERYX_DEV_COMMAND` at a release still waits on the next publish.
-7. **Rebase onto `main`, force-push** (§6.5).
+7. ~~**Rebase onto `main`, force-push**~~ — done as a merge instead, §0.
 8. **Full sweep:** 84 arms, ~$22, hours, one leg at a time, resumable.
 9. **T2 judging** — `arena-judge.ts` is written and tested against a scripted model;
    it needs a real judge model wired in, both presentation orders, and the
