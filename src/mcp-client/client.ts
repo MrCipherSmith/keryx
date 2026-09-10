@@ -66,6 +66,7 @@ import type {
   McpClientConnection,
   McpClientPort,
   McpSpawnOptions,
+  McpToolCallOutcome,
   RawCodexEventNotification,
   RawElicitationRequest,
 } from "./types";
@@ -115,6 +116,11 @@ interface SdkClient {
     resultSchema: unknown,
     options?: { timeout?: number },
   ): Promise<{ content?: unknown; isError?: boolean }>;
+  listTools(
+    params?: Record<string, unknown>,
+    resultSchema?: unknown,
+    options?: { timeout?: number },
+  ): Promise<{ tools?: unknown }>;
   close(): Promise<void>;
 }
 
@@ -126,12 +132,26 @@ interface SdkProtocolRequestHandlerRegistrar {
   ): void;
 }
 
-interface SdkModules {
+/**
+ * What ANY MCP stdio client needs: a client, a transport, and the result
+ * schema for a tool call.
+ *
+ * Split from {@link SdkModules} so the generic path does not depend on the
+ * elicitation-only internals below it. `loadSdk` reaches into
+ * `Protocol.prototype`, which the SDK is not obliged to keep stable across the
+ * minor bumps its `^1.0.0` range permits — and a user's filesystem server
+ * failing to connect because an elicitation internal moved would be a failure
+ * with no relationship to its cause.
+ */
+interface SdkCoreModules {
   Client: new (info: unknown, options: unknown) => SdkClient;
   StdioClientTransport: new (options: unknown) => SdkTransport;
+  CallToolResultSchema: unknown;
+}
+
+interface SdkModules extends SdkCoreModules {
   ProtocolPrototype: SdkProtocolRequestHandlerRegistrar;
   ElicitRequestSchema: unknown;
-  CallToolResultSchema: unknown;
 }
 
 /**
@@ -139,19 +159,36 @@ interface SdkModules {
  * schemas this module needs. Throws {@link McpClientSdkMissingError}
  * (actionable) when the optional dependency is absent.
  */
-async function loadSdk(): Promise<SdkModules> {
+/**
+ * The client, the stdio transport, and the tool-call result schema.
+ *
+ * Deliberately does NOT touch `shared/protocol.js`. See {@link SdkCoreModules}.
+ */
+async function loadCoreSdk(): Promise<SdkCoreModules> {
   try {
     const clientModule = await import("@modelcontextprotocol/sdk/client/index.js");
     const stdioModule = await import("@modelcontextprotocol/sdk/client/stdio.js");
-    const protocolModule = await import("@modelcontextprotocol/sdk/shared/protocol.js");
     const typesModule = await import("@modelcontextprotocol/sdk/types.js");
     return {
       Client: clientModule.Client as unknown as new (info: unknown, options: unknown) => SdkClient,
       StdioClientTransport: stdioModule.StdioClientTransport as unknown as new (options: unknown) => SdkTransport,
+      CallToolResultSchema: typesModule.CallToolResultSchema,
+    };
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
+}
+
+async function loadSdk(): Promise<SdkModules> {
+  const core = await loadCoreSdk();
+  try {
+    const protocolModule = await import("@modelcontextprotocol/sdk/shared/protocol.js");
+    const typesModule = await import("@modelcontextprotocol/sdk/types.js");
+    return {
+      ...core,
       ProtocolPrototype: (protocolModule.Protocol as unknown as { prototype: SdkProtocolRequestHandlerRegistrar })
         .prototype,
       ElicitRequestSchema: typesModule.ElicitRequestSchema,
-      CallToolResultSchema: typesModule.CallToolResultSchema,
     };
   } catch (error) {
     throw new McpClientSdkMissingError(error);
@@ -276,20 +313,7 @@ export async function connectCodexMcpClient(
 
   return {
     async callTool(name, callArgs, opts) {
-      try {
-        const result = await client.callTool(
-          { name, arguments: callArgs },
-          sdk.CallToolResultSchema,
-          opts?.timeoutMs !== undefined ? { timeout: opts.timeoutMs } : undefined,
-        );
-        return {
-          kind: "result",
-          result: { content: result.content, isError: result.isError === true },
-        };
-      } catch (error) {
-        if (isTimeoutError(error)) return { kind: "timeout" };
-        return { kind: "error", message: describeError(error) };
-      }
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
     },
     onElicitation(handler): void {
       elicitationHandler = handler;
@@ -303,10 +327,156 @@ export async function connectCodexMcpClient(
   };
 }
 
+/**
+ * One tool call, with the three outcomes this module distinguishes.
+ *
+ * Shared by the Codex specialist and the generic server connection rather
+ * than written twice. The distinction that matters is `timeout` versus
+ * `error`: the SDK raises the same JSON-RPC code for a wire `-32001` and for
+ * its own client-side deadline, and collapsing the two would report a server
+ * that answered slowly the same way as one that refused.
+ */
+async function callToolWithOutcome(
+  client: SdkClient,
+  resultSchema: unknown,
+  name: string,
+  args: Record<string, unknown>,
+  timeoutMs: number | undefined,
+): Promise<McpToolCallOutcome> {
+  try {
+    const result = await client.callTool(
+      { name, arguments: args },
+      resultSchema,
+      timeoutMs !== undefined ? { timeout: timeoutMs } : undefined,
+    );
+    return { kind: "result", result: { content: result.content, isError: result.isError === true } };
+  } catch (error) {
+    if (isTimeoutError(error)) return { kind: "timeout" };
+    return { kind: "error", message: describeError(error) };
+  }
+}
+
 /** The real port. Production wiring for `superviseCodexMcpRun`'s `client` dependency. */
 export const codexMcpClientPort: McpClientPort = { connect: connectCodexMcpClient };
 
 /** Argv for spawning the codex MCP server child. Pure; specification.md §3. */
 export function buildCodexMcpServerArgv(): readonly string[] {
   return ["codex", "mcp-server"];
+}
+
+/** One tool as an MCP server describes it. */
+export interface McpToolDescriptor {
+  readonly name: string;
+  readonly description?: string | undefined;
+  readonly inputSchema?: Record<string, unknown> | undefined;
+}
+
+/**
+ * A connection to an operator-configured MCP server.
+ *
+ * Separate from {@link McpClientConnection}, which is the Codex specialist:
+ * that one carries `onElicitation` and `onCodexEvent`, neither of which a
+ * user's server sends and neither of which it should be offered. Sharing the
+ * transport is right; sharing the specialist is how the specialist stops being
+ * verifiable.
+ */
+export interface McpServerConnection {
+  listTools(opts?: { readonly timeoutMs?: number }): Promise<McpToolDescriptor[]>;
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    opts?: { readonly timeoutMs?: number },
+  ): Promise<McpToolCallOutcome>;
+  close(): Promise<void>;
+}
+
+/**
+ * Normalize whatever a server returned for `tools/list`.
+ *
+ * Exported because it is the only part of `listTools` with a decision in it,
+ * and a decision inside a closure that needs a subprocess to reach is a
+ * decision nothing tests.
+ *
+ * Entries without a usable string name are DROPPED, not carried with an
+ * `undefined` name. A catalog key that is not a string cannot be called, so a
+ * nameless entry is a tool nobody can invoke — keeping it would put a row in
+ * `doctor` and in the catalog that fails at the moment of use instead of at
+ * the moment of listing.
+ */
+export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.flatMap((tool): McpToolDescriptor[] => {
+    if (typeof tool !== "object" || tool === null) return [];
+    const record = tool as { name?: unknown; description?: unknown; inputSchema?: unknown };
+    if (typeof record.name !== "string" || record.name === "") return [];
+    return [
+      {
+        name: record.name,
+        description: typeof record.description === "string" ? record.description : undefined,
+        inputSchema:
+          typeof record.inputSchema === "object" &&
+          record.inputSchema !== null &&
+          !Array.isArray(record.inputSchema)
+            ? (record.inputSchema as Record<string, unknown>)
+            : undefined,
+      },
+    ];
+  });
+}
+
+/**
+ * Connect to a third-party stdio MCP server.
+ *
+ * No elicitation handler and no `codex/event` tap: this installs no
+ * `transport.onmessage` at all, so every message reaches the SDK's own
+ * dispatch. The Codex path taps that hook because it must correlate an
+ * elicitation request before the SDK consumes it; a user server has no such
+ * requirement, and installing the tap anyway would put keryx between a server
+ * and its own protocol for no reason.
+ *
+ * `connectCodexMcpClient` above is untouched by this and stays the only thing
+ * that reaches into `Protocol.prototype`.
+ */
+export async function connectStdioMcpServer(
+  argv: readonly string[],
+  options: McpSpawnOptions,
+): Promise<McpServerConnection> {
+  const [command, ...args] = argv;
+  if (command === undefined) {
+    throw new Error("mcp-client: connectStdioMcpServer called with empty argv");
+  }
+
+  const sdk = await loadCoreSdk();
+  const transport = new sdk.StdioClientTransport({
+    command,
+    args,
+    cwd: options.cwd,
+    env: options.env,
+  });
+
+  // No `capabilities.elicitation`: this client does not implement it, and
+  // advertising a capability it cannot serve invites requests it will fail.
+  const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
+  await client.connect(transport);
+
+  return {
+    async listTools(opts): Promise<McpToolDescriptor[]> {
+      const result = await client.listTools(
+        {},
+        undefined,
+        opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+      );
+      return toToolDescriptors(result.tools);
+    },
+
+    async callTool(name, callArgs, opts): Promise<McpToolCallOutcome> {
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
+    },
+
+    async close(): Promise<void> {
+      await client.close();
+    },
+  };
 }
