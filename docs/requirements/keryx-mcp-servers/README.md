@@ -16,7 +16,7 @@ OpenCode's "register every MCP tool on the model" shape.
 
 ## Status
 
-**P0 implemented (flow 246, PR #522). P1–P3 open.**
+**P0 merged and released in keryx 0.2.90 (flow 246, PR #522). P1–P3 open.**
 
 Updated 2026-09-10.
 
