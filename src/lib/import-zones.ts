@@ -87,6 +87,13 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   { segment: "tui", zone: "client" },
   { segment: "session", zone: "client" },
   { segment: "mcp-client", zone: "client" },
+  // The OUTBOUND consumer of third-party MCP servers. Client for the same
+  // reason `mcp-client` is: it exists to put tools in front of the model —
+  // `search_tool`/`use_tool` are registered on the interactive tool list, and
+  // its approval gate is the model's turn loop asking permission. It is not
+  // an adapter: nothing outside keryx speaks to it, and it owns no project
+  // state a core module could want.
+  { segment: "mcp-servers", zone: "client" },
   { segment: "agents", zone: "client" },
 
   // Shared primitives — independent, below both core and client.

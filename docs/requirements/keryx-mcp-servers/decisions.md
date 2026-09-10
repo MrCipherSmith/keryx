@@ -206,3 +206,38 @@ child, not a `use_tool` target.
 **Reasoning.** Mixing them would double-spawn Codex, bypass
 `gatedSuperviseCodexMcpRun`, and present Codex's internal tools to the
 parent model. AC13 exists to keep the suites separate.
+
+## D-13 (OPEN — raised by P0 implementation evidence, 2026-09-10)
+
+**Question.** Should a tool whose qualified name fails
+`^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$` be SKIPPED (specification §5.1 as written),
+or SANITISED into a valid FQN while `rawName` keeps carrying the wire name?
+
+**What P0 measured.** `keryx mcp doctor` was pointed at keryx's own
+`keryx serve-mcp` — the one MCP server whose tool list this repository
+controls. Result: **19 tools reachable, 26 skipped.** Every skip had the same
+cause: a `.` in the tool name (`sac.read`, `gdgraph.find`, `wiki.ask`,
+`health.gate`, …). More than half of a server's surface disappeared, and the
+server was ours.
+
+**Why the regex is nonetheless right.** It is not arbitrary parity with Grok.
+Provider tool-name limits are real, and Anthropic's own API rejects a `.` in
+a tool name. Loosening the pattern would move the failure from load time,
+where `doctor` explains it, to call time, where the provider rejects the
+whole request with a message that says nothing about MCP.
+
+**Why skipping is nonetheless wrong.** `CatalogEntry` already separates `fqn`
+(keryx's name, shown to the model) from `rawName` (the server's name, sent in
+`tools/call`). That separation is what would make sanitising cheap: `sac.read`
+becomes `self__sac_read` on the model's side and stays `sac.read` on the
+wire. Nothing about provider safety requires DROPPING the tool.
+
+**Not decided here.** Sanitising introduces a collision the current pattern
+cannot produce — `a.b` and `a_b` would both map to `a_b`. `catalogForServer`
+already records a duplicate FQN as skipped with a reason, so a fallback
+exists, but which name wins is a choice this note does not make.
+
+**Status.** P0 ships the specification as written (skip + `doctor` warning),
+so the behaviour is the one that was reviewed. The evidence above is
+reproducible: `keryx mcp add self -- keryx serve-mcp --cwd <repo>`, then
+`keryx mcp doctor self`. Resolving D-13 is P1 work.
