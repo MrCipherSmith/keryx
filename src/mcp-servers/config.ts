@@ -306,12 +306,17 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
 /** `$defs/oauth` from the schema, enforced. */
 function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
   const problems: string[] = [];
-  const known = new Set(["clientId", "scopes", "callbackPort"]);
+  // Every field `$defs/oauth` declares. Omitting `clientSecretEnvVar` made
+  // the runtime STRICTER than the specification, so a legal document was
+  // refused — the parity failure in the opposite direction from the usual.
+  const known = new Set(["clientId", "clientSecretEnvVar", "scopes", "callbackPort"]);
   for (const key of Object.keys(oauth)) {
     if (!known.has(key)) problems.push(`server "${name}" oauth has unknown field "${key}"`);
   }
-  if (oauth.clientId !== undefined && typeof oauth.clientId !== "string") {
-    problems.push(`server "${name}" oauth.clientId must be a string`);
+  for (const field of ["clientId", "clientSecretEnvVar"] as const) {
+    if (oauth[field] !== undefined && typeof oauth[field] !== "string") {
+      problems.push(`server "${name}" oauth.${field} must be a string`);
+    }
   }
   if (oauth.scopes !== undefined) {
     if (!Array.isArray(oauth.scopes) || !oauth.scopes.every((v) => typeof v === "string")) {
@@ -494,21 +499,38 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
   return { servers, problems };
 }
 
+/**
+ * An empty override map with NO prototype.
+ *
+ * Every return from `readOverlay` goes through this. The first version used
+ * `Object.create(null)` on the success path only, and the four other returns
+ * — absent file, unreadable, no `overrides` key, invalid JSON — handed back a
+ * plain `{}`. The caller then does `overrides[name]`, which resolves through
+ * `Object.prototype`, so on a machine with NO OVERLAY FILE AT ALL (the
+ * default state of every fresh install) a server named `toString`,
+ * `constructor` or `hasOwnProperty` had its `"enabled": false` ignored and
+ * was dialled — and `enabled` became a function or an object, which
+ * `doctor --json` then emitted as `{}` or dropped from the payload entirely.
+ *
+ * A helper rather than four call sites, because four call sites is how one
+ * of them gets missed. Which is what happened.
+ */
+function noOverrides(): Record<string, boolean> {
+  return Object.create(null) as Record<string, boolean>;
+}
+
 function readOverlay(file: string): { overrides: Record<string, boolean>; problems: McpConfigProblem[] } {
   const read = readConfigFile(file);
   if (!read.ok) {
     return isDefiniteAbsence(read.reason)
-      ? { overrides: {}, problems: [] }
-      : { overrides: {}, problems: [{ file, message: `could not be read (${read.reason})` }] };
+      ? { overrides: noOverrides(), problems: [] }
+      : { overrides: noOverrides(), problems: [{ file, message: `could not be read (${read.reason})` }] };
   }
   try {
     const parsed = parseJsonTolerant(read.text) as McpDisableOverlay;
     const overrides = parsed.overrides;
-    if (overrides === undefined) return { overrides: {}, problems: [] };
-    // `Object.create(null)` for the same reason `parseConfigFile` uses it:
-    // an override keyed `__proto__` would hit the prototype setter instead
-    // of becoming an entry, and the toggle would silently do nothing.
-    const clean: Record<string, boolean> = Object.create(null) as Record<string, boolean>;
+    if (overrides === undefined) return { overrides: noOverrides(), problems: [] };
+    const clean = noOverrides();
     for (const [name, value] of Object.entries(overrides)) {
       if (typeof value === "boolean") clean[name] = value;
     }
@@ -516,6 +538,9 @@ function readOverlay(file: string): { overrides: Record<string, boolean>; proble
   } catch {
     // Not fatal: a broken personal overlay must not hide the servers, it must
     // report itself and leave the files' own `enabled` in force.
-    return { overrides: {}, problems: [{ file, message: "is not valid JSON; personal overrides ignored" }] };
+    return {
+      overrides: noOverrides(),
+      problems: [{ file, message: "is not valid JSON; personal overrides ignored" }],
+    };
   }
 }

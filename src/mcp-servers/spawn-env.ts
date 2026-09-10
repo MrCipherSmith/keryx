@@ -121,9 +121,23 @@ export const MCP_ENV_DENY: readonly string[] = [
   "GIT_CONFIG_GLOBAL",
   "HGRCPATH",
   "ANSIBLE_VAULT_PASSWORD_FILE",
-
-  // A remote Docker daemon is root on another machine.
-  "DOCKER_HOST",
+  // Certificate and identity POINTERS — the same class again, and the third
+  // round of finding members of it one at a time is what prompted the
+  // table test in `spawn-env.table.test.ts`.
+  "AZURE_CLIENT_CERTIFICATE_PATH",
+  "ARM_CLIENT_CERTIFICATE_PATH",
+  "VAULT_CLIENT_CERT",
+  "VAULT_CLIENT_KEY",
+  "SSL_CLIENT_CERT_PATH",
+  "SSL_CLIENT_KEY_FILE",
+  "IDENTITY_FILE",
+  "SSH_IDENTITY_FILE",
+  "GCP_SERVICE_ACCOUNT",
+  // The X11 magic cookie. Read access is keylogging and screen capture of
+  // the operator's entire desktop — a strictly larger grant than any API
+  // key on this list, and it was missed while its keyring siblings were
+  // caught.
+  "XAUTHORITY",
 
   // Model-provider credentials keryx itself reads. ANTHROPIC_* is on the
   // shared list; these are the ones that list was never about.
@@ -202,7 +216,8 @@ const SECRET_SEGMENT_RE = new RegExp(`(^|_)(${SECRET_SEGMENTS.join("|")})($|_)`)
  * `TOKEN` is deliberately NOT here — it would take `TOKENIZER` with it, and
  * the segment rule already catches every real `*_TOKEN`.
  */
-const SECRET_SUBSTRING_RE = /(PASSWORD|PASSWD|PASSPHRASE|PASSCODE|SECRET|CREDENTIAL|APIKEY)/;
+const SECRET_SUBSTRING_RE =
+  /(PASSWORD|PASSWD|PASSPHRASE|PASSCODE|SSHPASS|SECRET|CREDENTIAL|APIKEY|KEYFILE|PRIVKEY)/;
 
 /**
  * Connection strings that conventionally carry an inline password.
@@ -231,7 +246,14 @@ const CONNECTION_STRING_RE = /(^|_)(DSN|CONNECTION_STRING|CONNECTIONSTRING)($|_)
  * secret and the name contains no secret word at all. `://user:pass@` is
  * the shape itself, and it needs no list.
  */
-const CREDENTIAL_IN_VALUE_RE = /:\/\/[^/\s:@]+:[^/\s@]+@/;
+const CREDENTIAL_IN_VALUE_RE = /:\/\/[^/\s@]*(:[^/\s@]*)?@/;
+// Three shapes, not one. The first version required at least one character
+// before the colon and a colon at all, so it saw `postgres://u:pw@h` and
+// missed both `redis://:pw@h` (empty username, the Redis convention) and
+// `https://ghp_deadbeef@github.com/o/r.git` (a bare token as userinfo,
+// which is how a token gets embedded in a git remote). Anything with
+// userinfo before the `@` is credential-shaped; there is no reason to
+// require the colon.
 
 /**
  * True when this variable must not reach a third-party MCP server by
@@ -241,6 +263,21 @@ const CREDENTIAL_IN_VALUE_RE = /:\/\/[^/\s:@]+:[^/\s@]+@/;
  * against the raw name and another against the uppercased one, so a
  * lowercase `keryx_secretish` survived what `KERYX_SECRETISH` did not.
  */
+/**
+ * Names whose danger depends on the VALUE.
+ *
+ * `DOCKER_HOST` was stripped unconditionally on the grounds that a remote
+ * daemon is root on another machine — true for `tcp://` and `ssh://`, and
+ * false for `unix:///run/user/1000/docker.sock`, which is what rootless
+ * Docker, Podman, colima and Rancher Desktop all set. Stripping that made a
+ * `docker run -i mcp/...` server fall back to `/var/run/docker.sock` and die
+ * with "cannot connect to the Docker daemon" — the server-looks-broken
+ * outcome this module exists to avoid, for the second time.
+ */
+const VALUE_DEPENDENT: Record<string, (value: string) => boolean> = {
+  DOCKER_HOST: (value) => !value.startsWith("unix://") && !value.startsWith("fd://"),
+};
+
 export function isDeniedForMcpChild(name: string, value?: string): boolean {
   // The VALUE is checked first and independently of the name: an inline
   // `://user:pass@` is a credential however the variable is spelled, and
@@ -250,6 +287,12 @@ export function isDeniedForMcpChild(name: string, value?: string): boolean {
 
   const upper = name.toUpperCase();
   if (MCP_ENV_ALLOW_EXACT.includes(upper)) return false;
+
+  const conditional = VALUE_DEPENDENT[upper];
+  if (conditional !== undefined) {
+    // No value to judge by means judge it dangerous.
+    return value === undefined ? true : conditional(value);
+  }
 
   if (EXTERNAL_ENV_DENY.some((denied) => denied.toUpperCase() === upper)) return true;
   if (MCP_ENV_DENY.includes(upper)) return true;

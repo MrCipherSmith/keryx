@@ -294,6 +294,14 @@ function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
     deps.err(`unknown option ${unknown[0]}`);
     return 1;
   }
+  // `remove` takes `--scope` too, and had no guard: `remove x --scope user
+  // --scope project` silently deleted from the user file. A silent
+  // first-wins on a DELETE is worse than on an add.
+  const repeatedHere = repeatedFlags(own);
+  if (repeatedHere.length > 0) {
+    deps.err(`${repeatedHere[0]} was given more than once; it takes a single value`);
+    return 1;
+  }
   const scope = parseScope(own);
   if (scope === undefined) {
     deps.err("--scope must be user or project");
@@ -454,14 +462,32 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   // `AbortSignal`. Ctrl-C left the child reparented to init.
   const dialling = new AbortController();
   const kills: Array<Promise<void>> = [];
-  const onSignal = (): void => {
+  let exiting = false;
+  const onSignal = (code: number) => (): void => {
+    // `process.on`, NOT `process.once`.
+    //
+    // With `once` the listener is gone after the first signal, so a SECOND
+    // Ctrl-C took Node's default disposition and killed the parent in the
+    // middle of the kill grace — leaving the child reparented to init. Two
+    // seconds of apparent silence is exactly when an operator presses
+    // Ctrl-C again. `shell.ts` already used `on` for the same scenario,
+    // twelve hundred lines away.
+    //
+    // `exiting` makes the repeat idempotent rather than starting a second
+    // teardown.
+    if (exiting) return;
+    exiting = true;
     dialling.abort();
     void Promise.race([Promise.all(kills), new Promise((r) => setTimeout(r, KILL_GRACE_MS))]).then(() => {
-      process.exit(130);
+      process.exit(code);
     });
   };
-  process.once("SIGINT", onSignal);
-  process.once("SIGTERM", onSignal);
+  // 143 for SIGTERM, matching `shell.ts`. It exited 130 for both, which is
+  // the wrong number for a caller reading it.
+  const onInt = onSignal(130);
+  const onTerm = onSignal(143);
+  process.on("SIGINT", onInt);
+  process.on("SIGTERM", onTerm);
   const approvals = loadTrustStore(deps.configDir);
   let report;
   try {
@@ -471,8 +497,10 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
       heldForApproval: (server) => requiresApproval(server, approvals),
     });
   } finally {
-    process.removeListener("SIGINT", onSignal);
-    process.removeListener("SIGTERM", onSignal);
+    // Removed only once the dialling is done. Printing happens after this,
+    // and a Ctrl-C during printing has nothing to tear down.
+    process.removeListener("SIGINT", onInt);
+    process.removeListener("SIGTERM", onTerm);
   }
 
   if (splitAtSeparator(args).own.includes("--json")) {

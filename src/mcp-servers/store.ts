@@ -258,7 +258,13 @@ export function setServerEnabled(options: SetEnabledOptions): StoreResult {
   let overlay: McpDisableOverlay = {};
   if (read.ok) {
     try {
-      const parsed = JSON.parse(read.text) as unknown;
+      // `parseJsonTolerant`, like every reader of these files. This was the
+      // last bare `JSON.parse` in the module — and it is a WRITE path, so a
+      // BOM'd overlay did not merely fail to load: `setServerEnabled` fell
+      // into the catch, reset the map to `{}`, and wrote it back. Every
+      // other override the operator had set was destroyed, and the command
+      // reported success.
+      const parsed = parseJsonTolerant(read.text);
       if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
         overlay = parsed as McpDisableOverlay;
       }
