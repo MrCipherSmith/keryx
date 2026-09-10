@@ -1,0 +1,36 @@
+[
+  {
+    "id": "R1-LOGIC-001",
+    "reviewer": "review-pr467",
+    "severity": "major",
+    "problem": "The post-commit hook decides whether a commit is graph-relevant from a list of directory prefixes (^src/, ^lib/, ^app/, ^packages/, ^services/, ^scripts/, ^docs/), while the builder indexes any .ts/.tsx/.js/.jsx/.java/.py file anywhere except the fifteen directories in IGNORE_DIRS. Source between those two definitions was indexed and undetected.",
+    "impact": "The graph went stale after a commit to indexed source and NOTHING said so. Every other branch of this hook prints a warning when the graph may be stale - keryx missing, build failed, rebuild opted out - but this one returned 0 in silence, which is the exact failure the PR was written to end. Live in this repository: vscode-extension/src/ (18 TypeScript files), install.ts at the root, and the fixtures/ sources are all in the graph and none can match ^src/.",
+    "suggested_fix": "Keep the prefix list, which covers paths that change how the graph resolves without being indexed, and add an extension test whose exclusion mirrors IGNORE_DIRS in src/gdgraph/build.ts.",
+    "evidence": "Reproduced by running the rendered hook in a scratch repository: committing vscode-extension/src/extension.ts, a root install.ts and fixtures/leaf.ts each produced NO output and exit 0, while the positive control src/a.ts reached the rebuild branch. Confirmed independently against the graph itself - vscode-extension/src appears in .metaproject/data/gdgraph/storage/build-manifest.json.",
+    "confidence": "high",
+    "file": "src/lib/templates.ts",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/lib/templates.ts - renderGdgraphPostCommitHook, the single source of the hook written into every project keryx scaffolds or updates",
+        ".metaproject/modules/gdgraph.md - 'Automatic refresh', claims the hook covers the committed half of the freshness gap",
+        ".metaproject/hooks/README.md - same claim",
+        ".metaproject/skills/gdgraph/SKILL.md - 'Refresh Policy', same claim",
+        "docs/docs/workspace-and-lifecycle.md - hooks table, 'rebuilds the graph after a graph-relevant commit'"
+      ],
+      "enumeration_method": "Searched the PR's 20 changed files for 'graph-relevant' and 'relevant to the graph' to find every restatement of the coverage claim, then read the unchanged indexer in src/gdgraph/build.ts to establish the scope those sentences were claiming to match."
+    },
+    "global_id": "2026-09-10-ingest-467#R1-LOGIC-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at b0024c8c, which contains the fix, and could not make it reproduce. The rendered hook run in a scratch repository against a fake keryx on PATH: vscode-extension/src/extension.ts, root install.ts, fixtures/sample/leaf.ts and tools/report.py each printed 'rebuilding gdgraph after a graph-relevant commit' and invoked 'gdgraph build'; node_modules/dep/index.js, dist/cli.js and vscode-extension/node_modules/dep/index.ts each produced no output and no invocation. The hook's exclusion list and IGNORE_DIRS in src/gdgraph/build.ts hold the same fifteen names with no discrepancy either direction. bun test src/lib/gdgraph-post-commit.test.ts: 14 pass.",
+      "verifier": "independent-verifier-hook"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in b0024c8c; independently re-checked at b0024c8c by a verifier that did not raise it, and no longer reproducing."
+    }
+  }
+]
