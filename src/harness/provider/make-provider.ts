@@ -137,11 +137,12 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       streamUsage?: true;
     } = {
       network: true,
-      // A hosted OpenAI-compatible gateway is asked for usage; without the field
-      // the stream carries none and the session cannot report what it spent. The
-      // loopback Ollama path (above) is left alone, so a local model that works
-      // today keeps working.
-      streamUsage: true,
+      // Only where the gateway is known to honour it. Without the field a stream
+      // carries no usage at all and the session cannot report what it spent — but a
+      // non-conformant gateway may reject an unknown top-level field outright, so
+      // this is declared per provider in the registry and confirmed per provider.
+      // Today that is grok alone; the rest are unchecked, not unsupported.
+      ...(compat.streamUsage === true ? { streamUsage: true as const } : {}),
       baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
       ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),

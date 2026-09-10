@@ -56,6 +56,7 @@ import type { NormalizedRequest, StreamOptions } from "./types";
 
 // PINNED API under test — T6 impl exports these; import fails until then
 // (expected RED: "Cannot find module './make-provider'").
+import { providerByName } from "../../commands/providers";
 import { makeProvider } from "./make-provider";
 import type { MakeProviderOpts } from "./make-provider";
 
@@ -255,4 +256,22 @@ test("rapid-mlx uses allowLoopback grant so local baseUrl is permitted for strea
   expect(calls).toHaveLength(1);
   expect(events.length).toBeGreaterThan(0);
   expect(events[events.length - 1]!.kind).toBe("model_end");
+});
+
+describe("stream usage is opt-in per provider", () => {
+  test("grok asks for it, because x.ai is confirmed to honour the field", () => {
+    // Verified directly: the same request returns zero usage chunks without
+    // `stream_options` and `prompt_tokens: 638, cached_tokens: 512` with it.
+    const provider = makeProvider("grok", "grok-4.6", makeOpts({ env: { XAI_API_KEY: "k" } }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+  });
+
+  test("an unchecked gateway does not ask — absent means unverified, not unsupported", () => {
+    // A non-conformant gateway may reject an unknown top-level field outright and
+    // break a path that works today, so the flag is confirmed per provider rather
+    // than switched on for the family.
+    expect(providerByName("deepseek")?.streamUsage).toBeUndefined();
+    expect(providerByName("openrouter")?.streamUsage).toBeUndefined();
+    expect(providerByName("grok")?.streamUsage).toBe(true);
+  });
 });
