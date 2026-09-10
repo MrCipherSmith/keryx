@@ -370,6 +370,26 @@
           }
         }
       }
+    },
+    {
+      "$comment": "The rule 'Present in fix mode only. Null in analyze mode' was carried by the `fix` property DESCRIPTION and nothing else, so an analyze-mode result reporting a branch, a merge and an operator confirmation validated clean. That is the same defect this skill's INPUT contract had, where 'operator_confirmed is REQUIRED whenever fix is true' was also only a description. A rule a reader can see and a validator cannot is not a rule.",
+      "if": {
+        "required": [
+          "mode"
+        ],
+        "properties": {
+          "mode": {
+            "const": "analyze"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "fix": {
+            "type": "null"
+          }
+        }
+      }
     }
   ]
 }

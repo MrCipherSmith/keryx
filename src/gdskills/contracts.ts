@@ -16,11 +16,45 @@ export type ContractName =
   | "task-implementer-input"
   | "task-implementer-output";
 
+/**
+ * Whether keryx itself refuses a bad value of this contract, and where.
+ *
+ * Required, and a union rather than an optional field, so a new registration
+ * cannot join the unenforced set by saying nothing. That is how the set grew:
+ * three contracts were registered in PR #424 so a validator could be POINTED at
+ * them, which is worth doing and is not an enforcement, and nothing recorded
+ * the difference.
+ *
+ * `kind: "production"` is a checkable claim, not a comment. The guard in
+ * `contract-enforcement.test.ts` opens the named module and requires it to
+ * contain the actual `loadSchema("<name>")` call — a declaration that names a
+ * file which does not load the schema fails the build. The alternative, taking
+ * the registration's word for it, is the defect this whole flow is about.
+ */
+export type ContractEnforcement =
+  | {
+      kind: "production";
+      /** Repo-relative non-test module that loads this schema and refuses on error. */
+      module: string;
+      /** What a rejected value looks like, in one sentence. */
+      refuses: string;
+    }
+  | {
+      kind: "none";
+      /**
+       * Why nothing can refuse it. Required: a gap with no stated reason reads
+       * as an oversight, and the reader cannot tell "no keryx process is on
+       * this path" from "somebody forgot".
+       */
+      reason: string;
+    };
+
 export type ContractInfo = {
   name: ContractName;
   /** Name this contract is written under in `.metaproject/core/gdskills/contracts/`. */
   fileName: string;
   description: string;
+  enforcement: ContractEnforcement;
   /**
    * Repo-relative location of the AUTHORITATIVE file, when it does not live in
    * `src/gdskills/contracts/`.
@@ -124,6 +158,11 @@ export const CONTRACTS: ContractInfo[] = [
     name: "agent-event",
     fileName: "agent-event.schema.json",
     description: "Append-only lifecycle event emitted by orchestrators and subagents.",
+    enforcement: {
+      kind: "none",
+      reason:
+        "Events are appended by whichever agent is running, in that agent's own runtime. No keryx process sits between the emitter and the log, so there is no point at which a malformed event could be refused rather than written.",
+    },
   },
   /**
    * `flow-orchestrator`'s input, on the `task-implementer-input` precedent.
@@ -142,6 +181,11 @@ export const CONTRACTS: ContractInfo[] = [
       "Dispatch payload handed to flow-orchestrator (request + base branch + completion outcome + constraints).",
     sourcePath:
       "src/gdskills/bundled/skills/orchestration/flow-orchestrator/input-contract.schema.json",
+    enforcement: {
+      kind: "none",
+      reason:
+        "This payload is handed from one AGENT to another. In a session driven by a host agent's own dispatch tool, no keryx process is on that path, so nothing can refuse a malformed dispatch. Same structural position as reviewer-input, recorded for the same reason. Registering it made `keryx skills contracts validate --schema flow-orchestrator-input` possible, which is a validator an agent must remember to run, not an enforcement.",
+    },
   },
   /**
    * `review-pr-feedback`'s two, registered for the same reason its sibling was.
@@ -160,6 +204,11 @@ export const CONTRACTS: ContractInfo[] = [
     description:
       "Request handed to review-pr-feedback (PR reference, --fix, and the operator confirmation --fix requires).",
     sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/input-contract.schema.json",
+    enforcement: {
+      kind: "none",
+      reason:
+        "The request is what an operator or a host agent hands the skill before any keryx command runs, so keryx is not yet in the path when the payload would have to be refused. This is the one where that hurts most: `--fix` merges third-party review comments into somebody else's pull request, and `operator_confirmed` is the fence. The conditional is expressed in the schema and `keryx skills contracts validate --schema review-pr-feedback-input` will apply it — but only when something invokes it.",
+    },
   },
   {
     name: "review-pr-feedback-output",
@@ -167,6 +216,19 @@ export const CONTRACTS: ContractInfo[] = [
     description:
       "Result review-pr-feedback returns: verdict counts, the injection-screen record, and what the fix run merged.",
     sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
+    enforcement: {
+      kind: "production",
+      module: "src/commands/review.ts",
+      /*
+       * This entry said `none` first, and briefly said `production` pointing at
+       * src/review/managed.ts before that — where the guard in
+       * contract-enforcement.test.ts rejected it by name for containing no
+       * `loadSchema` call. The guard caught its own author, which is the only
+       * reason this claim is worth reading now.
+       */
+      refuses:
+        "`keryx review comments reply --result <file>` validates the skill's result before the pass is built, so nothing reaches the pull request when the result contradicts itself — an analyze-mode run reporting a branch and a merge, or a record saying the injection screen never ran while claiming it excluded comments.",
+    },
   },
   {
     name: "job-orchestrator-state",
@@ -174,26 +236,74 @@ export const CONTRACTS: ContractInfo[] = [
     description:
       "Persisted job package state (.metaproject/jobs/<name>/state.json), written by `keryx job`.",
     sourcePath: "src/gdskills/bundled/skills/orchestration/job-orchestrator/state.schema.json",
+    enforcement: {
+      kind: "production",
+      module: "src/job/store.ts",
+      refuses:
+        "`writeJob` refuses to write a state file that does not satisfy the schema, so an invalid job package cannot reach disk.",
+    },
   },
   {
     name: "orchestrator-state",
     fileName: "orchestrator-state.schema.json",
     description: "Persisted resumable orchestrator state.",
+    enforcement: {
+      kind: "none",
+      reason:
+        "No keryx command reads or writes this file. It describes state an orchestrator agent persists for itself, in its own runtime, so there is no keryx-owned write path to refuse at. Contrast job-orchestrator-state, which looks similar and IS enforced for exactly one reason: `keryx job` writes that one.",
+    },
   },
   {
     name: "review-finding",
     fileName: "review-finding.schema.json",
     description: "Normalized reviewer finding consumed by review-orchestrator and learning flows.",
+    enforcement: {
+      kind: "production",
+      module: "src/review/managed.ts",
+      refuses:
+        "`createManagedReviewPackage` refuses to record findings that do not satisfy the schema, and the disposition sub-schema is applied the same way, so a review round cannot be written with a malformed finding or an unreadable outcome.",
+    },
   },
   {
     name: "subagent-dispatch",
     fileName: "subagent-dispatch.schema.json",
     description: "Orchestrator-to-subagent dispatch payload.",
+    enforcement: {
+      kind: "none",
+      /*
+       * Recorded as `none` against the flow description that opened this work,
+       * which lists it as refused in production by
+       * `src/harness/child/{spawn,contract}.ts` and
+       * `src/harness/extension/execute.ts`.
+       *
+       * Those three files name it. None loads it. `subagent-dispatch` appears
+       * there as a label — `canonicalContract: "subagent-dispatch"` — on the
+       * harness extension metadata, and the schema it labels is validated
+       * nowhere: `loadSchema("subagent-dispatch")` occurs in no non-test file,
+       * and nothing reads `subagent-dispatch.schema.json` either. Six files
+       * mention the schema in prose, several describing it as defining or
+       * gating the dispatch.
+       *
+       * So the enumeration that this flow called "not by impression" carried
+       * one entry claiming an enforcement that does not exist — which is the
+       * defect the flow was opened to fix, present in its own statement of the
+       * problem. Kept visible here rather than silently corrected, because a
+       * table that got believed is the thing being guarded against.
+       */
+      reason:
+        "The dispatch is built and consumed inside the harness without the canonical schema being loaded: `subagent-dispatch` appears only as a label on the extension metadata. Its sibling `subagent-result` IS validated, because the harness parses a child's reply back and has to decide whether it is well-formed; nothing performs the equivalent act on the way out.",
+    },
   },
   {
     name: "subagent-result",
     fileName: "subagent-result.schema.json",
     description: "Subagent-to-orchestrator result payload.",
+    enforcement: {
+      kind: "production",
+      module: "src/harness/external/runtime.ts",
+      refuses:
+        "A child's reply that does not parse as a well-formed result is rejected when the harness reads it back, so a malformed result cannot be persisted as if the child had succeeded.",
+    },
   },
   /**
    * `task-implementer`'s two contracts, on the `job-orchestrator-state`
@@ -213,6 +323,11 @@ export const CONTRACTS: ContractInfo[] = [
       "Task request handed to task-implementer (task + workspace + automation), validated before dispatch.",
     sourcePath:
       "src/gdskills/bundled/skills/orchestration/task-implementer/input-contract.schema.json",
+    enforcement: {
+      kind: "none",
+      reason:
+        "Dispatched agent-to-agent, like flow-orchestrator-input. The skill's Phase 1.4 lists five `ASSERT … → ABORT(…)` refusals; registering the contract is what lets `keryx skills contracts validate` perform them, and nothing forces that call. The comment beside this registration has said so since it was written.",
+    },
   },
   {
     name: "task-implementer-output",
@@ -221,6 +336,11 @@ export const CONTRACTS: ContractInfo[] = [
       "JSON result task-implementer writes in Phase 6.1 before it emits its STATUS line.",
     sourcePath:
       "src/gdskills/bundled/skills/orchestration/task-implementer/output-contract.schema.json",
+    enforcement: {
+      kind: "none",
+      reason:
+        "The skill writes this file itself, in its own runtime, and no keryx command reads it back. Contrast subagent-result, which is the same shape of thing and IS enforced for one reason: the harness reads that one back and must decide whether it is well-formed.",
+    },
   },
 ];
 
