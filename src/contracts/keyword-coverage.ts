@@ -24,6 +24,7 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   "required",
   "properties",
   "additionalProperties",
+  "propertyNames",
   "dependentRequired",
   // String assertions.
   "minLength",

@@ -135,7 +135,7 @@ describe("enable/disable", () => {
     const { configDir, projectRoot } = workspace();
     addServer({ name: "fs", entry: { command: "a" }, scope: "user", configDir });
 
-    setServerEnabled({ name: "fs", enabled: false, configDir });
+    setServerEnabled({ name: "fs", enabled: false, source: "user", configDir });
 
     const loaded = loadMcpServers({ cwd: projectRoot, gitRoot: projectRoot, configDir });
     expect(loaded.servers[0]?.enabled).toBe(false);
@@ -149,7 +149,7 @@ describe("enable/disable", () => {
     const original = JSON.stringify({ servers: { fs: { command: "a", enabled: false } } }, null, 2);
     writeFileSync(projectFile, original);
 
-    setServerEnabled({ name: "fs", enabled: true, configDir });
+    setServerEnabled({ name: "fs", enabled: true, source: "project", configDir });
 
     const loaded = loadMcpServers({ cwd: projectRoot, gitRoot: projectRoot, configDir });
     expect(loaded.servers[0]?.enabled).toBe(true);
@@ -158,14 +158,43 @@ describe("enable/disable", () => {
     expect(readFileSync(projectFile, "utf8")).toBe(original);
   });
 
-  test("a sticky `enabled` in the USER file is cleared, so there is one answer", () => {
+  test("a sticky `enabled` in the USER file is cleared when the USER layer is the one toggled", () => {
     const { configDir } = workspace();
     addServer({ name: "fs", entry: { command: "a", enabled: false }, scope: "user", configDir });
 
-    setServerEnabled({ name: "fs", enabled: true, configDir });
+    setServerEnabled({ name: "fs", enabled: true, source: "user", configDir });
 
     const servers = readJson(userConfigFile(configDir)).servers as Record<string, { enabled?: boolean }>;
     expect(servers.fs?.enabled).toBeUndefined();
+  });
+
+  test("a PROJECT-scope toggle does not touch a same-named user preference", () => {
+    // The hole the first fix left open. It narrowed WHICH VALUES were
+    // cleared and not WHOSE: an `enable` aimed at the project-scope server
+    // still deleted `enabled: false` from a user entry the operator had
+    // hand-written. The overlay masks the loss until the overlay is lost —
+    // and `setServerEnabled` resets a corrupt overlay to `{}`, so there is
+    // a two-step path from that to a server silently coming back on.
+    const { configDir, projectRoot } = workspace();
+    addServer({ name: "shared", entry: { command: "user-cmd", enabled: false }, scope: "user", configDir });
+    addServer({ name: "shared", entry: { command: "project-cmd" }, scope: "project", configDir, projectRoot });
+
+    // The project layer wins the merge, so this toggle is about the project
+    // server.
+    setServerEnabled({ name: "shared", enabled: true, source: "project", configDir });
+
+    const servers = readJson(userConfigFile(configDir)).servers as Record<string, { enabled?: boolean }>;
+    expect(servers.shared?.enabled).toBe(false);
+  });
+
+  test("a value that AGREES with the toggle is left alone", () => {
+    const { configDir } = workspace();
+    addServer({ name: "fs", entry: { command: "a", enabled: false }, scope: "user", configDir });
+
+    setServerEnabled({ name: "fs", enabled: false, source: "user", configDir });
+
+    const servers = readJson(userConfigFile(configDir)).servers as Record<string, { enabled?: boolean }>;
+    expect(servers.fs?.enabled).toBe(false);
   });
 
   test("a broken overlay is replaced rather than making disable permanently unusable", () => {
@@ -173,7 +202,7 @@ describe("enable/disable", () => {
     addServer({ name: "fs", entry: { command: "a" }, scope: "user", configDir });
     writeFileSync(overlayFile(configDir), "not json");
 
-    const result = setServerEnabled({ name: "fs", enabled: false, configDir });
+    const result = setServerEnabled({ name: "fs", enabled: false, source: "user", configDir });
     expect(result.ok).toBe(true);
 
     const loaded = loadMcpServers({ cwd: projectRoot, gitRoot: projectRoot, configDir });
@@ -182,8 +211,8 @@ describe("enable/disable", () => {
 
   test("the overlay keeps earlier toggles instead of replacing the map", () => {
     const { configDir } = workspace();
-    setServerEnabled({ name: "a", enabled: false, configDir });
-    setServerEnabled({ name: "b", enabled: false, configDir });
+    setServerEnabled({ name: "a", enabled: false, source: "user", configDir });
+    setServerEnabled({ name: "b", enabled: false, source: "user", configDir });
 
     const overrides = readJson(overlayFile(configDir)).overrides as Record<string, boolean>;
     expect(overrides).toEqual({ a: false, b: false });

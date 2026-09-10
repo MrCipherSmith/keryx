@@ -22,7 +22,12 @@ import {
   readConfigFile,
   writeOwnerOnlyFileAtomic,
 } from "../lib/config-dir";
-import type { McpDisableOverlay, McpServerEntry } from "./config";
+import {
+  MAX_SERVER_NAME_LENGTH,
+  type McpDisableOverlay,
+  type McpServerEntry,
+  type McpServerSource,
+} from "./config";
 
 export type McpScope = "user" | "project";
 
@@ -155,6 +160,20 @@ export function addServer(options: AddOptions): StoreResult {
   if (!SERVER_NAME_PATTERN.test(options.name)) {
     return { ok: false, error: `server name "${options.name}" must match ${SERVER_NAME_PATTERN.source}` };
   }
+  if (!/^[A-Za-z_]/.test(options.name)) {
+    return {
+      ok: false,
+      error: `server name "${options.name}" must start with a letter or underscore, or none of its tools can be named`,
+    };
+  }
+  if (options.name.length > MAX_SERVER_NAME_LENGTH) {
+    // Refused at write time as well as load time. A name the loader will
+    // reject is a server the operator can add and never use.
+    return {
+      ok: false,
+      error: `server name "${options.name}" is ${options.name.length} characters; the limit is ${MAX_SERVER_NAME_LENGTH} so that "<server>__<tool>" fits in 64`,
+    };
+  }
   const file = fileForScope(options.scope, options);
   if (typeof file !== "string") return file;
 
@@ -192,7 +211,22 @@ export function removeServer(options: RemoveOptions): StoreResult {
   return { ok: true, file, created: false };
 }
 
-export type SetEnabledOptions = { readonly name: string; readonly enabled: boolean } & StoreTargets;
+export type SetEnabledOptions = {
+  readonly name: string;
+  readonly enabled: boolean;
+  /**
+   * Which layer the toggle actually targeted.
+   *
+   * Required, because without it the sticky-flag cleanup cannot tell whose
+   * preference it is deleting. The first fix narrowed WHICH VALUES were
+   * cleared and left this hole open: an `enable` aimed at a project-scope
+   * server still removed `enabled: false` from a same-named USER entry the
+   * operator had hand-written. The overlay masks the loss until the overlay
+   * is lost — and this function resets a corrupt overlay to `{}`, so there
+   * is a two-step path from that to a server silently coming back on.
+   */
+  readonly source: McpServerSource;
+} & StoreTargets;
 
 /**
  * Toggle a server through the PERSONAL overlay, and clear a sticky flag only
@@ -235,7 +269,11 @@ export function setServerEnabled(options: SetEnabledOptions): StoreResult {
   const overrides = { ...overlay.overrides, [options.name]: options.enabled };
   writeOwnerOnlyFileAtomic(file, `${JSON.stringify({ ...overlay, overrides }, null, 2)}\n`);
 
-  clearStickyUserFlag(options.name, options.enabled, options.configDir);
+  if (options.source === "user") {
+    // ONLY when the user layer is the one that won. A project-scope toggle
+    // has no business editing the user file.
+    clearStickyUserFlag(options.name, options.enabled, options.configDir);
+  }
   return { ok: true, file, created: !read.ok };
 }
 

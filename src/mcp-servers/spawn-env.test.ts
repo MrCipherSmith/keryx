@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { EXTERNAL_ENV_DENY, EXTERNAL_ENV_PREFIX_SWEEPS } from "../harness/external/env";
-import { buildMcpChildEnv } from "./spawn-env";
+import { buildMcpChildEnv, isDeniedForMcpChild } from "./spawn-env";
 
 describe("a third-party MCP server does not inherit keryx's credentials", () => {
   test("every name on the shared deny list is stripped", () => {
@@ -27,6 +27,80 @@ describe("a third-party MCP server does not inherit keryx's credentials", () => 
   test("the deny list is not empty, so the two tests above are not vacuous", () => {
     expect(EXTERNAL_ENV_DENY.length).toBeGreaterThan(0);
     expect(EXTERNAL_ENV_PREFIX_SWEEPS.length).toBeGreaterThan(0);
+  });
+});
+
+describe("the EIGHTEEN a real spawn found still leaking after the first fix", () => {
+  // Not a list I wrote: this is what an independent verifier read out of a
+  // child process whose command was `env | sort`, on a branch where the
+  // suite was green and `spawn-env.test.ts` asserted the nine names from
+  // the report. That is the whole lesson — the old test could not have
+  // failed on any of these.
+  const STILL_LEAKING = [
+    "ANTHROPIC_KEY", "OPENAI_KEY", "SSH_KEY", "SUPABASE_SERVICE_ROLE_KEY",
+    "PGPASSWORD", "MYSQL_PWD", "PGPASSFILE", "NPM_CONFIG__AUTH",
+    "AUTHORIZATION", "JWT", "BW_SESSION", "OP_SESSION_myacct",
+    "KUBECONFIG", "NETRC", "GNUPGHOME", "CLOUDSDK_CONFIG",
+    "DOCKER_HOST", "DATABASE_URL",
+  ];
+
+  test("none of them reaches the child now", () => {
+    const parent = Object.fromEntries(STILL_LEAKING.map((n) => [n, "secret"]));
+    const env = buildMcpChildEnv({ parent: { ...parent, PATH: "/usr/bin" } });
+    expect(Object.keys(env)).toEqual(["PATH"]);
+  });
+
+  test("each one individually, so a failure names which", () => {
+    for (const name of STILL_LEAKING) {
+      expect({ name, denied: isDeniedForMcpChild(name) }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("a bare KEY segment is caught — the docstring used to claim this and the regex did not", () => {
+    // The previous comment said "`_KEY` is matched only as a whole word
+    // segment", and `_KEY` was matched nowhere. Every honest `FOO_KEY`
+    // survived, including ANTHROPIC_KEY — the credential the module's own
+    // header is about.
+    expect(isDeniedForMcpChild("FOO_KEY")).toBe(true);
+    expect(isDeniedForMcpChild("KEY")).toBe(true);
+  });
+
+  test("a glued password word is caught even with no underscore", () => {
+    // The old sweep required a segment boundary, so one-word names walked
+    // through.
+    for (const name of ["PGPASSWORD", "MYSQLPASSWORD", "SNOWFLAKEPASSWD", "MYPASSPHRASE"]) {
+      expect({ name, denied: isDeniedForMcpChild(name) }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("matching is case-insensitive on every layer", () => {
+    // One sweep tested the raw name and another the uppercased one, so a
+    // lowercase `keryx_secretish` survived what `KERYX_SECRETISH` did not.
+    for (const name of ["keryx_thing", "github_token", "ssh_auth_sock", "pgpassword"]) {
+      expect({ name, denied: isDeniedForMcpChild(name) }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("the working directory is NOT a secret", () => {
+    // `PWD` is the segment that catches `MYSQL_PWD`, so the exception has
+    // to be by exact name rather than by weakening the rule.
+    expect(buildMcpChildEnv({ parent: { PWD: "/repo", OLDPWD: "/" } })).toEqual({
+      PWD: "/repo",
+      OLDPWD: "/",
+    });
+    expect(isDeniedForMcpChild("MYSQL_PWD")).toBe(true);
+  });
+
+  test("ordinary variables a toolchain needs still get through", () => {
+    // The reason this is copy-then-strip and not an allow-list. A filter
+    // that strips everything is a filter nobody can ship.
+    const keep = [
+      "PATH", "HOME", "LANG", "TMPDIR", "NODE_ENV", "TERM", "SHELL", "USER",
+      "KEYBOARD_LAYOUT", "MONKEY_PATCH", "TOKENIZER", "PASSAGE", "COMPASS",
+      "API_BASE_URL", "OTEL_EXPORTER_OTLP_ENDPOINT", "npm_package_version",
+    ];
+    const env = buildMcpChildEnv({ parent: Object.fromEntries(keep.map((k) => [k, "v"])) });
+    expect(Object.keys(env).sort()).toEqual([...keep].sort());
   });
 });
 

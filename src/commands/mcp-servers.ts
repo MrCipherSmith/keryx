@@ -28,7 +28,7 @@ import {
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
 import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
-import { defaultServerCwd } from "../mcp-servers/runtime";
+import { defaultServerCwd, handshakeBudgetMs } from "../mcp-servers/runtime";
 import {
   addServer,
   projectConfigFile,
@@ -281,6 +281,11 @@ function addCommand(argv: readonly string[], deps: McpConsumerDeps): number {
 
 function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
   const own = splitAtSeparator(args).own;
+  const unknown = own.filter((arg, index, all) => isUnknownFlag(arg, index, all));
+  if (unknown.length > 0) {
+    deps.err(`unknown option ${unknown[0]}`);
+    return 1;
+  }
   const scope = parseScope(own);
   if (scope === undefined) {
     deps.err("--scope must be user or project");
@@ -358,7 +363,8 @@ function toggleCommand(args: readonly string[], deps: McpConsumerDeps, enabled: 
   }
 
   const config = load(deps);
-  if (!config.servers.some((server) => server.name === name)) {
+  const server = config.servers.find((candidate) => candidate.name === name);
+  if (server === undefined) {
     // A toggle for a name nothing defines writes an overlay entry that will
     // never apply to anything. Saying so beats writing it and reporting
     // success.
@@ -370,7 +376,9 @@ function toggleCommand(args: readonly string[], deps: McpConsumerDeps, enabled: 
     return 1;
   }
 
-  const result = setServerEnabled({ name, enabled, configDir: deps.configDir });
+  // The layer that WON the merge is the one being toggled, and the only
+  // one whose sticky flag it may touch.
+  const result = setServerEnabled({ name, enabled, source: server.source, configDir: deps.configDir });
   if (!result.ok) {
     deps.err(result.error);
     return 1;
@@ -451,20 +459,34 @@ async function defaultConnect(server: ResolvedMcpServer): Promise<McpServerConne
   if (command === undefined || command === "") {
     throw new Error(`server "${server.name}" has no command; only stdio servers are dialled in this release`);
   }
-  return connectStdioMcpServer([command, ...(server.args ?? [])], {
-    // The SAME resolution the shell uses (`defaultServerCwd`). These two
-    // disagreed: the shell ran a project server from its project root and
-    // `doctor` ran it from the process cwd, so a server that resolves
-    // relative paths behaved differently under the command whose whole job
-    // is to tell you whether it will work.
-    cwd: server.cwd ?? defaultServerCwd(server),
-    env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
-  });
+  return connectStdioMcpServer(
+    [command, ...(server.args ?? [])],
+    {
+      // The SAME resolution the shell uses (`defaultServerCwd`). These two
+      // disagreed: the shell ran a project server from its project root and
+      // `doctor` ran it from the process cwd, so a server that resolves
+      // relative paths behaved differently under the command whose whole job
+      // is to tell you whether it will work.
+      cwd: server.cwd ?? defaultServerCwd(server),
+      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
+    },
+    handshakeBudgetMs(server),
+  );
 }
 
+/**
+ * `--scope user|project`, defaulting to user.
+ *
+ * A PRESENT `--scope` with no usable value is an error, not the default.
+ * `optionValue` returns undefined both when the flag is absent and when it
+ * is last on the line, so `add fs --scope -- mycmd` silently wrote the user
+ * file — indistinguishable from not passing `--scope` at all, which is the
+ * one thing the operator was trying not to do by typing it.
+ */
 function parseScope(args: readonly string[]): McpScope | undefined {
+  const present = args.some((arg) => arg === "--scope" || arg.startsWith("--scope="));
   const raw = optionValue(args as string[], "--scope");
-  if (raw === undefined) return "user";
+  if (raw === undefined) return present ? undefined : "user";
   return raw === "user" || raw === "project" ? raw : undefined;
 }
 
@@ -560,10 +582,17 @@ function isFlagOrValue(arg: string, index: number, all: readonly string[]): bool
  */
 function isUnknownFlag(arg: string, index: number, all: readonly string[]): boolean {
   if (!arg.startsWith("-") || arg === "-") return false;
-  if (isFlagOrValue(arg, index, all)) return false;
   const previous = all[index - 1];
   // A value that merely happens to look like a flag (`-e -x=1`) is not one.
-  return !(previous !== undefined && VALUE_FLAGS.has(previous));
+  if (previous !== undefined && VALUE_FLAGS.has(previous)) return false;
+
+  // The equals form is checked by NAME, not by shape. `isFlagOrValue`
+  // returns true for any `--x=y`, so routing this through it let
+  // `--scop=project` — a typo — be silently ignored: exit 0, server
+  // written to the default scope, nothing said. `--verbose` was refused
+  // and `--verbose=1` was not.
+  const name = arg.startsWith("--") && arg.includes("=") ? (arg.split("=")[0] as string) : arg;
+  return !VALUE_FLAGS.has(name) && !BARE_FLAGS.has(name);
 }
 
 function positional(args: readonly string[]): string | undefined {

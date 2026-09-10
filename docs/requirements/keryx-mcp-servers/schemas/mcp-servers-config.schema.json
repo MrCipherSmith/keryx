@@ -16,7 +16,9 @@
       "additionalProperties": { "$ref": "#/$defs/server" },
       "propertyNames": {
         "type": "string",
-        "pattern": "^[A-Za-z0-9_-]+$"
+        "description": "A server name must also be usable as the first half of a qualified tool name. `catalog.ts` builds `<server>__<tool>` and bounds it at 64 characters starting with a letter or underscore, so a name beginning with a digit or hyphen, or a long one, produces a server that connects and has some or all of its tools silently dropped. §3 originally said letters/digits/hyphen/underscore with no length bound; that was measured to be wrong (a 56-character name loaded with zero problems and lost a tool) and tightened here to match what the runtime can actually offer.",
+        "pattern": "^[A-Za-z_][A-Za-z0-9_-]*$",
+        "maxLength": 40
       }
     }
   },

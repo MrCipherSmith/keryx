@@ -147,7 +147,7 @@ describe("AC11 — this package writes no config it does not own", () => {
 
     addServer({ name: "u", entry: { command: "x" }, scope: "user", configDir });
     addServer({ name: "p", entry: { command: "x" }, scope: "project", configDir, projectRoot });
-    setServerEnabled({ name: "u", enabled: false, configDir });
+    setServerEnabled({ name: "u", enabled: false, source: "user", configDir });
     removeServer({ name: "u", scope: "user", configDir });
     approveServer(
       {

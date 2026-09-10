@@ -92,6 +92,29 @@ const VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g;
 const FQN_SAFE_NAME = /^[A-Za-z_]/;
 
 /**
+ * The longest server name that still leaves room for a tool.
+ *
+ * `FQN_PATTERN` caps `server__tool` at 64. Reserving 24 characters for
+ * `__` plus a tool name is a judgement, not a derivation — but the
+ * alternative, which is what shipped, is a name that loads cleanly and
+ * makes some or all of its tools unreachable with nothing said.
+ */
+export const MAX_SERVER_NAME_LENGTH = 40;
+
+/** The only document version this keryx understands. Absent reads as this. */
+export const SCHEMA_VERSION = 1;
+
+/**
+ * The largest timeout that survives `setTimeout`.
+ *
+ * Anything above 2^31-1 ms overflows and Node silently substitutes 1 ms —
+ * so `startup_timeout_sec: 1e400` (which parses to Infinity, is a number,
+ * and is greater than zero) produced a server timed out after one
+ * millisecond and reported `failed`. Observed as a `TimeoutOverflowWarning`.
+ */
+export const MAX_TIMEOUT_SEC = 24 * 60 * 60;
+
+/**
  * `${VAR}` and `${VAR:-default}`, expanded at load.
  *
  * An unset variable with no default expands to the empty string rather than
@@ -146,6 +169,19 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
   const problems: string[] = [];
   if (!/^[A-Za-z0-9_-]+$/.test(name)) {
     problems.push(`server name "${name}" must match ^[A-Za-z0-9_-]+$`);
+  } else if (name.length > MAX_SERVER_NAME_LENGTH) {
+    // Length, not just the leading character. `FQN_PATTERN` bounds
+    // `server__tool` at 64 characters, so a long server name silently
+    // costs tools: at 56 characters a plausible name
+    // (`github-copilot-language-server-for-the-monorepo-frontend`) loaded
+    // with zero problems, reported `connected`, and dropped every tool
+    // whose qualified name exceeded the limit — and `startServers` reports
+    // `toolCount` without `skipped`, so in a shell there was no signal at
+    // all. The bound here leaves room for a short tool name; anything
+    // longer is refused where the operator can act on it.
+    problems.push(
+      `server name "${name}" is ${name.length} characters; the limit is ${MAX_SERVER_NAME_LENGTH}, because "<server>__<tool>" must fit in 64 and a longer name silently drops tools`,
+    );
   } else if (!FQN_SAFE_NAME.test(name)) {
     // The name is legal per §3 but cannot be qualified: `catalog.ts` requires
     // an FQN starting with a letter or underscore, so `1password` would
@@ -159,6 +195,15 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
 
   const hasCommand = typeof entry.command === "string" && entry.command.length > 0;
   const hasUrl = typeof entry.url === "string" && entry.url.length > 0;
+  // A PRESENT but empty `url` is a leftover, not an absence. Treating it as
+  // absent let `{"command":"x","url":""}` load as stdio, so deleting the
+  // value of a `url` silently changed the transport instead of failing.
+  if (entry.url !== undefined && !hasUrl && typeof entry.url === "string") {
+    problems.push(`server "${name}" has an empty url; remove the field or give it a value`);
+  }
+  if (entry.command !== undefined && !hasCommand && typeof entry.command === "string") {
+    problems.push(`server "${name}" has an empty command; remove the field or give it a value`);
+  }
   if (hasCommand && hasUrl) {
     problems.push(`server "${name}" sets both command and url; it is stdio or HTTP, never both`);
   }
@@ -191,6 +236,13 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
       problems.push(`server "${name}" ${field} must be a string`);
     }
   }
+  const oauth = (entry as { oauth?: unknown }).oauth;
+  if (oauth !== undefined && oauth !== false && (typeof oauth !== "object" || oauth === null || Array.isArray(oauth))) {
+    // The schema specifies this field completely; the runtime never looked
+    // at it, and the "unknown fields round-trip" allowance does not cover a
+    // KNOWN one.
+    problems.push(`server "${name}" oauth must be an object or false`);
+  }
   if (entry.type !== undefined && !["stdio", "http", "sse"].includes(entry.type)) {
     problems.push(`server "${name}" type must be stdio, http or sse`);
   }
@@ -204,16 +256,24 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
     ["startup_timeout_sec", entry.startup_timeout_sec],
     ["tool_timeout_sec", entry.tool_timeout_sec],
   ] as const) {
-    if (value !== undefined && !(typeof value === "number" && value > 0)) {
-      problems.push(`server "${name}" ${field} must be a number greater than 0`);
+    if (value !== undefined && !(typeof value === "number" && Number.isFinite(value) && value > 0)) {
+      problems.push(`server "${name}" ${field} must be a finite number greater than 0`);
+    } else if (value !== undefined && value > MAX_TIMEOUT_SEC) {
+      problems.push(`server "${name}" ${field} must be at most ${MAX_TIMEOUT_SEC} seconds`);
     }
   }
   if (entry.tool_timeouts !== undefined) {
     const map = entry.tool_timeouts;
     if (typeof map !== "object" || map === null || Array.isArray(map)) {
       problems.push(`server "${name}" tool_timeouts must be an object`);
-    } else if (!Object.values(map).every((v) => typeof v === "number" && v > 0)) {
-      problems.push(`server "${name}" tool_timeouts values must all be numbers greater than 0`);
+    } else if (
+      !Object.values(map).every(
+        (v) => typeof v === "number" && Number.isFinite(v) && v > 0 && v <= MAX_TIMEOUT_SEC,
+      )
+    ) {
+      problems.push(
+        `server "${name}" tool_timeouts values must all be finite numbers between 0 and ${MAX_TIMEOUT_SEC}`,
+      );
     }
   }
   return problems;
@@ -239,7 +299,11 @@ export function parseConfigFile(file: string): ParsedFile {
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(read.text) as unknown;
+    // A leading BOM is not a syntax error the operator made. Windows
+    // editors write one by default, and `JSON.parse` reports it as
+    // "Unrecognized token '\ufeff'" — a message that sends someone hunting
+    // for a stray character in config that is otherwise perfectly valid.
+    parsed = JSON.parse(read.text.replace(/^\uFEFF/, "")) as unknown;
   } catch (error) {
     return {
       servers: {},
@@ -255,6 +319,24 @@ export function parseConfigFile(file: string): ParsedFile {
   const doc = parsed as { servers?: unknown };
   if (doc.servers === undefined) {
     return { servers: {}, problems: [{ file, message: "has no `servers` object" }] };
+  }
+  // `schemaVersion` was never checked at all. `schemaVersion: 2` means the
+  // file was written by a later keryx; reading it and applying v1 semantics
+  // without a word is how a newer field's meaning gets quietly ignored.
+  const version = (parsed as { schemaVersion?: unknown }).schemaVersion;
+  if (version !== undefined && version !== SCHEMA_VERSION) {
+    return {
+      servers: {},
+      problems: [
+        {
+          file,
+          message:
+            typeof version === "number" && Number.isInteger(version) && version > SCHEMA_VERSION
+              ? `declares schemaVersion ${version}; this keryx understands ${SCHEMA_VERSION}. Upgrade keryx rather than have it guess.`
+              : `schemaVersion must be ${SCHEMA_VERSION} (got ${JSON.stringify(version)})`,
+        },
+      ],
+    };
   }
   if (typeof doc.servers !== "object" || doc.servers === null || Array.isArray(doc.servers)) {
     return { servers: {}, problems: [{ file, message: "`servers` must be an object keyed by name" }] };

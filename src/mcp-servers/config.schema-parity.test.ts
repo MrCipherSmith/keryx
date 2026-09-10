@@ -87,6 +87,15 @@ const ENTRY_DIVERGENCES: Array<{ name: string; entry: Record<string, unknown>; w
  */
 const DOCUMENT_CORPUS: Array<{ name: string; doc: unknown; valid: boolean; note: string }> = [
   { name: "minimal", doc: { schemaVersion: 1, servers: {} }, valid: true, note: "the shape everything else assumes" },
+  // `schemaVersion` was never validated by the runtime at all. The corpus
+  // only ever held 1 and missing, so every other value was a divergence
+  // nothing could see — including `2`, which means "written by a later
+  // keryx" and was being read with v1 semantics in silence.
+  { name: "version_2", doc: { schemaVersion: 2, servers: {} }, valid: false, note: "" },
+  { name: "version_0", doc: { schemaVersion: 0, servers: {} }, valid: false, note: "" },
+  { name: "version_string", doc: { schemaVersion: "1", servers: {} }, valid: false, note: "" },
+  { name: "version_float", doc: { schemaVersion: 1.5, servers: {} }, valid: false, note: "" },
+  { name: "version_null", doc: { schemaVersion: null, servers: {} }, valid: false, note: "" },
   {
     name: "missing_schemaVersion",
     doc: { servers: {} },
@@ -175,6 +184,33 @@ describe("the code rules and the specification schema agree", () => {
       // is no longer true.
       expect(schemaAccepts(name, entry)).toBe(false);
       expect(await codeAccepts(name, entry)).toBe(true);
+    });
+  }
+
+  // SERVER NAMES, which the entry corpus structurally could not vary: both
+  // `schemaAccepts` and `codeAccepts` use the case LABEL as the name, so
+  // every case ran under a name that happened to be valid. The schema
+  // states its name rule in `propertyNames`, which the validator did not
+  // implement either — two independent blind spots over the same rule, and
+  // it had already drifted.
+  const NAME_CORPUS: Array<{ name: string; valid: boolean }> = [
+    { name: "linear", valid: true },
+    { name: "_internal", valid: true },
+    { name: "gh-mcp", valid: true },
+    { name: "x1", valid: true },
+    { name: "1password", valid: false },
+    { name: "-dash", valid: false },
+    { name: "9", valid: false },
+    { name: "a".repeat(41), valid: false },
+    { name: "a".repeat(40), valid: true },
+    { name: "has space", valid: false },
+    { name: "has.dot", valid: false },
+  ];
+
+  for (const { name, valid } of NAME_CORPUS) {
+    test(`server name "${name.length > 20 ? `${name.slice(0, 12)}…(${name.length})` : name}" is ${valid ? "accepted" : "rejected"} by both`, async () => {
+      expect(schemaAccepts(name, { command: "x" })).toBe(valid);
+      expect(await codeAccepts(name, { command: "x" })).toBe(valid);
     });
   }
 

@@ -460,6 +460,46 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
 }
 
 /**
+ * Bound a handshake, and CLEAN UP the transport when the bound is hit.
+ *
+ * The distinction from a bare `Promise.race` is the cleanup callback: the
+ * race decides what the caller sees, and this decides what happens to the
+ * process the caller can no longer reach.
+ */
+async function withHandshakeTimeout(
+  work: Promise<void>,
+  ms: number | undefined,
+  onTimeout: () => Promise<void>,
+): Promise<void> {
+  if (ms === undefined) {
+    await work;
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  try {
+    await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error(`MCP server did not complete the handshake within ${ms}ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (timedOut) {
+      await onTimeout();
+      // The abandoned `connect` may still reject once the transport dies;
+      // it is already subscribed by the race, so this only stops a late
+      // rejection from surfacing as unhandled.
+      void work.catch(() => {});
+    }
+  }
+}
+
+/**
  * Connect to a third-party stdio MCP server.
  *
  * No elicitation handler and no `codex/event` tap: this installs no
@@ -475,6 +515,8 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
 export async function connectStdioMcpServer(
   argv: readonly string[],
   options: McpSpawnOptions,
+  handshakeTimeoutMs?: number,
+  signal?: AbortSignal,
 ): Promise<McpServerConnection> {
   const [command, ...args] = argv;
   if (command === undefined) {
@@ -506,7 +548,59 @@ export async function connectStdioMcpServer(
   // No `capabilities.elicitation`: this client does not implement it, and
   // advertising a capability it cannot serve invites requests it will fail.
   const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
-  await client.connect(transport);
+
+  // The handshake is bounded HERE, where the transport is in scope, rather
+  // than only by a `Promise.race` in the caller.
+  //
+  // A race abandons; it does not cancel. A server that spawns and never
+  // answers `initialize` left the caller with no reference to the child it
+  // had started, so: the process lived until the SDK's own 60s request
+  // timeout (measured: `keryx` took 62.3s to exit with one such server
+  // configured, against 0.9s with none), and a SIGINT inside that window
+  // exited the parent and ORPHANED the child (measured: a live PID
+  // reparented to init).
+  //
+  // Closing the transport on timeout kills the child, so there is nothing
+  // left to abandon and nothing to defer.
+  const kill = async (): Promise<void> => {
+    try {
+      await transport.close();
+    } catch {
+      // Already gone; whatever is thrown below is the error worth having.
+    }
+  };
+
+  // A caller that gives up BEFORE the budget elapses — the session quitting,
+  // Ctrl-C — aborts. Without this the child outlives the parent: measured
+  // with a 30s budget and a `close()` at 750ms, the spawned process was
+  // still alive after the parent exited, reparented to init. A timeout that
+  // has not fired yet cleans up nothing.
+  // Tracked in a local rather than re-reading `signal.aborted`, because the
+  // check before the await narrows the type and the check after it is
+  // exactly the one that must see a CHANGED value.
+  let aborted = signal?.aborted ?? false;
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted before it began");
+  }
+  const onAbort = (): void => {
+    aborted = true;
+    void kill();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await withHandshakeTimeout(client.connect(transport), handshakeTimeoutMs, kill);
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (aborted) {
+    // The handshake won the race with the abort. The caller is gone, so
+    // hand back nothing and leave no process behind.
+    await kill();
+    throw new Error("mcp-client: connect aborted");
+  }
 
   return {
     async listTools(opts): Promise<McpToolDescriptor[]> {

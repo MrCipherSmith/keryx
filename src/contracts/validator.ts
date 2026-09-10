@@ -236,6 +236,20 @@ function validateNode(
         }
       }
     }
+    // `propertyNames` — a schema applied to each KEY, as a string.
+    //
+    // Added because `mcp-servers-config.schema.json` states its server-name
+    // rule here and nothing enforced it: the parity test that exists to stop
+    // the runtime drifting from the schema could not compare the one rule
+    // most likely to drift, because the validator silently ignored the
+    // keyword. A keyword a validator does not implement is a rule the schema
+    // does not have.
+    if (isPlainObject(schema.propertyNames)) {
+      for (const key of Object.keys(value)) {
+        validateNode(key, schema.propertyNames, docRoot, `${valuePath}.${key}`, ctx, errors);
+      }
+    }
+
     const properties = isPlainObject(schema.properties) ? schema.properties : {};
     const additional = schema.additionalProperties;
     for (const [key, nested] of Object.entries(value)) {

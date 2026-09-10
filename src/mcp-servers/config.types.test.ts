@@ -18,16 +18,32 @@ import path from "node:path";
 import { loadMcpServers } from "./config";
 import { createMcpRuntime } from "./runtime";
 
-function withServers(servers: Record<string, unknown>): { configDir: string; cwd: string } {
+function withServers(
+  servers: Record<string, unknown>,
+  schemaVersion: unknown = 1,
+): { configDir: string; cwd: string } {
   const base = mkdtempSync(path.join(tmpdir(), "keryx-mcp-types-"));
   const configDir = path.join(base, "config");
   mkdirSync(configDir, { recursive: true });
-  writeFileSync(path.join(configDir, "mcp-servers.json"), JSON.stringify({ schemaVersion: 1, servers }));
+  const doc = schemaVersion === undefined ? { servers } : { schemaVersion, servers };
+  writeFileSync(path.join(configDir, "mcp-servers.json"), JSON.stringify(doc));
   return { configDir, cwd: base };
 }
 
-function load(servers: Record<string, unknown>): ReturnType<typeof loadMcpServers> {
-  const { configDir, cwd } = withServers(servers);
+/** Write EXACT JSON text, for values `JSON.stringify` cannot round-trip. */
+function loadRaw(text: string): ReturnType<typeof loadMcpServers> {
+  const base = mkdtempSync(path.join(tmpdir(), "keryx-mcp-raw-"));
+  const configDir = path.join(base, "config");
+  mkdirSync(configDir, { recursive: true });
+  writeFileSync(path.join(configDir, "mcp-servers.json"), text);
+  return loadMcpServers({ cwd: base, gitRoot: base, configDir, env: {} });
+}
+
+function load(
+  servers: Record<string, unknown>,
+  schemaVersion: unknown = 1,
+): ReturnType<typeof loadMcpServers> {
+  const { configDir, cwd } = withServers(servers, schemaVersion);
   return loadMcpServers({ cwd, gitRoot: cwd, configDir, env: {} });
 }
 
@@ -95,6 +111,115 @@ describe("a name that cannot be qualified is refused at load", () => {
   test("a leading underscore is fine, and a normal name is fine", () => {
     expect(load({ _internal: { command: "x" } }).problems).toEqual([]);
     expect(load({ linear2: { command: "x" } }).problems).toEqual([]);
+  });
+});
+
+describe("things a second round of verification found still wrong", () => {
+  // Every case here reproduced AFTER the first fix, on a green suite. They
+  // are grouped so it stays visible that "fixed" and "verified fixed" are
+  // different states.
+
+  test("a long name is refused, instead of connecting and dropping tools", () => {
+    // 56 characters loaded with ZERO problems, reported `connected`, and
+    // silently dropped every tool whose `server__tool` exceeded 64 — and
+    // `startServers` reports `toolCount` without `skipped`, so in a shell
+    // there was no signal at all.
+    const long = "github-copilot-language-server-for-the-monorepo-frontend";
+    expect(long.length).toBe(56);
+    const result = load({ [long]: { command: "x" } });
+
+    expect(result.servers).toEqual([]);
+    expect(result.problems[0]?.message).toContain("the limit is 40");
+  });
+
+  test("a 40-character name is accepted and a 41-character one is not", () => {
+    expect(load({ ["a".repeat(40)]: { command: "x" } }).problems).toEqual([]);
+    expect(load({ ["a".repeat(41)]: { command: "x" } }).servers).toEqual([]);
+  });
+
+  test("a future schemaVersion is refused rather than read with today's meaning", () => {
+    // `schemaVersion` was never checked at all. `2` means "written by a
+    // later keryx", and applying v1 semantics to it in silence is how a
+    // newer field's meaning gets ignored.
+    const result = load({}, 2);
+    expect(result.problems[0]?.message).toContain("Upgrade keryx");
+  });
+
+  for (const [label, version] of [["zero", 0], ["string", "1"], ["float", 1.5], ["null", null]] as const) {
+    test(`a ${label} schemaVersion is refused`, () => {
+      expect(load({}, version).problems.length).toBeGreaterThan(0);
+    });
+  }
+
+  test("an absent schemaVersion still reads as 1", () => {
+    // The common case for a hand-written file, and the documented
+    // divergence from the schema.
+    expect(load({ ok: { command: "x" } }, undefined).problems).toEqual([]);
+  });
+
+  test("an empty url does not silently reclassify the transport", () => {
+    // `{"command":"x","url":""}` loaded as stdio, so deleting the VALUE of
+    // a url changed what the server was.
+    const result = load({ s: { command: "x", url: "" } });
+    expect(result.problems[0]?.message).toContain("empty url");
+  });
+
+  test("oauth is validated — the schema specifies it fully and nothing looked", () => {
+    // The "unknown fields round-trip" allowance covers unknown fields; this
+    // one is known.
+    expect(load({ s: { url: "https://x", oauth: true } }).problems[0]?.message).toContain("oauth");
+    expect(load({ s: { url: "https://x", oauth: "yes" } }).problems.length).toBeGreaterThan(0);
+    // `false` disables discovery and an object configures it: both legal.
+    expect(load({ s: { url: "https://x", oauth: false } }).problems).toEqual([]);
+    expect(load({ s: { url: "https://x", oauth: { clientId: "a" } } }).problems).toEqual([]);
+  });
+
+  test("an unrepresentable timeout is refused, not silently turned into 1ms", () => {
+    // `1e400` parses to Infinity, is a number, and is greater than zero. It
+    // reached `setTimeout`, overflowed the 32-bit range, and Node
+    // substituted 1ms — so the longest possible request became the
+    // shortest, and the server was reported `failed`.
+    //
+    // Written as RAW JSON TEXT, not via `JSON.stringify`. The first version
+    // of this test built the object in JS, where `1e400` is already
+    // `Infinity` and `JSON.stringify` emits `null` — so the file contained
+    // no large number at all and the assertion passed against a null. The
+    // same defect class this whole round is about, in the test for it.
+    expect(loadRaw('{"schemaVersion":1,"servers":{"s":{"command":"x","startup_timeout_sec":1e400}}}')
+      .problems[0]?.message).toContain("finite");
+    expect(loadRaw('{"schemaVersion":1,"servers":{"s":{"command":"x","tool_timeouts":{"a":1e400}}}}')
+      .problems.length).toBeGreaterThan(0);
+
+    // Finite but past what `setTimeout` can hold.
+    expect(load({ s: { command: "x", startup_timeout_sec: 999_999_999 } }).problems[0]?.message).toContain(
+      "at most",
+    );
+    // A sane value is untouched.
+    expect(load({ s: { command: "x", startup_timeout_sec: 30 } }).problems).toEqual([]);
+  });
+
+  test("the raw-JSON helper really does deliver a non-finite number", () => {
+    // Anti-vacuity for the test above: if `1e400` did not survive to the
+    // parser as Infinity, the "finite" assertion would be checking
+    // something else again.
+    const doc = JSON.parse('{"n":1e400}') as { n: number };
+    expect(Number.isFinite(doc.n)).toBe(false);
+  });
+
+  test("a UTF-8 BOM does not make a valid config 'not valid JSON'", () => {
+    // Windows editors write one by default, and the error named JSON
+    // rather than the byte.
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-mcp-bom-"));
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      `\uFEFF${JSON.stringify({ schemaVersion: 1, servers: { s: { command: "x" } } })}`,
+    );
+
+    const result = loadMcpServers({ cwd: base, gitRoot: base, configDir, env: {} });
+    expect(result.problems).toEqual([]);
+    expect(result.servers.map((s) => s.name)).toEqual(["s"]);
   });
 });
 

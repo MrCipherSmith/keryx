@@ -71,6 +71,11 @@ export type McpRuntime = {
  * carried: `problems()` for the files, a `failed` state for the servers.
  */
 export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
+  // Aborted by `close()`. A dial in flight has no connection to close yet,
+  // so the only way to reach its child process is to tell the dial itself
+  // to give up — see the abort handling in `connectStdioMcpServer`.
+  const dialling = new AbortController();
+
   const config = loadMcpServers({
     cwd: options.cwd,
     gitRoot: options.gitRoot,
@@ -108,7 +113,8 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     })),
   ];
 
-  const settled = startServers(launchable, options.connect ?? defaultConnect)
+  const connect = options.connect ?? ((server) => defaultConnect(server, dialling.signal));
+  const settled = startServers(launchable, connect)
     .then((result) => {
       catalog = result.catalog;
       // Held servers stay in the report. One that vanished would read as a
@@ -158,6 +164,11 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
       // per-server `startup_timeout_sec`, which has no upper bound in the
       // config, times the concurrency batches: eight unreachable servers at
       // the 15s default is thirty seconds of blank terminal.
+      // Abort FIRST. The grace below is for dials that are about to
+      // succeed; aborting is what deals with the ones that will not, and
+      // without it a `close()` inside the handshake budget left the child
+      // running and the parent exited out from under it.
+      dialling.abort();
       await Promise.race([settled, delay(CLOSE_GRACE_MS)]);
       await closeOnce(states);
       // Whatever lands after the grace is still closed — just not waited
@@ -167,23 +178,52 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   };
 }
 
+/**
+ * The dial budget, clamped.
+ *
+ * `startup_timeout_sec` has no upper bound in the config and reaches
+ * `setTimeout`, where anything past 2^31-1 ms overflows and silently becomes
+ * 1 ms — so a config asking for a very long budget got the shortest possible
+ * one. Clamped to a day, which is longer than any real handshake and inside
+ * the 32-bit range.
+ */
+export function handshakeBudgetMs(server: ResolvedMcpServer): number {
+  const configured = server.startup_timeout_sec;
+  if (configured === undefined || !Number.isFinite(configured) || configured <= 0) {
+    return DEFAULT_HANDSHAKE_MS;
+  }
+  return Math.min(configured * 1000, MAX_TIMEOUT_MS);
+}
+
+/** One day. Above `setTimeout`'s 32-bit ceiling the value silently becomes 1ms. */
+export const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_HANDSHAKE_MS = 15_000;
+
 /** Per-tool override first, then the server-wide one. Seconds, as configured. */
 function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): number | undefined {
   if (server === undefined) return undefined;
   return server.tool_timeouts?.[rawName] ?? server.tool_timeout_sec;
 }
 
-async function defaultConnect(server: ResolvedMcpServer): ReturnType<ConnectFn> {
+async function defaultConnect(server: ResolvedMcpServer, signal?: AbortSignal): ReturnType<ConnectFn> {
   const command = server.command;
   if (command === undefined || command === "") {
     // Reached only for a `url` server, which P0 does not dial. Thrown rather
     // than silently skipped so it lands as a `failed` state with a reason.
     throw new Error(`server "${server.name}" is not stdio; remote servers arrive in a later release`);
   }
-  return connectStdioMcpServer([command, ...(server.args ?? [])], {
-    cwd: server.cwd ?? defaultServerCwd(server),
-    env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
-  });
+  return connectStdioMcpServer(
+    [command, ...(server.args ?? [])],
+    {
+      cwd: server.cwd ?? defaultServerCwd(server),
+      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
+    },
+    // Bounded at the transport, so a server that never handshakes has its
+    // child KILLED rather than merely abandoned by the caller's race. See
+    // the comment in `connectStdioMcpServer`.
+    handshakeBudgetMs(server),
+    signal,
+  );
 }
 
 /**
