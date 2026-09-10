@@ -42,6 +42,21 @@ export interface OpenAiCompatProvider {
   allowLoopback?: boolean;
   /** Chat path appended to `baseUrl`; defaults to `/v1/chat/completions`. */
   chatPath?: string;
+  /**
+   * This gateway is known to return usage when asked via `stream_options`.
+   *
+   * Opt-in per provider, and verified per provider, because the flag only helps
+   * where the server honours it and a non-conformant gateway may reject an unknown
+   * top-level field outright — breaking a path that works today. Without it the
+   * stream carries NO usage at all and the session cannot report what it spent, so
+   * every entry here is worth confirming; absent means "not yet checked", never
+   * "unsupported".
+   *
+   * Confirmed: grok (x.ai) — the same request returns zero usage chunks without the
+   * field and `prompt_tokens: 638, cached_tokens: 512` with it.
+   * Unchecked: deepseek, openrouter, cerebras, groq, moonshot, zai, github-copilot.
+   */
+  streamUsage?: boolean;
   /** Model-list path appended to `baseUrl`; defaults to `/v1/models`. */
   modelsPath?: string;
   /** Curated fallback model ids (used when the live `/models` fetch fails). */
@@ -215,6 +230,7 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     label: "xAI (Grok)",
     baseUrl: "https://api.x.ai",
     envKey: "XAI_API_KEY",
+    streamUsage: true,
     models: ["grok-2-latest", "grok-2", "grok-beta"],
     note: "xAI · OpenAI-compatible",
   },

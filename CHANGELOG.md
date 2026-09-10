@@ -3,6 +3,60 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.89] — 2026-09-10
+
+### Added
+
+- **`keryx shell --deny-tools <a,b>`** — withhold named tools from a session
+  entirely. There was no way to say "this session does not need the web". Both
+  other agent CLIs offer one (`claude --disallowedTools`,
+  `grok --disable-web-search`), and keryx already treats egress as a product
+  concern elsewhere — `keryx harness exec --allowed-domains`, `sandbox.json` — so
+  a session-level roster that could not be narrowed was the inconsistent part.
+
+  Distinct from `--permission-mode`, which governs whether a call is APPROVED. A
+  denied tool is never offered to the model, so it cannot be attempted, reasoned
+  about, or approved by mistake — and the roster read back afterwards is the one
+  the turn actually ran with.
+
+  An unknown name is refused rather than ignored, and the error lists what is
+  deniable: `--deny-tools web_serch` must not leave the session with web search
+  and a clear conscience. Repeated use accumulates rather than replacing, since
+  silently dropping the first list would be the worse surprise for a flag whose
+  whole job is removing a capability.
+
+  Written for two cases: a sensitive checkout where a tool that fetches from
+  outside it is a liability, and any comparison that needs the roster to match
+  another tool's.
+
+## [0.2.88] — 2026-09-10
+
+Two defects that together made `keryx shell` unusable with a subscription-based
+OpenAI-compatible provider. Both were found by a benchmark arm, which is the worst
+place to find them: the arm completed, wrote a transcript, and reported nothing, so
+"the model was never called" looked exactly like "the model read nothing".
+
+### Fixed
+
+- `keryx auth login <provider>` stored a token nothing read. `makeProvider` resolves
+  an OpenAI-compatible provider's key from `env[definition.envKey]` — `XAI_API_KEY`
+  for grok — and the shell's provider factory passed neither `env` nor
+  `credentials`, so `process.env` was the only source. A user who authenticated by
+  subscription and never exported an API key got `FakeProvider`: an offline stub
+  that answers nothing while the session header still names the provider that was
+  asked for. The grant now reaches the construction that needs it, passed through
+  `credentials` rather than written into `process.env` so it does not leak into
+  every child the session later spawns. An explicit environment key still wins.
+- An OpenAI-compatible stream was never asked for usage. Without
+  `stream_options: { include_usage: true }` the response carries none at all, so
+  `onUsage` never fires, `NormalizedUsage` stays empty and a session cannot report
+  what it spent. Enabled for grok, where it is verified — the same request returns
+  zero usage chunks without the field and `prompt_tokens: 638, cached_tokens: 512`
+  with it. Declared per provider and confirmed per provider: deepseek, openrouter,
+  cerebras, groq, moonshot, zai and github-copilot are marked unchecked, which means
+  not yet verified rather than unsupported, and the loopback Ollama path is left
+  alone so a local model that works today keeps working.
+
 ## [0.2.87] — 2026-09-10
 
 ### Added

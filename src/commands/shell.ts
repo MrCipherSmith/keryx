@@ -20,6 +20,8 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
+import { loadOAuthGrant } from "../lib/oauth/grants";
+import { providerByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
   NormalizedMessage,
@@ -32,6 +34,7 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -543,8 +546,38 @@ function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"]
     return makeProvider(name, model, {
       fetch: globalThis.fetch,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...oauthCredentialsFor(name),
     });
   };
+}
+
+/**
+ * Hand a device-code grant to the provider factory as the credential it looks for.
+ *
+ * Without this, `keryx auth login <provider>` is a command that stores a token
+ * nothing reads. `makeProvider` resolves an OpenAI-compatible provider's key from
+ * `env[definition.envKey]` — `XAI_API_KEY` for grok — and this factory passed
+ * neither `env` nor `credentials`, so `process.env` was the only source. A user who
+ * authenticated by subscription and never exported an API key therefore got
+ * `FakeProvider`: an offline stub that answers nothing while the session header
+ * still names the provider that was asked for.
+ *
+ * The grant's access token is passed through `credentials` rather than written into
+ * `process.env`, so it reaches the one construction that needs it and does not leak
+ * into every child process the session later spawns. An explicit environment key
+ * still wins: an operator who exported one is making a choice.
+ */
+function oauthCredentialsFor(name: string): { credentials?: Record<string, string | undefined> } {
+  const definition = providerByName(name);
+  const envKey = definition?.envKey;
+  if (envKey === undefined) return {};
+
+  const fromEnv = process.env[envKey];
+  if (fromEnv !== undefined && fromEnv.length > 0) return {};
+
+  const grant = loadOAuthGrant(name);
+  if (grant === undefined || grant.access.length === 0) return {};
+  return { credentials: { ...process.env, [envKey]: grant.access } };
 }
 
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
@@ -882,6 +915,12 @@ async function runAgentRepl(
    * about Slate tool wiring need not pass one.
    */
   slateSessionBox: { current: SlateSessionRef | undefined } = { current: undefined },
+  /**
+   * Optional machine-readable transcript (`--events-file`). Written BESIDE the
+   * human output, never instead of it: a headless mode that renders differently
+   * is a different code path, and then what is measured is not what people run.
+   */
+  events?: ShellEventSink,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -925,6 +964,10 @@ async function runAgentRepl(
   // Per-turn token usage (last `usage_update` the provider reported), printed
   // once when the turn ends.
   let lastUsage: NormalizedUsage | undefined;
+  // Per-turn, for the machine-readable transcript. Reset with `lastUsage`.
+  let turnToolCalls = 0;
+  let turnText: string | undefined;
+  let turnError: string | undefined;
   // Full output of the most recent tool call, retained for `/expand` (the
   // transcript shows only a collapsed one-line summary — flow 055).
   let lastToolOutput: string | undefined;
@@ -980,6 +1023,8 @@ async function runAgentRepl(
       }
     },
     onAssistantText: (text) => {
+      turnText = text;
+      events?.emit({ type: "assistant", text });
       stopSpinner();
       if (liveBlock !== undefined) {
         endBlock(); // final repaint + line break + reset
@@ -995,6 +1040,7 @@ async function runAgentRepl(
     },
     onUsage: (usage) => {
       lastUsage = usage;
+      events?.emit({ type: "usage", usage });
     },
     requestApproval: async (tool, input, meta) => {
       stopSpinner();
@@ -1132,6 +1178,8 @@ async function runAgentRepl(
         : true;
     },
     onToolCall: (name, input) => {
+      turnToolCalls += 1;
+      events?.emit({ type: "tool_call", name, input });
       stopSpinner();
       endBlock(); // defensive: close any live block before the tool line
       const args = summarizeToolArgs(input);
@@ -1139,6 +1187,7 @@ async function runAgentRepl(
       out(`\n${GUTTER}${style.cyan(`⚙ ${call}`)}\n`);
     },
     onToolResult: (name, result) => {
+      events?.emit({ type: "tool_result", name, isError: result.isError === true, output: result.output });
       const marker = result.isError ? style.red("✗ ") : style.gray("↳ ");
       const { summary, hidden } = collapseToolOutput(result.output);
       const more = hidden > 0 ? style.dim(` · +${hidden} more (/expand)`) : "";
@@ -1148,6 +1197,15 @@ async function runAgentRepl(
       startSpinner(); // a tool finished; wait for the model's next round
     },
     onSystem: (text) => {
+      // A provider failure arrives here, not as a thrown error: the driver
+      // reports it and the turn ends normally. Without this, `turn_end` records
+      // an empty answer and zero tool calls — the exact shape of a model that
+      // searched and found nothing — and a reader scores a failure as a result.
+      // Observed on the first live run of this flag, against a provider with no
+      // credentials configured.
+      if (text.includes("[error]")) {
+        turnError = turnError === undefined ? text.trim() : `${turnError}\n${text.trim()}`;
+      }
       stopSpinner();
       endBlock(); // close the live block before printing a system/error line over it
       const styled = colorEnabled() ? (text.includes("[error]") ? style.red(text) : style.dim(text)) : text;
@@ -1559,13 +1617,31 @@ async function runAgentRepl(
     }
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
     lastUsage = undefined;
+    turnToolCalls = 0;
+    turnText = "";
+    turnError = undefined;
+    events?.emit({ type: "turn_start", prompt: line, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
     try {
       await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});
+    } catch (error) {
+      // Recorded before it is rethrown. A turn that threw and a turn that
+      // answered nothing produce the same empty text in the transcript, and a
+      // reader that cannot tell them apart will score a crash as an answer.
+      turnError = error instanceof Error ? error.message : String(error);
+      throw error;
     } finally {
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
+      const end: ShellEvent = {
+        type: "turn_end",
+        text: turnText ?? "",
+        toolCalls: turnToolCalls,
+        ...(lastUsage === undefined ? {} : { usage: lastUsage }),
+        ...(turnError === undefined ? {} : { errorMessage: turnError }),
+      };
+      events?.emit(end);
     }
     flushSessionCheckpoint();
     const usageLine = formatUsage(lastUsage);
@@ -1679,6 +1755,47 @@ export interface ShellCliFlags {
    * leftover flag from a shell alias should not fail the whole launch.
    */
   permissionModeFlag?: PermissionMode;
+  /**
+   * `--deny-tools <a,b>` — tool names this session must not have.
+   *
+   * There was no way to say "this session does not need the web". Both other
+   * agent CLIs offer one (`claude --disallowedTools`,
+   * `grok --disable-web-search`), and keryx already treats egress as a product
+   * concern elsewhere — `keryx harness exec --allowed-domains`, `sandbox.json` —
+   * so a session-level roster that could not be narrowed was the inconsistent
+   * part.
+   *
+   * Distinct from `--permission-mode`, which governs whether a tool call is
+   * APPROVED. A denied tool is not offered to the model at all, so it cannot be
+   * attempted, reasoned about, or approved by mistake.
+   *
+   * An unknown name is refused rather than ignored: `--deny-tools web_serch`
+   * must not leave the session with web search and a clear conscience.
+   */
+  denyTools?: readonly string[];
+  /**
+   * `--print <prompt>` / `-p`: run exactly one agent turn on this prompt and
+   * exit, instead of reading turns from stdin.
+   *
+   * Agent mode only, and non-interactive by construction: it supplies the one
+   * line the REPL would otherwise have read, so the turn goes through the same
+   * loop a person drives rather than through a second implementation of it.
+   */
+  printPrompt?: string;
+  /**
+   * `--events-file <path>`: append a machine-readable NDJSON transcript of the
+   * session — turn boundaries, tool calls and results, and provider-reported
+   * usage. Written beside the rendered output, never instead of it.
+   */
+  eventsFile?: string;
+  /**
+   * `--events-max-field <n>`: the per-field character cap in that transcript.
+   *
+   * Raised by callers that need whole tool outputs — a reader looking for a
+   * particular path in a long result cannot tell a clipped output from one that
+   * never contained it. Redaction still runs first at any limit.
+   */
+  eventsMaxField?: number;
 }
 
 /**
@@ -1709,6 +1826,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let resumeId: string | undefined;
   let resumePick: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
+  let denyTools: string[] | undefined;
+  let printPromptArg: string | undefined;
+  let eventsFile: string | undefined;
+  let eventsMaxField: number | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -1743,12 +1864,42 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       permissionModeFlag = next as PermissionMode;
     } else if (arg === "--ask" || arg === "--trust" || arg === "--auto") {
       permissionModeFlag = arg.slice(2) as PermissionMode;
+    } else if (arg === "--deny-tools") {
+      // Comma-separated, like every other value-taking flag here. Repeated use
+      // ACCUMULATES rather than replacing, so `--deny-tools a --deny-tools b`
+      // denies both — silently dropping the first would be the worse surprise
+      // for a flag whose whole job is removing a capability.
+      const names = valueAfter(i++)
+        .split(",")
+        .map((name) => name.trim())
+        .filter((name) => name.length > 0);
+      if (names.length === 0) invalid("--deny-tools needs at least one tool name");
+      denyTools = [...(denyTools ?? []), ...names];
+    } else if (arg === "-p" || arg === "--print") {
+      // `valueAfter` rejects a value starting with `-`, which a prompt legitimately
+      // may. Read it directly and reject only an absent or blank one.
+      const next = args[i + 1];
+      if (next === undefined || next.trim() === "") invalid("Missing value for --print");
+      printPromptArg = next;
+      i += 1;
+    } else if (arg === "--events-file") {
+      eventsFile = valueAfter(i++);
+    } else if (arg === "--events-max-field") {
+      const raw = valueAfter(i++);
+      const parsed = Number(raw);
+      if (!Number.isInteger(parsed) || parsed < 1) invalid("--events-max-field must be a positive integer");
+      eventsMaxField = parsed;
     } else {
       invalid("Unknown shell argument");
     }
   }
   if (continueLast && (resumeId !== undefined || resumePick)) {
     invalid("--continue and --resume cannot be combined");
+  }
+  if (printPromptArg !== undefined && modeFlag === false) {
+    // Chat mode has no tools and no turn loop worth driving headlessly. Saying
+    // so beats running something that looks like the agent and is not.
+    invalid("--print is agent-mode only and cannot be combined with --chat");
   }
   return {
     ...(providerArg !== undefined ? { providerArg } : {}),
@@ -1760,6 +1911,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
+    ...(denyTools !== undefined ? { denyTools } : {}),
+    ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
+    ...(eventsFile !== undefined ? { eventsFile } : {}),
+    ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
   };
 }
 
@@ -1783,9 +1938,15 @@ export type ShellSurface =
  * This function can.
  */
 export function chooseShellSurface(
-  flags: Pick<ShellCliFlags, "wantTui" | "modeFlag">,
+  flags: Pick<ShellCliFlags, "wantTui" | "modeFlag" | "printPrompt">,
   isTty: boolean,
 ): ShellSurface {
+  // `--print` is one turn on a supplied prompt with no terminal to own. It goes
+  // to the readline surface even on a TTY, and even with `--tui`, because the
+  // TUI has no way to be handed a line and exit.
+  if (flags.printPrompt !== undefined) {
+    return "readline";
+  }
   if (!flags.wantTui || !isTty) {
     return "readline";
   }
@@ -1828,7 +1989,11 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --continue, -c                Continue the latest project session
   --resume, -r [id-or-title]     Resume a session, or open the session picker
   --permission-mode <mode>      Agent permissions: ask, trust or auto
+  --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
+  --print, -p <prompt>          Run one agent turn on this prompt and exit
+  --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
+  --events-max-field <n>        Per-field character cap in that transcript (default 4000)
 
 Session continuation and resume are mutually exclusive. Permission flags
 are ignored in chat mode. Without a TTY, resume without an ID uses the latest session.
@@ -2007,6 +2172,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir,
           jobRegistry,
           mcp: getMcpRuntime(),
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
@@ -2151,7 +2317,18 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();
-  const sharedLines: AsyncIterable<string> = { [Symbol.asyncIterator]: () => lineIterator };
+  // `--print` supplies the one line the REPL would have read, so the turn runs
+  // through the same loop a person drives. The iterator ends immediately after,
+  // which is what makes the process exit rather than wait for a second turn.
+  const oneShotPrompt = flags.printPrompt;
+  const sharedLines: AsyncIterable<string> =
+    oneShotPrompt === undefined
+      ? { [Symbol.asyncIterator]: () => lineIterator }
+      : {
+          async *[Symbol.asyncIterator]() {
+            yield oneShotPrompt;
+          },
+        };
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
 
@@ -2282,6 +2459,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
@@ -2301,12 +2479,22 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       if (flags.resumePick === true && resumeId === undefined) {
         resumeId = latestSession(process.cwd())?.id;
       }
+      const events =
+        flags.eventsFile === undefined
+          ? undefined
+          : createFileEventSink(
+              flags.eventsFile,
+              (message) => {
+                emitSystem(`${message}\n`);
+              },
+              flags.eventsMaxField,
+            );
       try {
         await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
           cwd: process.cwd(),
           ...(flags.continueLast === true ? { continueLast: true } : {}),
           ...(resumeId !== undefined ? { resumeId } : {}),
-        }, flags.permissionModeFlag, slateSessionBox);
+        }, flags.permissionModeFlag, slateSessionBox, events);
       } finally {
         // Each connected server is a child process holding a pipe. Exiting
         // without closing them leaks one per session — and `closeServers`

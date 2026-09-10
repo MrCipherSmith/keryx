@@ -66,7 +66,22 @@ export interface OpenAiCompatCapabilityGrant {
    * loopback (use `allowLoopback`), metadata/link-local (169.254/16), or the
    * unspecified address — those stay denied even with this flag.
    */
-  readonly allowPrivateLan?: boolean;  /**
+  readonly allowPrivateLan?: boolean;
+  /**
+   * Ask the server to append a usage-bearing chunk to the stream.
+   *
+   * Without `stream_options: { include_usage: true }` an OpenAI-compatible stream
+   * carries NO usage at all, so `onUsage` never fires, `NormalizedUsage` stays
+   * empty and the session has no idea what it spent. Verified against x.ai: the
+   * same request returns zero usage chunks without the field and
+   * `prompt_tokens: 638, cached_tokens: 512` with it.
+   *
+   * Opt-in per grant rather than always-on, because a non-conformant
+   * OpenAI-compatible server may reject an unknown top-level field, and a local
+   * model that works today must keep working. Declared per provider in the registry
+   * and confirmed per provider; the loopback Ollama path leaves it alone.
+   */
+  readonly streamUsage?: boolean;  /**
    * Optional bearer credential for an authenticated OpenAI-compatible gateway
    * (e.g. OpenRouter). When set, an `Authorization: Bearer <apiKey>` header is
    * sent. Read from env by the caller; never logged or echoed here.
@@ -344,6 +359,9 @@ export class OpenAiCompatEngine implements ProviderPort {
     const payload: Record<string, unknown> = {
       model: request.modelId,
       stream: true,
+      // See `OpenAiCompatCapabilityGrant.streamUsage`: without this the stream
+      // reports no token usage whatsoever.
+      ...(this.deps.grant?.streamUsage === true ? { stream_options: { include_usage: true } } : {}),
       messages,
       ...(request.tools !== undefined
         ? {
