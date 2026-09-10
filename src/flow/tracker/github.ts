@@ -62,16 +62,25 @@ export const githubAdapter: TrackerAdapter = {
     isDraft: boolean;
     checksGreen: boolean | null;
     headSha: string | null;
+    baseRefName: string | null;
   }> {
     try {
       // `headRefOid` is the head COMMIT of the PR branch, which is what the
       // review gate compares a round's SHA against — not `headRefName`, which is
       // a branch name and moves under the round.
-      const view = await gh(["pr", "view", url, "--json", "isDraft,state,headRefOid"]);
+      //
+      // `baseRefName` IS a branch name, and that is what it is for: the
+      // completion gate compares where the merge landed against the base the
+      // flow recorded, and both sides of that comparison are names.
+      const view = await gh(["pr", "view", url, "--json", "isDraft,state,headRefOid,baseRefName"]);
       if (view.exitCode !== 0) {
-        return { exists: false, isDraft: false, checksGreen: null, headSha: null };
+        return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null };
       }
-      const parsed = JSON.parse(view.stdout) as { isDraft?: boolean; headRefOid?: string };
+      const parsed = JSON.parse(view.stdout) as {
+        isDraft?: boolean;
+        headRefOid?: string;
+        baseRefName?: string;
+      };
       // `gh pr checks` exits 0 when all checks pass, non-zero otherwise.
       const checks = await gh(["pr", "checks", url]);
       return {
@@ -82,9 +91,14 @@ export const githubAdapter: TrackerAdapter = {
         // the head UNKNOWN, and the gate must report that rather than compare
         // against an empty string and call it a mismatch.
         headSha: typeof parsed.headRefOid === "string" && parsed.headRefOid !== "" ? parsed.headRefOid : null,
+        // `null`, never `""`, for the reason above: an unread base must stay
+        // distinguishable from a base that is genuinely empty, because the gate
+        // fails differently for the two.
+        baseRefName:
+          typeof parsed.baseRefName === "string" && parsed.baseRefName !== "" ? parsed.baseRefName : null,
       };
     } catch {
-      return { exists: false, isDraft: false, checksGreen: null, headSha: null };
+      return { exists: false, isDraft: false, checksGreen: null, headSha: null, baseRefName: null };
     }
   },
 

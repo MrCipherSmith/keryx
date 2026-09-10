@@ -226,11 +226,19 @@ async function runInit(args: string[]): Promise<void> {
     title: optionValue(args, "--title"),
     issue: optionValue(args, "--issue"),
     slug: optionValue(args, "--slug"),
+    // The branch this work is told to land on. Recorded now because the
+    // completion gate has no other way to learn the INTENT: reading the pull
+    // request's base when the gate runs asks where it points today, which a
+    // retargeted PR answers in its own favour.
+    baseBranch: optionValue(args, "--base"),
   });
   banner("flow init", `Created flow ${result.flow.id}`);
   console.log(`  ${style.green(symbols.ok)} ${style.bold(result.flow.title)}`);
   note(result.dir);
   console.log(`  status: ${flowStatusLabel(result.flow.status)}`);
+  if (result.flow.baseBranch !== undefined) {
+    console.log(`  base:   ${result.flow.baseBranch}`);
+  }
   if (result.contextNotes.length > 0) {
     heading("Context collected");
     for (const contextNote of result.contextNotes) {
@@ -798,7 +806,7 @@ function requireId(args: string[]): string {
 function printHelp(): void {
   helpTitle("keryx flow", "agent-first managed work (flows)");
   helpUsage([
-    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>]',
+    'keryx flow init (--issue <url> | --title "<t>") [--slug <s>] [--base <branch>]',
     "keryx flow list",
     "keryx flow status <id>",
     "keryx flow freeze <id>",

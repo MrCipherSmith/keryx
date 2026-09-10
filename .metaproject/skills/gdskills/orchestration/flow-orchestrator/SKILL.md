@@ -198,13 +198,15 @@ keryx flow init --issue <url>
 or:
 
 ```bash
-keryx flow init --title "<short formalized problem>"
+keryx flow init --title "<short formalized problem>" --base "<branch the work must land on>"
 ```
 
 5. Run `keryx flow status <id>` and read the flow package.
-6. Record the git base branch from which the flow branch was created in
-   `context.md` and `journal.md`; the PR must later be merged into this exact
-   branch.
+6. `--base` records the branch in the flow record itself, where the completion
+   gate reads it. Note it in `context.md` and `journal.md` as well if it helps a
+   reader, but prose is not what the gate checks: before this flag the base
+   survived only as something an agent had written down, which is detectable at
+   dispatch and undetectable at completion.
 
 ## Phase 1: Initialize The Flow Package
 
@@ -442,9 +444,16 @@ How should this flow end?
 
 3. Follow the selected outcome:
 
-- **A - Create PR and merge:** create or confirm a PR in the author's name.
-  Preserve the base branch recorded during initialization. Do not mark the
-  flow implemented or complete before the PR is merged into that branch.
+- **A - Create PR and merge:** create or confirm a PR in the author's name,
+  opened against the base recorded at initialization. Do not mark the flow
+  implemented or complete before the PR is merged into that branch.
+
+  `keryx flow complete` now checks this rather than asking you to confirm it by
+  eye: its `base-branch` condition compares where the merge landed against the
+  base in the record, and refuses when they differ. It reports three states,
+  and only one of them is a pass — a flow that recorded no base gets
+  `not recorded`, which is not a pass either. So the useful thing to do here is
+  make sure the base WAS recorded, not to re-verify the merge yourself.
 
 ### A dispatched run answers the question from its input
 
