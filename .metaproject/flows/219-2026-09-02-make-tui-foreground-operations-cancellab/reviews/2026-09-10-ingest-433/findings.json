@@ -1,0 +1,32 @@
+[
+  {
+    "id": "R1-TEST-001",
+    "reviewer": "review-pr433",
+    "severity": "major",
+    "problem": "The Force-handoff wiring in forceMainQueue was covered only by a source-text audit that reads tui-shell.ts as text and regex-matches windows around anchor strings. Deleting the guard `if (!waitsForSettlement) return;` left all four audit assertions passing and the whole 101-test file green.",
+    "impact": "That guard is what stops a second Force press, arriving while the first is still settling, from awaiting settlement too and dispatching a second item into the operation the first has re-opened - `begin()` throwing 'a foreground operation is already active' out of a floating promise. The flow's own history records that exact regression found and fixed in review twice. A rule deleted from BETWEEN two matched lines is invisible to a text audit, so the class of regression this flow already suffered twice could ship green.",
+    "suggested_fix": "Extract the handoff logic into a directly-callable seam the way runAfterForegroundSettlement and ForegroundForceHandoff already were, and drive it with two overlapping presses.",
+    "evidence": "Removed the guard from forceMainQueue and ran the suite: `bun test src/tui/tui-shell.test.ts -t \"flow 219\"` gave 5 pass, 0 fail, and the full file gave 101 pass, 0 fail. Reverted; git status clean.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.test.ts",
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.test.ts - the four tests in the 'flow 219 ... (source-text audit)' describe block"
+      ],
+      "enumeration_method": "Read the whole describe block and confirmed every test shares the readFileSync + indexOf/toMatch pattern, then checked project-wide that no other test drives launchTuiAgentShell end to end."
+    },
+    "global_id": "2026-09-10-ingest-433#R1-TEST-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 1f5bb43e, which contains the fix, and could not make it reproduce. Deleting the guard from forceForegroundQueueItem now fails two behavioural tests: one with the real 'a foreground operation is already active' thrown from begin(), and one on runs equalling ['q1','q2'] where ['q1'] is expected. Restored; clean. Also confirmed the test's model matches production: runLine in tui-shell.ts calls foregroundOperation.begin() and the prior turn's finalizer settles synchronously before the awaited continuation resumes, so the re-entrancy the test relies on is real. Full src/tui and src/wiki suites: 943 pass, 0 fail.",
+      "verifier": "independent-verifier-433"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Fixed in 1f5bb43e: the Force rules moved into forceForegroundQueueItem, driven by three behavioural tests with two overlapping presses. Independently re-checked at 1f5bb43e and no longer reproducing."
+    }
+  }
+]
