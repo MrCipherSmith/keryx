@@ -34,8 +34,28 @@ export interface CheckoutRequest {
   readonly depth?: number;
 }
 
+/**
+ * Git LFS pointers are checked out as pointers, not as content.
+ *
+ * The target repository keeps screenshot baselines in LFS. A checkout in this
+ * isolated tree runs the smudge filter, which tries to download those objects from
+ * a remote the tree is about to drop — and the local clone does not hold the objects
+ * for older commits, so the checkout fails with "remote missing object" and takes
+ * the whole arm with it. Found on a dry run: the task whose base happened to be the
+ * clone's own HEAD worked, and an older base did not.
+ *
+ * Skipping the smudge is correct rather than merely expedient. An arm reads
+ * TypeScript; no task asks about a PNG, and no gate runs a screenshot test. What the
+ * tree gets is a pointer file where a binary would be, which is a faithful
+ * representation of a file whose content the measurement does not use.
+ */
+const GIT_LFS_SKIP_SMUDGE = "1";
+
 function run(cwd: string, args: readonly string[]): { code: number; stderr: string } {
-  const proc = Bun.spawnSync(["git", ...args], { cwd });
+  const proc = Bun.spawnSync(["git", ...args], {
+    cwd,
+    env: { ...process.env, GIT_LFS_SKIP_SMUDGE },
+  });
   return { code: proc.exitCode, stderr: proc.stderr.toString() };
 }
 

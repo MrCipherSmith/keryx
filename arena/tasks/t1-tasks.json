@@ -73,7 +73,7 @@
       "id": "acade8ab",
       "sha": "acade8abd47581318fe18fe507f3cd0db33114f3",
       "parent": "23b1ac3512bdc12065dfa820f83838eecfd0d756",
-      "query": "fix(graph): restore the graph canvas — drop the Node `events` import (#6137)",
+      "query": "fix(graph): restore the graph canvas \u2014 drop the Node `events` import (#6137)",
       "gold": [
         "eslint.config.mjs",
         "src/wrappers/sigma/programs/shared/texture/texture-events.ts",
@@ -153,5 +153,11 @@
         "src/data-catalog/schema-editor/dc-schema-editor-store.ts"
       ]
     }
+  ],
+  "sampleNotes": [
+    "6 of 13 tasks have a single-file gold set, which caps what any retrieval layer can contribute on those tasks.",
+    "Task 1405959d's only gold file is eslint.config.mjs \u2014 a root config. A code graph cannot help locate it; the answer is 'the lint config'. Kept because the draw was uniform and pre-registered, not because it is a good probe.",
+    "e2e/app/component/profileSearch.component.ts is the sole gold of 8078d774 and 57f92d67 and also appears in 6151fea2. Three of thirteen tasks share an answer, so effective independence is lower than n=13 implies and the paired test is mildly anti-conservative.",
+    "The goldSetSize filter dropped 242 of 600 candidates \u2014 every pull request touching more than eight source files \u2014 so the sample is systematically the small surgical change, not the large one."
   ]
 }
