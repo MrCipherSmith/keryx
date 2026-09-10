@@ -20,6 +20,8 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
+import { loadOAuthGrant } from "../lib/oauth/grants";
+import { providerByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
   NormalizedMessage,
@@ -524,8 +526,38 @@ function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"]
     return makeProvider(name, model, {
       fetch: globalThis.fetch,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...oauthCredentialsFor(name),
     });
   };
+}
+
+/**
+ * Hand a device-code grant to the provider factory as the credential it looks for.
+ *
+ * Without this, `keryx auth login <provider>` is a command that stores a token
+ * nothing reads. `makeProvider` resolves an OpenAI-compatible provider's key from
+ * `env[definition.envKey]` — `XAI_API_KEY` for grok — and this factory passed
+ * neither `env` nor `credentials`, so `process.env` was the only source. A user who
+ * authenticated by subscription and never exported an API key therefore got
+ * `FakeProvider`: an offline stub that answers nothing while the session header
+ * still names the provider that was asked for.
+ *
+ * The grant's access token is passed through `credentials` rather than written into
+ * `process.env`, so it reaches the one construction that needs it and does not leak
+ * into every child process the session later spawns. An explicit environment key
+ * still wins: an operator who exported one is making a choice.
+ */
+function oauthCredentialsFor(name: string): { credentials?: Record<string, string | undefined> } {
+  const definition = providerByName(name);
+  const envKey = definition?.envKey;
+  if (envKey === undefined) return {};
+
+  const fromEnv = process.env[envKey];
+  if (fromEnv !== undefined && fromEnv.length > 0) return {};
+
+  const grant = loadOAuthGrant(name);
+  if (grant === undefined || grant.access.length === 0) return {};
+  return { credentials: { ...process.env, [envKey]: grant.access } };
 }
 
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
