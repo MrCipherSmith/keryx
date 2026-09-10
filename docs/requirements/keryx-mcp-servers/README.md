@@ -16,17 +16,46 @@ OpenCode's "register every MCP tool on the model" shape.
 
 ## Status
 
-**specification ready (future).** Nothing in this package is a claim about
-the runtime. Verified against current code on this branch:
+**specification ready; the naming prerequisite has shipped, nothing else.**
+
+Updated 2026-09-10. One piece of P2 landed ahead of the rest, because it was
+blocking the package rather than part of it: `keryx mcp` used to BE the
+publisher surface, so the consumer this package specifies had nowhere to live.
+
+Shipped in 0.2.85 (PR #499, #500):
+
+<!-- retired-spellings-ok: line — the was-to-is record of the rename itself, which cannot be written without naming the spelling that was retired -->
+
+- `keryx mcp serve` → `keryx serve-mcp`; `keryx mcp install|uninstall` →
+  `keryx integrate [--remove] <editor>`. The old spellings still work and each
+  prints exactly one deprecation line. **`keryx mcp` is now free for the
+  consumer verbs this package specifies** (`add|list|remove|enable|disable|
+  doctor`).
+- The TUI installer view gained `/integrations`. `/mcp` still opens it and is
+  marked deprecated — deliberately NOT repointed at the consumer, which does
+  not exist yet: a slash command aimed at nothing is worse than one aimed at
+  the old thing. Repointing it is P2's job (D-04).
+- **AC9 is already enforced.** `/mcps` cannot be registered:
+  `src/commands/agent-commands.confusable.test.ts` fails the build on any
+  second command differing only by a trailing `s` unless declared, and the
+  guard is mutation-verified — inserting `/mcps` into the registry fails the
+  named test on its pair assertion.
+
+Everything below this line is still unimplemented, and the rest of P2 (the
+consumer modal, the Tools-tab caption) is untouched.
+
+Verified against current code:
 
 - `src/tui/mcp-inspector.ts` still states that keryx does not consume MCP
-  servers as a client. `/mcp` installs **keryx itself** into editor configs.
+  servers as a client. `/mcp` and `/integrations` both install **keryx itself**
+  into editor configs — the caption is still true and AC17 is still open.
 - `src/mcp-client/` connects only to a spawned `codex mcp-server` over stdio.
   `McpClientConnection` has `callTool` / elicitation / `codex/event` / `close`.
   It does not load user config, does not speak HTTP, and does not register
   discovered tools on the interactive agent.
-- `keryx mcp` today is `serve` / `install` / `uninstall` only
-  (`src/commands/mcp.ts`).
+- `keryx mcp` is now a deprecation alias only (`src/commands/mcp.ts`); the
+  publisher lives in `src/commands/serve-mcp.ts` and `src/commands/integrate.ts`.
+  No consumer verb is implemented.
 - `GatedToolRisk` is `"read" | "shell" | "destructive" | "delegate" | "write"`
   (`src/commands/permission-mode.ts`). There is no MCP tool risk class.
 - Interactive tools are a static `InteractiveTool[]` injected into
