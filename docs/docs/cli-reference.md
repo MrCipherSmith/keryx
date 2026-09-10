@@ -2295,6 +2295,74 @@ has no notion of the keryx manifest. Headless codex needs `codex exec
 runtime choice at that prompt). The default non-interactive `init` never enables MCP
 nor writes a client config.
 
+## mcp (consumer) — connecting keryx TO other MCP servers
+
+Everything above is keryx **as** an MCP server. This is the other direction:
+third-party MCP servers that `keryx shell` connects to, so the model can use
+their tools.
+
+```
+keryx mcp list [--json]
+keryx mcp add <name> [-e KEY=value]… [--scope user|project] [--force] -- <command…>
+keryx mcp add --transport http|sse <name> <url> [--header "K: V"]…
+keryx mcp remove <name> [--scope user|project]
+keryx mcp enable | disable <name>
+keryx mcp doctor [name] [--json]
+```
+
+| Command | Description |
+|---|---|
+| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. |
+| `add` | Writes a native entry. The stdio form REQUIRES `--` before the server's command: without it, `keryx mcp add fs -- npx pkg --json` could not tell whose `--json` that is. `-e` is repeatable. `--scope user` (default) writes `mcp-servers.json` in the keryx config dir, owner-only; `--scope project` writes `<root>/.keryx/mcp-servers.json`, which is meant to be committed. An existing name is refused unless `--force`. |
+| `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http`. **Configurable in this release, not yet connected** — remote transports arrive in P1, and `doctor` reports such a server as `not-attempted` rather than pretending it failed. |
+| `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |
+| `enable` / `disable` | A personal overlay in the keryx config dir, never an edit to the config file. Disabling a server your project committed produces no diff for your colleagues; enabling one the project disabled works for the same reason. |
+| `doctor` | Config problems, a real connection attempt, the tool count, and every tool that had to be skipped with the reason why. `--json` for the machine-readable form. Exits non-zero when anything needs you. |
+
+**Config files.**
+
+| File | Role |
+|---|---|
+| `<keryx config dir>/mcp-servers.json` | User-global. Owner-only (0600) — `env` values are often tokens. |
+| `<project>/.keryx/mcp-servers.json` | Project-scoped, meant to be committed. Wins over the user file for the same name (replace, not field-merge). |
+| `<keryx config dir>/mcp-servers-disabled.json` | Your personal enable/disable overlay. Wins over both, in either direction. |
+
+`${VAR}` and `${VAR:-default}` expand in `command`, `args`, `env`, `url` and
+`headers` at load time.
+
+**What the model sees.** Two tools, `search_tool` and `use_tool` — not one
+registered tool per MCP tool, however many servers you connect. The model
+searches for a tool by description, then calls it by qualified name
+(`server__tool`). The trade this buys is a tool surface whose cost does not
+grow with your server list; the cost is that the model cannot see a tool it
+has not searched for.
+
+**Approval.** Every `use_tool` call goes through the same approval gate as
+`shell_exec` and `apply_patch`. Under `--trust` a call still asks, and with no
+approver present (headless) it is denied rather than allowed. A server's own
+"this tool is read-only" annotation is shown to the model as a hint and is
+never allowed to skip the prompt.
+
+**Environment.** A server is spawned with your environment minus the
+credential-shaped variables keryx strips from every child it launches
+(`ANTHROPIC_API_KEY` and its family, plus the whole `KERYX_*` namespace). A
+server that genuinely needs one takes it explicitly via `-e`.
+
+```
+$ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes
+Added "fs" to /home/you/.local/share/keryx/mcp-servers.json (created).
+Run `keryx mcp doctor fs` to check it connects.
+
+$ keryx mcp doctor fs
+fs [user] stdio: connected
+  file: /home/you/.local/share/keryx/mcp-servers.json
+  tools: 14
+```
+
+Not yet in this release: HTTP/SSE connection, OAuth, importing servers you
+already configured in Cursor/Claude/`.mcp.json`, and a TUI view. See
+`docs/requirements/keryx-mcp-servers/`.
+
 Tool and resource exposure is filtered by the manifest's `expose.modules` list — a
 disabled module is hidden from `tools/list` and `resources/list`.
 
