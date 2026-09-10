@@ -1434,8 +1434,14 @@ async function installManagedHook(
     ? await readFile(hookPath, "utf8")
     : "#!/usr/bin/env sh\n";
   const blockPattern = new RegExp(`${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`);
+  // `() => managedBlock`, not `managedBlock`. The string form of
+  // String.replace reads `$'`, "$`", `$&` and `$$` in the replacement as
+  // substitution patterns, and these blocks are shell scripts full of `$`.
+  // `$'` means "everything after the match", so a hook containing it spliced
+  // the rest of the file back in and silently duplicated every managed block
+  // below it. The function form has no such reading.
   const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
+    ? existing.replace(blockPattern, () => managedBlock)
     : `${existing.trimEnd()}\n\n${managedBlock}\n`;
 
   await writeFile(hookPath, next, "utf8");
