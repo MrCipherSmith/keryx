@@ -113,10 +113,31 @@ const RULES: Rule[] = [
   // carry a recognised prefix (`sk-…`) was still masked by the provider-shaped
   // rules above, which is why one key in a two-key file could be redacted while
   // the other was printed in full (keryx session 4a24a760).
+  // The lowercase credential-file form, restricted to names that mean one thing.
+  //
+  // `redactSensitiveText`'s own contract names `cat ~/.aws/credentials` as the
+  // case it exists to stop, and that file writes `aws_secret_access_key = …` in
+  // lower case — which the uppercase env-assignment rule below could never
+  // match. Verified before this rule existed: the value passed through to the
+  // model context untouched.
+  //
+  // Deliberately a short, unambiguous list rather than a case-insensitive
+  // version of the rule below. `[A-Z0-9_]*SECRET` lowercased would fire on
+  // ordinary prose and on identifiers like `client_secret_name`, and a redactor
+  // that mangles legitimate text gets turned off.
+  {
+    policyId: "secrets.credential-file-assignment",
+    regex:
+      /\b((?:aws_)?secret_access_key|aws_session_token|aws_secret_key|client_secret)\s*[:=]\s*["']?([^\s"'#]{6,})/gi,
+    severity: "critical",
+    confidence: 0.95,
+    remediation: "Rotate the credential; it was read from a credentials file into agent-visible output.",
+    valueGroup: 2,
+  },
   {
     policyId: "secrets.env-assignment",
     regex:
-      /\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))["']?\s*[:=]\s*["']?([^\s"'#]{6,})/g,
+      /\b([A-Z0-9_]*(?:DATABASE_URL|JWT_SECRET|SECRET(?:_KEY)?|API_?KEY|ACCESS_?KEY|ACCESS_?TOKEN|AUTH_?TOKEN|PASSWORD|PRIVATE_?KEY|TOKEN))["']?\s*[:=]\s*["']?([^\s"'#]{6,})/g,
     severity: "high",
     confidence: 0.85,
     remediation: "Move the secret to an untracked env file or secrets manager.",
