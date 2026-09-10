@@ -7,9 +7,9 @@
   "id": "231",
   "slug": "the-gdwiki-freshness-route-lived-only-in",
   "title": "The gdwiki freshness route lived only in the generated file, so keryx update deleted it",
-  "status": "implemented",
+  "status": "in-progress",
   "createdAt": "2026-09-04T18:22:42.985Z",
-  "updatedAt": "2026-09-04T18:27:00.345Z",
+  "updatedAt": "2026-09-10T04:14:16.540Z",
   "source": {
     "type": "description",
     "ref": null
@@ -182,6 +182,15 @@
       "at": "2026-09-04T18:27:00.345Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/468 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T04:14:13.007Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T04:14:16.540Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/231-2026-09-04-the-gdwiki-freshness-route-lived-only-in/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#468 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__468.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 468 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
     }
   ]
 }
