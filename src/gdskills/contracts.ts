@@ -40,6 +40,30 @@ export type ContractEnforcement =
       refuses: string;
     }
   | {
+      /**
+       * The refusal exists and works — but only when the caller asks for it.
+       *
+       * Separate from `production` because they are different guarantees and
+       * were briefly given the same word. `job-orchestrator-state` is validated
+       * on every write because keryx performs the write; there is nothing to
+       * opt into. `review-pr-feedback-output` is validated when
+       * `--result <file>` is passed, and an invocation that omits the flag is
+       * refused nothing.
+       *
+       * Recording both as `production` overstated the second by exactly the
+       * distance this registry exists to measure. A review of the change that
+       * introduced it found the overstatement by enumerating the documented
+       * invocations and finding the flag in none of them.
+       */
+      kind: "opt-in";
+      /** Repo-relative non-test module that loads this schema when asked to. */
+      module: string;
+      /** The flag or call that switches the refusal on. */
+      switchedOnBy: string;
+      /** What a rejected value looks like, in one sentence. */
+      refuses: string;
+    }
+  | {
       kind: "none";
       /**
        * Why nothing can refuse it. Required: a gap with no stated reason reads
@@ -217,17 +241,29 @@ export const CONTRACTS: ContractInfo[] = [
       "Result review-pr-feedback returns: verdict counts, the injection-screen record, and what the fix run merged.",
     sourcePath: "src/gdskills/bundled/skills/review/review-pr-feedback/output-contract.schema.json",
     enforcement: {
-      kind: "production",
-      module: "src/commands/review.ts",
       /*
-       * This entry said `none` first, and briefly said `production` pointing at
-       * src/review/managed.ts before that — where the guard in
-       * contract-enforcement.test.ts rejected it by name for containing no
-       * `loadSchema` call. The guard caught its own author, which is the only
-       * reason this claim is worth reading now.
+       * `opt-in`, not `production`, and the difference was found by review.
+       *
+       * This entry said `none` first; then `production` pointing at
+       * src/review/managed.ts, which the guard rejected for containing no
+       * `loadSchema` call; then `production` pointing here, which was true
+       * about the code and false about the guarantee. A reviewer enumerated
+       * every documented `comments reply` invocation — seven, across
+       * review-pr-feedback, review-orchestrator and job-orchestrator's five
+       * per-agent copies — and found `--result` in none of them. The refusal
+       * was real and unreached.
+       *
+       * The flag is now in the documented Step 10 invocation, so the skill
+       * offers its own result every time it replies. It stays `opt-in`
+       * regardless: an agent that omits the flag is refused nothing, and that
+       * is a weaker promise than `job-orchestrator-state`, which keryx
+       * validates on every write because keryx performs the write.
        */
+      kind: "opt-in",
+      module: "src/commands/review.ts",
+      switchedOnBy: "keryx review comments reply --result <file>",
       refuses:
-        "`keryx review comments reply --result <file>` validates the skill's result before the pass is built, so nothing reaches the pull request when the result contradicts itself — an analyze-mode run reporting a branch and a merge, or a record saying the injection screen never ran while claiming it excluded comments.",
+        "A result that contradicts itself, before the pass is built and before any network call: an analyze-mode run reporting a branch and a merge, or a record saying the injection screen never ran while claiming it excluded comments.",
     },
   },
   {

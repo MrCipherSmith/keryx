@@ -47,7 +47,13 @@ const REJECTING_PAYLOAD: Record<string, { payload: unknown; because: string }> =
 };
 
 describe("the contracts that refuse in production still refuse", () => {
-  const enforced = CONTRACTS.filter((c) => c.enforcement.kind === "production");
+  // Both kinds that claim a refusal, not just `production`. An `opt-in`
+  // contract refuses when its flag is passed, so its schema can be loosened
+  // into accepting what it used to reject exactly as easily — and it would be
+  // odd for the weaker guarantee to also get the weaker pinning.
+  const enforced = CONTRACTS.filter(
+    (c) => c.enforcement.kind === "production" || c.enforcement.kind === "opt-in",
+  );
 
   test("every enforced contract has a rejecting payload pinned here", () => {
     // Otherwise this file silently stops covering a contract the moment one is
