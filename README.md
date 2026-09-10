@@ -431,6 +431,29 @@ keryx integrate cursor                      # opt-in read-only MCP server
 Each of those commands has its own `--runtime` vocabulary — run
 `keryx <command> --help` for the values it accepts.
 
+### Using other people's MCP servers
+
+The commands above install keryx *into* an editor as an MCP server. The
+reverse also works: `keryx shell` connects out to MCP servers you configure,
+and the model can use their tools.
+
+```bash
+keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes
+keryx mcp doctor fs      # does it connect, how many tools, what got skipped
+keryx mcp list           # every server, its source, and whether it is disabled
+```
+
+The model gets two tools — `search_tool` and `use_tool` — however many
+servers you connect, rather than one registered tool per MCP tool: the
+advertised surface stays a fixed cost instead of growing with your server
+list. Every call goes through the same approval prompt as `shell_exec`, a
+server is spawned without keryx's own credentials in its environment, and
+`--scope project` writes a `.keryx/mcp-servers.json` you can commit while
+`keryx mcp disable` stays personal to you.
+
+stdio servers today; HTTP/SSE, OAuth, and importing what you already
+configured in Cursor or Claude are next.
+
 ## Requirements and compatibility
 
 | Requirement | Status |

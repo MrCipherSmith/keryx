@@ -1,0 +1,349 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "246",
+  "slug": "mcp-servers-p0-config-stdio-transport-an",
+  "title": "MCP servers P0: config, stdio transport, and search_tool/use_tool in the shell",
+  "status": "done",
+  "createdAt": "2026-09-10T08:49:21.941Z",
+  "updatedAt": "2026-09-10T16:30:59.060Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e1ef5532985d344709d24fabac34ea8655f725a20628d97caadc57b261108326",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-10T11:05:41.901Z",
+      "note": "config.test.ts + config.schema-parity.test.ts (29 tests). Project-beats-user merge asserted on loadMcpServers directly; the cwd→git-root walk asserted with a fixture nested two directories deep (projectConfigFiles); overlay and ${VAR}/${VAR:-default} expansion asserted at load. Round-tripped through the READER in store.test.ts, not just re-read as JSON."
+    },
+    "AC2": {
+      "at": "2026-09-10T11:05:42.019Z",
+      "note": "stdio.live.test.ts, gated block. RAN against the real @modelcontextprotocol/server-filesystem fetched by npx: status connected, non-zero tool count, 7 pass with KERYX_ALLOW_REAL_SUBPROCESS=1. Gated and excluded from CI per the keryx-mcp-client precedent; the gating is recorded in the file header rather than the criterion dropped."
+    },
+    "AC3": {
+      "at": "2026-09-10T11:05:42.131Z",
+      "note": "BOTH halves: catalog.test.ts asserts the over-long/invalid FQN is absent from entries, and doctor.test.ts asserts doctor lists it as skipped WITH the reason (formatDoctorReport output checked too). Mutation: dropping the skipped array fails the doctor test. Real-world instance found by pointing doctor at keryx serve-mcp — 26 skipped, recorded as D-13."
+    },
+    "AC4": {
+      "at": "2026-09-10T11:05:51.044Z",
+      "note": "mcp-tool-surface.test.ts, asserted against buildInteractiveAgentTools output — the definitions the agent actually gets, not the catalog. search_tool and use_tool present; none of the three FQNs present. Also: without a runtime the pair is absent entirely, and adding one adds exactly two. shell.test.ts's exact TUI tool-name list now includes both. Mutation: registering the pair unconditionally fails two tests."
+    },
+    "AC5": {
+      "at": "2026-09-10T11:05:51.162Z",
+      "note": "stdio.live.test.ts against a REAL fixture MCP server over stdio, no network (fixtures/mcp-servers/echo-server.ts, hand-rolled JSON-RPC so a framing bug cannot cancel out against the SDK on both sides). search_tool returns fx__echo; use_tool performs tools/call and returns the content the other process produced; result marked untrusted. Handshake and tools/list asserted separately."
+    },
+    "AC6": {
+      "at": "2026-09-10T11:05:51.275Z",
+      "note": "Two levels. tools.test.ts asserts the cap CONSTANT itself (MAX_TOOL_RESULT_BYTES === 20_000) so a silently raised cap fails rather than passes. stdio.live.test.ts makes a real server return 40,000 bytes and asserts the model-visible output carries the truncation marker and stays under cap+200."
+    },
+    "AC7": {
+      "at": "2026-09-10T11:06:04.461Z",
+      "note": "All three arms driven through runAgentTurn — the REAL gate, not a substitute (mcp-tool-surface.test.ts). ask: requestApproval called with use_tool, server reached only after yes; refusal: server never reached; trust: STILL asks; headless (no requestApproval): denied, no call. Anti-vacuity: auto mode does NOT ask — that test caught my first attempt passing permissionMode on the wrong object, which had made the other three assert ask-mode four times. NOTE: implemented WITHOUT a per-tool approval layer. My first cut added approveMcpCall inside use_tool; D-05 forbids a fourth decision layer and it would have double-prompted, since use_tool's static destructive risk already routes every call through resolveApprovalDecision. Deleted. classifyToolRisk is now advisory output in search_tool hits only — de-escalating on a third-party readOnlyHint is precisely what ADR-0009 forbids."
+    },
+    "AC8": {
+      "at": "2026-09-10T11:06:04.572Z",
+      "note": "Twice. runtime.test.ts: two configured servers, one connect throws — good is connected with its tools in the catalog, bad is failed with the message, createMcpRuntime never throws and never blocks (asserted: it returns with the dial outstanding). stdio.live.test.ts: same shape with a command that genuinely does not exist, so the failure comes from the OS rather than the test. Malformed config also carried, not thrown."
+    },
+    "AC9": {
+      "at": "2026-09-10T11:06:04.681Z",
+      "note": "runtime.test.ts, both routes to disabled (file enabled:false, and personal overlay). The ABSENCE OF THE PROCESS is asserted directly — a dial counter that must be 0 — not inferred from the reported status. Plus an anti-vacuity test that an enabled server IS dialled, so the counter can move. store.test.ts asserts disable leaves the config file intact, and byte-identical for a committed project file."
+    },
+    "AC10": {
+      "at": "2026-09-10T11:06:15.922Z",
+      "note": "constraints.test.ts: CAPABILITY_REGISTRY holds no id containing 'mcp', asserted against the real imported array; plus a non-empty check so the filter is not vacuous; plus no file in src/mcp-servers/ imports capability/ at all."
+    },
+    "AC11": {
+      "at": "2026-09-10T11:06:16.037Z",
+      "note": "constraints.test.ts, each checked rather than asserted. No static @modelcontextprotocol/sdk import in any production file here, AND the stronger end-to-end form: 'bun src/cli.ts mcp --help' is spawned and must exit 0. No foreign config path named in code (mcp.config.json, .cursor/mcp.json, .claude.json, .mcp.json) — comments stripped first, so a file is not failed for documenting the rule it obeys. Store writes only via userConfigFile/projectConfigFile/overlayFile. No Codex import (D-12). connectCodexMcpClient/gatedSuperviseCodexMcpRun suites still green in the full run. Bare 'keryx mcp' still serves: mcp.ts routes only the six consumer verbs and leaves the no-subcommand path on serveMcpCommand; mcp-servers.test.ts asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    "AC12": {
+      "at": "2026-09-10T11:06:16.148Z",
+      "note": "All four from SOURCE, none from the installed binary. bun test: 8623 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass. One order-dependent flake observed in src/sac/session-wrap-up.test.ts on an earlier full run (passes in isolation and on re-run, untouched by this work) — recorded, not silently ignored."
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/522"
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context was the package itself: specification.md §2-§5, implementation-plan.md P0 items 1-8, decisions.md D-01..D-12. D-05 in particular decided the approval design, after a first cut violated it."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "All 8 P0 items, plus the shell wiring item 5 required and I had initially skipped. New modules: config, store, catalog, manager, tools, doctor, runtime, spawn-env; CLI in src/commands/mcp-servers.ts routed from mcp.ts."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "191 tests across 12 files in src/mcp-servers/ + src/commands/. Includes a real stdio fixture server, a flag-gated real-npx run, and the agent gate driven through runAgentTurn. 13 mutations applied and all 13 killed by the tests that name them."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review found two real defects in my own work, both fixed before the PR left draft: (1) the tool pair had zero production callers — built and tested but never wired, so AC4/AC8/AC9 could not have been met; (2) the in-tool approval gate violated D-05's 'no fourth decision layer' and would have double-prompted, while adding de-escalation on a third-party readOnlyHint that ADR-0009 forbids. PR #522 ready for review, CI green."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-10T08:49:21.941Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-10T08:50:53.943Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-10T09:27:39.893Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-10T11:05:41.901Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: config.test.ts + config.schema-parity.test.ts (29 tests). Project-beats-user merge asserted on loadMcpServers directly; the cwd→git-root walk asserted with a fixture nested two directories deep (projectConfigFiles); overlay and ${VAR}/${VAR:-default} expansion asserted at load. Round-tripped through the READER in store.test.ts, not just re-read as JSON."
+    },
+    {
+      "at": "2026-09-10T11:05:42.019Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: stdio.live.test.ts, gated block. RAN against the real @modelcontextprotocol/server-filesystem fetched by npx: status connected, non-zero tool count, 7 pass with KERYX_ALLOW_REAL_SUBPROCESS=1. Gated and excluded from CI per the keryx-mcp-client precedent; the gating is recorded in the file header rather than the criterion dropped."
+    },
+    {
+      "at": "2026-09-10T11:05:42.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: BOTH halves: catalog.test.ts asserts the over-long/invalid FQN is absent from entries, and doctor.test.ts asserts doctor lists it as skipped WITH the reason (formatDoctorReport output checked too). Mutation: dropping the skipped array fails the doctor test. Real-world instance found by pointing doctor at keryx serve-mcp — 26 skipped, recorded as D-13."
+    },
+    {
+      "at": "2026-09-10T11:05:51.044Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mcp-tool-surface.test.ts, asserted against buildInteractiveAgentTools output — the definitions the agent actually gets, not the catalog. search_tool and use_tool present; none of the three FQNs present. Also: without a runtime the pair is absent entirely, and adding one adds exactly two. shell.test.ts's exact TUI tool-name list now includes both. Mutation: registering the pair unconditionally fails two tests."
+    },
+    {
+      "at": "2026-09-10T11:05:51.162Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: stdio.live.test.ts against a REAL fixture MCP server over stdio, no network (fixtures/mcp-servers/echo-server.ts, hand-rolled JSON-RPC so a framing bug cannot cancel out against the SDK on both sides). search_tool returns fx__echo; use_tool performs tools/call and returns the content the other process produced; result marked untrusted. Handshake and tools/list asserted separately."
+    },
+    {
+      "at": "2026-09-10T11:05:51.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Two levels. tools.test.ts asserts the cap CONSTANT itself (MAX_TOOL_RESULT_BYTES === 20_000) so a silently raised cap fails rather than passes. stdio.live.test.ts makes a real server return 40,000 bytes and asserts the model-visible output carries the truncation marker and stays under cap+200."
+    },
+    {
+      "at": "2026-09-10T11:06:04.461Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: All three arms driven through runAgentTurn — the REAL gate, not a substitute (mcp-tool-surface.test.ts). ask: requestApproval called with use_tool, server reached only after yes; refusal: server never reached; trust: STILL asks; headless (no requestApproval): denied, no call. Anti-vacuity: auto mode does NOT ask — that test caught my first attempt passing permissionMode on the wrong object, which had made the other three assert ask-mode four times. NOTE: implemented WITHOUT a per-tool approval layer. My first cut added approveMcpCall inside use_tool; D-05 forbids a fourth decision layer and it would have double-prompted, since use_tool's static destructive risk already routes every call through resolveApprovalDecision. Deleted. classifyToolRisk is now advisory output in search_tool hits only — de-escalating on a third-party readOnlyHint is precisely what ADR-0009 forbids."
+    },
+    {
+      "at": "2026-09-10T11:06:04.572Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: Twice. runtime.test.ts: two configured servers, one connect throws — good is connected with its tools in the catalog, bad is failed with the message, createMcpRuntime never throws and never blocks (asserted: it returns with the dial outstanding). stdio.live.test.ts: same shape with a command that genuinely does not exist, so the failure comes from the OS rather than the test. Malformed config also carried, not thrown."
+    },
+    {
+      "at": "2026-09-10T11:06:04.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: runtime.test.ts, both routes to disabled (file enabled:false, and personal overlay). The ABSENCE OF THE PROCESS is asserted directly — a dial counter that must be 0 — not inferred from the reported status. Plus an anti-vacuity test that an enabled server IS dialled, so the counter can move. store.test.ts asserts disable leaves the config file intact, and byte-identical for a committed project file."
+    },
+    {
+      "at": "2026-09-10T11:06:15.923Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: constraints.test.ts: CAPABILITY_REGISTRY holds no id containing 'mcp', asserted against the real imported array; plus a non-empty check so the filter is not vacuous; plus no file in src/mcp-servers/ imports capability/ at all."
+    },
+    {
+      "at": "2026-09-10T11:06:16.037Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: constraints.test.ts, each checked rather than asserted. No static @modelcontextprotocol/sdk import in any production file here, AND the stronger end-to-end form: 'bun src/cli.ts mcp --help' is spawned and must exit 0. No foreign config path named in code (mcp.config.json, .cursor/mcp.json, .claude.json, .mcp.json) — comments stripped first, so a file is not failed for documenting the rule it obeys. Store writes only via userConfigFile/projectConfigFile/overlayFile. No Codex import (D-12). connectCodexMcpClient/gatedSuperviseCodexMcpRun suites still green in the full run. Bare 'keryx mcp' still serves: mcp.ts routes only the six consumer verbs and leaves the no-subcommand path on serveMcpCommand; mcp-servers.test.ts asserts serve/install/uninstall are NOT claimed by the consumer surface."
+    },
+    {
+      "at": "2026-09-10T11:06:16.148Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: All four from SOURCE, none from the installed binary. bun test: 8623 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean. bun src/cli.ts skills verify --bundled: pass. One order-dependent flake observed in src/sac/session-wrap-up.test.ts on an earlier full run (passes in isolation and on re-run, untouched by this work) — recorded, not silently ignored."
+    },
+    {
+      "at": "2026-09-10T11:06:25.219Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-10T11:06:25.327Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-10T11:06:25.439Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-10T11:09:34.404Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-10T11:09:37.674Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T12:06:19.638Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T12:06:26.024Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — terminal-dispositions (violated): 27 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-522#F-001 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-002 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-003 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-004 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-005 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-006 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-007 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-008 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-009 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-010 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-011 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-012 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-013 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-014 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-015 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-016 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-017 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-018 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-019 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-020 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-021 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-022 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-023 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-024 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-025 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-032 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-10-ingest-522#F-033 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | head-commit (violated): the latest round ran against 976ae674d3b8723c8a4c62ee0b73abfd3299874a, but the PR head is 448323c5da3164e646458040e0b619b5c242ea0f. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#522 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__522.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 522 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (violated): round `2026-09-10-ingest-522` ran with `verification_mode: annotate` and received 0 claims while retaining 27 finding(s) at or above `minor` (2026-09-10-ingest-522#F-001, 2026-09-10-ingest-522#F-002, 2026-09-10-ingest-522#F-003, 2026-09-10-ingest-522#F-004, 2026-09-10-ingest-522#F-005, 2026-09-10-ingest-522#F-006, 2026-09-10-ingest-522#F-007, 2026-09-10-ingest-522#F-008, 2026-09-10-ingest-522#F-009, 2026-09-10-ingest-522#F-010, 2026-09-10-ingest-522#F-011, 2026-09-10-ingest-522#F-012, 2026-09-10-ingest-522#F-013, 2026-09-10-ingest-522#F-014, 2026-09-10-ingest-522#F-015, 2026-09-10-ingest-522#F-016, 2026-09-10-ingest-522#F-017, 2026-09-10-ingest-522#F-018, 2026-09-10-ingest-522#F-019, 2026-09-10-ingest-522#F-020, 2026-09-10-ingest-522#F-021, 2026-09-10-ingest-522#F-022, 2026-09-10-ingest-522#F-023, 2026-09-10-ingest-522#F-024, 2026-09-10-ingest-522#F-025, 2026-09-10-ingest-522#F-032, 2026-09-10-ingest-522#F-033). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-10T16:16:47.726Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:16:52.931Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:16:58.495Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 2 of 5 conditions failed — terminal-dispositions (violated): 61 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-522#F-001 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-002 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r03#F-003 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-004 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-005 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522#F-006 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-007 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-008 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-009 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-010 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-011 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-012 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r03#F-013 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522#F-014 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-015 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r03#F-016 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-017 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522#F-018 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-019 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-020 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r03#F-021 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522#F-022 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-023 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r03#F-024 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522#F-025 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-032 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-10-ingest-522-r03#F-001 (blocker, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-002 (blocker, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-006 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-007 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-008 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-009 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-010 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-011 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-012 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-014 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-015 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-018 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-019 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-020 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-023 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-025 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-022 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-034 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-035 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-036 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-037 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-038 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-039 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-040 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-041 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-042 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-043 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-044 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-045 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-046 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-047 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-048 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-049 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-051 (major, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-10-ingest-522-r03#F-050 (minor, round 2026-09-10-ingest-522-r03): marked fixed (`acted-on`) but its evidence names no commit SHA | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#522 was last collected against 448323c5da3164e646458040e0b619b5c242ea0f (round 1), but the PR head is 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4. Everything anyone said after 448323c5da3164e646458040e0b619b5c242ea0f is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 522 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-10T16:17:46.821Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:17:46.931Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:17:52.984Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 1 of 5 conditions failed — terminal-dispositions (violated): 61 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-522#F-001 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-002 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r04#F-003 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-004 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-005 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522#F-006 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-007 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-008 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-009 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-010 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-011 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-012 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r04#F-013 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522#F-014 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-015 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r04#F-016 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-017 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522#F-018 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-019 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-020 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r04#F-021 (minor, round 2026-09-10-ingest-522-r04): marked fixed at c1cde3c4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522#F-022 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-023 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522-r04#F-024 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522#F-025 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-032 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) | 2026-09-10-ingest-522-r04#F-001 (blocker, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-002 (blocker, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-006 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-007 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-008 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-009 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-010 (major, round 2026-09-10-ingest-522-r04): marked fixed at 68f2c19d but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-011 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-012 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-014 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-015 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-018 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-019 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-020 (minor, round 2026-09-10-ingest-522-r04): marked fixed at c1cde3c4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-023 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-025 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 976ae674 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-022 (minor, round 2026-09-10-ingest-522-r04): marked fixed at c1cde3c4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-034 (major, round 2026-09-10-ingest-522-r04): marked fixed at c9a63788 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-035 (major, round 2026-09-10-ingest-522-r04): marked fixed at c9a63788 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-036 (major, round 2026-09-10-ingest-522-r04): marked fixed at c9a63788 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-037 (major, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-038 (major, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-039 (major, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-040 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-041 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-042 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-043 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-044 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-045 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-046 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-047 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-048 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-049 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-051 (major, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-10-ingest-522-r04#F-050 (minor, round 2026-09-10-ingest-522-r04): marked fixed at 6ff3f8a2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-10T16:19:13.446Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:19:13.557Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:19:18.868Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 1 of 5 conditions failed — terminal-dispositions (violated): 18 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-522#F-001 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-002 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-006 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-007 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-008 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-009 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-010 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-011 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-012 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-014 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-015 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-018 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-019 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-020 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-022 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-023 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-025 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-032 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-10T16:20:12.594Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:20:12.714Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:20:18.640Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green | review: 1 of 5 conditions failed — terminal-dispositions (violated): 18 finding(s) at or above `minor` are not terminal: 2026-09-10-ingest-522#F-001 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-002 (blocker, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-006 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-007 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-008 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-009 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-010 (major, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-011 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-012 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-014 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-015 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-018 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-019 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-020 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-022 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-023 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-025 (minor, round 2026-09-10-ingest-522): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-10-ingest-522#F-032 (minor, round 2026-09-10-ingest-522): `dismissed-out-of-scope` with no recorded human decision — the orchestrator may not dismiss on its own authority; the evidence must name who decided (e.g. `human: <who>` or `decided-by: <who>`) The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-10T16:20:55.666Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:20:55.782Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:21:01.285Z",
+      "event": "completion-failed",
+      "detail": "pull-request: PR checks not green"
+    },
+    {
+      "at": "2026-09-10T16:30:10.122Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:30:10.231Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:30:15.932Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4, but the PR head is c6052d7d6b4108c1665728622db2930b3f7e0775. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#522 was last collected against 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4 (round 1), but the PR head is c6052d7d6b4108c1665728622db2930b3f7e0775. Everything anyone said after 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 522 --sha <pr-head>`."
+    },
+    {
+      "at": "2026-09-10T16:30:52.791Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T16:30:52.906Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T16:30:59.060Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ]
+}

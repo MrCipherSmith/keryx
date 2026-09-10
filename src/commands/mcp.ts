@@ -17,6 +17,7 @@ import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, heading, style } from "../lib/ui";
 import { mcpRuntimeIds } from "../mcp/client-config";
 import { EDITOR_USAGE, integrateCommand } from "./integrate";
+import { isMcpConsumerSubcommand, runMcpConsumerCommand } from "./mcp-servers";
 import { serveMcpCommand } from "./serve-mcp";
 
 export async function mcpCommand(
@@ -27,6 +28,22 @@ export async function mcpCommand(
 
   if (subcommand === "--help" || subcommand === "-h") {
     printMcpHelp();
+    return;
+  }
+
+  // The CONSUMER surface, and the reason the verb was freed. These are new
+  // subcommands, not renamed ones, so they print no deprecation line — `keryx
+  // mcp list` is the current spelling, not a retired one.
+  if (isMcpConsumerSubcommand(subcommand)) {
+    const code = await runMcpConsumerCommand(subcommand, args.slice(1), {
+      cwd,
+      log: (line) => console.log(line),
+      // stderr, because a bare `keryx mcp` is the stdio MCP server and this
+      // module shares its process: a diagnostic on stdout would sit in the
+      // same stream as JSON-RPC frames.
+      err: (line) => console.error(line),
+    });
+    if (code !== 0) process.exitCode = code;
     return;
   }
 

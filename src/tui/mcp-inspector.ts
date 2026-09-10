@@ -89,8 +89,14 @@ export type OpenModalFn = (otui: unknown, chrome: unknown, input: OpenModalInput
  * server into an editor's config, alongside whatever else that editor
  * already has configured (surfaced per row via `otherServers`).
  */
+// Updated when keryx-mcp-servers P0 shipped. The old wording ended "…keryx
+// doesn't consume MCP servers as a client yet", which became false the moment
+// `search_tool`/`use_tool` reached the shell's tool list. The consumer MODAL
+// is still P2 work, so this points at the CLI rather than at a view that does
+// not exist — a caption naming a missing screen is the failure the rename
+// avoided in the first place.
 const TOOLS_TAB_HEADER =
-  "Built into keryx — not from an external MCP server (keryx doesn't consume MCP servers as a client yet).";
+  "Built into keryx — not from an external MCP server. For those, see `keryx mcp list` / `doctor`.";
 const MCP_TAB_HEADER_1 = "Connects/disconnects ONLY keryx's own MCP server, one editor config at a time.";
 const MCP_TAB_HEADER_2 = "Other MCP servers already configured there (context7, playwright, …) show per row, read-only.";
 
