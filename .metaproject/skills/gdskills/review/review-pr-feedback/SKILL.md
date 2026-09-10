@@ -591,12 +591,24 @@ merge, with every reviewer unanswered.
 
 ```bash
 keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|-> \
+                            --result <this-run's-output.json> \
                             --sha <mergedHeadSha> --final [--dry-run] [--flow-link <url>]
 ```
 
 Run it **after** the merge, never during the loop: a reply written mid-round states
 an intention, and by the time the reviewer reads it the intention has changed.
 `--final` is required by the command; it is not a reminder that can be skipped.
+
+`--result` hands this run's own output to the one keryx-owned point that can
+refuse it. Write the result described in Step 11 to a file first and pass it
+here: the command validates it against `review-pr-feedback-output` BEFORE
+posting anything, so a result that contradicts itself — analyze mode reporting a
+merge, or a screen recorded as never having run while excluding comments — stops
+here instead of being published under your name.
+
+Optional in the CLI, and the registry records this contract as `opt-in` rather
+than enforced for exactly that reason: omit the flag and nothing is checked.
+Passing it is the whole of the enforcement.
 
 The judgement is yours; the command owns the mechanics. It routes an inline comment
 to its thread (`pulls/{n}/comments/{id}/replies`) and a review-submission body or
