@@ -20,7 +20,7 @@
 
 import { describe, expect, test } from "bun:test";
 import { explainConnectFailure, httpStatusOf } from "./doctor";
-import { resolveHttpHeaders } from "./http-headers";
+import { displayUrl, resolveHttpHeaders } from "./http-headers";
 import { describeForApproval } from "./trust";
 import { connectHttpMcpServer } from "../mcp-client/client";
 import { createMcpRuntime } from "./runtime";
@@ -294,6 +294,51 @@ describe("aborting a dial that is still in flight", () => {
     // and could not fail.
     expect(elapsed).toBeLessThan(5_000);
   }, 90_000);
+});
+
+describe("every surface that PRINTS a url elides the secret in it", () => {
+  // Found by smoke-testing the released 0.2.91 binary — late, and the
+  // sharpest instance of this package's recurring shape. `doctor`
+  // REFUSES a url carrying userinfo, and the reason it gives the
+  // operator is "it would be printed in every report". `keryx mcp list`
+  // was that report, printing `raw.url` verbatim.
+  //
+  // The earlier fix to `describeTarget` was real and half the problem:
+  // it switched from the EXPANDED url to the RAW one, so `${TOKEN}` no
+  // longer printed its value. It did nothing for the case where the
+  // operator writes the secret literally, which is the case `doctor`
+  // refuses the config over.
+  //
+  // So the unit here is the CLASS — every surface that renders a url —
+  // rather than the one that was reported.
+
+  const SECRETS = [
+    ["userinfo", "https://alice:hunter2@api.example/mcp", "hunter2"],
+    ["a query string", "https://api.example/mcp?api_key=sk-live-abc", "sk-live-abc"],
+  ] as const;
+
+  for (const [kind, url, secret] of SECRETS) {
+    test(`displayUrl removes ${kind}`, () => {
+      expect(displayUrl(url)).not.toContain(secret);
+    });
+
+    test(`the approval prompt removes ${kind}`, () => {
+      expect(describeForApproval(server({ url }))).not.toContain(secret);
+    });
+  }
+
+  test("BOUNDARY — a url with no secret is printed in full, so this is elision and not blanking", () => {
+    expect(displayUrl("https://api.example/v1/mcp")).toBe("https://api.example/v1/mcp");
+    expect(describeForApproval(server({ url: "https://api.example/v1/mcp" }))).toContain(
+      "https://api.example/v1/mcp",
+    );
+  });
+
+  test("and the host is still identifiable, because that is the point of showing it", () => {
+    // A redaction that hid the host would make the approval prompt
+    // useless: the operator is deciding whether to trust THAT host.
+    expect(displayUrl("https://alice:hunter2@api.example/mcp")).toContain("api.example");
+  });
 });
 
 describe("what the approval prompt says a remote server will be handed", () => {

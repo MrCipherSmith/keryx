@@ -31,6 +31,7 @@ import {
   writeOwnerOnlyFileAtomic,
 } from "../lib/config-dir";
 import { parseJsonTolerant, type ResolvedMcpServer } from "./config";
+import { displayUrl } from "./http-headers";
 
 export function trustFile(configDir?: string): string {
   return path.join(configDir ?? ensureKeryxConfigDir(), "mcp-servers-trust.json");
@@ -159,8 +160,18 @@ export function describeForApproval(server: ResolvedMcpServer): string {
     // approves handing a credential to that host, and the first prompt
     // never said which one — so an operator could read the line, see a
     // plausible vendor URL, and approve sending their GitHub token there.
+    // `displayUrl`, for the same reason `list` needs it — and this surface
+    // matters more. It is the text an operator reads while deciding
+    // whether to approve a server a repository committed, so a secret in
+    // it is printed at exactly the moment they are paying attention, and
+    // pasted into whatever they ask about it.
+    //
+    // Found by writing the fix for `list` as a CLASS — every surface that
+    // renders a url — rather than as the one instance that was reported.
+    // The instance-shaped fix would have left this one.
+    const shown = displayUrl(raw.url);
     const credentials = credentialSummary(raw);
-    return credentials === undefined ? raw.url : `${raw.url}  [sends ${credentials}]`;
+    return credentials === undefined ? shown : `${shown}  [sends ${credentials}]`;
   }
   return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
 }

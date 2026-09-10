@@ -27,6 +27,7 @@ import {
   transportOf,
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
+import { displayUrl } from "../mcp-servers/http-headers";
 import { defaultConnect, KILL_GRACE_MS } from "../mcp-servers/runtime";
 import {
   addServer,
@@ -206,7 +207,17 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
  */
 function describeTarget(server: ResolvedMcpServer): string {
   const raw = server.raw;
-  if (typeof raw.url === "string" && raw.url.length > 0) return raw.url;
+  // `displayUrl`, not the raw string. The RAW form solved the `${VAR}`
+  // half — an expanded `--token=${GITHUB_TOKEN}` printed a live token —
+  // and left the half where the operator writes the secret in literally:
+  // `https://alice:hunter2@host/mcp` and `?api_key=sk-live` were printed
+  // verbatim by `keryx mcp list`.
+  //
+  // Found smoke-testing the released 0.2.91 binary, which is late, and the
+  // sharpest version of the shape this package keeps producing: `doctor`
+  // REFUSES a url with userinfo, and the reason it gives is "it would be
+  // printed in every report". `list` was that report.
+  if (typeof raw.url === "string" && raw.url.length > 0) return displayUrl(raw.url);
   return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
 }
 
