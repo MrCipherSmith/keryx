@@ -134,8 +134,14 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       allowPrivateLan?: true;
       chatPath?: string;
       apiKey?: string;
+      streamUsage?: true;
     } = {
       network: true,
+      // A hosted OpenAI-compatible gateway is asked for usage; without the field
+      // the stream carries none and the session cannot report what it spent. The
+      // loopback Ollama path (above) is left alone, so a local model that works
+      // today keeps working.
+      streamUsage: true,
       baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
       ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),

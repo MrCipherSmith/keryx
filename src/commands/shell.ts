@@ -32,6 +32,8 @@ import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
+import { loadOAuthGrant } from "../lib/oauth/grants";
+import { providerByName } from "./providers";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { createDefaultSearchProviderController } from "../harness/search";
@@ -525,8 +527,42 @@ function realMakeProvider(write: (s: string) => void): ShellDeps["makeProvider"]
     return makeProvider(name, model, {
       fetch: globalThis.fetch,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
+      ...oauthCredentialsFor(name),
     });
   };
+}
+
+/**
+ * Hand a device-code grant to the provider factory as the credential it looks for.
+ *
+ * Without this, `keryx auth login <provider>` is a command that stores a token
+ * nothing reads. `makeProvider` resolves an OpenAI-compatible provider's key from
+ * `env[definition.envKey]` — `XAI_API_KEY` for grok — and this factory passed
+ * neither `env` nor `credentials`, so `process.env` was the only source. A user who
+ * authenticated by subscription and never exported an API key therefore got
+ * `FakeProvider`: an offline stub that answers nothing while the session header
+ * still names the provider that was asked for.
+ *
+ * Found by a benchmark arm, which is the worst place to find it: the arm completed,
+ * wrote a transcript, and reported no token usage, so "the model was never called"
+ * looked exactly like "the model read nothing".
+ *
+ * The grant's access token is passed through `credentials` rather than written into
+ * `process.env`, so it reaches the one construction that needs it and does not leak
+ * into every child process the session later spawns. An explicit environment key
+ * still wins: an operator who exported one is making a choice.
+ */
+function oauthCredentialsFor(name: string): { credentials?: Record<string, string | undefined> } {
+  const definition = providerByName(name);
+  const envKey = definition?.envKey;
+  if (envKey === undefined) return {};
+
+  const fromEnv = process.env[envKey];
+  if (fromEnv !== undefined && fromEnv.length > 0) return {};
+
+  const grant = loadOAuthGrant(name);
+  if (grant === undefined || grant.access.length === 0) return {};
+  return { credentials: { ...process.env, [envKey]: grant.access } };
 }
 
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */

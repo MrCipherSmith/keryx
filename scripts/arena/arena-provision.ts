@@ -21,7 +21,7 @@
 // entries pointing at directories that no longer exist. The pilot's registry
 // already carries twenty such leftovers.
 
-import { KERYX_GRAPH_BUILD, KERYX_INIT, forgetRegisteredProject } from "../benchmark/retrieval-provision";
+import { KERYX_GRAPH_BUILD, KERYX_INIT, createShellRunner, forgetRegisteredProject } from "../benchmark/retrieval-provision";
 import type { ArenaProvisioner } from "./arena-run";
 
 const KERYX_WIKI_COLLECT: readonly string[] = ["keryx", "wiki", "collect"];
@@ -105,6 +105,10 @@ export interface ArenaProvisionOptions {
 export function createArenaProvisioner(options: ArenaProvisionOptions): ArenaProvisioner {
   const run = options.run ?? spawnProvisionStep;
   const initialised = new Set<string>();
+  // `forgetRegisteredProject` needs a runner that can also LIST the registry: it
+  // matches a worktree path to the project id keryx assigned, because the id is what
+  // `keryx projects forget` takes and the path is all this module knows.
+  const registryRunner = createShellRunner();
 
   return {
     async provision(treePath: string): Promise<{ provisionCommit: string }> {
@@ -126,7 +130,7 @@ export function createArenaProvisioner(options: ArenaProvisionOptions): ArenaPro
       if (!initialised.has(treePath)) return;
       initialised.delete(treePath);
       try {
-        forgetRegisteredProject(treePath);
+        await forgetRegisteredProject(treePath, registryRunner);
       } catch {
         // Best effort. Losing an arm's result to tidy a registry would be the worse
         // trade; the leftover is visible in `keryx projects list`.

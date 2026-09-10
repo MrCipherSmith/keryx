@@ -43,6 +43,15 @@ export const BASE_ENV_KEYS: readonly string[] = [
   "LC_CTYPE",
   "TERM",
   "TZ",
+  // TLS trust, not context. A machine behind an inspecting proxy needs its extra CA
+  // or every Node/Bun process fails with "unable to get local issuer certificate" —
+  // which is how this was found: `curl` reached the API because it reads the system
+  // keychain, and `bun` threw because it does not. A Rust-built CLI survived the
+  // allowlist and a Node-built one would not have, so the failure would have looked
+  // like one harness being broken rather than one variable being absent.
+  "NODE_EXTRA_CA_CERTS",
+  "SSL_CERT_FILE",
+  "SSL_CERT_DIR",
 ];
 
 /**

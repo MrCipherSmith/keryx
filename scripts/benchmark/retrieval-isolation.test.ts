@@ -46,6 +46,19 @@ describe("buildIsolatedEnv", () => {
     expect("OTHER" in env).toBe(false);
   });
 
+  test("TLS trust passes, because without it every Node process fails to connect", () => {
+    // Found empirically: on a machine behind an inspecting proxy, `bun` throws
+    // "unable to get local issuer certificate" without the extra CA while `curl`
+    // succeeds from the system keychain. A Rust-built CLI survives the allowlist and
+    // a Node-built one does not, so the symptom reads as one harness being broken
+    // rather than one variable being absent.
+    const env = buildIsolatedEnv({
+      parent: { PATH: "/usr/bin", NODE_EXTRA_CA_CERTS: "/Users/x/corp-ca.crt" },
+      home: "/tmp/h",
+    });
+    expect(env.NODE_EXTRA_CA_CERTS).toBe("/Users/x/corp-ca.crt");
+  });
+
   test("overrides are applied after the allowlist", () => {
     const env = buildIsolatedEnv({ parent: { PORT: "3847" }, home: "/tmp/h", overrides: { PORT: "1" } });
     expect(env.PORT).toBe("1");
