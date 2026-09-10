@@ -114,9 +114,21 @@ describe("no trigger loses a matching path it had", () => {
 
     expect(oneWord.length).toBeGreaterThan(5);
 
+    // Scored against an entry carrying ONLY the trigger under test.
+    //
+    // `scoreBundledSkillRoute` computes its trigger hit over ALL of an entry's
+    // triggers, so a sibling can answer for the one being probed and the result
+    // reads as covered. Verification found this on `review-orchestrator::ревью`:
+    // its probe passes through RU synonym expansion satisfying the sibling
+    // English trigger `review`, by a completely different mechanism than the
+    // inflection this test names — so that trigger would stay "not lost" even
+    // with `matchesInflected` broken for it. One of nineteen, and the same
+    // shape of defect as the finding that produced this test: a case counted as
+    // measured while something else did the answering.
     const lost = oneWord
       .filter(({ entry, trigger }) => {
-        const { reasons } = scoreBundledSkillRoute(entry, `${trigger}ing the thing now`);
+        const isolated = { ...entry, triggers: [trigger] };
+        const { reasons } = scoreBundledSkillRoute(isolated, `${trigger}ing the thing now`);
         return !reasons.some((reason) => reason.startsWith("trigger"));
       })
       .map(({ entry, trigger }) => `${entry.name}::${trigger}`);
