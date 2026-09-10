@@ -37,6 +37,8 @@ export interface KeryxAgentOptions {
   readonly maxField?: number;
   /** The home a credential is linked from. Overridable so a test never reads a real one. */
   readonly realHome?: string;
+  /** The id written on every result row. See the note on `ClaudeAgentOptions.harnessId`. */
+  readonly harnessId?: string;
 }
 
 export interface KeryxTurn {
@@ -364,8 +366,10 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
   const command = options.command ?? ["keryx"];
   const maxField = options.maxField ?? 200_000;
 
+  const harness = options.harnessId ?? KERYX_HARNESS;
+
   return {
-    harness: KERYX_HARNESS,
+    harness,
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const dir = mkdtempSync(path.join(tmpdir(), "keryx-events-"));
       const eventsFile = path.join(dir, "events.jsonl");

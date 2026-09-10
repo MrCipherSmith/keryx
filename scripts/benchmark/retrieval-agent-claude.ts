@@ -37,6 +37,17 @@ export interface ClaudeAgentOptions {
   readonly allowedTools?: readonly string[];
   /** The home a credential is linked from. Overridable so a test never reads a real one. */
   readonly realHome?: string;
+  /**
+   * The id written on every result row from this agent.
+   *
+   * Defaults to the harness constant. Overridable because the id belonged to the
+   * ADAPTER rather than to the harness spec, so two specs over one adapter — the
+   * shape of "the same CLI on two models" — silently wrote the same id on every
+   * row. That collapses them in the results file, makes `completedKeys` skip the
+   * second leg as already done, pools them in `decideByHarness`, and collides
+   * their worktree paths. One field, four bugs.
+   */
+  readonly harnessId?: string;
 }
 
 interface StreamUsage {
@@ -356,8 +367,10 @@ export function buildClaudeEnv(parent: Record<string, string | undefined>, home:
 export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
 
+  const harness = options.harnessId ?? CLAUDE_HARNESS;
+
   return {
-    harness: CLAUDE_HARNESS,
+    harness,
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
       assertNoManagedSettings();
@@ -386,8 +399,8 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
         // interpretRun first, so a timeout is reported as a timeout rather than
         // as "no init event" — a killed process can lose the transcript entirely,
         // and the less specific message would hide the real cause.
-        const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd });
-        assertRoster(parsed, CLAUDE_HARNESS);
+        const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd, harness });
+        assertRoster(parsed, harness);
         return answer;
       } finally {
         isolated.dispose();

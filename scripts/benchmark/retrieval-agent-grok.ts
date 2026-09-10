@@ -29,6 +29,8 @@ export interface GrokAgentOptions {
   readonly timeoutMs?: number;
   /** Overridden in tests; the real home is only read for credentials. */
   readonly realHome?: string;
+  /** The id written on every result row. See the note on `ClaudeAgentOptions.harnessId`. */
+  readonly harnessId?: string;
 }
 
 /**
@@ -120,9 +122,10 @@ export function buildGrokEnv(parent: Record<string, string | undefined>, home: s
 
 export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
+  const harness = options.harnessId ?? GROK_HARNESS;
 
   return {
-    harness: GROK_HARNESS,
+    harness,
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const isolated = createIsolatedHome(options.realHome ?? homedir());
       try {
@@ -146,8 +149,8 @@ export function createGrokAgent(options: GrokAgentOptions = {}): AgentPort {
         }
 
         const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
-        const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd, harness: GROK_HARNESS });
-        assertRoster(parsed, GROK_HARNESS);
+        const answer = interpretRun(parsed, { timedOut, timeoutMs, model, cwd, harness });
+        assertRoster(parsed, harness);
         return answer;
       } finally {
         isolated.dispose();

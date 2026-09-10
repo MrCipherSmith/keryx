@@ -1,0 +1,97 @@
+// The three legs, and why these three.
+//
+// `keryx-shell` and `grok-build` both drive grok-4.6. That is the whole reason the
+// pair exists: with the model held constant, the difference between them is the
+// shell around it and nothing else. It is also the only thing this arena can
+// answer without leaning on statistics, because wrapper overhead is close to
+// deterministic.
+//
+// `claude-sonnet` is the third because a claim resting on one vendor's model is a
+// claim about that vendor. It is sonnet rather than opus on cost grounds: opus
+// alone was 26 of 104 arms at roughly $1 each, half the run's budget, for a second
+// point on an axis — "does keryx help a strong model as much as a weak one" — that
+// is interesting but not the question. Resume is keyed per harness, so adding opus
+// later is an append, not a re-run. That is why `harnessId` exists.
+//
+// Unlike the pilot, `hardModel` and `easyModel` are equal on every spec. The pilot
+// picks a model from the gold-set size, which is right when the sweep spans 50
+// tasks of varying difficulty and wrong here: a leg whose model changes between
+// tasks cannot be compared against a leg whose model does not, and the arena's
+// whole point is a controlled comparison.
+
+import { createClaudeAgent } from "../benchmark/retrieval-agent-claude";
+import { createGrokAgent } from "../benchmark/retrieval-agent-grok";
+import { createKeryxAgent } from "../benchmark/retrieval-agent-keryx";
+import type { AgentPort } from "../benchmark/retrieval-run";
+
+export interface ArenaHarnessSpec {
+  readonly id: string;
+  /** Pinned: the same model on every task, so legs stay comparable. */
+  readonly model: string;
+  readonly createAgent: (options: { timeoutMs: number }) => AgentPort;
+  /** Printed before the sweep, so the model split states itself rather than being described after. */
+  readonly note: string;
+}
+
+export const KERYX_SHELL: ArenaHarnessSpec = {
+  id: "keryx-shell",
+  model: "grok-4.6",
+  createAgent: ({ timeoutMs }) => createKeryxAgent({ timeoutMs, provider: "grok", harnessId: "keryx-shell" }),
+  note: "keryx's own shell on grok-4.6 — the same model grok-build runs, so the difference is the wrapper",
+};
+
+export const GROK_BUILD: ArenaHarnessSpec = {
+  id: "grok-build",
+  model: "grok-4.6",
+  createAgent: ({ timeoutMs }) => createGrokAgent({ timeoutMs, harnessId: "grok-build" }),
+  note: "the grok CLI on grok-4.6 — the control for the wrapper comparison",
+};
+
+export const CLAUDE_SONNET: ArenaHarnessSpec = {
+  id: "claude-sonnet",
+  model: "sonnet-5",
+  createAgent: ({ timeoutMs }) => createClaudeAgent({ timeoutMs, harnessId: "claude-sonnet" }),
+  note: "a second vendor, so the result is not a claim about one model family",
+};
+
+/**
+ * Deliberately not registered, and kept here rather than deleted.
+ *
+ * Adding opus is two lines and ~$25. It is listed so the decision is visible as a
+ * decision — a reader should be able to see that the axis was considered and
+ * priced, not that nobody thought of it.
+ */
+export const CLAUDE_OPUS_DEFERRED: ArenaHarnessSpec = {
+  id: "claude-opus",
+  model: "opus-5",
+  createAgent: ({ timeoutMs }) => createClaudeAgent({ timeoutMs, harnessId: "claude-opus" }),
+  note: "deferred on cost: ~$25 for the strong-versus-weak-model axis; resume is per harness, so this appends",
+};
+
+export const ARENA_HARNESSES: readonly ArenaHarnessSpec[] = [KERYX_SHELL, GROK_BUILD, CLAUDE_SONNET];
+
+export function harnessById(id: string): ArenaHarnessSpec {
+  const found = [...ARENA_HARNESSES, CLAUDE_OPUS_DEFERRED].find((spec) => spec.id === id);
+  if (found === undefined) {
+    const known = [...ARENA_HARNESSES, CLAUDE_OPUS_DEFERRED].map((spec) => spec.id).join(", ");
+    throw new Error(`unknown harness ${JSON.stringify(id)} — known: ${known}`);
+  }
+  return found;
+}
+
+/**
+ * Legs sharing a model, which the wrapper comparison depends on.
+ *
+ * Asserted rather than assumed: if someone repoints `keryx-shell` at grok-4.5 the
+ * pair stops being a controlled comparison, and the failure would otherwise show
+ * up as an unexplained difference in the results rather than as a broken test.
+ */
+export function modelPeers(): Map<string, string[]> {
+  const peers = new Map<string, string[]>();
+  for (const spec of ARENA_HARNESSES) {
+    const existing = peers.get(spec.model) ?? [];
+    existing.push(spec.id);
+    peers.set(spec.model, existing);
+  }
+  return peers;
+}
