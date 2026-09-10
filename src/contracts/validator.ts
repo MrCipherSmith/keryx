@@ -159,6 +159,29 @@ function validateNode(
     if (maximum !== undefined && value > maximum) {
       errors.push({ path: valuePath, message: `Expected number <= ${maximum}` });
     }
+    // The exclusive pair, added because this validator silently IGNORED them
+    // while its sibling in `gdskills/contracts.ts` enforced them — so the same
+    // `exclusiveMinimum: 0` meant "must be positive" or meant nothing,
+    // depending on which validator happened to read the schema.
+    //
+    // Found by a parity test for the MCP-servers config, which compared this
+    // validator against that package's own schema and found `0` and `-1`
+    // accepted for a field declared `exclusiveMinimum: 0`. That is the defect
+    // `gdskills/contracts.ts` documents three times over: a keyword a schema
+    // declares and a validator does not implement reads as enforced and
+    // enforces nothing.
+    //
+    // Safe to add: `subagent-dispatch.schema.json` is the only runtime schema
+    // that declares these, and it is validated by the sibling that already
+    // enforced them, so no document that passed before newly fails.
+    const exclusiveMinimum = asNumber(schema.exclusiveMinimum);
+    if (exclusiveMinimum !== undefined && value <= exclusiveMinimum) {
+      errors.push({ path: valuePath, message: `Expected number > ${exclusiveMinimum}` });
+    }
+    const exclusiveMaximum = asNumber(schema.exclusiveMaximum);
+    if (exclusiveMaximum !== undefined && value >= exclusiveMaximum) {
+      errors.push({ path: valuePath, message: `Expected number < ${exclusiveMaximum}` });
+    }
   }
 
   if (Array.isArray(value)) {
