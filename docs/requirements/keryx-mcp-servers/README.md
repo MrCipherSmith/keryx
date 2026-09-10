@@ -16,7 +16,8 @@ OpenCode's "register every MCP tool on the model" shape.
 
 ## Status
 
-**P0 merged and released in keryx 0.2.90 (flow 246, PR #522). P1–P3 open.**
+**P0 released in keryx 0.2.90 (flow 246, PR #522). P1 released in keryx 0.2.91
+(flow 247, PR #526). P2–P3 open.**
 
 Updated 2026-09-10.
 
@@ -41,8 +42,34 @@ keryx's own 45 tools reachable, 26 skipped, every one for a `.` in the name —
 §5.1 specifies skip-on-invalid-FQN rather than sanitise. P0 ships the
 specification as written; the remedy is P1's.
 
-Still open: HTTP/SSE transports, OAuth and owner-only credentials, the
-read-only compat readers, and the `/mcp` TUI repoint.
+Shipped in P1 — remote servers, over the same seam:
+
+| item | module | what it does |
+|---|---|---|
+| 9 | `../mcp-client/client.ts` | `connectHttpMcpServer` — streamable HTTP beside the stdio dial, same handshake bound, same abort handling, same `McpServerConnection`. Everything above the transport cannot tell the two apart, so a remote server inherits every control a local one has. |
+| 10 | `http-headers.ts` | The refusal seam. A credential that resolves to nothing never reaches a socket: `Bearer ${TOKEN}` with `TOKEN` unset expands to a non-empty `"Bearer "`, so emptiness is looked for in the VARIABLE, not the result. Also refuses duplicate case-variant names, control characters, invalid header names, an unresolved `${VAR}` in the url, and a credential written into the url. |
+| 11 | `doctor.ts` | The HTTP half: status, socket, TLS and non-MCP failures each get their own sentence, classified on the SDK's error CODE rather than a guess at its prose. `needs_auth` names the variable to set. |
+| 12 | `trust.ts` | The approval fingerprint covers `headers` and `bearer_token_env_var`, and the prompt discloses which variables a remote server would be handed. |
+
+`sse` is an alias of `http` (D-06): it is what the server chooses when it
+answers, and streamable HTTP negotiates it. The fixture now serves
+`text/event-stream` so that is a tested claim rather than a stated one.
+
+**Three refusals P1 makes on purpose,** each a working configuration
+elsewhere: a redirect is not followed (a custom credential header would
+follow it — `fetch` strips only `Authorization`, and only across origins);
+a username or password in the url is rejected (it prints everywhere and
+the HTTP client drops it anyway); and an unset `${VAR}` in the url is
+rejected rather than silently addressing the wrong path.
+
+`scripts/mutation-sweep.ts` was written during P1 and is the criterion this
+package now holds itself to: no line of new production code may be inverted
+or deleted without a test failing. See the roadmap changelog for what it
+found that four rounds of human review did not.
+
+Still open: OAuth and owner-only credentials, the read-only compat readers,
+the `/mcp` TUI repoint, F-032/F-033 (approval rendering, deferred to P2 by
+operator decision), and D-13.
 
 Shipped earlier, in 0.2.85 (PR #499, #500):
 
