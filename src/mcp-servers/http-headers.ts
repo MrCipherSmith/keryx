@@ -111,6 +111,7 @@ function isHollowValue(value: string): boolean {
 }
 
 /** CR, LF, NUL and the rest — unsendable, and their rejection leaks the value. */
+// eslint-disable-next-line no-control-regex -- the control characters ARE the thing being matched
 const CONTROL_CHARS = /[\u0000-\u001f\u007f]/;
 /** RFC 9110 token. `fetch` throws on anything else, quoting the value. */
 const VALID_HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;

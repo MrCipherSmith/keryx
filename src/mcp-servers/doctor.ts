@@ -330,6 +330,15 @@ export function explainConnectFailure(
       return `the TLS certificate for ${url} was rejected (${syscall})`;
     }
     if (syscall === "ETIMEDOUT") return `${url} did not answer in time (${syscall})`;
+    if (syscall === "UnexpectedRedirect") {
+      // Bun reports the refusal from `redirect: "error"` as a CODE, so the
+      // message branch below could never see it — the third branch on this
+      // diff written from a guess at a library's wording and never
+      // executed. This is the one failure keryx causes on purpose, and it
+      // was reported as "could not be reached", which sends the operator
+      // to check a server that is up and answering.
+      return `${url} redirected, which keryx does not follow for MCP. Configure the final URL. (${syscall})`;
+    }
     return `${url} could not be reached (${syscall})`;
   }
 

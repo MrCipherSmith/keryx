@@ -12,7 +12,6 @@
 
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
-import type { McpServerConnection } from "../mcp-client/client";
 import {
   loadMcpServers,
   parseConfigFile,

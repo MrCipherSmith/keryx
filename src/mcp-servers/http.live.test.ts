@@ -12,6 +12,7 @@ import { startMockHttpMcpServer, type MockHttpMcpServer } from "../../fixtures/m
 import { catalogForServer } from "./catalog";
 import { createMcpInteractiveTools, MAX_TOOL_RESULT_BYTES } from "./tools";
 import { startServers } from "./manager";
+import { explainConnectFailure } from "./doctor";
 import type { ResolvedMcpServer } from "./config";
 
 const open: Array<{ close: () => Promise<void> }> = [];
@@ -211,6 +212,57 @@ describe("AC4 — a hollow credential never reaches the wire", () => {
     await expect(connectHttpMcpServer("https://alice:hunter2@example.test/mcp")).rejects.toThrow(
       /username\/password/,
     );
+  }, 30_000);
+});
+
+describe("a redirect is refused, and the target is never contacted", () => {
+  // `redirect: "error"` was a string literal in an options object with no
+  // test behind it — a security control asserted by a comment. `fetch`
+  // follows up to 20 hops by default and strips `Authorization` only
+  // across ORIGINS, so a custom credential header (the common MCP
+  // pattern) follows all the way; a 307 to a loopback or link-local
+  // address was followed, and the target's body came back through
+  // `doctor` and `use_tool`'s error branch into the model's context.
+  //
+  // The assertion that matters is not "the dial failed". It is that the
+  // TARGET recorded no request.
+
+  test("the credential header does not follow the hop", async () => {
+    const target = await mock();
+    const redirector = await mock({ redirectTo: target.url });
+
+    await expect(
+      connectHttpMcpServer(redirector.url, {
+        headers: { "X-Api-Key": "sk-live-must-not-follow" },
+        handshakeTimeoutMs: 10_000,
+      }),
+    ).rejects.toThrow();
+
+    // The whole point.
+    expect(target.requests()).toEqual([]);
+    // And the redirector did see it, so the test is not passing because
+    // nothing was dialled at all.
+    expect(redirector.requests().length).toBeGreaterThan(0);
+  }, 30_000);
+
+  test("and the operator is told it was a redirect, not that the server is broken", async () => {
+    const target = await mock();
+    const redirector = await mock({ redirectTo: target.url });
+    const error = await connectHttpMcpServer(redirector.url, { handshakeTimeoutMs: 10_000 }).then(
+      () => new Error("expected a failure"),
+      (e: Error) => e,
+    );
+
+    const explained = explainConnectFailure(
+      "http",
+      { name: "r", source: "user", file: "/x", enabled: true, url: redirector.url, raw: { url: redirector.url } } as never,
+      error,
+    );
+    // The branch was written from a guess at the wording. If this fails,
+    // the guess was wrong and the operator gets an unclassified error for
+    // the one failure keryx causes on purpose.
+    expect(explained).toContain("redirect");
+    expect(explained).toContain("Configure the final URL");
   }, 30_000);
 });
 

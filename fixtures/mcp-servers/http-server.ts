@@ -51,6 +51,17 @@ export type MockOptions = {
    * hosted MCP endpoints this feature exists to reach.
    */
   readonly sse?: boolean;
+  /**
+   * Answer with a 307 to this URL.
+   *
+   * `fetch` follows up to 20 hops by default and only strips
+   * `Authorization` across origins — a custom credential header, which is
+   * the common MCP pattern, follows all the way. keryx sets
+   * `redirect: "error"` for that reason, and until this fixture existed
+   * the control had no test: a string literal in an options object that
+   * nothing exercised.
+   */
+  readonly redirectTo?: string;
 };
 
 const DEFAULT_TOOLS = [
@@ -125,6 +136,9 @@ export async function startMockHttpMcpServer(options: MockOptions = {}): Promise
       }
       if (options.requireAuth !== undefined && headers.authorization !== options.requireAuth) {
         return new Response("unauthorized", { status: 401 });
+      }
+      if (options.redirectTo !== undefined) {
+        return new Response(null, { status: 307, headers: { location: options.redirectTo } });
       }
       if (options.failWith !== undefined) {
         return new Response("nope", { status: options.failWith });
