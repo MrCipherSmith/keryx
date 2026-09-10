@@ -7,9 +7,9 @@
   "id": "217",
   "slug": "skills-route-mis-routes-a-generic-review",
   "title": "skills route mis-routes a generic review request to a specialist, and orient never reads the prompt",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-02T15:37:01.384Z",
-  "updatedAt": "2026-09-10T06:57:17.524Z",
+  "updatedAt": "2026-09-10T07:30:13.814Z",
   "source": {
     "type": "description",
     "ref": null
@@ -62,7 +62,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/513"
   },
   "tasks": [
     {
@@ -392,6 +392,25 @@
       "at": "2026-09-10T06:57:17.524Z",
       "event": "ac-confirmed",
       "detail": "AC11: bunx tsc --noEmit: 0 errors. bun run lint: clean. 71 routing tests pass across the five files. Full suite run at the end of this branch introduces no failure beyond what reproduces on origin/main."
+    },
+    {
+      "at": "2026-09-10T07:30:01.501Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/513 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-10T07:30:12.017Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T07:30:13.814Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "847cdb3c",
+    "ref": "origin/main",
+    "at": "2026-09-10T07:30:13.814Z"
+  }
 }
