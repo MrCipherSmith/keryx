@@ -2131,7 +2131,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   //
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
-  process.on("SIGINT", () => {
+  const closeAndExit = (code: number) => (): void => {
     void (async (): Promise<void> => {
       try {
         await readlineMcp?.close();
@@ -2139,9 +2139,15 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // Exiting; a failed close must not become the last thing printed.
       }
       rl.close();
-      process.exit(130);
+      process.exit(code);
     })();
-  });
+  };
+  process.on("SIGINT", closeAndExit(130));
+  // SIGTERM too. Only SIGINT was handled, so `kill <pid>` — what a
+  // supervisor, a CI job or a terminal-closing window manager sends — took
+  // the default disposition and left one child process per connected
+  // server behind.
+  process.on("SIGTERM", closeAndExit(143));
   // A SINGLE shared line iterator so the picker and the REPL consume stdin in
   // sequence (two independent iterators would race over the same readline).
   const lineIterator = rl[Symbol.asyncIterator]();

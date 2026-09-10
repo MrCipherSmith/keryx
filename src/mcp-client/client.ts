@@ -517,6 +517,15 @@ export async function connectStdioMcpServer(
   options: McpSpawnOptions,
   handshakeTimeoutMs?: number,
   signal?: AbortSignal,
+  /**
+   * Collector for the close this function starts on abort or timeout.
+   *
+   * The caller needs it because `transport.close()` is GRACEFUL — the SDK
+   * waits 2s before SIGTERM and another 2s before SIGKILL — so a caller
+   * that aborts and immediately exits kills itself before the child gets a
+   * signal, and the child is reparented to init.
+   */
+  kills?: Array<Promise<void>>,
 ): Promise<McpServerConnection> {
   const [command, ...args] = argv;
   if (command === undefined) {
@@ -562,12 +571,16 @@ export async function connectStdioMcpServer(
   //
   // Closing the transport on timeout kills the child, so there is nothing
   // left to abandon and nothing to defer.
-  const kill = async (): Promise<void> => {
-    try {
-      await transport.close();
-    } catch {
-      // Already gone; whatever is thrown below is the error worth having.
-    }
+  const kill = (): Promise<void> => {
+    const done = (async (): Promise<void> => {
+      try {
+        await transport.close();
+      } catch {
+        // Already gone; whatever is thrown below is the error worth having.
+      }
+    })();
+    kills?.push(done);
+    return done;
   };
 
   // A caller that gives up BEFORE the budget elapses — the session quitting,

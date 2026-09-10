@@ -54,11 +54,14 @@
           ]
         },
         "enabled": { "type": "boolean", "default": true },
-        "startup_timeout_sec": { "type": "number", "exclusiveMinimum": 0 },
-        "tool_timeout_sec": { "type": "number", "exclusiveMinimum": 0 },
+        "startup_timeout_sec": { "type": "number", "exclusiveMinimum": 0,
+          "maximum": 86400 },
+        "tool_timeout_sec": { "type": "number", "exclusiveMinimum": 0,
+          "maximum": 86400 },
         "tool_timeouts": {
           "type": "object",
-          "additionalProperties": { "type": "number", "exclusiveMinimum": 0 }
+          "additionalProperties": { "type": "number", "exclusiveMinimum": 0,
+          "maximum": 86400 }
         }
       },
       "allOf": [

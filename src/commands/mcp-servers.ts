@@ -28,7 +28,7 @@ import {
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
 import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
-import { defaultServerCwd, handshakeBudgetMs } from "../mcp-servers/runtime";
+import { defaultServerCwd, handshakeBudgetMs, KILL_GRACE_MS } from "../mcp-servers/runtime";
 import {
   addServer,
   projectConfigFile,
@@ -218,6 +218,14 @@ function addCommand(argv: readonly string[], deps: McpConsumerDeps): number {
     // SERVER_NAME_PATTERN (hyphens are legal) and becomes the server NAME,
     // while the name the operator typed is dropped. Exit 0, wrong result.
     deps.err(`unknown option ${unknown[0]}. keryx flags go before \`--\`; the server's own flags go after it.`);
+    return 1;
+  }
+  const repeated = repeatedFlags(own);
+  if (repeated.length > 0) {
+    // `--scope user --scope project` silently used the FIRST — a scope the
+    // operator did not ask for, chosen in silence, exit 0. Same class as
+    // the typo above.
+    deps.err(`${repeated[0]} was given more than once; it takes a single value`);
     return 1;
   }
 
@@ -439,12 +447,33 @@ function trustCommand(args: readonly string[], deps: McpConsumerDeps, approve: b
 async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Promise<number> {
   const config = load(deps);
   const only = positional(args);
+
+  // `doctor` is the command most likely to be interrupted — it is the one
+  // that sits for the whole startup budget — and it had no cancellation
+  // path whatsoever: no signal handler, and `defaultConnect` passed no
+  // `AbortSignal`. Ctrl-C left the child reparented to init.
+  const dialling = new AbortController();
+  const kills: Array<Promise<void>> = [];
+  const onSignal = (): void => {
+    dialling.abort();
+    void Promise.race([Promise.all(kills), new Promise((r) => setTimeout(r, KILL_GRACE_MS))]).then(() => {
+      process.exit(130);
+    });
+  };
+  process.once("SIGINT", onSignal);
+  process.once("SIGTERM", onSignal);
   const approvals = loadTrustStore(deps.configDir);
-  const report = await runDoctor(config, {
-    only,
-    connect: deps.connect ?? defaultConnect,
-    heldForApproval: (server) => requiresApproval(server, approvals),
-  });
+  let report;
+  try {
+    report = await runDoctor(config, {
+      only,
+      connect: deps.connect ?? ((server) => defaultConnect(server, dialling.signal, kills)),
+      heldForApproval: (server) => requiresApproval(server, approvals),
+    });
+  } finally {
+    process.removeListener("SIGINT", onSignal);
+    process.removeListener("SIGTERM", onSignal);
+  }
 
   if (splitAtSeparator(args).own.includes("--json")) {
     deps.log(JSON.stringify(report, null, 2));
@@ -454,7 +483,11 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
   return report.healthy ? 0 : 1;
 }
 
-async function defaultConnect(server: ResolvedMcpServer): Promise<McpServerConnection> {
+async function defaultConnect(
+  server: ResolvedMcpServer,
+  signal?: AbortSignal,
+  kills?: Array<Promise<void>>,
+): Promise<McpServerConnection> {
   const command = server.command;
   if (command === undefined || command === "") {
     throw new Error(`server "${server.name}" has no command; only stdio servers are dialled in this release`);
@@ -471,6 +504,8 @@ async function defaultConnect(server: ResolvedMcpServer): Promise<McpServerConne
       env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
     },
     handshakeBudgetMs(server),
+    signal,
+    kills,
   );
 }
 
@@ -580,6 +615,23 @@ function isFlagOrValue(arg: string, index: number, all: readonly string[]): bool
  * then a perfectly valid server NAME. `keryx mcp add --verbose vv -- cmd`
  * created a server called `--verbose` and dropped `vv`, exit 0.
  */
+/** A keryx flag given more than once. `optionValue` takes the first and says nothing. */
+function repeatedFlags(args: readonly string[]): string[] {
+  const seen = new Map<string, number>();
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index] as string;
+    const previous = args[index - 1];
+    if (previous !== undefined && VALUE_FLAGS.has(previous)) continue;
+    if (!arg.startsWith("-")) continue;
+    const name = arg.startsWith("--") && arg.includes("=") ? (arg.split("=")[0] as string) : arg;
+    // Repeatable by design; the rest are not.
+    if (name === "-e" || name === "--env" || name === "--header") continue;
+    if (!VALUE_FLAGS.has(name) && !BARE_FLAGS.has(name)) continue;
+    seen.set(name, (seen.get(name) ?? 0) + 1);
+  }
+  return [...seen.entries()].filter(([, count]) => count > 1).map(([name]) => name);
+}
+
 function isUnknownFlag(arg: string, index: number, all: readonly string[]): boolean {
   if (!arg.startsWith("-") || arg === "-") return false;
   const previous = all[index - 1];

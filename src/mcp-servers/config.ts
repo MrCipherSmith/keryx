@@ -105,6 +105,24 @@ export const MAX_SERVER_NAME_LENGTH = 40;
 export const SCHEMA_VERSION = 1;
 
 /**
+ * `JSON.parse`, minus a leading byte-order mark.
+ *
+ * EXPORTED and shared, because the first version of this put the strip in
+ * `parseConfigFile` alone — one of the three readers of these same files.
+ * The result was two surfaces disagreeing about one file: `keryx mcp list`
+ * read a BOM'd config perfectly while `keryx mcp add` refused it, and
+ * `keryx mcp enable` reported success while silently skipping the
+ * sticky-flag cleanup. Worse, a BOM on the OVERLAY made `disable` not take
+ * effect: the overrides were "ignored" and the server started.
+ *
+ * Windows editors write a BOM by default. It is not a syntax error the
+ * operator made.
+ */
+export function parseJsonTolerant(text: string): unknown {
+  return JSON.parse(text.replace(/^\uFEFF/, "")) as unknown;
+}
+
+/**
  * The largest timeout that survives `setTimeout`.
  *
  * Anything above 2^31-1 ms overflows and Node silently substitutes 1 ms —
@@ -237,11 +255,17 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
     }
   }
   const oauth = (entry as { oauth?: unknown }).oauth;
-  if (oauth !== undefined && oauth !== false && (typeof oauth !== "object" || oauth === null || Array.isArray(oauth))) {
-    // The schema specifies this field completely; the runtime never looked
-    // at it, and the "unknown fields round-trip" allowance does not cover a
-    // KNOWN one.
-    problems.push(`server "${name}" oauth must be an object or false`);
+  if (oauth !== undefined && oauth !== false) {
+    if (typeof oauth !== "object" || oauth === null || Array.isArray(oauth)) {
+      problems.push(`server "${name}" oauth must be an object or false`);
+    } else {
+      // The INTERIOR too. The first pass checked only "object or false",
+      // which left six schema-specified rules unenforced — and the
+      // "unknown fields round-trip" allowance covers unknown fields, not a
+      // known one's contents. Latent while P0 does not dial OAuth, which
+      // is the reason to pin it now rather than after it does.
+      problems.push(...oauthProblems(name, oauth as Record<string, unknown>));
+    }
   }
   if (entry.type !== undefined && !["stdio", "http", "sse"].includes(entry.type)) {
     problems.push(`server "${name}" type must be stdio, http or sse`);
@@ -279,6 +303,28 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
   return problems;
 }
 
+/** `$defs/oauth` from the schema, enforced. */
+function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
+  const problems: string[] = [];
+  const known = new Set(["clientId", "scopes", "callbackPort"]);
+  for (const key of Object.keys(oauth)) {
+    if (!known.has(key)) problems.push(`server "${name}" oauth has unknown field "${key}"`);
+  }
+  if (oauth.clientId !== undefined && typeof oauth.clientId !== "string") {
+    problems.push(`server "${name}" oauth.clientId must be a string`);
+  }
+  if (oauth.scopes !== undefined) {
+    if (!Array.isArray(oauth.scopes) || !oauth.scopes.every((v) => typeof v === "string")) {
+      problems.push(`server "${name}" oauth.scopes must be an array of strings`);
+    }
+  }
+  const port = oauth.callbackPort;
+  if (port !== undefined && !(typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535)) {
+    problems.push(`server "${name}" oauth.callbackPort must be an integer between 1 and 65535`);
+  }
+  return problems;
+}
+
 type ParsedFile = { servers: Record<string, McpServerEntry>; problems: McpConfigProblem[] };
 
 /**
@@ -299,11 +345,7 @@ export function parseConfigFile(file: string): ParsedFile {
 
   let parsed: unknown;
   try {
-    // A leading BOM is not a syntax error the operator made. Windows
-    // editors write one by default, and `JSON.parse` reports it as
-    // "Unrecognized token '\ufeff'" — a message that sends someone hunting
-    // for a stray character in config that is otherwise perfectly valid.
-    parsed = JSON.parse(read.text.replace(/^\uFEFF/, "")) as unknown;
+    parsed = parseJsonTolerant(read.text);
   } catch (error) {
     return {
       servers: {},
@@ -342,7 +384,12 @@ export function parseConfigFile(file: string): ParsedFile {
     return { servers: {}, problems: [{ file, message: "`servers` must be an object keyed by name" }] };
   }
 
-  const servers: Record<string, McpServerEntry> = {};
+  // `Object.create(null)`, not `{}`. A server named `__proto__` passes the
+  // name rule and `servers[name] = entry` then hits `Object.prototype`'s
+  // setter instead of creating an own property — so the file loaded with
+  // ZERO problems and ZERO servers. No pollution, but exactly the
+  // load-clean-and-produce-nothing shape this package keeps finding.
+  const servers: Record<string, McpServerEntry> = Object.create(null) as Record<string, McpServerEntry>;
   const problems: McpConfigProblem[] = [];
   for (const [name, value] of Object.entries(doc.servers as Record<string, unknown>)) {
     if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -455,10 +502,13 @@ function readOverlay(file: string): { overrides: Record<string, boolean>; proble
       : { overrides: {}, problems: [{ file, message: `could not be read (${read.reason})` }] };
   }
   try {
-    const parsed = JSON.parse(read.text) as McpDisableOverlay;
+    const parsed = parseJsonTolerant(read.text) as McpDisableOverlay;
     const overrides = parsed.overrides;
     if (overrides === undefined) return { overrides: {}, problems: [] };
-    const clean: Record<string, boolean> = {};
+    // `Object.create(null)` for the same reason `parseConfigFile` uses it:
+    // an override keyed `__proto__` would hit the prototype setter instead
+    // of becoming an entry, and the toggle would silently do nothing.
+    const clean: Record<string, boolean> = Object.create(null) as Record<string, boolean>;
     for (const [name, value] of Object.entries(overrides)) {
       if (typeof value === "boolean") clean[name] = value;
     }

@@ -154,6 +154,33 @@ describe("an option this module does not know is refused, not renamed", () => {
   });
 });
 
+describe("a keryx flag given twice is refused, not silently first-wins", () => {
+  test("--scope twice picks neither", async () => {
+    // `optionValue` takes the first and says nothing, so
+    // `--scope user --scope project` landed in USER, exit 0 — a scope the
+    // operator did not ask for, chosen in silence. Same class as the typo
+    // above.
+    const h = harness();
+    const result = await h.run("add", ["srv", "--scope", "user", "--scope", "project", "--", "cmd"]);
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("more than once");
+    expect(Object.keys(h.userServers())).toEqual([]);
+  });
+
+  test("the equals form too", async () => {
+    const h = harness();
+    expect((await h.run("add", ["srv", "--scope=project", "--scope=user", "--", "cmd"])).code).toBe(1);
+  });
+
+  test("but -e and --header stay repeatable, because they are meant to be", async () => {
+    const h = harness();
+    const result = await h.run("add", ["srv", "-e", "A=1", "-e", "B=2", "--", "cmd"]);
+    expect(result.code).toBe(0);
+    expect(h.userServers().srv?.env).toEqual({ A: "1", B: "2" });
+  });
+});
+
 describe("a malformed option is reported, not dropped", () => {
   test("-e without an = refuses instead of adding a server with no env", async () => {
     // Reported: exit 0, `{"command":"cmd"}` written, no env, no warning —

@@ -24,6 +24,7 @@ import {
 } from "../lib/config-dir";
 import {
   MAX_SERVER_NAME_LENGTH,
+  parseJsonTolerant,
   type McpDisableOverlay,
   type McpServerEntry,
   type McpServerSource,
@@ -92,13 +93,13 @@ function readForWrite(file: string): { doc: Document; existed: boolean } | { err
   const read = readConfigFile(file);
   if (!read.ok) {
     return isDefiniteAbsence(read.reason)
-      ? { doc: { schemaVersion: 1, servers: {} }, existed: false }
+      ? { doc: { schemaVersion: 1, servers: Object.create(null) as Record<string, McpServerEntry> }, existed: false }
       : { error: `${file} could not be read (${read.reason}); nothing was written` };
   }
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(read.text) as unknown;
+    parsed = parseJsonTolerant(read.text);
   } catch (error) {
     return {
       error: `${file} is not valid JSON (${error instanceof Error ? error.message : String(error)}); nothing was written. Fix it by hand first.`,
@@ -120,7 +121,13 @@ function readForWrite(file: string): { doc: Document; existed: boolean } | { err
       // round-trips, and the two keys this code owns still win.
       ...(parsed as Record<string, unknown>),
       schemaVersion: typeof doc.schemaVersion === "number" ? doc.schemaVersion : 1,
-      servers: { ...(servers as Record<string, McpServerEntry> | undefined) },
+      // Null-prototype, so a later `servers[name] = entry` with
+      // `name === "__proto__"` defines an own property instead of invoking
+      // the inherited setter and vanishing.
+      servers: Object.assign(
+        Object.create(null) as Record<string, McpServerEntry>,
+        servers as Record<string, McpServerEntry> | undefined,
+      ),
     },
     existed: true,
   };

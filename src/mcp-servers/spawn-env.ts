@@ -73,6 +73,24 @@ export const MCP_ENV_DENY: readonly string[] = [
   "SSH_AGENT_PID",
   "GPG_AGENT_INFO",
   "GNUPGHOME",
+  // The desktop keyring fronts every password the user has stored. It was
+  // missed while its three siblings above were caught — the same
+  // half-enumeration this file's header describes, one round later.
+  "GNOME_KEYRING_CONTROL",
+  "GNOME_KEYRING_PID",
+  "KDE_FULL_SESSION",
+
+  // CREDENTIAL-HARVESTING PRIMITIVES, not credentials.
+  //
+  // The child runs `$GIT_ASKPASS "Password for https://github.com"` and the
+  // operator's credential helper hands it a live token — no interaction,
+  // nothing in the process list. Holding no secret itself, this is the most
+  // directly exploitable thing on the list.
+  "GIT_ASKPASS",
+  "SSH_ASKPASS",
+  "SUDO_ASKPASS",
+  "GIT_CREDENTIAL_HELPER",
+  "GIT_SSH_COMMAND",
 
   // Credential POINTERS: a path to a file full of secrets is a secret. The
   // module already treated GOOGLE_APPLICATION_CREDENTIALS this way; these
@@ -88,6 +106,21 @@ export const MCP_ENV_DENY: readonly string[] = [
   "AWS_CONFIG_FILE",
   "BOTO_CONFIG",
   "AZURE_CONFIG_DIR",
+  // Same class, found in a second pass: each of these names a file that
+  // holds credentials in plain text. `.curlrc` and `.wgetrc` carry
+  // `user = name:password`; `.npmrc` carries `_authToken`; `rclone.conf`
+  // carries cloud tokens.
+  "CURLRC",
+  "WGETRC",
+  "NPMRC",
+  "NPM_CONFIG_USERCONFIG",
+  "PIP_CONFIG_FILE",
+  "RCLONE_CONFIG",
+  "MAVEN_SETTINGS",
+  "GIT_CONFIG",
+  "GIT_CONFIG_GLOBAL",
+  "HGRCPATH",
+  "ANSIBLE_VAULT_PASSWORD_FILE",
 
   // A remote Docker daemon is root on another machine.
   "DOCKER_HOST",
@@ -106,20 +139,30 @@ export const MCP_ENV_DENY: readonly string[] = [
   "PERPLEXITY_API_KEY",
 ];
 
-/** Namespaces swept whole, in addition to the shared ones. */
+/**
+ * Namespaces swept whole, in addition to the shared ones.
+ *
+ * MUCH shorter than the first attempt, which swept `AWS_`, `AZURE_`,
+ * `GCP_`, `GOOGLE_CLOUD_`, `CLOUDSDK_` and `NPM_CONFIG_`. Verification
+ * showed what that cost:
+ *
+ *   - `npm_config_registry` went with it, so on a machine with a private
+ *     registry the canonical `npx -y @scope/server` launch silently
+ *     resolved against the public one;
+ *   - `AWS_REGION` and `GOOGLE_CLOUD_PROJECT` went with it, so a server
+ *     given its keys explicitly by `-e` then failed with "you must specify
+ *     a region" — which reads as the server being broken, the exact
+ *     outcome this file's header says the design avoids.
+ *
+ * None of those namespaces needed a sweep: every credential in them ends in
+ * `SECRET`, `KEY`, `TOKEN` or `PASSWORD` and is caught by the segment rule,
+ * and the handful of pointers are named above. A sweep is for a namespace
+ * that is credential-bearing THROUGHOUT, which is these two and no others.
+ */
 export const MCP_ENV_PREFIX_SWEEPS: readonly string[] = [
-  "AWS_",
-  "AZURE_",
-  "GCP_",
-  "GOOGLE_CLOUD_",
-  "CLOUDSDK_",
-  // Password-manager unlock sessions: `OP_SESSION_<account>`, and 1Password
-  // /Bitwarden service tokens.
+  // Password-manager unlock sessions: `OP_SESSION_<account>`, Bitwarden.
   "OP_SESSION",
   "BW_SESSION",
-  // npm's per-registry auth lives under names like `NPM_CONFIG__AUTH` and
-  // `NPM_CONFIG_//REGISTRY/:_AUTHTOKEN`.
-  "NPM_CONFIG_",
 ];
 
 /**
@@ -131,10 +174,22 @@ export const MCP_ENV_PREFIX_SWEEPS: readonly string[] = [
  */
 const SECRET_SEGMENTS = [
   "KEY", "KEYS", "TOKEN", "TOKENS", "SECRET", "SECRETS", "PASSWORD", "PASSWD",
-  "PWD", "PASS", "PASSPHRASE", "CREDENTIAL", "CREDENTIALS", "CREDS", "AUTH",
-  "AUTHORIZATION", "BEARER", "JWT", "SESSION", "COOKIE", "SIGNATURE", "PRIVATE",
-  "APIKEY", "SECRETKEY", "ACCESSKEY", "AUTHTOKEN",
+  "PWD", "PASS", "PASSPHRASE", "PASSCODE", "PASSKEY", "CREDENTIAL",
+  "CREDENTIALS", "CREDS", "AUTH", "AUTHORIZATION", "BEARER", "JWT", "COOKIE",
+  "SIGNATURE", "APIKEY", "SECRETKEY", "ACCESSKEY", "AUTHTOKEN",
+  // Personal access token, which no rule spelled out.
+  "PAT",
+  // A webhook URL is a bearer credential with no `user:pass@` in it, so
+  // the value scan cannot see it.
+  "WEBHOOK",
 ];
+// NOT segments, and each for a measured reason:
+//   SESSION — took `XDG_SESSION_TYPE` (how a browser server picks X11 vs
+//     Wayland), `SESSION_MANAGER` and `DBUS_SESSION_BUS_ADDRESS` with it.
+//     Real session credentials are `*_SESSION_TOKEN` (caught by TOKEN) or
+//     the two password-manager prefixes above.
+//   PRIVATE — `PRIVATE_KEY` is already caught by KEY, and the bare segment
+//     took `PRIVATE_REGISTRY_URL`.
 
 const SECRET_SEGMENT_RE = new RegExp(`(^|_)(${SECRET_SEGMENTS.join("|")})($|_)`);
 
@@ -147,7 +202,7 @@ const SECRET_SEGMENT_RE = new RegExp(`(^|_)(${SECRET_SEGMENTS.join("|")})($|_)`)
  * `TOKEN` is deliberately NOT here — it would take `TOKENIZER` with it, and
  * the segment rule already catches every real `*_TOKEN`.
  */
-const SECRET_SUBSTRING_RE = /(PASSWORD|PASSWD|PASSPHRASE|SECRET|CREDENTIAL|APIKEY)/;
+const SECRET_SUBSTRING_RE = /(PASSWORD|PASSWD|PASSPHRASE|PASSCODE|SECRET|CREDENTIAL|APIKEY)/;
 
 /**
  * Connection strings that conventionally carry an inline password.
@@ -157,8 +212,26 @@ const SECRET_SUBSTRING_RE = /(PASSWORD|PASSWD|PASSPHRASE|SECRET|CREDENTIAL|APIKE
  * than sweeping every `*_URL`, which would take ordinary service endpoints
  * with it.
  */
-const CONNECTION_STRING_RE =
-  /^(DATABASE|DB|POSTGRES|POSTGRESQL|PG|MYSQL|MARIADB|MONGO|MONGODB|REDIS|AMQP|RABBITMQ|CLICKHOUSE|ELASTIC|ELASTICSEARCH|SNOWFLAKE|CLOUDAMQP|MEMCACHED|CASSANDRA|NEO4J)_(URL|URI|DSN|CONNECTION_STRING|CONNECTIONSTRING)$|_(DSN|CONNECTION_STRING)$/;
+const CONNECTION_STRING_RE = /(^|_)(DSN|CONNECTION_STRING|CONNECTIONSTRING)($|_)/;
+// NOT `URL`/`URI` as a segment. Trying that took `API_BASE_URL` and
+// `OTEL_EXPORTER_OTLP_ENDPOINT`-shaped configuration with it — ordinary
+// service endpoints a server needs. A `*_URL` is a secret exactly when its
+// VALUE carries credentials, which is what the value scan below decides
+// without needing anyone to have listed the name. The one exception is a
+// webhook, where the URL itself IS the credential and there is no
+// `user:pass@` to spot, so `WEBHOOK` is a segment.
+
+/**
+ * A VALUE that carries an inline credential, whatever the variable is
+ * called.
+ *
+ * The name-based list above will always be incomplete — `MONGO_URL` was
+ * caught and `MONGOHQ_URL` was not, `DATABASE_URL` and not
+ * `JDBC_DATABASE_URL` — and `http_proxy` is the case where the value is a
+ * secret and the name contains no secret word at all. `://user:pass@` is
+ * the shape itself, and it needs no list.
+ */
+const CREDENTIAL_IN_VALUE_RE = /:\/\/[^/\s:@]+:[^/\s@]+@/;
 
 /**
  * True when this variable must not reach a third-party MCP server by
@@ -168,7 +241,13 @@ const CONNECTION_STRING_RE =
  * against the raw name and another against the uppercased one, so a
  * lowercase `keryx_secretish` survived what `KERYX_SECRETISH` did not.
  */
-export function isDeniedForMcpChild(name: string): boolean {
+export function isDeniedForMcpChild(name: string, value?: string): boolean {
+  // The VALUE is checked first and independently of the name: an inline
+  // `://user:pass@` is a credential however the variable is spelled, and
+  // this is the only rule that does not depend on someone having thought
+  // of the name.
+  if (value !== undefined && CREDENTIAL_IN_VALUE_RE.test(value)) return true;
+
   const upper = name.toUpperCase();
   if (MCP_ENV_ALLOW_EXACT.includes(upper)) return false;
 
@@ -200,7 +279,7 @@ export function buildMcpChildEnv(input: McpChildEnvInput): Record<string, string
 
   for (const [key, value] of Object.entries(input.parent)) {
     if (value === undefined) continue;
-    if (isDeniedForMcpChild(key)) continue;
+    if (isDeniedForMcpChild(key, value)) continue;
     env[key] = value;
   }
 

@@ -30,7 +30,7 @@ import {
   readConfigFile,
   writeOwnerOnlyFileAtomic,
 } from "../lib/config-dir";
-import type { ResolvedMcpServer } from "./config";
+import { parseJsonTolerant, type ResolvedMcpServer } from "./config";
 
 export function trustFile(configDir?: string): string {
   return path.join(configDir ?? ensureKeryxConfigDir(), "mcp-servers-trust.json");
@@ -67,7 +67,7 @@ export function loadTrustStore(configDir?: string): Record<string, string> {
   const read = readConfigFile(trustFile(configDir));
   if (!read.ok) return {};
   try {
-    const parsed = JSON.parse(read.text) as McpTrustStore;
+    const parsed = parseJsonTolerant(read.text) as McpTrustStore;
     const approvals = parsed.approvals;
     if (approvals === undefined) return {};
     const clean: Record<string, string> = {};

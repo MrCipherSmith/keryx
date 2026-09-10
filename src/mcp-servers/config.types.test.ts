@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadMcpServers } from "./config";
+import { addServer } from "./store";
 import { createMcpRuntime } from "./runtime";
 
 function withServers(
@@ -220,6 +221,96 @@ describe("things a second round of verification found still wrong", () => {
     const result = loadMcpServers({ cwd: base, gitRoot: base, configDir, env: {} });
     expect(result.problems).toEqual([]);
     expect(result.servers.map((s) => s.name)).toEqual(["s"]);
+  });
+});
+
+describe("what a THIRD round of verification found", () => {
+  test("a server named __proto__ does not load clean and produce nothing", () => {
+    // It passes the name rule, and `servers[name] = entry` then hits
+    // `Object.prototype`'s setter instead of creating an own property — so
+    // the file reported ZERO problems and ZERO servers. Not pollution;
+    // exactly the load-clean-and-vanish shape this package keeps finding.
+    // RAW JSON. `{ __proto__: x }` in a JavaScript object literal sets the
+    // PROTOTYPE and creates no key at all, so building this case in JS
+    // would test something else entirely — the same shape of mistake as
+    // the `1e400` one above.
+    const result = loadRaw(
+      '{"schemaVersion":1,"servers":{"__proto__":{"command":"x"},"ok":{"command":"y"}}}',
+    );
+
+    expect(result.problems).toEqual([]);
+    expect(result.servers.map((s) => s.name).sort()).toEqual(["__proto__", "ok"]);
+    // And nothing was written to the real prototype.
+    expect(({} as Record<string, unknown>).command).toBeUndefined();
+  });
+
+  test("other prototype-ish names still work", () => {
+    const result = loadRaw(
+      '{"schemaVersion":1,"servers":{"constructor":{"command":"a"},"toString":{"command":"b"}}}',
+    );
+    expect(result.servers.map((s) => s.name).sort()).toEqual(["constructor", "toString"]);
+  });
+
+  test("oauth's INTERIOR is validated, not just its type", () => {
+    // The first pass checked "object or false" and left six
+    // schema-specified rules unenforced. The unknown-field allowance
+    // covers unknown fields, not a known one's contents.
+    const bad: Array<[string, unknown]> = [
+      ["clientId as a number", { clientId: 5 }],
+      ["an unknown field", { bogus: 1 }],
+      ["a port above the range", { callbackPort: 99999 }],
+      ["a port below the range", { callbackPort: 0 }],
+      ["scopes of numbers", { scopes: [1, 2] }],
+      ["scopes as a string", { scopes: "a" }],
+    ];
+    for (const [label, oauth] of bad) {
+      expect({ label, problems: load({ s: { url: "https://x", oauth } }).problems.length > 0 }).toEqual({
+        label,
+        problems: true,
+      });
+    }
+    // And a valid one is accepted — anti-vacuity.
+    expect(
+      load({ s: { url: "https://x", oauth: { clientId: "a", scopes: ["b"], callbackPort: 8080 } } }).problems,
+    ).toEqual([]);
+  });
+
+  test("a BOM is tolerated by every reader of these files, not just the loader", () => {
+    // The strip landed in `parseConfigFile` alone — one of three readers.
+    // The result was two surfaces disagreeing about one file: `list` read
+    // it and `add` refused it, and a BOM on the OVERLAY made `disable` not
+    // take effect while reporting success.
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-mcp-bom3-"));
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      `\uFEFF${JSON.stringify({ schemaVersion: 1, servers: { s: { command: "x", enabled: false } } })}`,
+    );
+    writeFileSync(
+      path.join(configDir, "mcp-servers-disabled.json"),
+      `\uFEFF${JSON.stringify({ overrides: { s: false } })}`,
+    );
+
+    const loaded = loadMcpServers({ cwd: base, gitRoot: base, configDir, env: {} });
+    expect(loaded.problems).toEqual([]);
+    // The overlay was READ, so `disable` took effect rather than being
+    // "ignored" while the server started.
+    expect(loaded.servers[0]?.enabled).toBe(false);
+
+    // And the writer agrees with the reader about the same file.
+    const written = addServer({ name: "t", entry: { command: "y" }, scope: "user", configDir });
+    expect(written.ok).toBe(true);
+  });
+
+  test("a BOM plus a genuine syntax error still reports the syntax error", () => {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-mcp-bom4-"));
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(path.join(configDir, "mcp-servers.json"), '\uFEFF{"servers":{,}}');
+
+    const result = loadMcpServers({ cwd: base, gitRoot: base, configDir, env: {} });
+    expect(result.problems[0]?.message).toContain("not valid JSON");
   });
 });
 

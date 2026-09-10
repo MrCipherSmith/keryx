@@ -36,23 +36,85 @@ describe("the EIGHTEEN a real spawn found still leaking after the first fix", ()
   // suite was green and `spawn-env.test.ts` asserted the nine names from
   // the report. That is the whole lesson — the old test could not have
   // failed on any of these.
-  const STILL_LEAKING = [
-    "ANTHROPIC_KEY", "OPENAI_KEY", "SSH_KEY", "SUPABASE_SERVICE_ROLE_KEY",
-    "PGPASSWORD", "MYSQL_PWD", "PGPASSFILE", "NPM_CONFIG__AUTH",
-    "AUTHORIZATION", "JWT", "BW_SESSION", "OP_SESSION_myacct",
-    "KUBECONFIG", "NETRC", "GNUPGHOME", "CLOUDSDK_CONFIG",
-    "DOCKER_HOST", "DATABASE_URL",
+  // Name AND value, because one of these is only a credential by its
+  // value. `DATABASE_URL=secret` is not a secret; the connection string
+  // the verifier actually observed is. Giving every entry the placeholder
+  // "secret" would have made this test assert a rule the code should not
+  // have.
+  const STILL_LEAKING: Array<[string, string]> = [
+    ["ANTHROPIC_KEY", "sk-ant-bare"],
+    ["OPENAI_KEY", "sk-openai-bare"],
+    ["SSH_KEY", "/home/u/.ssh/id_ed25519"],
+    ["SUPABASE_SERVICE_ROLE_KEY", "srk-secret"],
+    ["PGPASSWORD", "pg_secret"],
+    ["MYSQL_PWD", "mysql_secret"],
+    ["PGPASSFILE", "/home/u/.pgpass"],
+    ["NPM_CONFIG__AUTH", "bmFtZTpwdw=="],
+    ["AUTHORIZATION", "Bearer abc"],
+    ["JWT", "eyJ"],
+    ["BW_SESSION", "bwsess"],
+    ["OP_SESSION_myacct", "opsess"],
+    ["KUBECONFIG", "/home/u/.kube/config"],
+    ["NETRC", "/home/u/.netrc"],
+    ["GNUPGHOME", "/home/u/.gnupg"],
+    ["CLOUDSDK_CONFIG", "/home/u/.config/gcloud"],
+    ["DOCKER_HOST", "tcp://1.2.3.4:2375"],
+    ["DATABASE_URL", "postgres://u:hunter2@db/app"],
   ];
 
   test("none of them reaches the child now", () => {
-    const parent = Object.fromEntries(STILL_LEAKING.map((n) => [n, "secret"]));
+    const parent = Object.fromEntries(STILL_LEAKING);
     const env = buildMcpChildEnv({ parent: { ...parent, PATH: "/usr/bin" } });
     expect(Object.keys(env)).toEqual(["PATH"]);
   });
 
   test("each one individually, so a failure names which", () => {
-    for (const name of STILL_LEAKING) {
+    for (const [name, value] of STILL_LEAKING) {
+      expect({ name, denied: isDeniedForMcpChild(name, value) }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("a credential in the VALUE is caught whatever the name is", () => {
+    // The rule that needs no list. `http_proxy` is the case where the
+    // value is a secret and the name contains no secret word at all, and a
+    // name list will always miss `MONGOHQ_URL` while catching `MONGO_URL`.
+    expect(isDeniedForMcpChild("http_proxy", "http://user:pw@proxy:8080")).toBe(true);
+    expect(isDeniedForMcpChild("JDBC_DATABASE_URL", "jdbc:postgresql://u:pw@h/db")).toBe(true);
+    expect(isDeniedForMcpChild("MONGOHQ_URL", "mongodb://u:pw@h/db")).toBe(true);
+
+    // And the same names WITHOUT credentials are ordinary configuration.
+    expect(isDeniedForMcpChild("http_proxy", "http://proxy:8080")).toBe(false);
+    expect(isDeniedForMcpChild("API_BASE_URL", "https://api.example.com")).toBe(false);
+  });
+
+  test("the classes a THIRD round found: keyring, rc-file pointers, askpass", () => {
+    for (const name of [
+      "GNOME_KEYRING_CONTROL", "CURLRC", "WGETRC", "NPMRC", "PIP_CONFIG_FILE",
+      "RCLONE_CONFIG", "MAVEN_SETTINGS", "GIT_CONFIG", "HGRCPATH",
+      // Not credentials — a credential-HARVESTING primitive. The child runs
+      // `$GIT_ASKPASS "Password for https://github.com"` and the operator's
+      // helper hands it a live token.
+      "GIT_ASKPASS", "SSH_ASKPASS", "SUDO_ASKPASS",
+      "GITHUB_PAT", "PASSCODE", "PASSKEY", "SLACK_WEBHOOK_URL",
+    ]) {
       expect({ name, denied: isDeniedForMcpChild(name) }).toEqual({ name, denied: true });
+    }
+  });
+
+  test("the OVER-reach a third round found is gone", () => {
+    // Sweeping `NPM_CONFIG_` took `npm_config_registry`, so on a machine
+    // with a private registry the canonical `npx -y @scope/server` launch
+    // silently resolved against the public one. Sweeping `AWS_` took
+    // `AWS_REGION`, so a server given its keys by `-e` then failed with
+    // "you must specify a region" — which reads as the server being
+    // broken, the exact outcome this design is meant to avoid.
+    for (const name of [
+      "npm_config_registry", "npm_config_cache", "NPM_CONFIG_PREFIX",
+      "AWS_REGION", "AWS_DEFAULT_REGION", "GOOGLE_CLOUD_PROJECT",
+      "CLOUDSDK_CORE_PROJECT", "XDG_SESSION_TYPE", "SESSION_MANAGER",
+      "DBUS_SESSION_BUS_ADDRESS", "PRIVATE_REGISTRY_URL", "API_BASE_URL",
+    ]) {
+      expect({ name, denied: isDeniedForMcpChild(name) }).toEqual({ name, denied: false });
     }
   });
 

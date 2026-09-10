@@ -33,6 +33,17 @@ import { buildMcpChildEnv } from "./spawn-env";
  */
 export const CLOSE_GRACE_MS = 750;
 
+/**
+ * How long `close()` waits for an aborted dial's child to actually die.
+ *
+ * The SDK escalates `stdin.end()` → 2s → SIGTERM → 2s → SIGKILL, so
+ * anything under ~4s can return before the child is gone. Measured: with
+ * the parent living 0/500/1000ms past `close()` the child survived; at
+ * 1500ms it did not. This is longer than that, because the measurement was
+ * on an idle machine.
+ */
+export const KILL_GRACE_MS = 4_500;
+
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export type McpRuntimeOptions = {
@@ -113,7 +124,16 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     })),
   ];
 
-  const connect = options.connect ?? ((server) => defaultConnect(server, dialling.signal));
+  // Kills started by an abort, so `close()` can WAIT for them.
+  //
+  // The abort was already wired; the problem was a budget mismatch nobody
+  // had measured. The SDK's `StdioClientTransport.close()` is graceful:
+  // `stdin.end()`, then a 2s wait, THEN SIGTERM, then another 2s, then
+  // SIGKILL. `close()` returned at 750ms and `process.exit` followed, so
+  // the first signal never went out and the child was reparented to init —
+  // on all four exit paths a verifier tried.
+  const kills: Array<Promise<void>> = [];
+  const connect = options.connect ?? ((server) => defaultConnect(server, dialling.signal, kills));
   const settled = startServers(launchable, connect)
     .then((result) => {
       catalog = result.catalog;
@@ -171,8 +191,14 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
       dialling.abort();
       await Promise.race([settled, delay(CLOSE_GRACE_MS)]);
       await closeOnce(states);
-      // Whatever lands after the grace is still closed — just not waited
-      // for. Dropping it would trade the hang for a leak.
+      // AWAIT the kills the abort started, bounded by how long the SDK's
+      // graceful close actually takes to reach SIGKILL. Returning before
+      // this is what orphaned the child: the caller's very next statement
+      // is `process.exit`, and "still closed, just not awaited" is only
+      // true while the process survives.
+      await Promise.race([Promise.all(kills), delay(KILL_GRACE_MS)]);
+      // Whatever lands after all of that is still closed — a dial that has
+      // not even reached the abort handler yet.
       void settled.then(() => closeOnce(states)).catch(() => {});
     },
   };
@@ -205,7 +231,11 @@ function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): num
   return server.tool_timeouts?.[rawName] ?? server.tool_timeout_sec;
 }
 
-async function defaultConnect(server: ResolvedMcpServer, signal?: AbortSignal): ReturnType<ConnectFn> {
+async function defaultConnect(
+  server: ResolvedMcpServer,
+  signal?: AbortSignal,
+  kills?: Array<Promise<void>>,
+): ReturnType<ConnectFn> {
   const command = server.command;
   if (command === undefined || command === "") {
     // Reached only for a `url` server, which P0 does not dial. Thrown rather
@@ -223,6 +253,7 @@ async function defaultConnect(server: ResolvedMcpServer, signal?: AbortSignal): 
     // the comment in `connectStdioMcpServer`.
     handshakeBudgetMs(server),
     signal,
+    kills,
   );
 }
 
