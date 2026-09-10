@@ -520,7 +520,14 @@ export async function connectHttpMcpServer(
   try {
     parsed = new URL(url);
   } catch {
-    throw new Error(`mcp-client: "${url}" is not a URL`);
+    // The url is NOT echoed. It is the expanded form, and an expanded
+    // `?api_key=${KEY}` put a live secret into `doctor --json` and
+    // `ServerState.error` through exactly this message. The caller knows
+    // the raw form and reports it.
+    throw new Error("mcp-client: the server url is not a valid URL");
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new Error("mcp-client: refusing a url that carries a username/password");
   }
   if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
     // `file:` and friends would be read through fetch with no server at the
@@ -540,7 +547,38 @@ export async function connectHttpMcpServer(
 
   const sdk = await loadHttpSdk();
   const transport = new sdk.StreamableHTTPClientTransport(parsed, {
-    requestInit: Object.keys(headers).length > 0 ? { headers } : undefined,
+    requestInit: {
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      // NO REDIRECTS. `fetch` defaults to following up to 20 hops, and
+      // `fetch` only strips `Authorization` across origins — a custom
+      // credential header, which is the common MCP pattern, follows. A
+      // 307 to a loopback or link-local address was followed and the
+      // target's body came back into `doctor` and, through `use_tool`'s
+      // error branch, into the model's context.
+      //
+      // keryx already sets the house standard for fetching third-party
+      // content in `src/harness/web/sandboxed-web-transport.ts`: bounded
+      // hops, each validated. Until this path can do the same, it does
+      // not redirect at all — a server that needs one can be configured
+      // with its real URL.
+      redirect: "error",
+    },
+    // The reconnection bound, stated rather than inherited.
+    //
+    // A review asked whether an SSE stream that drops can reconnect
+    // without limit. In this SDK version it cannot — the default is
+    // `maxRetries: 2` — so there is no storm to fix, and adding a
+    // supervisor for one would be machinery for a problem that does not
+    // exist. What was wrong is that the bound was a LIBRARY DEFAULT: a
+    // minor-version bump could raise it, and nothing here would notice or
+    // fail. These values are today's defaults, pinned so the policy is
+    // keryx's and a change to it shows up in this diff.
+    reconnectionOptions: {
+      initialReconnectionDelay: 1_000,
+      maxReconnectionDelay: 30_000,
+      reconnectionDelayGrowFactor: 1.5,
+      maxRetries: 2,
+    },
   });
 
   const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });

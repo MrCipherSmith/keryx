@@ -20,6 +20,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { classTableProblems } from "./class-table";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -171,11 +172,19 @@ describe("P1 additions obey the same module rules", () => {
   });
 
   test("header resolution is covered by a CLASS table, like the environment filter", () => {
-    // AC10, frozen as a criterion rather than left to a later round.
+    // AC10. This asserted the STRING `"every class carries a BOUNDARY"`
+    // appeared in the file — the P0 pattern verbatim, correct at the site
+    // it was given: renaming the test satisfied it, and gutting the
+    // assertion inside the test did not break it. It was also true at the
+    // moment it was written of a table whose boundary check was a
+    // tautology.
+    //
+    // What can be checked cheaply from here is WIRING: that the table
+    // hands its rows to the shared rule rather than re-deriving one. The
+    // rule itself is enforced when the table runs, and proven to have
+    // teeth by "the shared class-table rule bites" below.
     const table = readFileSync(path.join(HERE, "http-headers.table.test.ts"), "utf8");
-    expect(table).toContain("klass");
-    expect(table).toContain("every class carries a BOUNDARY");
-    expect(table).toContain("every class carries at least three rows");
+    expect(table).toContain("classTableProblems");
   });
 
   test("the HTTP handshake is proved against a real listener, not a stub", () => {
@@ -194,7 +203,56 @@ describe("the class-based tests exist and are load-bearing", () => {
     // names in the next one.
     const table = readFileSync(path.join(HERE, "spawn-env.table.test.ts"), "utf8");
     expect(table).toContain("klass");
-    expect(table).toContain("every class carries a BOUNDARY");
+    expect(table).toContain("classTableProblems");
+  });
+
+  test("the shared class-table rule BITES — it is not a function returning []", () => {
+    // The point of the two assertions above is that both tables submit to
+    // one rule. That is worth nothing if the rule accepts everything, and
+    // the two hand-written versions it replaced did very nearly that: one
+    // read `refused > 0 || allowed > 0`, true of any non-empty class; the
+    // other read `kept > 0`, which passes a class that is entirely kept.
+    //
+    // So: give it tables that violate each rule and require it to say so.
+    // This is the assertion a string match cannot make.
+    const outcome = (row: { ok: boolean }): string => (row.ok ? "allowed" : "refused");
+    const ok = { ok: true };
+    const no = { ok: false };
+
+    // A class with only one outcome — the tautology, caught.
+    expect(
+      classTableProblems([{ klass: "all-allowed", rows: [ok, ok, ok] }], outcome),
+    ).toEqual(["all-allowed: every row comes out \"allowed\" — no BOUNDARY, so the rule could be a constant"]);
+    expect(classTableProblems([{ klass: "all-refused", rows: [no, no, no] }], outcome)).toHaveLength(1);
+
+    // A class too small to be a class.
+    expect(classTableProblems([{ klass: "thin", rows: [ok, no] }], outcome)).toEqual([
+      "thin: 2 row(s), fewer than the 3 a class needs",
+    ]);
+
+    // Both at once are both reported, rather than the first stopping the
+    // check — an operator fixing one problem per run is the pattern this
+    // package keeps producing.
+    expect(classTableProblems([{ klass: "both", rows: [ok] }], outcome)).toHaveLength(2);
+
+    // An empty table is not a passing table.
+    expect(classTableProblems([], outcome)).toHaveLength(1);
+
+    // Two classes with one name are one class with a spelling mistake.
+    expect(
+      classTableProblems(
+        [
+          { klass: "same", rows: [ok, no, ok] },
+          { klass: "same", rows: [ok, no, no] },
+        ],
+        outcome,
+      ),
+    ).toHaveLength(1);
+
+    // BOUNDARY — a table that satisfies every rule passes clean. Without
+    // this, `classTableProblems = () => ["problem"]` passes everything
+    // above.
+    expect(classTableProblems([{ klass: "good", rows: [ok, no, ok] }], outcome)).toEqual([]);
   });
 
   test("readOverlay is covered per STATE, not only on its success path", () => {

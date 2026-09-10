@@ -24,7 +24,8 @@ import type {
 import type { SkippedTool } from "./catalog";
 import { catalogForServer } from "./catalog";
 import type { ConnectFn, ServerStatus } from "./manager";
-import { describeHollow, resolveHttpHeaders } from "./http-headers";
+import { describeHollow, displayUrl, resolveHttpHeaders, urlProblem, userinfoProblem } from "./http-headers";
+import { sanitiseForDisplay } from "./tools";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
 /**
@@ -94,7 +95,14 @@ export function redactHeaders(
   // the config's own `headers`, so it would otherwise be absent from the
   // report entirely — and absent reads as "not configured".
   const tokenVar = server.bearer_token_env_var;
-  if (tokenVar !== undefined && tokenVar !== "" && out.Authorization === undefined) {
+  // Case-INSENSITIVELY, because HTTP header names are. `out.Authorization
+  // === undefined` was true for a config that wrote `"authorization"` in
+  // lowercase, so the report grew a second Authorization row — for a
+  // credential that `resolveHttpHeaders` does not send, since the explicit
+  // header wins. The operator saw the header listed twice and had no way
+  // to tell which of the two was on the wire.
+  const alreadyReported = Object.keys(out).some((key) => key.toLowerCase() === "authorization");
+  if (tokenVar !== undefined && tokenVar !== "" && !alreadyReported) {
     out.Authorization = hollow.has("authorization") ? "unset" : "set";
   }
   return out;
@@ -211,7 +219,12 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
     // of AC19's second half: dialling with `Bearer ` would produce a 401
     // from somebody else's server, which reads as "their server is broken"
     // rather than "your variable is unset".
-    const resolved = resolveHttpHeaders(server, server.raw, options.env ?? process.env);
+    const env = options.env ?? process.env;
+    const urlIssue = urlProblem(server.raw.url, env) ?? userinfoProblem(server.raw.url);
+    if (urlIssue !== undefined) {
+      return { ...base, status: "needs_auth", toolCount: 0, skipped: [], detail: urlIssue };
+    }
+    const resolved = resolveHttpHeaders(server, server.raw, env);
     if (!resolved.ok) {
       return {
         ...base,
@@ -278,35 +291,83 @@ export function explainConnectFailure(
   server: ResolvedMcpServer,
   error: unknown,
 ): string {
-  const message = messageOf(error);
+  const message = sanitiseForDisplay(messageOf(error));
   if (transport !== "http") return message;
 
-  const lower = message.toLowerCase();
-  const url = server.raw.url ?? server.url ?? "";
+  // The URL, from the RAW entry and with its query elided. The expanded
+  // form carries whatever `${API_KEY}` resolved to.
+  const url = displayUrl(server.raw.url);
 
-  if (/econnrefused|connection refused|unable to connect|failed to fetch|fetch failed/.test(lower)) {
-    return `nothing is listening at ${url} (${message})`;
+  // CLASSIFY ON THE CODE, NOT THE MESSAGE.
+  //
+  // The first version matched regexes against the message text and four of
+  // its seven branches could never fire, which a reviewer proved by
+  // deleting the whole function and watching 505 tests stay green. The
+  // reason is structural: the SDK throws
+  // `new StreamableHTTPError(response.status, "Error POSTing to endpoint: " + body)`
+  // — the status is on `.code` and is NEVER in the message. So the
+  // credentials branch fired only when the SERVER'S RESPONSE BODY happened
+  // to contain the word "unauthorized", and the same 401 was classified
+  // two different ways depending on what the server wrote.
+  const status = httpStatusOf(error);
+  if (status !== undefined) {
+    if (status === 401 || status === 403) {
+      return `${url} rejected the credentials it was given (HTTP ${status}). Check the header or bearer_token_env_var.`;
+    }
+    if (status === 404) return `${url} has no MCP endpoint there (HTTP 404). Check the path.`;
+    if (status >= 500) return `${url} answered HTTP ${status} — the server is failing, not the config.`;
+    return `${url} answered HTTP ${status}.`;
   }
-  if (/enotfound|getaddrinfo|dns/.test(lower)) {
-    return `the host in ${url} does not resolve (${message})`;
+
+  // Then the system error code, which is where a socket failure lives.
+  const syscall = syscallCodeOf(error);
+  if (syscall !== undefined) {
+    if (syscall === "ECONNREFUSED") return `nothing is listening at ${url} (${syscall})`;
+    if (syscall === "ENOTFOUND" || syscall === "EAI_AGAIN") {
+      return `the host in ${url} does not resolve (${syscall})`;
+    }
+    if (syscall.includes("CERT") || syscall.includes("SSL") || syscall.includes("TLS")) {
+      return `the TLS certificate for ${url} was rejected (${syscall})`;
+    }
+    if (syscall === "ETIMEDOUT") return `${url} did not answer in time (${syscall})`;
+    return `${url} could not be reached (${syscall})`;
   }
-  if (/certificate|self-signed|self signed|tls|ssl|unable to verify/.test(lower)) {
-    return `the TLS certificate for ${url} was rejected (${message})`;
-  }
-  if (/\b40[13]\b|unauthorized|forbidden/.test(lower)) {
-    return `${url} refused the credentials it was given (${message}). Check the header or bearer_token_env_var.`;
-  }
-  if (/\b(4\d\d|5\d\d)\b|http \d\d\d|status code/.test(lower)) {
-    return `${url} answered with an HTTP error (${message})`;
-  }
-  if (/did not complete the handshake|did not answer/.test(lower)) {
-    return `${url} accepted the connection and never completed the MCP handshake (${message})`;
-  }
-  if (/json|parse|unexpected token|zod|invalid/.test(lower)) {
-    // The commonest misconfiguration: a URL that serves a web page.
+
+  // Only then the message, and only for the cases that have no code.
+  const lower = message.toLowerCase();
+  if (lower.includes("unexpected content type")) {
+    // The commonest misconfiguration: a URL that serves a web page. The
+    // SDK reports it exactly this way and the old regex list had no
+    // branch that matched it.
     return `${url} answered, but not with MCP — is that the server endpoint and not a web page? (${message})`;
   }
-  return message;
+  if (lower.includes("did not complete the handshake") || lower.includes("did not answer")) {
+    return `${url} accepted the connection and never completed the MCP handshake (${message})`;
+  }
+  if (lower.includes("unable to connect")) {
+    // Bun collapses refused and unresolvable into one message with no
+    // code. Say both rather than guess.
+    return `${url} could not be reached — nothing listening, or the host does not resolve (${message})`;
+  }
+  if (lower.includes("redirect")) {
+    return `${url} redirected, which keryx does not follow for MCP. Configure the final URL. (${message})`;
+  }
+  return `${url}: ${message}`;
+}
+
+/** The HTTP status the SDK carries on `StreamableHTTPError.code`. */
+export function httpStatusOf(error: unknown): number | undefined {
+  const code = (error as { code?: unknown } | undefined)?.code;
+  return typeof code === "number" && code >= 100 && code <= 599 ? code : undefined;
+}
+
+/** The system error code, on the error or its cause. */
+export function syscallCodeOf(error: unknown): string | undefined {
+  for (const candidate of [error, (error as { cause?: unknown } | undefined)?.cause]) {
+    const code = (candidate as { code?: unknown } | undefined)?.code;
+    if (typeof code === "string" && code.length > 0) return code;
+  }
+  return undefined;
 }
 
 function messageOf(error: unknown): string {

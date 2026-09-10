@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { startMockHttpMcpServer, type MockHttpMcpServer } from "../../fixtures/mcp-servers/http-server";
 import { loadMcpServers } from "./config";
-import { runDoctor, formatDoctorReport } from "./doctor";
+import { runDoctor, formatDoctorReport, redactHeaders } from "./doctor";
 import { createMcpRuntime } from "./runtime";
 import { connectHttpMcpServer } from "../mcp-client/client";
 import { resolveHttpHeaders, describeHollow } from "./http-headers";
@@ -98,6 +98,36 @@ describe("AC4 — an unset variable means NO REQUEST, not a rejected one", () =>
     expect(state?.error).toContain("TOKEN");
     expect(server.requests()).toEqual([]);
   }, 30_000);
+
+  test("and it obeys the env it was GIVEN, not the one the process happens to hold", async () => {
+    // The test above passed for the wrong reason. `connectRemote` resolved
+    // headers against `process.env` while everything else in the runtime
+    // used `options.env`, so the refusal came from the developer's shell
+    // having no `KERYX_TEST_TOKEN` — and on a machine that did, the same
+    // test would have gone green having proved nothing.
+    //
+    // Two runs, same config, differing only in the INJECTED env. If the
+    // dial reads the process environment, both come out the same and one
+    // of these two assertions fails.
+    const VAR = "KERYX_TEST_TOKEN_9F3A";
+    expect(process.env[VAR]).toBeUndefined(); // the premise, stated
+
+    const withToken = await mock({ requireAuth: "Bearer injected-only" });
+    const dir = workspace({ url: withToken.url, bearer_token_env_var: VAR });
+
+    const connected = createMcpRuntime({
+      cwd: dir,
+      gitRoot: dir,
+      configDir: dir,
+      env: { [VAR]: "injected-only" },
+    });
+    await connected.ready();
+    const good = connected.servers()[0];
+    await connected.close();
+
+    expect(good?.status).toBe("connected");
+    expect(withToken.requests()[0]?.headers.authorization).toBe("Bearer injected-only");
+  }, 30_000);
 });
 
 describe("AC4 — doctor says which variable, and does not dial", () => {
@@ -125,6 +155,41 @@ describe("AC4 — doctor says which variable, and does not dial", () => {
     expect(server.requests()).toEqual([]);
     expect(formatDoctorReport(report)).toContain("MY_TOKEN");
   }, 30_000);
+});
+
+describe("AC8 — the headers map agrees with itself", () => {
+  function redactFor(entry: Record<string, unknown>, env: Record<string, string | undefined>) {
+    const configDir = workspace(entry);
+    const config = loadMcpServers({ cwd: configDir, gitRoot: configDir, configDir, env });
+    const server = config.servers[0];
+    if (server === undefined) throw new Error("no server loaded");
+    return redactHeaders(server, env);
+  }
+
+  test("a lowercase authorization header is not reported TWICE", () => {
+    // `out.Authorization === undefined` is an exact-key test, and HTTP
+    // header names are case-insensitive. A config writing `authorization`
+    // got a second `Authorization` row synthesised from
+    // `bearer_token_env_var` — a credential the resolver does not send,
+    // because the explicit header wins. Two rows, one header, no way to
+    // tell which was on the wire.
+    const map = redactFor(
+      { url: "https://x/mcp", headers: { authorization: "Bearer lower" }, bearer_token_env_var: "TOKEN" },
+      { TOKEN: "unused" },
+    );
+    expect(Object.keys(map)).toEqual(["authorization"]);
+  });
+
+  test("BOUNDARY — with no explicit header the env var IS reported", () => {
+    // Without this, dropping the synthesis entirely passes the test above.
+    const map = redactFor({ url: "https://x/mcp", bearer_token_env_var: "TOKEN" }, { TOKEN: "t" });
+    expect(map).toEqual({ Authorization: "set" });
+  });
+
+  test("and an unset one is reported unset, not omitted", () => {
+    const map = redactFor({ url: "https://x/mcp", bearer_token_env_var: "TOKEN" }, {});
+    expect(map).toEqual({ Authorization: "unset" });
+  });
 });
 
 describe("AC8 — no report prints a token", () => {

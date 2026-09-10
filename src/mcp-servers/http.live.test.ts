@@ -190,8 +190,72 @@ describe("AC4 — a hollow credential never reaches the wire", () => {
   }, 30_000);
 
   test("a non-URL and a non-http scheme are refused before any I/O", async () => {
-    await expect(connectHttpMcpServer("not a url")).rejects.toThrow(/is not a URL/);
+    await expect(connectHttpMcpServer("not a url")).rejects.toThrow(/not a valid URL/);
     await expect(connectHttpMcpServer("file:///etc/passwd")).rejects.toThrow(/not an MCP transport/);
+  }, 30_000);
+
+  test("the rejected URL is NOT echoed — it is the expanded one", async () => {
+    // `?api_key=${KEY}` expands to a live secret, and this message put it
+    // into `doctor --json` and `ServerState.error`. The caller knows the
+    // raw form and reports that instead.
+    const withSecret = "/relative?api_key=sk-live-must-not-appear";
+    await expect(connectHttpMcpServer(withSecret)).rejects.toThrow(
+      expect.not.stringContaining("sk-live-must-not-appear") as never,
+    );
+  }, 30_000);
+
+  test("a url carrying a username and password is refused", async () => {
+    // Printed in every report that names the URL, and silently dropped by
+    // Bun's fetch — so the operator gets the secret on screen and an
+    // unauthenticated connection.
+    await expect(connectHttpMcpServer("https://alice:hunter2@example.test/mcp")).rejects.toThrow(
+      /username\/password/,
+    );
+  }, 30_000);
+});
+
+describe("D-06 — `sse` is not a separate transport, it is what the server answers with", () => {
+  // The decision record says so and nothing tested it: every fixture reply
+  // was `application/json`, so the SSE half of the transport — which is
+  // what the hosted MCP endpoints this feature exists to reach actually
+  // use — was asserted by a sentence. `sse` in a config is an alias, and
+  // an alias that is never exercised is a claim.
+
+  test("a server that streams its replies connects and lists tools the same way", async () => {
+    const streaming = await mock({ sse: true });
+    const connection = await connectHttpMcpServer(streaming.url, { handshakeTimeoutMs: 10_000 });
+    try {
+      const tools = await connection.listTools();
+      expect(tools.map((t) => t.name).sort()).toEqual(["create_ticket", "search"]);
+    } finally {
+      await connection.close();
+    }
+  }, 30_000);
+
+  test("and calling a tool over it returns the same result", async () => {
+    const streaming = await mock({ sse: true });
+    const connection = await connectHttpMcpServer(streaming.url, { handshakeTimeoutMs: 10_000 });
+    try {
+      const outcome = await connection.callTool("search", { q: "x" });
+      expect(JSON.stringify(outcome)).toContain("remote:search");
+    } finally {
+      await connection.close();
+    }
+  }, 30_000);
+
+  test("BOUNDARY — the JSON server is still a JSON server", async () => {
+    // Without this, wiring the fixture to answer SSE unconditionally would
+    // pass both tests above and delete the coverage they replaced.
+    const json = await mock();
+    const connection = await connectHttpMcpServer(json.url, { handshakeTimeoutMs: 10_000 });
+    try {
+      expect((await connection.listTools()).length).toBe(2);
+      // And the fixture proves which wire format it used, rather than the
+      // test believing the option it passed.
+      expect(json.requests().length).toBeGreaterThan(0);
+    } finally {
+      await connection.close();
+    }
   }, 30_000);
 });
 
@@ -209,21 +273,42 @@ describe("AC7 — failures are told apart", () => {
     expect(a).not.toBe(b);
   }, 30_000);
 
-  test("an unreachable port fails without hanging", async () => {
+  test("an unreachable port fails on the SOCKET, not on the handshake clock", async () => {
+    // This raced itself: budget 8000, assertion `elapsed < 8000`. The two
+    // numbers were the same one, so the test passed when the connection
+    // was refused instantly AND when the budget expired — and in the
+    // second case only by however many milliseconds the timer overshot by.
+    // A loaded CI box decides which.
+    //
+    // What the test is actually about is the REASON, so assert that: the
+    // dial must fail because nothing is listening, which is a different
+    // message from the timeout. The clock is then a margin check with real
+    // margin, not a photo finish.
+    const budget = 20_000;
     const started = Date.now();
-    await expect(
-      connectHttpMcpServer("http://127.0.0.1:1/mcp", { handshakeTimeoutMs: 8_000 }),
-    ).rejects.toThrow();
-    expect(Date.now() - started).toBeLessThan(8_000);
-  }, 30_000);
+    const error = await connectHttpMcpServer("http://127.0.0.1:1/mcp", {
+      handshakeTimeoutMs: budget,
+    }).then(
+      () => new Error("expected the dial to fail"),
+      (e: Error) => e,
+    );
 
-  test("a server that never answers is bounded by the handshake budget", async () => {
-    const slow = await mock({ delayMs: 5_000 });
+    expect(error.message).not.toMatch(/did not complete the handshake/);
+    expect(Date.now() - started).toBeLessThan(budget / 4);
+  }, 40_000);
+
+  test("a server that never answers IS bounded by the handshake budget", async () => {
+    // The other side of the same coin, and the boundary for the test
+    // above: here the timeout is what must fire, and the message must say
+    // so rather than reporting a socket error.
+    const slow = await mock({ delayMs: 20_000 });
     const started = Date.now();
 
     await expect(connectHttpMcpServer(slow.url, { handshakeTimeoutMs: 1_000 })).rejects.toThrow(
       /did not complete the handshake/,
     );
-    expect(Date.now() - started).toBeLessThan(5_000);
-  }, 30_000);
+    // Comfortably before the server would have replied, so a pass cannot
+    // mean "the response arrived first".
+    expect(Date.now() - started).toBeLessThan(10_000);
+  }, 40_000);
 });

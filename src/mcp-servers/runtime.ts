@@ -135,7 +135,16 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   // the first signal never went out and the child was reparented to init —
   // on all four exit paths a verifier tried.
   const kills: Array<Promise<void>> = [];
-  const connect = options.connect ?? ((server) => defaultConnect(server, dialling.signal, kills));
+  // `options.env` is threaded all the way to the dial, not just to
+  // `loadMcpServers`. It was read back from `process.env` inside
+  // `connectRemote`, which made the runtime's own env option a half-truth:
+  // the config was resolved against the injected environment and the
+  // CREDENTIALS were resolved against the real one. A test could inject
+  // `{}` and watch the refusal happen for the wrong reason — because the
+  // developer's shell had no `TOKEN` either — and the same test would go
+  // green on a machine where it did, having proved nothing about the code.
+  const env = options.env ?? process.env;
+  const connect = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills));
   const settled = startServers(launchable, connect)
     .then((result) => {
       catalog = result.catalog;
@@ -234,8 +243,12 @@ const DEFAULT_HANDSHAKE_MS = 15_000;
  * the transport, so the message names the variable the operator has to set
  * instead of reporting a 401 from somebody else's server.
  */
-async function connectRemote(server: ResolvedMcpServer, signal?: AbortSignal): ReturnType<ConnectFn> {
-  const resolved = resolveHttpHeaders(server, server.raw, process.env);
+async function connectRemote(
+  server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
+  signal?: AbortSignal,
+): ReturnType<ConnectFn> {
+  const resolved = resolveHttpHeaders(server, server.raw, env);
   if (!resolved.ok) {
     throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
   }
@@ -254,10 +267,11 @@ function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): num
 
 async function defaultConnect(
   server: ResolvedMcpServer,
+  env: Record<string, string | undefined>,
   signal?: AbortSignal,
   kills?: Array<Promise<void>>,
 ): ReturnType<ConnectFn> {
-  if (transportOf(server) === "http") return connectRemote(server, signal);
+  if (transportOf(server) === "http") return connectRemote(server, env, signal);
 
   const command = server.command;
   if (command === undefined || command === "") {
@@ -267,7 +281,7 @@ async function defaultConnect(
     [command, ...(server.args ?? [])],
     {
       cwd: server.cwd ?? defaultServerCwd(server),
-      env: buildMcpChildEnv({ parent: process.env, serverEnv: server.env }),
+      env: buildMcpChildEnv({ parent: env, serverEnv: server.env }),
     },
     // Bounded at the transport, so a server that never handshakes has its
     // child KILLED rather than merely abandoned by the caller's race. See

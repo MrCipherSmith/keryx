@@ -89,6 +89,33 @@ export function classifyToolRisk(entry: {
   return WRITE_VERBS.some((verb) => haystack.includes(verb)) ? "destructive" : "read";
 }
 
+/**
+ * Strip what a third-party server should not be able to draw.
+ *
+ * P0 closed this for stdio by piping the child's stderr, with a comment
+ * about a forged `✓ auto-approved shell: …` line painted into the TUI
+ * transcript. The HTTP transport reopened it: the SDK embeds an error
+ * response body verbatim in its message, and that message reaches
+ * `doctor` output and the model. Same attack, remote, with no process to
+ * spawn.
+ *
+ * Escapes are replaced rather than dropped so the text still reads and the
+ * tampering is visible.
+ *
+ * `\n` is KEPT — a multi-line error message is legitimate, and flattening
+ * every honest one to defuse a hostile one is the wrong trade. `\r` is NOT
+ * kept, though the original range spared it alongside `\n`: a lone carriage
+ * return is most of the attack by itself. It puts the cursor back at column
+ * 0, so `real error\r\u2713 auto-approved` overwrites the real line with
+ * the forged one and leaves nothing on screen to show that it did — no
+ * escape sequence required. "It is only whitespace" holds for `\n` and not
+ * for `\r`.
+ */
+export function sanitiseForDisplay(text: string): string {
+  // eslint-disable-next-line no-control-regex -- the control characters ARE the thing being removed
+  return text.replace(/[\u0000-\u0008\u000b-\u001f\u007f]/g, "\uFFFD");
+}
+
 /** Truncate to the cap, and say so in the output rather than trailing off. */
 export function truncateResult(text: string): { text: string; truncated: boolean } {
   if (Buffer.byteLength(text, "utf8") <= MAX_TOOL_RESULT_BYTES) {
@@ -199,7 +226,11 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
       // `risk: "read"`, so it is auto-approved — without this flag a server
       // could put a paragraph of instructions in a tool description and have
       // the model read it with no prompt and no provenance marker at all.
-      return { output: JSON.stringify(hits, null, 2), isError: false, untrusted: true };
+      // Capped like `use_tool`'s. Twenty hits with long descriptions
+      // measured at twice the cap `use_tool` enforces, and the
+      // descriptions are the server's own text.
+      const { text } = truncateResult(JSON.stringify(hits, null, 2));
+      return { output: text, isError: false, untrusted: true };
     },
   };
 
@@ -271,9 +302,14 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
         return { output: `MCP tool "${fqn}" timed out.`, isError: true, untrusted: true };
       }
       if (outcome.kind === "error") {
-        // `outcome.message` is the server's own text. An error is not a
-        // reason to stop treating it as third-party content.
-        return { output: `MCP tool "${fqn}" failed: ${outcome.message}`, isError: true, untrusted: true };
+        // `outcome.message` is the server's own text, and for the HTTP
+        // transport the SDK embeds the WHOLE error-response body in it. A
+        // 400 with a 1 MB body produced a one-million-character tool
+        // output — uncapped, because only the success branch was capped.
+        // And an error is not a reason to stop treating it as
+        // third-party content.
+        const { text } = truncateResult(sanitiseForDisplay(outcome.message));
+        return { output: `MCP tool "${fqn}" failed: ${text}`, isError: true, untrusted: true };
       }
 
       const { text } = truncateResult(JSON.stringify(outcome.result.content ?? [], null, 2));
