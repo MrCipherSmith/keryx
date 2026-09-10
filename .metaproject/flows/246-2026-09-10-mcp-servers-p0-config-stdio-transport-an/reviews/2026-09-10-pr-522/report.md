@@ -67,6 +67,20 @@ reviewer, and every one of them ran something.
 Full suite: 8890 pass, 0 fail. `tsc --noEmit`, `bun run lint` and
 `keryx skills verify --bundled` clean, all from source.
 
+## Re-run against the merge commit
+
+This round was first ingested against `6ff3f8a2`. `main` then moved three
+PRs ahead (#523, #524, #525) and the branch was merged with it, so the head
+became `c6052d7d` and the gate refused — correctly: a clean round against a
+stale SHA says nothing about what will merge.
+
+Re-ingested against the merge commit. The verdicts are carried unchanged,
+and that is a claim worth backing rather than asserting: the merge resolved
+two conflicts additively (`denyTools` alongside `mcp` in the tool-build
+input, and main's event sink alongside this branch's MCP teardown around
+the same REPL call), touched no behaviour either reviewer or verifier
+examined, and the full suite passes on the merged tree at 8919 / 0.
+
 ## Findings
 
 ```json keryx:findings

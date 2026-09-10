@@ -18,7 +18,7 @@
       ],
       "enumeration_method": "`keryx ctx rg 'createMcpRuntime' src` — the only two entry points that start servers; both filter through requiresApproval before startServers."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-001",
+    "global_id": "2026-09-10-ingest-522#F-001",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-1 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -51,7 +51,7 @@
       ],
       "enumeration_method": "Every field expandEntry touches, read off the function body."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-002",
+    "global_id": "2026-09-10-ingest-522#F-002",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -81,7 +81,7 @@
       ],
       "enumeration_method": "Every consumer of the flag / every return carrying server-derived text, read off the source."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-003",
+    "global_id": "2026-09-10-ingest-522#F-003",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-1 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -112,7 +112,7 @@
       ],
       "enumeration_method": "Every consumer of the flag / every return carrying server-derived text, read off the source."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-004",
+    "global_id": "2026-09-10-ingest-522#F-004",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-1 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -143,7 +143,7 @@
       ],
       "enumeration_method": "`keryx ctx rg 'buildMcpChildEnv' src` — both spawn paths route through the one builder."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-005",
+    "global_id": "2026-09-10-ingest-522#F-005",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -177,7 +177,7 @@
       ],
       "enumeration_method": "Every read of `args` in the module, enumerated by reading it."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-006",
+    "global_id": "2026-09-10-ingest-522#F-006",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -207,7 +207,7 @@
       ],
       "enumeration_method": "`keryx ctx rg 'createMcpRuntime' src` — two production call sites."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-007",
+    "global_id": "2026-09-10-ingest-522#F-007",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -237,7 +237,7 @@
       ],
       "enumeration_method": "Both places in the codebase that dial and then list."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-008",
+    "global_id": "2026-09-10-ingest-522#F-008",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -268,7 +268,7 @@
       ],
       "enumeration_method": "Every text-scanning assertion in the file."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-009",
+    "global_id": "2026-09-10-ingest-522#F-009",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -298,7 +298,7 @@
       ],
       "enumeration_method": "Both assertions in the 'writes no config it does not own' block."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-010",
+    "global_id": "2026-09-10-ingest-522#F-010",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 68f2c19d on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -320,7 +320,7 @@
     "evidence": "Auditor's two bypasses each survived while the undisguised control failed.",
     "confidence": "high",
     "file": "src/mcp-servers/constraints.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-011",
+    "global_id": "2026-09-10-ingest-522#F-011",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -342,7 +342,7 @@
     "evidence": "SDK source uses `stderr ?? 'inherit'`. No test asserted anything about the child's stderr.",
     "confidence": "high",
     "file": "src/mcp-client/client.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-012",
+    "global_id": "2026-09-10-ingest-522#F-012",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -364,7 +364,7 @@
     "evidence": "There was no assertion over listCommand's human output.",
     "confidence": "high",
     "file": "src/commands/mcp-servers.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-013",
+    "global_id": "2026-09-10-ingest-522#F-013",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-1 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -386,7 +386,7 @@
     "evidence": "MCP spec types declare annotations beside inputSchema on Tool.",
     "confidence": "high",
     "file": "src/mcp-servers/tools.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-014",
+    "global_id": "2026-09-10-ingest-522#F-014",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-1 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -408,7 +408,7 @@
     "evidence": "The chat branch builds makeShellDeps with no mcp binding.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-015",
+    "global_id": "2026-09-10-ingest-522#F-015",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -430,7 +430,7 @@
     "evidence": "runtime.ts close(): `await settled; await closeServers(states)`.",
     "confidence": "high",
     "file": "src/mcp-servers/runtime.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-016",
+    "global_id": "2026-09-10-ingest-522#F-016",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -452,7 +452,7 @@
     "evidence": "shell.ts registered SIGINT only under `if (!process.stdin.isTTY)`.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-017",
+    "global_id": "2026-09-10-ingest-522#F-017",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -474,7 +474,7 @@
     "evidence": "shell.ts: reportMcpProblems at runtime creation, renderer mounted much later.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-018",
+    "global_id": "2026-09-10-ingest-522#F-018",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -496,7 +496,7 @@
     "evidence": "runtime.ts used defaultServerCwd, commands/mcp-servers.ts used process.cwd().",
     "confidence": "high",
     "file": "src/commands/mcp-servers.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-019",
+    "global_id": "2026-09-10-ingest-522#F-019",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -518,7 +518,7 @@
     "evidence": "Auditor tabulated nine schema-rejects / runtime-accepts.",
     "confidence": "high",
     "file": "src/mcp-servers/config.schema-parity.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-020",
+    "global_id": "2026-09-10-ingest-522#F-020",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c1cde3c4 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -540,7 +540,7 @@
     "evidence": "Reviewer: `enabled:\"false\" resolves to: \"false\"  problems: []`.",
     "confidence": "high",
     "file": "src/mcp-servers/config.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-021",
+    "global_id": "2026-09-10-ingest-522#F-021",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c1cde3c4 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-2 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -562,7 +562,7 @@
     "evidence": "Auditor's filler bypass survived at 10 pass / 0 fail.",
     "confidence": "high",
     "file": "src/mcp-servers/connection.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-023",
+    "global_id": "2026-09-10-ingest-522#F-023",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -584,7 +584,7 @@
     "evidence": "Auditor added a duplicate wrapper and it survived.",
     "confidence": "high",
     "file": "src/mcp-servers/connection.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-024",
+    "global_id": "2026-09-10-ingest-522#F-024",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -606,7 +606,7 @@
     "evidence": "Auditor deleted writeDocument and this test passed.",
     "confidence": "high",
     "file": "src/commands/mcp-servers.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-025",
+    "global_id": "2026-09-10-ingest-522#F-025",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -628,7 +628,7 @@
     "evidence": "Reviewer: `1password` accept=true, catalog entries=0. Round-2 verifier found the length half.",
     "confidence": "high",
     "file": "src/mcp-servers/config.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-022",
+    "global_id": "2026-09-10-ingest-522#F-022",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c1cde3c4 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -650,7 +650,7 @@
     "evidence": "Auditor: inlining the cap while keeping the export passed.",
     "confidence": "high",
     "file": "src/mcp-servers/manager.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-026",
+    "global_id": "2026-09-10-ingest-522#F-026",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -672,7 +672,7 @@
     "evidence": "Auditor read the assertions against the comment.",
     "confidence": "high",
     "file": "src/mcp-servers/stdio.live.test.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-027",
+    "global_id": "2026-09-10-ingest-522#F-027",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -694,7 +694,7 @@
     "evidence": "Reviewer showed the before/after. Round-2 verifier showed the narrowing left the scope hole open.",
     "confidence": "high",
     "file": "src/mcp-servers/store.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-028",
+    "global_id": "2026-09-10-ingest-522#F-028",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c1cde3c4 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -716,7 +716,7 @@
     "evidence": "Reviewer ran both against the real CLI.",
     "confidence": "high",
     "file": "src/commands/mcp-servers.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-029",
+    "global_id": "2026-09-10-ingest-522#F-029",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 976ae674 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -738,7 +738,7 @@
     "evidence": "Reviewer enumerated the four escape routes and refuted each.",
     "confidence": "high",
     "file": "src/mcp-servers/store.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-030",
+    "global_id": "2026-09-10-ingest-522#F-030",
     "disposition": {
       "state": "dismissed-wont-fix",
       "evidence": "Accepted with reason. decided-by: flow-246-author on the reviewer's refutation of all four escape routes (the name is a JSON object key and never a path component; removeServer requires the name to exist; setServerEnabled is reachable only via a command that refuses unknown names; the computed-key spread is not __proto__-vulnerable). Load-time validation closes the gap at the layer that matters."
@@ -760,7 +760,7 @@
     "evidence": "Reviewer compared writeDocument's two branches against config-dir.ts.",
     "confidence": "high",
     "file": "src/mcp-servers/store.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-031",
+    "global_id": "2026-09-10-ingest-522#F-031",
     "disposition": {
       "state": "dismissed-deprioritised",
       "evidence": "Deferred to P1, recorded in the report. decided-by: flow-246-author — the fix needs an atomic writer with default permissions that src/lib/config-dir.ts does not currently provide (writeOwnerOnlyFileAtomic forces 0600, wrong for a committed file), and reaching the failure needs two concurrent keryx invocations against one project file."
@@ -782,7 +782,7 @@
     "evidence": "Reviewer traced the fall-through, parseShellExecCommand and suggestShellPatterns, and quoted pickShellApproval's own comment stating the invariant it violates.",
     "confidence": "high",
     "file": "src/tui/tui-shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-032",
+    "global_id": "2026-09-10-ingest-522#F-032",
     "disposition": {
       "state": "dismissed-out-of-scope",
       "evidence": "Deferred to P2. decided-by: altsay (operator), 2026-09-10, in the helyx channel — shown all three options (defer both / fix F-033 now / fix both) with the deferral as the stated recommendation, and answered agreeing to it. The defect is in tui-shell.ts's approval rendering rather than this package, is verified not to be an execution bypass, and wants the per-tool renderer P2's consumer-modal work needs anyway."
@@ -804,7 +804,7 @@
     "evidence": "Reviewer quoted shell.ts:1055-1058 against the apply_patch branch and its comment.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-033",
+    "global_id": "2026-09-10-ingest-522#F-033",
     "disposition": {
       "state": "dismissed-out-of-scope",
       "evidence": "Deferred to P2 with F-032. decided-by: altsay (operator), 2026-09-10, in the helyx channel — same question, same answer. Both are approval-rendering defects in the shell surfaces and want one fix together rather than two partial ones."
@@ -837,7 +837,7 @@
       ],
       "enumeration_method": "Every rule in the module, each now carrying a class in spawn-env.table.test.ts with members and a boundary."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-034",
+    "global_id": "2026-09-10-ingest-522#F-034",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c9a63788 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -868,7 +868,7 @@
       ],
       "enumeration_method": "Every sweep and broad segment, each now with a `kept` boundary row in the class table."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-035",
+    "global_id": "2026-09-10-ingest-522#F-035",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c9a63788 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -900,7 +900,7 @@
       ],
       "enumeration_method": "Every place that starts a dial or ends a session, enumerated by following AbortSignal and KILL_GRACE_MS."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-036",
+    "global_id": "2026-09-10-ingest-522#F-036",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit c9a63788 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by verifier-round-3 (verdict refuted); full suite 8890 pass / 0 fail"
@@ -930,7 +930,7 @@
       ],
       "enumeration_method": "Every `process.on|once` with a signal name in this package and its two command files, asserted by invariants.test.ts rather than enumerated by hand."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-037",
+    "global_id": "2026-09-10-ingest-522#F-037",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -963,7 +963,7 @@
       ],
       "enumeration_method": "Every return statement in the function, now each covered by a state in config.overlay-states.test.ts."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-038",
+    "global_id": "2026-09-10-ingest-522#F-038",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -996,7 +996,7 @@
       ],
       "enumeration_method": "Asserted over the whole module by invariants.test.ts rather than enumerated, which is the point."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-039",
+    "global_id": "2026-09-10-ingest-522#F-039",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1018,7 +1018,7 @@
     "evidence": "Round-4 verifier's real-spawn dump.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-040",
+    "global_id": "2026-09-10-ingest-522#F-040",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1040,7 +1040,7 @@
     "evidence": "Round-4 verifier's real-spawn dump.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-041",
+    "global_id": "2026-09-10-ingest-522#F-041",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1062,7 +1062,7 @@
     "evidence": "Round-4 verifier's real-spawn dump.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-042",
+    "global_id": "2026-09-10-ingest-522#F-042",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1084,7 +1084,7 @@
     "evidence": "Round-4 verifier's real-spawn dump.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-043",
+    "global_id": "2026-09-10-ingest-522#F-043",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1106,7 +1106,7 @@
     "evidence": "Round-4 verifier's real-spawn dump with both shapes planted.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-044",
+    "global_id": "2026-09-10-ingest-522#F-044",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1128,7 +1128,7 @@
     "evidence": "Round-4 verifier identified it as the same mistake as AWS_REGION one round later.",
     "confidence": "high",
     "file": "src/mcp-servers/spawn-env.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-045",
+    "global_id": "2026-09-10-ingest-522#F-045",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1150,7 +1150,7 @@
     "evidence": "Round-3 verifier traced doctorCommand's defaultConnect and found no signal argument.",
     "confidence": "high",
     "file": "src/commands/mcp-servers.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-046",
+    "global_id": "2026-09-10-ingest-522#F-046",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1172,7 +1172,7 @@
     "evidence": "Round-3 verifier's cases C and D.",
     "confidence": "high",
     "file": "src/commands/shell.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-047",
+    "global_id": "2026-09-10-ingest-522#F-047",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1194,7 +1194,7 @@
     "evidence": "Round-3 verifier's differential found all six.",
     "confidence": "high",
     "file": "src/mcp-servers/config.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-048",
+    "global_id": "2026-09-10-ingest-522#F-048",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1216,7 +1216,7 @@
     "evidence": "Round-3 verifier's differential.",
     "confidence": "high",
     "file": "src/mcp-servers/config.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-049",
+    "global_id": "2026-09-10-ingest-522#F-049",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1238,7 +1238,7 @@
     "evidence": "Round-4 verifier tried it against the real CLI.",
     "confidence": "high",
     "file": "src/commands/mcp-servers.ts",
-    "global_id": "2026-09-10-ingest-522-r05#F-050",
+    "global_id": "2026-09-10-ingest-522#F-050",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"
@@ -1269,7 +1269,7 @@
       ],
       "enumeration_method": "The three enumeration failures the four rounds exhibited, one test each."
     },
-    "global_id": "2026-09-10-ingest-522-r05#F-051",
+    "global_id": "2026-09-10-ingest-522#F-051",
     "disposition": {
       "state": "acted-on",
       "evidence": "fixed in commit 6ff3f8a2 on feat/mcp-servers-p0, with a regression test checked against the mutation it prevents; verified by flow-246-author (verdict refuted); full suite 8890 pass / 0 fail"

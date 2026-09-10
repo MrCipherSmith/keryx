@@ -37,3 +37,9 @@
 - 2026-09-10T16:20:55.666Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)
 - 2026-09-10T16:20:55.782Z - completing
 - 2026-09-10T16:21:01.285Z - completion-failed: pull-request: PR checks not green
+- 2026-09-10T16:30:10.122Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)
+- 2026-09-10T16:30:10.231Z - completing
+- 2026-09-10T16:30:15.932Z - completion-failed: review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4, but the PR head is c6052d7d6b4108c1665728622db2930b3f7e0775. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#522 was last collected against 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4 (round 1), but the PR head is c6052d7d6b4108c1665728622db2930b3f7e0775. Everything anyone said after 6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4 is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 522 --sha <pr-head>`.
+- 2026-09-10T16:30:52.791Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/522 (warning: PR is not a draft)
+- 2026-09-10T16:30:52.906Z - completing
+- 2026-09-10T16:30:59.060Z - done: all gates passed

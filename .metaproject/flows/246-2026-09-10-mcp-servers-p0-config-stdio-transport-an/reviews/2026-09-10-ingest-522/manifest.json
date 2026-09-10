@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-10-ingest-522-r05",
+  "reviewId": "2026-09-10-ingest-522",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "report",
     "ref": "522",
-    "head": "6ff3f8a2fe19e0c2dfb0296500fd6e4284abacd4"
+    "head": "c6052d7d6b4108c1665728622db2930b3f7e0775"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/scope.md",
-    "coverage": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/coverage.md",
-    "report": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/report.md",
-    "findings": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/findings.json",
-    "learning": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/learning.md",
-    "decisions": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522-r05/decisions.md"
+    "scope": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/scope.md",
+    "coverage": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/coverage.md",
+    "report": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/report.md",
+    "findings": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/findings.json",
+    "learning": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/learning.md",
+    "decisions": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an/reviews/2026-09-10-ingest-522/decisions.md"
   },
   "coverage": [
     {
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-10T16:19:04.187Z",
-  "updatedAt": "2026-09-10T16:19:57.404Z",
+  "createdAt": "2026-09-10T16:30:40.018Z",
+  "updatedAt": "2026-09-10T16:30:50.711Z",
   "flow": {
     "id": "246",
     "path": ".metaproject/flows/246-2026-09-10-mcp-servers-p0-config-stdio-transport-an"
