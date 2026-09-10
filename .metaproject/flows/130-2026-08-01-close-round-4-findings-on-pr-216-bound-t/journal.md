@@ -83,3 +83,5 @@ and the consolidated review of PR #219 recorded that as a minor.
 The criterion itself is frozen and stays as written — rewriting a confirmed AC
 to match the evidence afterwards is the opposite of what freezing is for. This
 note is the correction, and it is what a later reader should believe.
+- 2026-09-10T04:14:00.581Z - completing
+- 2026-09-10T04:14:02.931Z - done: all gates passed

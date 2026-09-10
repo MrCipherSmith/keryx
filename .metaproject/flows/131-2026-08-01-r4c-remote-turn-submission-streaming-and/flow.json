@@ -3,9 +3,9 @@
   "id": "131",
   "slug": "r4c-remote-turn-submission-streaming-and",
   "title": "R4c: remote turn submission, streaming, and the non-weakening remote policy profile",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-08-01T20:05:04.222Z",
-  "updatedAt": "2026-08-01T20:58:25.965Z",
+  "updatedAt": "2026-09-10T04:14:04.940Z",
   "source": {
     "type": "description",
     "ref": null
@@ -212,6 +212,15 @@
       "at": "2026-08-01T20:58:25.965Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-10T04:14:03.051Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-10T04:14:04.940Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

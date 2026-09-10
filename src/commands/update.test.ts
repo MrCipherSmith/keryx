@@ -2,6 +2,7 @@ import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promise
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { expect, test } from "bun:test";
+import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
 import { updateCommand } from "./update";
 
@@ -278,6 +279,21 @@ test("preserves existing git hooks and updates keryx managed blocks idempotently
     expect(countOccurrences(hook, "# keryx:health-post-commit:begin")).toBe(1);
     expect(countOccurrences(hook, "# keryx:testing-post-commit:begin")).toBe(1);
     expect(countOccurrences(hook, "# keryx:metaproject-dashboard-post-commit:begin")).toBe(1);
+
+    // A replaced block must be the rendered block, byte for byte.
+    //
+    // The hooks are shell, and shell is full of `$`. These blocks were written
+    // with the STRING form of String.replace, which reads `$'`, "$`", `$&` and
+    // `$$` in the replacement as substitution patterns rather than literal
+    // text. `$'` means "everything after the match", so a hook whose content
+    // contained it spliced the rest of the file back in and silently
+    // duplicated every managed block below it.
+    //
+    // That is not hypothetical: adding `(ts|tsx|js|jsx|java|py)$'` to the
+    // gdgraph hook's own grep made the gdskills assertion above report 2.
+    // Comparing against the renderer catches the whole class, not just the
+    // occurrence that happened to be noticed.
+    expect(hook).toContain(renderGdgraphPostCommitHook().trim());
     });
   } finally {
     await rm(root, { recursive: true, force: true });

@@ -1512,8 +1512,11 @@ async function installManagedHook(
   const blockPattern = new RegExp(
     `${escapeRegExp(blockStart)}[\\s\\S]*?${escapeRegExp(blockEnd)}`,
   );
+  // `() => managedBlock`, not `managedBlock`: the string form of
+  // String.replace reads `$'`, "$`", `$&` and `$$` as substitution patterns,
+  // and these blocks are shell. See the twin in update.ts.
   const next = blockPattern.test(existing)
-    ? existing.replace(blockPattern, managedBlock)
+    ? existing.replace(blockPattern, () => managedBlock)
     : `${existing.trimEnd()}\n\n${managedBlock}\n`;
 
   await writeFile(hookPath, next, "utf8");
