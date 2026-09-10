@@ -31,7 +31,7 @@ import { buildOrientation } from "../ctx/orient";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
-import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { createDefaultSearchProviderController } from "../harness/search";
@@ -1569,7 +1569,13 @@ async function runAgentRepl(
     turnToolCalls = 0;
     turnText = "";
     turnError = undefined;
-    events?.emit({ type: "turn_start", prompt: line, provider: deps.providerId, model: deps.modelId });
+    events?.emit({
+      type: "turn_start",
+      prompt: line,
+      provider: deps.providerId,
+      model: deps.modelId,
+      tools: interactiveAgentToolNames(deps.tools),
+    });
     deps.resetSubagentBudget?.();
     startSpinner();
     try {

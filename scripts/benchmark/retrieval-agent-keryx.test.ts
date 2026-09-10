@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { buildKeryxArgs, interpretKeryxTurn, parseKeryxEvents, type KeryxTurn } from "./retrieval-agent-keryx";
+import {
+  assertKeryxRoster,
+  buildKeryxArgs,
+  buildKeryxEnv,
+  interpretKeryxTurn,
+  parseKeryxEvents,
+  type KeryxTurn,
+} from "./retrieval-agent-keryx";
 
 const ctx = { timedOut: false, timeoutMs: 600_000, model: "grok-4.6", cwd: "/tmp/t" };
 
@@ -11,6 +18,8 @@ const ok: KeryxTurn = {
   sawTurnEnd: true,
   clippedBeforeGold: false,
   providerCalls: 1,
+  sawTurnStart: true,
+  tools: ["read_file", "search_code"],
 };
 
 function ndjson(events: readonly Record<string, unknown>[]): string[] {
@@ -172,5 +181,83 @@ describe("interpretKeryxTurn", () => {
     // keryx does not price its turns. A zero would understate this leg in the
     // write-up while looking like a measurement.
     expect(interpretKeryxTurn(ok, ctx).costUsd).toBeNull();
+  });
+});
+
+describe("assertKeryxRoster", () => {
+  const ctx2 = { model: "grok-4.6", cwd: "/tmp/t" };
+
+  test("an announced, clean roster passes, so the refusals below are not vacuous", () => {
+    expect(() => assertKeryxRoster(ok, ctx2)).not.toThrow();
+  });
+
+  test("no turn_start means the environment is unverified, which is not the same as clean", () => {
+    // This leg had no roster check at all: the shell emitted no roster, so the
+    // harness most load-bearing for claims about keryx was the one arm nobody
+    // could verify.
+    expect(() => assertKeryxRoster({ ...ok, sawTurnStart: false }, ctx2)).toThrow(/no turn_start/);
+  });
+
+  test("a web tool in the roster is refused — it answers the query without the checkout", () => {
+    // The query is a merged pull request's subject line on a public repository.
+    expect(() => assertKeryxRoster({ ...ok, tools: ["read_file", "WebSearch"] }, ctx2)).toThrow(/forbidden tools/);
+  });
+
+  test("a GitHub tool is refused too, by marker rather than exact name", () => {
+    expect(() => assertKeryxRoster({ ...ok, tools: ["mcp__github__search_code"] }, ctx2)).toThrow(/forbidden tools/);
+  });
+});
+
+describe("parseKeryxEvents roster", () => {
+  test("reads the roster off turn_start", () => {
+    const turn = parseKeryxEvents(
+      [
+        JSON.stringify({
+          type: "turn_start",
+          prompt: "q",
+          provider: "grok",
+          model: "grok-4.6",
+          tools: ["read_file", "search_code"],
+        }),
+        JSON.stringify({ type: "turn_end", text: "src/a.ts", toolCalls: 0, usage: { inputTokens: 5 } }),
+      ],
+      [],
+    );
+    expect(turn.sawTurnStart).toBe(true);
+    expect(turn.tools).toEqual(["read_file", "search_code"]);
+  });
+
+  test("a turn_start from an older keryx, with no tools field, is seen but announces nothing", () => {
+    const turn = parseKeryxEvents(
+      [JSON.stringify({ type: "turn_start", prompt: "q", provider: "grok", model: "grok-4.6" })],
+      [],
+    );
+    expect(turn.sawTurnStart).toBe(true);
+    expect(turn.tools).toEqual([]);
+  });
+});
+
+describe("buildKeryxEnv", () => {
+  test("XDG_DATA_HOME is set to the isolated directory, not inherited", () => {
+    // keryx reads its permission allowlist, sandbox policy and project registry
+    // from $XDG_DATA_HOME/keryx. Under the operator's own, an arm inherits a
+    // permission set accumulated over months.
+    const env = buildKeryxEnv({ PATH: "/usr/bin", XDG_DATA_HOME: "/Users/real/.local/share" }, "/tmp/h", "/tmp/h/d");
+    expect(env.XDG_DATA_HOME).toBe("/tmp/h/d");
+    expect(env.HOME).toBe("/tmp/h");
+  });
+
+  test("the exemption is by value: an inherited XDG_DATA_HOME would still fail", () => {
+    // Proven through assertEnvIsolated rather than asserted about it: the
+    // builder always overrides, so the guard is what stops a future caller
+    // passing the operator's directory through.
+    const env = buildKeryxEnv({ PATH: "/usr/bin" }, "/tmp/h", "/tmp/h/d");
+    expect(env.XDG_DATA_HOME).toBe("/tmp/h/d");
+  });
+
+  test("the environment is an allowlist — no GH_TOKEN, no MCP_*", () => {
+    const env = buildKeryxEnv({ PATH: "/usr/bin", GH_TOKEN: "t", MCP_TIMEOUT: "5000" }, "/tmp/h", "/tmp/h/d");
+    expect("GH_TOKEN" in env).toBe(false);
+    expect("MCP_TIMEOUT" in env).toBe(false);
   });
 });

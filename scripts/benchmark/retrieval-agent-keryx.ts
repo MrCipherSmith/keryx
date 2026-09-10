@@ -12,8 +12,9 @@
 // change to it.
 
 import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import path from "node:path";
+import { assertEnvIsolated, buildIsolatedEnv, createIsolatedHome, type IsolatedHome } from "./retrieval-isolation";
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
 
 export const KERYX_HARNESS = "keryx";
@@ -34,6 +35,8 @@ export interface KeryxAgentOptions {
    * smaller number. Redaction still runs first at any limit.
    */
   readonly maxField?: number;
+  /** The home a credential is linked from. Overridable so a test never reads a real one. */
+  readonly realHome?: string;
 }
 
 export interface KeryxTurn {
@@ -47,9 +50,29 @@ export interface KeryxTurn {
   readonly clippedBeforeGold: boolean;
   /** Provider calls the turn made. `inputTokens` is a sum over exactly these. */
   readonly providerCalls: number;
+  /** True when a turn_start was seen at all — the arm's roster is otherwise unverified. */
+  readonly sawTurnStart: boolean;
+  /** Tool names the turn ran with, from turn_start. */
+  readonly tools: readonly string[];
 }
 
 const CLIP_MARK = " chars]";
+
+/**
+ * Substrings that disqualify a tool from an arm, matched case-insensitively.
+ *
+ * The same list the other legs use, for the same reason: this repository is
+ * public and a task's query is a merged pull request's subject line, so a web
+ * search or a GitHub tool answers the question without reading the checkout.
+ */
+const KERYX_FORBIDDEN_TOOL_MARKERS: readonly string[] = [
+  "websearch",
+  "webfetch",
+  "web_search",
+  "web_fetch",
+  "github__",
+  "gitkraken__",
+];
 
 /**
  * Fold the NDJSON transcript into the numbers the measurement needs.
@@ -82,6 +105,8 @@ export function parseKeryxEvents(lines: readonly string[], gold: readonly string
   let sawTurnEnd = false;
   let clippedBeforeGold = false;
   let providerCalls = 0;
+  let sawTurnStart = false;
+  let tools: readonly string[] = [];
   let summedInputTokens = 0;
   let sawInputTokenCount = false;
   let turnEndInputTokens: number | null = null;
@@ -113,6 +138,10 @@ export function parseKeryxEvents(lines: readonly string[], gold: readonly string
       const output = typeof event.output === "string" ? event.output : "";
       if (stepsToFirstGold === null && toolCalls > 0 && namesGold(output)) stepsToFirstGold = toolCalls;
       noteClip(output);
+    }
+    if (event.type === "turn_start") {
+      sawTurnStart = true;
+      if (Array.isArray(event.tools)) tools = event.tools.filter((name): name is string => typeof name === "string");
     }
     if (event.type === "usage") {
       const usage = event.usage as { inputTokens?: unknown } | undefined;
@@ -146,7 +175,43 @@ export function parseKeryxEvents(lines: readonly string[], gold: readonly string
     ...(errorMessage === undefined ? {} : { errorMessage }),
     sawTurnEnd,
     clippedBeforeGold,
+    sawTurnStart,
+    tools,
   };
+}
+
+/**
+ * Refuse a keryx arm whose tool roster was never announced, or is wrong.
+ *
+ * The claude and grok legs have had this since the start, reading the roster
+ * out of the CLI's init event. This leg had NOTHING: no environment isolation
+ * and no roster check, because the shell emitted no roster to check. So the
+ * harness most load-bearing for claims about keryx was the one arm nobody could
+ * verify. `turn_start` now carries the names and this holds them to account.
+ *
+ * The two refusals mean different things. A missing roster means the arm's
+ * environment is unverified, which is not the same as clean. A forbidden tool
+ * means the answer was reachable by a route the ablation does not control — and
+ * on a public repository with a merged pull request's subject line as the query,
+ * a web search returns the answer outright.
+ */
+export function assertKeryxRoster(turn: KeryxTurn, context: { model: string; cwd: string }): void {
+  if (!turn.sawTurnStart) {
+    throw new Error(
+      `keryx wrote no turn_start for model ${context.model} in ${context.cwd} — ` +
+        "the arm's tool roster could not be read back, so its environment is unverified; " +
+        "refusing rather than assuming it was clean",
+    );
+  }
+  const forbidden = turn.tools.filter((name) =>
+    KERYX_FORBIDDEN_TOOL_MARKERS.some((marker) => name.toLowerCase().includes(marker)),
+  );
+  if (forbidden.length > 0) {
+    throw new Error(
+      `keryx ran with forbidden tools in the roster for model ${context.model} in ${context.cwd}: ` +
+        `${forbidden.sort().join(", ")} — these can reach the answer from outside the checkout`,
+    );
+  }
 }
 
 /**
@@ -241,6 +306,59 @@ export function buildKeryxArgs(
   ];
 }
 
+/**
+ * A keryx home and data directory holding nothing but the credential.
+ *
+ * keryx reads its user-global state from `$XDG_DATA_HOME/keryx`, falling back to
+ * `~/.local/share/keryx` (`src/lib/config-dir.ts`). That directory holds
+ * `permissions.json` — the shell's auto-approval allowlist — plus
+ * `sandbox.json`, `projects.json` and `auth.json`. Run under the operator's
+ * own, an arm inherits a permission set and a project registry accumulated over
+ * months, and twenty throwaway checkouts are registered into it per sweep.
+ *
+ * HOME is redirected too, so `~/.claude/CLAUDE.md` and the rest cannot reach the
+ * arm by the route the grok leg already measured at ~16,600 tokens.
+ */
+export function createKeryxHome(realHome: string = homedir()): { isolated: IsolatedHome; dataHome: string } {
+  const isolated = createIsolatedHome({
+    prefix: "keryx-keryx-home-",
+    realHome,
+    credentials: [
+      {
+        from: path.join(".local", "share", "keryx", "auth.json"),
+        to: ".local/share/keryx/auth.json",
+        required: true,
+        hint:
+          "run `keryx auth login grok` before the sweep; without a credential keryx constructs an " +
+          "offline fake provider whose turns report no usage, and the arm is refused rather than scored",
+      },
+    ],
+  });
+  return { isolated, dataHome: path.join(isolated.home, ".local", "share") };
+}
+
+/**
+ * The environment each keryx arm is spawned with.
+ *
+ * `XDG_DATA_HOME` is set here ON PURPOSE and exempted by value: it is this
+ * leg's isolation mechanism, and an inherited one — which would point back at
+ * the operator's own keryx state — still fails the assertion.
+ */
+export function buildKeryxEnv(
+  parent: Record<string, string | undefined>,
+  home: string,
+  dataHome: string,
+): Record<string, string> {
+  const env = buildIsolatedEnv({
+    parent,
+    home,
+    allowExtra: ["XAI_API_KEY"],
+    overrides: { XDG_DATA_HOME: dataHome },
+  });
+  assertEnvIsolated(env, KERYX_HARNESS, { XDG_DATA_HOME: dataHome });
+  return env;
+}
+
 export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
   const timeoutMs = options.timeoutMs ?? 10 * 60 * 1000;
   const command = options.command ?? ["keryx"];
@@ -251,9 +369,15 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
     async run({ cwd, prompt, model, gold }): Promise<AgentAnswer> {
       const dir = mkdtempSync(path.join(tmpdir(), "keryx-events-"));
       const eventsFile = path.join(dir, "events.jsonl");
+      const { isolated, dataHome } = createKeryxHome(options.realHome ?? homedir());
       try {
         const args = buildKeryxArgs(prompt, model, options.provider, eventsFile, maxField);
-        const proc = Bun.spawn([...command, ...args], { cwd, stdout: "pipe", stderr: "pipe" });
+        const proc = Bun.spawn([...command, ...args], {
+          cwd,
+          env: buildKeryxEnv(process.env, isolated.home, dataHome),
+          stdout: "pipe",
+          stderr: "pipe",
+        });
         let timedOut = false;
         const timer = setTimeout(() => {
           timedOut = true;
@@ -269,8 +393,15 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
         const lines = existsSync(eventsFile)
           ? readFileSync(eventsFile, "utf8").split("\n").filter((line) => line.trim().length > 0)
           : [];
-        return interpretKeryxTurn(parseKeryxEvents(lines, gold), { timedOut, timeoutMs, model, cwd });
+        const turn = parseKeryxEvents(lines, gold);
+        // interpretKeryxTurn first, so a timeout is reported as a timeout rather
+        // than as "no turn_start" — a killed process can lose the transcript
+        // entirely, and the less specific message would hide the real cause.
+        const answer = interpretKeryxTurn(turn, { timedOut, timeoutMs, model, cwd });
+        assertKeryxRoster(turn, { model, cwd });
+        return answer;
       } finally {
+        isolated.dispose();
         rmSync(dir, { recursive: true, force: true });
       }
     },

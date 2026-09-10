@@ -116,10 +116,23 @@ export function buildIsolatedEnv(request: IsolatedEnvRequest): Record<string, st
  * Separate from the builder so it can be run over a hand-written environment in
  * a test, and so a leg that builds its own environment cannot skip it.
  */
-export function assertEnvIsolated(env: Record<string, string>, harness: string): void {
-  const leaked = Object.keys(env).filter(
-    (key) => FORBIDDEN_ENV_KEYS.includes(key) || FORBIDDEN_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)),
-  );
+export function assertEnvIsolated(
+  env: Record<string, string>,
+  harness: string,
+  /**
+   * Keys this leg sets ON PURPOSE, with the value it must hold.
+   *
+   * The keryx leg isolates itself by pointing `XDG_DATA_HOME` at a temporary
+   * directory — the same variable that, inherited, would relocate the very
+   * configuration the isolation exists to hide. So the exemption is by value,
+   * not by name: an inherited `XDG_DATA_HOME` still fails.
+   */
+  deliberate: Readonly<Record<string, string>> = {},
+): void {
+  const leaked = Object.keys(env).filter((key) => {
+    if (deliberate[key] !== undefined && deliberate[key] === env[key]) return false;
+    return FORBIDDEN_ENV_KEYS.includes(key) || FORBIDDEN_ENV_PREFIXES.some((prefix) => key.startsWith(prefix));
+  });
   if (leaked.length > 0) {
     throw new Error(
       `${harness}: the arm's environment carries ${leaked.sort().join(", ")} — ` +

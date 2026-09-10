@@ -25,7 +25,22 @@ export interface ShellEventUsage {
 }
 
 export type ShellEvent =
-  | { readonly type: "turn_start"; readonly prompt: string; readonly provider: string; readonly model: string }
+  | {
+      readonly type: "turn_start";
+      readonly prompt: string;
+      readonly provider: string;
+      readonly model: string;
+      /**
+       * The tool names this turn actually ran with, sorted.
+       *
+       * Present so a consumer can verify the environment rather than assume it.
+       * A benchmark arm that silently held a second retrieval system, or a web
+       * tool that can fetch the answer, is not the arm the measurement claims —
+       * and without a roster on the wire there is nothing to check against. The
+       * other CLIs announce theirs in an init event; this is the equivalent.
+       */
+      readonly tools?: readonly string[];
+    }
   | { readonly type: "assistant"; readonly text: string }
   | { readonly type: "tool_call"; readonly name: string; readonly input: string }
   | { readonly type: "tool_result"; readonly name: string; readonly isError: boolean; readonly output: string }
