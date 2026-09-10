@@ -3,6 +3,52 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.86] — 2026-09-10
+
+Two defects in the machinery that is supposed to notice defects, both found by
+clearing out stale flow records rather than by looking for them.
+
+### Fixed
+
+- **The post-commit hook left the graph silently stale for indexed source.**
+  It decided whether a commit was graph-relevant from a list of directory
+  prefixes — `src/`, `lib/`, `app/`, `packages/`, `services/`, `scripts/`,
+  `docs/` — while the builder indexes any `.ts/.tsx/.js/.jsx/.java/.py` file
+  anywhere except the fifteen directories it never walks. Source between those
+  definitions was indexed and undetected: a nested package's `src/`, a
+  root-level entry file, anything under a directory not on the list.
+
+  The silence was the defect. Every other branch of that hook prints a warning
+  when the graph may be stale; this one returned 0 with no output, which is
+  exactly the failure the hook was written to end.
+
+  The prefix list is kept, so nothing that rebuilt before stops rebuilding, and
+  the added extension test excludes the same directories the builder ignores —
+  a rebuild triggered by a file the builder never reads cannot change the
+  answer, and every dependency bump would pay for it.
+
+- **A managed hook block containing `$'` duplicated every block below it.**
+  `installManagedHook` wrote blocks with the string form of `String.replace`,
+  which reads `$'`, `` $` ``, `$&` and `$$` in the replacement as substitution
+  patterns rather than literal text. These blocks are shell scripts. `$'` means
+  "everything after the match", so writing such a block spliced the rest of the
+  hook file back in and silently duplicated every managed block after it — the
+  hook still ran, it just ran those blocks twice.
+
+  Nothing had triggered it because no rendered hook happened to contain one of
+  the four sequences; the fix above added `(…|py)$'` and it fired immediately.
+  It had been one character away since the function was written. Fixed in both
+  copies, `update.ts` and `init.ts`, since a project would otherwise be
+  corrupted on `init` and correct on `update`.
+
+### Internal
+
+- Six flow records deleted that were never work: prompts from ad-hoc harness
+  runs that created real records as a side effect. Six more closed through the
+  completion gate — four unchanged on the first attempt, two on reviews that
+  were actually run because a flow with no recorded review has not been
+  reviewed.
+
 ## [0.2.85] — 2026-09-09
 
 One theme: `keryx mcp` meant "keryx is the MCP server", and the same verb is
