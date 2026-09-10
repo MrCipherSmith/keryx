@@ -5,8 +5,83 @@ import {
   createForegroundForceHandoff,
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
+  forceForegroundQueueItem,
   runAfterForegroundSettlement,
 } from "./foreground-operation";
+
+// Two Force presses arriving while one operation is still settling.
+//
+// This is the case review reached by deleting `if (!ownsSettlement) return;`
+// from the shell: all four source-text assertions kept passing and the whole
+// 101-test file stayed green, because those assertions read tui-shell.ts as
+// TEXT and never ran it. The guard now lives in a function a test can call,
+// and these tests call it.
+//
+// The invariant is the owner's: `begin()` throws when an operation is already
+// active. A second waiter dispatching into the operation the first has
+// re-opened is therefore not a silent mis-order — it is an exception thrown
+// out of a floating promise, which is how it reached review twice before.
+test("flow 219: a second Force during settlement does not open a second dispatch", async () => {
+  const owner = createForegroundOperationOwner();
+  const handoff = createForegroundForceHandoff<string>();
+  const runs: string[] = [];
+
+  const token = owner.begin();
+  // `run` re-opens the operation exactly as `runLine` does in the shell, which
+  // is what makes a second concurrent dispatch throw rather than merely
+  // duplicate.
+  const run = (item: string): void => {
+    runs.push(item);
+    owner.begin();
+  };
+
+  const first = forceForegroundQueueItem(owner, handoff, "q1", { run });
+  const second = forceForegroundQueueItem(owner, handoff, "q2", { run });
+
+  owner.settle(token);
+  await Promise.all([first, second]);
+
+  expect(runs).toEqual(["q1"]);
+  expect(handoff.hasPending).toBe(true);
+});
+
+test("flow 219: the deferred press keeps its place for the next finalizer", async () => {
+  // The second item is not lost, only deferred: it stays at the head of the
+  // queue for the following foreground finalizer to drain in FIFO order.
+  const owner = createForegroundOperationOwner();
+  const handoff = createForegroundForceHandoff<string>();
+  const runs: string[] = [];
+
+  const token = owner.begin();
+  await Promise.all([
+    forceForegroundQueueItem(owner, handoff, "q1", { run: (i) => void runs.push(i) }),
+    forceForegroundQueueItem(owner, handoff, "q2", { run: (i) => void runs.push(i) }),
+    Promise.resolve().then(() => owner.settle(token)),
+  ]);
+
+  expect(runs).toEqual(["q1"]);
+  expect(handoff.takeNext()).toBe("q2");
+});
+
+test("flow 219: forcing announces and cancels even when it does not own the settlement", async () => {
+  // The deferred press must still cancel and still tell the operator, or the
+  // second Ctrl-key press looks like it did nothing.
+  const owner = createForegroundOperationOwner();
+  const handoff = createForegroundForceHandoff<string>();
+  const announced: number[] = [];
+
+  const token = owner.begin();
+  const signal = owner.signal;
+
+  await Promise.all([
+    forceForegroundQueueItem(owner, handoff, "q1", { run: () => {}, announce: () => void announced.push(1) }),
+    forceForegroundQueueItem(owner, handoff, "q2", { run: () => {}, announce: () => void announced.push(2) }),
+    Promise.resolve().then(() => owner.settle(token)),
+  ]);
+
+  expect(announced).toEqual([1, 2]);
+  expect(signal.aborted).toBe(true);
+});
 
 test("flow 219: a Force-style handoff runs exactly once after the active operation settles", async () => {
   const owner = createForegroundOperationOwner();

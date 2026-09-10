@@ -144,7 +144,7 @@ import {
   createForegroundForceHandoff,
   createForegroundOperationOwner,
   finalizeWikiForegroundOperation,
-  runAfterForegroundSettlement,
+  forceForegroundQueueItem,
 } from "./foreground-operation";
 import {
   compactSession,
@@ -3890,18 +3890,15 @@ export async function launchTuiAgentShell(opts: {
       if (item === undefined) return;
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
-      void (async () => {
-        const waitsForSettlement = forceHandoff.enqueue(item);
-        foregroundOperation.cancel("queue item forced");
-        io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`);
-        if (!waitsForSettlement) return;
-        // Cancellation is cooperative. Do not run the forced item until the
-        // current operation's finalizer has settled its own UI state.
-        await runAfterForegroundSettlement(foregroundOperation, () => {
-          const next = forceHandoff.takeAfterSettlement();
-          if (next !== undefined) runLine(next.question);
-        });
-      })();
+      // Cancellation is cooperative, and only the press that owns the handoff
+      // waits for settlement. Both rules live in `forceForegroundQueueItem`
+      // rather than here, because this function has no headless seam and the
+      // guard was therefore covered only by a source-text audit — which review
+      // showed stays green with the guard deleted.
+      void forceForegroundQueueItem(foregroundOperation, forceHandoff, item, {
+        announce: () => io.onSystem?.(`◇ main turn interrupted — q${index + 1} will run next.\n`),
+        run: (next) => runLine(next.question),
+      });
     };
 
     /**

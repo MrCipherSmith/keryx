@@ -2936,15 +2936,28 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     expect(source).toMatch(/wikiEnrich\([\s\S]{0,500}signal:\s*foregroundOperation\.signal/);
   });
 
-  test("Force queues every selected item, cancels the active operation, and waits for settlement before ordered dispatch", () => {
+  test("Force delegates the cancel-settle-dispatch rules to the seam instead of repeating them here", () => {
+    // This assertion used to spell out the whole handoff — cancel, enqueue,
+    // await settlement, take, run — by matching regexes in a 1400-character
+    // window. Review deleted the `if (!waitsForSettlement) return;` guard from
+    // the middle of that window and every one of those matches still held,
+    // along with all 101 tests in this file. A source-text audit cannot see a
+    // rule that has been removed from between the lines it matches.
+    //
+    // So the rules moved into `forceForegroundQueueItem`, where
+    // foreground-operation.test.ts drives them with two overlapping Force
+    // presses and fails when the guard goes. What is left for an audit to say
+    // is the one thing execution cannot check from here: that this shell calls
+    // the tested function rather than growing its own copy of the logic.
     const start = source.indexOf("const forceMainQueue =");
     expect(start).toBeGreaterThanOrEqual(0);
     const block = source.slice(start, start + 1_400);
     expect(block).toContain("mainQueue = removeMainQueueItem(mainQueue, index)");
-    expect(block).toMatch(/foregroundOperation\.cancel\(/);
-    expect(block).toMatch(/await\s+runAfterForegroundSettlement\(foregroundOperation/);
-    expect(block).toContain("forceHandoff.enqueue(item)");
-    expect(block).toMatch(/forceHandoff\.takeAfterSettlement\(\)[\s\S]{0,250}runLine\(/);
+    expect(block).toContain("forceForegroundQueueItem(foregroundOperation, forceHandoff, item");
+    // The reimplementation guard: these belong to the seam now, and their
+    // reappearance here means the logic was copied back.
+    expect(block).not.toContain("forceHandoff.takeAfterSettlement()");
+    expect(block).not.toMatch(/await\s+runAfterForegroundSettlement/);
   });
   test("a disposed or aborted wiki-enrichment rejection returns before catch-side UI work", () => {
     const errorText = source.indexOf("wiki enrich failed:");
