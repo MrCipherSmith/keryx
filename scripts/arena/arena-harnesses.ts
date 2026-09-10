@@ -19,6 +19,7 @@
 // tasks cannot be compared against a leg whose model does not, and the arena's
 // whole point is a controlled comparison.
 
+import path from "node:path";
 import { createClaudeAgent } from "../benchmark/retrieval-agent-claude";
 import { createGrokAgent } from "../benchmark/retrieval-agent-grok";
 import { createKeryxAgent } from "../benchmark/retrieval-agent-keryx";
@@ -33,11 +34,33 @@ export interface ArenaHarnessSpec {
   readonly note: string;
 }
 
+/**
+ * The keryx under test is THIS checkout, not the globally installed binary.
+ *
+ * Not a preference. The adapter reads its transcript from `--events-file`, and the
+ * published 0.2.84 does not have that flag — the string appears nowhere in the
+ * package, so `keryx shell` answers `Unknown shell argument` and the leg cannot
+ * produce a row at all. The events file exists only in this branch.
+ *
+ * The adapter's own default is `["keryx"]`, i.e. PATH, and its docblock already
+ * offers "a path to `src/cli.ts` under bun for a dev build" for exactly this case.
+ * Pointing at the branch also means the two provider fixes this measurement needed
+ * — the device-code grant reaching `makeProvider`, and the stream being asked for
+ * usage — are present, which they are not in the release.
+ *
+ * Recorded in the report rather than glossed: the keryx leg measures an unreleased
+ * build. A reader comparing against `npm i -g @mrciphersmith/keryx` is not
+ * comparing against this.
+ */
+const ARENA_REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
+export const KERYX_DEV_COMMAND: readonly string[] = ["bun", path.join(ARENA_REPO_ROOT, "src", "cli.ts")];
+
 export const KERYX_SHELL: ArenaHarnessSpec = {
   id: "keryx-shell",
   model: "grok-4.6",
-  createAgent: ({ timeoutMs }) => createKeryxAgent({ timeoutMs, provider: "grok", harnessId: "keryx-shell" }),
-  note: "keryx's own shell on grok-4.6 — the same model grok-build runs, so the difference is the wrapper",
+  createAgent: ({ timeoutMs }) =>
+    createKeryxAgent({ timeoutMs, provider: "grok", harnessId: "keryx-shell", command: KERYX_DEV_COMMAND }),
+  note: "keryx's own shell on grok-4.6, built from this checkout — the release has no --events-file",
 };
 
 export const GROK_BUILD: ArenaHarnessSpec = {

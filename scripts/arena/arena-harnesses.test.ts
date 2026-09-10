@@ -1,6 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { completionKey } from "../benchmark/retrieval-sweep";
-import { ARENA_HARNESSES, CLAUDE_OPUS_DEFERRED, CLAUDE_SONNET, harnessById, modelPeers } from "./arena-harnesses";
+import { existsSync } from "node:fs";
+import path from "node:path";
+import {
+  ARENA_HARNESSES,
+  CLAUDE_OPUS_DEFERRED,
+  CLAUDE_SONNET,
+  harnessById,
+  KERYX_DEV_COMMAND,
+  modelPeers,
+} from "./arena-harnesses";
 
 describe("ARENA_HARNESSES", () => {
   test("three legs, each with a distinct id", () => {
@@ -30,6 +39,24 @@ describe("ARENA_HARNESSES", () => {
     // be compared against one whose model does not.
     for (const spec of ARENA_HARNESSES) expect(spec.model.length).toBeGreaterThan(0);
     expect(new Set(ARENA_HARNESSES.map((spec) => spec.model)).size).toBe(2);
+  });
+});
+
+describe("the keryx leg runs this checkout, not the release", () => {
+  test("its command points at src/cli.ts under bun", () => {
+    // `--events-file` does not exist in published 0.2.84 — the string appears
+    // nowhere in the package — so the release answers `Unknown shell argument` and
+    // the leg cannot produce a row at all.
+    expect(KERYX_DEV_COMMAND[0]).toBe("bun");
+    expect(KERYX_DEV_COMMAND[1]).toContain("src/cli.ts");
+  });
+
+  test("the path is absolute, because an arm runs with its own cwd", () => {
+    expect(path.isAbsolute(KERYX_DEV_COMMAND[1] ?? "")).toBe(true);
+  });
+
+  test("and that file exists, so a rename fails here and not mid-sweep", () => {
+    expect(existsSync(KERYX_DEV_COMMAND[1] ?? "")).toBe(true);
   });
 });
 
