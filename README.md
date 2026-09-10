@@ -454,7 +454,10 @@ server is spawned without keryx's own credentials in its environment, and
 Remote servers work the same way — `keryx mcp add linear --transport http
 <url> --header 'Authorization: Bearer ${LINEAR_TOKEN}'` — and if that
 variable is unset keryx refuses to dial rather than sending an empty bearer
-and letting the server answer 401.
+and letting the server answer 401. It also refuses to follow a redirect
+(your credential header would follow it) and refuses a credential written
+into the URL itself. `keryx mcp doctor` names which of those it is, rather
+than reporting one "failed".
 
 OAuth and importing what you already configured in Cursor or Claude are
 next.

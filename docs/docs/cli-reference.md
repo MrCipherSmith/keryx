@@ -2386,11 +2386,22 @@ linear [user] http: needs_auth — header "Authorization" needs LINEAR_TOKEN, wh
 An explicit `Authorization` header wins over `bearer_token_env_var` if you
 somehow write both.
 
+**Three things keryx refuses on purpose.** Each of these is a working
+configuration elsewhere and a refusal here, so `doctor` names it rather
+than reporting a generic failure:
+
+| Refused | Why |
+|---|---|
+| A **redirect** (`3xx`) | `fetch` follows up to twenty hops and only strips `Authorization` across origins — a custom credential header, which is the common MCP pattern, follows all the way. Configure the final URL. |
+| A **username or password in the URL** (`https://user:pw@host/mcp`) | It appears in every message that names the URL, and the HTTP client drops it anyway: you would get the secret on screen and an unauthenticated connection. Put it in a header or `bearer_token_env_var`. |
+| An **unset `${VAR}` in the `url`** | `https://api.example/${TENANT}/mcp` with `TENANT` unset is a *valid* URL addressing the wrong path, which otherwise reports as "nothing is listening" and sends you to check a server that is fine. |
+
 **What `doctor` tells apart.** For a remote server, "failed" is not one
 thing: nothing listening, a host that does not resolve, a rejected TLS
-certificate, an HTTP error, credentials the server refused, a handshake
-that never completed, and a URL that serves a web page rather than MCP each
-get their own message. `doctor` exits non-zero whenever something needs
+certificate (including the self-signed one a corporate TLS-intercepting
+proxy presents), an HTTP error by status, credentials the server refused, a
+handshake that never completed, a redirect, and a URL that serves a web
+page rather than MCP each get their own message. `doctor` exits non-zero whenever something needs
 you — including a server awaiting `trust` or a variable you have not set.
 
 **Approval of tool calls.** Every `use_tool` call goes through the same approval gate as
