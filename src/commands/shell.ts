@@ -38,6 +38,7 @@ import type { SearchProviderDescriptor, SearchProviderId } from "../harness/sear
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createLazyRunExternal } from "../harness/run-external-factory";
 import { createJobRegistry } from "../harness/tool/builtin/background-job-registry";
+import { resolveProjectRoot } from "../lib/contained-path";
 import { createMcpRuntime, type McpRuntime } from "../mcp-servers/runtime";
 
 /**
@@ -1882,7 +1883,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // registry: `makeAgentDeps` runs again on every `/model` or `/connect`
     // rebuild, and a runtime built inside it would spawn a second set of
     // server processes and orphan the first.
-    const mcpRuntime = createMcpRuntime({ cwd, gitRoot: cwd });
+    const mcpRuntime = createMcpRuntime({
+      cwd,
+      // The PROJECT root, not `cwd`. `projectConfigFiles` walks cwd → the
+      // root it is given, so passing `cwd` collapsed the walk to a single
+      // directory: a server configured at the repo root was invisible to a
+      // shell started in `packages/web`, while `keryx mcp list` — which does
+      // resolve the root — listed it. Two surfaces, two answers.
+      gitRoot: resolveProjectRoot(cwd),
+      ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+    });
     reportMcpProblems(mcpRuntime);
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
@@ -2170,7 +2180,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // One MCP runtime per session, for the same reason as `jobRegistry`
       // above: server processes must not be re-spawned and orphaned on every
       // tool-list rebuild. Non-blocking — the dials run behind the prompt.
-      const mcpRuntime = createMcpRuntime({ cwd: agentCwd, gitRoot: agentCwd });
+      const mcpRuntime = createMcpRuntime({
+        cwd: agentCwd,
+        gitRoot: resolveProjectRoot(agentCwd),
+        ...(runtime.cacheDir === undefined ? {} : { configDir: runtime.cacheDir }),
+      });
       reportMcpProblems(mcpRuntime);
       const searchProviderController = createDefaultSearchProviderController();
       // SLATE-3a (flow 161, AC5): `slate_read`/`slate_write_seed` need the

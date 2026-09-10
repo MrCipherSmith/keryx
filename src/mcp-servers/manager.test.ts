@@ -70,6 +70,83 @@ describe("AC8 — one server failing does not take the session down", () => {
   });
 });
 
+describe("a dial that succeeded is closed even when the server is reported failed", () => {
+  test("listTools failing after connect does NOT leak the child process", async () => {
+    // The connection exists — a process is spawned and holding pipes — but
+    // the state recorded is `failed`, which carries no `connection` field,
+    // so `closeServers` can never reach it. Nothing else holds a reference.
+    // This test existed one assertion short: it checked the status and not
+    // the process.
+    let closed = 0;
+    const result = await startServers([server("half")], async () => ({
+      listTools: async (): Promise<McpToolDescriptor[]> => {
+        throw new Error("protocol error");
+      },
+      callTool: async () => ({ kind: "result", result: { content: [], isError: false } }),
+      close: async (): Promise<void> => {
+        closed++;
+      },
+    }));
+
+    expect(result.servers[0]?.status).toBe("failed");
+    expect(closed).toBe(1);
+  });
+
+  test("a close that throws does not stop the failure being reported", async () => {
+    const result = await startServers([server("half")], async () => ({
+      listTools: async (): Promise<McpToolDescriptor[]> => {
+        throw new Error("protocol error");
+      },
+      callTool: async () => ({ kind: "result", result: { content: [], isError: false } }),
+      close: async (): Promise<void> => {
+        throw new Error("close also failed");
+      },
+    }));
+
+    expect(result.servers[0]?.status).toBe("failed");
+    expect(result.servers[0]?.error).toContain("protocol error");
+  });
+
+  test("a dial abandoned by the timeout is closed when it finally lands", async () => {
+    // `Promise.race` cancels nothing. A slow server — a cold `npx` fetch, a
+    // container starting — completes its handshake after the timeout has
+    // already given up on it, and the resolved connection is dropped on the
+    // floor. One orphan per slow dial, and the operator is told `failed`
+    // about a server that is actually running.
+    let closed = 0;
+    const result = await startServers([server("slow", { startup_timeout_sec: 0.01 })], async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+      return {
+        listTools: async (): Promise<McpToolDescriptor[]> => [],
+        callTool: async () => ({ kind: "result", result: { content: [], isError: false } }),
+        close: async (): Promise<void> => {
+          closed++;
+        },
+      };
+    });
+
+    expect(result.servers[0]?.status).toBe("failed");
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(closed).toBe(1);
+  });
+
+  test("a dial that wins the race is NOT closed behind the caller's back", async () => {
+    // Anti-vacuity for the three above: the abandonment path must not fire
+    // on the happy path, or every connected server would be closed the
+    // moment it connected.
+    let closed = 0;
+    const result = await startServers([server("fine")], async () => connection(["read"], {
+      onClose: () => {
+        closed++;
+      },
+    }));
+
+    expect(result.servers[0]?.status).toBe("connected");
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(closed).toBe(0);
+  });
+});
+
 describe("disabled servers", () => {
   test("a disabled server is reported as disabled and never dialled", async () => {
     let dialled = 0;

@@ -36,6 +36,13 @@ import {
   userConfigFile,
   type McpScope,
 } from "../mcp-servers/store";
+import {
+  approveServer,
+  describeForApproval,
+  loadTrustStore,
+  requiresApproval,
+  revokeServer,
+} from "../mcp-servers/trust";
 
 /** The subcommands this module owns. `mcp.ts` routes on exactly this set. */
 export const MCP_CONSUMER_SUBCOMMANDS = [
@@ -44,6 +51,8 @@ export const MCP_CONSUMER_SUBCOMMANDS = [
   "remove",
   "enable",
   "disable",
+  "trust",
+  "untrust",
   "doctor",
 ] as const;
 
@@ -81,6 +90,10 @@ export async function runMcpConsumerCommand(
       return toggleCommand(args, deps, true);
     case "disable":
       return toggleCommand(args, deps, false);
+    case "trust":
+      return trustCommand(args, deps, true);
+    case "untrust":
+      return trustCommand(args, deps, false);
     case "doctor":
       return doctorCommand(args, deps);
   }
@@ -112,7 +125,7 @@ function publicView(server: ResolvedMcpServer): Record<string, unknown> {
 
 function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
   const config = load(deps);
-  const wantJson = args.includes("--json");
+  const wantJson = splitAtSeparator(args).own.includes("--json");
 
   if (wantJson) {
     deps.log(JSON.stringify({ servers: config.servers.map(publicView), problems: config.problems }, null, 2));
@@ -133,10 +146,26 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
     return config.problems.length > 0 ? 1 : 0;
   }
 
+  const approvals = loadTrustStore(deps.configDir);
+  let held = 0;
   for (const server of config.servers) {
     const tags = [`(${server.source})`];
     if (!server.enabled) tags.push("(disabled)");
+    if (requiresApproval(server, approvals)) {
+      tags.push("(needs approval)");
+      held++;
+    }
     deps.log(`${server.name} ${tags.join(" ")} ${transportOf(server)} — ${describeTarget(server)}`);
+  }
+  if (held > 0) {
+    // Said once, at the bottom, rather than left for the operator to work
+    // out from a tag: a server that is configured and silently not running
+    // is the state they will otherwise debug as "it does not connect".
+    deps.log("");
+    deps.log(
+      `${held} project server(s) are not started until approved — a committed config is code someone else wrote.`,
+    );
+    deps.log("Read what it launches above, then: keryx mcp trust <name>");
   }
   return config.problems.length > 0 ? 1 : 0;
 }
@@ -153,18 +182,33 @@ function describeTarget(server: ResolvedMcpServer): string {
  * own flags are indistinguishable from keryx's without it, and guessing would
  * mean `keryx mcp add fs -- npx pkg --json` silently eats `--json`.
  */
-function addCommand(args: readonly string[], deps: McpConsumerDeps): number {
-  const scope = parseScope(args);
+function addCommand(argv: readonly string[], deps: McpConsumerDeps): number {
+  // EVERY keryx flag is read from `own` — the part BEFORE `--`. Reading them
+  // from the whole argv is the bug this separator exists to prevent, and the
+  // one this function used to have: `keryx mcp add fs -- mycmd --scope
+  // project` put the server in the committed project file because the CHILD
+  // command happened to take a `--scope`. Same for `--force` (silently
+  // overwriting an existing server), `-e` (inventing an environment variable
+  // from the child's own flag) and `--transport` (failing with an error
+  // naming flags the operator never typed).
+  const { own, rest: afterSeparator, hasSeparator } = splitAtSeparator(argv);
+
+  const scope = parseScope(own);
   if (scope === undefined) {
     deps.err("--scope must be user or project");
     return 1;
   }
 
-  const transport = optionValue(args as string[], "--transport");
-  const separator = args.indexOf("--");
-  const flagless = (separator === -1 ? args : args.slice(0, separator)).filter(
-    (arg, index, all) => !isFlagOrValue(arg, index, all),
-  );
+  const transport = optionValue(own as string[], "--transport");
+  const flagless = own.filter((arg, index, all) => !isFlagOrValue(arg, index, all));
+  const unknown = own.filter((arg, index, all) => isUnknownFlag(arg, index, all));
+  if (unknown.length > 0) {
+    // Otherwise `--verbose` survives the positional filter, matches
+    // SERVER_NAME_PATTERN (hyphens are legal) and becomes the server NAME,
+    // while the name the operator typed is dropped. Exit 0, wrong result.
+    deps.err(`unknown option ${unknown[0]}. keryx flags go before \`--\`; the server's own flags go after it.`);
+    return 1;
+  }
 
   const name = flagless[0];
   if (name === undefined) {
@@ -174,16 +218,17 @@ function addCommand(args: readonly string[], deps: McpConsumerDeps): number {
 
   let entry: McpServerEntry;
   if (transport === undefined || transport === "stdio") {
-    if (separator === -1 || args.length <= separator + 1) {
+    if (!hasSeparator || afterSeparator.length === 0) {
       deps.err(`keryx mcp add ${name} needs the server command after \`--\`, e.g. \`-- npx -y some-server\``);
       return 1;
     }
-    const [command, ...rest] = args.slice(separator + 1);
+    const [command, ...rest] = afterSeparator;
     if (command === undefined) {
       deps.err(`keryx mcp add ${name} needs the server command after \`--\``);
       return 1;
     }
-    const env = parseEnv(args);
+    const env = parseEnv(own, deps);
+    if (env === null) return 1;
     entry = {
       command,
       ...(rest.length > 0 ? { args: rest } : {}),
@@ -197,7 +242,7 @@ function addCommand(args: readonly string[], deps: McpConsumerDeps): number {
       deps.err(`keryx mcp add --transport ${transport} ${name} needs a URL`);
       return 1;
     }
-    const headers = parseHeaders(args, deps);
+    const headers = parseHeaders(own, deps);
     if (headers === undefined) return 1;
     entry = { url, ...(Object.keys(headers).length > 0 ? { headers } : {}) };
   } else {
@@ -209,7 +254,7 @@ function addCommand(args: readonly string[], deps: McpConsumerDeps): number {
     name,
     entry,
     scope,
-    force: args.includes("--force"),
+    force: own.includes("--force"),
     configDir: deps.configDir,
     projectRoot: projectRootOf(deps),
   });
@@ -224,7 +269,8 @@ function addCommand(args: readonly string[], deps: McpConsumerDeps): number {
 }
 
 function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
-  const scope = parseScope(args);
+  const own = splitAtSeparator(args).own;
+  const scope = parseScope(own);
   if (scope === undefined) {
     deps.err("--scope must be user or project");
     return 1;
@@ -235,7 +281,7 @@ function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
     return 1;
   }
 
-  const explicit = optionValue(args as string[], "--scope") !== undefined;
+  const explicit = optionValue(own as string[], "--scope") !== undefined;
   const projectRoot = projectRootOf(deps);
 
   if (!explicit) {
@@ -322,15 +368,66 @@ function toggleCommand(args: readonly string[], deps: McpConsumerDeps, enabled: 
   return 0;
 }
 
+/**
+ * `trust <name>` / `untrust <name>` — approve the exact command a committed
+ * config would launch.
+ *
+ * Prints what will run BEFORE recording anything. An approval prompt whose
+ * subject the operator cannot see is a formality.
+ */
+function trustCommand(args: readonly string[], deps: McpConsumerDeps, approve: boolean): number {
+  const name = positional(args);
+  if (name === undefined) {
+    deps.err(`usage: keryx mcp ${approve ? "trust" : "untrust"} <name>`);
+    return 1;
+  }
+
+  const config = load(deps);
+  const server = config.servers.find((candidate) => candidate.name === name);
+  if (server === undefined) {
+    deps.err(
+      config.servers.length === 0
+        ? `no server named "${name}" — no MCP servers are configured`
+        : `no server named "${name}". Configured: ${config.servers.map((s) => s.name).join(", ")}`,
+    );
+    return 1;
+  }
+
+  if (server.source !== "project") {
+    // Nothing to approve: the operator wrote this file themselves, on this
+    // machine. Asking them to confirm their own `keryx mcp add` would train
+    // them to say yes without reading.
+    deps.err(`"${name}" is a user-scope server; only project-scope servers need approval.`);
+    return 1;
+  }
+
+  const result = approve ? approveServer(server, deps.configDir) : revokeServer(server, deps.configDir);
+  if (!result.ok) {
+    deps.err(result.error);
+    return 1;
+  }
+
+  if (approve) {
+    deps.log(`Approved "${name}" from ${server.file}:`);
+    deps.log(`  ${describeForApproval(server)}`);
+    deps.log("It will start with the next shell. Editing that command revokes this approval.");
+  } else {
+    deps.log(`Withdrew approval for "${name}". It will not be started.`);
+  }
+  return 0;
+}
+
 async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Promise<number> {
   const config = load(deps);
   const only = positional(args);
+  const approvals = loadTrustStore(deps.configDir);
   const report = await runDoctor(config, {
     only,
     connect: deps.connect ?? defaultConnect,
+    heldForApproval: (server) => requiresApproval(server, approvals),
   });
 
-  if (args.includes("--json")) {
+  if (splitAtSeparator(args).own.includes("--json")) {
     deps.log(JSON.stringify(report, null, 2));
   } else {
     deps.log(formatDoctorReport(report));
@@ -355,15 +452,28 @@ function parseScope(args: readonly string[]): McpScope | undefined {
   return raw === "user" || raw === "project" ? raw : undefined;
 }
 
-/** Repeatable `-e KEY=value`. Returns undefined when none were given. */
-function parseEnv(args: readonly string[]): Record<string, string> | undefined {
+/**
+ * Repeatable `-e KEY=value`.
+ *
+ * `undefined` = none given. `null` = one was malformed and has been reported;
+ * the caller must abort. Dropping a malformed pair silently is how
+ * `-e PATH` (no `=`) used to add the server with no `env` at all and exit 0 —
+ * the operator believes they configured something they did not.
+ */
+function parseEnv(args: readonly string[], deps: McpConsumerDeps): Record<string, string> | undefined | null {
   const env: Record<string, string> = {};
   for (let index = 0; index < args.length; index++) {
     if (args[index] !== "-e" && args[index] !== "--env") continue;
     const pair = args[index + 1];
-    if (pair === undefined) continue;
+    if (pair === undefined) {
+      deps.err(`${args[index]} needs a KEY=value argument`);
+      return null;
+    }
     const eq = pair.indexOf("=");
-    if (eq <= 0) continue;
+    if (eq <= 0) {
+      deps.err(`-e "${pair}" must be in KEY=value form`);
+      return null;
+    }
     env[pair.slice(0, eq)] = pair.slice(eq + 1);
   }
   return Object.keys(env).length > 0 ? env : undefined;
@@ -378,7 +488,12 @@ function parseHeaders(
   for (let index = 0; index < args.length; index++) {
     if (args[index] !== "--header") continue;
     const raw = args[index + 1];
-    if (raw === undefined) continue;
+    if (raw === undefined) {
+      // Silently dropping this is a silent auth drop when it is an
+      // Authorization header.
+      deps.err("--header needs a \"Name: value\" argument");
+      return undefined;
+    }
     const colon = raw.indexOf(":");
     if (colon <= 0) {
       deps.err(`--header "${raw}" must be in "Name: value" form`);
@@ -393,6 +508,25 @@ function parseHeaders(
 const VALUE_FLAGS = new Set(["--scope", "--transport", "-e", "--env", "--header"]);
 const BARE_FLAGS = new Set(["--json", "--force"]);
 
+/**
+ * Split argv at the first bare `--`.
+ *
+ * Everything BEFORE it is keryx's; everything after belongs to the server
+ * being launched and must never be read for keryx's own flags. Both halves
+ * are returned, plus whether the separator was actually present — absent and
+ * empty are different (`add x --` has a separator and no command, which is
+ * an error worth naming rather than the same error as forgetting it).
+ */
+function splitAtSeparator(argv: readonly string[]): {
+  own: readonly string[];
+  rest: readonly string[];
+  hasSeparator: boolean;
+} {
+  const at = argv.indexOf("--");
+  if (at === -1) return { own: argv, rest: [], hasSeparator: false };
+  return { own: argv.slice(0, at), rest: argv.slice(at + 1), hasSeparator: true };
+}
+
 function isFlagOrValue(arg: string, index: number, all: readonly string[]): boolean {
   if (VALUE_FLAGS.has(arg) || BARE_FLAGS.has(arg)) return true;
   if (arg.startsWith("--") && arg.includes("=")) return true;
@@ -400,8 +534,22 @@ function isFlagOrValue(arg: string, index: number, all: readonly string[]): bool
   return previous !== undefined && VALUE_FLAGS.has(previous);
 }
 
+/**
+ * A dash-led token this module does not know.
+ *
+ * Without this, `--verbose` is not recognised as a flag, so it survives the
+ * positional filter — and because `SERVER_NAME_PATTERN` allows hyphens it is
+ * then a perfectly valid server NAME. `keryx mcp add --verbose vv -- cmd`
+ * created a server called `--verbose` and dropped `vv`, exit 0.
+ */
+function isUnknownFlag(arg: string, index: number, all: readonly string[]): boolean {
+  if (!arg.startsWith("-") || arg === "-") return false;
+  if (isFlagOrValue(arg, index, all)) return false;
+  const previous = all[index - 1];
+  // A value that merely happens to look like a flag (`-e -x=1`) is not one.
+  return !(previous !== undefined && VALUE_FLAGS.has(previous));
+}
+
 function positional(args: readonly string[]): string | undefined {
-  const stop = args.indexOf("--");
-  const scanned = stop === -1 ? args : args.slice(0, stop);
-  return scanned.filter((arg, index, all) => !isFlagOrValue(arg, index, all))[0];
+  return splitAtSeparator(args).own.filter((arg, index, all) => !isFlagOrValue(arg, index, all))[0];
 }

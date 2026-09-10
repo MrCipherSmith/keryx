@@ -72,6 +72,16 @@ export type McpDisableOverlay = { overrides?: Record<string, boolean> };
 const VAR_PATTERN = /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g;
 
 /**
+ * The subset of legal server names that can actually be qualified.
+ *
+ * §3 allows a leading digit or hyphen; `catalog.ts`'s `FQN_PATTERN` requires
+ * `^[a-zA-Z_]`. Both are right for their own job, and the gap between them is
+ * a server that loads and connects while none of its tools can be named.
+ * Enforced at load so the report names the cause.
+ */
+const FQN_SAFE_NAME = /^[A-Za-z_]/;
+
+/**
  * `${VAR}` and `${VAR:-default}`, expanded at load.
  *
  * An unset variable with no default expands to the empty string rather than
@@ -126,7 +136,17 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
   const problems: string[] = [];
   if (!/^[A-Za-z0-9_-]+$/.test(name)) {
     problems.push(`server name "${name}" must match ^[A-Za-z0-9_-]+$`);
+  } else if (!FQN_SAFE_NAME.test(name)) {
+    // The name is legal per §3 but cannot be qualified: `catalog.ts` requires
+    // an FQN starting with a letter or underscore, so `1password` would
+    // connect, report a tool count, and have every one of its tools silently
+    // dropped from the catalog. Said here, at load, instead of leaving the
+    // operator to notice that a server they can see has no usable tools.
+    problems.push(
+      `server "${name}" must start with a letter or underscore; "${name}__<tool>" is not a usable tool name, so none of its tools could be offered`,
+    );
   }
+
   const hasCommand = typeof entry.command === "string" && entry.command.length > 0;
   const hasUrl = typeof entry.url === "string" && entry.url.length > 0;
   if (hasCommand && hasUrl) {
@@ -135,12 +155,52 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
   if (!hasCommand && !hasUrl) {
     problems.push(`server "${name}" sets neither command nor url`);
   }
+
+  // TYPES, not just presence. `expandEntry` calls `.map` on `args` and
+  // `.replace` on every `env`/`headers` value; a config that says
+  // `"args": "oops"` used to throw a TypeError straight out of
+  // `loadMcpServers`, through `createMcpRuntime` — which is documented never
+  // to throw — and take the whole shell down. One committed typo bricked
+  // `keryx shell` for everyone who checked the repository out.
+  if (entry.args !== undefined && !(Array.isArray(entry.args) && entry.args.every((a) => typeof a === "string"))) {
+    problems.push(`server "${name}" args must be an array of strings`);
+  }
+  for (const field of ["env", "headers"] as const) {
+    const value = entry[field];
+    if (value === undefined) continue;
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      problems.push(`server "${name}" ${field} must be an object of string values`);
+      continue;
+    }
+    if (!Object.values(value).every((v) => typeof v === "string")) {
+      problems.push(`server "${name}" ${field} values must all be strings`);
+    }
+  }
+  for (const field of ["command", "url", "cwd", "bearer_token_env_var"] as const) {
+    if (entry[field] !== undefined && typeof entry[field] !== "string") {
+      problems.push(`server "${name}" ${field} must be a string`);
+    }
+  }
+  if (entry.enabled !== undefined && typeof entry.enabled !== "boolean") {
+    // `"enabled": "false"` is a string, and every non-empty string is truthy
+    // — so the server the operator meant to switch off used to start.
+    problems.push(`server "${name}" enabled must be true or false, not ${JSON.stringify(entry.enabled)}`);
+  }
+
   for (const [field, value] of [
     ["startup_timeout_sec", entry.startup_timeout_sec],
     ["tool_timeout_sec", entry.tool_timeout_sec],
   ] as const) {
     if (value !== undefined && !(typeof value === "number" && value > 0)) {
       problems.push(`server "${name}" ${field} must be a number greater than 0`);
+    }
+  }
+  if (entry.tool_timeouts !== undefined) {
+    const map = entry.tool_timeouts;
+    if (typeof map !== "object" || map === null || Array.isArray(map)) {
+      problems.push(`server "${name}" tool_timeouts must be an object`);
+    } else if (!Object.values(map).every((v) => typeof v === "number" && v > 0)) {
+      problems.push(`server "${name}" tool_timeouts values must all be numbers greater than 0`);
     }
   }
   return problems;

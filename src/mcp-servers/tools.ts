@@ -187,7 +187,13 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
           isError: false,
         };
       }
-      return { output: JSON.stringify(hits, null, 2), isError: false };
+      // UNTRUSTED, even though this reads a local catalog and touches no
+      // network. Every `description` in a hit was written by the third-party
+      // server and copied verbatim from its `tools/list`. `search_tool` is
+      // `risk: "read"`, so it is auto-approved — without this flag a server
+      // could put a paragraph of instructions in a tool description and have
+      // the model read it with no prompt and no provenance marker at all.
+      return { output: JSON.stringify(hits, null, 2), isError: false, untrusted: true };
     },
   };
 
@@ -256,10 +262,12 @@ export function createMcpInteractiveTools(deps: McpToolDeps): InteractiveTool[] 
       });
 
       if (outcome.kind === "timeout") {
-        return { output: `MCP tool "${fqn}" timed out.`, isError: true };
+        return { output: `MCP tool "${fqn}" timed out.`, isError: true, untrusted: true };
       }
       if (outcome.kind === "error") {
-        return { output: `MCP tool "${fqn}" failed: ${outcome.message}`, isError: true };
+        // `outcome.message` is the server's own text. An error is not a
+        // reason to stop treating it as third-party content.
+        return { output: `MCP tool "${fqn}" failed: ${outcome.message}`, isError: true, untrusted: true };
       }
 
       const { text } = truncateResult(JSON.stringify(outcome.result.content ?? [], null, 2));

@@ -77,6 +77,8 @@ export type DoctorOptions = {
   readonly only?: string | undefined;
   readonly connect: ConnectFn;
   readonly connectTimeoutMs?: number | undefined;
+  /** Injected so `doctor` does not dial a project server nobody approved. */
+  readonly heldForApproval?: ((server: ResolvedMcpServer) => boolean) | undefined;
 };
 
 const DEFAULT_DOCTOR_TIMEOUT_MS = 10_000;
@@ -120,6 +122,8 @@ export async function runDoctor(
   return {
     problems,
     servers,
+    // A held server is not a failure — it is a decision waiting. It must
+    // still be visible, which is what `status` carries.
     healthy: problems.length === 0 && servers.every((s) => s.status !== "failed"),
   };
 }
@@ -137,6 +141,18 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
 
   if (!server.enabled) {
     return { ...base, status: "disabled", toolCount: 0, skipped: [], detail: "disabled; not dialled" };
+  }
+  if (options.heldForApproval?.(server) === true) {
+    // Never dialled, and that is the answer — not a connection result. A
+    // `doctor` that connected anyway would be doing the exact thing the
+    // approval gate exists to prevent, in the name of diagnosing it.
+    return {
+      ...base,
+      status: "needs-approval",
+      toolCount: 0,
+      skipped: [],
+      detail: `project server not approved; run \`keryx mcp trust ${server.name}\` after reading what it launches`,
+    };
   }
   if (base.transport !== "stdio") {
     return {

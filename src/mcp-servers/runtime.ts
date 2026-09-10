@@ -20,6 +20,7 @@ import path from "node:path";
 import { loadMcpServers, type McpConfigProblem, type ResolvedMcpServer } from "./config";
 import { mergeCatalogs, type ServerCatalog } from "./catalog";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "./manager";
+import { loadTrustStore, requiresApproval } from "./trust";
 import { connectStdioMcpServer } from "../mcp-client/client";
 import { buildMcpChildEnv } from "./spawn-env";
 
@@ -68,20 +69,41 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
 
   const byName = new Map(config.servers.map((server) => [server.name, server]));
 
+  // Project-scoped servers the operator has not approved are held back
+  // BEFORE anything is dialled. This is the gate between `git clone` and
+  // arbitrary code execution; see `trust.ts`.
+  const approvals = loadTrustStore(options.configDir);
+  const held = config.servers.filter((server) => server.enabled && requiresApproval(server, approvals));
+  const heldNames = new Set(held.map((server) => server.name));
+  const launchable = config.servers.filter((server) => !heldNames.has(server.name));
+
   let catalog: ServerCatalog = mergeCatalogs([]);
-  let states: readonly ServerState[] = config.servers.map((server) => ({
+  const heldStates: readonly ServerState[] = held.map((server) => ({
     name: server.name,
-    // Reported as `connecting` from the outset rather than omitted: a server
-    // the operator configured and cannot see anywhere reads as one keryx
-    // never noticed.
-    status: server.enabled ? "connecting" : "disabled",
+    status: "needs-approval" as const,
     toolCount: 0,
+    error: `not started: run \`keryx mcp trust ${server.name}\` after reading what it launches`,
   }));
 
-  const settled = startServers(config.servers, options.connect ?? defaultConnect)
+  let states: readonly ServerState[] = [
+    ...heldStates,
+    ...launchable.map((server) => ({
+      name: server.name,
+      // Reported as `connecting` from the outset rather than omitted: a server
+      // the operator configured and cannot see anywhere reads as one keryx
+      // never noticed.
+      status: server.enabled ? ("connecting" as const) : ("disabled" as const),
+      toolCount: 0,
+    })),
+  ];
+
+  const settled = startServers(launchable, options.connect ?? defaultConnect)
     .then((result) => {
       catalog = result.catalog;
-      states = result.servers;
+      // Held servers stay in the report. One that vanished would read as a
+      // server keryx never saw, which is the state the operator would then
+      // go looking for in the wrong file.
+      states = [...heldStates, ...result.servers].sort((a, b) => a.name.localeCompare(b.name));
     })
     .catch(() => {
       // `startServers` is documented never to reject. If that ever stops
