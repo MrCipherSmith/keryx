@@ -255,6 +255,30 @@ describe("the class-based tests exist and are load-bearing", () => {
     expect(classTableProblems([{ klass: "good", rows: [ok, no, ok] }], outcome)).toEqual([]);
   });
 
+  test("and its two defaults are `??`, not `||` — the mutation sweep's last two survivors", () => {
+    // The sweep's final run left nine survivors, and eight were `?? -> ||`
+    // on an object or function default where no falsy non-nullish value
+    // exists. These two are the exception: both left-hand sides CAN be
+    // falsy, so the operators genuinely differ and nothing was watching.
+    //
+    // `minRows: 0` under `||` silently becomes 3 — a caller asking for no
+    // minimum gets the default they were overriding.
+    const ok = { ok: true };
+    const no = { ok: false };
+    expect(
+      classTableProblems([{ klass: "tiny", rows: [ok, no] }], (r: { ok: boolean }) => (r.ok ? "y" : "n"), {
+        minRows: 0,
+      }),
+    ).toEqual([]);
+
+    // And an outcome label that is the empty string is still a label. Under
+    // `||` the message reads `every row comes out "—"` for a class whose
+    // rows all came out `""`, which describes a table that does not exist.
+    expect(classTableProblems([{ klass: "blank", rows: [ok, ok, ok] }], () => "")).toEqual([
+      'blank: every row comes out "" — no BOUNDARY, so the rule could be a constant',
+    ]);
+  });
+
   test("readOverlay is covered per STATE, not only on its success path", () => {
     const states = readFileSync(path.join(HERE, "config.overlay-states.test.ts"), "utf8");
     expect(states).toContain("absent");
