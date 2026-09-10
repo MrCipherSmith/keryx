@@ -145,6 +145,48 @@ describe("every signal handler survives the signal arriving twice", () => {
   });
 });
 
+describe("P1 additions obey the same module rules", () => {
+  test("no unbounded wait was introduced on the HTTP path", () => {
+    // `connectHttpMcpServer` takes a handshake budget for the same reason
+    // the stdio one does: a server that accepts a socket and never answers
+    // must not hold a session open. Asserted structurally because the
+    // behavioural proof needs a listener, and lives in `http.live.test.ts`.
+    const client = code(readFileSync(path.join(HERE, "..", "mcp-client", "client.ts"), "utf8"));
+    const start = client.indexOf("export async function connectHttpMcpServer");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = client.slice(start, client.indexOf("\n}", start));
+    expect(body).toContain("withHandshakeTimeout");
+    expect(body).toContain("signal");
+  });
+
+  test("the HTTP path refuses an empty header value in its own right", () => {
+    // A rule enforced in one place is a rule with one bug between it and
+    // failure. `http-headers.ts` produces the actionable message; the
+    // transport refuses independently so a caller that builds headers by
+    // hand cannot route around it.
+    // `keepStrings`, because the refusal IS a string literal and the
+    // default stripper blanks it.
+    const client = code(readFileSync(path.join(HERE, "..", "mcp-client", "client.ts"), "utf8"), true);
+    expect(client).toContain("refusing to send an empty");
+  });
+
+  test("header resolution is covered by a CLASS table, like the environment filter", () => {
+    // AC10, frozen as a criterion rather than left to a later round.
+    const table = readFileSync(path.join(HERE, "http-headers.table.test.ts"), "utf8");
+    expect(table).toContain("klass");
+    expect(table).toContain("every class carries a BOUNDARY");
+    expect(table).toContain("every class carries at least three rows");
+  });
+
+  test("the HTTP handshake is proved against a real listener, not a stub", () => {
+    const live = readFileSync(path.join(HERE, "http.live.test.ts"), "utf8");
+    expect(live).toContain("startMockHttpMcpServer");
+    // And the mock records what it RECEIVED, which is the half that makes
+    // a header assertion mean anything.
+    expect(live).toContain("server.requests()");
+  });
+});
+
 describe("the class-based tests exist and are load-bearing", () => {
   test("spawn-env is covered by a class table, not a list of reported names", () => {
     // Recorded as an invariant because the lesson was learned three times:

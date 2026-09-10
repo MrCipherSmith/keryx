@@ -21,7 +21,9 @@ import { loadMcpServers, type McpConfigProblem, type ResolvedMcpServer } from ".
 import { mergeCatalogs, type ServerCatalog } from "./catalog";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "./manager";
 import { loadTrustStore, requiresApproval } from "./trust";
-import { connectStdioMcpServer } from "../mcp-client/client";
+import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
+import { describeHollow, resolveHttpHeaders } from "./http-headers";
+import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
 
 /**
@@ -225,6 +227,25 @@ export function handshakeBudgetMs(server: ResolvedMcpServer): number {
 export const MAX_TIMEOUT_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_HANDSHAKE_MS = 15_000;
 
+/**
+ * Dial a remote server, refusing before the socket if a credential is hollow.
+ *
+ * The refusal is the whole of AC19 and it happens HERE rather than inside
+ * the transport, so the message names the variable the operator has to set
+ * instead of reporting a 401 from somebody else's server.
+ */
+async function connectRemote(server: ResolvedMcpServer, signal?: AbortSignal): ReturnType<ConnectFn> {
+  const resolved = resolveHttpHeaders(server, server.raw, process.env);
+  if (!resolved.ok) {
+    throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
+  }
+  return connectHttpMcpServer(server.url as string, {
+    headers: resolved.headers,
+    handshakeTimeoutMs: handshakeBudgetMs(server),
+    ...(signal === undefined ? {} : { signal }),
+  });
+}
+
 /** Per-tool override first, then the server-wide one. Seconds, as configured. */
 function timeoutFor(server: ResolvedMcpServer | undefined, rawName: string): number | undefined {
   if (server === undefined) return undefined;
@@ -236,11 +257,11 @@ async function defaultConnect(
   signal?: AbortSignal,
   kills?: Array<Promise<void>>,
 ): ReturnType<ConnectFn> {
+  if (transportOf(server) === "http") return connectRemote(server, signal);
+
   const command = server.command;
   if (command === undefined || command === "") {
-    // Reached only for a `url` server, which P0 does not dial. Thrown rather
-    // than silently skipped so it lands as a `failed` state with a reason.
-    throw new Error(`server "${server.name}" is not stdio; remote servers arrive in a later release`);
+    throw new Error(`server "${server.name}" sets neither command nor url`);
   }
   return connectStdioMcpServer(
     [command, ...(server.args ?? [])],

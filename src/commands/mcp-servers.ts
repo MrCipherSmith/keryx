@@ -12,7 +12,7 @@
 
 import { optionValue } from "../lib/args";
 import { resolveProjectRoot } from "../lib/contained-path";
-import { connectStdioMcpServer, type McpServerConnection } from "../mcp-client/client";
+import { connectHttpMcpServer, connectStdioMcpServer, type McpServerConnection } from "../mcp-client/client";
 import {
   loadMcpServers,
   parseConfigFile,
@@ -26,6 +26,7 @@ import {
   runDoctor,
   transportOf,
 } from "../mcp-servers/doctor";
+import { describeHollow, resolveHttpHeaders } from "../mcp-servers/http-headers";
 import type { ConnectFn } from "../mcp-servers/manager";
 import { buildMcpChildEnv } from "../mcp-servers/spawn-env";
 import { defaultServerCwd, handshakeBudgetMs, KILL_GRACE_MS } from "../mcp-servers/runtime";
@@ -516,9 +517,24 @@ async function defaultConnect(
   signal?: AbortSignal,
   kills?: Array<Promise<void>>,
 ): Promise<McpServerConnection> {
+  if (transportOf(server) === "http") {
+    const resolved = resolveHttpHeaders(server, server.raw, process.env);
+    if (!resolved.ok) {
+      // Same refusal the shell makes, and the same message. `doctor` is a
+      // pre-flight; a pre-flight that dials on a credential the session
+      // would refuse is testing something else.
+      throw new Error(describeHollow(resolved.hollow));
+    }
+    return connectHttpMcpServer(server.url as string, {
+      headers: resolved.headers,
+      handshakeTimeoutMs: handshakeBudgetMs(server),
+      ...(signal === undefined ? {} : { signal }),
+    });
+  }
+
   const command = server.command;
   if (command === undefined || command === "") {
-    throw new Error(`server "${server.name}" has no command; only stdio servers are dialled in this release`);
+    throw new Error(`server "${server.name}" sets neither command nor url`);
   }
   return connectStdioMcpServer(
     [command, ...(server.args ?? [])],

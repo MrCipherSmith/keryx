@@ -24,6 +24,7 @@ import type {
 import type { SkippedTool } from "./catalog";
 import { catalogForServer } from "./catalog";
 import type { ConnectFn, ServerStatus } from "./manager";
+import { describeHollow, resolveHttpHeaders } from "./http-headers";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
 /**
@@ -66,6 +67,39 @@ export function redactValues(values: Record<string, string> | undefined): Record
   return out;
 }
 
+/**
+ * `set`/`unset` for HEADERS, judged the way the dial judges them.
+ *
+ * `redactValues` alone is wrong here and the report said so out loud:
+ * `Bearer ${NOPE}` expands to `"Bearer "`, which is non-empty, so the
+ * headers map read `set` while the detail on the same server read "NOPE is
+ * unset". A report that contradicts itself in two adjacent fields teaches
+ * the reader to trust neither.
+ *
+ * The question is the same one `resolveHttpHeaders` answers — would this
+ * header be sent — so it is answered by asking that.
+ */
+export function redactHeaders(
+  server: ResolvedMcpServer,
+  env: Readonly<Record<string, string | undefined>>,
+): Record<string, "set" | "unset"> {
+  const out: Record<string, "set" | "unset"> = {};
+  const resolution = resolveHttpHeaders(server, server.raw, env);
+  const hollow = new Set(resolution.ok ? [] : resolution.hollow.map((h) => h.header.toLowerCase()));
+
+  for (const key of Object.keys(server.headers ?? {})) {
+    out[key] = hollow.has(key.toLowerCase()) ? "unset" : "set";
+  }
+  // `bearer_token_env_var` produces an Authorization header that is not in
+  // the config's own `headers`, so it would otherwise be absent from the
+  // report entirely — and absent reads as "not configured".
+  const tokenVar = server.bearer_token_env_var;
+  if (tokenVar !== undefined && tokenVar !== "" && out.Authorization === undefined) {
+    out.Authorization = hollow.has("authorization") ? "unset" : "set";
+  }
+  return out;
+}
+
 export function transportOf(server: ResolvedMcpServer): "stdio" | "http" | "unknown" {
   if (typeof server.command === "string" && server.command.length > 0) return "stdio";
   if (typeof server.url === "string" && server.url.length > 0) return "http";
@@ -79,6 +113,8 @@ export type DoctorOptions = {
   readonly connectTimeoutMs?: number | undefined;
   /** Injected so `doctor` does not dial a project server nobody approved. */
   readonly heldForApproval?: ((server: ResolvedMcpServer) => boolean) | undefined;
+  /** Overridden in tests; otherwise the process environment. */
+  readonly env?: Readonly<Record<string, string | undefined>> | undefined;
 };
 
 const DEFAULT_DOCTOR_TIMEOUT_MS = 10_000;
@@ -136,7 +172,7 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
     transport: transportOf(server),
     enabled: server.enabled,
     env: redactValues(server.env),
-    headers: redactValues(server.headers),
+    headers: redactHeaders(server, options.env ?? process.env),
   } as const;
 
   if (!server.enabled) {
@@ -154,17 +190,31 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
       detail: `project server not approved; run \`keryx mcp trust ${server.name}\` after reading what it launches`,
     };
   }
-  if (base.transport !== "stdio") {
+  if (base.transport === "unknown") {
     return {
       ...base,
       status: "not-attempted",
       toolCount: 0,
       skipped: [],
-      detail:
-        base.transport === "http"
-          ? "remote (url) servers are not connected in this release; stdio only"
-          : "sets neither command nor url",
+      detail: "sets neither command nor url",
     };
+  }
+
+  if (base.transport === "http") {
+    // A hollow credential is a CONFIG problem, and saying so is the whole
+    // of AC19's second half: dialling with `Bearer ` would produce a 401
+    // from somebody else's server, which reads as "their server is broken"
+    // rather than "your variable is unset".
+    const resolved = resolveHttpHeaders(server, server.raw, options.env ?? process.env);
+    if (!resolved.ok) {
+      return {
+        ...base,
+        status: "needs_auth",
+        toolCount: 0,
+        skipped: [],
+        detail: describeHollow(resolved.hollow),
+      };
+    }
   }
 
   const timeoutMs =
@@ -176,7 +226,13 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
   try {
     connection = await withTimeout(options.connect(server), timeoutMs, server.name);
   } catch (error) {
-    return { ...base, status: "failed", toolCount: 0, skipped: [], detail: messageOf(error) };
+    return {
+      ...base,
+      status: "failed",
+      toolCount: 0,
+      skipped: [],
+      detail: explainConnectFailure(base.transport, server, error),
+    };
   }
 
   try {
@@ -200,6 +256,51 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
       // replace the diagnosis with an error about ending the diagnosis.
     }
   }
+}
+
+/**
+ * Say WHICH failure, not that there was one.
+ *
+ * AC7: unreachable, wrong status, a non-MCP endpoint and a TLS problem are
+ * four different things an operator does four different things about, and
+ * the SDK reports all of them as an exception. Collapsing them into
+ * "failed: <whatever the SDK said>" is the shape of report that sends
+ * someone to restart a server that is running fine on a URL with a typo.
+ */
+export function explainConnectFailure(
+  transport: "stdio" | "http" | "unknown",
+  server: ResolvedMcpServer,
+  error: unknown,
+): string {
+  const message = messageOf(error);
+  if (transport !== "http") return message;
+
+  const lower = message.toLowerCase();
+  const url = server.raw.url ?? server.url ?? "";
+
+  if (/econnrefused|connection refused|unable to connect|failed to fetch|fetch failed/.test(lower)) {
+    return `nothing is listening at ${url} (${message})`;
+  }
+  if (/enotfound|getaddrinfo|dns/.test(lower)) {
+    return `the host in ${url} does not resolve (${message})`;
+  }
+  if (/certificate|self-signed|self signed|tls|ssl|unable to verify/.test(lower)) {
+    return `the TLS certificate for ${url} was rejected (${message})`;
+  }
+  if (/\b40[13]\b|unauthorized|forbidden/.test(lower)) {
+    return `${url} refused the credentials it was given (${message}). Check the header or bearer_token_env_var.`;
+  }
+  if (/\b(4\d\d|5\d\d)\b|http \d\d\d|status code/.test(lower)) {
+    return `${url} answered with an HTTP error (${message})`;
+  }
+  if (/did not complete the handshake|did not answer/.test(lower)) {
+    return `${url} accepted the connection and never completed the MCP handshake (${message})`;
+  }
+  if (/json|parse|unexpected token|zod|invalid/.test(lower)) {
+    // The commonest misconfiguration: a URL that serves a web page.
+    return `${url} answered, but not with MCP — is that the server endpoint and not a web page? (${message})`;
+  }
+  return message;
 }
 
 function messageOf(error: unknown): string {

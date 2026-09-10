@@ -107,17 +107,37 @@ describe("what doctor reports", () => {
     expect(dialled).toBe(0);
   });
 
-  test("a remote server is not-attempted, which is not the same as failed", async () => {
-    // P0 connects stdio only. Calling it `failed` would send the operator to
-    // debug a server that was never dialled.
+  test("a remote server IS dialled now — P1 changed this", async () => {
+    // P0 reported `not-attempted` because it connected stdio only. Leaving
+    // that in place after the transport shipped would be a report that is
+    // wrong in the reassuring direction.
+    let dialled = 0;
     const report = await runDoctor(
       config([server({ command: undefined, url: "https://mcp.example/mcp" })]),
-      { connect: async () => connection([]) },
+      {
+        connect: async () => {
+          dialled++;
+          return connection([{ name: "read" }] as McpToolDescriptor[]);
+        },
+        env: {},
+      },
     );
 
-    expect(report.servers[0]?.status).toBe("not-attempted");
+    expect(dialled).toBe(1);
+    expect(report.servers[0]?.status).toBe("connected");
     expect(report.servers[0]?.transport).toBe("http");
-    expect(report.healthy).toBe(true);
+  });
+
+  test("a server with NEITHER command nor url is still not-attempted", async () => {
+    // The case that genuinely cannot be dialled, kept distinct from the
+    // one that now can.
+    const report = await runDoctor(config([server({ command: undefined })]), {
+      connect: async () => connection([]),
+      env: {},
+    });
+
+    expect(report.servers[0]?.status).toBe("not-attempted");
+    expect(report.servers[0]?.detail).toContain("neither command nor url");
   });
 
   test("config problems come through and make the report unhealthy", async () => {

@@ -150,6 +150,10 @@ interface SdkProtocolRequestHandlerRegistrar {
  * failing to connect because an elicitation internal moved would be a failure
  * with no relationship to its cause.
  */
+interface SdkHttpModules extends SdkCoreModules {
+  StreamableHTTPClientTransport: new (url: URL, options?: unknown) => SdkTransport;
+}
+
 interface SdkCoreModules {
   Client: new (info: unknown, options: unknown) => SdkClient;
   StdioClientTransport: new (options: unknown) => SdkTransport;
@@ -180,6 +184,28 @@ async function loadCoreSdk(): Promise<SdkCoreModules> {
       Client: clientModule.Client as unknown as new (info: unknown, options: unknown) => SdkClient,
       StdioClientTransport: stdioModule.StdioClientTransport as unknown as new (options: unknown) => SdkTransport,
       CallToolResultSchema: typesModule.CallToolResultSchema,
+    };
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
+}
+
+/**
+ * The core modules plus the streamable-HTTP transport.
+ *
+ * A separate loader from {@link loadCoreSdk} on the same principle that one
+ * exists at all: a stdio server must not fail to start because the HTTP
+ * module moved, and neither should the reverse. Both stay clear of
+ * `shared/protocol.js`.
+ */
+async function loadHttpSdk(): Promise<SdkHttpModules> {
+  const core = await loadCoreSdk();
+  try {
+    const httpModule = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+    return {
+      ...core,
+      StreamableHTTPClientTransport:
+        httpModule.StreamableHTTPClientTransport as unknown as new (url: URL, options?: unknown) => SdkTransport,
     };
   } catch (error) {
     throw new McpClientSdkMissingError(error);
@@ -457,6 +483,117 @@ export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
       },
     ];
   });
+}
+
+/**
+ * Connect to a remote MCP server over streamable HTTP.
+ *
+ * The sibling of {@link connectStdioMcpServer}, and deliberately the same
+ * shape: same handshake bound, same abort handling, same
+ * `callToolWithOutcome`, same `McpServerConnection` back. Everything above
+ * this function — the catalog, the tool pair, the approval gate, the trust
+ * gate, truncation, timeouts — cannot tell the two apart, which is the
+ * property AC2 asserts and the reason a remote server inherits every
+ * control a local one has instead of needing them re-implemented.
+ *
+ * The differences are the two the transport forces:
+ *
+ *   - there is no child process, so an abort closes a socket rather than
+ *     killing a PID, and nothing can be orphaned;
+ *   - `headers` are resolved BEFORE this is called (`http-headers.ts`) so a
+ *     hollow credential never reaches the wire. This function refuses an
+ *     empty `Authorization` if one arrives anyway, because a rule enforced
+ *     in exactly one place is a rule with one bug between it and failure.
+ *
+ * `sse` is not a separate transport (D-06): it is what the server chooses
+ * when it responds, and streamable HTTP negotiates it.
+ */
+export async function connectHttpMcpServer(
+  url: string,
+  options: {
+    readonly headers?: Record<string, string> | undefined;
+    readonly handshakeTimeoutMs?: number | undefined;
+    readonly signal?: AbortSignal | undefined;
+  } = {},
+): Promise<McpServerConnection> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`mcp-client: "${url}" is not a URL`);
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    // `file:` and friends would be read through fetch with no server at the
+    // other end and no useful error.
+    throw new Error(`mcp-client: ${parsed.protocol} is not an MCP transport; use http or https`);
+  }
+
+  const headers = options.headers ?? {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === "") {
+      // Second line of defence, not the first. `resolveHttpHeaders` is the
+      // one that produces the actionable message; this one exists so the
+      // rule cannot be bypassed by a caller that builds headers itself.
+      throw new Error(`mcp-client: refusing to send an empty "${name}" header`);
+    }
+  }
+
+  const sdk = await loadHttpSdk();
+  const transport = new sdk.StreamableHTTPClientTransport(parsed, {
+    requestInit: Object.keys(headers).length > 0 ? { headers } : undefined,
+  });
+
+  const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
+
+  const kill = (): Promise<void> =>
+    (async (): Promise<void> => {
+      try {
+        await transport.close();
+      } catch {
+        // Already closed; the error below is the one worth having.
+      }
+    })();
+
+  let aborted = options.signal?.aborted ?? false;
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted before it began");
+  }
+  const onAbort = (): void => {
+    aborted = true;
+    void kill();
+  };
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await withHandshakeTimeout(client.connect(transport), options.handshakeTimeoutMs, kill);
+  } finally {
+    options.signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted");
+  }
+
+  return {
+    async listTools(opts): Promise<McpToolDescriptor[]> {
+      const result = await client.listTools(
+        {},
+        undefined,
+        opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+      );
+      return toToolDescriptors(result.tools);
+    },
+
+    async callTool(name, callArgs, opts): Promise<McpToolCallOutcome> {
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
+    },
+
+    async close(): Promise<void> {
+      await client.close();
+    },
+  };
 }
 
 /**
