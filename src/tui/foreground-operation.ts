@@ -153,6 +153,48 @@ export async function runAfterForegroundSettlement(
 }
 
 /**
+ * Force a queued item to run next: enqueue it, cancel the active operation, and
+ * dispatch after settlement — but only from the press that owns the handoff.
+ *
+ * Extracted from `forceMainQueue` in tui-shell.ts because it could not be
+ * tested where it lived. `launchTuiAgentShell` has no headless injection seam,
+ * so the wiring there was covered only by a source-text audit that reads the
+ * file and matches regexes. Review demonstrated the cost: deleting the
+ * `if (!ownsSettlement) return;` guard left all four audit assertions passing
+ * and the whole 101-test file green, while a second Force press during
+ * settlement would dispatch a second item into the operation the first had
+ * already re-opened — `begin()` throwing "a foreground operation is already
+ * active" out of an async IIFE.
+ *
+ * That regression is not hypothetical here: the flow's own history records it
+ * found and fixed in review twice. A guard with that record should be
+ * executable by a test, not merely visible to one.
+ */
+export async function forceForegroundQueueItem<T>(
+  owner: ForegroundOperationOwner,
+  handoff: ForegroundForceHandoff<T>,
+  item: T,
+  deps: { readonly announce?: () => void; readonly run: (item: T) => void; readonly cancelReason?: unknown },
+): Promise<void> {
+  const ownsSettlement = handoff.enqueue(item);
+  owner.cancel(deps.cancelReason ?? "queue item forced");
+  deps.announce?.();
+  // Only the press that owns the handoff waits. A later press has already put
+  // its item in the queue and returns: the settlement handler drains in FIFO
+  // order, and a second waiter would dispatch into an operation the first has
+  // re-opened.
+  if (!ownsSettlement) {
+    return;
+  }
+  await runAfterForegroundSettlement(owner, () => {
+    const next = handoff.takeAfterSettlement();
+    if (next !== undefined) {
+      deps.run(next);
+    }
+  });
+}
+
+/**
  * Prevents late events from a completed or disposed foreground turn from
  * mutating the TUI. Each callback reads the current delegate at call time so
  * shell-installed hooks remain live during a valid operation.
