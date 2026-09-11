@@ -362,7 +362,7 @@ live child connections cannot hold the process.
 | K-009 | fixed in 0.2.95 (#529), plus the prompt now follows the roster |
 | K-010 | open |
 | K-011 | fixed on this branch; residual risk recorded |
-| K-012 | open — product defect in 0.2.95; tests now probe under an isolated HOME |
+| K-012 | fixed in 0.2.96 (#530, flow 251): every exit closes the readline MCP runtime; a refused start went from a 40 s timeout to 5.8 s, and close() no longer lingers ~4.5 s |
 | S-1 | fixed in 0.2.95 (#529) |
 | S-2 | improved — clip notes now say how much was dropped (K-008) |
 | S-3 | partly — the prompt's tool statements are now true of the roster |
