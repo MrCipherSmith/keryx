@@ -15,7 +15,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { bothStreamsAreATerminal, browserCommand, runMcpConsumerCommand } from "./mcp-servers";
+import {
+  bothStreamsAreATerminal,
+  browserCommand,
+  resolveInteractive,
+  runMcpConsumerCommand,
+} from "./mcp-servers";
 
 type TtyRow = {
   readonly label: string;
@@ -107,12 +112,32 @@ describe("the platform's browser command", () => {
   });
 });
 
-describe("an explicit `interactive: false` is not overridden by a real terminal", () => {
-  test("it refuses even when both streams ARE terminals", async () => {
-    // The `??` here must not become `||`. With `||`, an explicit
-    // `false` is falsy and falls through to the TTY probe — an
-    // explicit refusal silently becoming permission, which is the
-    // whole gate inverted for any caller that passes false on purpose.
+describe("an explicit answer wins over the streams", () => {
+  const TTY = { isTTY: true };
+  const PIPE = { isTTY: false };
+
+  test("`false` refuses even when both streams ARE terminals", () => {
+    // THE case that distinguishes `??` from `||`, and the reason
+    // `resolveInteractive` takes its streams as arguments. Under
+    // `bun test` neither real stream is a TTY, so the first version of
+    // this test — driving the whole command — passed under both
+    // spellings and proved nothing about either.
+    //
+    // Under `||`, an explicit `false` is falsy and falls through to
+    // the probe: a caller refusing on purpose gets permission.
+    expect(resolveInteractive(false, TTY, TTY)).toBe(false);
+  });
+
+  test("`true` allows even when NEITHER stream is", () => {
+    expect(resolveInteractive(true, PIPE, PIPE)).toBe(true);
+  });
+
+  test("BOUNDARY — with no explicit answer, the streams decide", () => {
+    expect(resolveInteractive(undefined, TTY, TTY)).toBe(true);
+    expect(resolveInteractive(undefined, TTY, PIPE)).toBe(false);
+  });
+
+  test("and the command honours it end to end", async () => {
     const base = mkdtempSync(path.join(tmpdir(), "keryx-explicit-"));
     const configDir = path.join(base, "config");
     mkdirSync(configDir, { recursive: true });

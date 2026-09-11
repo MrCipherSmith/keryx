@@ -5,7 +5,12 @@
 // server proves things about the stub.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { LOOPBACK_HOST, startCallbackListener, type CallbackListener } from "./oauth-callback";
+import {
+  LOOPBACK_HOST,
+  startCallbackListener,
+  type CallbackListener,
+  type CallbackResult,
+} from "./oauth-callback";
 
 const open: CallbackListener[] = [];
 afterEach(() => {
@@ -16,6 +21,26 @@ function listen(timeoutMs = 10_000): CallbackListener {
   const listener = startCallbackListener({ timeoutMs });
   open.push(listener);
   return listener;
+}
+
+/**
+ * The listener's result, or the fact that it never produced one.
+ *
+ * A bare `await listener.result` HANGS when the listener is broken in
+ * the direction of never settling, and two mutants do exactly that —
+ * inverting the `state` check, and making the "no code" guard always
+ * true. Both wedged the whole mutation run rather than failing a test,
+ * which is the sweep reporting that these tests lack a deadline of
+ * their own. Now they say "never settled" and the assertion fails.
+ */
+async function resultOf(listener: CallbackListener): Promise<CallbackResult | "never settled"> {
+  return await Promise.race([
+    listener.result,
+    new Promise<"never settled">((resolve) => {
+      const timer = setTimeout(() => resolve("never settled"), 3_000);
+      timer.unref?.();
+    }),
+  ]);
 }
 
 describe("AC6 — the listener is reachable only from this machine", () => {
@@ -42,7 +67,7 @@ describe("AC7 — a redirect from somewhere else is not accepted", () => {
     const listener = listen();
     const response = await fetch(`${listener.redirectUrl}?code=the-code&state=${listener.state}`);
     expect(response.status).toBe(200);
-    await expect(listener.result).resolves.toEqual({ ok: true, code: "the-code" });
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "the-code" });
   });
 
   test("a WRONG state is refused and does not end the flow", async () => {
@@ -55,7 +80,7 @@ describe("AC7 — a redirect from somewhere else is not accepted", () => {
 
     const good = await fetch(`${listener.redirectUrl}?code=real&state=${listener.state}`);
     expect(good.status).toBe(200);
-    await expect(listener.result).resolves.toEqual({ ok: true, code: "real" });
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "real" });
   });
 
   test("a MISSING state is refused too", async () => {
@@ -79,7 +104,7 @@ describe("AC8 — the listener answers once", () => {
     const listener = listen();
     const first = await fetch(`${listener.redirectUrl}?code=real&state=${listener.state}`);
     expect(first.status).toBe(200);
-    await listener.result;
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "real" });
 
     // The code is single-use at the authorisation server, but a
     // listener that stays open is a second chance for anything local
@@ -94,7 +119,7 @@ describe("AC8 — the listener answers once", () => {
     const listener = listen();
     await fetch(`${listener.redirectUrl}?code=first&state=${listener.state}`);
     await fetch(`${listener.redirectUrl}?code=second&state=${listener.state}`).catch(() => undefined);
-    await expect(listener.result).resolves.toEqual({ ok: true, code: "first" });
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "first" });
   });
 });
 
@@ -155,7 +180,7 @@ describe("AC10 — the wait is bounded, with real margin", () => {
     // test above.
     const listener = listen(10_000);
     await fetch(`${listener.redirectUrl}?code=in-time&state=${listener.state}`);
-    await expect(listener.result).resolves.toEqual({ ok: true, code: "in-time" });
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "in-time" });
   });
 });
 

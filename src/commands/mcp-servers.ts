@@ -404,7 +404,7 @@ async function authCommand(args: readonly string[], deps: McpConsumerDeps): Prom
   }
 
   // THE headless gate, resolved once, from the real terminal.
-  const interactive = deps.interactive ?? bothStreamsAreATerminal(process.stdin, process.stdout);
+  const interactive = resolveInteractive(deps.interactive, process.stdin, process.stdout);
   if (!interactive) {
     deps.err(`"${name}" needs OAuth, and this process has no terminal to ask in.`);
     deps.err("Run `keryx mcp auth " + name + "` from an interactive shell.");
@@ -506,6 +506,29 @@ async function loadAuthSdk(): Promise<{ auth: (provider: never, options: unknown
  * BOTH, not either. Output redirected to a file with input still a
  * terminal is a script, and a script must not be sent to a browser.
  */
+/**
+ * May this run ask a human — an explicit answer, or the streams.
+ *
+ * The `??` lives here rather than at the call site because at the call
+ * site it could not be tested. `deps.interactive === false` with a
+ * real terminal is the case that distinguishes `??` from `||`, and
+ * under `bun test` neither stream is a TTY, so the probe returns false
+ * and `false || false` is false — the test I wrote first passed under
+ * both spellings and proved nothing. With the streams as arguments the
+ * case is expressible, which is the whole point of the extraction.
+ *
+ * The distinction matters: under `||` an explicit `interactive: false`
+ * is falsy and falls through to the probe, so a caller that refuses on
+ * purpose gets permission instead.
+ */
+export function resolveInteractive(
+  explicit: boolean | undefined,
+  stdin: { readonly isTTY?: boolean | undefined },
+  stdout: { readonly isTTY?: boolean | undefined },
+): boolean {
+  return explicit ?? bothStreamsAreATerminal(stdin, stdout);
+}
+
 export function bothStreamsAreATerminal(
   stdin: { readonly isTTY?: boolean | undefined },
   stdout: { readonly isTTY?: boolean | undefined },
