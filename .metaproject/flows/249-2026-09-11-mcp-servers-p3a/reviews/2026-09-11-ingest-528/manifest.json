@@ -6,7 +6,7 @@
   "target": {
     "kind": "pr",
     "ref": "528",
-    "head": "d2d7a219108bc810053fe450c02ccc9773b46dbf"
+    "head": "0b9466e0bc39e95814ff0c8841a2ae7bb07ea938"
   },
   "artifacts": {
     "scope": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/reviews/2026-09-11-ingest-528/scope.md",
@@ -55,8 +55,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-11T08:43:24.970Z",
-  "updatedAt": "2026-09-11T08:43:24.970Z",
+  "createdAt": "2026-09-11T08:47:47.301Z",
+  "updatedAt": "2026-09-11T08:47:47.301Z",
   "flow": {
     "id": "249",
     "path": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a"

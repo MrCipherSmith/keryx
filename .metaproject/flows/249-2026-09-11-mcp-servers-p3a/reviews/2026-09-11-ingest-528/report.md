@@ -212,7 +212,7 @@ pre-existing and flag-gated, not from this diff.
       "verdict": "refuted",
       "method": "execution",
       "verifier": "author-mutation-check",
-      "evidence": "Verified against 0fb9483e: keys after `[[hooks]]` no longer reach the previous server, with BOUNDARY rows that a recognised header still opens its table and a non-mcp_servers section still closes cleanly without complaint."
+      "evidence": "Verified against 0fb9483e: keys after `[[hooks]]` no longer reach the previous server, with BOUNDARY rows that a recognised header still opens its table and a non-mcp_servers section still closes cleanly without complaint. Fixed in commit ace0eda7 and verified against 0fb9483e, which contains it \u2014 both commits are on the branch that merges."
     }
   },
   {
@@ -243,7 +243,7 @@ pre-existing and flag-gated, not from this diff.
       "verdict": "refuted",
       "method": "execution",
       "verifier": "author-mutation-check",
-      "evidence": "Verified against 0fb9483e: the multi-line-array fixture now yields no server and a 'was dropped' problem, with BOUNDARY rows that a fully-parsing server is kept and that one bad server does not take a good sibling with it."
+      "evidence": "Verified against 0fb9483e: the multi-line-array fixture now yields no server and a 'was dropped' problem, with BOUNDARY rows that a fully-parsing server is kept and that one bad server does not take a good sibling with it. Fixed in commit ace0eda7 and verified against 0fb9483e, which contains it \u2014 both commits are on the branch that merges."
     }
   },
   {
@@ -274,7 +274,7 @@ pre-existing and flag-gated, not from this diff.
       "verdict": "refuted",
       "method": "execution",
       "verifier": "author-mutation-check",
-      "evidence": "Verified against 0fb9483e: the all-six-sources test now resolves to `claude`, and the order assertion lists the spec's sequence with a comment naming the spec as the authority."
+      "evidence": "Verified against 0fb9483e: the all-six-sources test now resolves to `claude`, and the order assertion lists the spec's sequence with a comment naming the spec as the authority. Fixed in commit ace0eda7 and verified against 0fb9483e, which contains it \u2014 both commits are on the branch that merges."
     }
   },
   {

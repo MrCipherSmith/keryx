@@ -4,7 +4,7 @@ target: pr
 ref: 528
 mode: ingest
 flow: 249 (explicit-flow-id)
-created_at: 2026-09-11T08:43:24.970Z
+created_at: 2026-09-11T08:47:47.301Z
 context_mode: light
 
 ## Stage counts

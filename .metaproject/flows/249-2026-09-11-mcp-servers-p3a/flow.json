@@ -7,9 +7,9 @@
   "id": "249",
   "slug": "mcp-servers-p3a",
   "title": "MCP servers P3a: read-only compat readers (Cursor, Claude, .mcp.json, Grok) and D-13 FQN sanitisation",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-11T06:45:12.911Z",
-  "updatedAt": "2026-09-11T08:43:57.994Z",
+  "updatedAt": "2026-09-11T08:47:55.161Z",
   "source": {
     "type": "description",
     "ref": null
@@ -78,7 +78,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/528"
   },
   "baseBranch": "main",
   "tasks": [
@@ -255,6 +255,34 @@
       "at": "2026-09-11T08:43:57.994Z",
       "event": "ac-confirmed",
       "detail": "AC15: Smoke-tested on the INSTALLED 0.2.94 binary BEFORE merging. In a scratch directory standing in for a cloned repo: keryx mcp list showed both compat servers with their tags, and the footer read \"2 server(s) from committed config are not started until approved\" — so the project-local ones are HELD, which is the D-14 hole this branch reopened and closed. keryx mcp remove fromCursor named the defining file, stated that keryx never writes there, and offered keryx mcp disable instead. The run also proved the feature on real data: the operator own ~/.claude.json servers (helyx, helyx-channel, playwright) appeared tagged (claude) and were NOT held, because a home file is one they wrote themselves. Operator config backed up and restored; the scratch directory removed."
+    },
+    {
+      "at": "2026-09-11T08:47:24.433Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/528 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T08:47:24.554Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T08:47:30.476Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 3 finding(s) at or above `minor` are not terminal: 2026-09-11-ingest-528#F-065 (major, round 2026-09-11-ingest-528): marked fixed at ace0eda7 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-11-ingest-528#F-066 (major, round 2026-09-11-ingest-528): marked fixed at ace0eda7 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-11-ingest-528#F-067 (major, round 2026-09-11-ingest-528): marked fixed at ace0eda7 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-11T08:47:49.263Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/528 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T08:47:49.386Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T08:47:55.161Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
