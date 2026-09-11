@@ -2555,6 +2555,18 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       });
     }
   } finally {
+    // Every exit closes the readline session's MCP runtime (K-012). The agent
+    // branch creates it before building the tool list, and a start-up refusal
+    // thrown while the list is built — an unknown `--deny-tools` name — used to
+    // leave before the REPL's own `finally` was reached: a connected server then
+    // kept its child and pipe open, the error printed, and the shell never
+    // exited. On the normal path the REPL has already closed it, and a second
+    // `close()` finds nothing left to close.
+    try {
+      await readlineMcp?.close();
+    } catch {
+      // Exiting; a failed close must not become the last thing printed.
+    }
     destroy();
     rl.close();
   }
