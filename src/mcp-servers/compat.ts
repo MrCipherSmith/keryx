@@ -53,6 +53,15 @@ export type CompatServers = {
 export type CompatFile = {
   readonly source: CompatSource;
   readonly file: string;
+  /**
+   * Is this file one a REPOSITORY can commit?
+   *
+   * The question the trust gate actually asks, and the source tag
+   * cannot answer it: `.cursor/mcp.json` exists both in the operator's
+   * home — which they wrote — and in the project — which whoever they
+   * cloned from wrote. Same tag, opposite trust.
+   */
+  readonly projectLocal: boolean;
 };
 
 /**
@@ -70,12 +79,12 @@ export type CompatFile = {
 export function compatFiles(cwd: string, home?: string): CompatFile[] {
   const base = home ?? os.homedir();
   return [
-    { source: "grok", file: path.join(base, ".grok", "config.toml") },
-    { source: "grok", file: path.join(cwd, ".grok", "config.toml") },
-    { source: "claude", file: path.join(base, ".claude.json") },
-    { source: "mcp.json", file: path.join(cwd, ".mcp.json") },
-    { source: "cursor", file: path.join(base, ".cursor", "mcp.json") },
-    { source: "cursor", file: path.join(cwd, ".cursor", "mcp.json") },
+    { source: "grok", file: path.join(base, ".grok", "config.toml"), projectLocal: false },
+    { source: "grok", file: path.join(cwd, ".grok", "config.toml"), projectLocal: true },
+    { source: "claude", file: path.join(base, ".claude.json"), projectLocal: false },
+    { source: "mcp.json", file: path.join(cwd, ".mcp.json"), projectLocal: true },
+    { source: "cursor", file: path.join(base, ".cursor", "mcp.json"), projectLocal: false },
+    { source: "cursor", file: path.join(cwd, ".cursor", "mcp.json"), projectLocal: true },
   ];
 }
 

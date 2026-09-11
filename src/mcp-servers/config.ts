@@ -41,6 +41,23 @@ export type ResolvedMcpServer = McpServerEntry & {
   name: string;
   /** Which layer won this name. */
   source: McpServerSource;
+  /**
+   * Did this come from a file a REPOSITORY can commit?
+   *
+   * The question the trust gate asks, and the one `source` cannot
+   * answer: `.cursor/mcp.json` exists both in the operator's home,
+   * which they wrote, and in the project, which whoever they cloned
+   * from wrote. Same tag, opposite trust.
+   *
+   * D-14 was implemented as `source !== "project"`, which was correct
+   * when `.keryx/mcp-servers.json` was the only committable source. The
+   * moment compat readers added `.mcp.json`, `.cursor/mcp.json` and
+   * `.grok/config.toml` under the project, that check stopped asking
+   * the right question — and a cloned repository could run a command
+   * at session start with no approval, which is exactly the hole D-14
+   * exists to close.
+   */
+  projectLocal: boolean;
   /** The file it came from, so `doctor` can name it. */
   file: string;
   /** After the entry's own `enabled` and the personal overlay. */
@@ -488,7 +505,10 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
   const user = parseConfigFile(userFile);
   problems.push(...user.problems);
 
-  const winner = new Map<string, { entry: McpServerEntry; source: McpServerSource; file: string }>();
+  const winner = new Map<
+    string,
+    { entry: McpServerEntry; source: McpServerSource; file: string; projectLocal: boolean }
+  >();
 
   // COMPAT FIRST, so native overwrites it. Native is what keryx owns and
   // what `add` writes; a compat source is a courtesy read of a file
@@ -522,20 +542,25 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
           for (const message of found) problems.push({ file: entry.file, message });
           continue;
         }
-        winner.set(name, { entry: value, source: entry.source, file: entry.file });
+        winner.set(name, {
+          entry: value,
+          source: entry.source,
+          file: entry.file,
+          projectLocal: entry.projectLocal,
+        });
       }
     }
   }
 
   for (const [name, entry] of Object.entries(user.servers)) {
-    winner.set(name, { entry, source: "user", file: userFile });
+    winner.set(name, { entry, source: "user", file: userFile, projectLocal: false });
   }
 
   for (const file of projectConfigFiles(options.cwd, options.gitRoot)) {
     const parsed = parseConfigFile(file);
     problems.push(...parsed.problems);
     for (const [name, entry] of Object.entries(parsed.servers)) {
-      winner.set(name, { entry, source: "project", file });
+      winner.set(name, { entry, source: "project", file, projectLocal: true });
     }
   }
 
@@ -544,7 +569,7 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
   problems.push(...overlay.problems);
 
   const servers = [...winner.entries()]
-    .map(([name, { entry, source, file }]) => {
+    .map(([name, { entry, source, file, projectLocal }]) => {
       const expanded = expandEntry(entry, env);
       const personal = overlay.overrides[name];
       return {
@@ -552,6 +577,7 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
         name,
         source,
         file,
+        projectLocal,
         raw: entry,
         // The personal overlay wins over the file, in both directions. That is
         // what lets `enable` lift a committed `enabled: false` without editing

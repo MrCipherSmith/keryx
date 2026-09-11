@@ -185,7 +185,7 @@ describe("compat readers, by CLASS", () => {
           const root = row.source === "claude" ? home : cwd;
           place(root, row.write.rel, row.write.text);
           const file = path.join(root, row.readRel ?? row.write.rel);
-          const result = readCompatFile({ source: row.source, file }, cwd);
+          const result = readCompatFile({ source: row.source, file, projectLocal: row.source !== "claude" }, cwd);
 
           expect({ label: row.label, names: Object.keys(result.servers).sort() }).toEqual({
             label: row.label,
@@ -220,7 +220,7 @@ describe("Claude's per-project block", () => {
       ".claude.json",
       JSON.stringify({ projects: { [cwd]: { mcpServers: { here: { command: "x" } } } } }),
     );
-    expect(Object.keys(readCompatFile({ source: "claude", file }, cwd).servers)).toEqual(["here"]);
+    expect(Object.keys(readCompatFile({ source: "claude", file, projectLocal: false }, cwd).servers)).toEqual(["here"]);
   });
 
   test("BOUNDARY — servers for a DIFFERENT project are not", () => {
@@ -232,7 +232,7 @@ describe("Claude's per-project block", () => {
       ".claude.json",
       JSON.stringify({ projects: { "/somewhere/else": { mcpServers: { elsewhere: { command: "x" } } } } }),
     );
-    expect(Object.keys(readCompatFile({ source: "claude", file }, cwd).servers)).toEqual([]);
+    expect(Object.keys(readCompatFile({ source: "claude", file, projectLocal: false }, cwd).servers)).toEqual([]);
   });
 
   test("and the project block beats the top level within the same file", () => {
@@ -245,7 +245,7 @@ describe("Claude's per-project block", () => {
         projects: { [cwd]: { mcpServers: { shared: { command: "project" } } } },
       }),
     );
-    const servers = readCompatFile({ source: "claude", file }, cwd).servers;
+    const servers = readCompatFile({ source: "claude", file, projectLocal: false }, cwd).servers;
     expect(servers.shared?.command).toBe("project");
   });
 });
@@ -393,7 +393,7 @@ describe("Claude's project block with nothing in it", () => {
     // deleting it survived every test.
     const { home, cwd } = workspace();
     const file = place(home, ".claude.json", JSON.stringify({ projects: { [cwd]: { other: true } } }));
-    const result = readCompatFile({ source: "claude", file }, cwd);
+    const result = readCompatFile({ source: "claude", file, projectLocal: false }, cwd);
     expect(result.problems).toEqual([]);
     expect(Object.keys(result.servers)).toEqual([]);
   });
