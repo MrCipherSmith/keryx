@@ -1,6 +1,6 @@
 # Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants
 
-Status: formalized (not frozen; freezes after flow 252 finishes)
+Status: formalized (not frozen; freezes after flow 256 finishes)
 Source: user request 2026-09-11 after the agent-skills comparison
 Program: docs/plans/skills-quality-program.md (flow 2 of 4)
 

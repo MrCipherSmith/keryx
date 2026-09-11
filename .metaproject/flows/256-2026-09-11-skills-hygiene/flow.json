@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "252",
+  "id": "256",
   "slug": "skills-hygiene",
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T20:18:57.300Z",
+  "updatedAt": "2026-09-11T20:22:28.057Z",
   "source": {
     "type": "description",
     "ref": null
@@ -1260,6 +1260,11 @@
       "at": "2026-09-11T20:18:57.300Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T20:22:28.057Z",
+      "event": "renumbered",
+      "detail": "252 -> 256: Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide."
     }
   ]
 }

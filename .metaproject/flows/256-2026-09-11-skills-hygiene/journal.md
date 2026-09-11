@@ -116,3 +116,4 @@
 - 2026-09-11T20:18:57.175Z - task-done: T30: R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify
 - 2026-09-11T20:18:57.300Z - task-done: T4: Self-review and prepare draft PR
 - 2026-09-11T20:20:57Z - COMPLETION CHOICE (user): A — PR, review, merge into main, complete. PR https://github.com/MrCipherSmith/keryx/pull/533 opened from skills/quality-program (34 commits ahead, 1 behind origin/main at open). Branch review is rounds 1-3 + T30 closure check on the same diff; PR loop will wait on CI and mergeability.
+- 2026-09-11T20:22:28.057Z - renumbered: 252 -> 256: Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide.

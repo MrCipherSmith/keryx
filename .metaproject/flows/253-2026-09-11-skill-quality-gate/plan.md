@@ -1,13 +1,13 @@
 # Implementation Plan
 
-Status: draft — freezes when flow 252 closes; re-check context-map.md line numbers first.
+Status: draft — freezes when flow 256 closes; re-check context-map.md line numbers first.
 
 ## Approach
 
 Extend what exists instead of adding parallel machinery:
 
 - lint lives in `src/gdskills/bundled-eval.ts` as new check ids with reason-carrying
-  exemptions and fixture tests, the way flow 252 added `frontmatter:harness-claude`;
+  exemptions and fixture tests, the way flow 256 added `frontmatter:harness-claude`;
 - routing evals reuse the one scorer `scoreBundledSkillRoute` and extend the
   `ROUTING_BASELINE` shape (prompt → expected skill), not `src/eval/corpus.ts`;
 - runtime variants: stop shipping byte-identical copies and make "falls back to SKILL.md" the

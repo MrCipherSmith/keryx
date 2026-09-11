@@ -1,7 +1,7 @@
 # Context map for flow 253 (dispatch 253-T1, 2026-09-11)
 
-Collected read-only while flow 252 was in review. Line numbers are as of the
-skills/quality-program branch after flow 252's round-1 fixes; re-locate before editing.
+Collected read-only while flow 256 was in review. Line numbers are as of the
+skills/quality-program branch after flow 256's round-1 fixes; re-locate before editing.
 
 ## Routing infrastructure (reuse, do not duplicate)
 
@@ -22,7 +22,7 @@ skills/quality-program branch after flow 252's round-1 fixes; re-locate before e
 
 ## bundled-eval.ts (layer one)
 
-- Checks are ids in `BUNDLED_SKILL_CHECKS` (:97-114, 16 ids incl. flow 252's
+- Checks are ids in `BUNDLED_SKILL_CHECKS` (:97-114, 16 ids incl. flow 256's
   frontmatter:harness-claude and frontmatter:category); implemented imperatively inside
   `evaluateBundledTree` (:705-961) via a per-loop `add(check, line, message)`; findings
   `{check, skill, file, line, message}`; report `renderBundledEvaluation` (:972-1028) prints every
@@ -33,7 +33,7 @@ skills/quality-program branch after flow 252's round-1 fixes; re-locate before e
 - Fixtures: bundled-eval.test.ts writes tmp skill trees (writeSkill/writeSkillFile/writeRule),
   one broken SKILL.md per violation + a CONTROL_SKILL; :680-689 requires every declared check id
   to be exercised; denominators asserted non-vacuous.
-- Info carry-overs from flow 252 review: L-005 harness/category values read by single-line regex
+- Info carry-overs from flow 256 review: L-005 harness/category values read by single-line regex
   (use parseSkillFrontmatter); L-006 PATH_REFERENCE captures a trailing sentence period;
   orchestrator-prompt.md files are not swept by xref.
 
@@ -64,7 +64,7 @@ Verification but no Red Flags.
 
 - SKILL.md frontmatter: 0 "Use when <bare imperative>" hits (they use "Use when: …" or gerunds);
   1 without a trigger phrase: planning/interview ("Use to clarify …"). Max 625 chars; none > 1024.
-- Catalog (BUNDLED_GDSKILLS, 78 entries): 11 carry descriptionOverride (flow 252); the other 67
+- Catalog (BUNDLED_GDSKILLS, 78 entries): 11 carry descriptionOverride (flow 256); the other 67
   fall back to `Use when ${purpose}` (catalog.ts ~:509), and 52 of those read as
   "Use when review/run/create/…" — hookify renders "Use when use hook guidance…". The catalog
   description is what the router scores, so SKILL.md and catalog descriptions can drift: there is
@@ -104,6 +104,6 @@ skill-lifecycle.mdc's skill-changelog records applied learn changes only.
 
 ## Other carry-overs
 
-- feature-dev, hookify, deploy hardcode `npx tsc --noEmit` (flow 252 journal).
+- feature-dev, hookify, deploy hardcode `npx tsc --noEmit` (flow 256 journal).
 - Bare `skills/gdskills/...` and 2-segment `skills/<category>/<name>` spellings are accepted by xref
   but inconsistent with `.metaproject/...` used elsewhere.

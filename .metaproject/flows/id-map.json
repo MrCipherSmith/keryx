@@ -174,5 +174,13 @@
     "toDir": "252-2026-09-11-mcp-servers-p3b",
     "at": "2026-09-11T19:42:50.128Z",
     "reason": "Flow id 250 collided after rebasing onto main: main already carries 250-keryx-shell-loses-the-arena-on-tools (PR #529) and 251-k-012. This flow was numbered 250 locally before either landed, so it takes the next free id."
+  },
+  {
+    "from": "252",
+    "to": "256",
+    "fromDir": "252-2026-09-11-skills-hygiene",
+    "toDir": "256-2026-09-11-skills-hygiene",
+    "at": "2026-09-11T20:22:28.057Z",
+    "reason": "Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide."
   }
 ]
