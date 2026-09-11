@@ -333,3 +333,65 @@ describe("doctor", () => {
     expect(result.out).not.toContain("sk-live-secret");
   });
 });
+
+describe("a server that came from another tool's config", () => {
+  // AC3. The compat-only `remove` path had three surviving mutants on
+  // one line — the predicate that finds the compat server — because I
+  // confirmed the behaviour by reading the code rather than running it.
+  // Exactly the habit this package keeps paying for.
+
+  function withCursor(): { run: (sub: McpConsumerSubcommand, args: string[]) => Promise<Run>; cursorFile: string } {
+    const h = harness();
+    const cursorFile = path.join(h.projectRoot, ".cursor", "mcp.json");
+    mkdirSync(path.dirname(cursorFile), { recursive: true });
+    writeFileSync(cursorFile, JSON.stringify({ mcpServers: { theirs: { command: "their-cmd" } } }));
+    return { run: h.run, cursorFile };
+  }
+
+  test("remove names the file that defines it, and refuses", async () => {
+    const { run, cursorFile } = withCursor();
+    const result = await run("remove", ["theirs"]);
+
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("cursor");
+    expect(result.err).toContain(cursorFile);
+    expect(result.err).toContain("never writes to it");
+    // And it offers the thing that DOES work.
+    expect(result.err).toContain("keryx mcp disable theirs");
+  });
+
+  test("and the compat file is untouched by the attempt", async () => {
+    const { run, cursorFile } = withCursor();
+    const before = readFileSync(cursorFile, "utf8");
+    await run("remove", ["theirs"]);
+    expect(readFileSync(cursorFile, "utf8")).toBe(before);
+  });
+
+  test("BOUNDARY — a name in NEITHER native nor compat gets the native message", async () => {
+    // The predicate must find the right server, not any server. With
+    // `name !== name` it matched the first compat entry whatever was
+    // asked for, so a typo would be blamed on somebody else's file.
+    const { run } = withCursor();
+    const result = await run("remove", ["nosuch"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("not defined in either native config file");
+    expect(result.err).not.toContain(".cursor");
+  });
+
+  test("BOUNDARY — a NATIVE name is removed normally, not diverted", async () => {
+    // With the source check inverted, a native server would be reported
+    // as coming from a compat file and never removed.
+    const { run } = withCursor();
+    await run("add", ["mine", "--", "cmd"]);
+    const result = await run("remove", ["mine"]);
+    expect(result.code).toBe(0);
+    expect(result.err).not.toContain("never writes to it");
+  });
+
+  test("the compat server is listed, with its tag", async () => {
+    const { run } = withCursor();
+    const result = await run("list", []);
+    expect(result.out).toContain("theirs");
+    expect(result.out).toContain("(cursor)");
+  });
+});
