@@ -13,12 +13,17 @@ code was reshaped to make the case expressible.
 
 ## P3b (flow 250) — 116 mutants over the diff
 
+Final state: **108 killed, 8 equivalent, 0 unexplained survivors, 0
+hangs.** Every entry below was confirmed still surviving by a
+verification sweep run after the killing tests landed, so this list is
+what the sweep actually reports and not what it reported once.
+
 ### `?? → ||` where the left operand is a function or `undefined`
 
 | Site | Expression |
 |---|---|
 | `src/commands/mcp-servers.ts:437` | `deps.openBrowser ?? defaultOpenBrowser` |
-| `src/commands/mcp-servers.ts:784` | `deps.connect ?? ((server) => defaultConnect(…))` |
+| `src/commands/mcp-servers.ts:807` | `deps.connect ?? ((server) => defaultConnect(…))` |
 | `src/mcp-servers/doctor.ts:272` | `options.now ?? Date.now` |
 | `src/mcp-servers/oauth-callback.ts:86` | `options.serve ?? Bun.serve` |
 | `src/mcp-servers/oauth-provider.ts:82` | `deps.now ?? Date.now` |
