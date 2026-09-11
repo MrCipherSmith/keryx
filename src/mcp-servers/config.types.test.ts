@@ -332,3 +332,46 @@ describe("the shell survives every one of these", () => {
     await runtime?.close();
   });
 });
+
+describe("the oauth block — validated fields, and the one that is not implemented", () => {
+  // `oauthProblems` had no tests at all, which is how a mutation of
+  // its `clientSecretEnvVar` condition survived a sweep. The point of
+  // that branch is the opposite of the usual: it reports a field the
+  // schema legally accepts, because silently ignoring this one is
+  // dangerous.
+
+  function problemsFor(oauth: unknown): string[] {
+    const { configDir, cwd } = withServers({ s: { url: "https://h/mcp", oauth } });
+    return loadMcpServers({ configDir, cwd }).problems.map((p) => p.message);
+  }
+
+  test("clientSecretEnvVar is refused as an unknown field, consistently with the schema", () => {
+    // keryx registers `token_endpoint_auth_method: "none"`, so a
+    // server configured as a confidential client would authenticate
+    // as a public one. The first fix for that reported it as "not
+    // implemented" while the schema still declared it — which made
+    // the runtime stricter than the specification, the exact parity
+    // failure a comment in config.ts warns about. The field is now
+    // absent from both, so the document is invalid in one way.
+    expect(problemsFor({ clientSecretEnvVar: "LINEAR_SECRET" }).join("\n")).toContain(
+      'unknown field "clientSecretEnvVar"',
+    );
+  });
+
+  test("an unknown oauth field is refused by name", () => {
+    expect(problemsFor({ nope: 1 }).join("\n")).toContain('unknown field "nope"');
+  });
+
+  test("scopes must be an array of strings", () => {
+    expect(problemsFor({ scopes: "read" }).join("\n")).toContain("array of strings");
+  });
+
+  test("and a port outside the range is refused", () => {
+    expect(problemsFor({ callbackPort: 70_000 }).join("\n")).toContain("between 1 and 65535");
+  });
+
+  test("BOUNDARY — a legal oauth block produces no problems at all", () => {
+    // Without this, "report everything" would pass every test above.
+    expect(problemsFor({ clientId: "c", scopes: ["read"], callbackPort: 8765 })).toEqual([]);
+  });
+});

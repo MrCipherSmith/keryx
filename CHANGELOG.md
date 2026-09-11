@@ -3,6 +3,36 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.97] — 2026-09-11
+`keryx mcp auth` — OAuth for remote MCP servers, so a server that needs a
+login can be used without pasting a bearer token into a config file.
+
+### Added
+- **`keryx mcp auth <name>`** — runs the authorisation flow in a browser and
+  stores the result owner-only (0600) in `mcp-credentials.json`. Tokens are
+  keyed by server name *and* URL: repointing a server at a different host
+  does not send it a credential issued to the first one.
+- **Sessions never start a flow.** Only `keryx mcp auth` can open a browser.
+  A session opening one you did not ask for, or blocking a headless shell
+  waiting for a consent screen nobody will click, are both worse than a
+  clear refusal naming the command to run.
+- **`needs_auth` in `keryx mcp doctor`**, for a server whose credential is
+  absent, expired beyond refresh, or revoked — naming the command that fixes
+  it, rather than reporting the 401 as the server being broken.
+- **Dynamic client registration**, only when `oauth.clientId` is absent. An
+  operator who registered the client themselves does not get a second one.
+
+### Security
+- The loopback callback binds `127.0.0.1` on an ephemeral port, validates
+  `state`, serves exactly one request, and times out. A callback on every
+  interface is an authorisation code offered to whoever shares the network.
+- No surface prints token material. Asserted over every `keryx mcp`
+  subcommand, both streams, and the `--json` forms — enumerated from the
+  subcommand list, so a new one is covered the day it is added.
+- Authenticating writes one file. Every other file in the config directory
+  is byte-identical afterwards, including the comments and ordering in a
+  hand-edited `mcp-servers.json`.
+
 ## [0.2.96] — 2026-09-11
 
 ### Fixed

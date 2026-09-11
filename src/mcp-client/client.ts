@@ -514,6 +514,16 @@ export async function connectHttpMcpServer(
     readonly headers?: Record<string, string> | undefined;
     readonly handshakeTimeoutMs?: number | undefined;
     readonly signal?: AbortSignal | undefined;
+    /**
+     * The SDK's OAuth hook, when this server uses OAuth.
+     *
+     * Absent for a server that authenticates with a header or a
+     * bearer variable — most of them — so the transport behaves
+     * exactly as it did before for those. When present, the SDK
+     * handles discovery, PKCE, refresh and retry, and asks the
+     * provider where to store things and how to reach a human.
+     */
+    readonly authProvider?: unknown;
   } = {},
 ): Promise<McpServerConnection> {
   let parsed: URL;
@@ -547,6 +557,7 @@ export async function connectHttpMcpServer(
 
   const sdk = await loadHttpSdk();
   const transport = new sdk.StreamableHTTPClientTransport(parsed, {
+    ...(options.authProvider === undefined ? {} : { authProvider: options.authProvider }),
     // EVERY fetch the transport makes, not the two that happen to read
     // `requestInit`.
     //
