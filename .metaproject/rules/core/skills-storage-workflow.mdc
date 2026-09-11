@@ -89,10 +89,10 @@ written by `keryx init`/`keryx update`), which stays inside the project.
 
 Once a project skill is exported for a runtime, `keryx skills sync --runtime
 <runtime> --global` copies it from `.metaproject/runtime/skills/<runtime>/` to:
-- `cursor` → `~/.cursor/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.cursor.md`, or `SKILL.md` as fallback)
-- `codex` → `${CODEX_HOME:-~/.codex}/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.codex.md`, or `SKILL.md` as fallback)
-- `zed` → `~/.config/zed/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.zed.md`, or `SKILL.md` as fallback)
-- `opencode` → `~/.config/opencode/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.opencode.md`, or `SKILL.md` as fallback)
+- `cursor` → `~/.cursor/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.cursor.md` when the skill ships one, otherwise `SKILL.md`)
+- `codex` → `${CODEX_HOME:-~/.codex}/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.codex.md` when the skill ships one, otherwise `SKILL.md`)
+- `zed` → `~/.config/zed/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.zed.md` when the skill ships one, otherwise `SKILL.md`)
+- `opencode` → `~/.config/opencode/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.opencode.md` when the skill ships one, otherwise `SKILL.md`)
 
 These four global destinations are written only by the explicit, opt-in
 `keryx skills sync --runtime <runtime> --global` command — never as a side
