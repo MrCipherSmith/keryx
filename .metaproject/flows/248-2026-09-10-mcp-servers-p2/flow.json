@@ -7,17 +7,66 @@
   "id": "248",
   "slug": "mcp-servers-p2",
   "title": "MCP servers P2: the /mcp consumer view, /integrations, and a per-tool approval renderer",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-10T23:44:52.609Z",
-  "updatedAt": "2026-09-10T23:45:58.312Z",
+  "updatedAt": "2026-09-11T00:44:26.958Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:d7a2312ac0e3d32b82838b44b57c86cf149be8ecb2c625d4beac28572c801699",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T00:32:15.002Z",
+      "note": "isMcpConsumerCommand('/mcp') is true and isMcpToolsCommand('/mcp') is now false; mcp-consumer.test.ts asserts the two commands resolve to DIFFERENT views, not merely that each is accepted. The installer's MCP_TOOLS_COMMAND_RETIRED alias is deleted. tui-shell dispatches /mcp to showMcpConsumer before the installer branch, and busy-dispatch gained an 'mcp-consumer' target with a BOUNDARY test that the consumer wins when both predicates match — the classifier exists to predict the live if-chain, so the two orders must agree."
+    },
+    "AC2": {
+      "at": "2026-09-11T00:32:15.120Z",
+      "note": "mcp-consumer.test.ts: isMcpConsumerCommand('/mcps') and isMcpToolsCommand('/mcps') are both false. agent-commands.confusable.test.ts passes with no new written exemption (bun test src/commands/agent-commands: 35 pass). The registry comment forbidding /mcps is kept and restated."
+    },
+    "AC6": {
+      "at": "2026-09-11T00:32:15.233Z",
+      "note": "TOOLS_TAB_HEADER now reads 'Built into keryx — not from an external MCP server. For those, see `/mcp` (or `keryx mcp list`).' mcp-inspector.test.ts asserts the rendered caption row contains '/mcp' and contains neither \"doesn't consume\" nor 'does not consume'. Spec AC17."
+    },
+    "AC3": {
+      "at": "2026-09-11T00:32:26.525Z",
+      "note": "buildConsumerModel emits name/source/transport/status/toolCount per configured server. mcp-consumer.test.ts covers: connected shows transport+source+tool count; needs-approval yields action 'keryx mcp trust <name>'; failed shows its reason; a configured server with NO state is 'connecting' rather than absent; disabled is listed as disabled; and with nothing configured the emptyHint names both files read. Asserted against the built model, never a terminal."
+    },
+    "AC4": {
+      "at": "2026-09-11T00:32:26.644Z",
+      "note": "ServerState.error and every config-problem message pass through sanitiseForDisplay in buildConsumerModel. Test drives an error containing ESC (String.fromCharCode(27)) and a bare CR and asserts neither survives, plus a BOUNDARY assertion that the readable text ('dial failed', 'auto-approved') DOES — so dropping the detail cannot pass. Closes the asymmetry P1's security reviewer recorded as unreachable until this surface existed."
+    },
+    "AC5": {
+      "at": "2026-09-11T00:32:26.773Z",
+      "note": "Urls render through displayUrl; credentials are listed by variable NAME only. Tests: a url carrying alice:hunter2@ and ?api_key=sk-live-abc renders with both absent and the host still present; header and bearer variables are named (FALLBACK_TOKEN, LINEAR_TOKEN); a stdio --token=${GITHUB_TOKEN} shows the name; a ${REGION} url variable is listed; BOUNDARY — a server with no credentials shows no 'reads' tag."
+    },
+    "AC7": {
+      "at": "2026-09-11T00:32:41.065Z",
+      "note": "isMcpToolCall('use_tool') routes to the MCP renderer in both surfaces, and approval-wiring.test.ts asserts the branch appears BEFORE evaluateShellApproval in each file — ordering is the property, since a correct rendering placed after it would still have consulted the store. rememberable is typed literal false, so a caller cannot offer 'always' by forgetting to check. A counterfactual test shows evaluateShellApproval WOULD have offered one (destructive=false, credentials=false for 'ls -la'), so the file states a real difference. BOUNDARY: shell_exec/apply_patch/search_tool/read_file are not MCP calls."
+    },
+    "AC8": {
+      "at": "2026-09-11T00:32:41.187Z",
+      "note": "The class table's row 'a long reassuring first key does not push the tool name out of view' builds {reason: <234 chars>, table: 'customers'} — far past the old 117-char budget — and asserts 'db', 'drop_table' and 'customers' all still render. A second row puts 800 chars before command:'rm -rf /important' and asserts it survives. Structurally, server and tool are separate lines ABOVE the payload, so no key order can displace them; renderUseToolApprovalLines has an ordering test proving server precedes tool precedes the first argument."
+    },
+    "AC9": {
+      "at": "2026-09-11T00:32:41.300Z",
+      "note": "One module, src/mcp-servers/approval-render.ts, imported by both surfaces. approval-wiring.test.ts asserts both import it, that the generic 117-char branch in shell.ts comes after the MCP branch, and that the renderer runs with nothing mocked (no terminal). The line-building moved into the module after the sweep showed the inlined destructive check was unkillable."
+    },
+    "AC10": {
+      "at": "2026-09-11T00:32:41.421Z",
+      "note": "approval-render.table.test.ts: 3 classes, 16 rows, shape checked by P1's shared classTableProblems. It earned itself immediately — one outcome vocabulary across three classes made two come out one-sided, correctly, because identifiability/elision/neutralisation are three different axes. Each class now carries its own axis and both members."
+    },
+    "AC11": {
+      "at": "2026-09-11T00:44:18.365Z",
+      "note": "Two sweeps. First: 42 mutants, 18 survived — 2 real defects (JSON null payload and tool_input null, where the || form throws / renders 'null'), 5 decisions inside the /mcp TUI callback with no harness, 1 needs_auth action arm, and 10 glue/equivalent. All 8 non-glue survivors killed by new BOUNDARY tests, each verified by hand-running the mutant. Remaining 8 recorded in commit b88d7020: the [y/N] read and choice-dock result handling, identical across all four approval branches and unreachable without a terminal harness, plus 3 equivalent ?? -> || on non-empty strings and a zero-valued count."
+    },
+    "AC12": {
+      "at": "2026-09-11T00:44:18.483Z",
+      "note": "bun test: 9139 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/527"
   },
   "baseBranch": "main",
   "tasks": [
@@ -26,7 +75,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +83,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,14 +99,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -64,14 +115,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,7 +131,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -95,6 +148,91 @@
     {
       "at": "2026-09-10T23:45:58.312Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-11T00:13:38.468Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/527 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T00:32:15.002Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: isMcpConsumerCommand('/mcp') is true and isMcpToolsCommand('/mcp') is now false; mcp-consumer.test.ts asserts the two commands resolve to DIFFERENT views, not merely that each is accepted. The installer's MCP_TOOLS_COMMAND_RETIRED alias is deleted. tui-shell dispatches /mcp to showMcpConsumer before the installer branch, and busy-dispatch gained an 'mcp-consumer' target with a BOUNDARY test that the consumer wins when both predicates match — the classifier exists to predict the live if-chain, so the two orders must agree."
+    },
+    {
+      "at": "2026-09-11T00:32:15.120Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: mcp-consumer.test.ts: isMcpConsumerCommand('/mcps') and isMcpToolsCommand('/mcps') are both false. agent-commands.confusable.test.ts passes with no new written exemption (bun test src/commands/agent-commands: 35 pass). The registry comment forbidding /mcps is kept and restated."
+    },
+    {
+      "at": "2026-09-11T00:32:15.233Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: TOOLS_TAB_HEADER now reads 'Built into keryx — not from an external MCP server. For those, see `/mcp` (or `keryx mcp list`).' mcp-inspector.test.ts asserts the rendered caption row contains '/mcp' and contains neither \"doesn't consume\" nor 'does not consume'. Spec AC17."
+    },
+    {
+      "at": "2026-09-11T00:32:26.525Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: buildConsumerModel emits name/source/transport/status/toolCount per configured server. mcp-consumer.test.ts covers: connected shows transport+source+tool count; needs-approval yields action 'keryx mcp trust <name>'; failed shows its reason; a configured server with NO state is 'connecting' rather than absent; disabled is listed as disabled; and with nothing configured the emptyHint names both files read. Asserted against the built model, never a terminal."
+    },
+    {
+      "at": "2026-09-11T00:32:26.644Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: ServerState.error and every config-problem message pass through sanitiseForDisplay in buildConsumerModel. Test drives an error containing ESC (String.fromCharCode(27)) and a bare CR and asserts neither survives, plus a BOUNDARY assertion that the readable text ('dial failed', 'auto-approved') DOES — so dropping the detail cannot pass. Closes the asymmetry P1's security reviewer recorded as unreachable until this surface existed."
+    },
+    {
+      "at": "2026-09-11T00:32:26.773Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Urls render through displayUrl; credentials are listed by variable NAME only. Tests: a url carrying alice:hunter2@ and ?api_key=sk-live-abc renders with both absent and the host still present; header and bearer variables are named (FALLBACK_TOKEN, LINEAR_TOKEN); a stdio --token=${GITHUB_TOKEN} shows the name; a ${REGION} url variable is listed; BOUNDARY — a server with no credentials shows no 'reads' tag."
+    },
+    {
+      "at": "2026-09-11T00:32:41.065Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: isMcpToolCall('use_tool') routes to the MCP renderer in both surfaces, and approval-wiring.test.ts asserts the branch appears BEFORE evaluateShellApproval in each file — ordering is the property, since a correct rendering placed after it would still have consulted the store. rememberable is typed literal false, so a caller cannot offer 'always' by forgetting to check. A counterfactual test shows evaluateShellApproval WOULD have offered one (destructive=false, credentials=false for 'ls -la'), so the file states a real difference. BOUNDARY: shell_exec/apply_patch/search_tool/read_file are not MCP calls."
+    },
+    {
+      "at": "2026-09-11T00:32:41.187Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: The class table's row 'a long reassuring first key does not push the tool name out of view' builds {reason: <234 chars>, table: 'customers'} — far past the old 117-char budget — and asserts 'db', 'drop_table' and 'customers' all still render. A second row puts 800 chars before command:'rm -rf /important' and asserts it survives. Structurally, server and tool are separate lines ABOVE the payload, so no key order can displace them; renderUseToolApprovalLines has an ordering test proving server precedes tool precedes the first argument."
+    },
+    {
+      "at": "2026-09-11T00:32:41.300Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: One module, src/mcp-servers/approval-render.ts, imported by both surfaces. approval-wiring.test.ts asserts both import it, that the generic 117-char branch in shell.ts comes after the MCP branch, and that the renderer runs with nothing mocked (no terminal). The line-building moved into the module after the sweep showed the inlined destructive check was unkillable."
+    },
+    {
+      "at": "2026-09-11T00:32:41.421Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: approval-render.table.test.ts: 3 classes, 16 rows, shape checked by P1's shared classTableProblems. It earned itself immediately — one outcome vocabulary across three classes made two come out one-sided, correctly, because identifiability/elision/neutralisation are three different axes. Each class now carries its own axis and both members."
+    },
+    {
+      "at": "2026-09-11T00:44:18.365Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Two sweeps. First: 42 mutants, 18 survived — 2 real defects (JSON null payload and tool_input null, where the || form throws / renders 'null'), 5 decisions inside the /mcp TUI callback with no harness, 1 needs_auth action arm, and 10 glue/equivalent. All 8 non-glue survivors killed by new BOUNDARY tests, each verified by hand-running the mutant. Remaining 8 recorded in commit b88d7020: the [y/N] read and choice-dock result handling, identical across all four approval branches and unreachable without a terminal harness, plus 3 equivalent ?? -> || on non-empty strings and a zero-valued count."
+    },
+    {
+      "at": "2026-09-11T00:44:18.483Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: bun test: 9139 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean."
+    },
+    {
+      "at": "2026-09-11T00:44:26.607Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T00:44:26.724Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T00:44:26.838Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T00:44:26.958Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

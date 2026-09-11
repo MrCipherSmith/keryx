@@ -67,9 +67,24 @@ package now holds itself to: no line of new production code may be inverted
 or deleted without a test failing. See the roadmap changelog for what it
 found that four rounds of human review did not.
 
-Still open: OAuth and owner-only credentials, the read-only compat readers,
-the `/mcp` TUI repoint, F-032/F-033 (approval rendering, deferred to P2 by
-operator decision), and D-13.
+**Shipped in P2** (flow 248): `/mcp` is the CONSUMER view — the servers
+keryx connects to — and `/integrations` keeps the installer. `use_tool`
+gained the approval rendering it never had (F-032, F-033): the server and
+tool render above the arguments so no key order can displace them, every
+argument gets its own budget so none can crowd out another, and no
+"always allow" is offered because the grant pattern would be a name the
+model chose.
+
+**Sequenced next**, by operator decision of 2026-09-11 (asked with
+options and a recommendation, answered with the recommendation on each):
+
+| next | what | why separately |
+|---|---|---|
+| P3a | Read-only compat readers (`.cursor/mcp.json`, `~/.claude.json`, project `.mcp.json`, Grok TOML) **and D-13** (sanitise invalid FQNs, first-wins on collision) | Low risk, fixture-testable, and D-13 is a catalog change that belongs with them |
+| P3b | OAuth: browser flow, owner-only `mcp-credentials.json`, loopback callback, dynamic client registration, headless → `needs_auth` without hanging | A real attack surface that deserves its own review round rather than being reviewed alongside config parsing |
+| — | Behavioural tests for the OTHER three approval branches (`apply_patch`, Codex elicitation, `shell_exec`) | P2's review showed the approval DECISION is untested in all four branches; `use_tool` is fixed and the rest are a larger hole than it was. Not MCP, so not this package — a flow of its own, immediately after P3 |
+
+Also open: F-031.
 
 Shipped earlier, in 0.2.85 (PR #499, #500):
 
