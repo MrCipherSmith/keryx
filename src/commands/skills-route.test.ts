@@ -83,3 +83,45 @@ describe("scoreBundledSkillRoute", () => {
     }
   });
 });
+
+describe("rendered description reads as a trigger, not an echoed imperative", () => {
+  // catalog.ts's `skill()` helper defaults `description` to a lowercased echo
+  // of `purpose` — "Use when choose between gdgraph..." — which restates what
+  // the skill does rather than saying when an agent should reach for it.
+  //
+  // AC9 (flow 252, D7) is scoped to exactly these 11 core/platform skills —
+  // the ones a routing agent reaches for before any other skill has narrowed
+  // the request, where an echoed imperative gives it nothing to route on.
+  // Other categories (orchestration/review/quality/planning) and two more
+  // platform skills (agent-entrypoint-distiller, claude-md-management) still
+  // carry the same pattern; that is a real, broader instance of D7 but sits
+  // outside this frozen criterion's named set, so it is left untouched here.
+  const AC9_SCOPED_SKILLS = [
+    "metaproject-router",
+    "context-router",
+    "entity-skill-router",
+    "entity-skill-creator",
+    "entity-skill-verifier",
+    "entity-skill-learner",
+    "agent-entrypoint-manager",
+    "hook-manager",
+    "skill-catalog-manager",
+    "skill-runtime-exporter",
+    "skill-sync",
+  ];
+  const echoedImperative = /^Use when (choose|create|update|select|verify|split|maintain|generate|export|sync|run|build)\b/i;
+
+  test("the AC9 scope still names exactly 11 skills, all present in the catalog", () => {
+    expect(AC9_SCOPED_SKILLS.length).toBe(11);
+    for (const name of AC9_SCOPED_SKILLS) {
+      expect(BUNDLED_GDSKILLS.some((entry) => entry.name === name), name).toBe(true);
+    }
+  });
+
+  test("none of the 11 rendered core/platform skills echoes its purpose as a bare imperative", () => {
+    const offenders = BUNDLED_GDSKILLS.filter(
+      (entry) => AC9_SCOPED_SKILLS.includes(entry.name) && echoedImperative.test(entry.description),
+    ).map((entry) => entry.name);
+    expect(offenders).toEqual([]);
+  });
+});

@@ -1,6 +1,6 @@
 ---
 name: entity-skill-creator
-description: Use when create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.
+description: "Use when no project-skill exists yet for a target module, component, store, service, or domain entity, or one needs scaffolding, importing, or refreshing from its origin. NOT for: loading a project-skill that already exists (see entity-skill-router)."
 ---
 
 # entity-skill-creator

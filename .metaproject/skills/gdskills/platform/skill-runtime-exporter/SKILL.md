@@ -1,6 +1,6 @@
 ---
 name: skill-runtime-exporter
-description: Use when export canonical skills to runtime-compatible Codex or Claude artifacts.
+description: "Use when canonical skill packages need turning into runtime-compatible Codex or Claude artifacts, stripped of management-only files. NOT for: regenerating the skill catalog (see skill-catalog-manager) or pushing the export to local runtimes (see skill-sync)."
 ---
 
 # skill-runtime-exporter

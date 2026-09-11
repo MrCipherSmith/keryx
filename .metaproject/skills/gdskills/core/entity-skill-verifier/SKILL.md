@@ -1,6 +1,6 @@
 ---
 name: entity-skill-verifier
-description: Use when verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.
+description: "Use when an existing project-skill's claims need checking against current code, graph, wiki, health, memory, tests, or review lessons before it is trusted. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."
 ---
 
 # entity-skill-verifier
