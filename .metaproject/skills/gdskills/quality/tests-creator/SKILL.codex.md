@@ -63,17 +63,23 @@ Identify the test framework and conventions used in the project.
 **1.1 Detect framework:**
 
 ```bash
-# Check package.json for test dependencies
-cat <codebase_path>/package.json | grep -E '"(jest|vitest|mocha|jasmine|bun:test|pytest|go test)"'
-
-# Check for config files
-ls <codebase_path>/{vitest.config.*,jest.config.*,pytest.ini,setup.cfg}
-
-# Check existing test files for imports
-find <codebase_path>/src -name "*.test.*" -o -name "*.spec.*" | head -5
+keryx test analyze
 ```
 
-**1.2 Read 2-3 existing test files** to understand:
+Discovers the framework, test scripts, config files, and existing test file
+paths in one pass — do NOT `cat`/`grep` `package.json`, `ls` config globs, or
+`find` for test files; that is exactly what `keryx test analyze` already
+walks the project for. Read the result compactly:
+
+```bash
+keryx ctx read .metaproject/data/testing/context.md
+```
+
+On a project with no keryx testing config, fall back to the project's own
+configured way of finding its test framework and existing tests (discovered,
+not a hardcoded `cat`/`ls`/`find` invocation).
+
+**1.2 Read 2-3 existing test files** (from the `context.md` test file list) to understand:
 - Import style (`import { describe, it, expect } from 'vitest'` vs global)
 - Test file location (co-located `*.test.ts` vs `__tests__/` directory)
 - Describe/it/test nesting patterns
