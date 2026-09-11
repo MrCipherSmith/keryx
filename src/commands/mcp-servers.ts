@@ -27,7 +27,20 @@ import {
   transportOf,
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
-import { displayUrl } from "../mcp-servers/http-headers";
+import { displayUrl, remoteTargetProblem } from "../mcp-servers/http-headers";
+import { browserOpenPlan, openVerificationUrl } from "../lib/oauth/open-url";
+import { sanitiseForDisplay } from "../mcp-servers/tools";
+import {
+  clearCredential,
+  credentialsFile,
+  describeCredential,
+  forgetByName,
+  readCredential,
+  usesOAuth,
+} from "../mcp-servers/credentials";
+import { createOAuthProvider } from "../mcp-servers/oauth-provider";
+import { startCallbackListener } from "../mcp-servers/oauth-callback";
+import { connectHttpMcpServer } from "../mcp-client/client";
 import { defaultConnect, KILL_GRACE_MS } from "../mcp-servers/runtime";
 import {
   addServer,
@@ -55,6 +68,8 @@ export const MCP_CONSUMER_SUBCOMMANDS = [
   "trust",
   "untrust",
   "doctor",
+  "auth",
+  "logout",
 ] as const;
 
 export type McpConsumerSubcommand = (typeof MCP_CONSUMER_SUBCOMMANDS)[number];
@@ -79,6 +94,18 @@ export type McpConsumerDeps = {
    * environment and have half the command ignore it.
    */
   readonly env?: Record<string, string | undefined> | undefined;
+  /**
+   * Can this process ask a human? Overridden in tests.
+   *
+   * Resolved ONCE, here, from the real terminal, and handed to the
+   * OAuth provider as a capability — never sniffed inside it. A
+   * function that reads `process.stdout.isTTY` itself cannot be
+   * tested for the headless case without lying to the process about
+   * its own stdio, and the lie is what the test then asserts.
+   */
+  readonly interactive?: boolean | undefined;
+  /** Overridden in tests; otherwise launches the real browser. */
+  readonly openBrowser?: ((url: URL) => void | Promise<void>) | undefined;
   /**
    * Home directory for the compat readers. Overridden in tests.
    *
@@ -113,6 +140,10 @@ export async function runMcpConsumerCommand(
       return trustCommand(args, deps, false);
     case "doctor":
       return doctorCommand(args, deps);
+    case "auth":
+      return authCommand(args, deps);
+    case "logout":
+      return logoutCommand(args, deps);
   }
 }
 
@@ -334,6 +365,353 @@ function addCommand(argv: readonly string[], deps: McpConsumerDeps): number {
   deps.log(`Added "${name}" to ${result.file}${result.created ? " (created)" : ""}.`);
   deps.log(`Run \`keryx mcp doctor ${name}\` to check it connects.`);
   return 0;
+}
+
+/**
+ * `keryx mcp auth <name>` — the one interactive entry point.
+ *
+ * Spec AC20 is the whole shape of this function: in a non-TTY process
+ * it must exit non-zero WITHOUT opening a browser and without hanging.
+ * The refusal is decided HERE, from the real terminal, and handed to
+ * the provider as a capability — so the provider never asks the
+ * process about itself, and the headless path is testable without
+ * lying to stdio.
+ */
+/**
+ * Forget a stored credential.
+ *
+ * The missing half of `auth`. A revoked refresh token is not
+ * recoverable by re-running `auth` — the SDK re-throws the
+ * `invalid_grant` before any browser opens — so without this the only
+ * escape from a dead credential was hand-editing
+ * `mcp-credentials.json`, which is not a supported operation and
+ * which the file's own mode discourages.
+ *
+ * It also removes a token for a server that has since been deleted
+ * from the config: `keryx mcp remove` takes the server away and left
+ * its credential behind, keyed to a name nothing looks up.
+ */
+function logoutCommand(args: readonly string[], deps: McpConsumerDeps): number {
+  const own = splitAtSeparator(args).own;
+  const name = own[0];
+  if (name === undefined || name.startsWith("-")) {
+    deps.err("usage: keryx mcp logout <name>");
+    return 1;
+  }
+
+  const config = load(deps);
+  const server = config.servers.find((candidate) => candidate.name === name);
+
+  // A server that is GONE from the config is exactly the case where a
+  // stale credential hides, so this does not require the server to
+  // exist — it requires a url to key by, and falls back to scanning.
+  const url = server?.url;
+  if (url === undefined) {
+    const removed = forgetByName(name, deps.configDir);
+    if (removed.count === 0) {
+      deps.err(`no stored credential for "${name}".`);
+      return 1;
+    }
+    deps.log(`Forgot ${removed.count} stored credential(s) for "${name}".`);
+    return 0;
+  }
+
+  const existing = readCredential(name, url, deps.configDir);
+  if (existing.problem !== undefined) {
+    deps.err(existing.problem);
+    return 1;
+  }
+  if (existing.record === undefined) {
+    deps.log(`"${name}" has no stored credential; nothing to forget.`);
+    return 0;
+  }
+  const cleared = clearCredential(name, url, deps.configDir);
+  if (!cleared.ok) {
+    deps.err(cleared.error);
+    return 1;
+  }
+  deps.log(`Forgot the stored credential for "${name}".`);
+  deps.log(`Run \`keryx mcp auth ${name}\` to authorise again.`);
+  return 0;
+}
+
+async function authCommand(args: readonly string[], deps: McpConsumerDeps): Promise<number> {
+  const own = splitAtSeparator(args).own;
+  const unknown = own.filter((arg, index, all) => isUnknownFlag(arg, index, all));
+  if (unknown.length > 0) {
+    deps.err(`unknown option ${unknown[0]}`);
+    return 1;
+  }
+  const name = positional(args);
+  if (name === undefined) {
+    deps.err("usage: keryx mcp auth <name>");
+    return 1;
+  }
+
+  const config = load(deps);
+  const server = config.servers.find((candidate) => candidate.name === name);
+  if (server === undefined) {
+    deps.err(
+      config.servers.length === 0
+        ? `no server named "${name}" — no MCP servers are configured`
+        : `no server named "${name}". Configured: ${config.servers.map((s) => s.name).join(", ")}`,
+    );
+    return 1;
+  }
+
+  if (transportOf(server) !== "http") {
+    deps.err(`"${name}" is a local (stdio) server; OAuth applies to remote ones.`);
+    return 1;
+  }
+
+  // THE SAME GATE EVERY OTHER SURFACE APPLIES.
+  //
+  // `list`, `doctor` and the session runtime all refuse to act on an
+  // unapproved project server; `auth` was the only one that did not.
+  // On a freshly cloned repository that meant `keryx mcp doctor`
+  // declined to dial a committed server while `keryx mcp auth <name>`
+  // would dial the repository author's URL, register a client against
+  // it and open the operator's browser at its authorisation endpoint
+  // — all before anyone had approved anything.
+  if (requiresApproval(server, loadTrustStore(deps.configDir))) {
+    deps.err(`"${name}" is a project server that has not been approved.`);
+    deps.err(`Read what it connects to, then: keryx mcp trust ${name}`);
+    return 1;
+  }
+
+  // THE SAME PRE-FLIGHT EVERY OTHER DIAL RUNS.
+  //
+  // `remoteTargetProblem` exists so there is one list of target
+  // problems and every caller asks it. This was the third caller and
+  // it asked nothing: with `url: "https://api.example/${TENANT}/mcp"`
+  // and TENANT unset, `doctor` names the variable in milliseconds
+  // while `auth` dialled `https://api.example//mcp`, stored nothing,
+  // and then waited out the full callback budget before blaming the
+  // operator's browser tab.
+  const env = deps.env ?? process.env;
+  const targetProblem = remoteTargetProblem(server.raw, env);
+  if (targetProblem !== undefined) {
+    deps.err(`"${name}": ${targetProblem}`);
+    return 1;
+  }
+
+  if (!usesOAuth(server.raw)) {
+    // AC13. Starting a flow that cannot help is worse than saying so:
+    // the operator would watch a browser open, authorise something,
+    // and still be authenticated by the header they already had.
+    deps.err(`"${name}" does not use OAuth — it authenticates with a header or bearer_token_env_var.`);
+    deps.err("Nothing to do. Remove that credential first if you meant to switch to OAuth.");
+    return 1;
+  }
+
+  // THE headless gate, resolved once, from the real terminal.
+  const interactive = resolveInteractive(deps.interactive, process.stdin, process.stdout);
+  if (!interactive) {
+    deps.err(`"${name}" needs OAuth, and this process has no terminal to ask in.`);
+    deps.err("Run `keryx mcp auth " + name + "` from an interactive shell.");
+    // Non-zero, no browser, no wait — the three things AC20 names, and
+    // three separate failures that one exit code cannot distinguish.
+    return 1;
+  }
+
+  deps.log(`Authorising "${name}" at ${displayUrl(server.raw.url)}…`);
+  deps.log("A browser window will open. keryx never sees your password — only the token the server issues.");
+  return await runOAuthFlow(server, deps);
+}
+
+/**
+ * The interactive half: listen, open a browser, wait, connect.
+ *
+ * The SDK drives the protocol. This supplies the loopback listener and
+ * the human, and — importantly — closes the listener on every exit,
+ * including the ones that throw. A callback port left open after a
+ * failed flow is a port that accepts a code nobody is waiting for.
+ */
+async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): Promise<number> {
+  // The configured callback port, when there is one. An authorisation
+  // server that pre-registered a redirect URI knows exactly one port,
+  // and an ephemeral one can never match it.
+  const configuredPort = server.oauth === false ? undefined : server.oauth?.callbackPort;
+  const listener = startCallbackListener(configuredPort === undefined ? {} : { port: configuredPort });
+  try {
+    const provider = createOAuthProvider({
+      serverName: server.name,
+      serverUrl: server.url as string,
+      ...(deps.configDir === undefined ? {} : { configDir: deps.configDir }),
+      interactive: true,
+      openBrowser: deps.openBrowser ?? ((url) => { openAuthorisationUrl(url, deps.log); }),
+      redirectUrl: listener.redirectUrl,
+      state: listener.state,
+      ...(server.oauth === false || server.oauth?.clientId === undefined
+        ? {}
+        : { clientId: server.oauth.clientId }),
+      ...(server.oauth === false || server.oauth?.scopes === undefined
+        ? {}
+        : { scopes: server.oauth.scopes }),
+    });
+
+    // The SDK's first connect attempt performs discovery and calls
+    // `redirectToAuthorization`, which opens the browser and throws
+    // `UnauthorizedError` — that is its documented shape, not a
+    // failure. The code then arrives on the listener.
+    //
+    // WAS THE BROWSER ACTUALLY OPENED? That is the question the old
+    // `.catch(() => undefined)` threw away, and without it every
+    // leg-one failure — a revoked refresh token, a 404 MCP path, a
+    // TLS error, DNS — fell through to a five-minute wait and then
+    // reported "the browser tab was never completed", blaming the
+    // operator for not finishing something that never started.
+    let opened = false;
+    const legOne = await connectHttpMcpServer(server.url as string, {
+      authProvider: {
+        ...provider,
+        redirectToAuthorization: async (url: URL): Promise<void> => {
+          opened = true;
+          await provider.redirectToAuthorization(url);
+        },
+      },
+      handshakeTimeoutMs: 30_000,
+    }).then(
+      (connection) => ({ ok: true as const, connection }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    if (legOne.ok) {
+      await legOne.connection.close();
+      // Only a STORED credential means "already authorised". A public
+      // server connects happily with none, and saying it is
+      // authorised would promise a token that does not exist.
+      const existing = readCredential(server.name, server.url as string, deps.configDir).record;
+      if (existing?.tokens === undefined) {
+        deps.log(`"${server.name}" connects without authentication; there is nothing to authorise.`);
+      } else {
+        deps.log(`"${server.name}" is already authorised; nothing to do.`);
+      }
+      return 0;
+    }
+
+    if (!opened) {
+      // No redirect happened, so no code can ever arrive. Report the
+      // real error now instead of waiting for a callback that cannot.
+      const message = legOne.error instanceof Error ? legOne.error.message : String(legOne.error);
+      deps.err(`Could not start authorisation for "${server.name}": ${sanitiseForDisplay(message)}`);
+      return 1;
+    }
+
+    const result = await listener.result;
+    if (!result.ok) {
+      deps.err(`Authorisation did not complete: ${result.reason}`);
+      return 1;
+    }
+
+    // Hand the code back to the SDK, which exchanges it using the
+    // PKCE verifier the provider stored.
+    const sdk = await loadAuthSdk();
+    await sdk.auth(provider as never, { serverUrl: server.url as string, authorizationCode: result.code });
+
+    const stored = readCredential(server.name, server.url as string, deps.configDir).record;
+    // An EMPTY access token is not a token. The SDK's schema accepts
+    // `access_token: ""`, so checking only for the record's presence
+    // let a flow that obtained nothing report success.
+    if (stored?.tokens === undefined || stored.tokens.access_token === "") {
+      // Belt and braces: a flow that "completed" with no token stored
+      // would fail later, somewhere else, with no connection to this.
+      deps.err("The exchange returned no token. Nothing was stored.");
+      return 1;
+    }
+    deps.log(`Authorised "${server.name}" — ${describeCredential(stored, Date.now())}.`);
+    deps.log(`Stored owner-only in ${credentialsFile(deps.configDir)}.`);
+    return 0;
+  } catch (error) {
+    deps.err(`Authorisation failed: ${error instanceof Error ? error.message : String(error)}`);
+    return 1;
+  } finally {
+    // ALWAYS. A callback port left open after a failed flow accepts a
+    // code nobody is waiting for.
+    listener.close();
+  }
+}
+
+/** Lazily loaded, like every other SDK import in this repository. */
+async function loadAuthSdk(): Promise<{ auth: (provider: never, options: unknown) => Promise<unknown> }> {
+  const mod = await import("@modelcontextprotocol/sdk/client/auth.js");
+  return mod as unknown as { auth: (provider: never, options: unknown) => Promise<unknown> };
+}
+
+/**
+ * Is there a human at BOTH ends of this process?
+ *
+ * Exported and taking its streams as arguments because the inline form
+ * was unreachable from any test: every test supplies `interactive`
+ * explicitly, so the fallback ran zero times and three separate
+ * mutations of it survived a full sweep. An inverted answer here is
+ * AC20 turned inside out — refusing on a real terminal, or opening a
+ * browser on a headless box.
+ *
+ * BOTH, not either. Output redirected to a file with input still a
+ * terminal is a script, and a script must not be sent to a browser.
+ */
+/**
+ * May this run ask a human — an explicit answer, or the streams.
+ *
+ * The `??` lives here rather than at the call site because at the call
+ * site it could not be tested. `deps.interactive === false` with a
+ * real terminal is the case that distinguishes `??` from `||`, and
+ * under `bun test` neither stream is a TTY, so the probe returns false
+ * and `false || false` is false — the test I wrote first passed under
+ * both spellings and proved nothing. With the streams as arguments the
+ * case is expressible, which is the whole point of the extraction.
+ *
+ * The distinction matters: under `||` an explicit `interactive: false`
+ * is falsy and falls through to the probe, so a caller that refuses on
+ * purpose gets permission instead.
+ */
+export function resolveInteractive(
+  explicit: boolean | undefined,
+  stdin: { readonly isTTY?: boolean | undefined },
+  stdout: { readonly isTTY?: boolean | undefined },
+): boolean {
+  return explicit ?? bothStreamsAreATerminal(stdin, stdout);
+}
+
+export function bothStreamsAreATerminal(
+  stdin: { readonly isTTY?: boolean | undefined },
+  stdout: { readonly isTTY?: boolean | undefined },
+): boolean {
+  return stdin.isTTY === true && stdout.isTTY === true;
+}
+
+/**
+ * Open the operator's browser, or say the URL out loud.
+ *
+ * This used to be its own platform table, which was a duplicate of
+ * `src/lib/oauth/open-url.ts` minus that module's guard: on Linux it
+ * spawned `xdg-open` unconditionally. Over SSH with a real pty —
+ * which passes the TTY check — that spawns a binary that usually is
+ * not there, the failure was swallowed, the URL was printed nowhere,
+ * and the operator watched five minutes of silence before being told
+ * their browser tab was never completed.
+ *
+ * `browserOpenPlan` returns `undefined` when there is no graphical
+ * session, and its contract is that the caller shows the URL instead.
+ * The old code had no way to honour that contract because it had no
+ * way to express "I could not open it".
+ */
+export function openAuthorisationUrl(
+  url: URL,
+  log: (line: string) => void,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const plan = browserOpenPlan(url.toString(), platform, env);
+  if (plan === undefined) {
+    // No graphical session. The URL is the whole product of this step,
+    // so print it rather than pretending.
+    log("No graphical session detected, so nothing was opened.");
+    log(`Open this URL yourself to continue:\n\n  ${url.toString()}\n`);
+    return;
+  }
+  openVerificationUrl(url.toString());
 }
 
 function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
@@ -573,9 +951,15 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
     const env = deps.env ?? process.env;
     report = await runDoctor(config, {
       only,
-      connect: deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills)),
+      connect:
+        deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills, deps.configDir)),
       heldForApproval: (server) => requiresApproval(server, approvals),
       env,
+      // Threaded, not defaulted. Without it `readCredential` falls back
+      // to the real config directory, and a test that forgets to pass
+      // one diagnoses the developer's own tokens — a hazard this
+      // package has already shipped once.
+      configDir: deps.configDir,
     });
   } finally {
     // Removed only once the dialling is done. Printing happens after this,

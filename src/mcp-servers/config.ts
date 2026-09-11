@@ -26,6 +26,14 @@ export type McpServerEntry = {
   startup_timeout_sec?: number;
   tool_timeout_sec?: number;
   tool_timeouts?: Record<string, number>;
+  /**
+   * OAuth for a remote server. `false` opts out entirely.
+   *
+   * Validated since P0 and untyped until P3b, which is why nothing
+   * could read it: the loader checked six rules about a field the
+   * type system said did not exist.
+   */
+  oauth?: false | { clientId?: string; scopes?: string[]; callbackPort?: number };
 };
 
 /**
@@ -331,14 +339,22 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
 /** `$defs/oauth` from the schema, enforced. */
 function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
   const problems: string[] = [];
-  // Every field `$defs/oauth` declares. Omitting `clientSecretEnvVar` made
-  // the runtime STRICTER than the specification, so a legal document was
-  // refused — the parity failure in the opposite direction from the usual.
-  const known = new Set(["clientId", "clientSecretEnvVar", "scopes", "callbackPort"]);
+  // Every field `$defs/oauth` declares, and only those.
+  //
+  // `clientSecretEnvVar` used to be here and in the schema, accepted by
+  // both and implemented by neither. Reporting it as "not implemented"
+  // while the schema still declared it made the runtime stricter than
+  // the specification — the exact parity failure a comment here once
+  // warned about, reintroduced from the other side. It is now absent
+  // from both, so a document using it is invalid in one consistent
+  // way, and an editor validating against the schema says so too.
+  //
+  // Whoever implements confidential-client auth adds it back to both.
+  const known = new Set(["clientId", "scopes", "callbackPort"]);
   for (const key of Object.keys(oauth)) {
     if (!known.has(key)) problems.push(`server "${name}" oauth has unknown field "${key}"`);
   }
-  for (const field of ["clientId", "clientSecretEnvVar"] as const) {
+  for (const field of ["clientId"] as const) {
     if (oauth[field] !== undefined && typeof oauth[field] !== "string") {
       problems.push(`server "${name}" oauth.${field} must be a string`);
     }

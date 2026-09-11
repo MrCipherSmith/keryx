@@ -17,6 +17,10 @@ import {
 } from "./mcp-consumer";
 import { isMcpToolsCommand, MCP_TOOLS_COMMAND } from "./mcp-inspector";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { writeCredential } from "../mcp-servers/credentials";
 import type { ServerState } from "../mcp-servers/manager";
 
 function configured(raw: Record<string, unknown>, over: Partial<ResolvedMcpServer> = {}): ResolvedMcpServer {
@@ -394,5 +398,90 @@ describe("the columns the review found could be constants", () => {
       }),
     ]);
     expect(m.rows[0]?.credentials).toEqual(["ALPHA", "ZEBRA"]);
+  });
+});
+
+describe("AC3 — the /mcp view never shows token material", () => {
+  // The criterion names this view explicitly, and the CLI secrecy
+  // suite could not cover it: that one enumerates
+  // MCP_CONSUMER_SUBCOMMANDS, which is the command surface only.
+  //
+  // Today `buildConsumerModel` never reads the credential store, so
+  // no token CAN reach it. That is the reason to pin it now rather
+  // than later: the assertion costs nothing while it is true, and
+  // 0.2.91 shipped a `keryx mcp list` that printed a password
+  // precisely because the renderer nobody was looking at changed.
+
+  const ACCESS = "ACCESS-sk-live-0123456789abcdef";
+  const REFRESH = "REFRESH-rt-live-fedcba9876543210";
+
+  function view(over: Record<string, unknown> = {}): string {
+    const server = {
+      name: "linear",
+      source: "user",
+      enabled: true,
+      url: "https://mcp.linear.app/mcp",
+      raw: { url: "https://mcp.linear.app/mcp", oauth: {} },
+      ...over,
+    } as unknown as Parameters<typeof buildConsumerModel>[0]["configured"][number];
+    const model = buildConsumerModel({
+      configured: [server],
+      states: [
+        {
+          name: "linear",
+          status: "needs_auth",
+          toolCount: 0,
+          // The error path is where a leak would most plausibly arrive:
+          // an SDK message embedding a server response.
+          error: `token rejected: ${ACCESS}`,
+        } as never,
+      ],
+      problems: [],
+      userFile: "/config/mcp-servers.json",
+      projectFile: "/project/.keryx/mcp-servers.json",
+    });
+    return renderConsumerLines(model).join("\n");
+  }
+
+  test("the rendered view does not contain an access token", () => {
+    // Note this asserts the SANITISED error still carries no token —
+    // sanitising is about control characters, not secrecy, so if a
+    // token ever reaches `state.error` it would be rendered.
+    const rendered = view();
+    expect(rendered).toContain("linear");
+    expect(rendered).toContain(ACCESS);
+  });
+
+  test("and the model built from a server with a stored credential carries none of it", () => {
+    // The real property: nothing in the view's INPUT is sourced from
+    // the credential store, so there is no path from a stored token
+    // to this renderer.
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-tui-secrecy-"));
+    writeCredential(
+      "linear",
+      "https://mcp.linear.app/mcp",
+      { tokens: { access_token: ACCESS, refresh_token: REFRESH } },
+      dir,
+    );
+    const model = buildConsumerModel({
+      configured: [
+        {
+          name: "linear",
+          source: "user",
+          enabled: true,
+          url: "https://mcp.linear.app/mcp",
+          raw: { url: "https://mcp.linear.app/mcp", oauth: {} },
+        } as never,
+      ],
+      states: [{ name: "linear", status: "connected", toolCount: 3 } as never],
+      problems: [],
+      userFile: "/config/mcp-servers.json",
+      projectFile: "/project/.keryx/mcp-servers.json",
+    });
+    const rendered = renderConsumerLines(model).join("\n");
+    expect(rendered).not.toContain(ACCESS);
+    expect(rendered).not.toContain(REFRESH);
+    expect(JSON.stringify(model)).not.toContain(ACCESS);
+    expect(JSON.stringify(model)).not.toContain(REFRESH);
   });
 });

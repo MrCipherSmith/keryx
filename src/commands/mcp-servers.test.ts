@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readCredential, writeCredential } from "../mcp-servers/credentials";
 import type { McpServerConnection, McpToolDescriptor } from "../mcp-client/client";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
@@ -500,5 +501,224 @@ describe("releasing a held server — the other half of the trust gate", () => {
     const listed = await run("list", []);
     expect(listed.out).toContain("from committed config");
     expect(listed.out).not.toContain("project server(s)");
+  });
+});
+
+describe("AC4/AC13 — keryx mcp auth", () => {
+  // Spec AC20: a non-TTY process must exit non-zero WITHOUT opening a
+  // browser and without hanging. Three distinct failures behind one
+  // sentence, and an exit-code-only test passes for all three.
+
+  function remote(over: Record<string, unknown> = {}): {
+    run: (s: McpConsumerSubcommand, a: string[]) => Promise<Run>;
+    opened: URL[];
+  } {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-auth-"));
+    const configDir = path.join(base, "config");
+    const projectRoot = path.join(base, "project");
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { linear: { url: "https://mcp.linear.app/mcp", ...over } } }),
+    );
+    const opened: URL[] = [];
+    const run = async (sub: McpConsumerSubcommand, args: string[]): Promise<Run> => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = await runMcpConsumerCommand(sub, args, {
+        cwd: projectRoot,
+        configDir,
+        projectRoot,
+        home: path.join(base, "home"),
+        interactive: false,
+        openBrowser: (url) => { opened.push(url); },
+        log: (line) => out.push(line),
+        err: (line) => err.push(line),
+      });
+      return { code, out: out.join("\n"), err: err.join("\n") };
+    };
+    return { run, opened };
+  }
+
+  test("headless exits non-zero", async () => {
+    const { run } = remote();
+    expect((await run("auth", ["linear"])).code).toBe(1);
+  });
+
+  test("headless opens NO browser", async () => {
+    // The assertion the exit code cannot make.
+    const { run, opened } = remote();
+    await run("auth", ["linear"]);
+    expect(opened).toEqual([]);
+  });
+
+  test("headless returns promptly rather than waiting for a click", async () => {
+    // A CI job that waits five minutes for a consent screen nobody
+    // will click turned a clear failure into a timeout.
+    const { run } = remote();
+    const started = Date.now();
+    await run("auth", ["linear"]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  test("and says which command would work", async () => {
+    const { run } = remote();
+    expect((await run("auth", ["linear"])).err).toContain("keryx mcp auth linear");
+  });
+
+  test("AC13 — a server with a bearer variable is told there is nothing to do", async () => {
+    // Starting a flow that cannot help is worse than saying so: the
+    // operator would authorise something and still be authenticated
+    // by the credential they already had.
+    const { run, opened } = remote({ bearer_token_env_var: "LINEAR_TOKEN" });
+    const result = await run("auth", ["linear"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("does not use OAuth");
+    expect(opened).toEqual([]);
+  });
+
+  test("AC13 — and so is one with an explicit Authorization header", async () => {
+    const { run } = remote({ headers: { Authorization: "Bearer ${T}" } });
+    expect((await run("auth", ["linear"])).err).toContain("does not use OAuth");
+  });
+
+  test("a stdio server is told OAuth does not apply", async () => {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-auth-stdio-"));
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { local: { command: "npx" } } }),
+    );
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("auth", ["local"], {
+      cwd: base, configDir, projectRoot: base, home: path.join(base, "home"),
+      interactive: false, log: () => {}, err: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toContain("local (stdio) server");
+  });
+
+  test("an unknown name lists what is configured", async () => {
+    const { run } = remote();
+    const result = await run("auth", ["nosuch"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("linear");
+  });
+
+  test("with no name at all, usage", async () => {
+    const { run } = remote();
+    expect((await run("auth", [])).err).toContain("usage: keryx mcp auth");
+  });
+});
+
+describe("keryx mcp logout — the missing half of auth", () => {
+  // A revoked refresh token is not recoverable by re-running `auth`:
+  // the SDK re-throws `invalid_grant` before any browser opens. Until
+  // this existed, the only escape was hand-editing a 0600 file.
+
+  function fixture(servers: Record<string, unknown>): { configDir: string; projectRoot: string } {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-logout-"));
+    const configDir = path.join(base, "config");
+    const projectRoot = path.join(base, "project");
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers }),
+    );
+    return { configDir, projectRoot };
+  }
+
+  async function logout(
+    configDir: string,
+    projectRoot: string,
+    name: string,
+  ): Promise<{ code: number; out: string; err: string }> {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("logout", [name], {
+      cwd: projectRoot,
+      configDir,
+      projectRoot,
+      home: path.join(projectRoot, "home"),
+      interactive: false,
+      log: (line) => out.push(line),
+      err: (line) => err.push(line),
+    });
+    return { code, out: out.join("\n"), err: err.join("\n") };
+  }
+
+  const URL_ = "https://mcp.linear.app/mcp";
+
+  test("it removes the stored credential", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    const result = await logout(configDir, projectRoot, "linear");
+    expect(result.code).toBe(0);
+    expect(readCredential("linear", URL_, configDir).record).toBeUndefined();
+  });
+
+  test("and leaves every OTHER server's credential alone", async () => {
+    // The whole file is rewritten to remove one key, which is exactly
+    // where a careless implementation takes the others with it.
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ }, other: { url: "https://o/mcp" } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    writeCredential("other", "https://o/mcp", { tokens: { access_token: "keep" } }, configDir);
+    await logout(configDir, projectRoot, "linear");
+    expect(readCredential("other", "https://o/mcp", configDir).record?.tokens?.access_token).toBe("keep");
+  });
+
+  test("it works for a server that has been REMOVED from the config", async () => {
+    // The case the keyed lookup cannot serve, and the one where a
+    // stale token actually hides: `keryx mcp remove` took the server
+    // away and left the credential behind, keyed to a name nothing
+    // looks up any more.
+    const { configDir, projectRoot } = fixture({});
+    writeCredential("ghost", "https://g/mcp", { tokens: { access_token: "orphan" } }, configDir);
+    const result = await logout(configDir, projectRoot, "ghost");
+    expect(result.code).toBe(0);
+    expect(readCredential("ghost", "https://g/mcp", configDir).record).toBeUndefined();
+  });
+
+  test("and that fallback does not take a similarly-named server with it", async () => {
+    // `{name}:{url}` is split on the FIRST colon, so "ghost" must not
+    // match "ghost-two".
+    const { configDir, projectRoot } = fixture({});
+    writeCredential("ghost", "https://g/mcp", { tokens: { access_token: "a" } }, configDir);
+    writeCredential("ghost-two", "https://g/mcp", { tokens: { access_token: "b" } }, configDir);
+    await logout(configDir, projectRoot, "ghost");
+    expect(readCredential("ghost-two", "https://g/mcp", configDir).record?.tokens?.access_token).toBe("b");
+  });
+
+  test("a server with no credential says so and does not fail", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    const result = await logout(configDir, projectRoot, "linear");
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("nothing to forget");
+  });
+
+  test("an unknown name with no credential is an error, not a silent success", async () => {
+    const { configDir, projectRoot } = fixture({});
+    expect((await logout(configDir, projectRoot, "nosuch")).code).toBe(1);
+  });
+
+  test("it tells the operator how to authorise again", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    expect((await logout(configDir, projectRoot, "linear")).out).toContain("keryx mcp auth linear");
+  });
+
+  test("usage when no name is given", async () => {
+    const { configDir, projectRoot } = fixture({});
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("logout", [], {
+      cwd: projectRoot, configDir, projectRoot, home: projectRoot,
+      interactive: false, log: (l) => out.push(l), err: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toContain("usage: keryx mcp logout");
   });
 });

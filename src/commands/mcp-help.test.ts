@@ -17,6 +17,7 @@
 
 import { afterEach, describe, expect, test } from "bun:test";
 import { printMcpHelp } from "./mcp";
+import { MCP_CONSUMER_SUBCOMMANDS } from "./mcp-servers";
 
 const realLog = console.log;
 afterEach(() => {
@@ -59,5 +60,29 @@ describe("keryx mcp --help leads with the consumer surface", () => {
     // The distinction is the whole reason there are two commands.
     expect(help).toContain("/mcp");
     expect(help).toContain("/integrations");
+  });
+});
+
+describe("every consumer subcommand is discoverable", () => {
+  test("`keryx mcp --help` names all of them", () => {
+    // `auth` and `logout` both shipped without reaching this text, so
+    // two working commands existed that no operator could find. A
+    // list maintained by memory drifts; an enumeration does not.
+    //
+    // The secrecy suite has this guard and it caught `logout` on the
+    // day it was added. The help had no equivalent.
+    // Matched as a WORD inside the `keryx mcp …` usage lines, not as
+    // the literal `keryx mcp <sub>`: several are documented in
+    // combined form (`remove|enable|disable`, `trust|untrust`), and a
+    // guard that demanded one spelling would force the help to be
+    // more repetitive than it should be. The property is that the
+    // name is findable, not that it is written a particular way.
+    const usageLines = captureHelp()
+      .split("\n")
+      .filter((line) => line.includes("keryx mcp "));
+    const missing = [...MCP_CONSUMER_SUBCOMMANDS].filter(
+      (sub) => !usageLines.some((line) => new RegExp(`\\b${sub}\\b`).test(line)),
+    );
+    expect(missing).toEqual([]);
   });
 });
