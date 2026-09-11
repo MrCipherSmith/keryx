@@ -36,8 +36,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
-import { isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
-import { resolveFqn } from "../mcp-servers/catalog";
+import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -1112,15 +1111,11 @@ async function runAgentRepl(
         // full suite green. Extracting only the line building was not
         // enough, because the part that decides whether a third party
         // acts was the part still out of reach.
-        const approvalCatalog = deps.mcpRuntime?.()?.catalog();
         return await promptUseToolApproval(
           { out, readLine: async () => await readLine() },
           input,
           meta,
-          (fqn) => {
-            const entry = approvalCatalog === undefined ? undefined : resolveFqn(approvalCatalog, fqn);
-            return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
-          },
+          catalogResolver(deps.mcpRuntime?.()?.catalog()),
           style,
           GUTTER,
         );

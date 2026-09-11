@@ -77,9 +77,9 @@ import {
   renderConsumerLines,
 } from "./mcp-consumer";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
-import { resolveFqn } from "../mcp-servers/catalog";
 import {
   APPROVAL_ALLOW_ID,
+  catalogResolver,
   describeUseToolApproval,
   isDockApproval,
   isMcpToolCall,
@@ -2895,11 +2895,10 @@ export async function launchTuiAgentShell(opts: {
         // uses, so the two surfaces cannot drift.
         // Resolved against the catalog that will execute the call, so
         // the prompt's attribution and the dispatch cannot disagree.
-        const mcpCatalog = deps.mcpRuntime?.()?.catalog();
-        const described = describeUseToolApproval(inputJson, (fqn) => {
-          const entry = mcpCatalog === undefined ? undefined : resolveFqn(mcpCatalog, fqn);
-          return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
-        });
+        const described = describeUseToolApproval(
+          inputJson,
+          catalogResolver(deps.mcpRuntime?.()?.catalog()),
+        );
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,

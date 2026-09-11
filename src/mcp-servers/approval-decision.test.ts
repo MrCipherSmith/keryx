@@ -21,6 +21,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   APPROVAL_ALLOW_ID,
+  catalogResolver,
   isApprovalYes,
   isDockApproval,
   promptUseToolApproval,
@@ -139,5 +140,57 @@ describe("isApprovalYes on its own", () => {
     for (const no of ["yep", "yest", "ya", "y!", "n", ""]) {
       expect({ no, ok: isApprovalYes(no) }).toEqual({ no, ok: false });
     }
+  });
+});
+
+describe("catalogResolver — the wiring both surfaces share", () => {
+  // The sweep found all four decisions in the inline copies unkillable.
+  // Inverting `catalog === undefined ? undefined : resolveFqn(...)` in
+  // either file makes the resolver always return undefined, so the
+  // prompt silently falls back to GUESSING the server by string split —
+  // F7's misattribution, back with no test failing. The reviewer named
+  // this risk in the same breath as the fix.
+  const catalog = {
+    entries: [
+      { fqn: "github__notes__exfil", server: "github__notes", rawName: "exfil" },
+      { fqn: "linear__search", server: "linear", rawName: "search" },
+    ],
+  };
+
+  test("resolves a known FQN to its real server and wire name", () => {
+    expect(catalogResolver(catalog)("github__notes__exfil")).toEqual({
+      server: "github__notes",
+      tool: "exfil",
+    });
+  });
+
+  test("and does NOT guess for a name the catalog does not have", () => {
+    // Returning a guess here would be worse than returning nothing: the
+    // caller's fallback is at least labelled as a guess.
+    expect(catalogResolver(catalog)("unknown__thing")).toBeUndefined();
+  });
+
+  test("BOUNDARY — an absent catalog resolves nothing rather than throwing", () => {
+    // `--chat` sessions never build a runtime, so this is the normal
+    // case, not an error case.
+    expect(catalogResolver(undefined)("linear__search")).toBeUndefined();
+  });
+
+  test("BOUNDARY — an empty catalog is not an absent one, and also resolves nothing", () => {
+    expect(catalogResolver({ entries: [] })("linear__search")).toBeUndefined();
+  });
+
+  test("end to end: a resolved call names the server the catalog says", async () => {
+    // The wiring, not just the function: this is the shape both call
+    // sites now use.
+    const io = fakeIo("n");
+    await promptUseToolApproval(
+      io,
+      JSON.stringify({ tool_name: "github__notes__exfil", tool_input: {} }),
+      undefined,
+      catalogResolver(catalog),
+    );
+    expect(io.written()).toContain("github__notes");
+    expect(io.written()).toContain("exfil");
   });
 });

@@ -381,3 +381,27 @@ export const APPROVAL_ALLOW_ID = "allow";
 export function isDockApproval(id: string | undefined): boolean {
   return id === APPROVAL_ALLOW_ID;
 }
+
+/**
+ * The resolver both surfaces pass to {@link describeUseToolApproval}.
+ *
+ * Extracted because both surfaces built the same closure inline and the
+ * sweep showed all four of its decisions were unkillable: inverting
+ * `catalog === undefined ? undefined : resolveFqn(...)` in either file
+ * makes the resolver always return undefined, so the prompt silently
+ * falls back to GUESSING the server by string split — which is the
+ * misattribution F7 was about, reintroduced without a test failing.
+ *
+ * The P2 reviewer named this risk in the same breath as the fix: "a call
+ * site that forgot to pass the resolver would silently fall back to
+ * guessing." Two inline copies is that risk with extra steps.
+ */
+export function catalogResolver(
+  catalog: { entries: readonly { fqn: string; server: string; rawName: string }[] } | undefined,
+): (fqn: string) => { server: string; tool: string } | undefined {
+  return (fqn) => {
+    if (catalog === undefined) return undefined;
+    const entry = catalog.entries.find((candidate) => candidate.fqn === fqn);
+    return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
+  };
+}
