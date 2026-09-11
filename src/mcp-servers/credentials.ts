@@ -204,3 +204,38 @@ export function describeCredential(record: CredentialRecord | undefined, now: nu
   const minutes = Math.max(0, Math.round((record.tokens.expires_at - now) / 60_000));
   return `stored credential, valid for about ${minutes} more minute(s)`;
 }
+
+/**
+ * Does this server authenticate with OAuth?
+ *
+ * Only when it has said nothing else. A header or a
+ * `bearer_token_env_var` is an explicit instruction about how to
+ * authenticate, and starting an OAuth flow anyway would be keryx
+ * overriding the operator. `oauth: false` opts a public server out.
+ */
+export function usesOAuth(server: {
+  readonly url?: string | undefined;
+  /** `false` is the opt-out the specification spells, not `{enabled:false}`. */
+  readonly oauth?: false | { clientId?: string; scopes?: string[]; callbackPort?: number } | undefined;
+  readonly bearer_token_env_var?: string | undefined;
+  /** The RAW headers, as declared. See below for why not the resolved ones. */
+  readonly headers?: Readonly<Record<string, string>> | undefined;
+}): boolean {
+  // Remote only: there is nothing to authorise against for a stdio child.
+  if (typeof server.url !== "string" || server.url === "") return false;
+  // `oauth: false` — the operator says this server is public.
+  if (server.oauth === false) return false;
+  // An explicit credential is an explicit instruction. Starting an
+  // OAuth flow anyway would be keryx overriding what it was told.
+  if (server.bearer_token_env_var !== undefined && server.bearer_token_env_var !== "") return false;
+  // The DECLARED headers, not the resolved ones.
+  //
+  // Resolution fails precisely when a credential variable is unset —
+  // which is exactly the moment this question gets asked. Reading the
+  // resolved headers meant `Authorization: "Bearer ${T}"` with `T`
+  // unset looked like a server that had declared no credential at all,
+  // so keryx offered to start an OAuth flow instead of saying "set
+  // T". Declaring the header IS the instruction, whether or not the
+  // variable currently holds anything.
+  return !Object.keys(server.headers ?? {}).some((name) => name.toLowerCase() === "authorization");
+}

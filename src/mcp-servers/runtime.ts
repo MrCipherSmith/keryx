@@ -23,6 +23,8 @@ import { closeServers, startServers, type ConnectFn, type ServerState } from "./
 import { loadTrustStore, requiresApproval } from "./trust";
 import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
 import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
+import { usesOAuth } from "./credentials";
+import { createOAuthProvider } from "./oauth-provider";
 import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
 
@@ -177,7 +179,7 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   // developer's shell had no `TOKEN` either — and the same test would go
   // green on a machine where it did, having proved nothing about the code.
   const env = options.env ?? process.env;
-  const connect = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills));
+  const connect = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills, options.configDir));
   const settled = startServers(launchable, connect)
     .then((result) => {
       catalog = result.catalog;
@@ -291,6 +293,7 @@ async function connectRemote(
   server: ResolvedMcpServer,
   env: Record<string, string | undefined>,
   signal?: AbortSignal,
+  runtimeConfigDir?: string,
 ): ReturnType<ConnectFn> {
   // The TARGET first, then the credential. Both refusals happen before a
   // socket, and both are shared with `doctor` rather than reimplemented:
@@ -305,8 +308,34 @@ async function connectRemote(
   if (!resolved.ok) {
     throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
   }
+
+  // OAuth, only for a server that has no other credential.
+  //
+  // A server with a header or a `bearer_token_env_var` has already
+  // said how it authenticates, and starting an OAuth flow for it would
+  // be keryx overriding an explicit instruction. `oauth: false` opts
+  // out entirely, for a server that is simply public.
+  // The RAW entry: a declared credential is an instruction even when
+  // its variable is unset, and `resolved` is empty in exactly that case.
+  const oauth = usesOAuth(server.raw);
+  const authProvider = oauth
+    ? createOAuthProvider({
+        serverName: server.name,
+        serverUrl: server.url as string,
+        ...(runtimeConfigDir === undefined ? {} : { configDir: runtimeConfigDir }),
+        // NEVER interactive from the runtime. A session opening must
+        // not launch a browser: the operator did not ask for one, and
+        // on a headless box it would block the shell from starting.
+        // `keryx mcp auth` is the interactive entry point.
+        interactive: false,
+        ...(server.oauth === false || server.oauth?.clientId === undefined
+          ? {}
+          : { clientId: server.oauth.clientId }),
+      })
+    : undefined;
   return connectHttpMcpServer(server.url as string, {
     headers: resolved.headers,
+    ...(authProvider === undefined ? {} : { authProvider }),
     handshakeTimeoutMs: handshakeBudgetMs(server),
     ...(signal === undefined ? {} : { signal }),
   });
@@ -336,8 +365,9 @@ export async function defaultConnect(
   env: Record<string, string | undefined>,
   signal?: AbortSignal,
   kills?: Array<Promise<void>>,
+  configDir?: string,
 ): ReturnType<ConnectFn> {
-  if (transportOf(server) === "http") return connectRemote(server, env, signal);
+  if (transportOf(server) === "http") return connectRemote(server, env, signal, configDir);
 
   const command = server.command;
   if (command === undefined || command === "") {

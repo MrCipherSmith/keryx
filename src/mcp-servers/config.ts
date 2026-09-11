@@ -26,6 +26,14 @@ export type McpServerEntry = {
   startup_timeout_sec?: number;
   tool_timeout_sec?: number;
   tool_timeouts?: Record<string, number>;
+  /**
+   * OAuth for a remote server. `false` opts out entirely.
+   *
+   * Validated since P0 and untyped until P3b, which is why nothing
+   * could read it: the loader checked six rules about a field the
+   * type system said did not exist.
+   */
+  oauth?: false | { clientId?: string; scopes?: string[]; callbackPort?: number };
 };
 
 /**

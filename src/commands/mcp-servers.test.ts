@@ -502,3 +502,112 @@ describe("releasing a held server — the other half of the trust gate", () => {
     expect(listed.out).not.toContain("project server(s)");
   });
 });
+
+describe("AC4/AC13 — keryx mcp auth", () => {
+  // Spec AC20: a non-TTY process must exit non-zero WITHOUT opening a
+  // browser and without hanging. Three distinct failures behind one
+  // sentence, and an exit-code-only test passes for all three.
+
+  function remote(over: Record<string, unknown> = {}): {
+    run: (s: McpConsumerSubcommand, a: string[]) => Promise<Run>;
+    opened: URL[];
+  } {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-auth-"));
+    const configDir = path.join(base, "config");
+    const projectRoot = path.join(base, "project");
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { linear: { url: "https://mcp.linear.app/mcp", ...over } } }),
+    );
+    const opened: URL[] = [];
+    const run = async (sub: McpConsumerSubcommand, args: string[]): Promise<Run> => {
+      const out: string[] = [];
+      const err: string[] = [];
+      const code = await runMcpConsumerCommand(sub, args, {
+        cwd: projectRoot,
+        configDir,
+        projectRoot,
+        home: path.join(base, "home"),
+        interactive: false,
+        openBrowser: (url) => { opened.push(url); },
+        log: (line) => out.push(line),
+        err: (line) => err.push(line),
+      });
+      return { code, out: out.join("\n"), err: err.join("\n") };
+    };
+    return { run, opened };
+  }
+
+  test("headless exits non-zero", async () => {
+    const { run } = remote();
+    expect((await run("auth", ["linear"])).code).toBe(1);
+  });
+
+  test("headless opens NO browser", async () => {
+    // The assertion the exit code cannot make.
+    const { run, opened } = remote();
+    await run("auth", ["linear"]);
+    expect(opened).toEqual([]);
+  });
+
+  test("headless returns promptly rather than waiting for a click", async () => {
+    // A CI job that waits five minutes for a consent screen nobody
+    // will click turned a clear failure into a timeout.
+    const { run } = remote();
+    const started = Date.now();
+    await run("auth", ["linear"]);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+
+  test("and says which command would work", async () => {
+    const { run } = remote();
+    expect((await run("auth", ["linear"])).err).toContain("keryx mcp auth linear");
+  });
+
+  test("AC13 — a server with a bearer variable is told there is nothing to do", async () => {
+    // Starting a flow that cannot help is worse than saying so: the
+    // operator would authorise something and still be authenticated
+    // by the credential they already had.
+    const { run, opened } = remote({ bearer_token_env_var: "LINEAR_TOKEN" });
+    const result = await run("auth", ["linear"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("does not use OAuth");
+    expect(opened).toEqual([]);
+  });
+
+  test("AC13 — and so is one with an explicit Authorization header", async () => {
+    const { run } = remote({ headers: { Authorization: "Bearer ${T}" } });
+    expect((await run("auth", ["linear"])).err).toContain("does not use OAuth");
+  });
+
+  test("a stdio server is told OAuth does not apply", async () => {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-auth-stdio-"));
+    const configDir = path.join(base, "config");
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { local: { command: "npx" } } }),
+    );
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("auth", ["local"], {
+      cwd: base, configDir, projectRoot: base, home: path.join(base, "home"),
+      interactive: false, log: () => {}, err: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toContain("local (stdio) server");
+  });
+
+  test("an unknown name lists what is configured", async () => {
+    const { run } = remote();
+    const result = await run("auth", ["nosuch"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("linear");
+  });
+
+  test("with no name at all, usage", async () => {
+    const { run } = remote();
+    expect((await run("auth", [])).err).toContain("usage: keryx mcp auth");
+  });
+});
