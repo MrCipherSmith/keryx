@@ -7,17 +7,50 @@
   "id": "250",
   "slug": "keryx-shell-loses-the-arena-on-tools-and",
   "title": "keryx shell loses the arena on tools and errors: self-spawned keryx, provider identity and error bodies, search noise, project-blind roster, head-only read_file",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-11T07:29:26.898Z",
-  "updatedAt": "2026-09-11T09:51:44.813Z",
+  "updatedAt": "2026-09-11T10:38:20.057Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ae2df11111c0fbaa3d39fba365f226ec22e3cc0f01254b6a0c5e1ba521816e95",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T09:56:58.723Z",
+      "note": "make-provider-label.test.ts: makeProvider('grok') 403 message starts 'xAI (Grok) API returned HTTP 403', no 'Ollama', providerId still 'ollama'. Live probe printed 'xAI (Grok) API returned HTTP 403: The OAuth2 access token could not be validated.'"
+    },
+    "AC2": {
+      "at": "2026-09-11T09:56:58.824Z",
+      "note": "openai-compat-provider.test.ts K-005 tests: reason from error.message / error string / message / detail beside the status; reasonless and empty bodies give the bare status line; redaction + flatten + 300-char cap tested; C-01 non-JSON test still passes."
+    },
+    "AC3": {
+      "at": "2026-09-11T09:56:58.930Z",
+      "note": "openai-compat-provider.test.ts: 401 and 403 -> authentication (not retryable); 429 -> rate_limit, retryable, retryAfterMs 7000 from Retry-After: 7; 404 -> invalid_request; 502 -> unavailable."
+    },
+    "AC4": {
+      "at": "2026-09-11T09:56:59.042Z",
+      "note": "search-code-output.test.ts against the real adapter and real ripgrep: relative paths with no absolute root on any line; an enormous SVG line capped (longest line < 600); a clip states 'showing N of 2000 lines' cut at a line boundary."
+    },
+    "AC5": {
+      "at": "2026-09-11T09:56:59.145Z",
+      "note": "interactive-agent-tools.test.ts: without .metaproject exactly the 18 pinned METAPROJECT_BOUND tools are withheld and search_code stays; with .metaproject the roster equals the list pinned before; --deny-tools graph_find accepted in a bare repo, a typo still refused."
+    },
+    "AC6": {
+      "at": "2026-09-11T09:56:59.243Z",
+      "note": "read-file-bounded.test.ts: start_line reaches a line past 20,000 bytes; paging via the notice's start_line reads all 2000 lines once; notice names lines shown; past-end errors state the real length (F-002); small file without start_line returned verbatim as before."
+    },
+    "AC7": {
+      "at": "2026-09-11T09:56:59.343Z",
+      "note": "keryx-self-command.test.ts: argv is [execPath, entry] for keryx's own module-derived entry, the binary itself when compiled, PATH keryx otherwise; a host app named src/cli.ts is not trusted (F-004); unchanged with PATH=/nonexistent; runner spawns the given command."
+    },
+    "AC8": {
+      "at": "2026-09-11T10:38:20.057Z",
+      "note": "CI on PR #529 head 0373787: 18/18 checks pass, including typecheck-and-tests (bun run check: lint, typecheck, typecheck:scripts, full bun test) and client matrix (terminal). Locally: lint and both typechecks clean; the ten files that timed out under local load pass alone 239/239. Two earlier CI rounds failed on this branch's own defects (shell.ts source audits, one facade bypass over the ratchet) and were fixed, not loosened."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/529"
   },
   "tasks": [
     {
@@ -75,7 +108,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -83,7 +116,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -179,7 +213,7 @@
       "id": "T11",
       "title": "Verification: typecheck, related tests, full suite vs base 9fba208",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -187,7 +221,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -318,6 +353,62 @@
       "at": "2026-09-11T09:51:44.813Z",
       "event": "task-done",
       "detail": "T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry"
+    },
+    {
+      "at": "2026-09-11T09:56:58.629Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T09:56:58.723Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: make-provider-label.test.ts: makeProvider('grok') 403 message starts 'xAI (Grok) API returned HTTP 403', no 'Ollama', providerId still 'ollama'. Live probe printed 'xAI (Grok) API returned HTTP 403: The OAuth2 access token could not be validated.'"
+    },
+    {
+      "at": "2026-09-11T09:56:58.824Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: openai-compat-provider.test.ts K-005 tests: reason from error.message / error string / message / detail beside the status; reasonless and empty bodies give the bare status line; redaction + flatten + 300-char cap tested; C-01 non-JSON test still passes."
+    },
+    {
+      "at": "2026-09-11T09:56:58.930Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: openai-compat-provider.test.ts: 401 and 403 -> authentication (not retryable); 429 -> rate_limit, retryable, retryAfterMs 7000 from Retry-After: 7; 404 -> invalid_request; 502 -> unavailable."
+    },
+    {
+      "at": "2026-09-11T09:56:59.042Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: search-code-output.test.ts against the real adapter and real ripgrep: relative paths with no absolute root on any line; an enormous SVG line capped (longest line < 600); a clip states 'showing N of 2000 lines' cut at a line boundary."
+    },
+    {
+      "at": "2026-09-11T09:56:59.145Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: interactive-agent-tools.test.ts: without .metaproject exactly the 18 pinned METAPROJECT_BOUND tools are withheld and search_code stays; with .metaproject the roster equals the list pinned before; --deny-tools graph_find accepted in a bare repo, a typo still refused."
+    },
+    {
+      "at": "2026-09-11T09:56:59.244Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: read-file-bounded.test.ts: start_line reaches a line past 20,000 bytes; paging via the notice's start_line reads all 2000 lines once; notice names lines shown; past-end errors state the real length (F-002); small file without start_line returned verbatim as before."
+    },
+    {
+      "at": "2026-09-11T09:56:59.344Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: keryx-self-command.test.ts: argv is [execPath, entry] for keryx's own module-derived entry, the binary itself when compiled, PATH keryx otherwise; a host app named src/cli.ts is not trusted (F-004); unchanged with PATH=/nonexistent; runner spawns the given command."
+    },
+    {
+      "at": "2026-09-11T10:38:19.670Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/529 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-11T10:38:19.881Z",
+      "event": "task-done",
+      "detail": "T11: Verification: typecheck, related tests, full suite vs base 9fba208"
+    },
+    {
+      "at": "2026-09-11T10:38:20.057Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: CI on PR #529 head 0373787: 18/18 checks pass, including typecheck-and-tests (bun run check: lint, typecheck, typecheck:scripts, full bun test) and client matrix (terminal). Locally: lint and both typechecks clean; the ten files that timed out under local load pass alone 239/239. Two earlier CI rounds failed on this branch's own defects (shell.ts source audits, one facade bypass over the ratchet) and were fixed, not loosened."
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
