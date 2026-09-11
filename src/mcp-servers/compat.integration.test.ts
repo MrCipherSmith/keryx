@@ -112,9 +112,13 @@ describe("AC4 — native beats compat, and compat has a fixed internal order", (
     place(w.home, ".cursor/mcp.json", JSON.stringify({ mcpServers: { shared: { command: "cursor-home" } } }));
     place(w.cwd, ".cursor/mcp.json", JSON.stringify({ mcpServers: { shared: { command: "cursor-proj" } } }));
 
+    // Spec §2: Claude outranks Cursor, Cursor outranks `.mcp.json`,
+    // `.mcp.json` outranks Grok. So the operator's own ~/.claude.json
+    // wins over everything, including a `.cursor/mcp.json` a cloned
+    // repository committed — which is the point of that ranking.
     const shared = load(w).servers.find((s) => s.name === "shared");
-    expect(shared?.source).toBe("cursor");
-    expect(shared?.command).toBe("cursor-proj");
+    expect(shared?.source).toBe("claude");
+    expect(shared?.command).toBe("claude");
   });
 
   test("BOUNDARY — project-local beats user-global WITHIN a source", () => {

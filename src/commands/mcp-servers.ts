@@ -189,7 +189,7 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
     // is the state they will otherwise debug as "it does not connect".
     deps.log("");
     deps.log(
-      `${held} project server(s) are not started until approved — a committed config is code someone else wrote.`,
+      `${held} server(s) from committed config are not started until approved — a committed config is code someone else wrote.`,
     );
     deps.log("Read what it launches above, then: keryx mcp trust <name>");
   }
@@ -479,11 +479,21 @@ function trustCommand(args: readonly string[], deps: McpConsumerDeps, approve: b
     return 1;
   }
 
-  if (server.source !== "project") {
-    // Nothing to approve: the operator wrote this file themselves, on this
-    // machine. Asking them to confirm their own `keryx mcp add` would train
-    // them to say yes without reading.
-    deps.err(`"${name}" is a user-scope server; only project-scope servers need approval.`);
+  if (!server.projectLocal) {
+    // `projectLocal`, not `source === "project"`, and this is the second
+    // half of the same fix. The trust GATE was corrected to hold every
+    // committable source; this command — the only way to release one —
+    // still asked about the tag. So a server read from a cloned repo's
+    // `.mcp.json` was held, told to run `keryx mcp trust <name>`, and
+    // that command refused it as "a user-scope server". Held, with no
+    // path to approval, and the refusal misdescribed a file the operator
+    // never wrote.
+    //
+    // Fixed at the site it was found and broken one step to the side —
+    // in a fix for exactly that pattern, two commits after writing the
+    // pattern down.
+    deps.err(`"${name}" did not come from a file this project can commit; only those need approval.`);
+    deps.err(`  it came from ${server.file} (${server.source})`);
     return 1;
   }
 
