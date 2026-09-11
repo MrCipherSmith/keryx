@@ -20,3 +20,12 @@
 - 2026-09-11T00:44:26.724Z - task-done: T2: Implement per plan
 - 2026-09-11T00:44:26.838Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-11T00:44:26.958Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T06:30:47.022Z - completing
+- 2026-09-11T06:30:52.648Z - completion-failed: acceptance-criteria: unconfirmed: AC13
+- 2026-09-11T06:31:49.547Z - ac-confirmed: AC13: Smoke-tested on the INSTALLED 0.2.93 binary BEFORE merging, not after — which satisfies the criterion's intent better, since a defect found here never reaches main. scripts smoke: keryx mcp list and list --json elide a password and an ?api_key=; doctor refuses a credential-in-url and names it; doctor names an unset bearer variable as needs_auth without dialling; the binary boots. By hand: a literal pasted bearer (sk-live-pasted-secret) appears nowhere in list output, and keryx mcp --help now leads with the consumer subcommands. The operator's own config was backed up and restored; the file keryx created for the test was removed. NOT reachable by smoke test and stated as such: /mcp and the approval prompt are in-session TUI surfaces with no CLI to drive them — they are covered by tests against pure functions, which is why those functions were made pure.
+- 2026-09-11T06:32:06.882Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/527 (warning: PR is not a draft)
+- 2026-09-11T06:32:06.996Z - completing
+- 2026-09-11T06:32:12.324Z - completion-failed: pull-request: PR checks not green | review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against 737e980e040b88f9689c99f70f5f7d2b78172de2, but the PR head is 8d739b0493c6e116a7d18dbd06df07ca11f4fbe2. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#527 was last collected against 737e980e040b88f9689c99f70f5f7d2b78172de2 (round 1), but the PR head is 8d739b0493c6e116a7d18dbd06df07ca11f4fbe2. Everything anyone said after 737e980e040b88f9689c99f70f5f7d2b78172de2 is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 527 --sha <pr-head>`.
+- 2026-09-11T06:35:40.046Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/527 (warning: PR is not a draft)
+- 2026-09-11T06:35:40.162Z - completing
+- 2026-09-11T06:35:45.609Z - done: all gates passed

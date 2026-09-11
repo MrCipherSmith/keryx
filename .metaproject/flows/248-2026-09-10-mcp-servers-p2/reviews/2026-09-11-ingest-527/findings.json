@@ -1,0 +1,194 @@
+[
+  {
+    "id": "F-056",
+    "reviewer": "review-testing-practices",
+    "severity": "blocker",
+    "problem": "The AC7 test proving `use_tool` never reaches `evaluateShellApproval` compared the CHARACTER OFFSETS of two string literals in the source text of two files. No production code ran, so the approval DECISION had no coverage at all.",
+    "impact": "The security fix this phase exists for was unverified. Measured by the reviewer: inverting `if (!approved)` — so typing `y` DENIES and anything else APPROVES and runs a third party's tool — left the full 9158-test suite green. So did inverting `return id === \"allow\"` in the TUI, so did replacing the description with a constant, and so did commenting the branch out entirely, restoring F-032.",
+    "suggested_fix": "Extract the whole prompt — print, read, verdict — behind injected IO (`promptUseToolApproval`), and the TUI's verdict into `isDockApproval`. Test with real answers.",
+    "evidence": "Reviewer ran each mutation against the full suite and reported 9139 pass / 0 fail. Reproduced by the author before fixing.",
+    "confidence": "high",
+    "file": "src/mcp-servers/approval-wiring.test.ts",
+    "line": 42,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts use_tool branch",
+        "src/tui/tui-shell.ts use_tool branch",
+        "src/mcp-servers/approval-wiring.test.ts ordering assertions"
+      ],
+      "enumeration_method": "Enumerated every decision in both new approval branches and asked which had a test that executes it. None did. The same question applied to the other three branches (apply_patch, elicitation, shell_exec) returns the same answer — recorded as a separate flow by operator decision."
+    },
+    "global_id": "2026-09-11-ingest-527#F-056",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit e58d47ae — promptUseToolApproval and isDockApproval extracted; approval-decision.test.ts added"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit e58d47ae, the tree that will merge. Re-ran the two mutations the reviewer used: `if (!approved)` inverted produces 18 failures in approval-decision.test.ts where 0 failed before; `isDockApproval` inverted produces 6. Restored: 30 pass. The finding does not reproduce at e58d47ae.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-057",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "A single budget over the whole pretty-printed `tool_input` let one argument consume the space of the others, so a long leading value pushed the destructive arguments off screen.",
+    "impact": "Executes. `tool_input`'s schema is the UNTRUSTED SERVER'S OWN, so a hostile server publishes a required 4000-character `justification` and every call it induces arrives pre-overflowed. Measured: `{reason: <4080 chars>, path: '/home/victim/.ssh/authorized_keys', content: 'ssh-rsa …'}` rendered with neither `path` nor `content` visible; the operator saw the reassurance, 'arguments truncated', and [y/N]. Approving ran the real call.",
+    "suggested_fix": "Budget per VALUE, not per payload, so every key renders whatever any other key does; cap the key count separately and say how many were elided.",
+    "evidence": "Reviewer measured `rendering contains 'authorized_keys': false` and `contains 'ssh-rsa': false`. Author reproduced before fixing.",
+    "confidence": "high",
+    "file": "src/mcp-servers/approval-render.ts",
+    "line": 125,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/approval-render.ts renderArguments (all callers)",
+        "src/commands/shell.ts readline prompt",
+        "src/tui/tui-shell.ts transcript lines"
+      ],
+      "enumeration_method": "One rendering function feeds both surfaces, so the class is that function's output; enumerated its callers to confirm there is no second path that formats arguments."
+    },
+    "global_id": "2026-09-11-ingest-527#F-057",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit e58d47ae — MAX_ARGUMENT_CHARS is per value (400), MAX_ARGUMENT_KEYS caps the list"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit e58d47ae. The reviewer's exact payload now renders both `authorized_keys` and `ssh-rsa`; `argumentsTruncated` stays true so the elision is still announced. Pinned by two rows in approval-render.table.test.ts.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-058",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`sanitiseForDisplay` deliberately keeps `\\n` — correct for an error message, wrong for an identifier — and the renderer applied it to `server`, `tool` and `fqn` without checking for line breaks.",
+    "impact": "A `tool_name` of `evil__tool` + 40 newlines + `  server: docs\\n  tool:   search_docs` renders a COMPLETE, correctly-shaped, benign-looking approval prompt, with the real tool name 40 rows above the fold and the attacker's text immediately above [y/N]. The call does not resolve afterwards, so the gain is an arbitrary convincing write to the approval surface — including desensitising the operator with N harmless-looking prompts before a real one. In the TUI the same string reaches the dock subtitle as up to 10 attacker-controlled yellow lines.",
+    "suggested_fix": "A separate `sanitiseIdentifier` that flattens line breaks and caps length; `sanitiseForDisplay` keeps its `\\n` contract for messages.",
+    "evidence": "Reviewer rendered the 48-row prompt and quoted it. Author reproduced: 4 array elements became 11 screen rows.",
+    "confidence": "high",
+    "file": "src/mcp-servers/approval-render.ts",
+    "line": 130,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/approval-render.ts server/tool/fqn",
+        "src/mcp-servers/approval-render.ts argument values",
+        "src/tui/mcp-consumer.ts targetOf"
+      ],
+      "enumeration_method": "Enumerated every field on this branch that is (a) third-party text and (b) rendered as one line of a record rather than as a message body. Three sites; all three now use the identifier-grade sanitiser."
+    },
+    "global_id": "2026-09-11-ingest-527#F-058",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit e58d47ae — sanitiseIdentifier added and applied; MAX_IDENTIFIER_CHARS caps at 80"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit e58d47ae. Array length now equals screen rows for the 40-newline payload; a 200 000-character tool_name caps at 81. Pinned by three rows in approval-render.table.test.ts.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-059",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`displayUrl`'s catch branch returned `raw` — the whole url, password included — excused by a comment saying the case was 'most likely because a ${VAR} is still in it'. The ${VAR} branch returns earlier, so that justification is unreachable by construction.",
+    "impact": "Every url `new URL` rejects printed its credential through three callers: `keryx mcp list`, the `/mcp` view, and `describeForApproval` — the trust prompt, i.e. the moment the operator is deciding. Measured leaking forms: `//user:hunter2@host/v1`, `https://user:hunter2@host:notaport/mcp`, `https://user:hunter2@[bad/mcp`.",
+    "suggested_fix": "Elide userinfo and query by TEXT as the floor under every return path, so the function fails closed whether or not the url parses.",
+    "evidence": "Reviewer listed three inputs and their verbatim output. Author reproduced all three before fixing.",
+    "confidence": "high",
+    "file": "src/mcp-servers/http-headers.ts",
+    "line": 335,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/http-headers.ts displayUrl catch branch",
+        "src/mcp-servers/http-headers.ts ${VAR} branch",
+        "callers: keryx mcp list, /mcp view, trust prompt"
+      ],
+      "enumeration_method": "Enumerated every return path of displayUrl and asked which could emit userinfo; then enumerated its callers to size the blast radius. The path-segment case is documented as knowingly kept."
+    },
+    "global_id": "2026-09-11-ingest-527#F-059",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit e58d47ae — elideCredentialText is the floor under both fallback paths"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit e58d47ae. All three inputs now render `…@`; a clean url and a ${VAR} url are unchanged. Pinned by a test.each in mutation-gaps.test.ts with two BOUNDARY rows.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-060",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "The `/mcp` view sanitised `detail` and `problems` and not `target`, and indented only the FIRST line of a multi-line detail.",
+    "impact": "`target` comes from a committed `.keryx/mcp-servers.json` — a file in a repository somebody else wrote, which trust.ts is explicit is not consent — and nothing in the config loader rejects control characters in `command`, `args` or `url`. The row reading `needs-approval` was precisely the row that could print a forged `✓ trusted` over the line above it. Separately, a crafted HTTP response body embedded in `ServerState.error` rendered two fabricated server rows at column 0, indistinguishable from real ones.",
+    "suggested_fix": "Sanitise `target` with the identifier-grade sanitiser; indent every line of a multi-line detail and problem.",
+    "evidence": "Reviewer quoted both rendered outputs. Author reproduced.",
+    "confidence": "high",
+    "file": "src/tui/mcp-consumer.ts",
+    "line": 97,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/tui/mcp-consumer.ts targetOf",
+        "src/tui/mcp-consumer.ts detail lines",
+        "src/tui/mcp-consumer.ts problem lines"
+      ],
+      "enumeration_method": "Enumerated every field buildConsumerModel emits and classified each as regex-constrained (name, transport, credentials) or free third-party text (target, detail, problems). The three free ones are now all handled."
+    },
+    "global_id": "2026-09-11-ingest-527#F-060",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit e58d47ae — targetOf sanitised; renderConsumerLines indents every line"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit e58d47ae. Tests assert no ESC or CR survives a stdio command or a url, and that no forged row starts at column 0 for a multi-line error or problem.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-061",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The prompt derived the server by splitting the FQN on its first separator, while the executed call resolves by exact match against the catalog.",
+    "impact": "Server names legally contain `_`, so a project config may define `github__notes`. Its tool `exfil` has the valid FQN `github__notes__exfil`, resolves and runs correctly — and the prompt said `server: github` / `tool: notes__exfil`, crediting a project-supplied server's call to the operator's own user-scoped `github`. Two answers to one question, and the displayed one was not the executed one.",
+    "suggested_fix": "Resolve against the catalog that will execute the call; keep the split only as a labelled fallback for a name that cannot resolve anyway.",
+    "evidence": "Reviewer traced both derivations and gave the mirrored input. Author reproduced: splitFqn('github__notes__exfil') returns server 'github'.",
+    "confidence": "high",
+    "file": "src/mcp-servers/approval-render.ts",
+    "line": 71,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/approval-render.ts splitFqn",
+        "src/commands/shell.ts resolver wiring",
+        "src/tui/tui-shell.ts resolver wiring"
+      ],
+      "enumeration_method": "Enumerated every place the branch derives a server name from an FQN: one guess and two wirings of the authoritative lookup. The sweep then showed both wirings were themselves unkillable, so they were unified into catalogResolver."
+    },
+    "global_id": "2026-09-11-ingest-527#F-061",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commits e58d47ae (resolver parameter) and 5ecaf049 (catalogResolver extracted and tested)"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against commit 5ecaf049, the tree that will merge. The resolver returns server 'github__notes' for the mirrored input; catalogResolver has BOUNDARY tests for an absent and an empty catalog. Before 5ecaf049 the sweep reported all four decisions in the two inline copies as surviving; after, they are covered.",
+      "verifier": "author-mutation-check"
+    }
+  }
+]
