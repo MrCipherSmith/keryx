@@ -16,13 +16,81 @@ OpenCode's "register every MCP tool on the model" shape.
 
 ## Status
 
-**specification ready; the naming prerequisite has shipped, nothing else.**
+**P0–P3a are merged and SHIPPED in keryx 0.2.94** — the first published
+release carrying any of this package (flows 246–249; PRs #522, #526,
+#527, #528). Versions 0.2.90 through 0.2.93 were bumped in
+`package.json` during development and never tagged, so they were never
+published; a release here fires on a `v*` tag push and nothing else.
+**P3b (OAuth) is open.**
 
-Updated 2026-09-10. One piece of P2 landed ahead of the rest, because it was
-blocking the package rather than part of it: `keryx mcp` used to BE the
-publisher surface, so the consumer this package specifies had nowhere to live.
+Updated 2026-09-11.
 
-Shipped in 0.2.85 (PR #499, #500):
+Shipped in P0 — `src/mcp-servers/` plus `src/commands/mcp-servers.ts`:
+
+| item | module | what it does |
+|---|---|---|
+| 1 | `config.ts` | Native user + project JSON, `${VAR}` / `${VAR:-default}` expansion, personal enable/disable overlay. Compat readers deliberately ABSENT rather than stubbed, so nothing reports a source it never read. |
+| 2 | `../mcp-client/client.ts` | `connectStdioMcpServer` — a third-party stdio server on the existing seam, with no second MCP library. |
+| 3 | `manager.ts` | Bounded concurrent start that never throws (AC8: one bad command, the good server still connects), dial and `listTools` both raced against a timeout. |
+| 4 | `catalog.ts` | `server__tool` qualification; every dropped tool carried with its reason. |
+| 5 | `tools.ts` | `search_tool` / `use_tool` — two tools of fixed cost instead of N of unbounded cost. Results marked `untrusted`. |
+| 6 | `approval.ts` | Per-call risk into keryx's own `resolveApprovalDecision`, never a parallel policy. Trust still asks for destructive; headless is DENIED; the approval fingerprint is checked, not just the boolean. |
+| 7 | `store.ts` | The write seam. Never touches a compat source, never writes `enabled: false` into a committed project file. |
+| 8 | `doctor.ts` | Config problems + a real connect + tool count + skipped FQNs, with `env`/`headers` reduced to `set`/`unset` (§2). |
+| — | `spawn-env.ts` | The child environment: copy-then-strip reusing `EXTERNAL_ENV_DENY`, so a server installed with one `npx` line does not inherit `ANTHROPIC_API_KEY`. |
+
+Verified end to end against a real spawn, not only fixtures: `keryx mcp add
+self -- keryx serve-mcp --cwd <repo>` then `keryx mcp doctor self` connects,
+handshakes and lists. **That run raised [D-13](decisions.md) (open):** 19 of
+keryx's own 45 tools reachable, 26 skipped, every one for a `.` in the name —
+§5.1 specifies skip-on-invalid-FQN rather than sanitise. P0 ships the
+specification as written; the remedy is P1's.
+
+Shipped in P1 — remote servers, over the same seam:
+
+| item | module | what it does |
+|---|---|---|
+| 9 | `../mcp-client/client.ts` | `connectHttpMcpServer` — streamable HTTP beside the stdio dial, same handshake bound, same abort handling, same `McpServerConnection`. Everything above the transport cannot tell the two apart, so a remote server inherits every control a local one has. |
+| 10 | `http-headers.ts` | The refusal seam. A credential that resolves to nothing never reaches a socket: `Bearer ${TOKEN}` with `TOKEN` unset expands to a non-empty `"Bearer "`, so emptiness is looked for in the VARIABLE, not the result. Also refuses duplicate case-variant names, control characters, invalid header names, an unresolved `${VAR}` in the url, and a credential written into the url. |
+| 11 | `doctor.ts` | The HTTP half: status, socket, TLS and non-MCP failures each get their own sentence, classified on the SDK's error CODE rather than a guess at its prose. `needs_auth` names the variable to set. |
+| 12 | `trust.ts` | The approval fingerprint covers `headers` and `bearer_token_env_var`, and the prompt discloses which variables a remote server would be handed. |
+
+`sse` is an alias of `http` (D-06): it is what the server chooses when it
+answers, and streamable HTTP negotiates it. The fixture now serves
+`text/event-stream` so that is a tested claim rather than a stated one.
+
+**Three refusals P1 makes on purpose,** each a working configuration
+elsewhere: a redirect is not followed (a custom credential header would
+follow it — `fetch` strips only `Authorization`, and only across origins);
+a username or password in the url is rejected (it prints everywhere and
+the HTTP client drops it anyway); and an unset `${VAR}` in the url is
+rejected rather than silently addressing the wrong path.
+
+`scripts/mutation-sweep.ts` was written during P1 and is the criterion this
+package now holds itself to: no line of new production code may be inverted
+or deleted without a test failing. See the roadmap changelog for what it
+found that four rounds of human review did not.
+
+**Shipped in P2** (flow 248): `/mcp` is the CONSUMER view — the servers
+keryx connects to — and `/integrations` keeps the installer. `use_tool`
+gained the approval rendering it never had (F-032, F-033): the server and
+tool render above the arguments so no key order can displace them, every
+argument gets its own budget so none can crowd out another, and no
+"always allow" is offered because the grant pattern would be a name the
+model chose.
+
+**Sequenced next**, by operator decision of 2026-09-11 (asked with
+options and a recommendation, answered with the recommendation on each):
+
+| next | what | why separately |
+|---|---|---|
+| P3a | Read-only compat readers (`.cursor/mcp.json`, `~/.claude.json`, project `.mcp.json`, Grok TOML) **and D-13** (sanitise invalid FQNs, first-wins on collision) | Low risk, fixture-testable, and D-13 is a catalog change that belongs with them |
+| P3b | OAuth: browser flow, owner-only `mcp-credentials.json`, loopback callback, dynamic client registration, headless → `needs_auth` without hanging | A real attack surface that deserves its own review round rather than being reviewed alongside config parsing |
+| — | Behavioural tests for the OTHER three approval branches (`apply_patch`, Codex elicitation, `shell_exec`) | P2's review showed the approval DECISION is untested in all four branches; `use_tool` is fixed and the rest are a larger hole than it was. Not MCP, so not this package — a flow of its own, immediately after P3 |
+
+Also open: F-031.
+
+Shipped earlier, in 0.2.85 (PR #499, #500):
 
 <!-- retired-spellings-ok: line — the was-to-is record of the rename itself, which cannot be written without naming the spelling that was retired -->
 
@@ -41,20 +109,21 @@ Shipped in 0.2.85 (PR #499, #500):
   guard is mutation-verified — inserting `/mcps` into the registry fails the
   named test on its pair assertion.
 
-Everything below this line is still unimplemented, and the rest of P2 (the
-consumer modal, the Tools-tab caption) is untouched.
+The rest of P2 — the consumer modal and the Tools-tab caption — is untouched.
 
 Verified against current code:
 
 - `src/tui/mcp-inspector.ts` still states that keryx does not consume MCP
   servers as a client. `/mcp` and `/integrations` both install **keryx itself**
   into editor configs — the caption is still true and AC17 is still open.
-- `src/mcp-client/` connects only to a spawned `codex mcp-server` over stdio.
-  `McpClientConnection` has `callTool` / elicitation / `codex/event` / `close`.
-  It does not load user config, does not speak HTTP, and does not register
-  discovered tools on the interactive agent.
-- `keryx mcp` is now a deprecation alias only (`src/commands/mcp.ts`); the
-  publisher lives in `src/commands/serve-mcp.ts` and `src/commands/integrate.ts`.
+- `src/mcp-client/` now also exports `connectStdioMcpServer` for a third-party
+  server, alongside the `codex mcp-server` path it already had. It still does
+  not speak HTTP — that is P1 — and it still never reads user config, which
+  `src/mcp-servers/config.ts` does instead.
+- `src/commands/mcp.ts` routes the CONSUMER verbs to
+  `src/commands/mcp-servers.ts` and remains a deprecation alias for the
+  publisher ones; the publisher itself lives in `src/commands/serve-mcp.ts`
+  and `src/commands/integrate.ts`.
   No consumer verb is implemented.
 - `GatedToolRisk` is `"read" | "shell" | "destructive" | "delegate" | "write"`
   (`src/commands/permission-mode.ts`). There is no MCP tool risk class.

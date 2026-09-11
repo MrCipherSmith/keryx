@@ -838,6 +838,11 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "read_wiki",
     "repomap",
     "search_code",
+    // The MCP consumer pair (keryx-mcp-servers P0). TWO entries however many
+    // servers the operator has connected — if a qualified name like
+    // `linear__create_issue` ever appears in this list, the package's whole
+    // premise has been reversed.
+    "search_tool",
     "shell_exec",
     "shell_job_kill",
     "shell_job_output",
@@ -847,6 +852,7 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "slate_write_seed",
     "spawn_subagent",
     "test_related",
+    "use_tool",
     "web_fetch",
     "web_search",
     "wiki_ask",
@@ -946,11 +952,18 @@ test("shellCommand's makeAgentDeps threads a supplied getSessionDir through to s
 describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", () => {
   const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
-  // A generous fixed window from the branch start: large enough to cover
-  // everything from `if (agentMode) {` through its `runAgentRepl(...)` call
-  // and a little past it, without accidentally reaching into an unrelated
-  // later part of the file (this file has no other "if (agentMode)" branch).
-  const agentModeBranch = shellSource.slice(agentModeBranchStart, agentModeBranchStart + 3600);
+  // The branch, ended at its own `} else {` rather than at a fixed character
+  // count. The window used to be a flat 3600 characters, and adding anything
+  // to the branch silently pushed the last literal out of range — the audit
+  // then failed with `-1`, which reads as "the wiring is gone" when the
+  // wiring was fine and only the ruler was short. Derived from the source, it
+  // grows with the branch; `else` is unambiguous because this file has one
+  // `if (agentMode) {`.
+  const agentModeBranchEnd = shellSource.indexOf("\n    } else {", agentModeBranchStart);
+  const agentModeBranch = shellSource.slice(
+    agentModeBranchStart,
+    agentModeBranchEnd === -1 ? agentModeBranchStart + 3600 : agentModeBranchEnd,
+  );
   const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
   const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
 

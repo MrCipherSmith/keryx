@@ -71,6 +71,21 @@ import { isWorkspaceCommand, openWorkspace } from "./workspace-inspector";
 import { isReviewCommand, openReview } from "./review-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
+import {
+  buildConsumerModel,
+  isMcpConsumerCommand,
+  renderConsumerLines,
+} from "./mcp-consumer";
+import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
+import {
+  APPROVAL_ALLOW_ID,
+  catalogResolver,
+  describeUseToolApproval,
+  isDockApproval,
+  isMcpToolCall,
+  MAX_ARGUMENT_CHARS,
+  summariseUseToolApproval,
+} from "../mcp-servers/approval-render";
 import { installMcpClient, mcpClientStatus, mcpRuntimeIds, uninstallMcpClient } from "../mcp/client-config";
 import { makeCommandRunner } from "../harness/tool/builtin/shell-exec-tool";
 import { readSlate } from "../session/slate";
@@ -2863,6 +2878,76 @@ export async function launchTuiAgentShell(opts: {
         return id === "allow";
       }
 
+      if (isMcpToolCall(tool)) {
+        // F-032, deferred from P0 to P2 by operator decision.
+        //
+        // `use_tool` fell through to `evaluateShellApproval` below, which
+        // drew a third party's tool call as a SHELL COMMAND and offered
+        // "Always allow" with an exact match. The reviewer established it
+        // was not an approval bypass — auto-approve gates on
+        // `!destructive`, and `use_tool` is unconditionally destructive —
+        // but the permission store would then hold a grant pattern the
+        // MODEL wrote.
+        //
+        // `apply_patch` above and the elicitation below each already had
+        // their own branch. This is the one `use_tool` was missing, and
+        // the description comes from the same module the readline shell
+        // uses, so the two surfaces cannot drift.
+        // Resolved against the catalog that will execute the call, so
+        // the prompt's attribution and the dispatch cannot disagree.
+        const described = describeUseToolApproval(
+          inputJson,
+          catalogResolver(deps.mcpRuntime?.()?.catalog()),
+        );
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: otui.t`${otui.yellow(`⚙ ${described.server} wants to run ${described.tool}`)}`,
+          }),
+        );
+        for (const line of described.argumentLines) {
+          transcript.add(new otui.TextRenderable(r, { id: `ap${uid++}`, content: otui.t`${otui.dim(`  ${line}`)}` }));
+        }
+        if (described.argumentsTruncated) {
+          transcript.add(
+            new otui.TextRenderable(r, {
+              id: `ap${uid++}`,
+              content: otui.t`${otui.dim(`  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}`,
+            }),
+          );
+        }
+        chrome.hideMenu();
+        setMainAgent("blocked", "approval");
+        const id = await showComposerChoice(otui, r, chrome.dock, {
+          title: described.title,
+          // Names the tool and the server and NOTHING the model supplied,
+          // so no payload prefix can occupy the line read first.
+          subtitle: summariseUseToolApproval(described),
+          cancelId: "deny",
+          options: [
+            // No "always" option. `described.rememberable` is typed
+            // `false` so this cannot be added back by forgetting to check.
+            { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
+            { id: "deny", label: "Deny", description: "the tool call is refused", recommended: true },
+          ],
+        });
+        input.focus();
+        // `isDockApproval`, not an inline `id === "allow"`, and not three
+        // copies of it. A reviewer inverted this comparison — so "Deny"
+        // approved — and the full suite stayed green.
+        const allowed = isDockApproval(id);
+        setMainAgent("running", allowed ? "write" : "denied");
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `ap${uid++}`,
+            content: allowed
+              ? otui.t`${otui.green(`◇ ${described.fqn} approved`)}`
+              : otui.t`${otui.red(`◇ ${described.fqn} denied`)}`,
+          }),
+        );
+        return allowed;
+      }
+
       if (tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) {
         // T12 (specification.md §8): render the elicitation's own human-readable
         // `message` (and vendor command, when present) rather than falling
@@ -3506,6 +3591,32 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    /**
+     * `/mcp` — the servers keryx CONNECTS TO.
+     *
+     * Reads the runtime if the session has one; otherwise the config
+     * alone, and says which it did. A read-only view must not spawn
+     * anything, so it never creates the runtime.
+     */
+    const showMcpConsumer = (): void => {
+      const runtime = deps.mcpRuntime?.();
+      const cwd = inspectorCwd();
+      const model =
+        runtime === undefined
+          ? undefined
+          : buildConsumerModel({
+              configured: runtime.configured(),
+              states: runtime.servers(),
+              problems: runtime.problems(),
+              userFile: userConfigFile(),
+              projectFile: projectConfigFile(cwd),
+            });
+      const lines = renderConsumerLines(model);
+      for (const line of lines) {
+        transcript.add(new otui.TextRenderable(r, { id: `mcp${uid++}`, content: otui.t`${otui.dim(line)}` }));
+      }
+    };
+
     const showTools = (): void => {
       void (async () => {
         const cwd = inspectorCwd();
@@ -4163,6 +4274,7 @@ export async function launchTuiAgentShell(opts: {
           isWorkspace: isWorkspaceCommand(line),
           isReview: isReviewCommand(line),
           isMcp: isMcpToolsCommand(line),
+          isMcpConsumer: isMcpConsumerCommand(line),
         });
         switch (decision) {
           case "exit": {
@@ -4271,6 +4383,10 @@ export async function launchTuiAgentShell(opts: {
           }
           case "mcp": {
             showTools();
+            return;
+          }
+          case "mcp-consumer": {
+            showMcpConsumer();
             return;
           }
           case "game": {
@@ -4544,6 +4660,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewCommand(command.name)) {
           showReview();
+          return;
+        }
+        if (isMcpConsumerCommand(command.name)) {
+          showMcpConsumer();
           return;
         }
         if (isMcpToolsCommand(command.name)) {

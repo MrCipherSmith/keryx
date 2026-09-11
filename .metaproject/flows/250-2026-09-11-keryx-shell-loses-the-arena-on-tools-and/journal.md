@@ -1,0 +1,43 @@
+# Flow Journal
+
+- 2026-09-11T07:29:26.898Z - flow created
+- 2026-09-11T07:36:29.136Z - task-added: T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit
+- 2026-09-11T07:36:29.357Z - task-added: T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped
+- 2026-09-11T07:36:29.550Z - task-added: T7: K-009: no .metaproject tools in a project without .metaproject
+- 2026-09-11T07:36:29.773Z - task-added: T8: S-1: read_file reads by start_line past the 20 KB head
+- 2026-09-11T07:36:29.974Z - task-added: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
+- 2026-09-11T07:36:30.252Z - task-added: T10: Changelog entry for the five fixes
+- 2026-09-11T07:36:30.569Z - task-added: T11: Verification: typecheck, related tests, full suite vs base 9fba208
+- 2026-09-11T07:36:53.624Z - task-done: T1: Collect remaining context
+- 2026-09-11T07:36:53.894Z - task-done: T2: Implement per plan
+- 2026-09-11T07:36:54.143Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T07:36:54.358Z - frozen: 8 criteria; checksum recorded
+- 2026-09-11T07:36:54.579Z - started
+- 2026-09-11T07:42:08.651Z - ac-updated: AC1: the grok registry label is 'xAI (Grok)', not 'Grok' — the criterion now names the label actually shipped. AC2: non-JSON bodies are deliberately never surfaced by any provider adapter (C-01 test in compat, OpenAI and Anthropic); the criterion now covers the JSON shapes only and keeps that invariant.
+- 2026-09-11T07:42:34.894Z - task-done: T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit
+- 2026-09-11T07:46Z - evidence: K-005 proved itself on its first real call. The arena's keryx 403s, blamed on the x.ai balance because the grok CLI reported a 402 at the same time, were a REJECTED OAUTH TOKEN: a probe through this branch printed `xAI (Grok) API returned HTTP 403: The OAuth2 access token could not be validated.` while `keryx auth status grok` still said `active`. Logged as K-010 (auth status claims a state nobody checked; no refresh or login hint on 401/403). Out of this flow's scope; the arena defect log on `arena/measurement` must be corrected when leaving the worktree (the session cannot write the shared checkout from here).
+- 2026-09-11T07:47Z - operator: fix keryx shell before the next arena run, merge into main, cut a release; the changelog must also carry main's unreleased changes from other work.
+- 2026-09-11 - K-010 confirmed by its remedy: after the operator ran `keryx auth login grok`, the same one-line probe through this branch answered `ok` with 6,370 input tokens and no error. The 403 was the token, not the balance.
+- 2026-09-11 - main published 0.2.94 (another agent) while this flow was open, and used flow id 249 for mcp-servers-p3a. Merged origin/main; this release is 0.2.95 with a changelog section of its own; this flow renumbered 249 -> 250 through `keryx flow renumber`.
+- 2026-09-11 - review round 1 (read-only reviewer): F-001 major (static prompt contradicted K-009 and S-1), F-002/F-003 (read_file line count and notice units), F-004 (keryxSelfCommand trusted any src/cli.ts). All fixed with tests (T12).
+- 2026-09-11 - CI round 1 on PR #529 failed `client matrix (terminal)` and `typecheck-and-tests`: the F-001 wiring moved `tools: buildInteractiveAgentTools({` into a variable, which the SLATE-3a and flow 173 AC7 source-text audits look for, and pushed `sweepBackgroundJobs` past the AC7 audit's 4,200-character window. Restored the inline literal and add the instruction after, from the object's own tools; `test:client:terminal` 725 pass locally. The audits were right and were not loosened.
+- 2026-09-11 - the arena comparison that motivated this flow is contaminated: grok-build's 4/4 on t1-53254e0e came from `git show 53254e0e3` run against the SOURCE clone (`/Users/…/arena/clear/vantage-frontend`), found through the arm checkout's `.git/config` / `FETCH_HEAD`. The five fixes stand on the keryx transcript alone; the PR and changelog no longer claim "keryx loses to grok". K-006 (hunting the commit in git) is the model's habit — grok does it too. Arena isolation fix scheduled after the release.
+- 2026-09-11T07:52:18.019Z - task-done: T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped
+- 2026-09-11T07:54:54.577Z - task-done: T7: K-009: no .metaproject tools in a project without .metaproject
+- 2026-09-11T07:57:12.481Z - task-done: T8: S-1: read_file reads by start_line past the 20 KB head
+- 2026-09-11T07:59:16.589Z - task-done: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
+- 2026-09-11T08:02:23.436Z - task-done: T10: Changelog entry for the five fixes
+- 2026-09-11T09:33:35.468Z - task-added: T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry
+- 2026-09-11T09:51:25.530Z - renumbered: 249 -> 250: id 249 was taken on main by flow mcp-servers-p3a (#528) while this flow was created on the older base 9fba208; both inits saw 248 as the last id
+- 2026-09-11T09:51:44.813Z - task-done: T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry
+- 2026-09-11T09:56:58.629Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T09:56:58.723Z - ac-confirmed: AC1: make-provider-label.test.ts: makeProvider('grok') 403 message starts 'xAI (Grok) API returned HTTP 403', no 'Ollama', providerId still 'ollama'. Live probe printed 'xAI (Grok) API returned HTTP 403: The OAuth2 access token could not be validated.'
+- 2026-09-11T09:56:58.824Z - ac-confirmed: AC2: openai-compat-provider.test.ts K-005 tests: reason from error.message / error string / message / detail beside the status; reasonless and empty bodies give the bare status line; redaction + flatten + 300-char cap tested; C-01 non-JSON test still passes.
+- 2026-09-11T09:56:58.930Z - ac-confirmed: AC3: openai-compat-provider.test.ts: 401 and 403 -> authentication (not retryable); 429 -> rate_limit, retryable, retryAfterMs 7000 from Retry-After: 7; 404 -> invalid_request; 502 -> unavailable.
+- 2026-09-11T09:56:59.042Z - ac-confirmed: AC4: search-code-output.test.ts against the real adapter and real ripgrep: relative paths with no absolute root on any line; an enormous SVG line capped (longest line < 600); a clip states 'showing N of 2000 lines' cut at a line boundary.
+- 2026-09-11T09:56:59.145Z - ac-confirmed: AC5: interactive-agent-tools.test.ts: without .metaproject exactly the 18 pinned METAPROJECT_BOUND tools are withheld and search_code stays; with .metaproject the roster equals the list pinned before; --deny-tools graph_find accepted in a bare repo, a typo still refused.
+- 2026-09-11T09:56:59.244Z - ac-confirmed: AC6: read-file-bounded.test.ts: start_line reaches a line past 20,000 bytes; paging via the notice's start_line reads all 2000 lines once; notice names lines shown; past-end errors state the real length (F-002); small file without start_line returned verbatim as before.
+- 2026-09-11T09:56:59.344Z - ac-confirmed: AC7: keryx-self-command.test.ts: argv is [execPath, entry] for keryx's own module-derived entry, the binary itself when compiled, PATH keryx otherwise; a host app named src/cli.ts is not trusted (F-004); unchanged with PATH=/nonexistent; runner spawns the given command.
+- 2026-09-11T10:38:19.670Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/529 (warning: PR is not a draft) (base: main)
+- 2026-09-11T10:38:19.881Z - task-done: T11: Verification: typecheck, related tests, full suite vs base 9fba208
+- 2026-09-11T10:38:20.057Z - ac-confirmed: AC8: CI on PR #529 head 0373787: 18/18 checks pass, including typecheck-and-tests (bun run check: lint, typecheck, typecheck:scripts, full bun test) and client matrix (terminal). Locally: lint and both typechecks clean; the ten files that timed out under local load pass alone 239/239. Two earlier CI rounds failed on this branch's own defects (shell.ts source audits, one facade bypass over the ratchet) and were fixed, not loosened.

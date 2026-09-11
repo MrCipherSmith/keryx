@@ -2,6 +2,8 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
@@ -19,6 +21,9 @@ import { workspaceOverviewTool, workspaceReadTool } from "../harness/tool/builti
 import { workspaceCreateTool, workspaceListTool, workspaceProposeTool, workspaceShowTool } from "../harness/tool/builtin/workspace-lifecycle-tool";
 import type { SearchProviderController } from "../harness/search";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
+import type { ServerCatalog } from "../mcp-servers/catalog";
+import type { ServerState } from "../mcp-servers/manager";
+import { createMcpInteractiveTools } from "../mcp-servers/tools";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 
 export type InteractiveAgentToolsInput = {
@@ -65,6 +70,20 @@ export type InteractiveAgentToolsInput = {
    */
   jobRegistry?: JobRegistry;
   /**
+   * The session's MCP runtime, if the surface built one.
+   *
+   * Session-scoped for the same measured reason as `jobRegistry`: this
+   * function is called again on every tool-list rebuild, and a runtime
+   * created inside it would spawn a fresh set of server processes each time
+   * and orphan the previous ones. It is created once by the surface that
+   * owns the session and closed when that session ends.
+   *
+   * Omitted → `search_tool` and `use_tool` are NOT registered at all, on the
+   * same principle `jobRegistry` established: advertising a tool backed by
+   * nothing is worse than not offering the capability.
+   */
+  mcp?: McpToolBinding;
+  /**
    * Tool names this session must not have, by exact name.
    *
    * Exists because there was no way to say "this session does not need the web".
@@ -78,6 +97,22 @@ export type InteractiveAgentToolsInput = {
    * roster to be the same as another tool's.
    */
   denyTools?: readonly string[];
+};
+
+/**
+ * What the MCP pair needs from the session, and nothing more.
+ *
+ * Declared here rather than importing `McpRuntime` so this factory does not
+ * depend on how the runtime is built — a test can bind a catalog directly.
+ *
+ * There is no approval hook, on purpose. `use_tool` is declared
+ * `risk: "destructive"`, so every call already goes through the agent's own
+ * gate; a hook here would be the fourth decision layer D-05 rules out.
+ */
+export type McpToolBinding = {
+  readonly catalog: () => ServerCatalog;
+  readonly servers: () => readonly ServerState[];
+  readonly toolTimeoutSec?: ((server: string, rawName: string) => number | undefined) | undefined;
 };
 
 /**
@@ -120,14 +155,28 @@ export function assertDeniableTools(tools: readonly InteractiveTool[], denied: r
   }
 }
 
+/**
+ * The metaproject tools that work in a project with no `.metaproject/`.
+ *
+ * Every other metaproject operation reads an artifact under `.metaproject/` — the
+ * graph database, the wiki, memory, flows, health and testing reports, the skill
+ * tree — and in a project without one it can only fail. The arena's control arm
+ * was offered all of them, called `graph_find`, and got `index-incomplete … never
+ * built here`; each was also a description the model re-read every round.
+ * `search_code` runs ripgrep over the tree and needs nothing.
+ */
+export const METAPROJECT_FREE_TOOLS: ReadonlySet<string> = new Set(["search_code"]);
+
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
   const getSessionDir = input.getSessionDir ?? (() => undefined);
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const jobRegistry = input.jobRegistry;
+  const metaprojectTools = builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort);
+  const hasMetaproject = existsSync(join(input.cwd, ".metaproject"));
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
-    ...builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort),
+    ...metaprojectTools,
     webFetchTool(),
     webSearchTool(input.searchController),
     shellExecTool(input.cwd, undefined, jobRegistry),
@@ -142,11 +191,28 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    // Two tools of fixed cost, whatever the operator has connected — never
+    // one registered tool per MCP tool. That refusal is the package's whole
+    // shape, and `mcp-tool-surface.test.ts` is what keeps it true from here.
+    ...(input.mcp === undefined
+      ? []
+      : createMcpInteractiveTools({
+          catalog: input.mcp.catalog,
+          servers: input.mcp.servers,
+          ...(input.mcp.toolTimeoutSec === undefined ? {} : { toolTimeoutSec: input.mcp.toolTimeoutSec }),
+        })),
     input.spawnTool,
   ];
   const denied = input.denyTools ?? [];
+  // Checked against the FULL set, before the project filter: `--deny-tools graph_find`
+  // names a real tool whether or not this project can run it, and refusing it as
+  // "unknown" in a plain repository would make the same command line fail in one
+  // directory and pass in the next.
   assertDeniableTools(built, denied);
-  return denyInteractiveTools(built, denied);
+  const offered = hasMetaproject
+    ? built
+    : built.filter((tool) => !metaprojectTools.includes(tool) || METAPROJECT_FREE_TOOLS.has(tool.definition.name));
+  return denyInteractiveTools(offered, denied);
 }
 
 export function interactiveAgentToolNames(tools: readonly InteractiveTool[]): string[] {

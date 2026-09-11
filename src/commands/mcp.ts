@@ -17,6 +17,7 @@ import { optionValue } from "../lib/args";
 import { helpOptions, helpTitle, helpUsage, heading, style } from "../lib/ui";
 import { mcpRuntimeIds } from "../mcp/client-config";
 import { EDITOR_USAGE, integrateCommand } from "./integrate";
+import { isMcpConsumerSubcommand, runMcpConsumerCommand } from "./mcp-servers";
 import { serveMcpCommand } from "./serve-mcp";
 
 export async function mcpCommand(
@@ -27,6 +28,22 @@ export async function mcpCommand(
 
   if (subcommand === "--help" || subcommand === "-h") {
     printMcpHelp();
+    return;
+  }
+
+  // The CONSUMER surface, and the reason the verb was freed. These are new
+  // subcommands, not renamed ones, so they print no deprecation line — `keryx
+  // mcp list` is the current spelling, not a retired one.
+  if (isMcpConsumerSubcommand(subcommand)) {
+    const code = await runMcpConsumerCommand(subcommand, args.slice(1), {
+      cwd,
+      log: (line) => console.log(line),
+      // stderr, because a bare `keryx mcp` is the stdio MCP server and this
+      // module shares its process: a diagnostic on stdout would sit in the
+      // same stream as JSON-RPC frames.
+      err: (line) => console.error(line),
+    });
+    if (code !== 0) process.exitCode = code;
     return;
   }
 
@@ -92,7 +109,26 @@ function toIntegrateArgs(rest: string[]): string[] {
 }
 
 export function printMcpHelp(): void {
-  helpTitle("keryx mcp", "retired spelling of the MCP publisher surface — see the replacements below");
+  // `keryx mcp` MEANS the consumer surface (D-04), so its help leads with
+  // the consumer subcommands. It described only the retired publisher
+  // spellings — so an operator typing `keryx mcp --help` to find
+  // `list`/`doctor`, which work, was told about `serve-mcp` and
+  // `integrate` instead. That is the same confusion the rename exists to
+  // end, and it is exactly the shape of `/mcp` opening the installer:
+  // the name had moved and one surface had not been told.
+  //
+  // Found by writing the release smoke test, which is the second time
+  // that exercise has turned up something the suite could not.
+  helpTitle("keryx mcp", "the MCP servers keryx connects to");
+  helpUsage([
+    "keryx mcp list [--json]                        # what is configured, and from where",
+    "keryx mcp add <name> -- <command…>             # a local server",
+    "keryx mcp add <name> --transport http <url>    # a remote one",
+    "keryx mcp remove|enable|disable <name>",
+    "keryx mcp trust|untrust <name>                 # approve a project-scoped server",
+    "keryx mcp doctor [name] [--json]               # dial it and say what is wrong",
+  ]);
+  heading("Publishing keryx itself (the retired `keryx mcp` spellings)");
   helpUsage([
     "keryx serve-mcp [--http] [--cwd <project-root>]   # replaces `keryx mcp serve`",
     `keryx integrate ${EDITOR_USAGE}          # replaces \`keryx mcp install --runtime\``,
@@ -112,6 +148,9 @@ export function printMcpHelp(): void {
     `  ${style.dim("Every `keryx mcp …` invocation still works and still behaves identically; each prints one deprecation line on stderr naming its replacement.")}`,
   );
   console.log(
-    `  ${style.dim("Run `keryx serve-mcp --help` or `keryx integrate --help` for the current surface.")}`,
+    `  ${style.dim("Run `keryx serve-mcp --help` or `keryx integrate --help` for the publisher surface.")}`,
+  );
+  console.log(
+    `  ${style.dim("In a session, `/mcp` shows the same list live; `/integrations` is the publisher view.")}`,
   );
 }

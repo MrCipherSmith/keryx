@@ -154,21 +154,23 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
-    // Kept as a working alias of /integrations, deprecated rather than moved.
+    // P2 flipped this, as the entry it replaces said it would: `/mcp` was
+    // "Deprecated alias of /integrations", kept pointing at the installer
+    // only because the consumer view did not exist and a slash command
+    // aimed at nothing is worse than one aimed at the old thing.
     //
-    // It is NOT repointed at the MCP-server consumer yet, because that surface
-    // does not exist — a slash command aimed at nothing is worse than one
-    // aimed at the old thing. The consumer flow flips it and drops this entry.
+    // It is the consumer view now — the servers keryx CONNECTS TO, which
+    // is what D-04 says the word means. `/integrations` above is the
+    // installer and keeps its own name.
     //
-    // `/mcps` is deliberately absent and cannot be added: it would differ from
-    // `/mcp` by one trailing character while meaning the opposite, and a slash
-    // command carries no flags to say which you invoked. Guarded by
-    // agent-commands.confusable.test.ts.
+    // `/mcps` is deliberately absent and cannot be added: it would differ
+    // from `/mcp` by one trailing character while meaning the opposite,
+    // and a slash command carries no flags to say which you invoked.
+    // Guarded by agent-commands.confusable.test.ts.
     name: "/mcp",
-    description: "Deprecated alias of /integrations",
-    // TUI-only, same reasoning as /review: the sidebar click and the
-    // Tools/MCP modal (with its [c]/[d]/[y] connect/disconnect) both need
-    // the OpenTUI surface.
+    description: "MCP servers keryx is connected to — status, tools, what needs trust",
+    // TUI-only, same reasoning as /review: it renders into the transcript
+    // of an OpenTUI session.
     modes: AGENT_ONLY,
   },
   {

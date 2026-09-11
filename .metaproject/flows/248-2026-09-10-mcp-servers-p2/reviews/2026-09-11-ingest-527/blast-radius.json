@@ -1,0 +1,1165 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/acceptance-criteria.md",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/context.md",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/description.md",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/flow.json",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/journal.md",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/plan.md",
+    ".metaproject/flows/248-2026-09-10-mcp-servers-p2/tasks.md",
+    "docs/docs/cli-reference.md",
+    "docs/requirements/keryx-mcp-servers/README.md",
+    "docs/requirements/keryx-mcp-servers/decisions.md",
+    "scripts/mutation-sweep.ts",
+    "src/commands/agent-commands.ts",
+    "src/commands/agent.ts",
+    "src/commands/mcp-help.test.ts",
+    "src/commands/mcp.ts",
+    "src/commands/shell.ts",
+    "src/mcp-servers/approval-decision.test.ts",
+    "src/mcp-servers/approval-render.table.test.ts",
+    "src/mcp-servers/approval-render.ts",
+    "src/mcp-servers/approval-wiring.test.ts",
+    "src/mcp-servers/http-headers.ts",
+    "src/mcp-servers/mutation-gaps.test.ts",
+    "src/mcp-servers/runtime.ts",
+    "src/tui/busy-dispatch.test.ts",
+    "src/tui/busy-dispatch.ts",
+    "src/tui/mcp-consumer.test.ts",
+    "src/tui/mcp-consumer.ts",
+    "src/tui/mcp-inspector.test.ts",
+    "src/tui/mcp-inspector.ts",
+    "src/tui/tui-shell.ts"
+  ],
+  "files": [
+    {
+      "file": "src/tui/shell-chrome.ts",
+      "hop": 1,
+      "fanIn": 14,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/shell-chrome.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.ts",
+      "hop": 1,
+      "fanIn": 13,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/harness/tool/builtin/spawn-subagent-tool.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/mcp-servers/http-headers.ts",
+      "path": [
+        "src/mcp-servers/doctor.ts",
+        "src/mcp-servers/http-headers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/mcp.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/mcp.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/trust.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/mcp-servers/http-headers.ts",
+      "path": [
+        "src/mcp-servers/trust.ts",
+        "src/mcp-servers/http-headers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/goal-command.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/goal-command.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell-approval.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/shell-approval.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp-servers.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/mcp-servers/http-headers.ts",
+      "path": [
+        "src/commands/mcp-servers.ts",
+        "src/mcp-servers/http-headers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-containment.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-containment.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-safety.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-safety.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/harness/external/supervise-mcp.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/foreground-operation.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/tui/foreground-operation.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/wiki/deep-enrich.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/wiki/deep-enrich.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-mutating.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation-mutating.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation-raw.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/benchmark/run-ablation.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/benchmark/run-ablation.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "scripts/stress/keryx-shell-stress.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "scripts/stress/keryx-shell-stress.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-approval-binding.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agent-approval-binding.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-commands.confusable.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/commands/agent-commands.confusable.test.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-commands.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/commands/agent-commands.test.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-destructive-gate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agent-destructive-gate.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-permission-mode.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agent-permission-mode.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent-tool-call-budget.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agent-tool-call-budget.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/agent.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/goal-command.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/goal-command.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "path": [
+        "src/commands/mcp-install.test.ts",
+        "src/commands/mcp.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/mcp-tool-surface.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "path": [
+        "src/commands/mcp-untrusted.test.ts",
+        "src/commands/agent.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/commands/select.test.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/commands/shell-cli-validation.test.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/commands/shell-launch.test.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "path": [
+        "src/commands/shell-slash-registry.test.ts",
+        "src/commands/agent-commands.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "path": [
+        "src/commands/shell.test.ts",
+        "src/commands/shell.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.types.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/mcp-servers/config.types.test.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/http-headers.table.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "path": [
+        "src/mcp-servers/http-headers.table.test.ts",
+        "src/mcp-servers/http-headers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/http.credentials.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "path": [
+        "src/mcp-servers/http.credentials.test.ts",
+        "src/mcp-servers/http-headers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/runtime.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/mcp-servers/runtime.test.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/trust.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/runtime.ts",
+      "path": [
+        "src/mcp-servers/trust.test.ts",
+        "src/mcp-servers/runtime.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/security/web-taint-durable-boundary.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 101 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 101 at hop 1, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/composer-choice.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/foreground-operation.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 101 at hop 1, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/modal-host.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/review-buttons.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/shell-chrome.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/theme-picker.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 101 at hop 1, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/modal-host.ts",
+      "hop": 2,
+      "fanIn": 21,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 101 at hop 2, fan-in 21, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/enrich.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 101 at hop 2, fan-in 5, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/run-external-factory.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 101 at hop 2, fan-in 4, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-session.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 101 at hop 2, fan-in 4, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-session.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 101 at hop 2, fan-in 4, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-bridge.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 101 at hop 2, fan-in 3, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/background-job-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 101 at hop 2, fan-in 2, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 101 at hop 2, fan-in 2, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-inspector.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 101 at hop 2, fan-in 2, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/ablation-emission-gating.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-ablation-raw.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-containment.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-leakage-check.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "scripts/benchmark/run-safety.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 101 at hop 2, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 65 of 101 at hop 2, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-servers.argv.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 66 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-servers.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 67 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 68 of 101 at hop 2, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-approval.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 69 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 70 of 101 at hop 2, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/gdskills/round-bound.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 71 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/external/supervise-mcp.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 72 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/review-remediation-architecture.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 73 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-child-slate.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 74 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-external-seam.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 75 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-isolation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 76 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 77 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-model-tier.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 78 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/harness/tool/builtin/spawn-subagent-tool.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 79 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-client/live-elicitation.smoke.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 80 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 81 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/doctor.failures.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 82 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/doctor.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 83 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/http.live.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 84 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/stdio.live.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/http-headers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 85 of 101 at hop 2, fan-in 0, reached via src/mcp-servers/http-headers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 86 of 101 at hop 2, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/external-operator.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 87 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/subagent-session.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent-commands.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 88 of 101 at hop 2, fan-in 0, reached via src/commands/agent-commands.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/wiki/deep-enrich.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 89 of 101 at hop 2, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context-p0.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 90 of 101 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agent-approval-context.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 91 of 101 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents-external.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 92 of 101 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/agents.monitor.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 93 of 101 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-offer.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 94 of 101 at hop 3, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/init-mcp-runtimes.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 95 of 101 at hop 3, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/agent.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 96 of 101 at hop 3, fan-in 0, reached via src/commands/agent.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-serve-root.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 97 of 101 at hop 3, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/security-scan-mcp.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/mcp.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 98 of 101 at hop 3, fan-in 0, reached via src/commands/mcp.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-events.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 99 of 101 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-headless-sigint.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 100 of 101 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-pty-launch.smoke.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/shell.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 101 of 101 at hop 3, fan-in 0, reached via src/commands/shell.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/248-2026-09-10-mcp-servers-p2/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/docs/cli-reference.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-mcp-servers/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-mcp-servers/decisions.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 34,
+    "changedFilesResolved": 20,
+    "changedFilesUnresolved": 14,
+    "candidates": 101,
+    "retained": 40,
+    "droppedByCap": 61,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 12,
+    "testsRetained": 22,
+    "hopHistogram": {
+      "1": 40
+    }
+  },
+  "graph": {
+    "nodes": 1416,
+    "edges": 4239
+  }
+}

@@ -158,5 +158,13 @@
     "toDir": "230-2026-09-04-graph-freshness-is-not-routed-index-md-t",
     "at": "2026-09-04T17:30:31.302Z",
     "reason": "id 227 was allocated against a stale local main; upstream already has flow 227 (Living Wiki + Graph phase 2)"
+  },
+  {
+    "from": "249",
+    "to": "250",
+    "fromDir": "249-2026-09-11-keryx-shell-loses-the-arena-on-tools-and",
+    "toDir": "250-2026-09-11-keryx-shell-loses-the-arena-on-tools-and",
+    "at": "2026-09-11T09:51:25.530Z",
+    "reason": "id 249 was taken on main by flow mcp-servers-p3a (#528) while this flow was created on the older base 9fba208; both inits saw 248 as the last id"
   }
 ]

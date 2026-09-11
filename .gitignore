@@ -95,3 +95,9 @@ docs/requirements/keryx-shell-benchmark/harness/__pycache__/
 .metaproject/data/retention/
 .metaproject/reports/
 # keryx:end
+
+# mutation-sweep working state. The journal names the file that may still
+# be mutated if the run is killed; the progress file is how a backgrounded
+# run is watched, since Bun buffers stdout to a pipe.
+.mutation-sweep-journal
+.mutation-sweep-progress

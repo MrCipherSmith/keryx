@@ -206,3 +206,99 @@ child, not a `use_tool` target.
 **Reasoning.** Mixing them would double-spawn Codex, bypass
 `gatedSuperviseCodexMcpRun`, and present Codex's internal tools to the
 parent model. AC13 exists to keep the suites separate.
+
+## D-13 (RESOLVED 2026-09-11 — sanitise, first-wins on collision)
+
+**Question.** Should a tool whose qualified name fails
+`^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$` be SKIPPED (specification §5.1 as written),
+or SANITISED into a valid FQN while `rawName` keeps carrying the wire name?
+
+**What P0 measured.** `keryx mcp doctor` was pointed at keryx's own
+`keryx serve-mcp` — the one MCP server whose tool list this repository
+controls. Result: **19 tools reachable, 26 skipped.** Every skip had the same
+cause: a `.` in the tool name (`sac.read`, `gdgraph.find`, `wiki.ask`,
+`health.gate`, …). More than half of a server's surface disappeared, and the
+server was ours.
+
+**Why the regex is nonetheless right.** It is not arbitrary parity with Grok.
+Provider tool-name limits are real, and Anthropic's own API rejects a `.` in
+a tool name. Loosening the pattern would move the failure from load time,
+where `doctor` explains it, to call time, where the provider rejects the
+whole request with a message that says nothing about MCP.
+
+**Why skipping is nonetheless wrong.** `CatalogEntry` already separates `fqn`
+(keryx's name, shown to the model) from `rawName` (the server's name, sent in
+`tools/call`). That separation is what would make sanitising cheap: `sac.read`
+becomes `self__sac_read` on the model's side and stays `sac.read` on the
+wire. Nothing about provider safety requires DROPPING the tool.
+
+**Not decided here.** Sanitising introduces a collision the current pattern
+cannot produce — `a.b` and `a_b` would both map to `a_b`. `catalogForServer`
+already records a duplicate FQN as skipped with a reason, so a fallback
+exists, but which name wins is a choice this note does not make.
+
+**Decision.** SANITISE. A tool whose qualified name fails the pattern is
+renamed for the model and keeps its wire name: `sac.read` becomes
+`self__sac_read` in `fqn` and stays `sac.read` in `rawName`. The regex is
+unchanged — it is still what keeps a `.` from reaching a provider that
+rejects it — and the separation `CatalogEntry` already had is what makes
+this cost nothing.
+
+**Collision.** `a.b` and `a_b` both sanitise to `a_b`. FIRST WINS, in the
+order the server's own `tools/list` returns, and the loser is recorded as
+skipped with a reason. This reuses the duplicate-FQN path
+`catalogForServer` already has rather than adding a second mechanism. A
+numeric suffix (`a_b_2`) was rejected: it invents a name that exists
+neither on the server nor in any config, so the operator has nothing to
+match it against.
+
+decided-by: altsay (operator), 2026-09-11, in the helyx channel — shown
+both questions with options and a recommendation, answered with the
+recommendation on each and confirmed in text.
+
+**Status.** P0 and P1 shipped the specification as written (skip +
+`doctor` warning), so the behaviour through 0.2.92 is the one that was
+reviewed. The evidence above is reproducible: `keryx mcp add self --
+keryx serve-mcp --cwd <repo>`, then `keryx mcp doctor self`. Implementing
+this decision is P3 work, alongside the compat readers.
+
+## D-14: a project-scoped server is not started until the operator approves it
+
+**Decision.** A server defined in `<project>/.keryx/mcp-servers.json` is held
+at status `needs-approval` and never dialled until `keryx mcp trust <name>`
+records the operator's consent. User-scoped servers are unaffected.
+
+**Why this was not in the specification.** §2 treats the project file as an
+ordinary config layer that is committed and shared. The P0 review asked what
+that means on a machine that has just cloned the repository, and the answer
+was: `git clone … && cd … && keryx` executes whatever command the
+repository's author wrote, before the prompt paints, with no approval, and
+without the model or `use_tool` being involved at all. There was no
+folder-trust mechanism anywhere in keryx to fall back on.
+
+That is the same hazard VS Code answers with Workspace Trust and Claude Code
+with folder trust, and it is not a hazard the approval gate on `use_tool`
+touches — the code runs at session start, long before any tool call.
+
+**Shape.** Two properties follow from approving *the exact command*:
+
+- the record is keyed by what will be EXECUTED (command, args, env, cwd),
+  not by the server's name. Getting a harmless `docs` approved and changing
+  it in a later commit does not carry the approval forward.
+- the record lives in the operator's config directory, owner-only. A trust
+  marker a repository can commit is not a trust marker.
+
+An unreadable trust store grants nothing.
+
+**What it costs.** One command, once per project server, per machine. The
+alternative price is that adding keryx to a repository becomes a way to run
+code on every contributor's laptop.
+
+**Not applied to user scope**, deliberately. The operator wrote that file
+themselves with `keryx mcp add`; asking them to confirm their own action is
+the kind of prompt people learn to dismiss unread, which makes the prompts
+that matter worth less.
+
+**Status.** Implemented in P0 (`src/mcp-servers/trust.ts`). The
+specification's §2 and §4.2 should be amended to describe it; this note is
+the decision record until they are.

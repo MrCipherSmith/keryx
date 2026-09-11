@@ -66,6 +66,7 @@ import type {
   McpClientConnection,
   McpClientPort,
   McpSpawnOptions,
+  McpToolCallOutcome,
   RawCodexEventNotification,
   RawElicitationRequest,
 } from "./types";
@@ -102,6 +103,13 @@ interface SdkTransport {
   onmessage?: (message: unknown, extra?: unknown) => void;
   onclose?: () => void;
   onerror?: (error: Error) => void;
+  /**
+   * The child's stderr, present only when the transport was constructed with
+   * `stderr: "pipe"` — which `connectStdioMcpServer` does, so the stream has
+   * to be drained. `readonly` and optional: the Codex path leaves it
+   * inherited and has no such stream.
+   */
+  readonly stderr?: { resume(): void } | undefined;
 }
 
 interface SdkRequestHandlerExtra {
@@ -115,6 +123,11 @@ interface SdkClient {
     resultSchema: unknown,
     options?: { timeout?: number },
   ): Promise<{ content?: unknown; isError?: boolean }>;
+  listTools(
+    params?: Record<string, unknown>,
+    resultSchema?: unknown,
+    options?: { timeout?: number },
+  ): Promise<{ tools?: unknown }>;
   close(): Promise<void>;
 }
 
@@ -126,12 +139,30 @@ interface SdkProtocolRequestHandlerRegistrar {
   ): void;
 }
 
-interface SdkModules {
+/**
+ * What ANY MCP stdio client needs: a client, a transport, and the result
+ * schema for a tool call.
+ *
+ * Split from {@link SdkModules} so the generic path does not depend on the
+ * elicitation-only internals below it. `loadSdk` reaches into
+ * `Protocol.prototype`, which the SDK is not obliged to keep stable across the
+ * minor bumps its `^1.0.0` range permits — and a user's filesystem server
+ * failing to connect because an elicitation internal moved would be a failure
+ * with no relationship to its cause.
+ */
+interface SdkHttpModules extends SdkCoreModules {
+  StreamableHTTPClientTransport: new (url: URL, options?: unknown) => SdkTransport;
+}
+
+interface SdkCoreModules {
   Client: new (info: unknown, options: unknown) => SdkClient;
   StdioClientTransport: new (options: unknown) => SdkTransport;
+  CallToolResultSchema: unknown;
+}
+
+interface SdkModules extends SdkCoreModules {
   ProtocolPrototype: SdkProtocolRequestHandlerRegistrar;
   ElicitRequestSchema: unknown;
-  CallToolResultSchema: unknown;
 }
 
 /**
@@ -139,19 +170,58 @@ interface SdkModules {
  * schemas this module needs. Throws {@link McpClientSdkMissingError}
  * (actionable) when the optional dependency is absent.
  */
-async function loadSdk(): Promise<SdkModules> {
+/**
+ * The client, the stdio transport, and the tool-call result schema.
+ *
+ * Deliberately does NOT touch `shared/protocol.js`. See {@link SdkCoreModules}.
+ */
+async function loadCoreSdk(): Promise<SdkCoreModules> {
   try {
     const clientModule = await import("@modelcontextprotocol/sdk/client/index.js");
     const stdioModule = await import("@modelcontextprotocol/sdk/client/stdio.js");
-    const protocolModule = await import("@modelcontextprotocol/sdk/shared/protocol.js");
     const typesModule = await import("@modelcontextprotocol/sdk/types.js");
     return {
       Client: clientModule.Client as unknown as new (info: unknown, options: unknown) => SdkClient,
       StdioClientTransport: stdioModule.StdioClientTransport as unknown as new (options: unknown) => SdkTransport,
+      CallToolResultSchema: typesModule.CallToolResultSchema,
+    };
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
+}
+
+/**
+ * The core modules plus the streamable-HTTP transport.
+ *
+ * A separate loader from {@link loadCoreSdk} on the same principle that one
+ * exists at all: a stdio server must not fail to start because the HTTP
+ * module moved, and neither should the reverse. Both stay clear of
+ * `shared/protocol.js`.
+ */
+async function loadHttpSdk(): Promise<SdkHttpModules> {
+  const core = await loadCoreSdk();
+  try {
+    const httpModule = await import("@modelcontextprotocol/sdk/client/streamableHttp.js");
+    return {
+      ...core,
+      StreamableHTTPClientTransport:
+        httpModule.StreamableHTTPClientTransport as unknown as new (url: URL, options?: unknown) => SdkTransport,
+    };
+  } catch (error) {
+    throw new McpClientSdkMissingError(error);
+  }
+}
+
+async function loadSdk(): Promise<SdkModules> {
+  const core = await loadCoreSdk();
+  try {
+    const protocolModule = await import("@modelcontextprotocol/sdk/shared/protocol.js");
+    const typesModule = await import("@modelcontextprotocol/sdk/types.js");
+    return {
+      ...core,
       ProtocolPrototype: (protocolModule.Protocol as unknown as { prototype: SdkProtocolRequestHandlerRegistrar })
         .prototype,
       ElicitRequestSchema: typesModule.ElicitRequestSchema,
-      CallToolResultSchema: typesModule.CallToolResultSchema,
     };
   } catch (error) {
     throw new McpClientSdkMissingError(error);
@@ -276,20 +346,7 @@ export async function connectCodexMcpClient(
 
   return {
     async callTool(name, callArgs, opts) {
-      try {
-        const result = await client.callTool(
-          { name, arguments: callArgs },
-          sdk.CallToolResultSchema,
-          opts?.timeoutMs !== undefined ? { timeout: opts.timeoutMs } : undefined,
-        );
-        return {
-          kind: "result",
-          result: { content: result.content, isError: result.isError === true },
-        };
-      } catch (error) {
-        if (isTimeoutError(error)) return { kind: "timeout" };
-        return { kind: "error", message: describeError(error) };
-      }
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
     },
     onElicitation(handler): void {
       elicitationHandler = handler;
@@ -303,10 +360,481 @@ export async function connectCodexMcpClient(
   };
 }
 
+/**
+ * One tool call, with the three outcomes this module distinguishes.
+ *
+ * Shared by the Codex specialist and the generic server connection rather
+ * than written twice. The distinction that matters is `timeout` versus
+ * `error`: the SDK raises the same JSON-RPC code for a wire `-32001` and for
+ * its own client-side deadline, and collapsing the two would report a server
+ * that answered slowly the same way as one that refused.
+ */
+async function callToolWithOutcome(
+  client: SdkClient,
+  resultSchema: unknown,
+  name: string,
+  args: Record<string, unknown>,
+  timeoutMs: number | undefined,
+): Promise<McpToolCallOutcome> {
+  try {
+    const result = await client.callTool(
+      { name, arguments: args },
+      resultSchema,
+      timeoutMs !== undefined ? { timeout: timeoutMs } : undefined,
+    );
+    return { kind: "result", result: { content: result.content, isError: result.isError === true } };
+  } catch (error) {
+    if (isTimeoutError(error)) return { kind: "timeout" };
+    return { kind: "error", message: describeError(error) };
+  }
+}
+
 /** The real port. Production wiring for `superviseCodexMcpRun`'s `client` dependency. */
 export const codexMcpClientPort: McpClientPort = { connect: connectCodexMcpClient };
 
 /** Argv for spawning the codex MCP server child. Pure; specification.md §3. */
 export function buildCodexMcpServerArgv(): readonly string[] {
   return ["codex", "mcp-server"];
+}
+
+/** One tool as an MCP server describes it. */
+export interface McpToolDescriptor {
+  readonly name: string;
+  readonly description?: string | undefined;
+  readonly inputSchema?: Record<string, unknown> | undefined;
+  /**
+   * `ToolAnnotations` — `readOnlyHint`, `destructiveHint`, and friends.
+   *
+   * A SIBLING of `inputSchema` in the protocol, not a member of it. Carried
+   * because a consumer that wants the hint has nowhere else to read it, and
+   * dropping it here is indistinguishable from a server that sent none.
+   */
+  readonly annotations?: Record<string, unknown> | undefined;
+}
+
+/**
+ * A connection to an operator-configured MCP server.
+ *
+ * Separate from {@link McpClientConnection}, which is the Codex specialist:
+ * that one carries `onElicitation` and `onCodexEvent`, neither of which a
+ * user's server sends and neither of which it should be offered. Sharing the
+ * transport is right; sharing the specialist is how the specialist stops being
+ * verifiable.
+ */
+export interface McpServerConnection {
+  listTools(opts?: { readonly timeoutMs?: number }): Promise<McpToolDescriptor[]>;
+  callTool(
+    name: string,
+    args: Record<string, unknown>,
+    opts?: { readonly timeoutMs?: number },
+  ): Promise<McpToolCallOutcome>;
+  close(): Promise<void>;
+}
+
+/**
+ * Normalize whatever a server returned for `tools/list`.
+ *
+ * Exported because it is the only part of `listTools` with a decision in it,
+ * and a decision inside a closure that needs a subprocess to reach is a
+ * decision nothing tests.
+ *
+ * Entries without a usable string name are DROPPED, not carried with an
+ * `undefined` name. A catalog key that is not a string cannot be called, so a
+ * nameless entry is a tool nobody can invoke — keeping it would put a row in
+ * `doctor` and in the catalog that fails at the moment of use instead of at
+ * the moment of listing.
+ */
+export function toToolDescriptors(raw: unknown): McpToolDescriptor[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.flatMap((tool): McpToolDescriptor[] => {
+    if (typeof tool !== "object" || tool === null) return [];
+    const record = tool as {
+      name?: unknown;
+      description?: unknown;
+      inputSchema?: unknown;
+      annotations?: unknown;
+    };
+    if (typeof record.name !== "string" || record.name === "") return [];
+    return [
+      {
+        name: record.name,
+        description: typeof record.description === "string" ? record.description : undefined,
+        inputSchema:
+          typeof record.inputSchema === "object" &&
+          record.inputSchema !== null &&
+          !Array.isArray(record.inputSchema)
+            ? (record.inputSchema as Record<string, unknown>)
+            : undefined,
+        // `annotations` is a SIBLING of `inputSchema` on `Tool`, never nested
+        // inside it. Dropping it here meant `classifyToolRisk` — which was
+        // reading it from inside `inputSchema`, a place the protocol never
+        // puts it — could never see a real server's `readOnlyHint`. Every
+        // honest read-only tool was advertised to the model as destructive,
+        // and the only way to be classified `read` was to nest the field
+        // where the spec says it does not go.
+        annotations:
+          typeof record.annotations === "object" &&
+          record.annotations !== null &&
+          !Array.isArray(record.annotations)
+            ? (record.annotations as Record<string, unknown>)
+            : undefined,
+      },
+    ];
+  });
+}
+
+/**
+ * Connect to a remote MCP server over streamable HTTP.
+ *
+ * The sibling of {@link connectStdioMcpServer}, and deliberately the same
+ * shape: same handshake bound, same abort handling, same
+ * `callToolWithOutcome`, same `McpServerConnection` back. Everything above
+ * this function — the catalog, the tool pair, the approval gate, the trust
+ * gate, truncation, timeouts — cannot tell the two apart, which is the
+ * property AC2 asserts and the reason a remote server inherits every
+ * control a local one has instead of needing them re-implemented.
+ *
+ * The differences are the two the transport forces:
+ *
+ *   - there is no child process, so an abort closes a socket rather than
+ *     killing a PID, and nothing can be orphaned;
+ *   - `headers` are resolved BEFORE this is called (`http-headers.ts`) so a
+ *     hollow credential never reaches the wire. This function refuses an
+ *     empty `Authorization` if one arrives anyway, because a rule enforced
+ *     in exactly one place is a rule with one bug between it and failure.
+ *
+ * `sse` is not a separate transport (D-06): it is what the server chooses
+ * when it responds, and streamable HTTP negotiates it.
+ */
+export async function connectHttpMcpServer(
+  url: string,
+  options: {
+    readonly headers?: Record<string, string> | undefined;
+    readonly handshakeTimeoutMs?: number | undefined;
+    readonly signal?: AbortSignal | undefined;
+  } = {},
+): Promise<McpServerConnection> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    // The url is NOT echoed. It is the expanded form, and an expanded
+    // `?api_key=${KEY}` put a live secret into `doctor --json` and
+    // `ServerState.error` through exactly this message. The caller knows
+    // the raw form and reports it.
+    throw new Error("mcp-client: the server url is not a valid URL");
+  }
+  if (parsed.username !== "" || parsed.password !== "") {
+    throw new Error("mcp-client: refusing a url that carries a username/password");
+  }
+  if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+    // `file:` and friends would be read through fetch with no server at the
+    // other end and no useful error.
+    throw new Error(`mcp-client: ${parsed.protocol} is not an MCP transport; use http or https`);
+  }
+
+  const headers = options.headers ?? {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (value === "") {
+      // Second line of defence, not the first. `resolveHttpHeaders` is the
+      // one that produces the actionable message; this one exists so the
+      // rule cannot be bypassed by a caller that builds headers itself.
+      throw new Error(`mcp-client: refusing to send an empty "${name}" header`);
+    }
+  }
+
+  const sdk = await loadHttpSdk();
+  const transport = new sdk.StreamableHTTPClientTransport(parsed, {
+    // EVERY fetch the transport makes, not the two that happen to read
+    // `requestInit`.
+    //
+    // `redirect: "error"` below was set on `requestInit`, and a reviewer
+    // found that the SDK spreads `requestInit` into exactly two of its
+    // three fetch calls — `send()` (POST) and `terminateSession()`
+    // (DELETE). The third, `_startOrAuthSse()`, builds its GET by hand:
+    //
+    //     const response = await (this._fetch ?? fetch)(this._url, {
+    //       method: 'GET', headers, signal: ...
+    //     });
+    //
+    // That GET opens the SSE stream. It runs automatically after
+    // `notifications/initialized`, and again on every reconnection. And
+    // `_commonHeaders()` DOES merge `requestInit.headers` into it — so the
+    // configured credential rode on the one call with no redirect policy,
+    // at the platform default of following up to twenty hops.
+    //
+    // A server could therefore answer the handshake normally and then
+    // 307 that GET to `169.254.169.254` or anywhere else, and keryx would
+    // hand over `X-Api-Key` — `fetch` strips only `Authorization`, and
+    // only across origins. The existing test could not see this: its
+    // fixture redirected EVERY request, so the very first POST was
+    // refused and the GET leg never ran.
+    //
+    // Wrapping `fetch` covers all three legs and stays correct if the SDK
+    // adds a fourth.
+    fetch: ((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) =>
+      fetch(input, { ...init, redirect: "error" })) as typeof fetch,
+    requestInit: {
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      // NO REDIRECTS. `fetch` defaults to following up to 20 hops, and
+      // `fetch` only strips `Authorization` across origins — a custom
+      // credential header, which is the common MCP pattern, follows. A
+      // 307 to a loopback or link-local address was followed and the
+      // target's body came back into `doctor` and, through `use_tool`'s
+      // error branch, into the model's context.
+      //
+      // keryx already sets the house standard for fetching third-party
+      // content in `src/harness/web/sandboxed-web-transport.ts`: bounded
+      // hops, each validated. Until this path can do the same, it does
+      // not redirect at all — a server that needs one can be configured
+      // with its real URL.
+      redirect: "error",
+    },
+    // The reconnection bound, stated rather than inherited.
+    //
+    // A review asked whether an SSE stream that drops can reconnect
+    // without limit. In this SDK version it cannot — the default is
+    // `maxRetries: 2` — so there is no storm to fix, and adding a
+    // supervisor for one would be machinery for a problem that does not
+    // exist. What was wrong is that the bound was a LIBRARY DEFAULT: a
+    // minor-version bump could raise it, and nothing here would notice or
+    // fail. These values are today's defaults, pinned so the policy is
+    // keryx's and a change to it shows up in this diff.
+    reconnectionOptions: {
+      initialReconnectionDelay: 1_000,
+      maxReconnectionDelay: 30_000,
+      reconnectionDelayGrowFactor: 1.5,
+      maxRetries: 2,
+    },
+  });
+
+  const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
+
+  const kill = (): Promise<void> =>
+    (async (): Promise<void> => {
+      try {
+        await transport.close();
+      } catch {
+        // Already closed; the error below is the one worth having.
+      }
+    })();
+
+  let aborted = options.signal?.aborted ?? false;
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted before it began");
+  }
+  const onAbort = (): void => {
+    aborted = true;
+    void kill();
+  };
+  options.signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await withHandshakeTimeout(client.connect(transport), options.handshakeTimeoutMs, kill);
+  } finally {
+    options.signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted");
+  }
+
+  return {
+    async listTools(opts): Promise<McpToolDescriptor[]> {
+      const result = await client.listTools(
+        {},
+        undefined,
+        opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+      );
+      return toToolDescriptors(result.tools);
+    },
+
+    async callTool(name, callArgs, opts): Promise<McpToolCallOutcome> {
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
+    },
+
+    async close(): Promise<void> {
+      await client.close();
+    },
+  };
+}
+
+/**
+ * Bound a handshake, and CLEAN UP the transport when the bound is hit.
+ *
+ * The distinction from a bare `Promise.race` is the cleanup callback: the
+ * race decides what the caller sees, and this decides what happens to the
+ * process the caller can no longer reach.
+ */
+async function withHandshakeTimeout(
+  work: Promise<void>,
+  ms: number | undefined,
+  onTimeout: () => Promise<void>,
+): Promise<void> {
+  if (ms === undefined) {
+    await work;
+    return;
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  try {
+    await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => {
+          timedOut = true;
+          reject(new Error(`MCP server did not complete the handshake within ${ms}ms`));
+        }, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+    if (timedOut) {
+      await onTimeout();
+      // The abandoned `connect` may still reject once the transport dies;
+      // it is already subscribed by the race, so this only stops a late
+      // rejection from surfacing as unhandled.
+      void work.catch(() => {});
+    }
+  }
+}
+
+/**
+ * Connect to a third-party stdio MCP server.
+ *
+ * No elicitation handler and no `codex/event` tap: this installs no
+ * `transport.onmessage` at all, so every message reaches the SDK's own
+ * dispatch. The Codex path taps that hook because it must correlate an
+ * elicitation request before the SDK consumes it; a user server has no such
+ * requirement, and installing the tap anyway would put keryx between a server
+ * and its own protocol for no reason.
+ *
+ * `connectCodexMcpClient` above is untouched by this and stays the only thing
+ * that reaches into `Protocol.prototype`.
+ */
+export async function connectStdioMcpServer(
+  argv: readonly string[],
+  options: McpSpawnOptions,
+  handshakeTimeoutMs?: number,
+  signal?: AbortSignal,
+  /**
+   * Collector for the close this function starts on abort or timeout.
+   *
+   * The caller needs it because `transport.close()` is GRACEFUL — the SDK
+   * waits 2s before SIGTERM and another 2s before SIGKILL — so a caller
+   * that aborts and immediately exits kills itself before the child gets a
+   * signal, and the child is reparented to init.
+   */
+  kills?: Array<Promise<void>>,
+): Promise<McpServerConnection> {
+  const [command, ...args] = argv;
+  if (command === undefined) {
+    throw new Error("mcp-client: connectStdioMcpServer called with empty argv");
+  }
+
+  const sdk = await loadCoreSdk();
+  const transport = new sdk.StdioClientTransport({
+    command,
+    args,
+    cwd: options.cwd,
+    env: options.env,
+    // PIPED, not inherited. The SDK defaults this to `inherit`, which hands
+    // a third-party server a direct writer to the operator's terminal: it
+    // can emit cursor-positioning and colour escapes and paint a convincing
+    // `✓ auto-approved shell: git status` line into the running TUI
+    // transcript, or simply flood the screen. Neither needs the model's
+    // cooperation and neither is attributable to the server that did it.
+    stderr: "pipe",
+  });
+
+  // Drained and discarded. A piped stream nobody reads fills its buffer and
+  // then blocks the child mid-write, which would turn "the server is noisy"
+  // into "the server hangs" — a worse failure than the one being fixed.
+  // `resume()` puts it in flowing mode with no consumer, so the bytes are
+  // read and dropped.
+  transport.stderr?.resume();
+
+  // No `capabilities.elicitation`: this client does not implement it, and
+  // advertising a capability it cannot serve invites requests it will fail.
+  const client = new sdk.Client({ name: "keryx-mcp-servers", version: "0.1.0" }, { capabilities: {} });
+
+  // The handshake is bounded HERE, where the transport is in scope, rather
+  // than only by a `Promise.race` in the caller.
+  //
+  // A race abandons; it does not cancel. A server that spawns and never
+  // answers `initialize` left the caller with no reference to the child it
+  // had started, so: the process lived until the SDK's own 60s request
+  // timeout (measured: `keryx` took 62.3s to exit with one such server
+  // configured, against 0.9s with none), and a SIGINT inside that window
+  // exited the parent and ORPHANED the child (measured: a live PID
+  // reparented to init).
+  //
+  // Closing the transport on timeout kills the child, so there is nothing
+  // left to abandon and nothing to defer.
+  const kill = (): Promise<void> => {
+    const done = (async (): Promise<void> => {
+      try {
+        await transport.close();
+      } catch {
+        // Already gone; whatever is thrown below is the error worth having.
+      }
+    })();
+    kills?.push(done);
+    return done;
+  };
+
+  // A caller that gives up BEFORE the budget elapses — the session quitting,
+  // Ctrl-C — aborts. Without this the child outlives the parent: measured
+  // with a 30s budget and a `close()` at 750ms, the spawned process was
+  // still alive after the parent exited, reparented to init. A timeout that
+  // has not fired yet cleans up nothing.
+  // Tracked in a local rather than re-reading `signal.aborted`, because the
+  // check before the await narrows the type and the check after it is
+  // exactly the one that must see a CHANGED value.
+  let aborted = signal?.aborted ?? false;
+  if (aborted) {
+    await kill();
+    throw new Error("mcp-client: connect aborted before it began");
+  }
+  const onAbort = (): void => {
+    aborted = true;
+    void kill();
+  };
+  signal?.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    await withHandshakeTimeout(client.connect(transport), handshakeTimeoutMs, kill);
+  } finally {
+    signal?.removeEventListener("abort", onAbort);
+  }
+
+  if (aborted) {
+    // The handshake won the race with the abort. The caller is gone, so
+    // hand back nothing and leave no process behind.
+    await kill();
+    throw new Error("mcp-client: connect aborted");
+  }
+
+  return {
+    async listTools(opts): Promise<McpToolDescriptor[]> {
+      const result = await client.listTools(
+        {},
+        undefined,
+        opts?.timeoutMs === undefined ? undefined : { timeout: opts.timeoutMs },
+      );
+      return toToolDescriptors(result.tools);
+    },
+
+    async callTool(name, callArgs, opts): Promise<McpToolCallOutcome> {
+      return callToolWithOutcome(client, sdk.CallToolResultSchema, name, callArgs, opts?.timeoutMs);
+    },
+
+    async close(): Promise<void> {
+      await client.close();
+    },
+  };
 }

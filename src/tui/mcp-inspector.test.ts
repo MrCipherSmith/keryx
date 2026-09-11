@@ -143,7 +143,20 @@ test("Tools tab opens with an explanatory caption, then one clickable-free row p
   );
   const rows = body.rows();
   expect(rows).toHaveLength(3); // caption + 2 tools
-  expect(findRow(rows, "mcp-tools-header")?.content).toContain("Built into keryx");
+  const caption = String(findRow(rows, "mcp-tools-header")?.content ?? "");
+  expect(caption).toContain("Built into keryx");
+  // Spec AC17, closed in P2. The caption originally ended "…keryx doesn't
+  // consume MCP servers as a client yet", which P0 made false. P0 pointed
+  // it at the CLI because the consumer view did not exist — a caption
+  // naming a missing screen is the failure the rename avoided. P2 built
+  // the view, so the caption names the view.
+  // `toContain("/mcp")` matched any superstring, so repointing the
+  // caption at `/mcps` — the one command this codebase forbids
+  // everywhere else — survived. Assert the exact token.
+  expect(caption).toMatch(/`\/mcp`/);
+  expect(caption).not.toContain("/mcps");
+  expect(caption).not.toContain("doesn't consume");
+  expect(caption).not.toContain("does not consume");
   expect(rows[1]?.content).toContain("gdgraph_affected");
   expect(rows[1]?.onMouseDown).toBeUndefined();
   expect(rows[2]?.content).toContain("shell_exec");
@@ -371,11 +384,19 @@ test("[d] never arms for generic (no file to disconnect)", () => {
   );
 });
 
-test("both /integrations and the retired /mcp open this view", () => {
-  // The rename must not make a command vanish under someone mid-session. The
-  // CLI aliases make the same promise; the TUI has to keep it too.
+test("/integrations opens this view and /mcp no longer does", () => {
+  // CHANGED IN P2, deliberately. This asserted that `/mcp` still opened
+  // the installer, on the grounds that "the rename must not make a
+  // command vanish under someone mid-session" — a real concern, and the
+  // right call while the consumer view did not exist.
+  //
+  // P2 built it, so `/mcp` does not vanish: it now means what D-04 says
+  // it means, the servers keryx CONNECTS TO. That is a better answer to
+  // the original concern than pointing it at the installer forever,
+  // because the installer is the surface this file's own header warns is
+  // "easy to misread as 'the MCP servers this agent is connected to'".
   expect(isMcpToolsCommand("/integrations")).toBe(true);
-  expect(isMcpToolsCommand("/mcp")).toBe(true);
+  expect(isMcpToolsCommand("/mcp")).toBe(false);
 
   // And `/mcps` is still nobody's command — it would differ from `/mcp` by one
   // character while meaning the opposite, with no flags to say which ran.

@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.89",
+  "version": "0.2.95",
   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {
@@ -49,7 +49,7 @@
     "test:client:terminal": "bun test src/tui/ src/commands/shell",
     "test:client:streaming": "bun test src/harness/provider/",
     "test:client:cancel-resume": "bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/commands/sessions",
-    "test:client:runtime": "bun test src/harness/ src/mcp-client/ src/agents/ src/commands/agent src/commands/harness src/commands/providers",
+    "test:client:runtime": "bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers",
     "test:client": "bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime",
     "check": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun test",
     "check:core": "bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core",

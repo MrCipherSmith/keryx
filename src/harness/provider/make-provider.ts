@@ -149,7 +149,12 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
     };
-    return new OpenAiCompatEngine({ fetch: opts.fetch, grant }, OLLAMA_COMPAT_IDENTITY);
+    // The label is the registry's own, so an error names the gateway that sent it.
+    // A grok session used to report `Ollama API returned HTTP 403` — and whoever
+    // read that went looking at an Ollama endpoint that was never involved. The id
+    // and revision stay Ollama's (pinned by tests and keyed on elsewhere); giving
+    // each provider its own is the separate naming fix recorded above.
+    return new OpenAiCompatEngine({ fetch: opts.fetch, grant }, { ...OLLAMA_COMPAT_IDENTITY, providerLabel: compat.label });
   }
   return new FakeProvider([]);
 }

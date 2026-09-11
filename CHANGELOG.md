@@ -3,6 +3,129 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.95] — 2026-09-11
+
+Five defects in keryx's own agent tools and error handling, read off a transcript
+of the shell on a research task. Each is a place where the shell worked against the
+model it was driving; each is fixed whatever any comparison says.
+
+### Added
+
+- **`read_file` reads past the first 20 KB** — optional `start_line` (1-based).
+  The tool returned the first 20,000 bytes of a file and nothing else; content past
+  them was unreachable however the model asked. A truncated read now ends with the
+  lines it showed and the `start_line` to continue from, and a line reported by
+  `search_code` or `graph_symbol` can be read directly. Streamed, so memory stays
+  bounded; a `start_line` past the end is an error that states the file's length.
+
+### Changed
+
+- **A project without `.metaproject/` is no longer offered the tools that need
+  one.** The graph, wiki, memory, flow, health, testing and skill tools read
+  artifacts under `.metaproject/`, and in a plain repository they could only fail —
+  the measured session called `graph_find` and got `index-incomplete … never built
+  here`. Each was also a description the model re-read every round. `search_code`
+  stays, and a project with `.metaproject/` gets exactly the roster it had.
+  `--deny-tools` still accepts those names in a plain repository, so one command
+  line does not pass in one directory and fail as "unknown tool" in the next.
+
+- **The agent's instruction describes the tools it was actually given.** It named
+  every metaproject tool and told the model to call `graph_symbol` first whatever
+  the roster held, and it said `read_file` "cannot page forward". It is now built
+  from the session's roster, and says how to page.
+
+- **`search_code` output is project-relative, long lines are capped, and a clip
+  says how much it dropped.** A path argument went to ripgrep absolute, so every
+  match line carried the checkout's root — about 65 bytes of noise per line. One
+  matching line of an SVG or a minified bundle is the whole file (8 KB came back
+  from a single SVG); lines are now capped at 400 columns. A result over the cap
+  said `…(truncated)`; it now says `showing N of M lines`, cut at a line boundary.
+
+### Fixed
+
+- **An OpenAI-compatible provider's errors name that provider, keep the server's
+  reason, and classify auth and rate limits.** Every registry provider was built
+  with Ollama's identity, so a grok session reported `Ollama API returned HTTP 403`.
+  The message now uses the registry label, keeps the status, and carries the
+  server's reason from the JSON shapes gateways use — `error.message`, `error` as a
+  string, `message`, `detail` — redacted and capped at 300 characters. A non-JSON
+  body is still never surfaced. 401 and 403 are `authentication`, 429 is a
+  retryable `rate_limit` honouring `Retry-After`; every 4xx was `invalid_request`
+  before. The first real call through it turned a bare 403 into `xAI (Grok) API
+  returned HTTP 403: The OAuth2 access token could not be validated.` — which had
+  been blamed on an exhausted balance. The provider id stays `ollama` for now;
+  giving each provider its own is a separate change.
+
+- **The subprocess runner runs the keryx that is running.** It spawned whichever
+  `keryx` PATH resolved, which is routinely a different build: a shell run from
+  source had its tool fallbacks answered by an installed release four versions
+  behind. It now re-runs keryx's own entry script with the current bun, or the
+  compiled binary itself, and uses PATH only when the process is not keryx.
+
+## [0.2.94] — 2026-09-11
+`keryx mcp` — keryx as a CLIENT of other people's MCP servers. This entry
+covers 0.2.90 through 0.2.94: those versions were tagged in `package.json`
+during development but never published, so 0.2.94 is the first release that
+carries any of it.
+
+### Added
+- **`keryx mcp add|list|remove|enable|disable|trust|untrust|doctor`** — the
+  servers keryx connects to, as distinct from `keryx serve-mcp`/`keryx
+  integrate`, which publish keryx itself. Native config is
+  `mcp-servers.json`, user-global and project-scoped, with `${VAR}` and
+  `${VAR:-default}` expansion.
+- **Two tools of fixed cost, not one per server tool.** `search_tool` finds a
+  tool by name, description or server; `use_tool` calls it. Connecting a
+  server with ninety tools does not put ninety tools in front of the model.
+- **Remote servers over streamable HTTP.** `keryx mcp add <name> --transport
+  http <url> --header 'Authorization: Bearer ${TOKEN}'`. `sse` is an alias:
+  it is what a server chooses when it answers, and streamable HTTP negotiates
+  it.
+- **`/mcp` in a session** lists what is connected, what failed and why, and
+  what is waiting for `keryx mcp trust`. `/integrations` remains the
+  installer view.
+- **Read-only compat readers** for Cursor (`.cursor/mcp.json`), Claude
+  (`~/.claude.json`, including its per-project block), a bare `.mcp.json`,
+  and Grok (`.grok/config.toml`). A server you already configured elsewhere
+  appears in `keryx mcp list` tagged with its source. keryx never writes to
+  those files: `remove` on such a name fails and names the file to edit, and
+  `enable`/`disable` record your preference in keryx's own overlay.
+
+### Security
+- **A project-scoped server is not started until you approve it.** A
+  committed `.keryx/mcp-servers.json`, `.mcp.json`, `.cursor/mcp.json` or
+  `.grok/config.toml` is code whoever you cloned from wrote, and cloning is
+  not consent to run it. Such a server is held at `needs-approval` until
+  `keryx mcp trust <name>`, and the approval is keyed to the exact command,
+  url, environment and credential variables — editing any of them revokes it.
+  A server from your own home directory is not held: you wrote that file.
+- **A credential that resolves to nothing never reaches a socket.** `Bearer
+  ${TOKEN}` with `TOKEN` unset expands to a non-empty `"Bearer "`, which
+  produces a 401 that reads as the server being broken. keryx refuses before
+  connecting and names the variable to set.
+- **Three refusals made on purpose**, each a working configuration elsewhere:
+  a redirect is not followed (your credential header would follow it), a
+  username or password in the url is rejected (it prints everywhere and the
+  HTTP client drops it anyway), and an unset `${VAR}` in a url is rejected
+  rather than silently addressing the wrong path.
+- **No credential value is ever printed** — not by `list`, `doctor --json`,
+  the `/mcp` view or the approval prompt. Variable NAMES are shown so you
+  know what a server will be handed.
+- **A third-party server cannot draw on your terminal.** Tool names,
+  descriptions, results and error bodies are neutralised before display, so
+  a server cannot paint a forged `✓ auto-approved` line.
+- **Approving an MCP call names the server and the tool above the
+  arguments**, and never offers "always allow" — the grant pattern would be a
+  name the model chose, stored in your permission file.
+
+### Fixed
+- A tool whose qualified name fails the FQN pattern is renamed for the model
+  and kept verbatim on the wire, instead of being dropped. Measured against
+  keryx's own server: 19 tools reachable before, 40 after.
+- `keryx mcp --help` describes the consumer subcommands. It described only
+  the retired publisher spellings, so looking up `list` or `doctor` sent you
+  to `serve-mcp`.
+
 ## [0.2.89] — 2026-09-10
 
 ### Added

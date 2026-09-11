@@ -7,6 +7,7 @@ const base = {
   isWorkspace: false,
   isReview: false,
   isMcp: false,
+  isMcpConsumer: false,
 };
 
 test("classifyBusyDispatch: /exit routes to exit", () => {
@@ -110,12 +111,41 @@ test("classifyBusyDispatch: isReview line routes to review", () => {
 test("classifyBusyDispatch: isMcp line routes to mcp", () => {
   expect(
     classifyBusyDispatch({
-      line: "/mcp",
+      line: "/integrations",
       commandName: undefined,
       ...base,
       isMcp: true,
     }),
   ).toBe("mcp");
+});
+
+// P2. `/mcp` is the CONSUMER view now, and it is read-only, so it is
+// allowed while the main agent is busy for the same reason `/review` and
+// `/flows` are: looking at what is connected cannot interfere with a turn.
+test("classifyBusyDispatch: /mcp routes to the consumer view", () => {
+  expect(
+    classifyBusyDispatch({
+      line: "/mcp",
+      commandName: undefined,
+      ...base,
+      isMcpConsumer: true,
+    }),
+  ).toBe("mcp-consumer");
+});
+
+// BOUNDARY. The live if-chain checks the consumer before the installer,
+// and this function exists to PREDICT that chain — if the two orders ever
+// disagree, the classifier answers for a route the shell does not take.
+test("classifyBusyDispatch: the consumer wins when both predicates say yes", () => {
+  expect(
+    classifyBusyDispatch({
+      line: "/mcp",
+      commandName: undefined,
+      ...base,
+      isMcp: true,
+      isMcpConsumer: true,
+    }),
+  ).toBe("mcp-consumer");
 });
 
 test("classifyBusyDispatch: unrecognized slash command routes to deferred", () => {

@@ -24,6 +24,7 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   "required",
   "properties",
   "additionalProperties",
+  "propertyNames",
   "dependentRequired",
   // String assertions.
   "minLength",
@@ -33,6 +34,17 @@ export const SUPPORTED_KEYWORDS: ReadonlySet<string> = new Set([
   // Number assertions.
   "minimum",
   "maximum",
+  // The exclusive pair. This list did NOT claim them before, and the validator
+  // did not implement them — the two were honestly in step, and the coverage
+  // proof was sound for what it covers: the frozen schemas in SCHEMA_DIR.
+  //
+  // What it does not cover is a schema handed to `validateAgainstSchemaObject`
+  // from outside that directory, which is how `exclusiveMinimum: 0` in the
+  // MCP-servers package schema came to mean nothing. Both are implemented now,
+  // and listed here so this set stays what its comment says it is: the exact
+  // keywords the validator implements.
+  "exclusiveMinimum",
+  "exclusiveMaximum",
   // Array assertions.
   "items",
   "minItems",

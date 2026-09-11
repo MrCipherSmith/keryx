@@ -2295,6 +2295,164 @@ has no notion of the keryx manifest. Headless codex needs `codex exec
 runtime choice at that prompt). The default non-interactive `init` never enables MCP
 nor writes a client config.
 
+## mcp (consumer) — connecting keryx TO other MCP servers
+
+Everything above is keryx **as** an MCP server. This is the other direction:
+third-party MCP servers that `keryx shell` connects to, so the model can use
+their tools.
+
+```
+keryx mcp list [--json]
+keryx mcp add <name> [-e KEY=value]… [--scope user|project] [--force] -- <command…>
+keryx mcp add --transport http|sse <name> <url> [--header "K: V"]…
+keryx mcp remove <name> [--scope user|project]
+keryx mcp enable | disable <name>
+keryx mcp trust | untrust <name>
+keryx mcp doctor [name] [--json]
+```
+
+| Command | Description |
+|---|---|
+| `list` | Every configured server with its source tag (`user`, `project`) and whether it is disabled. `--json` adds the resolved entry, with `env` and `headers` reduced to `set`/`unset` — never the values. An empty list names the two files that were read, because "no servers" and "your config is somewhere keryx does not look" are different problems. |
+| `add` | Writes a native entry. The stdio form REQUIRES `--` before the server's command: without it, `keryx mcp add fs -- npx pkg --json` could not tell whose `--json` that is. `-e` is repeatable. `--scope user` (default) writes `mcp-servers.json` in the keryx config dir, owner-only; `--scope project` writes `<root>/.keryx/mcp-servers.json`, which is meant to be committed. An existing name is refused unless `--force`. |
+| `add --transport http\|sse` | A remote server by URL, with repeatable `--header "Name: value"`. `sse` is an alias of `http` — streamable HTTP negotiates it, so it is not a separate transport. |
+| `remove` | Deletes a native entry. With `--scope` omitted it resolves which file actually defines the name, and refuses when both do rather than guessing which one you meant. |
+| `enable` / `disable` | A personal overlay in the keryx config dir, never an edit to the config file. Disabling a server your project committed produces no diff for your colleagues; enabling one the project disabled works for the same reason. |
+| `trust` / `untrust` | Approve (or withdraw approval for) a PROJECT-scoped server. See "Project servers need approval" below. Prints the command it would launch before recording anything. |
+| `doctor` | Config problems, a real connection attempt, the tool count, and every tool that had to be skipped with the reason why. `--json` for the machine-readable form. Exits non-zero when anything needs you. |
+
+**Config files.**
+
+| File | Role |
+|---|---|
+| `<keryx config dir>/mcp-servers.json` | User-global. Owner-only (0600) — `env` values are often tokens. |
+| `<project>/.keryx/mcp-servers.json` | Project-scoped, meant to be committed. Wins over the user file for the same name (replace, not field-merge). |
+| `<keryx config dir>/mcp-servers-disabled.json` | Your personal enable/disable overlay. Wins over both, in either direction. |
+
+`${VAR}` and `${VAR:-default}` expand in `command`, `args`, `env`, `url` and
+`headers` at load time.
+
+**What the model sees.** Two tools, `search_tool` and `use_tool` — not one
+registered tool per MCP tool, however many servers you connect. The model
+searches for a tool by description, then calls it by qualified name
+(`server__tool`). The trade this buys is a tool surface whose cost does not
+grow with your server list; the cost is that the model cannot see a tool it
+has not searched for.
+
+**Project servers need approval.** A server in `<project>/.keryx/mcp-servers.json`
+is committed, which means it is a command *someone else wrote* the moment you
+clone the repository. keryx will not start one until you have said so:
+
+```
+$ keryx mcp list
+docs (project) (needs approval) stdio — npx -y some-docs-mcp
+
+1 project server(s) are not started until approved — a committed config is code someone else wrote.
+Read what it launches above, then: keryx mcp trust <name>
+```
+
+The approval is bound to the exact command, so a later commit that changes
+what `docs` runs needs approving again. It is stored in your own config
+directory, never in the repository. Your own `keryx mcp add` servers
+(user scope) need none of this.
+
+**Remote servers and their credentials.** A `url` server is dialled over
+streamable HTTP and is otherwise identical to a local one: same catalog,
+same `search_tool`/`use_tool`, same approval gate, same result cap, same
+trust rule for project scope.
+
+Credentials come from the environment, two ways:
+
+```bash
+keryx mcp add linear --transport http https://mcp.linear.app/mcp \
+  --header 'Authorization: Bearer ${LINEAR_TOKEN}'
+
+# or, equivalently
+keryx mcp add linear --transport http https://mcp.linear.app/mcp \
+  --header 'X-Whatever: v'   # plus, in the config file: "bearer_token_env_var": "LINEAR_TOKEN"
+```
+
+If the variable is **unset**, keryx does not dial. It does not send
+`Bearer ` and let the server reject it — a hollow credential produces a 401
+that reads as the server being broken, and on a server that treats an empty
+bearer as anonymous it may be accepted as the wrong identity. Instead:
+
+```
+$ keryx mcp doctor linear
+linear [user] http: needs_auth — header "Authorization" needs LINEAR_TOKEN, which is unset
+  unset: Authorization
+```
+
+An explicit `Authorization` header wins over `bearer_token_env_var` if you
+somehow write both.
+
+**Three things keryx refuses on purpose.** Each of these is a working
+configuration elsewhere and a refusal here, so `doctor` names it rather
+than reporting a generic failure:
+
+| Refused | Why |
+|---|---|
+| A **redirect** (`3xx`) | `fetch` follows up to twenty hops and only strips `Authorization` across origins — a custom credential header, which is the common MCP pattern, follows all the way. Configure the final URL. |
+| A **username or password in the URL** (`https://user:pw@host/mcp`) | It appears in every message that names the URL, and the HTTP client drops it anyway: you would get the secret on screen and an unauthenticated connection. Put it in a header or `bearer_token_env_var`. |
+| An **unset `${VAR}` in the `url`** | `https://api.example/${TENANT}/mcp` with `TENANT` unset is a *valid* URL addressing the wrong path, which otherwise reports as "nothing is listening" and sends you to check a server that is fine. |
+
+**What `doctor` tells apart.** For a remote server, "failed" is not one
+thing: nothing listening, a host that does not resolve, a rejected TLS
+certificate (including the self-signed one a corporate TLS-intercepting
+proxy presents), an HTTP error by status, credentials the server refused, a
+handshake that never completed, a redirect, and a URL that serves a web
+page rather than MCP each get their own message. `doctor` exits non-zero whenever something needs
+you — including a server awaiting `trust` or a variable you have not set.
+
+**In a session: `/mcp`.** Inside `keryx shell`, `/mcp` lists the servers
+keryx is connected to — status, tool count, why a failed one failed, and
+the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
+session's live state and never dials anything itself, so opening it is
+free.
+
+Do not confuse it with `/integrations`, which is the opposite direction:
+that is where keryx ITSELF is registered into an editor's MCP config.
+`/mcp` meant the installer before this release and now means the
+consumer, matching what `keryx mcp` has meant on the command line since
+the rename.
+
+**Approval of tool calls.** Every `use_tool` call goes through the same approval gate as
+`shell_exec` and `apply_patch`. Under `--trust` a call still asks, and with no
+approver present (headless) it is denied rather than allowed. A server's own
+"this tool is read-only" annotation is shown to the model as a hint and is
+never allowed to skip the prompt.
+
+The prompt for an MCP call names the **server** and the **tool** on their
+own lines, above the arguments, and never offers "always allow". Both are
+deliberate: a tool call's arguments are written by the model, so nothing
+in them may be able to push the tool's identity out of view, and an
+"always" grant would store a pattern the model chose in your permission
+file.
+
+**Environment.** A server is spawned with your environment minus anything
+credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
+`GEMINI_API_KEY`, …), forge and cloud tokens (`GITHUB_TOKEN`, `NPM_TOKEN`,
+`AWS_*`), `SSH_AUTH_SOCK`, the whole `KERYX_*` namespace, and any variable
+whose name says it holds a token, key, password or credential. A server that
+genuinely needs one takes it explicitly with `-e`, which is a decision you
+made rather than a default you inherited. Its stderr is captured, not
+inherited, so it cannot write to your terminal.
+
+```
+$ keryx mcp add fs -- npx -y @modelcontextprotocol/server-filesystem ~/notes
+Added "fs" to /home/you/.local/share/keryx/mcp-servers.json (created).
+Run `keryx mcp doctor fs` to check it connects.
+
+$ keryx mcp doctor fs
+fs [user] stdio: connected
+  file: /home/you/.local/share/keryx/mcp-servers.json
+  tools: 14
+```
+
+Not yet in this release: OAuth, importing servers you already configured in
+Cursor/Claude/`.mcp.json`, and a TUI view. See
+`docs/requirements/keryx-mcp-servers/`.
+
 Tool and resource exposure is filtered by the manifest's `expose.modules` list — a
 disabled module is hidden from `tools/list` and `resources/list`.
 
