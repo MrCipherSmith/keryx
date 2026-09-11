@@ -7,9 +7,9 @@
   "id": "250",
   "slug": "keryx-shell-loses-the-arena-on-tools-and",
   "title": "keryx shell loses the arena on tools and errors: self-spawned keryx, provider identity and error bodies, search noise, project-blind roster, head-only read_file",
-  "status": "implemented",
+  "status": "done",
   "createdAt": "2026-09-11T07:29:26.898Z",
-  "updatedAt": "2026-09-11T10:38:20.057Z",
+  "updatedAt": "2026-09-11T14:32:44.304Z",
   "source": {
     "type": "description",
     "ref": null
@@ -408,6 +408,43 @@
       "at": "2026-09-11T10:38:20.057Z",
       "event": "ac-confirmed",
       "detail": "AC8: CI on PR #529 head 0373787: 18/18 checks pass, including typecheck-and-tests (bun run check: lint, typecheck, typecheck:scripts, full bun test) and client matrix (terminal). Locally: lint and both typechecks clean; the ten files that timed out under local load pass alone 239/239. Two earlier CI rounds failed on this branch's own defects (shell.ts source audits, one facade bypass over the ratchet) and were fixed, not loosened."
+    },
+    {
+      "at": "2026-09-11T12:28:47.384Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T12:28:56.003Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/250-2026-09-11-keryx-shell-loses-the-arena-on-tools-and/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#529 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__529.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 529 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-11T14:27:54.134Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/529 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T14:27:54.329Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T14:28:02.994Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 4 finding(s) at or above `minor` are not terminal: 2026-09-11-ingest-529#F-001 (major, round 2026-09-11-ingest-529): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-11-ingest-529#F-002 (minor, round 2026-09-11-ingest-529): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-11-ingest-529#F-003 (minor, round 2026-09-11-ingest-529): marked fixed (`acted-on`) but its evidence names no commit SHA | 2026-09-11-ingest-529#F-004 (minor, round 2026-09-11-ingest-529): marked fixed (`acted-on`) but its evidence names no commit SHA"
+    },
+    {
+      "at": "2026-09-11T14:32:35.474Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/529 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T14:32:35.691Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T14:32:44.304Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
   "baseBranch": "main"

@@ -1,0 +1,29 @@
+# Flow Journal
+
+- 2026-09-11T14:35:04.062Z - flow created
+- 2026-09-11T14:38:20.779Z - task-added: T5: Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives
+- 2026-09-11T14:38:21.007Z - task-added: T6: Close the readline MCP runtime in the shell command's outer finally
+- 2026-09-11T14:38:21.184Z - task-added: T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test
+- 2026-09-11T14:38:21.413Z - task-added: T8: Verification: test:client:terminal, typecheck, lint, CI green
+- 2026-09-11T14:38:21.636Z - task-done: T1: Collect remaining context
+- 2026-09-11T14:38:21.825Z - task-done: T2: Implement per plan
+- 2026-09-11T14:38:22.067Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T14:38:22.219Z - frozen: 4 criteria; checksum recorded
+- 2026-09-11T14:38:22.357Z - started
+- 2026-09-11T14:39:45.324Z - task-done: T5: Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives
+- 2026-09-11T14:42:03.077Z - task-done: T6: Close the readline MCP runtime in the shell command's outer finally
+- 2026-09-11T14:42:03.241Z - task-done: T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test
+- 2026-09-11T14:50:36.711Z - task-done: T8: Verification: test:client:terminal, typecheck, lint, CI green
+- 2026-09-11T15:13:58.899Z - task-added: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)
+- 2026-09-11T15:13:59.098Z - task-done: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)
+- 2026-09-11T15:17:33.499Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T15:18:15.131Z - ac-confirmed: AC1
+- 2026-09-11T15:18:29.169Z - ac-confirmed: AC2
+- 2026-09-11T15:18:29.351Z - ac-confirmed: AC3
+- 2026-09-11T15:18:29.521Z - ac-confirmed: AC4
+- 2026-09-11T15:25:52.079Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/530 (warning: PR is not a draft)
+- 2026-09-11T15:27:23.822Z - completing
+- 2026-09-11T15:27:33.180Z - completion-failed: review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against d57ecbec7dd43075cae17c0e4153fbdb24e31f2a, but the PR head is f93a4d832e5784cf983217b6680ad562f8fee0dd. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#530 was last collected against d57ecbec7dd43075cae17c0e4153fbdb24e31f2a (round 1), but the PR head is f93a4d832e5784cf983217b6680ad562f8fee0dd. Everything anyone said after d57ecbec7dd43075cae17c0e4153fbdb24e31f2a is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 530 --sha <pr-head>`.
+- 2026-09-11T15:28:04.964Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/530 (warning: PR is not a draft)
+- 2026-09-11T15:28:05.139Z - completing
+- 2026-09-11T15:28:13.877Z - done: all gates passed

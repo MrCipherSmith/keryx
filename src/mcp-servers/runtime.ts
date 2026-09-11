@@ -46,7 +46,30 @@ export const CLOSE_GRACE_MS = 750;
  */
 export const KILL_GRACE_MS = 4_500;
 
-const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Wait for `work`, but no longer than `ms` — and take the timer down either way.
+ *
+ * This was `Promise.race([work, delay(ms)])`, and the losing timer stayed armed.
+ * The CLI exits by setting `exitCode` rather than calling `process.exit`, so an
+ * armed timer is a reason to stay alive: every `close()` held the process for its
+ * full grace — about 4.5 s after every refused start and every `-p` run, even when
+ * the work had finished at once (flow 251, review F-001). Cleared rather than
+ * `unref`'d, because an unref'd bound lets the process exit in the middle of the
+ * `finally` that awaits it, before the terminal is restored or the exit code set.
+ */
+async function within(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      work,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, ms);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
 
 export type McpRuntimeOptions = {
   readonly cwd: string;
@@ -190,6 +213,12 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     await closeServers(fresh);
   };
 
+  // Idempotent: the second caller gets the first caller's close, not a second run
+  // of the waits. The shell closes the readline runtime in two places — the REPL's
+  // own `finally` and the command's outer one, which is what catches a start-up
+  // refusal (K-012) — and the second must cost nothing.
+  let closing: Promise<void> | undefined;
+
   return {
     catalog: () => catalog,
     servers: () => states,
@@ -199,7 +228,11 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     ready: async () => {
       await settled;
     },
-    close: async () => {
+    close: () => (closing ??= closeNow()),
+  };
+
+  async function closeNow(): Promise<void> {
+    {
       // Bounded. `close()` used to `await settled` outright, so quitting a
       // session — or the TUI failing to init and falling through to readline
       // — blocked for as long as the outstanding dials took. That is the
@@ -211,19 +244,19 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
       // without it a `close()` inside the handshake budget left the child
       // running and the parent exited out from under it.
       dialling.abort();
-      await Promise.race([settled, delay(CLOSE_GRACE_MS)]);
+      await within(settled, CLOSE_GRACE_MS);
       await closeOnce(states);
       // AWAIT the kills the abort started, bounded by how long the SDK's
       // graceful close actually takes to reach SIGKILL. Returning before
       // this is what orphaned the child: the caller's very next statement
       // is `process.exit`, and "still closed, just not awaited" is only
       // true while the process survives.
-      await Promise.race([Promise.all(kills), delay(KILL_GRACE_MS)]);
+      await within(Promise.all(kills), KILL_GRACE_MS);
       // Whatever lands after all of that is still closed — a dial that has
       // not even reached the abort handler yet.
       void settled.then(() => closeOnce(states)).catch(() => {});
-    },
-  };
+    }
+  }
 }
 
 /**

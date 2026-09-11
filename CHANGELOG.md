@@ -3,6 +3,27 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.96] — 2026-09-11
+
+### Fixed
+
+- **A `keryx shell` start that fails no longer hangs when MCP servers are
+  configured.** The readline path (`--no-tui`, `--print`) starts the session's MCP
+  runtime before it builds the tool list, and a refusal thrown while building it —
+  an unknown name in `--deny-tools` is the reproduced case — left before the
+  runtime was closed. One live child per configured server then held the process
+  open: the error printed and the shell never exited (measured: killed at 90 s,
+  against 1.3 s with no servers). Every exit from the agent branch now closes the
+  runtime — aborting a dial still in flight, and closing any server that had
+  already connected.
+
+- **Closing the MCP runtime no longer holds the process for its full grace
+  period.** `close()` bounded its waits with timers it never cleared, and the CLI
+  exits by letting the event loop drain, so every close kept the process alive for
+  about 4.5 s after it had finished — after every refused start and after every
+  `keryx shell -p` run. The timers are now cleared as soon as the wait resolves,
+  and a second `close()` returns the first one's result instead of waiting again.
+
 ## [0.2.95] — 2026-09-11
 
 Five defects in keryx's own agent tools and error handling, read off a transcript
@@ -61,6 +82,24 @@ model it was driving; each is fixed whatever any comparison says.
   source had its tool fallbacks answered by an installed release four versions
   behind. It now re-runs keryx's own entry script with the current bun, or the
   compiled binary itself, and uses PATH only when the process is not keryx.
+
+### Shipped in 0.2.94, recorded late (#524)
+
+Both changes below went out in 0.2.94 and are missing from that entry; they are
+recorded here rather than by rewriting a published section.
+
+- **Security: a credentials file was masked on one line and printed in full on the
+  next.** `redactSensitiveText` exists so that `cat ~/.aws/credentials` does not
+  leak into the model context, and both forms of that file passed through: the key
+  id was masked and `aws_secret_access_key` printed in full. The uppercase rule
+  missed names ending in `ACCESS_KEY`, and the credentials file writes the name in
+  lower case. A short case-insensitive list of names that mean one thing now covers
+  it, tested in both directions — prose and camelCase identifiers stay untouched.
+- **`keryx shell --print <prompt>`, `--events-file <path>`, `--events-max-field
+  <n>`.** One agent turn through the same loop a person drives, and an NDJSON
+  transcript of it — turn boundaries, tool calls and results, provider usage —
+  written beside the rendered output, never instead of it. Every string passes the
+  redaction floor before it is clipped.
 
 ## [0.2.94] — 2026-09-11
 `keryx mcp` — keryx as a CLIENT of other people's MCP servers. This entry
