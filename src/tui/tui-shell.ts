@@ -73,8 +73,8 @@ import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
   buildConsumerModel,
-  formatConsumerRow,
   isMcpConsumerCommand,
+  renderConsumerLines,
 } from "./mcp-consumer";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
@@ -3600,22 +3600,7 @@ export async function launchTuiAgentShell(opts: {
               userFile: userConfigFile(),
               projectFile: projectConfigFile(cwd),
             });
-      const lines =
-        model === undefined
-          ? [
-              "No MCP session yet — this shell has not built a tool list.",
-              "Configured servers are listed by `keryx mcp list`; `keryx mcp doctor` dials them.",
-            ]
-          : [
-              ...model.problems.map((p) => `config problem — ${p}`),
-              ...(model.emptyHint === undefined ? [] : model.emptyHint.split("\n")),
-              ...model.rows.flatMap((row) => {
-                const out = [formatConsumerRow(row)];
-                if (row.detail !== undefined) out.push(`    ${row.detail}`);
-                if (row.action !== undefined) out.push(`    → ${row.action}`);
-                return out;
-              }),
-            ];
+      const lines = renderConsumerLines(model);
       for (const line of lines) {
         transcript.add(new otui.TextRenderable(r, { id: `mcp${uid++}`, content: otui.t`${otui.dim(line)}` }));
       }

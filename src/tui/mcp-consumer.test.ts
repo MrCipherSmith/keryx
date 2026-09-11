@@ -13,6 +13,7 @@ import {
   formatConsumerRow,
   isMcpConsumerCommand,
   MCP_CONSUMER_COMMAND,
+  renderConsumerLines,
 } from "./mcp-consumer";
 import { isMcpToolsCommand, MCP_TOOLS_COMMAND } from "./mcp-inspector";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
@@ -204,5 +205,97 @@ describe("AC5 — the view never prints a credential", () => {
     const m = model([configured({ url: "https://api.test/mcp" })]);
     expect(m.rows[0]?.credentials).toEqual([]);
     expect(formatConsumerRow(m.rows[0] as never)).not.toContain("reads");
+  });
+});
+
+describe("the printed lines — found by the mutation sweep", () => {
+  // Five separate decisions in the `/mcp` TUI callback could be inverted
+  // with nothing failing, because a callback inside `tui-shell.ts` has no
+  // harness. Third time on this branch that moving lines into a value was
+  // the fix.
+
+  test("no runtime says so, rather than showing an empty panel", () => {
+    const lines = renderConsumerLines(undefined);
+    expect(lines.join("\n")).toContain("No MCP session yet");
+    expect(lines.join("\n")).toContain("keryx mcp list");
+  });
+
+  test("BOUNDARY — a runtime with servers shows the servers, not that message", () => {
+    // Without this, `renderConsumerLines = () => noSessionLines` passes
+    // the test above.
+    const lines = renderConsumerLines(model([configured({ url: "https://api.test/mcp" })]));
+    expect(lines.join("\n")).not.toContain("No MCP session yet");
+    expect(lines.join("\n")).toContain("api.test");
+  });
+
+  test("a detail line is printed when there is one", () => {
+    const lines = renderConsumerLines(
+      model([configured({ url: "https://api.test/mcp" })], [
+        { name: "s", status: "failed", toolCount: 0, error: "boom" },
+      ]),
+    );
+    expect(lines.join("\n")).toContain("boom");
+  });
+
+  test("BOUNDARY — and NOT printed when there is none", () => {
+    // The mutant: `if (row.detail !== undefined)` inverted prints the
+    // string "undefined" under every healthy server.
+    const lines = renderConsumerLines(
+      model([configured({ url: "https://api.test/mcp" })], [
+        { name: "s", status: "connected", toolCount: 2 },
+      ]),
+    );
+    expect(lines.join("\n")).not.toContain("undefined");
+  });
+
+  test("an action line is printed for a held server and not for a healthy one", () => {
+    const held = renderConsumerLines(
+      model([configured({ command: "npx" }, { source: "project" })], [
+        { name: "s", status: "needs-approval", toolCount: 0 },
+      ]),
+    );
+    expect(held.join("\n")).toContain("keryx mcp trust s");
+
+    const fine = renderConsumerLines(
+      model([configured({ url: "https://api.test/mcp" })], [
+        { name: "s", status: "connected", toolCount: 1 },
+      ]),
+    );
+    expect(fine.join("\n")).not.toContain("→");
+  });
+
+  test("a needs_auth server is told to set the variable", () => {
+    // The mutant `status === "needs_auth"` -> `!==` survived: no test
+    // covered this arm, so inverting it put the auth instruction on every
+    // OTHER status and removed it from the one that needs it.
+    const m = model([configured({ url: "https://api.test/mcp" })], [
+      { name: "s", status: "needs_auth", toolCount: 0, error: "needs TOKEN" },
+    ]);
+    expect(m.rows[0]?.action).toContain("set the variable");
+  });
+
+  test("BOUNDARY — a connected server gets no action at all", () => {
+    const m = model([configured({ url: "https://api.test/mcp" })], [
+      { name: "s", status: "connected", toolCount: 1 },
+    ]);
+    expect(m.rows[0]?.action).toBeUndefined();
+  });
+
+  test("the empty hint is printed only when the list is empty", () => {
+    expect(renderConsumerLines(model([])).join("\n")).toContain("No MCP servers configured");
+    expect(
+      renderConsumerLines(model([configured({ url: "https://api.test/mcp" })])).join("\n"),
+    ).not.toContain("No MCP servers configured");
+  });
+
+  test("config problems are labelled as such", () => {
+    const m = buildConsumerModel({
+      configured: [],
+      states: [],
+      problems: [{ file: "/cfg/x.json", message: "bad json" }],
+      userFile: "/u",
+      projectFile: "/p",
+    });
+    expect(renderConsumerLines(m).join("\n")).toContain("config problem — /cfg/x.json: bad json");
   });
 });

@@ -99,6 +99,23 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         shows: ["(unnamed)"],
         outcome: "unnamed",
       },
+      {
+        // Found by the mutation sweep. `typeof value === "object" &&
+        // value !== null` inverted to `||` is TRUE for JSON `null`
+        // (because `typeof null === "object"`), so `parsed` becomes null
+        // and reading `parsed.tool_name` throws — an approval prompt
+        // that crashes instead of asking. No row covered bare `null`.
+        label: "BOUNDARY — a payload that is literally `null` still produces a prompt",
+        input: "null",
+        shows: ["(unnamed)"],
+        outcome: "unnamed",
+      },
+      {
+        label: "BOUNDARY — so does a payload that is a bare number",
+        input: "42",
+        shows: ["(unnamed)"],
+        outcome: "unnamed",
+      },
     ],
   },
   {
@@ -140,6 +157,17 @@ const TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         label: "BOUNDARY — tool_input of the wrong TYPE is treated as no arguments",
         input: call("a__b", "not an object"),
         shows: ["a", "b"],
+        outcome: "whole",
+      },
+      {
+        // The sibling of the `null` payload row above, and the same
+        // mutant one line down: with `||`, `tool_input: null` passes the
+        // guard and the prompt renders the word "null" where the
+        // arguments should be.
+        label: "BOUNDARY — tool_input of `null` renders an empty object, not the word null",
+        input: call("a__b", null),
+        shows: ["a", "b", "{}"],
+        hides: ["null"],
         outcome: "whole",
       },
     ],

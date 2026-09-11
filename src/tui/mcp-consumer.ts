@@ -157,6 +157,38 @@ export function buildConsumerModel(input: {
   };
 }
 
+/**
+ * Every line the view prints, in order — including the no-session case.
+ *
+ * Built here rather than in the TUI callback for the reason the last
+ * commit gave, one file over: the mutation sweep showed that five
+ * separate decisions in that callback could be inverted with nothing
+ * failing, because a callback inside `tui-shell.ts` has no harness. This
+ * is the third time on this branch that moving lines into a value was
+ * the fix, so it is now the default rather than the remedy.
+ */
+export function renderConsumerLines(model: ConsumerModel | undefined): string[] {
+  if (model === undefined) {
+    // No runtime: `--chat` never builds a tool list, and opening a
+    // read-only view must not be what spawns every configured server.
+    // Saying which of the two states this is beats an empty panel.
+    return [
+      "No MCP session yet — this shell has not built a tool list.",
+      "Configured servers are listed by `keryx mcp list`; `keryx mcp doctor` dials them.",
+    ];
+  }
+  return [
+    ...model.problems.map((problem) => `config problem — ${problem}`),
+    ...(model.emptyHint === undefined ? [] : model.emptyHint.split("\n")),
+    ...model.rows.flatMap((row) => {
+      const lines = [formatConsumerRow(row)];
+      if (row.detail !== undefined) lines.push(`    ${row.detail}`);
+      if (row.action !== undefined) lines.push(`    → ${row.action}`);
+      return lines;
+    }),
+  ];
+}
+
 /** One line per row, for a surface that renders text. */
 export function formatConsumerRow(row: ConsumerRow): string {
   const tags = [row.source, row.transport, row.status].join(" ");
