@@ -307,11 +307,45 @@ export function remoteTargetProblem(
 }
 
 /**
+ * Elide a credential WITHOUT parsing, so it works on anything.
+ *
+ * Userinfo and the query string, by text. This is the floor every
+ * return path of `displayUrl` stands on: whatever else happens, these
+ * two are gone.
+ */
+function elideCredentialText(raw: string): string {
+  const query = raw.indexOf("?");
+  const trimmed = query === -1 ? raw : `${raw.slice(0, query)}?…`;
+  // Scheme-relative (`//user:pw@host`) as well as absolute, because
+  // `new URL` rejects the former and it was printed verbatim.
+  return trimmed.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:)?\/\/[^/@]*@/, (_m, scheme: string | undefined) =>
+    `${scheme ?? ""}//…@`,
+  );
+}
+
+/**
  * A URL safe to print.
  *
  * Query strings carry `?api_key=`. Printing the RAW url keeps `${VAR}`
  * unexpanded, but a literal secret written into the config would still
  * show, so the query is replaced wholesale rather than guessed at.
+ *
+ * FAILS CLOSED. The catch used to `return raw` — the whole url, password
+ * and all — excused by a comment saying it was "most likely because a
+ * `${VAR}` is still in it". That case cannot reach the catch: the `${`
+ * branch above returns first. So the justification was unreachable by
+ * construction and the branch it excused made a redaction function
+ * return its input unredacted, for every url `new URL` rejects:
+ * `//user:pw@host/v1`, `https://user:pw@host:notaport/mcp`,
+ * `https://user:pw@[bad/mcp`. Three callers print this — `keryx mcp
+ * list`, the `/mcp` view, and the TRUST PROMPT, which is the moment the
+ * operator is deciding.
+ *
+ * Known and deliberate: the PATH is kept. `https://host/v1/sk-live-x/mcp`
+ * still shows the secret. Eliding the path would make the row unable to
+ * say which endpoint it is, which is most of why it is shown; a
+ * credential in a path segment is also not a form any of the MCP
+ * vendors use. Recorded rather than silently accepted.
  */
 export function displayUrl(raw: string | undefined): string {
   if (raw === undefined) return "";
@@ -321,11 +355,7 @@ export function displayUrl(raw: string | undefined): string {
   // lowercases the host — so the message told the operator to set
   // `${region}`, an environment variable that does not exist, while
   // `REGION` sat there unset. Elide by hand instead of normalising.
-  if (raw.includes("${")) {
-    const query = raw.indexOf("?");
-    const trimmed = query === -1 ? raw : `${raw.slice(0, query)}?…`;
-    return trimmed.replace(/^([a-zA-Z][a-zA-Z0-9+.-]*:\/\/)[^/@]*@/, "$1…@");
-  }
+  if (raw.includes("${")) return elideCredentialText(raw);
 
   try {
     const parsed = new URL(raw);
@@ -333,9 +363,8 @@ export function displayUrl(raw: string | undefined): string {
     const auth = parsed.username === "" ? "" : "…@";
     return `${parsed.protocol}//${auth}${parsed.host}${parsed.pathname}${query}`;
   } catch {
-    // Unparseable — most likely because a `${VAR}` is still in it. Show
-    // the raw form, which contains the variable name and no value.
-    return raw;
+    // Unparseable. Elide by text rather than surrendering the string.
+    return elideCredentialText(raw);
   }
 }
 

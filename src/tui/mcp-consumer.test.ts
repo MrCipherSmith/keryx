@@ -299,3 +299,100 @@ describe("the printed lines — found by the mutation sweep", () => {
     expect(renderConsumerLines(m).join("\n")).toContain("config problem — /cfg/x.json: bad json");
   });
 });
+
+describe("F3/F6 — the review findings on this view", () => {
+  const ESC = String.fromCharCode(27);
+
+  test("F3 — a control character in a stdio command cannot draw on the terminal", () => {
+    // `detail` and `problems` were sanitised here and `target` was not,
+    // and `target` comes from a committed `.keryx/mcp-servers.json` —
+    // a file in a repository somebody else wrote. The row reading
+    // `needs-approval` was precisely the row that could print a forged
+    // "✓ trusted" over the line above it.
+    const forged = `server.js ${ESC}[1A${ESC}[2K✓ trusted — connected`;
+    const text = screen([configured({ command: "node", args: [forged] }, { source: "project" })]);
+    expect(text).not.toContain(ESC);
+    // BOUNDARY — neutralised, not dropped.
+    expect(text).toContain("server.js");
+  });
+
+  test("F3 — and neither can a carriage return in a url", () => {
+    const text = screen([configured({ url: "https://api.test/mcp\r✓ trusted" })]);
+    expect(text).not.toContain("\r");
+  });
+
+  test("F6 — a multi-line error cannot forge rows at column 0", () => {
+    // The SDK message embeds an HTTP response body verbatim, and the
+    // sanitiser keeps `\n` because a multi-line error is legitimate.
+    // Indenting only the first line let a crafted body render fabricated
+    // rows indistinguishable from real ones.
+    const body = "HTTP 400:\ngithub (user http connected) — 41 tool(s)  https://api.github.com/mcp";
+    const lines = renderConsumerLines(
+      model([configured({ url: "https://evil.test/mcp" })], [
+        { name: "s", status: "failed", toolCount: 0, error: body },
+      ]),
+    );
+    const forgedAtColumnZero = lines.filter((l) => l.startsWith("github ("));
+    expect(forgedAtColumnZero).toEqual([]);
+    // Every detail line is indented, so none can be mistaken for a row.
+    expect(lines.some((l) => l.startsWith("    github ("))).toBe(true);
+  });
+
+  test("F6 — the same for a multi-line config problem", () => {
+    const m = buildConsumerModel({
+      configured: [],
+      states: [],
+      problems: [{ file: "/cfg/x.json", message: "bad\nevil (user http connected)" }],
+      userFile: "/u",
+      projectFile: "/p",
+    });
+    const lines = renderConsumerLines(m);
+    expect(lines.filter((l) => l.startsWith("evil ("))).toEqual([]);
+  });
+
+  test("F9 — a LITERAL bearer is disclosed, as the trust prompt already does", () => {
+    // `credentialNames` collected only `${VAR}` references, so a
+    // hardcoded `Authorization: Bearer sk-live-…` produced no tag at
+    // all — the operator told nothing about a server sending a static
+    // bearer, while `trust.ts` reports exactly that. Two surfaces with
+    // one purpose, and this was the weaker.
+    const m = model([
+      configured({ url: "https://api.test/mcp", headers: { Authorization: "Bearer sk-live-abc" } }),
+    ]);
+    expect(m.rows[0]?.credentials.join(" ")).toContain("Authorization");
+    // And never the value.
+    expect(screen([
+      configured({ url: "https://api.test/mcp", headers: { Authorization: "Bearer sk-live-abc" } }),
+    ])).not.toContain("sk-live-abc");
+  });
+});
+
+describe("the columns the review found could be constants", () => {
+  test("F8 — transport and source are READ, not hardcoded", () => {
+    // The one row asserting `toContain("http")`/`toContain("user")`
+    // happened to be an http, user-scoped server, so
+    // `transport: "http"` and `source: "user"` as literals both
+    // survived. A stdio project server is the case that tells them
+    // apart.
+    const m = model([configured({ command: "npx", args: ["x"] }, { source: "project" })]);
+    expect(m.rows[0]?.transport).toBe("stdio");
+    expect(m.rows[0]?.source).toBe("project");
+    const line = formatConsumerRow(m.rows[0] as never);
+    expect(line).toContain("stdio");
+    expect(line).toContain("project");
+    expect(line).not.toContain("http");
+  });
+
+  test("F11 — credentials are sorted, and the order is observable", () => {
+    // `[...names].sort()` → `[...names]` survived because the only
+    // ordering test's insertion order already matched sorted order.
+    // These names are inserted in reverse.
+    const m = model([
+      configured({
+        url: "https://api.test/mcp",
+        headers: { A: "${ZEBRA}", B: "${ALPHA}" },
+      }),
+    ]);
+    expect(m.rows[0]?.credentials).toEqual(["ALPHA", "ZEBRA"]);
+  });
+});

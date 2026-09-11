@@ -77,8 +77,11 @@ import {
   renderConsumerLines,
 } from "./mcp-consumer";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
+import { resolveFqn } from "../mcp-servers/catalog";
 import {
+  APPROVAL_ALLOW_ID,
   describeUseToolApproval,
+  isDockApproval,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
   summariseUseToolApproval,
@@ -2890,7 +2893,13 @@ export async function launchTuiAgentShell(opts: {
         // their own branch. This is the one `use_tool` was missing, and
         // the description comes from the same module the readline shell
         // uses, so the two surfaces cannot drift.
-        const described = describeUseToolApproval(inputJson);
+        // Resolved against the catalog that will execute the call, so
+        // the prompt's attribution and the dispatch cannot disagree.
+        const mcpCatalog = deps.mcpRuntime?.()?.catalog();
+        const described = describeUseToolApproval(inputJson, (fqn) => {
+          const entry = mcpCatalog === undefined ? undefined : resolveFqn(mcpCatalog, fqn);
+          return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
+        });
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
@@ -2919,22 +2928,25 @@ export async function launchTuiAgentShell(opts: {
           options: [
             // No "always" option. `described.rememberable` is typed
             // `false` so this cannot be added back by forgetting to check.
-            { id: "allow", label: "Approve", description: `run ${described.tool} on ${described.server}` },
+            { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
             { id: "deny", label: "Deny", description: "the tool call is refused", recommended: true },
           ],
         });
         input.focus();
-        setMainAgent("running", id === "allow" ? "write" : "denied");
+        // `isDockApproval`, not an inline `id === "allow"`, and not three
+        // copies of it. A reviewer inverted this comparison — so "Deny"
+        // approved — and the full suite stayed green.
+        const allowed = isDockApproval(id);
+        setMainAgent("running", allowed ? "write" : "denied");
         transcript.add(
           new otui.TextRenderable(r, {
             id: `ap${uid++}`,
-            content:
-              id === "allow"
-                ? otui.t`${otui.green(`◇ ${described.fqn} approved`)}`
-                : otui.t`${otui.red(`◇ ${described.fqn} denied`)}`,
+            content: allowed
+              ? otui.t`${otui.green(`◇ ${described.fqn} approved`)}`
+              : otui.t`${otui.red(`◇ ${described.fqn} denied`)}`,
           }),
         );
-        return id === "allow";
+        return allowed;
       }
 
       if (tool.startsWith(MCP_ELICITATION_TOOL_PREFIX)) {

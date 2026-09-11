@@ -18,6 +18,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describeUseToolApproval, isMcpToolCall } from "./approval-render";
 import { evaluateShellApproval } from "../commands/shell-approval";
+import { createMcpRuntime } from "./runtime";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(HERE, "..");
@@ -113,4 +116,32 @@ describe("AC9 — one renderer, and neither surface re-derives it", () => {
     expect(described.server).toBe("a");
     expect(described.tool).toBe("b");
   });
+});
+
+describe("the runtime accessors the branch added", () => {
+  // `configured: () => config.servers` mutated to `() => []` survived:
+  // nothing exercised the new accessor, so the `/mcp` view could have
+  // been listing nothing and no test would have noticed.
+  test("configured() returns the servers that were loaded", async () => {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-cfg-"));
+    writeFileSync(
+      path.join(dir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { alpha: { url: "https://a.test/mcp" } } }),
+    );
+    const runtime = createMcpRuntime({ cwd: dir, gitRoot: dir, configDir: dir, env: {} });
+    try {
+      expect(runtime.configured().map((s) => s.name)).toEqual(["alpha"]);
+    } finally {
+      await runtime.close();
+    }
+  }, 30_000);
+
+  test("BOUNDARY — and an empty config really does give an empty list", () => {
+    // Without this, `configured: () => config.servers` could be
+    // `() => [somethingFixed]` and the test above would still pass.
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-empty-"));
+    const runtime = createMcpRuntime({ cwd: dir, gitRoot: dir, configDir: dir, env: {} });
+    expect(runtime.configured()).toEqual([]);
+    void runtime.close();
+  }, 30_000);
 });

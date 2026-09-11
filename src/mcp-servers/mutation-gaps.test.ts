@@ -390,3 +390,29 @@ describe("what the approval prompt says a remote server will be handed", () => {
     expect(describeForApproval(server({ command: "npx", args: ["-y", "pkg"] }))).toBe("npx -y pkg");
   });
 });
+
+describe("F2 — displayUrl fails CLOSED on a url `new URL` rejects", () => {
+  // It returned `raw` — the whole url, password and all — excused by a
+  // comment saying the case was "most likely because a `${VAR}` is still
+  // in it". That case returns earlier, so the justification was
+  // unreachable by construction and the branch it excused made a
+  // redaction function return its input unredacted. Three callers print
+  // this, one of them the trust prompt.
+  test.each([
+    ["scheme-relative", "//user:hunter2@mcp.example.com/v1"],
+    ["a bad port", "https://user:hunter2@mcp.example.com:notaport/mcp"],
+    ["an unclosed bracket", "https://user:hunter2@[bad/mcp"],
+  ])("%s still has its credential elided", (_label, url) => {
+    const shown = displayUrl(url);
+    expect(shown).not.toContain("hunter2");
+    expect(shown).toContain("…@");
+  });
+
+  test("BOUNDARY — a parseable url with no credential is untouched", () => {
+    expect(displayUrl("https://api.test/v1/mcp")).toBe("https://api.test/v1/mcp");
+  });
+
+  test("BOUNDARY — a ${VAR} url keeps its variable and still loses its query", () => {
+    expect(displayUrl("https://u:p@${R}.t/mcp?k=sk-live")).toBe("https://…@${R}.t/mcp?…");
+  });
+});

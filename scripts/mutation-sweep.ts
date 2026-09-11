@@ -111,10 +111,38 @@ const DELETABLE_GUARD = /^\s*if \(.+\) (return|throw|continue|break)\b[^;]*;\s*$
  * falsy left-hand side is reachable there, and one of them was a genuine
  * gap.
  */
-const EQUIVALENT = [/\?\? \{\}/, /\?\? \[\]/, /\?\? ""/, /\?\? false/, /\?\? null/];
+const EQUIVALENT = [/\?\? \{\}/, /\?\? \[\]/, /\?\? ""/, /\?\? false/];
 
+/**
+ * Was the mutation ITSELF a `??` swap on a safe default?
+ *
+ * The first version asked whether the ORIGINAL LINE contained a safe
+ * `??` anywhere and whether the MUTATED line contained `|| ` anywhere —
+ * which is true of a completely different mutation on the same line. A
+ * reviewer replayed the operator table over `src/` and found 13 mutants
+ * wrongly suppressed, all `&&`→`||` or `===`→`!==` on lines that merely
+ * happened to also carry a `?? {}`:
+ *
+ *   src/wiki/section-marker.ts  `if (match && (match[1] ?? "").length >= 2)`
+ *
+ * Suppressing a real mutant is worse than reporting a false one: a
+ * survivor gets triaged, a suppressed mutant is invisible.
+ *
+ * So compare the two lines directly — the swap is equivalent only when
+ * the ONLY difference is a safe `?? <literal>` becoming `|| <literal>`.
+ *
+ * `?? null` is no longer on the list. It is NOT equivalent when the left
+ * side can be `0`, `""` or `false`, and nothing here can tell whether it
+ * can be.
+ */
 function isEquivalent(original: string, mutated: string): boolean {
-  return EQUIVALENT.some((p) => p.test(original)) && mutated.includes("|| ");
+  for (const pattern of EQUIVALENT) {
+    const match = pattern.exec(original);
+    if (match === null) continue;
+    const swapped = original.replace(match[0], match[0].replace("?? ", "|| "));
+    if (swapped === mutated) return true;
+  }
+  return false;
 }
 
 function arg(name: string, fallback?: string): string | undefined {
@@ -223,9 +251,17 @@ async function main(): Promise<void> {
   if (chosen.length === 0) return;
 
   const survivors: Mutant[] = [];
+  let ran = 0;
+  let stopped = false;
   const originals = new Map(chosen.map((m) => [m.file, m.source]));
+  // Files that must NEVER be restored from memory, because something
+  // outside this run wrote them. Restoring would discard that write.
+  const untouchable = new Set<string>();
   const restore = (): void => {
-    for (const [file, source] of originals) writeFileSync(file, source);
+    for (const [file, source] of originals) {
+      if (untouchable.has(file)) continue;
+      writeFileSync(file, source);
+    }
   };
   // A SIGKILL cannot be caught, and the first run of this script was
   // killed mid-mutation and left a mutant on disk. Nothing was lost —
@@ -256,9 +292,20 @@ async function main(): Promise<void> {
       // only covers the start. This covers the middle.
       const onDisk = readFileSync(mutant.file, "utf8");
       if (onDisk !== mutant.source && onDisk !== mutant.mutated) {
+        // MARK IT FIRST, then stop. `break` falls into the `finally`
+        // below, and `restore()` used to write every original back —
+        // including this file. So the message said "nothing was
+        // written" and then the run wrote, discarding exactly the edit
+        // it had just refused to touch. The guard's promise was
+        // inverted, which a reviewer reproduced in a scratch repo.
+        //
+        // Third time this script has had the defect it exists to catch,
+        // and the second time in this same guard.
+        untouchable.add(mutant.file);
+        stopped = true;
         console.error(
           `\n\nSTOPPING: ${mutant.file} changed on disk since this run began.\n` +
-            "Restoring from memory would discard that change, so nothing was written.\n" +
+            "It is left exactly as found; no other file is affected.\n" +
             "A running sweep is a lock on src/ — re-run when the tree is settled.",
         );
         break;
@@ -269,6 +316,7 @@ async function main(): Promise<void> {
       writeFileSync(mutant.file, mutant.source);
       writeFileSync(journal, "");
 
+      ran++;
       const killed = code !== 0;
       if (!killed) survivors.push(mutant);
       process.stdout.write(killed ? "." : "S");
@@ -283,13 +331,24 @@ async function main(): Promise<void> {
     writeFileSync(journal, "");
   }
 
-  console.log(`\n\n${chosen.length - survivors.length} killed, ${survivors.length} SURVIVED\n`);
+  // `ran`, not `chosen.length`. Subtracting survivors from the PLANNED
+  // count reported every never-executed mutant as killed — so a run that
+  // stopped after three of six printed "5 killed, 1 SURVIVED", which is
+  // the "coverage the suite does not have" this file's own header warns
+  // about, produced by the file itself.
+  console.log(`\n\n${ran - survivors.length} killed of ${ran} run, ${survivors.length} SURVIVED`);
+  if (ran < chosen.length) {
+    console.log(`${chosen.length - ran} mutant(s) were NOT run. This is not a clean sweep.`);
+  }
+  console.log("");
   for (const s of survivors) {
     console.log(`${s.file}:${s.line}`);
     console.log(`  -  ${s.from}`);
     console.log(`  +  ${s.to}`);
   }
-  process.exit(survivors.length === 0 ? 0 : 1);
+  // A stopped run is a failure even with no survivors yet: it measured
+  // nothing about the mutants it never reached.
+  process.exit(stopped || ran < chosen.length ? 2 : survivors.length === 0 ? 0 : 1);
 }
 
 await main();

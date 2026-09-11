@@ -36,11 +36,8 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
-import {
-  describeUseToolApproval,
-  isMcpToolCall,
-  renderUseToolApprovalLines,
-} from "../mcp-servers/approval-render";
+import { isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
+import { resolveFqn } from "../mcp-servers/catalog";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -1107,40 +1104,26 @@ async function runAgentRepl(
       if (isMcpToolCall(tool)) {
         // F-032/F-033, deferred from P0 to P2 by operator decision.
         //
-        // `use_tool` used to reach the `tool !== "shell_exec"` branch
-        // below, which truncates the whole tool input at 117 characters.
-        // `use_tool`'s schema does not constrain JSON key order, so a
-        // call whose first key is a reassuring `reason` showed the
-        // operator the reassurance and put the tool name and the
-        // destructive arguments past the cut. `apply_patch` and the Codex
-        // elicitation each already had their own branch here for exactly
-        // that reason; this is the one `use_tool` was missing.
-        //
-        // The description comes from a shared module, so this surface and
-        // the TUI cannot drift — they had already drifted once.
-        // Lines built by the shared module, printed here. The split is
-        // what makes the PROMPT testable and not only the description —
-        // the mutation sweep found that inverting the destructive check
-        // survived while it was inlined, because nothing drives this
-        // path: every test in the suite stubs `requestApproval` whole.
-        const described = describeUseToolApproval(input);
-        const lines = renderUseToolApprovalLines(described, meta);
-        out("\n");
-        for (const [index, line] of lines.entries()) {
-          out(`${GUTTER}${index === 0 ? style.yellow(line) : style.dim(line)}\n`);
-        }
-        // No `A=always`. The grant pattern would be a qualified tool name
-        // the MODEL supplied, stored in the operator's permission file.
-        out(`\n${GUTTER}${style.dim("[y/N] ")}`);
-        const answer = ((await readLine()) ?? "").trim();
-        const approved = /^y(es)?$/i.test(answer);
-        out(approved ? style.green("approved\n") : style.red("denied\n"));
-        if (!approved) {
-          return false;
-        }
-        return meta?.fingerprint !== undefined
-          ? { approved: true, fingerprint: meta.fingerprint }
-          : true;
+        // The WHOLE prompt — printing, reading the answer, and the
+        // verdict — lives in the shared module with its IO injected. An
+        // earlier version kept the decision here and a reviewer showed
+        // it had no coverage whatsoever: inverting `if (!approved)`, so
+        // that `y` denies and anything else approves and RUNS, left the
+        // full suite green. Extracting only the line building was not
+        // enough, because the part that decides whether a third party
+        // acts was the part still out of reach.
+        const approvalCatalog = deps.mcpRuntime?.()?.catalog();
+        return await promptUseToolApproval(
+          { out, readLine: async () => await readLine() },
+          input,
+          meta,
+          (fqn) => {
+            const entry = approvalCatalog === undefined ? undefined : resolveFqn(approvalCatalog, fqn);
+            return entry === undefined ? undefined : { server: entry.server, tool: entry.rawName };
+          },
+          style,
+          GUTTER,
+        );
       }
       if (tool !== "shell_exec") {
         const preview = input.length > 120 ? `${input.slice(0, 117)}…` : input;

@@ -150,7 +150,11 @@ test("Tools tab opens with an explanatory caption, then one clickable-free row p
   // it at the CLI because the consumer view did not exist — a caption
   // naming a missing screen is the failure the rename avoided. P2 built
   // the view, so the caption names the view.
-  expect(caption).toContain("/mcp");
+  // `toContain("/mcp")` matched any superstring, so repointing the
+  // caption at `/mcps` — the one command this codebase forbids
+  // everywhere else — survived. Assert the exact token.
+  expect(caption).toMatch(/`\/mcp`/);
+  expect(caption).not.toContain("/mcps");
   expect(caption).not.toContain("doesn't consume");
   expect(caption).not.toContain("does not consume");
   expect(rows[1]?.content).toContain("gdgraph_affected");

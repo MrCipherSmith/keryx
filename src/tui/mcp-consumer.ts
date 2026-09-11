@@ -22,6 +22,7 @@
 
 import { displayUrl } from "../mcp-servers/http-headers";
 import { sanitiseForDisplay } from "../mcp-servers/tools";
+import { sanitiseIdentifier } from "../mcp-servers/approval-render";
 import { transportOf } from "../mcp-servers/doctor";
 import type { ResolvedMcpServer } from "../mcp-servers/config";
 import type { ServerState } from "../mcp-servers/manager";
@@ -77,6 +78,15 @@ function credentialNames(server: ResolvedMcpServer): string[] {
   if (typeof raw.url === "string") {
     for (const match of raw.url.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)/g)) names.add(match[1] as string);
   }
+  // A header whose value has NO `${}` is a credential pasted in
+  // literally, and it was disclosed nowhere here — so `/mcp` said
+  // nothing at all about a server sending a static bearer, while
+  // `trust.ts` reports exactly that as `literal header(s) …`. Two
+  // surfaces with one purpose and this was the weaker of them. The NAME
+  // only; the value stays off the screen, as everywhere else.
+  for (const [name, value] of Object.entries(raw.headers ?? {})) {
+    if (!/\$\{/.test(value)) names.add(`${name} (literal)`);
+  }
   return [...names].sort();
 }
 
@@ -94,8 +104,19 @@ function credentialNames(server: ResolvedMcpServer): string[] {
  */
 function targetOf(server: ResolvedMcpServer): string {
   const raw = server.raw;
-  if (typeof raw.url === "string" && raw.url.length > 0) return displayUrl(raw.url);
-  return [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
+  const target =
+    typeof raw.url === "string" && raw.url.length > 0
+      ? displayUrl(raw.url)
+      : [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
+  // SANITISED, and an identifier-grade sanitise at that. This came from
+  // a committed `.keryx/mcp-servers.json` — a file in a repository
+  // somebody else wrote, which `trust.ts` is explicit is not consent —
+  // and nothing in the config loader rejects control characters in
+  // `command`, `args` or `url`. `detail` and `problems` were sanitised
+  // here and this was not, so the row reading `needs-approval` was
+  // precisely the row that could print `\u001b[1A\u001b[2K✓ trusted`
+  // over the line above it.
+  return sanitiseIdentifier(target);
 }
 
 /**
@@ -178,11 +199,25 @@ export function renderConsumerLines(model: ConsumerModel | undefined): string[] 
     ];
   }
   return [
-    ...model.problems.map((problem) => `config problem — ${problem}`),
+    ...model.problems.flatMap((problem) =>
+      problem.split("\n").map((line, index) => (index === 0 ? `config problem — ${line}` : `    ${line}`)),
+    ),
     ...(model.emptyHint === undefined ? [] : model.emptyHint.split("\n")),
     ...model.rows.flatMap((row) => {
       const lines = [formatConsumerRow(row)];
-      if (row.detail !== undefined) lines.push(`    ${row.detail}`);
+      // EVERY line of the detail is indented, not just the first.
+      //
+      // `state.error` is the SDK's message, which for an HTTP failure
+      // embeds the server's response body verbatim, and the sanitiser
+      // keeps `\n` because a multi-line error message is legitimate.
+      // Indenting only the first line let a 400 body of
+      // "\ngithub (user http connected) — 41 tool(s)  https://…"
+      // render two fabricated rows at column 0, indistinguishable from
+      // real ones. A message-shaped sanitiser applied to record-shaped
+      // output; the fix belongs at the record, which is here.
+      if (row.detail !== undefined) {
+        for (const line of row.detail.split("\n")) lines.push(`    ${line}`);
+      }
       if (row.action !== undefined) lines.push(`    → ${row.action}`);
       return lines;
     }),
