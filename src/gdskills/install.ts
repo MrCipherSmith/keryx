@@ -1,4 +1,4 @@
-import { cp, copyFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { cp, copyFile, lstat, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -12,7 +12,7 @@ import {
   renderGdskillsCatalog,
   renderGdskillsManifest,
 } from "./catalog";
-import { RETIRED_RULES, type RetiredRuleOutcome } from "./retired-rules";
+import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES, type RetiredRuleOutcome } from "./retired-rules";
 
 export type InstallGdskillsResult = {
   profile: GdskillsProfile;
@@ -81,8 +81,8 @@ export async function installGdskills(
   await installContracts(contractsRoot);
 
   const warnings = retiredRuleOutcomes
-    .filter((outcome) => outcome.action === "kept-modified")
-    .map((outcome) => `retired rule kept because it was modified: ${outcome.fileName}`);
+    .map(retiredRuleWarning)
+    .filter((warning): warning is string => warning !== null);
 
   return {
     profile,
@@ -123,23 +123,120 @@ async function installBundledRules(metaprojectRoot: string): Promise<RetiredRule
   return removeUnmodifiedRetiredRules(rulesTarget);
 }
 
+/**
+ * For each name RETIRED_RULES tracks, decide what to do with whatever sits
+ * at that path in the installed project — without ever letting a hostile or
+ * merely unusual entry (a directory, symlink, FIFO, socket, device, huge
+ * file, or permission-denied file) abort the rest of `installGdskills`.
+ *
+ * `.metaproject/rules/core` is git-tracked, so a project's repo — not just
+ * the project's own edits — can plant any of these at a retired name (round-1
+ * finding S-001). The rule this function follows: `lstat` first and never
+ * follow a symlink or read anything that is not a plain regular file; cap
+ * the size of what it will read; and let no single entry's failure escape
+ * this loop — every failure becomes a warning instead.
+ */
 async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of RETIRED_RULES) {
     const installedPath = path.join(rulesTarget, retired.fileName);
-    if (!existsSync(installedPath)) {
-      continue;
-    }
-    const content = await readFile(installedPath);
-    const hash = createHash("sha256").update(content).digest("hex");
-    if (retired.shippedSha256.includes(hash)) {
-      await unlink(installedPath);
-      outcomes.push({ fileName: retired.fileName, action: "removed" });
-    } else {
-      outcomes.push({ fileName: retired.fileName, action: "kept-modified" });
+    try {
+      const stats = await lstat(installedPath);
+
+      // Symlinks, directories, FIFOs, sockets, and devices are all rejected
+      // here. `lstat` never follows a symlink, so a link at a retired name
+      // is judged (and, if kept, left alone) without ever touching its
+      // target — reading through it is the hazard, not the link itself.
+      if (!stats.isFile()) {
+        outcomes.push({ fileName: retired.fileName, action: "kept-not-regular-file" });
+        continue;
+      }
+
+      // Bound the read before doing it: a regular file far larger than
+      // anything keryx ever shipped under this name is not a plausible
+      // untouched leftover, so there is no reason to read all of it.
+      if (stats.size > RETIRED_RULE_SIZE_CAP_BYTES) {
+        outcomes.push({ fileName: retired.fileName, action: "kept-oversized", sizeBytes: stats.size });
+        continue;
+      }
+
+      const content = await readFile(installedPath);
+      const hash = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
+      if (retired.shippedSha256.includes(hash)) {
+        await unlink(installedPath);
+        outcomes.push({ fileName: retired.fileName, action: "removed" });
+      } else {
+        outcomes.push({ fileName: retired.fileName, action: "kept-modified" });
+      }
+    } catch (error) {
+      if (isErrnoException(error) && error.code === "ENOENT") {
+        // Nothing at this retired name — the steady state once every
+        // installation has caught up. Not an outcome, not a warning.
+        continue;
+      }
+      // Anything else (EACCES on an unreadable file, a race where the
+      // entry disappears between lstat and readFile/unlink, etc.): keep
+      // the file, warn, and move on to the next retired name. Cleanup of
+      // one entry must never abort the rest of installGdskills.
+      outcomes.push({
+        fileName: retired.fileName,
+        action: "kept-error",
+        errorCode: isErrnoException(error) && error.code ? error.code : "UNKNOWN",
+      });
     }
   }
   return outcomes;
+}
+
+/**
+ * Decode as UTF-8, strip one leading U+FEFF byte-order mark, and normalise
+ * `\r\n` to `\n` before hashing. `RETIRED_RULES[].shippedSha256` records
+ * hashes of content normalised this same way (the files themselves are
+ * shipped LF, BOM-less) — without this, an unmodified copy checked out with
+ * CRLF line endings (e.g. Windows `core.autocrlf=true`) or carrying a BOM
+ * would never match and would be kept + warned as "modified" forever
+ * (round-1 finding L-001).
+ */
+function normalizeRetiredRuleContent(content: Buffer): string {
+  let text = content.toString("utf8");
+  if (text.charCodeAt(0) === 0xfeff) {
+    text = text.slice(1);
+  }
+  return text.replace(/\r\n/g, "\n");
+}
+
+function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
+}
+
+/**
+ * Human-readable notice for one retired-rule outcome, or `null` for
+ * "removed" (nothing to tell the operator). Each kept-* case gets its own
+ * wording naming why the file is no longer shipped (`RETIRED_RULES[].reason`)
+ * and what to do about it, rather than one generic "modified" message that
+ * repeats forever with no remedy (round-1 finding L-002).
+ */
+function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
+  if (outcome.action === "removed") {
+    return null;
+  }
+  const reason = RETIRED_RULES.find((retired) => retired.fileName === outcome.fileName)?.reason
+    ?? "no longer shipped by keryx";
+  const prefix = `${outcome.fileName} is no longer shipped by keryx (${reason})`;
+  switch (outcome.action) {
+    case "kept-modified":
+      return `${prefix}; kept because it differs from every shipped version — delete it, or rename it if you still rely on it`;
+    case "kept-not-regular-file":
+      return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`;
+    case "kept-oversized":
+      return `${prefix}; kept because it is ${outcome.sizeBytes} bytes, far larger than any version keryx ever shipped under this name — inspect it, then delete or rename it if appropriate`;
+    case "kept-error":
+      return `${prefix}; kept because it could not be read (${outcome.errorCode}) — inspect it, then delete or rename it if appropriate`;
+    default: {
+      const exhaustive: never = outcome;
+      throw new Error(`unhandled retired rule outcome: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 }
 
 async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: string): Promise<string> {

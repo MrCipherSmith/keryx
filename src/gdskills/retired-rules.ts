@@ -23,11 +23,17 @@
  * a project that installed an older version of the file (before a later
  * in-place edit) still holds an untouched copy of *that* version, and it
  * should be removed too.
+ *
+ * The hashes below are of the content *after* normalisation (decode as
+ * UTF-8, strip one leading U+FEFF byte-order mark, `\r\n` -> `\n`), not of
+ * raw bytes — the files themselves were and are shipped LF, BOM-less, so
+ * this only matters for how the installer compares an installed copy; see
+ * `removeUnmodifiedRetiredRules` in `install.ts`.
  */
 export type RetiredRuleEntry = {
   /** File name as it appeared in `bundled/rules/core/`, e.g. `foo.mdc`. */
   fileName: string;
-  /** sha256 (hex) of every distinct content version ever shipped under this name, oldest first. */
+  /** sha256 (hex, of normalised text — see above) of every distinct content version ever shipped under this name, oldest first. */
   shippedSha256: string[];
   /** Why this rule was retired. */
   reason: string;
@@ -62,7 +68,31 @@ export const RETIRED_RULES: RetiredRuleEntry[] = [
   },
 ];
 
+/**
+ * Byte size of every content version `RETIRED_RULES` has ever shipped, across
+ * both registered rules: `review-agent-profile.mdc`'s only version (1494
+ * bytes, commit fd43d35a) and `review-strict-profile.mdc`'s two versions
+ * (1994 bytes at commit fd43d35a, 2248 bytes at commit ff9dd071 — see the
+ * comments above). Measured with `git cat-file -s <blob>` against each
+ * commit's tree entry for this file.
+ */
+const LARGEST_SHIPPED_RETIRED_RULE_BYTES = 2248;
+
+/**
+ * Size cap used by `removeUnmodifiedRetiredRules` (install.ts): an installed
+ * file at a retired name that is larger than this is not a plausible
+ * untouched leftover of anything keryx ever shipped under that name, so the
+ * installer keeps it (with a warning) instead of reading and hashing
+ * arbitrary, potentially attacker-controlled bytes. 4x the largest version
+ * ever shipped is generous headroom above real content while still bounding
+ * the read — see round-1 finding S-001.
+ */
+export const RETIRED_RULE_SIZE_CAP_BYTES = LARGEST_SHIPPED_RETIRED_RULE_BYTES * 4;
+
 /** One installed retired-rule file the installer found and what it did with it. */
 export type RetiredRuleOutcome =
   | { fileName: string; action: "removed" }
-  | { fileName: string; action: "kept-modified" };
+  | { fileName: string; action: "kept-modified" }
+  | { fileName: string; action: "kept-not-regular-file" }
+  | { fileName: string; action: "kept-oversized"; sizeBytes: number }
+  | { fileName: string; action: "kept-error"; errorCode: string };

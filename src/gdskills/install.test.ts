@@ -1,4 +1,4 @@
-import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
 import { installGdskills } from "./install";
-import { RETIRED_RULES } from "./retired-rules";
+import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-"));
@@ -224,7 +224,226 @@ test("a modified retired rule is kept and reported as a warning", async () => {
 
     expect(await readFile(path.join(rulesCore, retiredEntry.fileName), "utf8")).toBe(modifiedContent);
     expect(result.warnings).toEqual([
-      `retired rule kept because it was modified: ${retiredEntry.fileName}`,
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it differs from every shipped version — delete it, or rename it if you still rely on it`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-1 finding S-001: `removeUnmodifiedRetiredRules` used to gate on
+// `existsSync` + `readFile` with no `lstat`/`isFile`, no size bound, and no
+// try/catch — a directory, symlink, FIFO, or unreadable file at a retired
+// name would abort the whole install (or worse) before the catalog,
+// manifest, and contracts were written. `.metaproject/rules/core` is
+// git-tracked, so a project's repo can plant any of these. The tests below
+// each assert the install still completes (catalog + manifest written).
+
+test("a directory at a retired rule's name is kept, warned about, and does not abort the install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const dirPath = path.join(rulesCore, retiredEntry.fileName);
+    await mkdir(dirPath, { recursive: true });
+    await writeFile(path.join(dirPath, "placeholder.txt"), "not a rule file\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // The install completed: catalog and manifest were actually written,
+    // not aborted partway through by the directory.
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+    expect((await lstat(dirPath)).isDirectory()).toBe(true);
+    await access(path.join(dirPath, "placeholder.txt"));
+    expect(result.warnings).toEqual([
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlink at a retired rule's name is kept and its target is left untouched", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName));
+    const targetPath = path.join(root, "shared-target.mdc");
+    await writeFile(targetPath, unmodifiedContent);
+    const linkPath = path.join(rulesCore, retiredEntry.fileName);
+    await symlink(targetPath, linkPath);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // `lstat` never followed the link, so it was judged (and kept) without
+    // ever reading through it — the target is untouched, byte for byte.
+    expect((await lstat(linkPath)).isSymbolicLink()).toBe(true);
+    expect(await readFile(targetPath)).toEqual(unmodifiedContent);
+    expect(result.warnings).toEqual([
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an unreadable retired rule file is kept, warned about, and does not abort the install", async () => {
+  // Root bypasses permission bits, so chmod 000 would still be readable —
+  // skip rather than assert a false negative.
+  if (process.getuid?.() === 0) {
+    return;
+  }
+
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const filePath = path.join(rulesCore, retiredEntry.fileName);
+    await writeFile(filePath, "some content that is about to become unreadable\n", "utf8");
+    await chmod(filePath, 0o000);
+
+    try {
+      const result = await installGdskills(metaprojectRoot, "recommended");
+
+      expect(existsSync(filePath)).toBe(true);
+      expect(result.warnings).toHaveLength(1);
+      const [warning] = result.warnings;
+      expect(warning).toStartWith(`${retiredEntry.fileName} is no longer shipped by keryx`);
+      expect(warning).toContain("could not be read (EACCES)");
+    } finally {
+      // Restore permissions so the outer `rm` can clean up the tmp dir.
+      await chmod(filePath, 0o644).catch(() => {});
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a CRLF copy of an unmodified retired rule is removed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName), "utf8");
+    const crlfContent = unmodifiedContent.replace(/\n/g, "\r\n");
+    // Sanity check: this only exercises the CRLF path if the fixture
+    // actually contains a line break to convert.
+    expect(crlfContent).not.toBe(unmodifiedContent);
+    await writeFile(path.join(rulesCore, retiredEntry.fileName), crlfContent, "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
+    expect(result.warnings).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a UTF-8 BOM-prefixed copy of an unmodified retired rule is removed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName), "utf8");
+    const bomContent = `﻿${unmodifiedContent}`;
+    await writeFile(path.join(rulesCore, retiredEntry.fileName), bomContent, "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
+    expect(result.warnings).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("an oversized regular file at a retired rule's name is kept, warned about, and does not abort the install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const filePath = path.join(rulesCore, retiredEntry.fileName);
+    const oversizedContent = "x".repeat(RETIRED_RULE_SIZE_CAP_BYTES + 1);
+    await writeFile(filePath, oversizedContent, "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect(existsSync(filePath)).toBe(true);
+    expect(result.warnings).toEqual([
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it is ${oversizedContent.length} bytes, far larger than any version keryx ever shipped under this name — inspect it, then delete or rename it if appropriate`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a FIFO at a retired rule's name is kept, warned about, and does not hang or abort the install", async () => {
+  // `mkfifo` isn't available on Windows, and with lstat-first the installer
+  // never opens the FIFO anyway (that's the property this test pins).
+  if (process.platform === "win32") {
+    return;
+  }
+
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const fifoPath = path.join(rulesCore, retiredEntry.fileName);
+    const mkfifo = Bun.spawnSync(["mkfifo", fifoPath]);
+    if (mkfifo.exitCode !== 0) {
+      throw new Error(`mkfifo failed: ${mkfifo.stderr.toString()}`);
+    }
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(fifoPath)).isFIFO()).toBe(true);
+    expect(result.warnings).toEqual([
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete or rename it yourself if appropriate`,
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });

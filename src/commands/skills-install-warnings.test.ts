@@ -71,7 +71,7 @@ test("keryx skills install: an unmodified retired rule is removed with no Warnin
 
     expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
     expect(logs.some((line) => line.includes("Warnings:"))).toBe(false);
-    expect(logs.some((line) => line.includes("retired rule kept"))).toBe(false);
+    expect(logs.some((line) => line.includes("is no longer shipped by keryx"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -99,7 +99,9 @@ test("keryx skills install: a modified retired rule is kept and prints a Warning
 
     expect(await readFile(path.join(rulesCore, retiredEntry.fileName), "utf8")).toBe(modifiedContent);
     expect(logs).toContain("Warnings:");
-    expect(logs).toContain(`- retired rule kept because it was modified: ${retiredEntry.fileName}`);
+    expect(logs).toContain(
+      `- ${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it differs from every shipped version — delete it, or rename it if you still rely on it`,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }
