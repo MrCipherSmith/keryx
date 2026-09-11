@@ -159,7 +159,36 @@ describe("AC10 — the wait is bounded, with real margin", () => {
   });
 });
 
+describe("the budget is taken literally", () => {
+  test("timeoutMs: 0 gives up at once rather than waiting five minutes", async () => {
+    // `options.timeoutMs ?? CALLBACK_TIMEOUT_MS` must not become
+    // `||`: zero is falsy, so `||` would silently replace an explicit
+    // "do not wait" with the full five-minute default.
+    const started = Date.now();
+    const listener = listen(0);
+    const result = await listener.result;
+    expect(result.ok).toBe(false);
+    expect(Date.now() - started).toBeLessThan(2_000);
+  });
+});
+
 describe("what the browser is shown", () => {
+  test("a real doctype, so the page is not rendered in quirks mode", async () => {
+    // Invisible when wrong, which is why the mutation survived: a
+    // malformed doctype renders the page in quirks mode, and a
+    // one-paragraph confirmation comes out looking broken at the one
+    // moment the operator is being asked to trust this flow.
+    const listener = listen();
+    const response = await fetch(`${listener.redirectUrl}?code=c&state=${listener.state}`);
+    expect((await response.text()).startsWith("<!doctype html>")).toBe(true);
+  });
+
+  test("and on the refusal page too", async () => {
+    const listener = listen();
+    const response = await fetch(`${listener.redirectUrl}?code=c&state=wrong`);
+    expect((await response.text()).startsWith("<!doctype html>")).toBe(true);
+  });
+
   test("never the code, on any path", async () => {
     const listener = listen();
     const response = await fetch(`${listener.redirectUrl}?code=secret-code-value&state=${listener.state}`);

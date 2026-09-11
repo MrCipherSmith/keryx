@@ -160,6 +160,33 @@ describe("expires_in is resolved to an instant at the moment of issue", () => {
     expect(readCredential("linear", URL_, dir).record?.tokens?.expires_at).toBeUndefined();
   });
 
+  test("token_type survives — it is what the transport puts in the header", () => {
+    // The spread that carries it survived inversion: without it the
+    // stored credential has no type, and a server expecting `Bearer`
+    // gets something else or nothing.
+    const dir = store();
+    provider({ configDir: dir }).saveTokens({ access_token: "t", token_type: "Bearer" });
+    expect(readCredential("linear", URL_, dir).record?.tokens?.token_type).toBe("Bearer");
+  });
+
+  test("and so does scope, which is what the operator actually granted", () => {
+    const dir = store();
+    provider({ configDir: dir }).saveTokens({ access_token: "t", scope: "read write" });
+    expect(readCredential("linear", URL_, dir).record?.tokens?.scope).toBe("read write");
+  });
+
+  test("BOUNDARY — fields the server did not send are absent, not undefined-valued", () => {
+    // The inverted spread stores `{token_type: undefined}`, which
+    // round-trips through JSON as a MISSING key anyway — so the
+    // assertion has to be on a token that HAS the field, above, not on
+    // one that lacks it.
+    const dir = store();
+    provider({ configDir: dir }).saveTokens({ access_token: "t" });
+    const stored = readCredential("linear", URL_, dir).record?.tokens;
+    expect(stored?.access_token).toBe("t");
+    expect(stored?.token_type).toBeUndefined();
+  });
+
   test("and the refresh token survives the round trip", () => {
     const dir = store();
     provider({ configDir: dir }).saveTokens({ access_token: "t", refresh_token: "r" });

@@ -24,7 +24,7 @@ import { loadTrustStore, requiresApproval } from "./trust";
 import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
 import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
 import { usesOAuth } from "./credentials";
-import { createOAuthProvider } from "./oauth-provider";
+import { createOAuthProvider, type ProviderDeps } from "./oauth-provider";
 import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
 
@@ -289,6 +289,44 @@ const DEFAULT_HANDSHAKE_MS = 15_000;
  * the transport, so the message names the variable the operator has to set
  * instead of reporting a 401 from somebody else's server.
  */
+/**
+ * How a SESSION builds its OAuth provider, or why it builds none.
+ *
+ * Exported and pure because it was none of those things: inline in
+ * `connectRemote`, which is not exported, three of its decisions could
+ * not be reached by any test and all three survived mutation. Two of
+ * them fail silently — a dropped `configDir` reads the wrong store, a
+ * dropped `clientId` registers a client the operator already has — and
+ * the third disables OAuth for every session without a word.
+ *
+ * OAuth only for a server that has said nothing else. A header or a
+ * `bearer_token_env_var` is an explicit instruction about how to
+ * authenticate, and starting a flow anyway would be keryx overriding
+ * it; `oauth: false` opts out entirely for a server that is public.
+ */
+export function sessionAuthProviderOptions(
+  server: ResolvedMcpServer,
+  runtimeConfigDir?: string,
+): ProviderDeps | undefined {
+  // The RAW entry: a declared credential is an instruction even when
+  // its variable is unset, and the resolved headers are empty in
+  // exactly that case.
+  if (!usesOAuth(server.raw)) return undefined;
+  return {
+    serverName: server.name,
+    serverUrl: server.url as string,
+    ...(runtimeConfigDir === undefined ? {} : { configDir: runtimeConfigDir }),
+    // NEVER interactive from the runtime. A session opening must not
+    // launch a browser: the operator did not ask for one, and on a
+    // headless box it would block the shell from starting. `keryx mcp
+    // auth` is the interactive entry point.
+    interactive: false,
+    ...(server.oauth === false || server.oauth?.clientId === undefined
+      ? {}
+      : { clientId: server.oauth.clientId }),
+  };
+}
+
 async function connectRemote(
   server: ResolvedMcpServer,
   env: Record<string, string | undefined>,
@@ -309,30 +347,8 @@ async function connectRemote(
     throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
   }
 
-  // OAuth, only for a server that has no other credential.
-  //
-  // A server with a header or a `bearer_token_env_var` has already
-  // said how it authenticates, and starting an OAuth flow for it would
-  // be keryx overriding an explicit instruction. `oauth: false` opts
-  // out entirely, for a server that is simply public.
-  // The RAW entry: a declared credential is an instruction even when
-  // its variable is unset, and `resolved` is empty in exactly that case.
-  const oauth = usesOAuth(server.raw);
-  const authProvider = oauth
-    ? createOAuthProvider({
-        serverName: server.name,
-        serverUrl: server.url as string,
-        ...(runtimeConfigDir === undefined ? {} : { configDir: runtimeConfigDir }),
-        // NEVER interactive from the runtime. A session opening must
-        // not launch a browser: the operator did not ask for one, and
-        // on a headless box it would block the shell from starting.
-        // `keryx mcp auth` is the interactive entry point.
-        interactive: false,
-        ...(server.oauth === false || server.oauth?.clientId === undefined
-          ? {}
-          : { clientId: server.oauth.clientId }),
-      })
-    : undefined;
+  const options = sessionAuthProviderOptions(server, runtimeConfigDir);
+  const authProvider = options === undefined ? undefined : createOAuthProvider(options);
   return connectHttpMcpServer(server.url as string, {
     headers: resolved.headers,
     ...(authProvider === undefined ? {} : { authProvider }),

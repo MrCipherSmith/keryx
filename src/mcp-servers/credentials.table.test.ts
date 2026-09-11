@@ -10,7 +10,7 @@
 // what protects the token from the machine's other users.
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, statSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { classTableProblems } from "./class-table";
@@ -22,6 +22,7 @@ import {
   EXPIRY_MARGIN_MS,
   isExpired,
   readCredential,
+  usesOAuth,
   writeCredential,
   type StoredTokens,
 } from "./credentials";
@@ -350,6 +351,13 @@ describe("expiry", () => {
     expect(isExpired(tokens({ expires_at: NOW + EXPIRY_MARGIN_MS - 1 }), NOW)).toBe(true);
   });
 
+  test("EXACTLY at the margin is expired — the comparison is <=, not <", () => {
+    // One millisecond of ambiguity, and the mutation that removes it
+    // survived: a token that expires at precisely the moment the
+    // margin allows for is not worth the round trip.
+    expect(isExpired(tokens({ expires_at: NOW + EXPIRY_MARGIN_MS }), NOW)).toBe(true);
+  });
+
   test("BOUNDARY — and one expiring just outside it is not", () => {
     expect(isExpired(tokens({ expires_at: NOW + EXPIRY_MARGIN_MS + 1_000 }), NOW)).toBe(false);
   });
@@ -360,6 +368,131 @@ describe("expiry", () => {
 
   test("and no token at all is", () => {
     expect(isExpired(undefined, NOW)).toBe(true);
+  });
+});
+
+// `usesOAuth` had no direct test at all: five mutations of its two
+// guard clauses survived a sweep, including DELETING them outright.
+// The axis is the question the function answers.
+type OAuthRow = {
+  readonly label: string;
+  readonly server: Record<string, unknown>;
+  readonly outcome: "OAuth" | "not OAuth";
+};
+
+const USES_OAUTH_TABLE: Array<{ klass: string; why: string; rows: OAuthRow[] }> = [
+  {
+    klass: "does this server authenticate with OAuth",
+    why: "a wrong yes starts a browser flow nothing will use; a wrong no leaves a server unreachable with no way to fix it",
+    rows: [
+      {
+        label: "a stdio server has nothing to authorise against",
+        server: { command: "npx" },
+        outcome: "not OAuth",
+      },
+      {
+        label: "an EMPTY url is not a url",
+        // `url: ""` reaches here from a config whose `${VAR}` expanded
+        // to nothing.
+        server: { url: "" },
+        outcome: "not OAuth",
+      },
+      {
+        label: "`oauth: false` is the operator saying the server is public",
+        server: { url: "https://h/mcp", oauth: false },
+        outcome: "not OAuth",
+      },
+      {
+        label: "a bearer_token_env_var is an explicit instruction",
+        server: { url: "https://h/mcp", bearer_token_env_var: "TOKEN" },
+        outcome: "not OAuth",
+      },
+      {
+        label: "so is a declared Authorization header, whatever its case",
+        server: { url: "https://h/mcp", headers: { authorization: "Bearer ${T}" } },
+        outcome: "not OAuth",
+      },
+      {
+        label: "BOUNDARY — a url and nothing else is the OAuth case",
+        server: { url: "https://h/mcp" },
+        outcome: "OAuth",
+      },
+      {
+        label: "BOUNDARY — a configured oauth block certainly is",
+        server: { url: "https://h/mcp", oauth: { clientId: "c" } },
+        outcome: "OAuth",
+      },
+      {
+        label: "BOUNDARY — an unrelated header does not count as a credential",
+        // Only `Authorization` is a credential. Refusing on any header
+        // at all would exclude every server that sets an API version.
+        server: { url: "https://h/mcp", headers: { "X-Api-Version": "2" } },
+        outcome: "OAuth",
+      },
+      {
+        label: "an EMPTY bearer_token_env_var is not an instruction",
+        server: { url: "https://h/mcp", bearer_token_env_var: "" },
+        outcome: "OAuth",
+      },
+    ],
+  },
+];
+
+describe("AC15 — which servers use OAuth, by CLASS", () => {
+  for (const { klass, why, rows } of USES_OAUTH_TABLE) {
+    describe(`${klass} — ${why}`, () => {
+      for (const row of rows) {
+        test(row.label, () => {
+          const answer = usesOAuth(row.server);
+          expect({ label: row.label, outcome: answer ? "OAuth" : "not OAuth" }).toEqual({
+            label: row.label,
+            outcome: row.outcome,
+          });
+        });
+      }
+    });
+  }
+
+  test("every class has three rows and both outcomes", () => {
+    expect(classTableProblems(USES_OAUTH_TABLE, (row) => row.outcome)).toEqual([]);
+  });
+});
+
+describe("an empty configDir never resolves to the real one", () => {
+  test("credentialsFile('') stays out of the user's config directory", () => {
+    // `configDir ?? ensureKeryxConfigDir()` must not become `||`. With
+    // `||` an empty string is falsy and silently resolves to the REAL
+    // store — the exact hazard that has twice had tests read the
+    // developer's own secrets.
+    const real = credentialsFile();
+    const empty = credentialsFile("");
+    expect(empty).not.toBe(real);
+    expect(path.isAbsolute(empty)).toBe(false);
+  });
+});
+
+describe("clearing a credential against a store that cannot be read", () => {
+  test("is REFUSED, and the file is left byte-identical", () => {
+    // The guard here survived being DELETED outright. Without it,
+    // clearing one server's credential rewrites a corrupt store from
+    // an empty object — destroying every OTHER server's token, while
+    // reporting success. `writeCredential` had this test and
+    // `clearCredential` did not, which is the same defect one step to
+    // the side for the fourth time in this package.
+    const dir = store();
+    const target = credentialsFile(dir);
+    const corrupt = '{"credentials": {"keep:https://k/mcp": {"tokens": truncated…';
+    writeFileSync(target, corrupt);
+
+    const result = clearCredential("a", "https://a/mcp", dir);
+    expect(result.ok).toBe(false);
+    expect(readFileSync(target, "utf8")).toBe(corrupt);
+  });
+
+  test("BOUNDARY — clearing against a readable store succeeds", () => {
+    const dir = store();
+    writeCredential("a", "https://a/mcp", { tokens: tokens() }, dir);
+    expect(clearCredential("a", "https://a/mcp", dir).ok).toBe(true);
   });
 });
 

@@ -400,6 +400,23 @@ describe("AC12 — refresh, and what happens when it fails", () => {
     expect(needsAuthorisation(error)).toBe(true);
   });
 
+  test("a non-object error does not crash the classifier", () => {
+    // The guard in `oauthErrorCodeOf` survived being deleted AND
+    // having its `||` flipped to `&&` (which can never be true, since
+    // null IS typeof "object"). Both leave a property read on null.
+    // Errors reach here from the SDK, the transport and fetch, and not
+    // all of them are objects.
+    expect(needsAuthorisation(null)).toBe(false);
+    expect(needsAuthorisation(undefined)).toBe(false);
+    expect(needsAuthorisation("invalid_grant")).toBe(false);
+    expect(needsAuthorisation(401)).toBe(false);
+  });
+
+  test("and neither does an object whose errorCode is not a string", () => {
+    expect(needsAuthorisation({ errorCode: 42 })).toBe(false);
+    expect(needsAuthorisation({ errorCode: null })).toBe(false);
+  });
+
   test("BOUNDARY — the authorisation server having a bad day is NOT needs_auth", async () => {
     // `server_error` is not fixed by re-authenticating: the same
     // endpoint would fail the same way, and keryx would have sent the

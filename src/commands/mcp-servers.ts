@@ -404,7 +404,7 @@ async function authCommand(args: readonly string[], deps: McpConsumerDeps): Prom
   }
 
   // THE headless gate, resolved once, from the real terminal.
-  const interactive = deps.interactive ?? (process.stdin.isTTY === true && process.stdout.isTTY === true);
+  const interactive = deps.interactive ?? bothStreamsAreATerminal(process.stdin, process.stdout);
   if (!interactive) {
     deps.err(`"${name}" needs OAuth, and this process has no terminal to ask in.`);
     deps.err("Run `keryx mcp auth " + name + "` from an interactive shell.");
@@ -493,15 +493,50 @@ async function loadAuthSdk(): Promise<{ auth: (provider: never, options: unknown
   return mod as unknown as { auth: (provider: never, options: unknown) => Promise<unknown> };
 }
 
+/**
+ * Is there a human at BOTH ends of this process?
+ *
+ * Exported and taking its streams as arguments because the inline form
+ * was unreachable from any test: every test supplies `interactive`
+ * explicitly, so the fallback ran zero times and three separate
+ * mutations of it survived a full sweep. An inverted answer here is
+ * AC20 turned inside out — refusing on a real terminal, or opening a
+ * browser on a headless box.
+ *
+ * BOTH, not either. Output redirected to a file with input still a
+ * terminal is a script, and a script must not be sent to a browser.
+ */
+export function bothStreamsAreATerminal(
+  stdin: { readonly isTTY?: boolean | undefined },
+  stdout: { readonly isTTY?: boolean | undefined },
+): boolean {
+  return stdin.isTTY === true && stdout.isTTY === true;
+}
+
+/**
+ * The platform's "open this URL" command, as argv.
+ *
+ * Split out because the inline ternaries could only ever execute on the
+ * platform running the tests: both mutations of them survived on Linux,
+ * which means the macOS and Windows paths would have shipped without
+ * anything ever having run them.
+ */
+export function browserCommand(platform: string, url: string): string[] {
+  // The empty string is the window TITLE that `start` requires. Without
+  // it `start "https://…"` treats the quoted URL as the title and opens
+  // nothing at all.
+  if (platform === "win32") return ["cmd", "/c", "start", "", url];
+  return [platform === "darwin" ? "open" : "xdg-open", url];
+}
+
 /** Open the operator's browser, without waiting for it to exit. */
 function defaultOpenBrowser(url: URL): void {
-  const opener =
-    process.platform === "darwin" ? "open" : process.platform === "win32" ? "cmd" : "xdg-open";
-  const args = process.platform === "win32" ? ["/c", "start", "", url.toString()] : [url.toString()];
   // Detached and unref'd: a browser that outlives the command must not
   // hold the command open, and a missing opener must not crash it.
   try {
-    Bun.spawn([opener, ...args], { stdio: ["ignore", "ignore", "ignore"] }).unref();
+    Bun.spawn(browserCommand(process.platform, url.toString()), {
+      stdio: ["ignore", "ignore", "ignore"],
+    }).unref();
   } catch {
     // Reported by the caller as a failed authorisation; there is
     // nothing useful to add about the spawn itself.
