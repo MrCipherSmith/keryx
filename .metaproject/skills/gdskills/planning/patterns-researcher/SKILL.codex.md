@@ -5,6 +5,10 @@ description: >
   application architecture patterns. Produces constraints that PRD must follow.
   Use when: dispatched by gproject-orchestrator Phase 3.
   NOT for: direct user invocation.
+triggers:
+  - "research patterns"
+  - "architecture patterns"
+  - "best practices"
 metadata:
   version: 1.0.0
   compatible_harnesses: "cursor,codex,zed,opencode"

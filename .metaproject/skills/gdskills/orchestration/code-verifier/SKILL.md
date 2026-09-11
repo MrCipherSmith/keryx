@@ -3,12 +3,13 @@ name: code-verifier
 model_tier: light
 description: "Use when running a full quality gate after implementation — lint, type-check, tests, and import validation. Mandatory step in job-orchestrator after task-implementer and after fix iterations. Use standalone when you need a structured verification report."
 triggers:
+  - "verify code"
+  - "run checks"
+  - "quality gate"
   - "Run verification"
-  - "Quality gate"
   - "Check code quality"
   - "Run lint and tests"
   - "Verify implementation"
-  - "Run checks"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

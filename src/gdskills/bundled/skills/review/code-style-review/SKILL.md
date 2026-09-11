@@ -1,10 +1,9 @@
 ---
 name: code-style-review
-description: "Detailed code style and architecture review using code-style-patterns.mdc. Reviews current branch changes. Checks naming, organization, patterns, TypeScript usage. Use when: style validation needed, architecture review."
+description: "Use when the legacy code style and architecture review profile (code-style-patterns.mdc) is asked for by name — naming, organization, patterns, and TypeScript usage on the current branch. NOT for: a general style review (review-style) or an architecture review (review-architecture)."
 triggers:
-  - "Style review"
-  - "Check code style"
-  - "Architecture review"
+  - "code-style-review"
+  - "architecture style"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

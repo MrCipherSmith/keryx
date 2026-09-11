@@ -2,10 +2,10 @@
 name: pr
 description: "Use when opening a pull request for the current branch."
 triggers:
-  - "/pr"
-  - "Create PR"
+  - "open PR"
+  - "create pull request"
+  - "draft PR"
   - "Open pull request"
-  - "Create pull request"
   - "Make PR"
 metadata:
   author: "MrCipherSmith"

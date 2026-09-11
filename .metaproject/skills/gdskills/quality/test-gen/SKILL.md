@@ -2,8 +2,9 @@
 name: test-gen
 description: "Use when unit or integration tests need to be written for a specific file or module."
 triggers:
-  - "/test-gen"
-  - "Generate tests"
+  - "generate tests"
+  - "write tests"
+  - "add coverage"
   - "Write tests for"
   - "Add tests"
   - "Create test file"

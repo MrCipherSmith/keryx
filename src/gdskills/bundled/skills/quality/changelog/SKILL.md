@@ -2,10 +2,10 @@
 name: changelog
 description: "Use when generating a changelog, release notes, or summarizing what changed between tags, versions, or date ranges."
 triggers:
-  - "/changelog"
-  - "Generate changelog"
+  - "generate changelog"
+  - "release notes"
+  - "what changed"
   - "What changed since"
-  - "Release notes"
   - "What's new"
 metadata:
   author: "MrCipherSmith"

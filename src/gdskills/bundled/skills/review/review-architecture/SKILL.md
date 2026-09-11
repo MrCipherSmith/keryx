@@ -8,12 +8,12 @@ description: |
   Dispatched by review-orchestrator with --architecture or --backend.
   NOT for: style/naming preferences, logic correctness bugs, or security vulnerabilities.
 triggers:
-  - "review architecture"
+  - "architecture review"
+  - "boundary review"
+  - "layering"
   - "check architecture"
   - "architectural review"
-  - "architecture review"
   - "check layers"
-  - "dispatched by review-orchestrator"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

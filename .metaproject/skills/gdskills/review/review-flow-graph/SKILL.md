@@ -8,9 +8,9 @@ description: |
   review-orchestrator for --flow-graph, --project-conventions, --all, or
   src/core/flow/** / graph abstraction changes.
 triggers:
-  - "review flow graph"
-  - "review --flow-graph"
-  - dispatched by review-orchestrator
+  - "flow graph review"
+  - "graph ui review"
+  - "reactflow review"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

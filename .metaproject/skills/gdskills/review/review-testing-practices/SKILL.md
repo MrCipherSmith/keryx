@@ -11,10 +11,11 @@ description: |
   Dispatched by review-orchestrator for --testing-practices,
   --project-conventions, --all, or changed test/e2e/story files.
 triggers:
+  - "test review"
+  - "testing practices"
+  - "coverage quality"
   - "review tests"
   - "review testing practices"
-  - "review --testing-practices"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"

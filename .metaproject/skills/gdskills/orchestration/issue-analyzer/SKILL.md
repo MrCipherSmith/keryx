@@ -2,9 +2,9 @@
 name: issue-analyzer
 description: "Use when decomposing a GitHub issue into atomic tasks for AI implementation, planning task breakdown, or preparing work for task-implementer agents."
 triggers:
-  - "Analyze issue"
-  - "Decompose issue"
-  - "Break down issue"
+  - "analyze issue"
+  - "decompose issue"
+  - "break down issue"
   - "Issue to tasks"
   - "Plan issue implementation"
 metadata:

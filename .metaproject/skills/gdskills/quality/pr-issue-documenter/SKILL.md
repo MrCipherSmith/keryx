@@ -2,10 +2,12 @@
 name: pr-issue-documenter
 description: "Use when documenting PR changes, adding a PR description, creating a linked issue for a PR, or updating an existing issue body."
 triggers:
+  - "document PR"
+  - "PR description"
+  - "create issue for PR"
   - "Add PR description"
   - "Document PR changes"
   - "Describe what was done in PR"
-  - "Create issue for PR"
   - "Update PR and issue"
   - "Add description to PR"
   - "Write PR summary"

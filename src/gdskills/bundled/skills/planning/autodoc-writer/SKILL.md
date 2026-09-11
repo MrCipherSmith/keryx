@@ -5,6 +5,10 @@ description: >
   from analysis artifacts. Dispatched in parallel — one instance per section.
   Use when: dispatched by autodoc-orchestrator Phase 4.
   NOT for: direct user invocation.
+triggers:
+  - "autodoc writer"
+  - "write docs"
+  - "generate documentation pages"
 metadata:
   version: 1.0.0
 ---

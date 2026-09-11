@@ -2,10 +2,11 @@
 name: push
 description: "Use when pushing the current branch to the remote, especially when upstream tracking or safety checks are needed."
 triggers:
-  - "/push"
+  - "push branch"
+  - "git push"
+  - "publish branch"
   - "Push changes"
   - "Push to remote"
-  - "Push branch"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

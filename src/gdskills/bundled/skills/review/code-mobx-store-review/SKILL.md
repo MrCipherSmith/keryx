@@ -1,10 +1,12 @@
 ---
 name: code-mobx-store-review
-description: "Targeted MobX store and state logic review. Checks store/actions/computed/reactions, async runInAction, state typing, View↔Store boundaries. Use when: reviewing MobX changes, state management validation."
+description: "Use when MobX store changes need a focused review — actions, computed values, reactions, async runInAction, state typing, and View↔Store boundaries. NOT for: a general frontend review (review-frontend) or a review request that names no domain (review-orchestrator)."
 triggers:
+  - "mobx review"
+  - "store review"
+  - "code-mobx-store-review"
   - "Review MobX store"
   - "Check store changes"
-  - "MobX review"
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"

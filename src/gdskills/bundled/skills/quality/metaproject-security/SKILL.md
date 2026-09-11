@@ -2,12 +2,12 @@
 name: metaproject-security
 description: "Use when working with Metaproject Security: checking prompts, external content, memory/wiki/report writes, PII/secrets redaction, prompt-injection risk, data exfiltration, or security policy reports under .metaproject/security and .metaproject/data/security."
 triggers:
-  - "Metaproject Security"
-  - "security check-input"
-  - "security check-output"
+  - "metaproject security"
   - "prompt injection"
   - "PII redaction"
   - "data exfiltration"
+  - "security check-input"
+  - "security check-output"
   - "check memory for secrets"
 metadata:
   author: "MrCipherSmith"

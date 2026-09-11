@@ -2,8 +2,9 @@
 name: brainstorm
 description: "Use when exploring architecture decisions, tech choices, feature ideas, or any open-ended problem that benefits from multiple perspectives."
 triggers:
-  - "/brainstorm"
-  - "Brainstorm"
+  - "brainstorm"
+  - "explore options"
+  - "architecture decision"
   - "Let's think about"
   - "What are options for"
   - "How should we approach"

@@ -7,6 +7,10 @@ description: >
   points, and cross-cutting concerns.
   Use when: dispatched by autodoc-orchestrator Phase 3.
   NOT for: direct user invocation.
+triggers:
+  - "autodoc architect"
+  - "architecture docs"
+  - "reverse engineer architecture"
 metadata:
   version: 1.0.0
 ---

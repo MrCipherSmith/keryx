@@ -4,6 +4,10 @@ description: >
   Generates roadmap, milestones, task breakdown, and dependency graph from PRD.
   Use when: dispatched by gproject-orchestrator Phase 6.
   NOT for: direct user invocation.
+triggers:
+  - "create plan"
+  - "roadmap"
+  - "task breakdown"
 metadata:
   version: 1.0.0
   compatible_harnesses: "cursor,codex,zed,opencode"

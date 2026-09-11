@@ -2,9 +2,9 @@
 name: context-collector
 description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution."
 triggers:
-  - "Collect context"
-  - "Build context"
-  - "Gather context"
+  - "collect context"
+  - "gather context"
+  - "build context"
   - "Update context"
   - "Refresh context"
   - "Context for job"

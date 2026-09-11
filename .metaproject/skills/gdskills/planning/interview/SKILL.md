@@ -2,12 +2,9 @@
 name: interview
 description: "Use to clarify implementation-specific ambiguities AFTER context has already been collected and the goal is known — the questions that sharpen a plan, not the ones that scope the request. This is the `implement`-intent interview job-orchestrator runs at 0.3. To pin down a vague request before any context is gathered, use `interviewer` instead."
 triggers:
-  - "/interview"
-  - "Interview"
-  - "Clarify requirements"
-  - "Ask questions first"
-  - "What do you need to know"
-  - "Gather requirements"
+  - "implementation interview"
+  - "interview before implementation"
+  - "clarify implementation"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

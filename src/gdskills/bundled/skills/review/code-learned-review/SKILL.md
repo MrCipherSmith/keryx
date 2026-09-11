@@ -1,8 +1,9 @@
 ---
 name: code-learned-review
-description: "Reviews the current branch against conventions this project learned from its own pull-request comments, recorded in a local project skill. Ships with an empty checklist: the content comes from `keryx review learn`, never from the tool. Use when: a project has a learned review skill and wants its own accumulated conventions applied."
+description: "Use when a project has a learned review skill — built by `keryx review learn` from its own pull-request comments — and wants those accumulated conventions applied to the current branch. Ships with an empty checklist: the content comes from the project, never from the tool. NOT for: a project with no learned skill, or a review request that names no profile (review-orchestrator)."
 triggers:
   - "learned review"
+  - "code-learned-review"
   - "review with our conventions"
   - "review using what we learned"
 metadata:

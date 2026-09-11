@@ -2,8 +2,12 @@
 name: agent-entrypoint-distiller
 description: Use when the user asks to split, decompose, distill, or refactor a large AGENTS.md or CLAUDE.md into Metaproject rules and project-specific skills while keeping root entrypoints compact.
 triggers:
-  - "distill AGENTS.md"
+  - "distill claude"
   - "split CLAUDE.md"
+  - "разбери CLAUDE.md"
+  - "создай правила из CLAUDE.md"
+  - "entrypoint rules"
+  - "distill AGENTS.md"
   - "разнеси CLAUDE.md по правилам"
 metadata:
   version: "1.0.0"

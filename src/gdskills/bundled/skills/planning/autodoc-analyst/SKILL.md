@@ -5,6 +5,10 @@ description: >
   to extract purpose, structure, public API surface, patterns, and key dependencies.
   Use when: dispatched by autodoc-orchestrator Phase 2 (one instance per module).
   NOT for: direct user invocation.
+triggers:
+  - "autodoc analyst"
+  - "analyze module docs"
+  - "reverse engineer module"
 metadata:
   version: 1.0.0
 ---

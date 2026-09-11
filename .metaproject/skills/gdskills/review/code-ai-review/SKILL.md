@@ -1,11 +1,10 @@
 ---
 name: code-ai-review
-description: "Performs strict AI code review following code-review-ai-assistant.mdc standards. Reviews current branch changes from merge-base by default, including both committed and local uncommitted changes. Use when: code review requested, checking branch changes, reviewing implementation quality."
+description: "Use when the legacy strict AI review profile (code-review-ai-assistant.mdc) is asked for by name — reviews the current branch from its merge-base, committed and uncommitted changes together. NOT for: a code review request that names no profile (review-orchestrator)."
 triggers:
-  - "Code review"
-  - "Review my changes"
-  - "Check this code"
-  - "Review code"
+  - "code-ai-review"
+  - "AI review baseline"
+  - "strict AI review"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

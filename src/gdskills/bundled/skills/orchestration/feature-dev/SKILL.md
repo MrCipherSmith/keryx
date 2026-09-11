@@ -2,8 +2,9 @@
 name: feature-dev
 description: "Use when taking a feature from idea or GitHub issue all the way to a merge-ready PR in one guided workflow."
 triggers:
-  - "/feature-dev"
-  - "Develop feature"
+  - "feature dev"
+  - "develop feature"
+  - "guided feature workflow"
   - "Build feature"
   - "Implement feature"
   - "Feature from scratch"

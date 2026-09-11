@@ -2,11 +2,15 @@
 name: docpack-orchestrator
 description: "Use when creating or updating a Metaproject requirements package under docs/requirements: PRD, specification, README, policies/protocols/schemas, roadmap updates, verification, and package review. Use for requests like 'create requirements package', 'prepare module documentation', 'write PRD/spec for module', or 'оформи пакет документации'. Not for reverse-engineering current codebase documentation; use autodoc-orchestrator for that."
 triggers:
-  - "create requirements package"
   - "requirements package"
+  - "create requirements package"
+  - "module documentation"
+  - "documentation package for implementation"
+  - "пакет документации"
+  - "оформи пакет документации"
+  - "подготовь пакет документации"
   - "prepare module documentation"
   - "write PRD and spec"
-  - "оформи пакет документации"
   - "создай документацию модуля"
 metadata:
   author: "MrCipherSmith"

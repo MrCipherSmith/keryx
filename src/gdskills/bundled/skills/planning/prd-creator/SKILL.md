@@ -2,7 +2,9 @@
 name: prd-creator
 description: "Use when a vague or unstructured request needs to be converted into a formal, testable Product Requirements Document."
 triggers:
-  - "Create a PRD"
+  - "create PRD"
+  - "product requirements"
+  - "specify feature"
   - "Formulate requirements"
   - "Write a product requirements document"
   - "Draft PRD"

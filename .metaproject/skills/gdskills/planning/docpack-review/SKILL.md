@@ -2,9 +2,8 @@
 name: docpack-review
 description: "Use when reviewing or verifying a Metaproject requirements package under docs/requirements for completeness, versioning, README/PRD/spec consistency, schema references, roadmap updates, unsupported claims, and implementation-status accuracy. Usually dispatched by docpack-orchestrator. Not for reviewing autodoc-generated current-codebase documentation."
 triggers:
-  - "review requirements package"
-  - "verify requirements package"
   - "requirements package review"
+  - "verify requirements package"
   - "check PRD spec consistency"
   - "проверь документацию"
 metadata:

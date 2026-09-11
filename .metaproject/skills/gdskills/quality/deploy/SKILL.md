@@ -2,7 +2,10 @@
 name: deploy
 description: "Use when deploying to any environment (staging, production) or when a deployment pipeline needs to run."
 triggers:
-  - "/deploy"
+  - "deploy"
+  - "deployment"
+  - "ship"
+  - "release"
   - "Deploy to"
   - "Push to production"
   - "Deploy staging"

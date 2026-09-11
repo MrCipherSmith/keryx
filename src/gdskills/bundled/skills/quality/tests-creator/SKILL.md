@@ -2,7 +2,9 @@
 name: tests-creator
 description: "Use when writing test cases BEFORE implementation — converts acceptance criteria into failing test stubs that task-implementer will make pass. Mandatory step in the TDD pipeline between issue-analyzer and task-implementer."
 triggers:
-  - "Create tests"
+  - "create tests first"
+  - "test scenarios"
+  - "tdd"
   - "Write tests first"
   - "Generate test specs"
   - "Tests before implementation"

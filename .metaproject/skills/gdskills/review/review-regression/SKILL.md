@@ -11,7 +11,6 @@ triggers:
   - "review regression"
   - "does this change break anything"
   - "blast radius review"
-  - "dispatched by review-orchestrator"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

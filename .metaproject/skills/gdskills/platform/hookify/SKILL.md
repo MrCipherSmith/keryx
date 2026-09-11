@@ -2,7 +2,9 @@
 name: hookify
 description: "Use when adding automated hook behavior to Claude Code or Cursor from a natural language description."
 triggers:
-  - "/hookify"
+  - "hookify"
+  - "hook guidance"
+  - "safe hooks"
   - "Create hook"
   - "Add hook"
   - "Run lint after edit"

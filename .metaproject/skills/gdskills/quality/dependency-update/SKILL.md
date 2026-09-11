@@ -2,9 +2,9 @@
 name: dependency-update
 description: "Use when checking for outdated packages or upgrading dependencies with compatibility verification."
 triggers:
-  - "/dependency-update"
-  - "Update dependencies"
-  - "Upgrade packages"
+  - "update dependencies"
+  - "upgrade packages"
+  - "bump deps"
   - "Check outdated"
   - "Update npm packages"
 metadata:

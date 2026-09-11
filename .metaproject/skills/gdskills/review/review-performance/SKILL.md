@@ -3,12 +3,12 @@ name: review-performance
 model_tier: standard
 description: "Use when a performance review is requested, checking for N+1 queries, unnecessary re-renders, memory leaks, missing indexes, large bundle imports, and synchronous blocking in changed code. NOT for security, logic correctness, style, or architecture."
 triggers:
-  - "review performance"
   - "performance review"
+  - "perf check"
+  - "slow"
   - "check for perf issues"
   - "perf review"
   - "check N+1"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

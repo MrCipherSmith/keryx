@@ -1,36 +1,16 @@
 ---
 name: review-orchestrator
-description: |
-  Use when: a code review is requested and the user does not explicitly name a specialized reviewer.
-  Handles "review", "code review", "review PR", "review --frontend", "review --backend",
-  "review --architecture", "review --security", "review --performance", "review --style",
-  "review --verify", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
-  consolidates findings into one unified report.
-  NOT for: running a single specialized reviewer — invoke it directly by name instead.
+description: 'Use when: a code review is requested and the user does not name a specialized reviewer — "review", "code review", "review this PR", "review --all". Dispatches the relevant specialized reviewers in parallel and consolidates their findings into one unified report. NOT for: running a single specialized reviewer — invoke it directly by name instead.'
 triggers:
   - "review"
-  - "code review"
+  - "ревью"
+  - "review code"
+  - "full review"
+  - "review changes"
   - "review PR"
-  - "review --frontend"
-  - "review --backend"
-  - "review --architecture"
-  - "review --security"
-  - "review --performance"
-  - "review --style"
-  - "review --verify"
   - "review --all"
-  - "review --clean-code"
-  - "review --highload"
   - "review --project-conventions"
-  - "review --frontend-conventions"
-  - "review --testing-practices"
-  - "review --core-boundaries"
-  - "review --flow-graph"
   - "review --legacy-profiles"
-  - "review --code-ai"
-  - "review --learned"
-  - "review --code-style"
-  - "review --mobx-store"
 metadata:
   author: "MrCipherSmith"
   version: "1.9.0"

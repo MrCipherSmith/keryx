@@ -2,14 +2,15 @@
 name: flow-orchestrator
 description: "Use when Task Manager is enabled and a non-trivial feature, issue, or story should be driven through keryx flow from initialization to a user-selected completion, verified handoff, or open state."
 triggers:
-  - "создай flow"
   - "создай фло"
+  - "create flow"
+  - "issue to flow"
+  - "managed implementation"
+  - "task manager orchestration"
+  - "создай flow"
   - "заведи стори"
   - "implement with flow"
-  - "issue to flow"
-  - "task manager orchestration"
   - "flow orchestration"
-  - "managed implementation"
 metadata:
   author: "MrCipherSmith"
   version: "1.4.0"

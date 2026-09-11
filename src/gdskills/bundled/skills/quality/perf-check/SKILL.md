@@ -2,9 +2,10 @@
 name: perf-check
 description: "Use when measuring bundle size, detecting performance regressions, auditing slow queries, or investigating why something is slow."
 triggers:
-  - "/perf-check"
+  - "perf audit"
+  - "bundle size"
+  - "complexity"
   - "Check performance"
-  - "Bundle size"
   - "Lighthouse"
   - "Why is it slow"
   - "Optimize performance"

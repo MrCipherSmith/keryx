@@ -2,10 +2,11 @@
 name: db-migrate
 description: "Use when creating, applying, rolling back, or checking the status of database migrations."
 triggers:
-  - "/db-migrate"
+  - "database migration"
+  - "db migrate"
+  - "migration status"
   - "Create migration"
   - "Run migrations"
-  - "Migration status"
   - "Rollback migration"
 metadata:
   author: "MrCipherSmith"

@@ -2,8 +2,9 @@
 name: commit
 description: "Use when committing code changes and a well-structured conventional commit message is needed, with optional amend or selective staging."
 triggers:
-  - "/commit"
-  - "Commit changes"
+  - "commit changes"
+  - "git commit"
+  - "conventional commit"
   - "Commit this"
   - "Save changes"
 metadata:

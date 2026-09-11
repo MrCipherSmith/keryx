@@ -2,9 +2,9 @@
 name: security-audit
 description: "Use when checking for dependency vulnerabilities, accidentally committed secrets, or security issues in Docker images."
 triggers:
-  - "Security audit"
-  - "Check vulnerabilities"
-  - "Audit dependencies"
+  - "security audit"
+  - "audit dependencies"
+  - "scan secrets"
   - "Security scan"
   - "Check for CVEs"
   - "npm audit"

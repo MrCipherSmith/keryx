@@ -5,6 +5,10 @@ description: >
   and best practices constraints. Catches contradictions, gaps, and violations.
   Use when: dispatched by gproject-orchestrator Phase 5.
   NOT for: direct user invocation.
+triggers:
+  - "check consistency"
+  - "validate spec"
+  - "doc contradictions"
 metadata:
   version: 1.0.0
 ---

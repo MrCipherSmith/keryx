@@ -12,10 +12,9 @@ description: |
   naming and readability (review-style), re-render cost (review-performance), React or
   MobX structure (review-frontend).
 triggers:
-  - "review layout"
   - "layout review"
+  - "review layout"
   - "does this render correctly"
-  - "dispatched by review-orchestrator"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

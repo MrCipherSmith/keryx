@@ -2,7 +2,8 @@
 name: claude-md-management
 description: "Use when saving session learnings, coding patterns, conventions, or commands discovered during work into CLAUDE.md files."
 triggers:
-  - "/revise-claude-md"
+  - "CLAUDE.md management"
+  - "agent entrypoint"
   - "Update claude md"
   - "Save learnings"
   - "Update project instructions"

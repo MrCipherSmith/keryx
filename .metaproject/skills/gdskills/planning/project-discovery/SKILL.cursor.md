@@ -4,6 +4,10 @@ description: >
   Collects and structures initial project information from multiple sources.
   Use when: dispatched by gproject-orchestrator Phase 0.
   NOT for: direct user invocation — always called through orchestrator.
+triggers:
+  - "project discovery"
+  - "discover project"
+  - "initial analysis"
 metadata:
   version: 1.0.0
   compatible_harnesses: "cursor,codex,zed,opencode"

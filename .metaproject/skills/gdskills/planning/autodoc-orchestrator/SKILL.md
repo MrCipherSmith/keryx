@@ -8,6 +8,8 @@ description: >
   NOT for: writing new PRDs or planning new features (use gproject-orchestrator).
 triggers:
   - "autodoc"
+  - "document codebase"
+  - "reverse engineer docs"
   - "автодок"
   - "document this codebase"
   - "generate docs for my project"

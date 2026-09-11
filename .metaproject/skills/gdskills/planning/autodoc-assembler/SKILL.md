@@ -5,6 +5,10 @@ description: >
   into a cohesive package: main README.md and navigation index.
   Use when: dispatched by autodoc-orchestrator Phase 5.
   NOT for: direct user invocation.
+triggers:
+  - "autodoc assemble"
+  - "assemble docs"
+  - "assemble documentation package"
 metadata:
   version: 1.0.0
 ---

@@ -3,7 +3,9 @@ name: task-implementer
 model_tier: standard
 description: "Use when implementing a single decomposed task from issue-analyzer end-to-end, or executing autonomous code changes from a JSON task object."
 triggers:
-  - "Implement task"
+  - "implement task"
+  - "execute task"
+  - "atomic task"
   - "Execute task scenario"
   - "Code this task"
   - "Run task-implementer"
