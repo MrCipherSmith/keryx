@@ -85,8 +85,11 @@ test("K-005: a reasonless or empty body gives exactly the status line", async ()
 
 test("K-005: the reason is redacted, flattened and bounded", async () => {
   // Assembled at runtime so the repository never holds a string shaped like a key —
-  // the pre-push secret scan rightly refuses one, fake or not.
-  const fakeKeyBody = "abcdefghijklmnopqrstuvwxyz0123456789";
+  // the pre-push secret scan rightly refuses one, fake or not. The body is a single
+  // repeated character for the same reason: an alphabet-and-digits run is exactly
+  // what the high-entropy rule is for, and it flagged the first version. The
+  // `sk-…{20,}` redaction rule still matches the assembled key.
+  const fakeKeyBody = "x".repeat(32);
   const fakeKey = ["sk", "ant", "api03", fakeKeyBody].join("-");
   const leaked = await errorFor(json({ error: { message: `bad key ${fakeKey}` } }, 401));
   expect(leaked.message).not.toContain(fakeKeyBody);

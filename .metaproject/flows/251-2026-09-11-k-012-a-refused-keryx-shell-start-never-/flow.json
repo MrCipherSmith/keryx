@@ -1,0 +1,284 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "251",
+  "slug": "k-012-a-refused-keryx-shell-start-never-",
+  "title": "K-012: a refused keryx shell start never exits when MCP servers are configured",
+  "status": "in-progress",
+  "createdAt": "2026-09-11T14:35:04.062Z",
+  "updatedAt": "2026-09-11T15:18:29.521Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:23fa110df06c55c6a9618b854d54ecdace0d349dbaa8e8d44166e88f3f755258",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T15:18:15.131Z"
+    },
+    "AC2": {
+      "at": "2026-09-11T15:18:29.169Z"
+    },
+    "AC3": {
+      "at": "2026-09-11T15:18:29.351Z"
+    },
+    "AC4": {
+      "at": "2026-09-11T15:18:29.521Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the implement task T6"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "the regression test is T5; the suite run is T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Close the readline MCP runtime in the shell command's outer finally",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Verification: test:client:terminal, typecheck, lint, CI green",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-11T14:35:04.062Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-11T14:38:20.779Z",
+      "event": "task-added",
+      "detail": "T5: Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives"
+    },
+    {
+      "at": "2026-09-11T14:38:21.007Z",
+      "event": "task-added",
+      "detail": "T6: Close the readline MCP runtime in the shell command's outer finally"
+    },
+    {
+      "at": "2026-09-11T14:38:21.184Z",
+      "event": "task-added",
+      "detail": "T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test"
+    },
+    {
+      "at": "2026-09-11T14:38:21.413Z",
+      "event": "task-added",
+      "detail": "T8: Verification: test:client:terminal, typecheck, lint, CI green"
+    },
+    {
+      "at": "2026-09-11T14:38:21.636Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T14:38:21.825Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T14:38:22.067Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T14:38:22.219Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T14:38:22.357Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T14:39:45.324Z",
+      "event": "task-done",
+      "detail": "T5: Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives"
+    },
+    {
+      "at": "2026-09-11T14:42:03.077Z",
+      "event": "task-done",
+      "detail": "T6: Close the readline MCP runtime in the shell command's outer finally"
+    },
+    {
+      "at": "2026-09-11T14:42:03.241Z",
+      "event": "task-done",
+      "detail": "T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test"
+    },
+    {
+      "at": "2026-09-11T14:50:36.711Z",
+      "event": "task-done",
+      "detail": "T8: Verification: test:client:terminal, typecheck, lint, CI green"
+    },
+    {
+      "at": "2026-09-11T15:13:58.899Z",
+      "event": "task-added",
+      "detail": "T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)"
+    },
+    {
+      "at": "2026-09-11T15:13:59.098Z",
+      "event": "task-done",
+      "detail": "T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)"
+    },
+    {
+      "at": "2026-09-11T15:17:33.499Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T15:18:15.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-11T15:18:29.169Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-11T15:18:29.351Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-11T15:18:29.521Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    }
+  ]
+}
