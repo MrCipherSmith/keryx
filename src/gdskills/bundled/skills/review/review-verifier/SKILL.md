@@ -224,7 +224,7 @@ STATUS: DONE | NEEDS_CONTEXT | BLOCKED
 There is no `DONE_WITH_CONCERNS`: a verifier has no concerns of its own.
 
 Return one object conforming to
-`skills/review/review-orchestrator/verification-claim.schema.json`:
+`.metaproject/skills/gdskills/review/review-orchestrator/verification-claim.schema.json`:
 
 ````text
 ```json keryx:verifications

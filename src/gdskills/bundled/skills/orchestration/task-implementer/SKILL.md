@@ -222,8 +222,6 @@ Based on what you're implementing, load and follow the relevant project rules.
 
 Rules live at `.metaproject/rules/core/<rule>.mdc` on every harness — that is the
 one tree `keryx init` installs and the one every build of this skill reads.
-Cursor additionally mirrors them under `.cursor/rules/core/<rule>.mdc`; when both
-are present they are copies of the same file, so read either.
 
 **Output of Phase 2:** Mental model of the implementation:
 ```

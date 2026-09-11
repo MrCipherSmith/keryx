@@ -297,7 +297,7 @@ For each comment, classify intent before explaining:
 
 This maps the **intent of an incoming human comment**, which is not a code
 condition. It is not a second severity rubric: the levels themselves are defined
-once, in `skills/review/review-orchestrator/SKILL.md` → **Severity (canonical)**,
+once, in `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md` → **Severity (canonical)**,
 and a mapped value is a starting point that the canonical test overrides whenever
 the comment names a concrete trigger and outcome.
 

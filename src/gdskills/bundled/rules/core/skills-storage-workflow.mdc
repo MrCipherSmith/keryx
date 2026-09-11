@@ -68,7 +68,6 @@ back toward the spec:
 ## Global Sync Mapping
 - `SKILL.cursor.md` (or `SKILL.md`) → `~/.cursor/skills/<skill-name>/SKILL.md`
 - `SKILL.codex.md` (or `SKILL.md`) → `${CODEX_HOME:-~/.codex}/skills/<skill-name>/SKILL.md`
-- `SKILL.antigravity.md` (or `SKILL.md`) → `~/.antigravity/skills/<skill-name>/SKILL.md`
 - `SKILL.zed.md` (or `SKILL.md`) → `~/.config/zed/skills/<skill-name>/SKILL.md`
 - `SKILL.opencode.md` (or `SKILL.md`) → `~/.config/opencode/skills/<skill-name>/SKILL.md`
 
@@ -76,16 +75,13 @@ back toward the spec:
 1. Always create/update `SKILL.md` as the canonical source.
 2. Create platform variants only when platform-specific adaptations are needed; otherwise `SKILL.md` serves all platforms via fallback.
 3. Keep all profiles aligned in structure and intent.
-3. Validate skills before sync.
-4. Sync both global destinations after source update.
-5. Ensure `agents/openai.yaml` exists where required by the target agent UI.
-6. For create/update/sync workflows, produce a machine-readable final result for orchestrators.
+4. Validate skills before sync.
+5. Sync both global destinations after source update.
+6. Ensure `agents/openai.yaml` exists where required by the target agent UI.
+7. For create/update/sync workflows, produce a machine-readable final result for orchestrators.
 
 ## Machine-Readable Contract
-Use canonical schema:
-- `.metaproject/rules/schemas/skill-workflow-result.schema.json`
-
-Contract requirements:
+No canonical schema file exists for this result yet. Contract requirements:
 - One top-level JSON object only.
 - Stable required keys.
 - Closed objects (`additionalProperties: false`).

@@ -34,7 +34,7 @@ Never touches logic correctness, architecture, security, or performance.
 ```
 review-style Progress:
 - [ ] Step 1: Read Job Context (if CONTEXT_PATH provided)
-- [ ] Step 2: Determine git scope (merge-base) — see skills/shared/git-merge-base.md
+- [ ] Step 2: Determine git scope (merge-base) — see .metaproject/skills/gdskills/shared/git-merge-base.md
 - [ ] Step 3: Collect diff and changed file list
 - [ ] Step 4: Naming conventions check
 - [ ] Step 5: Dead code and imports check
@@ -60,7 +60,7 @@ review-style Progress:
 
 ## Scope Detection
 
-See shared script: `skills/shared/git-merge-base.md`
+See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run that script to determine `BASE_SHA` before collecting the diff.
 
@@ -228,7 +228,7 @@ boundary is the trigger-and-outcome test.
 
 ## Orchestrated Review Contract
 
-When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `skills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
+When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
 
 ---
 
