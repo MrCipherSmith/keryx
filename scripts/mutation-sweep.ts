@@ -180,6 +180,12 @@ async function main(): Promise<void> {
   const base = arg("base", "main") as string;
   const testPath = arg("tests", "src/mcp-servers/ src/mcp-client/") as string;
   const max = Number(arg("max", "0"));
+  // `--skip N` with `--max M` runs mutants [N, N+M). Slicing exists
+  // because this environment reaps detached background processes: three
+  // separate runs were killed part-way, each leaving a live mutant that
+  // the journal then had to name. A slice that finishes inside a
+  // foreground call cannot be reaped mid-write.
+  const skip = Number(arg("skip", "0"));
   const only = arg("files");
 
   const dirty = await sh(["git", "status", "--porcelain"]);
@@ -246,8 +252,12 @@ async function main(): Promise<void> {
     }
   }
 
-  const chosen = max > 0 ? mutants.slice(0, max) : mutants;
-  console.log(`${chosen.length} mutants across ${files.length} file(s); tests: ${testPath}`);
+  const windowed = mutants.slice(skip);
+  const chosen = max > 0 ? windowed.slice(0, max) : windowed;
+  console.log(
+    `${mutants.length} mutants across ${files.length} file(s); running ${chosen.length}` +
+      `${skip > 0 || max > 0 ? ` (slice ${skip}..${skip + chosen.length})` : ""}; tests: ${testPath}`,
+  );
   if (chosen.length === 0) return;
 
   const survivors: Mutant[] = [];
