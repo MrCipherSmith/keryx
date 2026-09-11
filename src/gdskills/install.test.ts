@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { installGdskills } from "./install";
+import { installGdskills, normalizeRetiredRuleContent } from "./install";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -244,21 +244,14 @@ test("a modified retired rule is kept and reported as a warning", async () => {
 // entry, matching the naming convention already used for the single-version
 // entry (`review-agent-profile.mdc`, no suffix).
 //
-// `normalizeRetiredRuleContentForTest` below replicates
-// `normalizeRetiredRuleContent` from install.ts (not exported — see that
-// file) rather than importing it, so it is deliberately identical to the
-// installer's own normalisation: decode UTF-8, strip one leading BOM,
+// The fixtures below are hashed with the installer's own
+// `normalizeRetiredRuleContent` (imported from install.ts, round-2 finding
+// T-008 — this used to be a hand-copied duplicate that could silently
+// drift from the real function): decode UTF-8, strip one leading BOM,
 // `\r\n` -> `\n`. The registered hashes are of the shipped files
 // LF/BOM-less already, so normalisation is a no-op for these fixtures, but
-// keeping the same function here means a future entry that recorded a
-// hash of non-normalised content would be caught by these tests too.
-function normalizeRetiredRuleContentForTest(content: Buffer): string {
-  let text = content.toString("utf8");
-  if (text.charCodeAt(0) === 0xfeff) {
-    text = text.slice(1);
-  }
-  return text.replace(/\r\n/g, "\n");
-}
+// hashing the same way here means a future entry that recorded a hash of
+// non-normalised content would be caught by these tests too.
 
 type RetiredRuleFixtureCase = {
   /** `RetiredRuleEntry.fileName` this fixture is a version of. */
@@ -291,7 +284,7 @@ async function listRetiredRuleFixtureCases(): Promise<RetiredRuleFixtureCase[]> 
             .sort();
     for (const fixtureFile of fixtureFiles) {
       const content = await readFile(path.join(retiredFixturesRoot, fixtureFile));
-      const sha256 = createHash("sha256").update(normalizeRetiredRuleContentForTest(content)).digest("hex");
+      const sha256 = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
       cases.push({ fileName: entry.fileName, fixtureFile, sha256 });
     }
   }
@@ -438,6 +431,65 @@ test("an unreadable retired rule file is kept, warned about, and does not abort 
     } finally {
       // Restore permissions so the outer `rm` can clean up the tmp dir.
       await chmod(filePath, 0o644).catch(() => {});
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-2 finding L-008: an unmodified retired copy that fails only at the
+// `unlink` step (the file itself was read and hash-matched fine) used to be
+// reported with the same "could not be read" wording as a genuine read
+// failure. This drives that path specifically: unlike the chmod-000 test
+// above, the file stays readable — only removing it from its directory
+// fails, because the directory itself has no write permission.
+test("an unmodified retired rule in a read-only rules/core directory is kept, warned about as a removal failure (not a read failure), and does not abort the install", async () => {
+  // Unlinking a file requires write permission on its *containing
+  // directory*, not the file itself — root bypasses that check, and
+  // directory permission bits don't carry the same meaning on Windows, so
+  // this scenario isn't worth emulating there.
+  if (process.getuid?.() === 0 || process.platform === "win32") {
+    return;
+  }
+
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const rulesCore = path.join(metaprojectRoot, "rules", "core");
+
+    // First install populates rules/core normally, while it's still
+    // writable.
+    await installGdskills(metaprojectRoot, "recommended");
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const filePath = path.join(rulesCore, retiredEntry.fileName);
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName), "utf8");
+    await writeFile(filePath, unmodifiedContent, "utf8");
+
+    // A retired name isn't in the bundle anymore, so the second install's
+    // `cp` never needs to create *this* directory entry — every bundled
+    // file it does write already exists from the first install, and
+    // overwriting an existing file only needs write permission on that
+    // file, not on the directory. So making rules/core read-only here
+    // blocks nothing but this function's own `unlink` call.
+    await chmod(rulesCore, 0o555);
+
+    try {
+      const result = await installGdskills(metaprojectRoot, "recommended");
+
+      expect(existsSync(filePath)).toBe(true);
+      expect(await readFile(filePath, "utf8")).toBe(unmodifiedContent);
+      expect(result.warnings).toHaveLength(1);
+      const [warning] = result.warnings;
+      expect(warning).toStartWith(`${retiredEntry.fileName} is no longer shipped by keryx`);
+      expect(warning).toContain("matches a shipped version but could not be removed (EACCES)");
+      expect(warning).not.toContain("could not be read");
+    } finally {
+      // Restore permissions so the outer `rm` can clean up the tmp dir.
+      await chmod(rulesCore, 0o755).catch(() => {});
     }
   } finally {
     await rm(root, { recursive: true, force: true });

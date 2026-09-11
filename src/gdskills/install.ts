@@ -12,7 +12,12 @@ import {
   renderGdskillsCatalog,
   renderGdskillsManifest,
 } from "./catalog";
-import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES, type RetiredRuleOutcome } from "./retired-rules";
+import {
+  RETIRED_RULE_SIZE_CAP_BYTES,
+  RETIRED_RULES,
+  type RetiredRuleFailureStage,
+  type RetiredRuleOutcome,
+} from "./retired-rules";
 
 export type InstallGdskillsResult = {
   profile: GdskillsProfile;
@@ -140,6 +145,9 @@ async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<Retire
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of RETIRED_RULES) {
     const installedPath = path.join(rulesTarget, retired.fileName);
+    // Updated right before each step so the catch block below can name
+    // which one actually failed (round-2 finding L-008).
+    let stage: RetiredRuleFailureStage = "lstat";
     try {
       const stats = await lstat(installedPath);
 
@@ -160,9 +168,11 @@ async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<Retire
         continue;
       }
 
+      stage = "read";
       const content = await readFile(installedPath);
       const hash = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
       if (retired.shippedSha256.includes(hash)) {
+        stage = "unlink";
         await unlink(installedPath);
         outcomes.push({ fileName: retired.fileName, action: "removed" });
       } else {
@@ -174,13 +184,19 @@ async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<Retire
         // installation has caught up. Not an outcome, not a warning.
         continue;
       }
-      // Anything else (EACCES on an unreadable file, a race where the
-      // entry disappears between lstat and readFile/unlink, etc.): keep
-      // the file, warn, and move on to the next retired name. Cleanup of
-      // one entry must never abort the rest of installGdskills.
+      // Anything else (EACCES on an unreadable file, a read-only
+      // directory blocking the unlink of a confirmed-unmodified copy, a
+      // race where the entry disappears between lstat and
+      // readFile/unlink, etc.): keep the file, warn, and move on to the
+      // next retired name. Cleanup of one entry must never abort the rest
+      // of installGdskills. `stage` records which step was in flight, so
+      // the warning below can tell a read failure (the file's status is
+      // still unknown) apart from an unlink failure (the file was already
+      // confirmed as an unmodified shipped copy — only its removal failed).
       outcomes.push({
         fileName: retired.fileName,
         action: "kept-error",
+        stage,
         errorCode: isErrnoException(error) && error.code ? error.code : "UNKNOWN",
       });
     }
@@ -196,8 +212,12 @@ async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<Retire
  * CRLF line endings (e.g. Windows `core.autocrlf=true`) or carrying a BOM
  * would never match and would be kept + warned as "modified" forever
  * (round-1 finding L-001).
+ *
+ * Exported so `install.test.ts` can hash fixtures the same way the
+ * installer does, instead of maintaining its own copy of this function
+ * that could silently drift from it (round-2 finding T-008).
  */
-function normalizeRetiredRuleContent(content: Buffer): string {
+export function normalizeRetiredRuleContent(content: Buffer): string {
   let text = content.toString("utf8");
   if (text.charCodeAt(0) === 0xfeff) {
     text = text.slice(1);
@@ -231,7 +251,15 @@ function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
     case "kept-oversized":
       return `${prefix}; kept because it is ${outcome.sizeBytes} bytes, far larger than any version keryx ever shipped under this name — inspect it, then delete or rename it if appropriate`;
     case "kept-error":
-      return `${prefix}; kept because it could not be read (${outcome.errorCode}) — inspect it, then delete or rename it if appropriate`;
+      // `lstat`/`read` failures leave the file's status unconfirmed, so
+      // they keep the original "could not be read" wording. An `unlink`
+      // failure means the file *was* read and hash-matched an unmodified
+      // shipped copy — only the removal failed — so it gets its own
+      // wording rather than the misleading "could not be read"
+      // (round-2 finding L-008).
+      return outcome.stage === "unlink"
+        ? `${prefix}; matches a shipped version but could not be removed (${outcome.errorCode}) — delete it by hand`
+        : `${prefix}; kept because it could not be read (${outcome.errorCode}) — inspect it, then delete or rename it if appropriate`;
     default: {
       const exhaustive: never = outcome;
       throw new Error(`unhandled retired rule outcome: ${JSON.stringify(exhaustive)}`);

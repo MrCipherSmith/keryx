@@ -89,10 +89,20 @@ const LARGEST_SHIPPED_RETIRED_RULE_BYTES = 2248;
  */
 export const RETIRED_RULE_SIZE_CAP_BYTES = LARGEST_SHIPPED_RETIRED_RULE_BYTES * 4;
 
+/**
+ * Which step of `removeUnmodifiedRetiredRules` (install.ts) was in flight
+ * when a `kept-error` outcome's error was thrown: `lstat`/`read` failures
+ * mean the file was never confirmed as an unmodified shipped copy, while
+ * `unlink` means it *was* confirmed and only the removal itself failed
+ * (round-2 finding L-008 — those two cases need different wording, since
+ * "could not be read" is wrong for a file that was read and hash-matched).
+ */
+export type RetiredRuleFailureStage = "lstat" | "read" | "unlink";
+
 /** One installed retired-rule file the installer found and what it did with it. */
 export type RetiredRuleOutcome =
   | { fileName: string; action: "removed" }
   | { fileName: string; action: "kept-modified" }
   | { fileName: string; action: "kept-not-regular-file" }
   | { fileName: string; action: "kept-oversized"; sizeBytes: number }
-  | { fileName: string; action: "kept-error"; errorCode: string };
+  | { fileName: string; action: "kept-error"; stage: RetiredRuleFailureStage; errorCode: string };
