@@ -332,3 +332,53 @@ describe("the shell survives every one of these", () => {
     await runtime?.close();
   });
 });
+
+describe("the oauth block — validated fields, and the one that is not implemented", () => {
+  // `oauthProblems` had no tests at all, which is how a mutation of
+  // its `clientSecretEnvVar` condition survived a sweep. The point of
+  // that branch is the opposite of the usual: it reports a field the
+  // schema legally accepts, because silently ignoring this one is
+  // dangerous.
+
+  function problemsFor(oauth: unknown): string[] {
+    const { configDir, cwd } = withServers({ s: { url: "https://h/mcp", oauth } });
+    return loadMcpServers({ configDir, cwd }).problems.map((p) => p.message);
+  }
+
+  test("a configured clientSecretEnvVar is reported as not implemented", () => {
+    // keryx registers `token_endpoint_auth_method: "none"`, so a
+    // server configured as a confidential client would authenticate
+    // as a public one — and the operator would never learn the secret
+    // they configured was not used.
+    const problems = problemsFor({ clientSecretEnvVar: "LINEAR_SECRET" });
+    expect(problems.join("\n")).toContain("not implemented");
+  });
+
+  test("BOUNDARY — an EMPTY clientSecretEnvVar is not reported", () => {
+    // The condition is `!== ""`, and inverting it to `=== ""` survived
+    // a sweep: an empty string configures nothing, so warning about it
+    // would be noise on a field the operator effectively left unset.
+    expect(problemsFor({ clientSecretEnvVar: "" }).join("\n")).not.toContain("not implemented");
+  });
+
+  test("BOUNDARY — an absent clientSecretEnvVar is not reported either", () => {
+    expect(problemsFor({ clientId: "c" }).join("\n")).not.toContain("not implemented");
+  });
+
+  test("an unknown oauth field is refused by name", () => {
+    expect(problemsFor({ nope: 1 }).join("\n")).toContain('unknown field "nope"');
+  });
+
+  test("scopes must be an array of strings", () => {
+    expect(problemsFor({ scopes: "read" }).join("\n")).toContain("array of strings");
+  });
+
+  test("and a port outside the range is refused", () => {
+    expect(problemsFor({ callbackPort: 70_000 }).join("\n")).toContain("between 1 and 65535");
+  });
+
+  test("BOUNDARY — a legal oauth block produces no problems at all", () => {
+    // Without this, "report everything" would pass every test above.
+    expect(problemsFor({ clientId: "c", scopes: ["read"], callbackPort: 8765 })).toEqual([]);
+  });
+});

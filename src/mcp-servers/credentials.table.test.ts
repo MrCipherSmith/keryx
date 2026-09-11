@@ -19,6 +19,7 @@ import {
   credentialKey,
   credentialsFile,
   describeCredential,
+  forgetByName,
   EXPIRY_MARGIN_MS,
   isExpired,
   readCredential,
@@ -583,6 +584,54 @@ describe("concurrent writers do not lose each other's tokens", () => {
     expect(() => JSON.parse(readFileSync(credentialsFile(dir), "utf8")) as unknown).not.toThrow();
     expect(statSync(credentialsFile(dir)).mode & 0o777).toBe(0o600);
   }, 30_000);
+});
+
+describe("forgetting by name, for a server the config no longer has", () => {
+  test("a corrupt store is refused, not overwritten", () => {
+    // Same rule as every other writer here, and its guard survived
+    // deletion: without it, forgetting one name rewrites an
+    // unreadable store from an empty object and takes every other
+    // server's token with it.
+    const dir = store();
+    const corrupt = '{"credentials": truncated…';
+    writeFileSync(credentialsFile(dir), corrupt);
+    const result = forgetByName("anything", dir);
+    expect(result.error).toBeDefined();
+    expect(readFileSync(credentialsFile(dir), "utf8")).toBe(corrupt);
+  });
+
+  test("a key with no separator is skipped, not mis-parsed", () => {
+    // Hand-edited or written by a future version. Without the guard,
+    // `indexOf(":") === -1` yields `slice(0, -1)`, which can equal a
+    // real server name and delete a credential nobody asked about.
+    const dir = store();
+    writeCredential("keep", "https://k/mcp", { tokens: tokens() }, dir);
+    const raw = JSON.parse(readFileSync(credentialsFile(dir), "utf8")) as {
+      credentials: Record<string, unknown>;
+    };
+    raw.credentials.malformed = { tokens: { access_token: "x" } };
+    writeFileSync(credentialsFile(dir), JSON.stringify(raw));
+
+    // "malforme" is `slice(0, -1)` of "malformed": the exact string an
+    // unguarded parse would match on.
+    expect(forgetByName("malforme", dir).count).toBe(0);
+    expect(readCredential("keep", "https://k/mcp", dir).record?.tokens?.access_token).toBe(TOKEN);
+  });
+
+  test("BOUNDARY — a real name IS forgotten, whatever its url", () => {
+    const dir = store();
+    writeCredential("ghost", "https://one/mcp", { tokens: tokens() }, dir);
+    writeCredential("ghost", "https://two/mcp", { tokens: tokens() }, dir);
+    expect(forgetByName("ghost", dir).count).toBe(2);
+  });
+
+  test("and a similarly-named server is left alone", () => {
+    const dir = store();
+    writeCredential("ghost", "https://a/mcp", { tokens: tokens() }, dir);
+    writeCredential("ghost-two", "https://a/mcp", { tokens: tokens() }, dir);
+    expect(forgetByName("ghost", dir).count).toBe(1);
+    expect(readCredential("ghost-two", "https://a/mcp", dir).record).toBeDefined();
+  });
 });
 
 describe("clearing", () => {

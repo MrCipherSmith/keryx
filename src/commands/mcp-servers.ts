@@ -697,8 +697,13 @@ export function bothStreamsAreATerminal(
  * The old code had no way to honour that contract because it had no
  * way to express "I could not open it".
  */
-function openAuthorisationUrl(url: URL, log: (line: string) => void): void {
-  const plan = browserOpenPlan(url.toString());
+export function openAuthorisationUrl(
+  url: URL,
+  log: (line: string) => void,
+  platform: NodeJS.Platform = process.platform,
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const plan = browserOpenPlan(url.toString(), platform, env);
   if (plan === undefined) {
     // No graphical session. The URL is the whole product of this step,
     // so print it rather than pretending.

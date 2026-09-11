@@ -9,7 +9,7 @@
 // exit code passes for all three.
 
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readCredential, writeCredential } from "./credentials";
@@ -191,6 +191,45 @@ describe("expires_in is resolved to an instant at the moment of issue", () => {
     const dir = store();
     provider({ configDir: dir }).saveTokens({ access_token: "t", refresh_token: "r" });
     expect(readCredential("linear", URL_, dir).record?.tokens?.refresh_token).toBe("r");
+  });
+});
+
+describe("a REFUSED write is surfaced, not swallowed", () => {
+  // All three save methods discarded `writeCredential`'s
+  // `{ok:false}`, and all three deletions survived a sweep. With a
+  // corrupt store the SDK carried on as though the write had
+  // happened: the operator finished a browser round trip, spent the
+  // authorisation code, and then got "no PKCE verifier stored; the
+  // authorisation was not started by this keryx" — accusing the flow
+  // of being foreign when the real cause was a JSON syntax error.
+  function corruptStore(): string {
+    const dir = store();
+    writeFileSync(path.join(dir, "mcp-credentials.json"), "{not json");
+    return dir;
+  }
+
+  test("saveTokens throws, naming the store", () => {
+    const p = provider({ configDir: corruptStore() });
+    expect(() => p.saveTokens({ access_token: "t" })).toThrow(/not valid JSON/);
+  });
+
+  test("saveCodeVerifier throws", () => {
+    const p = provider({ configDir: corruptStore() });
+    expect(() => p.saveCodeVerifier("v")).toThrow(/not valid JSON/);
+  });
+
+  test("saveClientInformation throws", () => {
+    const p = provider({ configDir: corruptStore(), interactive: true });
+    expect(() => p.saveClientInformation({ client_id: "c" })).toThrow(/not valid JSON/);
+  });
+
+  test("BOUNDARY — against a healthy store all three succeed", () => {
+    // Without this, "always throw" would pass the three above.
+    const dir = store();
+    const p = provider({ configDir: dir, interactive: true });
+    expect(() => p.saveClientInformation({ client_id: "c" })).not.toThrow();
+    expect(() => p.saveCodeVerifier("v")).not.toThrow();
+    expect(() => p.saveTokens({ access_token: "t" })).not.toThrow();
   });
 });
 

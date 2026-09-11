@@ -15,7 +15,12 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { bothStreamsAreATerminal, resolveInteractive, runMcpConsumerCommand } from "./mcp-servers";
+import {
+  bothStreamsAreATerminal,
+  openAuthorisationUrl,
+  resolveInteractive,
+  runMcpConsumerCommand,
+} from "./mcp-servers";
 
 type TtyRow = {
   readonly label: string;
@@ -122,5 +127,43 @@ describe("an explicit answer wins over the streams", () => {
     expect(code).toBe(1);
     expect(opened).toEqual([]);
     expect(err.join("\n")).toContain("no terminal");
+  });
+});
+
+describe("when there is no graphical session, the URL is printed instead", () => {
+  // `browserOpenPlan` returns undefined when it cannot open anything,
+  // and its contract is that the caller shows the URL. The first
+  // version of this code had no way to honour that contract because
+  // it had no way to express "I could not open it" — so over SSH the
+  // operator got silence and, five minutes later, was told their
+  // browser tab was never completed.
+  const URL_ = new URL("https://auth.test/authorize?client_id=x");
+
+  test("the operator is given the URL to open themselves", () => {
+    const lines: string[] = [];
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {});
+    expect(lines.join("\n")).toContain("https://auth.test/authorize?client_id=x");
+  });
+
+  test("and told why nothing opened", () => {
+    const lines: string[] = [];
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {});
+    expect(lines.join("\n")).toContain("No graphical session");
+  });
+
+  test("BOUNDARY — with DISPLAY set, it does NOT print the fallback", () => {
+    // Without this, "always print" would pass the two tests above and
+    // the browser would never open for anybody.
+    const lines: string[] = [];
+    // darwin needs no DISPLAY and always has an opener, so it is the
+    // cleanest way to exercise the other branch without spawning.
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "darwin", {});
+    expect(lines.join("\n")).not.toContain("No graphical session");
+  });
+
+  test("and a Wayland session counts as graphical too", () => {
+    const lines: string[] = [];
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", { WAYLAND_DISPLAY: "wayland-0" });
+    expect(lines.join("\n")).not.toContain("No graphical session");
   });
 });

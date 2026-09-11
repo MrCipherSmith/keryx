@@ -206,7 +206,7 @@ type Run = { code: number; out: string; err: string; configDir: string };
 async function authenticate(
   mock: Mock,
   entry: Record<string, unknown> = {},
-  extra: { opened?: URL[]; preStoreToken?: boolean } = {},
+  extra: { opened?: URL[]; preStoreToken?: boolean; seenRedirects?: string[] } = {},
 ): Promise<Run> {
   const base = mkdtempSync(path.join(tmpdir(), "keryx-authflow-"));
   const configDir = path.join(base, "config");
@@ -239,6 +239,7 @@ async function authenticate(
     // operator and drives the redirect back to keryx's listener.
     openBrowser: async (url) => {
       extra.opened?.push(url);
+      extra.seenRedirects?.push(url.toString());
       const redirect = url.searchParams.get("redirect_uri");
       const state = url.searchParams.get("state");
       if (redirect === null || state === null) return;
@@ -383,6 +384,53 @@ describe("a configured clientId is used instead of registering one", () => {
     const mock = mockAuthServer();
     await authenticate(mock);
     expect(mock.seen.filter((s) => s.path === "/register").length).toBe(1);
+  });
+});
+
+/** The `redirect_uri` the authorisation URL actually carried. */
+function redirectParam(seen: readonly string[]): string | null {
+  const first = seen[0];
+  return first === undefined ? null : new URL(first).searchParams.get("redirect_uri");
+}
+
+describe("the configured oauth block reaches the real flow", () => {
+  test("a configured callbackPort is the port the redirect_uri names", async () => {
+    // Tested at the COMMAND, not just on the listener: the field has
+    // to survive being read off the entry, and the two mutations that
+    // drop it there both survived a sweep. An authorisation server
+    // with a pre-registered redirect URI knows exactly one port.
+    const mock = mockAuthServer();
+    const seenRedirects: string[] = [];
+    await authenticate(mock, { oauth: { clientId: "c", callbackPort: 47_811 } }, { seenRedirects });
+    // Read as a parsed parameter, not as a substring: the value is
+    // percent-encoded inside the authorisation URL, so a raw
+    // `toContain` tests the encoding rather than the port.
+    expect(redirectParam(seenRedirects)).toBe("http://127.0.0.1:47811/callback");
+  });
+
+  test("BOUNDARY — with no callbackPort, the redirect_uri is not that port", async () => {
+    const mock = mockAuthServer();
+    const seenRedirects: string[] = [];
+    await authenticate(mock, { oauth: { clientId: "c" } }, { seenRedirects });
+    const redirect = redirectParam(seenRedirects);
+    expect(redirect).not.toBe("http://127.0.0.1:47811/callback");
+    expect(redirect?.startsWith("http://127.0.0.1:")).toBe(true);
+  });
+
+  test("configured scopes reach the authorisation request", async () => {
+    const mock = mockAuthServer();
+    const seenRedirects: string[] = [];
+    await authenticate(mock, { oauth: { clientId: "c", scopes: ["read", "write"] } }, { seenRedirects });
+    // `+` is a space in a query string, so `decodeURIComponent` on the
+    // raw URL would not have found it either.
+    expect(new URL(seenRedirects[0] ?? "http://x/").searchParams.get("scope")).toBe("read write");
+  });
+
+  test("BOUNDARY — with no scopes, none is requested", async () => {
+    const mock = mockAuthServer();
+    const seenRedirects: string[] = [];
+    await authenticate(mock, { oauth: { clientId: "c" } }, { seenRedirects });
+    expect(new URL(seenRedirects[0] ?? "http://x/").searchParams.get("scope")).toBeNull();
   });
 });
 
