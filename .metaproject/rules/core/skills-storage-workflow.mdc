@@ -70,10 +70,23 @@ back toward the spec:
   to address.
 
 ## Global Sync Mapping
-- `SKILL.cursor.md` (or `SKILL.md`) → `~/.cursor/skills/<skill-name>/SKILL.md`
-- `SKILL.codex.md` (or `SKILL.md`) → `${CODEX_HOME:-~/.codex}/skills/<skill-name>/SKILL.md`
-- `SKILL.zed.md` (or `SKILL.md`) → `~/.config/zed/skills/<skill-name>/SKILL.md`
-- `SKILL.opencode.md` (or `SKILL.md`) → `~/.config/opencode/skills/<skill-name>/SKILL.md`
+Global sync only ever reaches a **project-local skill**
+(`.metaproject/project-skills/<skill-name>/`) that has first been exported for
+that runtime with `keryx skills export <skill-name> --runtime <runtime>`
+(this writes `.metaproject/runtime/skills/<runtime>/<module>-<skill-name>/`).
+A **shipped** skill (`src/gdskills/bundled/skills/<category>/<skill-name>/`)
+cannot be exported — `keryx skills export` resolves project skills only and
+reports `Project skill not found for: <name>` for a shipped one — so it has no
+global-sync route today. A shipped skill reaches a runtime only through the
+project-local installed mirror (`.metaproject/skills/gdskills/<category>/<skill-name>/`,
+written by `keryx init`/`keryx update`), which stays inside the project.
+
+Once a project skill is exported for a runtime, `keryx skills sync --runtime
+<runtime> --global` copies it from `.metaproject/runtime/skills/<runtime>/` to:
+- `cursor` → `~/.cursor/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.cursor.md`, or `SKILL.md` as fallback)
+- `codex` → `${CODEX_HOME:-~/.codex}/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.codex.md`, or `SKILL.md` as fallback)
+- `zed` → `~/.config/zed/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.zed.md`, or `SKILL.md` as fallback)
+- `opencode` → `~/.config/opencode/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.opencode.md`, or `SKILL.md` as fallback)
 
 These four global destinations are written only by the explicit, opt-in
 `keryx skills sync --runtime <runtime> --global` command — never as a side
@@ -86,7 +99,7 @@ those instead.
 2. Create platform variants only when platform-specific adaptations are needed; otherwise `SKILL.md` serves all platforms via fallback.
 3. Keep all profiles aligned in structure and intent.
 4. Validate skills before sync.
-5. Sync every global destination that applies (`cursor`, `codex`, `zed`, `opencode` — four in total) with `keryx skills sync --runtime <runtime> --global`, run once per runtime that needs it, after source update.
+5. For a **project-local** skill only: export it per runtime first (`keryx skills export <skill-name> --runtime <runtime>`), then sync every global destination that applies (`cursor`, `codex`, `zed`, `opencode` — four in total) with `keryx skills sync --runtime <runtime> --global`, run once per runtime that needs it. A shipped skill cannot be exported and has no global-sync route — it reaches a runtime only via the project-local installed mirror (`keryx update`/`keryx init`).
 6. Ensure `agents/openai.yaml` exists where required by the target agent UI.
 7. For create/update/sync workflows, produce a machine-readable final result for orchestrators.
 
@@ -119,10 +132,16 @@ source:
 keryx update
 ```
 
-`keryx update` never writes outside the project. To also push a skill to a
-harness's own global directory (opt-in, outside the project), run:
+`keryx update` never writes outside the project, and it is the only route a
+**shipped** skill has to reach a runtime — a shipped skill cannot be exported
+and has no global-sync destination.
+
+To push a **project-local** skill (`.metaproject/project-skills/<skill-name>/`)
+to a harness's own global directory (opt-in, outside the project), export it
+for that runtime first, then sync:
 
 ```bash
+keryx skills export <skill-name> --runtime <runtime>
 keryx skills sync --runtime <runtime> --global
 ```
 
@@ -140,5 +159,9 @@ Edit skills under `src/gdskills/bundled/skills/<category>/<skill-name>/`
 (shipped) or `.metaproject/project-skills/<skill-name>/` (project-local).
 `keryx init`/`keryx update` regenerate the installed mirror at
 `.metaproject/skills/gdskills/<category>/<skill-name>/` — this stays inside
-the project. Use `keryx skills sync --runtime <runtime> --global` separately
-to push a skill to a harness's own global directory outside the project.
+the project, and is the only way a shipped skill reaches a runtime. For a
+project-local skill only, run `keryx skills export <skill-name> --runtime
+<runtime>` then `keryx skills sync --runtime <runtime> --global` separately to
+push it to a harness's own global directory outside the project; shipped
+skills cannot be exported (`keryx skills export` resolves project skills
+only) and have no global-sync route.
