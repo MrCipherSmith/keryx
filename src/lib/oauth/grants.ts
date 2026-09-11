@@ -1,7 +1,7 @@
 // OAuth grants in the existing user-global auth.json (mode 0600).
 // Secrets live only in this file. Status/list surfaces never copy them.
 
-import { loadShellConfig, saveShellConfig } from "../shell-config";
+import { loadShellConfig, noteSavedCredentialEnv, saveShellConfig } from "../shell-config";
 
 export type OAuthGrantMethod = "device-code" | "oauth-pkce-loopback";
 
@@ -127,6 +127,7 @@ export function applyOAuthAccessToEnv(dir?: string): string[] {
       applied.push(envKey);
     }
   }
+  noteSavedCredentialEnv(applied);
   return applied;
 }
 

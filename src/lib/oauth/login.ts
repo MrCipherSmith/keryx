@@ -179,6 +179,57 @@ export async function refreshProviderGrant(
   return next;
 }
 
+/** Providers whose stored grant a session refreshes before building a provider from it. */
+const SESSION_REFRESHED_GRANTS = ["grok", "github-copilot"] as const;
+
+/**
+ * Refresh every stored grant that has expired or is about to, before any surface
+ * builds a provider from one (K-013).
+ *
+ * This used to run only in the TUI's start-up, with each failure swallowed. The
+ * readline surface — `--no-tui`, `--print`, every scripted run — then sent an
+ * access token hours past its expiry, and the 403 it got back ("could not be
+ * validated") read as a revoked login, not an expired one. Returns one line per
+ * grant that needed a refresh and could not get one, for the caller to show.
+ */
+export async function refreshSavedGrants(
+  http: { fetch: import("./device-code").OAuthFetch; signal?: AbortSignal; now?: () => number },
+  dir?: string,
+  providers: readonly string[] = SESSION_REFRESHED_GRANTS,
+): Promise<string[]> {
+  const warnings: string[] = [];
+  const now = http.now ?? Date.now;
+  // One after the other, not in parallel: each refresh rewrites the whole
+  // `auth.json`, and two concurrent read-modify-writes would lose one grant.
+  // The caller bounds the total with `http.signal`.
+  for (const provider of providers) {
+    if (!(SESSION_REFRESHED_GRANTS as readonly string[]).includes(provider)) continue;
+    const grant = loadOAuthGrant(provider, dir);
+    if (grant === undefined) continue;
+    if (grant.refresh === undefined || grant.refresh.length === 0) {
+      // Not refreshable, so `grantNeedsRefresh` says no — and the same opaque 403
+      // follows unless someone says why first.
+      if (grant.expires !== undefined && grant.expires <= now()) {
+        warnings.push(
+          `${provider}: the saved login has expired and holds no refresh token. Run \`keryx auth login ${provider}\`.`,
+        );
+      }
+      continue;
+    }
+    if (!grantNeedsRefresh(grant, http.now)) continue;
+    try {
+      await refreshProviderGrant(provider, http, dir);
+    } catch (cause) {
+      const reason = cause instanceof Error ? cause.message : String(cause);
+      warnings.push(
+        `${provider}: the saved login is expiring or expired and could not be refreshed (${reason}). ` +
+          `Run \`keryx auth login ${provider}\`.`,
+      );
+    }
+  }
+  return warnings;
+}
+
 export function logoutProvider(provider: string, dir?: string): void {
   deleteOAuthGrant(provider, dir);
 }
