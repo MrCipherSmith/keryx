@@ -78,6 +78,15 @@ test("CLI and stdio MCP normalize the progressive read contract", async () => {
   expect(normalizeFixture(JSON.parse(cliRead.stdout))).toEqual(normalizeFixture(JSON.parse(mcpRead.text)));
 });
 
+// 30s, not bun's default 5s. This test SPAWNS A REAL PROCESS and
+// drives a real stdio MCP handshake through the SDK, and on a loaded
+// machine that alone can exceed five seconds — it failed roughly one
+// run in three while a release was being verified on this suite's
+// verdict. A flaky test in the gate is worse than a slow one: it
+// teaches the reader to re-run rather than to look.
+//
+// Found while hunting a single unexplained failure in a full run; it
+// is unrelated to what that run was verifying.
 test("real SAC stdio MCP SDK round-trip preserves overview, read, and overflow parity", async () => {
   let sdk: {
     Client: new (info: unknown, options: unknown) => { connect(t: unknown): Promise<void>; callTool(args: { name: string; arguments: Record<string, unknown> }): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>; close(): Promise<void> };
@@ -107,4 +116,4 @@ test("real SAC stdio MCP SDK round-trip preserves overview, read, and overflow p
   } finally {
     await client.close();
   }
-});
+}, 30_000);

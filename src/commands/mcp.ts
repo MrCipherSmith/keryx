@@ -119,6 +119,12 @@ export function printMcpHelp(): void {
   //
   // Found by writing the release smoke test, which is the second time
   // that exercise has turned up something the suite could not.
+  //
+  // Third time: `auth` and `logout` shipped without appearing here at
+  // all, so two new commands were undiscoverable. There is now a test
+  // enumerating MCP_CONSUMER_SUBCOMMANDS against this text, the same
+  // guard the secrecy suite uses — which caught `logout` the day it
+  // was added, while this list did not.
   helpTitle("keryx mcp", "the MCP servers keryx connects to");
   helpUsage([
     "keryx mcp list [--json]                        # what is configured, and from where",
@@ -127,6 +133,8 @@ export function printMcpHelp(): void {
     "keryx mcp remove|enable|disable <name>",
     "keryx mcp trust|untrust <name>                 # approve a project-scoped server",
     "keryx mcp doctor [name] [--json]               # dial it and say what is wrong",
+    "keryx mcp auth <name>                          # authorise a remote server in your browser",
+    "keryx mcp logout <name>                        # forget its stored credential",
   ]);
   heading("Publishing keryx itself (the retired `keryx mcp` spellings)");
   helpUsage([

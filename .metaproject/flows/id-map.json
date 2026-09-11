@@ -166,5 +166,21 @@
     "toDir": "250-2026-09-11-keryx-shell-loses-the-arena-on-tools-and",
     "at": "2026-09-11T09:51:25.530Z",
     "reason": "id 249 was taken on main by flow mcp-servers-p3a (#528) while this flow was created on the older base 9fba208; both inits saw 248 as the last id"
+  },
+  {
+    "from": "250",
+    "to": "252",
+    "fromDir": "250-2026-09-11-mcp-servers-p3b",
+    "toDir": "252-2026-09-11-mcp-servers-p3b",
+    "at": "2026-09-11T19:42:50.128Z",
+    "reason": "Flow id 250 collided after rebasing onto main: main already carries 250-keryx-shell-loses-the-arena-on-tools (PR #529) and 251-k-012. This flow was numbered 250 locally before either landed, so it takes the next free id."
+  },
+  {
+    "from": "252",
+    "to": "253",
+    "fromDir": "252-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t",
+    "toDir": "253-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t",
+    "at": "2026-09-11T20:16:15.378Z",
+    "reason": "main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open"
   }
 ]

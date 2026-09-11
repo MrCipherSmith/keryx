@@ -177,6 +177,29 @@ test("graphQuery delegates to the fake for orphans and cycles", async () => {
   });
 });
 
+// K-016, found by the arena 2026-09-11: in a project that has never deleted
+// anything, every memory_search miss carried the deletion journal's absolute path
+// and the full scope caveat, ~700 characters. It was the first place three agents
+// learned where on disk they were, the step before each walked out of its tree.
+test("a memory_search miss in a project with no deletion trail is one short line, with no path in it", async () => {
+  const cwd = await mkdtemp(path.join(tmpdir(), "keryx-k016-"));
+  try {
+    const { deps } = fakeDeps({});
+    const port = createMetaprojectAdapter(cwd, deps);
+    const result = await port.memorySearch({ query: "perf(lint): move import cycles to oxlint" });
+
+    expect(result.hits).toHaveLength(0);
+    expect(result.removalTrail?.verdict).toBe("trail-absent");
+    expect(result.removalTrail?.summary).not.toContain(cwd);
+    expect(result.removalTrail?.summary).not.toContain("journal.jsonl");
+    // The bound survives: "no record" is still not "never existed".
+    expect(result.removalTrail?.summary).toContain("never existed");
+    expect(result.removalTrail?.summary.length ?? 0).toBeLessThan(200);
+  } finally {
+    await rm(cwd, { recursive: true, force: true });
+  }
+});
+
 test("memorySearch delegates to the injected memory fake and maps ranked hits", async () => {
   const scored: ScoredEntry = {
     entry: entry(),

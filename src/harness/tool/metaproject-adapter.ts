@@ -326,6 +326,10 @@ const MAX_REMOVAL_RECORDS = 5;
  */
 const MAX_REMOVAL_SUMMARY_BYTES = 1600;
 
+/** A `trail-absent` miss, as the model sees it: the verdict and its bound, no path. */
+const TRAIL_ABSENT_SUMMARY =
+  'no removal has ever been recorded in this project (it has no deletion trail) — not the claim "this never existed".';
+
 /** `<value> [<basis>]`, or `unknown` — a derived actor never renders as a stated one. */
 function flattenAttribution(attribution: Attribution): string {
   return attribution.basis === "unknown" || attribution.value === null
@@ -344,12 +348,22 @@ function flattenAttribution(attribution: Attribution): string {
  */
 async function projectRemovalTrail(cwd: string, query: string): Promise<MemoryRemovalTrail> {
   const lookup = searchRemovals(await loadDeletionTrail(cwd), query);
+  // K-016: a project that has never deleted anything has no trail, and the owner's
+  // prose for that — the journal's absolute path and the full scope caveat, ~700
+  // characters — went to the model on every miss. In the arena it was the first
+  // place an agent learned its own absolute location, the step before it walked
+  // out of its tree. The model needs the verdict and the bound, not the file.
+  if (lookup.verdict === "trail-absent") {
+    return { verdict: "trail-absent", summary: TRAIL_ABSENT_SUMMARY };
+  }
+  // Every other verdict keeps its prose, with paths relative to the project.
+  const summary = clipAutomaticRecallText(lookup.reason.split(`${cwd}/`).join(""), MAX_REMOVAL_SUMMARY_BYTES);
   if (lookup.verdict !== "recorded-removed") {
-    return { verdict: lookup.verdict, summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES) };
+    return { verdict: lookup.verdict, summary };
   }
   return {
     verdict: "recorded-removed",
-    summary: clipAutomaticRecallText(lookup.reason, MAX_REMOVAL_SUMMARY_BYTES),
+    summary,
     totalRemovals: lookup.occurrences.length,
     removals: lookup.occurrences.slice(0, MAX_REMOVAL_RECORDS).map((item) => ({
       layer: item.layer,

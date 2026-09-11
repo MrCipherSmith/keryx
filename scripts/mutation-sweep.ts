@@ -150,11 +150,53 @@ function arg(name: string, fallback?: string): string | undefined {
   return index === -1 ? fallback : process.argv[index + 1];
 }
 
-async function sh(argv: string[]): Promise<{ code: number; out: string }> {
+async function sh(
+  argv: string[],
+  timeoutMs?: number,
+): Promise<{ code: number; out: string; timedOut: boolean }> {
   const proc = Bun.spawn(argv, { stdout: "pipe", stderr: "pipe" });
-  const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
-  return { code: await proc.exited, out: out + err };
+
+  // A DEADLINE, because some mutants do not fail — they hang.
+  //
+  // Measured, twice, on the same run: `if (code !== null || code !== "")`
+  // is always true, so the callback listener never settles, so a test
+  // awaiting its result waits forever. The sweep had no timeout, so one
+  // such mutant stalled the entire run for two hours and looked
+  // identical to slow progress. Both times it took killing the child by
+  // hand to find out.
+  //
+  // A hang is NOT reported as a kill. The suite did stop passing, but
+  // "no test asserts this" and "this wedges the process" are different
+  // findings with different fixes — the second usually means a test is
+  // missing a timeout of its own.
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let timedOut = false;
+  if (timeoutMs !== undefined) {
+    timer = setTimeout(() => {
+      timedOut = true;
+      proc.kill(9);
+    }, timeoutMs);
+    timer.unref?.();
+  }
+  try {
+    const [out, err] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    return { code: await proc.exited, out: out + err, timedOut };
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
+
+/**
+ * How long one mutant's test run may take before it is called a hang.
+ *
+ * Generous against the honest worst case — the scoped suite runs in
+ * well under a minute — and finite, because the alternative is a sweep
+ * that cannot distinguish "working" from "wedged".
+ */
+const MUTANT_TIMEOUT_MS = 240_000;
 
 /** Lines this branch ADDED, per file — the diff is the unit, not the repo. */
 async function addedLines(base: string, file: string): Promise<number[]> {
@@ -261,6 +303,8 @@ async function main(): Promise<void> {
   if (chosen.length === 0) return;
 
   const survivors: Mutant[] = [];
+  /** Mutants whose test run had to be killed. Reported separately. */
+  const hung: Mutant[] = [];
   let ran = 0;
   let stopped = false;
   const originals = new Map(chosen.map((m) => [m.file, m.source]));
@@ -322,17 +366,18 @@ async function main(): Promise<void> {
       }
       writeFileSync(journal, `${mutant.file}\n`);
       writeFileSync(mutant.file, mutant.mutated);
-      const { code } = await sh(["bun", "test", ...testPath.split(" ")]);
+      const { code, timedOut } = await sh(["bun", "test", ...testPath.split(" ")], MUTANT_TIMEOUT_MS);
       writeFileSync(mutant.file, mutant.source);
       writeFileSync(journal, "");
 
       ran++;
+      if (timedOut) hung.push(mutant);
       const killed = code !== 0;
       if (!killed) survivors.push(mutant);
-      process.stdout.write(killed ? "." : "S");
+      process.stdout.write(timedOut ? "T" : killed ? "." : "S");
       writeFileSync(
         progress,
-        `${index + 1}/${chosen.length} — ${survivors.length} survived\n` +
+        `${index + 1}/${chosen.length} — ${survivors.length} survived, ${hung.length} hung\n` +
           survivors.map((s) => `${s.file}:${s.line}  ${s.from}  ->  ${s.to}`).join("\n"),
       );
     }
@@ -346,7 +391,17 @@ async function main(): Promise<void> {
   // stopped after three of six printed "5 killed, 1 SURVIVED", which is
   // the "coverage the suite does not have" this file's own header warns
   // about, produced by the file itself.
-  console.log(`\n\n${ran - survivors.length} killed of ${ran} run, ${survivors.length} SURVIVED`);
+  console.log(
+    `\n\n${ran - survivors.length} killed of ${ran} run, ${survivors.length} SURVIVED` +
+      `${hung.length === 0 ? "" : `, ${hung.length} HUNG`}`,
+  );
+  if (hung.length > 0) {
+    // Counted as killed above — the run did stop passing — but named
+    // here, because a mutant that wedges the process usually means a
+    // test awaits something with no timeout of its own.
+    console.log("\nHUNG (test run killed at the deadline, not by an assertion):");
+    for (const h of hung) console.log(`  ${h.file}:${h.line}  ${h.from}  ->  ${h.to}`);
+  }
   if (ran < chosen.length) {
     console.log(`${chosen.length - ran} mutant(s) were NOT run. This is not a clean sweep.`);
   }
