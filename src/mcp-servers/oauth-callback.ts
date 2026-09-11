@@ -25,7 +25,7 @@
 //   - BOUND THE WAIT. An operator who closes the tab must get their
 //     shell back with a reason, not a process that waits forever.
 
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 
 export type CallbackResult =
   | { readonly ok: true; readonly code: string }
@@ -34,6 +34,17 @@ export type CallbackResult =
 export type CallbackListener = {
   /** Where the authorisation server must redirect. Always loopback. */
   readonly redirectUrl: string;
+  /**
+   * The address actually bound, read back from the running server.
+   *
+   * Exposed because `redirectUrl` cannot carry AC6. Both are built
+   * from `LOOPBACK_HOST`, so a test asserting the URL asserts the
+   * constant against itself: changing the `hostname` passed to
+   * `serve` to `0.0.0.0` left all 19 callback tests green. What keryx
+   * advertises and where it listens are two facts, and only this one
+   * is the security property.
+   */
+  readonly boundHost: string;
   /** The `state` this listener will accept, and only this one. */
   readonly state: string;
   /** Resolves once, when the browser arrives or the budget runs out. */
@@ -41,6 +52,25 @@ export type CallbackListener = {
   /** Idempotent; safe to call after `result` settles. */
   readonly close: () => void;
 };
+
+/**
+ * Compare the presented `state` without leaking its length or prefix
+ * through timing.
+ *
+ * Not because a remote timing oracle over Bun's HTTP parsing is a
+ * demonstrated attack — it is not — but because this is a 32-byte
+ * secret compared on every request to a port any local process can
+ * reach, and the constant-time form costs nothing.
+ */
+function matchesState(given: string | null, expected: string): boolean {
+  if (given === null) return false;
+  const a = Buffer.from(given, "utf8");
+  const b = Buffer.from(expected, "utf8");
+  // `timingSafeEqual` throws on a length mismatch, which is itself the
+  // answer for a fixed-length secret.
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
 
 /** Loopback only. Named so a future edit has to argue with the name. */
 export const LOOPBACK_HOST = "127.0.0.1";
@@ -109,6 +139,31 @@ export function startCallbackListener(options: StartCallbackOptions = {}): Callb
         });
       }
 
+      // STATE FIRST, BEFORE ANYTHING THAT SETTLES.
+      //
+      // The error branch used to run above this check, and settling on
+      // an unauthenticated request is a denial of service: any page
+      // the operator visits while `keryx mcp auth` is waiting can
+      // `<img src="http://127.0.0.1:PORT/callback?error=access_denied">`
+      // across the ephemeral range — a plain cross-origin GET, no
+      // preflight, no knowledge of `state` needed — and abort an
+      // authorisation it knows nothing about. Any local process can do
+      // it directly by reading the port from /proc/net/tcp.
+      //
+      // The comment below said this must not happen while the code
+      // three lines above did it.
+      const given = url.searchParams.get("state");
+      if (!matchesState(given, state)) {
+        // NOT settled. A wrong `state` is somebody else's redirect, and
+        // ending the operator's flow because a stray request arrived
+        // would be a denial of service with extra steps. The real
+        // browser can still arrive.
+        return new Response(page("Not this flow", "This request did not come from the authorisation keryx started."), {
+          status: 400,
+          headers: { "content-type": "text/html" },
+        });
+      }
+
       const error = url.searchParams.get("error");
       if (error !== null) {
         // The authorisation server said no. Reported as THAT, because
@@ -122,19 +177,6 @@ export function startCallbackListener(options: StartCallbackOptions = {}): Callb
           headers: { "content-type": "text/html" },
         });
       }
-
-      const given = url.searchParams.get("state");
-      if (given !== state) {
-        // NOT settled. A wrong `state` is somebody else's redirect, and
-        // ending the operator's flow because a stray request arrived
-        // would be a denial of service with extra steps. The real
-        // browser can still arrive.
-        return new Response(page("Not this flow", "This request did not come from the authorisation keryx started."), {
-          status: 400,
-          headers: { "content-type": "text/html" },
-        });
-      }
-
       const code = url.searchParams.get("code");
       if (code === null || code === "") {
         return new Response(page("No code", "The authorisation server returned no code."), {
@@ -186,6 +228,8 @@ export function startCallbackListener(options: StartCallbackOptions = {}): Callb
 
   return {
     redirectUrl: `http://${LOOPBACK_HOST}:${server.port}/callback`,
+    // From the SERVER, not from the constant.
+    boundHost: server.hostname ?? "",
     state,
     result,
     close,

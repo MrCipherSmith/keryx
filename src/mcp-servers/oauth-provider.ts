@@ -103,9 +103,20 @@ export function createOAuthProvider(deps: ProviderDeps) {
 
     state(): string {
       if (deps.state === undefined) {
-        // The SDK would otherwise mint its own, which the listener
-        // does not know and will reject — a flow that fails at the
-        // last step for a reason nobody can see.
+        // A session reaching here is starting a NEW authorisation, and
+        // that needs a human. Refuse with the named type.
+        //
+        // This branch is why the headless gate in
+        // `redirectToAuthorization` was unreachable from a session:
+        // the SDK calls `state()` FIRST, and the plain `Error` this
+        // used to throw carried no code, so `needsAuthorisation`
+        // returned false and doctor said "failed" instead of
+        // "needs_auth". A gate is only a gate if it is on every path
+        // that reaches the thing it guards.
+        if (!deps.interactive) throw new OAuthInteractionRequiredError(deps.serverName);
+        // Interactive, but no listener: the SDK would mint its own
+        // state, which the listener does not know and will reject — a
+        // flow that fails at the last step for a reason nobody can see.
         throw new Error("no callback listener is running; state is minted by the listener");
       }
       return deps.state;
@@ -122,7 +133,20 @@ export function createOAuthProvider(deps: ProviderDeps) {
     },
 
     saveClientInformation(client: StoredClient): void {
-      writeCredential(deps.serverName, deps.serverUrl, { client }, deps.configDir);
+      // A SESSION MUST NOT REGISTER A CLIENT.
+      //
+      // The SDK registers before it refreshes, so a session dialling a
+      // server it has no credential for was silently POSTing a dynamic
+      // client registration to the operator's authorisation server —
+      // creating state on a third party nobody asked it to touch, and
+      // persisting it with `redirect_uris: []`, which then prevents
+      // `keryx mcp auth` from ever completing against that client.
+      //
+      // Registration only happens while starting a new authorisation,
+      // which is exactly what a session may not do.
+      if (!deps.interactive) throw new OAuthInteractionRequiredError(deps.serverName);
+      const write = writeCredential(deps.serverName, deps.serverUrl, { client }, deps.configDir);
+      if (!write.ok) throw new Error(write.error);
     },
 
     tokens(): StoredTokens | undefined {
@@ -147,7 +171,16 @@ export function createOAuthProvider(deps: ProviderDeps) {
         ...(sdkTokens.scope === undefined ? {} : { scope: sdkTokens.scope }),
         ...(sdkTokens.expires_in === undefined ? {} : { expires_at: now() + sdkTokens.expires_in * 1000 }),
       };
-      writeCredential(deps.serverName, deps.serverUrl, { tokens }, deps.configDir);
+      // A REFUSED WRITE IS NOT A SUCCESS.
+      //
+      // `writeCredential` refuses (writing nothing) when the store is
+      // unreadable, and discarding that turned a JSON syntax error
+      // into "no PKCE verifier stored; the authorisation was not
+      // started by this keryx" — accusing the flow of being foreign,
+      // after the browser round trip and the authorisation code had
+      // already been spent.
+      const write = writeCredential(deps.serverName, deps.serverUrl, { tokens }, deps.configDir);
+      if (!write.ok) throw new Error(write.error);
     },
 
     async redirectToAuthorization(url: URL): Promise<void> {
@@ -161,7 +194,13 @@ export function createOAuthProvider(deps: ProviderDeps) {
     },
 
     saveCodeVerifier(codeVerifier: string): void {
-      writeCredential(deps.serverName, deps.serverUrl, { code_verifier: codeVerifier }, deps.configDir);
+      const write = writeCredential(
+        deps.serverName,
+        deps.serverUrl,
+        { code_verifier: codeVerifier },
+        deps.configDir,
+      );
+      if (!write.ok) throw new Error(write.error);
     },
 
     codeVerifier(): string {

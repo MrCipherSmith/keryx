@@ -23,7 +23,7 @@ import { closeServers, startServers, type ConnectFn, type ServerState } from "./
 import { loadTrustStore, requiresApproval } from "./trust";
 import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
 import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
-import { usesOAuth } from "./credentials";
+import { isExpired, readCredential, usesOAuth, type CredentialRecord } from "./credentials";
 import { createOAuthProvider, type ProviderDeps } from "./oauth-provider";
 import { transportOf } from "./doctor";
 import { buildMcpChildEnv } from "./spawn-env";
@@ -304,18 +304,63 @@ const DEFAULT_HANDSHAKE_MS = 15_000;
  * authenticate, and starting a flow anyway would be keryx overriding
  * it; `oauth: false` opts out entirely for a server that is public.
  */
+/**
+ * The redirect a session declares and never serves.
+ *
+ * Loopback, so it cannot describe a reachable third party even if
+ * something did send an operator there.
+ */
+export const SESSION_REDIRECT_URL = "http://127.0.0.1/keryx-session-never-listens";
+
 export function sessionAuthProviderOptions(
   server: ResolvedMcpServer,
   runtimeConfigDir?: string,
+  stored?: CredentialRecord | undefined,
+  now: number = Date.now(),
 ): ProviderDeps | undefined {
   // The RAW entry: a declared credential is an instruction even when
   // its variable is unset, and the resolved headers are empty in
   // exactly that case.
   if (!usesOAuth(server.raw)) return undefined;
+
+  // NO USABLE CREDENTIAL: NO PROVIDER.
+  //
+  // Not an optimisation. Handing the SDK a provider it cannot satisfy
+  // makes it start a new authorisation, and the FIRST thing that does
+  // is POST a dynamic client registration to the operator's
+  // authorisation server — unattended, from a shell starting up,
+  // against a third party nobody asked keryx to touch. Refusing
+  // inside `saveClientInformation` is too late: the request has
+  // already been sent and the client already exists.
+  //
+  // Dialling bare instead is both safer and more accurate. A server
+  // that needs authorisation answers 401, which `needsAuthorisation`
+  // already classifies as `needs_auth`; a PUBLIC server answers
+  // normally, which is exactly the behaviour the doctor regression
+  // taught us to preserve.
+  const tokens = stored?.tokens;
+  if (tokens === undefined) return undefined;
+  if (isExpired(tokens, now) && tokens.refresh_token === undefined) return undefined;
   return {
     serverName: server.name,
     serverUrl: server.url as string,
     ...(runtimeConfigDir === undefined ? {} : { configDir: runtimeConfigDir }),
+    // PRESENT, AND NEVER LISTENED ON.
+    //
+    // This looks wrong — a session has nowhere to be redirected to,
+    // so `undefined` is the honest value — and it cost this release a
+    // blocker. The SDK computes `nonInteractiveFlow = !provider.redirectUrl`
+    // and, finding none, short-circuits into a client-credentials
+    // grant BEFORE the refresh branch: no refresh was ever attempted,
+    // the stored token stayed stale, and the resulting error carried
+    // no status, so `needsAuthorisation` said false and doctor
+    // reported "failed" instead of "needs_auth".
+    //
+    // Its value is never used. A refresh grant does not send a
+    // redirect_uri, and every path that would use one — registration,
+    // `state()`, `redirectToAuthorization` — refuses first, because
+    // `interactive` is false below.
+    redirectUrl: SESSION_REDIRECT_URL,
     // NEVER interactive from the runtime. A session opening must not
     // launch a browser: the operator did not ask for one, and on a
     // headless box it would block the shell from starting. `keryx mcp
@@ -347,7 +392,11 @@ async function connectRemote(
     throw new Error(`server "${server.name}": ${describeHollow(resolved.hollow)}`);
   }
 
-  const options = sessionAuthProviderOptions(server, runtimeConfigDir);
+  const options = sessionAuthProviderOptions(
+    server,
+    runtimeConfigDir,
+    server.url === undefined ? undefined : readCredential(server.name, server.url, runtimeConfigDir).record,
+  );
   const authProvider = options === undefined ? undefined : createOAuthProvider(options);
   return connectHttpMcpServer(server.url as string, {
     headers: resolved.headers,

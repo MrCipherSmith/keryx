@@ -27,7 +27,7 @@ function provider(over: Partial<Parameters<typeof createOAuthProvider>[0]> = {})
     serverName: "linear",
     serverUrl: URL_,
     configDir: store(),
-    interactive: false,
+    interactive: true,
     now: () => NOW,
     ...over,
   });
@@ -202,7 +202,26 @@ describe("the state is the listener's, not the SDK's", () => {
   test("and refused when none is, rather than letting the SDK mint its own", () => {
     // A state the listener does not know is a flow that fails at the
     // last step for a reason nobody can see.
-    expect(() => provider().state()).toThrow(/listener/);
+    expect(() => provider({ interactive: true }).state()).toThrow(/listener/);
+  });
+
+  test("a NON-interactive provider refuses here with the named type", () => {
+    // The SDK calls `state()` before `redirectToAuthorization`, so the
+    // headless gate has to be on this path too. It was not, and that
+    // is why a session's refusal arrived as an unclassified Error:
+    // `needsAuthorisation` said false and doctor reported "failed"
+    // instead of "needs_auth". A gate is only a gate if it covers
+    // every path to the thing it guards.
+    expect(() => provider({ interactive: false }).state()).toThrow(OAuthInteractionRequiredError);
+  });
+
+  test("and a session refuses to REGISTER a client", () => {
+    // Registration only happens while starting a new authorisation,
+    // which a session may not do. Left unguarded, a shell starting up
+    // created a client on the operator's authorisation server.
+    expect(() => provider({ interactive: false }).saveClientInformation({ client_id: "x" })).toThrow(
+      OAuthInteractionRequiredError,
+    );
   });
 });
 

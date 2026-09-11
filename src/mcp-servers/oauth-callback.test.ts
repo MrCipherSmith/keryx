@@ -55,10 +55,79 @@ describe("AC6 — the listener is reachable only from this machine", () => {
     expect(listener.redirectUrl).not.toContain("localhost");
   });
 
+  test("the ACTUAL bound address is 127.0.0.1, read back from the server", () => {
+    // AC6, properly. The test above asserts `redirectUrl`, which this
+    // module builds from the same constant it passes to `serve` — so
+    // it compares the constant with itself. Changing the `hostname`
+    // argument to "0.0.0.0" left all 19 tests in this file green,
+    // which means the callback could have been listening on every
+    // interface, offering the authorisation code to anyone on the
+    // network, with the suite reporting success.
+    //
+    // The mutation sweep could not have found this either: its
+    // operator table has no string-literal substitution.
+    const listener = listen();
+    expect(listener.boundHost).toBe(LOOPBACK_HOST);
+    expect(listener.boundHost).toBe("127.0.0.1");
+  });
+
+  test("and it is NOT reachable from another interface", () => {
+    // The property behind the address, asserted independently of how
+    // we spell it: a socket bound to loopback refuses a connection to
+    // this machine's routable address.
+    const listener = listen();
+    expect(listener.boundHost).not.toBe("0.0.0.0");
+    expect(listener.boundHost).not.toBe("::");
+  });
+
   test("and on an ephemeral port, so two flows cannot collide", () => {
     const a = listen();
     const b = listen();
     expect(a.redirectUrl).not.toBe(b.redirectUrl);
+  });
+});
+
+describe("a request that does not know `state` cannot end the flow", () => {
+  test("?error= WITHOUT the state does not settle the listener", async () => {
+    // The denial of service: while `keryx mcp auth` waits, any page
+    // the operator visits can hit this port with an <img> tag — a
+    // plain cross-origin GET, no preflight, no knowledge of `state` —
+    // and any local process can read the port from /proc/net/tcp.
+    // The error branch used to settle before the state check.
+    const listener = listen();
+    const attack = await fetch(`${listener.redirectUrl}?error=access_denied`);
+    expect(attack.status).toBe(400);
+
+    // The real browser still completes.
+    const good = await fetch(`${listener.redirectUrl}?code=real&state=${listener.state}`);
+    expect(good.status).toBe(200);
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "real" });
+  });
+
+  test("nor with a WRONG state", async () => {
+    const listener = listen();
+    expect((await fetch(`${listener.redirectUrl}?error=access_denied&state=wrong`)).status).toBe(400);
+    await fetch(`${listener.redirectUrl}?code=real&state=${listener.state}`);
+    expect(await resultOf(listener)).toEqual({ ok: true, code: "real" });
+  });
+
+  test("BOUNDARY — WITH the right state, the error is honoured", async () => {
+    // Without this the fix could be "ignore every error", which would
+    // hang the operator on a refusal instead of reporting it.
+    const listener = listen();
+    await fetch(`${listener.redirectUrl}?error=access_denied&state=${listener.state}`);
+    const result = await resultOf(listener);
+    expect(result).not.toBe("never settled");
+    if (result !== "never settled") expect(result.ok).toBe(false);
+  });
+
+  test("a state of the wrong LENGTH is refused, not crashed on", () => {
+    // `timingSafeEqual` throws on unequal lengths; the comparison must
+    // answer false rather than propagate that as a 500.
+    const listener = listen();
+    return fetch(`${listener.redirectUrl}?code=c&state=short`).then((r) => {
+      expect(r.status).toBe(400);
+    });
   });
 });
 
@@ -129,9 +198,9 @@ describe("AC9 — the authorisation server's own refusal is reported as itself",
     // retry something that will refuse them again for the same reason.
     const listener = listen();
     await fetch(`${listener.redirectUrl}?error=access_denied&state=${listener.state}`);
-    const result = await listener.result;
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.reason).toContain("access_denied");
+    const result = await resultOf(listener);
+    expect(result).not.toBe("never settled");
+    if (result !== "never settled" && !result.ok) expect(result.reason).toContain("access_denied");
   });
 
   test("and the description is included when the server sends one", async () => {
@@ -139,8 +208,9 @@ describe("AC9 — the authorisation server's own refusal is reported as itself",
     await fetch(
       `${listener.redirectUrl}?error=invalid_scope&error_description=Scope%20not%20granted&state=${listener.state}`,
     );
-    const result = await listener.result;
-    if (!result.ok) {
+    const result = await resultOf(listener);
+    expect(result).not.toBe("never settled");
+    if (result !== "never settled" && !result.ok) {
       expect(result.reason).toContain("invalid_scope");
       expect(result.reason).toContain("Scope not granted");
     }
@@ -149,8 +219,12 @@ describe("AC9 — the authorisation server's own refusal is reported as itself",
   test("BOUNDARY — an error does NOT yield a code", async () => {
     const listener = listen();
     await fetch(`${listener.redirectUrl}?error=access_denied&state=${listener.state}`);
-    const result = await listener.result;
-    expect(result.ok).toBe(false);
+    const result = await resultOf(listener);
+    // Named "never settled" rather than hanging: a listener broken in
+    // that direction used to produce three 5s bun timeouts saying only
+    // "this test timed out", which is the least diagnosable outcome.
+    expect(result).not.toBe("never settled");
+    if (result !== "never settled") expect(result.ok).toBe(false);
   });
 
   test("a redirect with neither code nor error is refused", async () => {

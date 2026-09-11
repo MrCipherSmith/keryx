@@ -19,7 +19,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { writeCredential } from "./credentials";
-import { defaultConnect, sessionAuthProviderOptions } from "./runtime";
+import { defaultConnect, SESSION_REDIRECT_URL, sessionAuthProviderOptions } from "./runtime";
+import type { CredentialRecord } from "./credentials";
 import type { ResolvedMcpServer } from "./config";
 
 function store(): string {
@@ -40,15 +41,58 @@ function server(raw: Record<string, unknown>, name = "linear"): ResolvedMcpServe
 
 const URL_ = "https://mcp.linear.app/mcp";
 
+/** A credential the session can actually use. */
+const USABLE: CredentialRecord = {
+  tokens: { access_token: "t", refresh_token: "r", expires_at: 4_102_444_800_000 },
+};
+
 describe("what a session decides about OAuth", () => {
-  test("a server with no other credential gets a provider", () => {
-    expect(sessionAuthProviderOptions(server({ url: URL_ }))).toBeDefined();
+  test("a server with a usable credential gets a provider", () => {
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, USABLE)).toBeDefined();
+  });
+
+  test("it declares a redirectUrl even though it will never listen on one", () => {
+    // The blocker this release shipped and a review caught. `undefined`
+    // is the honest value — a session has nowhere to redirect — but the
+    // SDK computes `nonInteractiveFlow = !provider.redirectUrl` and,
+    // finding none, short-circuits into a client-credentials grant
+    // BEFORE the refresh branch. No refresh was ever attempted, the
+    // stored token stayed stale, and the error carried no status so
+    // doctor said "failed" instead of "needs_auth".
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, USABLE)?.redirectUrl).toBe(
+      SESSION_REDIRECT_URL,
+    );
+  });
+
+  test("and that redirect is loopback, so it can never name a third party", () => {
+    expect(SESSION_REDIRECT_URL.startsWith("http://127.0.0.1")).toBe(true);
+  });
+
+  test("BOUNDARY — NO stored credential means NO provider", () => {
+    // Not an optimisation. A provider the SDK cannot satisfy makes it
+    // start a new authorisation, and the first thing that does is POST
+    // a dynamic client registration to the operator's authorisation
+    // server — unattended, from a shell starting up. Refusing inside
+    // `saveClientInformation` is too late: the request is already sent.
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, undefined)).toBeUndefined();
+  });
+
+  test("BOUNDARY — an expired credential with no refresh token means no provider either", () => {
+    const dead: CredentialRecord = { tokens: { access_token: "t", expires_at: 1 } };
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, dead)).toBeUndefined();
+  });
+
+  test("BOUNDARY — but expired WITH a refresh token does get one, because it can be refreshed", () => {
+    const refreshable: CredentialRecord = {
+      tokens: { access_token: "t", refresh_token: "r", expires_at: 1 },
+    };
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, refreshable)).toBeDefined();
   });
 
   test("and it is NEVER interactive", () => {
     // A session opening must not launch a browser. This is the single
     // most important field on the object.
-    expect(sessionAuthProviderOptions(server({ url: URL_ }))?.interactive).toBe(false);
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), undefined, USABLE)?.interactive).toBe(false);
   });
 
   test("the configDir is PASSED THROUGH, not defaulted", () => {
@@ -56,42 +100,42 @@ describe("what a session decides about OAuth", () => {
     // the configured one — which in a test means the developer's own
     // tokens, and in production means the wrong profile.
     const dir = store();
-    expect(sessionAuthProviderOptions(server({ url: URL_ }), dir)?.configDir).toBe(dir);
+    expect(sessionAuthProviderOptions(server({ url: URL_ }), dir, USABLE)?.configDir).toBe(dir);
   });
 
   test("and omitted entirely when there is none, rather than set to undefined", () => {
-    expect("configDir" in (sessionAuthProviderOptions(server({ url: URL_ })) ?? {})).toBe(false);
+    expect("configDir" in (sessionAuthProviderOptions(server({ url: URL_ }), undefined, USABLE) ?? {})).toBe(false);
   });
 
   test("a configured clientId reaches the provider", () => {
     // Dropping it makes keryx register a second client against the
     // operator's authorisation server, silently.
-    const options = sessionAuthProviderOptions(server({ url: URL_, oauth: { clientId: "mine" } }));
+    const options = sessionAuthProviderOptions(server({ url: URL_, oauth: { clientId: "mine" } }), undefined, USABLE);
     expect(options?.clientId).toBe("mine");
   });
 
   test("BOUNDARY — with no clientId configured, the key is absent", () => {
-    expect("clientId" in (sessionAuthProviderOptions(server({ url: URL_, oauth: {} })) ?? {})).toBe(false);
+    expect("clientId" in (sessionAuthProviderOptions(server({ url: URL_, oauth: {} }), undefined, USABLE) ?? {})).toBe(false);
   });
 
   test("BOUNDARY — `oauth: false` yields no provider at all", () => {
-    expect(sessionAuthProviderOptions(server({ url: URL_, oauth: false }))).toBeUndefined();
+    expect(sessionAuthProviderOptions(server({ url: URL_, oauth: false }), undefined, USABLE)).toBeUndefined();
   });
 
   test("BOUNDARY — nor does a server with a bearer variable", () => {
     expect(
-      sessionAuthProviderOptions(server({ url: URL_, bearer_token_env_var: "T" })),
+      sessionAuthProviderOptions(server({ url: URL_, bearer_token_env_var: "T" }), undefined, USABLE),
     ).toBeUndefined();
   });
 
   test("BOUNDARY — nor one with a declared Authorization header", () => {
     expect(
-      sessionAuthProviderOptions(server({ url: URL_, headers: { Authorization: "Bearer x" } })),
+      sessionAuthProviderOptions(server({ url: URL_, headers: { Authorization: "Bearer x" } }), undefined, USABLE),
     ).toBeUndefined();
   });
 
   test("the server name and url are the ones the credential is keyed by", () => {
-    const options = sessionAuthProviderOptions(server({ url: URL_ }, "linear"));
+    const options = sessionAuthProviderOptions(server({ url: URL_ }, "linear"), undefined, USABLE);
     expect([options?.serverName, options?.serverUrl]).toEqual(["linear", URL_]);
   });
 });

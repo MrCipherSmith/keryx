@@ -15,12 +15,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import {
-  bothStreamsAreATerminal,
-  browserCommand,
-  resolveInteractive,
-  runMcpConsumerCommand,
-} from "./mcp-servers";
+import { bothStreamsAreATerminal, resolveInteractive, runMcpConsumerCommand } from "./mcp-servers";
 
 type TtyRow = {
   readonly label: string;
@@ -77,39 +72,6 @@ describe("is there a human at both ends", () => {
       });
     });
   }
-});
-
-describe("the platform's browser command", () => {
-  test("macOS uses open", () => {
-    expect(browserCommand("darwin", "https://a.test/x")).toEqual(["open", "https://a.test/x"]);
-  });
-
-  test("Linux uses xdg-open", () => {
-    expect(browserCommand("linux", "https://a.test/x")).toEqual(["xdg-open", "https://a.test/x"]);
-  });
-
-  test("Windows uses start, WITH the empty title argument", () => {
-    // The empty string is not padding. `start "https://…"` treats a
-    // quoted first argument as the window title and opens nothing.
-    expect(browserCommand("win32", "https://a.test/x")).toEqual([
-      "cmd",
-      "/c",
-      "start",
-      "",
-      "https://a.test/x",
-    ]);
-  });
-
-  test("BOUNDARY — an unrecognised platform falls back to xdg-open", () => {
-    // The default is a default, not a third named case: every other
-    // Unix has xdg-open or nothing, and nothing is what a crash gives.
-    expect(browserCommand("freebsd", "https://a.test/x")).toEqual(["xdg-open", "https://a.test/x"]);
-  });
-
-  test("the url is passed whole, not re-parsed or truncated", () => {
-    const url = "https://auth.test/authorize?client_id=x&state=y&code_challenge=z";
-    expect(browserCommand("linux", url)).toEqual(["xdg-open", url]);
-  });
 });
 
 describe("an explicit answer wins over the streams", () => {

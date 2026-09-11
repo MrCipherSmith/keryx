@@ -27,7 +27,9 @@ import {
   transportOf,
 } from "../mcp-servers/doctor";
 import type { ConnectFn } from "../mcp-servers/manager";
-import { displayUrl } from "../mcp-servers/http-headers";
+import { displayUrl, remoteTargetProblem } from "../mcp-servers/http-headers";
+import { browserOpenPlan, openVerificationUrl } from "../lib/oauth/open-url";
+import { sanitiseForDisplay } from "../mcp-servers/tools";
 import { credentialsFile, describeCredential, readCredential, usesOAuth } from "../mcp-servers/credentials";
 import { createOAuthProvider } from "../mcp-servers/oauth-provider";
 import { startCallbackListener } from "../mcp-servers/oauth-callback";
@@ -394,6 +396,37 @@ async function authCommand(args: readonly string[], deps: McpConsumerDeps): Prom
     return 1;
   }
 
+  // THE SAME GATE EVERY OTHER SURFACE APPLIES.
+  //
+  // `list`, `doctor` and the session runtime all refuse to act on an
+  // unapproved project server; `auth` was the only one that did not.
+  // On a freshly cloned repository that meant `keryx mcp doctor`
+  // declined to dial a committed server while `keryx mcp auth <name>`
+  // would dial the repository author's URL, register a client against
+  // it and open the operator's browser at its authorisation endpoint
+  // — all before anyone had approved anything.
+  if (requiresApproval(server, loadTrustStore(deps.configDir))) {
+    deps.err(`"${name}" is a project server that has not been approved.`);
+    deps.err(`Read what it connects to, then: keryx mcp trust ${name}`);
+    return 1;
+  }
+
+  // THE SAME PRE-FLIGHT EVERY OTHER DIAL RUNS.
+  //
+  // `remoteTargetProblem` exists so there is one list of target
+  // problems and every caller asks it. This was the third caller and
+  // it asked nothing: with `url: "https://api.example/${TENANT}/mcp"`
+  // and TENANT unset, `doctor` names the variable in milliseconds
+  // while `auth` dialled `https://api.example//mcp`, stored nothing,
+  // and then waited out the full callback budget before blaming the
+  // operator's browser tab.
+  const env = deps.env ?? process.env;
+  const targetProblem = remoteTargetProblem(server.raw, env);
+  if (targetProblem !== undefined) {
+    deps.err(`"${name}": ${targetProblem}`);
+    return 1;
+  }
+
   if (!usesOAuth(server.raw)) {
     // AC13. Starting a flow that cannot help is worse than saying so:
     // the operator would watch a browser open, authorise something,
@@ -434,7 +467,7 @@ async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): P
       serverUrl: server.url as string,
       ...(deps.configDir === undefined ? {} : { configDir: deps.configDir }),
       interactive: true,
-      openBrowser: deps.openBrowser ?? defaultOpenBrowser,
+      openBrowser: deps.openBrowser ?? ((url) => { openAuthorisationUrl(url, deps.log); }),
       redirectUrl: listener.redirectUrl,
       state: listener.state,
       ...(server.oauth === false || server.oauth?.clientId === undefined
@@ -446,14 +479,48 @@ async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): P
     // `redirectToAuthorization`, which opens the browser and throws
     // `UnauthorizedError` — that is its documented shape, not a
     // failure. The code then arrives on the listener.
-    const connection = await connectHttpMcpServer(server.url as string, {
-      authProvider: provider,
+    //
+    // WAS THE BROWSER ACTUALLY OPENED? That is the question the old
+    // `.catch(() => undefined)` threw away, and without it every
+    // leg-one failure — a revoked refresh token, a 404 MCP path, a
+    // TLS error, DNS — fell through to a five-minute wait and then
+    // reported "the browser tab was never completed", blaming the
+    // operator for not finishing something that never started.
+    let opened = false;
+    const legOne = await connectHttpMcpServer(server.url as string, {
+      authProvider: {
+        ...provider,
+        redirectToAuthorization: async (url: URL): Promise<void> => {
+          opened = true;
+          await provider.redirectToAuthorization(url);
+        },
+      },
       handshakeTimeoutMs: 30_000,
-    }).catch(() => undefined);
-    if (connection !== undefined) {
-      await connection.close();
-      deps.log(`"${server.name}" is already authorised; nothing to do.`);
+    }).then(
+      (connection) => ({ ok: true as const, connection }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    if (legOne.ok) {
+      await legOne.connection.close();
+      // Only a STORED credential means "already authorised". A public
+      // server connects happily with none, and saying it is
+      // authorised would promise a token that does not exist.
+      const existing = readCredential(server.name, server.url as string, deps.configDir).record;
+      if (existing?.tokens === undefined) {
+        deps.log(`"${server.name}" connects without authentication; there is nothing to authorise.`);
+      } else {
+        deps.log(`"${server.name}" is already authorised; nothing to do.`);
+      }
       return 0;
+    }
+
+    if (!opened) {
+      // No redirect happened, so no code can ever arrive. Report the
+      // real error now instead of waiting for a callback that cannot.
+      const message = legOne.error instanceof Error ? legOne.error.message : String(legOne.error);
+      deps.err(`Could not start authorisation for "${server.name}": ${sanitiseForDisplay(message)}`);
+      return 1;
     }
 
     const result = await listener.result;
@@ -468,7 +535,10 @@ async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): P
     await sdk.auth(provider as never, { serverUrl: server.url as string, authorizationCode: result.code });
 
     const stored = readCredential(server.name, server.url as string, deps.configDir).record;
-    if (stored?.tokens === undefined) {
+    // An EMPTY access token is not a token. The SDK's schema accepts
+    // `access_token: ""`, so checking only for the record's presence
+    // let a flow that obtained nothing report success.
+    if (stored?.tokens === undefined || stored.tokens.access_token === "") {
       // Belt and braces: a flow that "completed" with no token stored
       // would fail later, somewhere else, with no connection to this.
       deps.err("The exchange returned no token. Nothing was stored.");
@@ -537,33 +607,31 @@ export function bothStreamsAreATerminal(
 }
 
 /**
- * The platform's "open this URL" command, as argv.
+ * Open the operator's browser, or say the URL out loud.
  *
- * Split out because the inline ternaries could only ever execute on the
- * platform running the tests: both mutations of them survived on Linux,
- * which means the macOS and Windows paths would have shipped without
- * anything ever having run them.
+ * This used to be its own platform table, which was a duplicate of
+ * `src/lib/oauth/open-url.ts` minus that module's guard: on Linux it
+ * spawned `xdg-open` unconditionally. Over SSH with a real pty —
+ * which passes the TTY check — that spawns a binary that usually is
+ * not there, the failure was swallowed, the URL was printed nowhere,
+ * and the operator watched five minutes of silence before being told
+ * their browser tab was never completed.
+ *
+ * `browserOpenPlan` returns `undefined` when there is no graphical
+ * session, and its contract is that the caller shows the URL instead.
+ * The old code had no way to honour that contract because it had no
+ * way to express "I could not open it".
  */
-export function browserCommand(platform: string, url: string): string[] {
-  // The empty string is the window TITLE that `start` requires. Without
-  // it `start "https://…"` treats the quoted URL as the title and opens
-  // nothing at all.
-  if (platform === "win32") return ["cmd", "/c", "start", "", url];
-  return [platform === "darwin" ? "open" : "xdg-open", url];
-}
-
-/** Open the operator's browser, without waiting for it to exit. */
-function defaultOpenBrowser(url: URL): void {
-  // Detached and unref'd: a browser that outlives the command must not
-  // hold the command open, and a missing opener must not crash it.
-  try {
-    Bun.spawn(browserCommand(process.platform, url.toString()), {
-      stdio: ["ignore", "ignore", "ignore"],
-    }).unref();
-  } catch {
-    // Reported by the caller as a failed authorisation; there is
-    // nothing useful to add about the spawn itself.
+function openAuthorisationUrl(url: URL, log: (line: string) => void): void {
+  const plan = browserOpenPlan(url.toString());
+  if (plan === undefined) {
+    // No graphical session. The URL is the whole product of this step,
+    // so print it rather than pretending.
+    log("No graphical session detected, so nothing was opened.");
+    log(`Open this URL yourself to continue:\n\n  ${url.toString()}\n`);
+    return;
   }
+  openVerificationUrl(url.toString());
 }
 
 function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {

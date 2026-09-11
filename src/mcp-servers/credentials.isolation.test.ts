@@ -80,7 +80,9 @@ describe("AC14 — the credential store is the only file written", () => {
       serverName: "linear",
       serverUrl: URL_,
       configDir: dir,
-      interactive: false,
+      // Interactive: registration is part of the `keryx mcp auth`
+      // path, and a session provider now refuses it outright.
+      interactive: true,
     });
     provider.saveClientInformation({ client_id: "registered" });
     provider.saveCodeVerifier("verifier");
