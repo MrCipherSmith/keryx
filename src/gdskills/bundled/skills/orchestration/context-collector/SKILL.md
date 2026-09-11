@@ -1,6 +1,6 @@
 ---
 name: context-collector
-description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution."
+description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution. NOT for: deciding what to build from that context (use interviewer or job-orchestrator)."
 triggers:
   - "collect context"
   - "gather context"
@@ -653,3 +653,19 @@ Execute update flow and return a CONTEXT_RESULT block.
 10. **DO NOT** fetch external docs for standard well-known patterns already covered by project rules.
 11. **DO NOT** modify any project files — this is a read + research + write-to-jobs skill only.
 12. **DO NOT** skip the metadata block and update log — they are mandatory for version tracking.
+
+---
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "More context is safer, so I'll include everything I found." | Rule 9 caps `context.md` at ~500 lines, and 3.4 admits only HIGH and MEDIUM findings. A 1200-line context is read by no sub-agent; the three paragraphs that mattered are now buried, which is the same as not having collected them. |
+| "I know this library well, so I can write the API section from memory." | Phase 3 fetches the docs for the version the project actually pins. A remembered signature is the single most expensive thing in this document: every sub-agent downstream implements against it without checking. |
+| "The task mentions React, so I should fetch React documentation." | Rule 10: no external fetch for well-known patterns already covered by project rules. External research is for the specific API, version gotcha or convention this task turns on — not for a topic overview. |
+| "This section of the existing context looks stale, so I'll drop it while updating." | 4.3 and Rule 4: preserve existing sections unless they are explicitly outdated. "Looks stale" from inside a scoped update usually means "I did not re-research it" — removing it silently deletes a decision another agent is relying on. |
+| "I fixed the small inconsistency I noticed in the source file while reading it." | Rule 11: this skill writes only into the job folder. An edit made during collection lands in a diff nobody attributed to a task, and the implementer inherits it without knowing. |
+| "The context is written, so I can return — job-documenter can be called later." | Phase 5 is part of the skill. A `context.md` that was never persisted through `job-documenter` is absent from the README index, and the next phase resolves the path to nothing. |
+| "The content changed only slightly, so bumping the Version and update log is overkill." | Rule 12 and Rule 3: version, timestamp and update log are mandatory. Without them, two agents reading different revisions have no way to tell which one they have. |

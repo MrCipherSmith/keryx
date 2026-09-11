@@ -30,6 +30,18 @@ for one specific section. Each instance handles exactly one output file.
 | 4 | Use concrete examples from the actual codebase (real file paths, real commands) |
 | 5 | If a section requires info not in the artifacts, note it as [TODO: add X] rather than inventing |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The artifacts don't give the install command, but `npm install` is always right." | Iron Law 2 and 5: write `[TODO: add install command]` instead. A plausible command in an onboarding doc is worse than a gap — the new developer runs it, it fails, and they stop trusting the rest of the page. |
+| "This belongs in the architecture section too, so I'll cover it here as well." | Iron Law 1: one section per invocation. Another writer owns that section right now, and two independently written accounts of the same thing will not agree by the time the assembler links them. |
+| "A generic example reads more cleanly than the real file path." | Iron Law 4 requires real paths and real commands. `src/foo/bar.ts` teaches nothing and cannot be checked; the actual path is the part the reader copies. |
+| "The API section is for developers, so more implementation detail is better." | Iron Law 3: write for the section's audience. API consumers need the contract — request, response, errors — not the service internals, which change without any promise to them. |
+| "I left a few TODOs, but the section reads as finished, so `DONE`." | Every gap goes into `concerns`, and a section held together by TODOs is `DONE_WITH_CONCERNS`. The assembler collects those TODOs in Phase 5; one that never reached `concerns` ships as finished documentation. |
+
 ---
 
 ## Input Contract

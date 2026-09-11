@@ -30,6 +30,18 @@ and writers can use without re-reading the source code.
 | 4 | Document what the code DOES, not how it does it internally |
 | 5 | Extract concrete examples from code (real function names, real endpoints) |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "This module imports from the shared module, so I should analyze that too." | Iron Law 1: one module per invocation. Another analyst has `shared` and is reading it right now. Record the dependency as a dependency; analysing across the boundary duplicates their work and produces two disagreeing accounts of the same code. |
+| "The framework's conventions tell me what this service does." | Iron Law 2: understanding comes from the code in front of you. A NestJS service named `UserService` does whatever this repository made it do, and the convention-based description is the one no reader can catch as wrong. |
+| "This internal helper is the clever part, so it deserves the most detail." | Iron Law 3 and 4: public interfaces first, and document what the module DOES, not how. Internals change without notice; the exported surface is what the writers and the architect can actually build on. |
+| "A real endpoint list would be long — a representative example is clearer." | Iron Law 5 asks for concrete names from the code. A representative example is indistinguishable from an invented one to everyone downstream, and Phase 4 will publish it as if it were real. |
+| "The entry point isn't where project-map said — I'll analyze what I can find." | That mismatch is exactly what `NEEDS_CONTEXT` (and `concerns`) exist for. Quietly analysing a different starting point produces an artifact the architect will merge without knowing it describes something else. |
+
 ---
 
 ## Input Contract

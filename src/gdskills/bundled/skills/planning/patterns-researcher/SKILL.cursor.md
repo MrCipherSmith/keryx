@@ -33,6 +33,18 @@ and architectural decisions for each technology. The output becomes a set of
 | 5 | Output MUST be structured as checkable constraints, not prose advice |
 | 6 | Existing project patterns (task_in_project) take precedence unless they're antipatterns |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "Clean Architecture is the right answer for any serious project." | Iron Law 2: patterns must fit the chosen level. Layer boundaries and ports-and-adapters on an MVP buy indirection nobody has time to maintain, and Phase 4 is then bound by a constraint that slows every task. |
+| "This is standard practice, so it needs no source." | Iron Law 1: every pattern cites official docs, community consensus, or established practice. Uncited standard practice is how a convention three major versions out of date becomes a binding constraint on the PRD. |
+| "I picked the best option, so listing the alternatives is padding." | Iron Law 3: architecture decisions list the alternatives considered. Without them, the next person to question the decision has to redo the research, and usually re-decides it differently. |
+| "The existing project does this badly, so I'll specify the correct pattern instead." | Iron Law 6: existing patterns win unless they are genuinely antipatterns — and if they are, say so explicitly with the reason. A silent replacement produces a PRD whose constraints contradict the codebase it will be implemented in. |
+| "'Use proper error handling' captures the intent well enough." | Iron Law 5: constraints must be checkable. Phase 5 validates the PRD against these line by line; prose advice passes trivially and constrains nothing. |
+
 ---
 
 ## Input Contract

@@ -1,6 +1,6 @@
 ---
 name: hookify
-description: "Use when adding automated hook behavior to Claude Code or Cursor from a natural language description."
+description: "Use when adding automated hook behavior to Claude Code or Cursor from a natural language description. NOT for: recording a convention or command as prose an agent reads (use claude-md-management)."
 triggers:
   - "hookify"
   - "hook guidance"
@@ -100,3 +100,26 @@ After confirmation, merge into settings.
 - Keep timeouts reasonable (10-60s)
 - Warn if hook could slow down every tool call
 - Test commands before adding as hooks
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The JSON is valid, so the hook works." | Valid JSON says nothing about whether the binary is on PATH, the matcher spells the tool name the way the harness emits it, or the command exits non-zero on a clean run. Step 4 exists because a hook that fails silently is worse than no hook: it runs on every tool call and reports nothing. |
+| "The user described what they want clearly, so I can skip the preview." | The preview is where a matcher mistake is caught — "after every edit" meaning `Edit` but not `Write`, or a `PreToolUse` hook that will block the tool instead of warning. Show the resolved event, matcher, command and timeout, and apply only after confirmation. |
+| "There is already a hook on this event, so I'll replace it." | Overwriting is the one thing this skill forbids. Merge into the existing array, or ask which should win. A removed hook does not announce itself — the user finds out when the check it enforced stops running. |
+| "It's only a lint run, so the timeout does not matter." | A `PostToolUse(Edit)` hook runs on every single edit. A 5-minute lint on a large repo turns every edit into a stall, and the user will disable hooks entirely rather than debug it. Keep it in the 10-60s band and say so when the command is likely to be slow. |
+| "The command works in my shell, so it works as a hook." | Hooks run without the interactive shell's profile, aliases or cwd assumptions. Use an absolute or project-relative invocation, and test it the way the hook will run it. |
+
+## Verification
+
+Before reporting, all of these must hold:
+
+- The command was run standalone (when safe to do so) and its exit code observed — not assumed.
+- The event name and matcher were checked against the Hook Event Reference table, and the matcher matches the tool the user actually meant.
+- Existing hooks on that event were read and preserved; the written config contains them plus the new one.
+- The timeout is set explicitly and is within the 10-60s band, or the report explains why it is not.
+- The user saw the preview block (event, matcher, command, timeout) and confirmed before the settings file was written.
+- The report names the settings file that changed and the exact hook entry added; for `--remove`, it names the entry deleted.

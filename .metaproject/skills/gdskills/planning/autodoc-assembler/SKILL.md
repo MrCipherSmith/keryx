@@ -29,6 +29,18 @@ verify cross-references, write the main README and navigation index.
 | 3 | All cross-links between docs must use relative paths |
 | 4 | Do NOT repeat content from sections — summarize and link |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "I know what `api-reference.md` contains from its name — no need to open it." | Iron Law 1: read every section before writing. A writer that returned `DONE_WITH_CONCERNS` may have left a half-written file or a [TODO]; the index would then link confidently to a page that does not deliver what the link promises. |
+| "The onboarding steps are the most important thing, so I'll repeat them in the README." | Iron Law 4: summarize and link. Duplicated steps drift the moment one copy is updated, and the reader has no way to tell which copy is current. |
+| "An absolute path works on my machine and is unambiguous." | Iron Law 3: relative paths only. The docs package gets moved, committed, and read from a repository checkout — an absolute path from the job directory breaks on every machine but the one that wrote it. |
+| "A writer left `[TODO: add X]`, but the section is otherwise complete." | Those TODOs are what `concerns` is for. The orchestrator's final report is the only place the user learns the documentation has known holes; an assembler that filters them out reports a complete package that is not. |
+| "A section is missing from `docs/`, so it must not have been needed." | A missing file means a Phase 4 writer failed or was never dispatched. Report it as a concern — inferring intent from an absence is how a documentation package quietly ships without its API reference. |
+
 ---
 
 ## Input Contract

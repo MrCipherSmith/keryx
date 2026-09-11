@@ -31,6 +31,18 @@ depends on the quality of discovery.
 | 4 | Web research MUST cite sources |
 | 5 | Codebase analysis MUST reference actual file paths |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The domain is obvious from the request, so `D_domain` is safe to fill in." | Iron Law 1 and 2: an inference is an assumption and must be labelled one. `D_domain` is a decision every later phase treats as settled — an unlabelled guess here becomes a stack choice in Phase 2 nobody re-examines. |
+| "One area has no data, but the rest is solid — I'll note the gap and return `DONE`." | Iron Law 3: a critical area with no data is `NEEDS_CONTEXT` with a concrete A/B/C/D question. A gap recorded as a note is read by the next phase as something already handled. |
+| "I recognise this framework's layout, so I can describe the codebase without opening files." | Iron Law 5 requires actual file paths. A described layout that does not match the repository misdirects every phase that follows, and nothing downstream reads the code again to catch it. |
+| "The best-practice claim is common knowledge, so a citation is ceremony." | Iron Law 4: web research cites sources. Uncited common knowledge is where a stale convention enters the brief and survives to the architecture document as a constraint. |
+| "The user already explained this in the request — restating it in the brief is redundant." | The brief is the only artifact Phase 1 receives; the original request is not passed along. Anything left out of it is lost to the entire pipeline. |
+
 ---
 
 ## Input Contract

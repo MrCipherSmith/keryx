@@ -29,6 +29,18 @@ This phase answers: "Why are we doing this?" and "How will we know we succeeded?
 | 4 | NEVER introduce solutions in the problem statement |
 | 5 | If discovery brief has low confidence areas, flag them — don't paper over |
 
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "'Improve onboarding' is a real goal — the metric can come later." | Iron Law 1: every goal carries a measurable success metric, here. Phase 5 checks each user story against a goal's metric; a goal without one passes every check by being uncheckable. |
+| "The obvious fix is a dashboard, so the problem is 'users have no dashboard'." | Iron Law 4: no solutions in the problem statement. A problem phrased as a missing solution pre-decides the PRD, and the stack and architecture phases then optimise for the wrong thing with nothing to notice. |
+| "Non-goals are filler — two obvious ones are enough." | Iron Law 2 sets a floor of three, and non-goals are the only part of this document that stops scope growth later. The useful ones are the plausible features you are deliberately not building, not the absurd ones. |
+| "The discovery brief was thin on this area, but I can reason my way to the goal." | Iron Law 5: flag low-confidence areas. Reasoning over a gap produces a goal that reads as firm as the evidenced ones, and no later phase can tell them apart. |
+| "This problem is really about the database schema, which is the true root cause." | Iron Law 3: problems are stated from the user's perspective. A technical root cause belongs in the architecture phase; stated here it becomes the thing success is measured against, instead of what the user experiences. |
+
 ---
 
 ## Input Contract

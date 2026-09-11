@@ -1,7 +1,7 @@
 ---
 name: code-verifier
 model_tier: light
-description: "Use when running a full quality gate after implementation — lint, type-check, tests, and import validation. Mandatory step in job-orchestrator after task-implementer and after fix iterations. Use standalone when you need a structured verification report."
+description: "Use when running a full quality gate after implementation — lint, type-check, tests, and import validation. Mandatory step in job-orchestrator after task-implementer and after fix iterations. Use standalone when you need a structured verification report. NOT for: fixing what the gate reports — this skill is read-only (use task-implementer)."
 triggers:
   - "verify code"
   - "run checks"
@@ -329,3 +329,18 @@ code-verifier:
 3. **Scope to changed files** by default — full scans are slow and produce noise.
 4. **Be specific** in findings — include file, line, rule, message. Vague "lint failed" is not actionable.
 5. Return `VERIFICATION_RESULT` as the **final message** to the orchestrator.
+
+---
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "Lint already failed, so running the type-check and tests adds nothing." | Rule 1: run ALL checks. The orchestrator sizes one fix wave from the full picture. Aborting early means it fixes lint, re-dispatches, then discovers the type errors — one wave per check instead of one wave. |
+| "This type error is a one-line fix — faster to correct it than to report it." | Rule 2: this gate is read-only. A verifier that edits has verified its own edit, and the diff the reviewer sees no longer matches what the implementer wrote. Report it; let the fix come back through the loop. |
+| "The lint binary isn't installed, so there is nothing wrong — the gate passes." | A check that did not run is `status: skipped`, never `pass`. `gate: PASS` on an empty check set is a false all-clear, and zero checks available is `STATUS: BLOCKED` by the Error Handling table. |
+| "`gate: FAIL`, so my STATUS must be BLOCKED." | STATUS reports whether THIS SKILL ran, not what it found. A complete report of a failing gate is `STATUS: DONE`. `BLOCKED` tells the orchestrator verification never happened and it must resolve tooling — a different, wrong branch. |
+| "That failing test is unrelated to the diff, so I'll record it as skipped." | `skipped` means it did not run. A failure you judged out of scope is still `failed`, with a finding. Deciding what is in scope is the orchestrator's call, and it cannot make it on a result you rewrote. |
+| "I hit `max_findings_reported`, so the remaining findings can go unmentioned." | The cap limits the list, not the count. Report the true totals in `checks:` and say in `summary` that the finding list is truncated, or the orchestrator plans a fix wave against a number that is quietly too small. |

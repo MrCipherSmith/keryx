@@ -1,6 +1,6 @@
 ---
 name: issue-analyzer
-description: "Use when decomposing a GitHub issue into atomic tasks for AI implementation, planning task breakdown, or preparing work for task-implementer agents."
+description: "Use when decomposing a GitHub issue into atomic tasks for AI implementation, planning task breakdown, or preparing work for task-implementer agents. NOT for: writing the code for those tasks (use task-implementer)."
 triggers:
   - "analyze issue"
   - "decompose issue"

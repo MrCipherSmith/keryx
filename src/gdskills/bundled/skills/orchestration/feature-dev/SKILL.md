@@ -1,6 +1,6 @@
 ---
 name: feature-dev
-description: "Use when taking a feature from idea or GitHub issue all the way to a merge-ready PR in one guided workflow."
+description: "Use when taking a feature from idea or GitHub issue all the way to a merge-ready PR in one guided workflow. NOT for: splitting an issue into tasks run by parallel sub-agents (use job-orchestrator)."
 triggers:
   - "feature dev"
   - "develop feature"
@@ -162,3 +162,16 @@ At each phase transition, report progress:
 | "I understand the requirements, confirmation is just a formality" | The confirmation step exists to catch the gap between what you understood and what was meant |
 
 **The three constraints that hold the pipeline together:** no implementation before the spec is written and confirmed; no implementation code before tests-creator has generated failing stubs; no delivery without a passing code-verifier gate and a Change Report.
+
+## Verification
+
+Do not report the feature as delivered until all of these hold:
+
+- The user explicitly confirmed the Phase 1 spec and the Phase 2 design — a confirmation you can quote, not one you inferred from silence.
+- Phase 4's test stubs were observed FAILING before any implementation code was written, and the same tests pass now. Tests that were green the moment they were written tested nothing.
+- Every acceptance criterion in the Phase 1 spec maps to at least one test, and each is checked off in the Change Report.
+- `code-verifier` was re-run after the last fix and its final result is `gate: PASS` (or `PASS_WITH_WARNINGS` with the warnings named in the Change Report). A gate result from before the last edit does not count.
+- `git diff <base>...HEAD` shows no TODOs, debug logging, or hardcoded values introduced by this work.
+- Commits are atomic — one logical chunk each — and the branch is pushed.
+- The PR exists with the issue link, acceptance-criteria checklist, test plan and gate result; if no PR was created, the Change Report says why.
+- The Change Report was printed to the user and names files changed, test count and result, gate result, checked-off criteria, and the commit list.
