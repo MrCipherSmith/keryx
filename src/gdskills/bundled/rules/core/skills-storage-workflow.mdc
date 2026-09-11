@@ -25,13 +25,19 @@ Before creating or editing a skill, ask and confirm:
 - Project-local skill: `.metaproject/project-skills/<skill-name>/`.
 
 ## Required Source Layout
-- `SKILL.md` — canonical source of truth
-- `SKILL.cursor.md` — Cursor-specific variant (optional; falls back to SKILL.md)
-- `SKILL.codex.md` — Codex-specific variant (optional; falls back to SKILL.md)
-- `SKILL.zed.md` — Zed-specific variant (optional; falls back to SKILL.md)
-- `SKILL.opencode.md` — OpenCode-specific variant (optional; falls back to SKILL.md)
+- `SKILL.md` — canonical source of truth, the shared build used by every runtime
+- `SKILL.cursor.md` — Cursor-specific variant, present only where Cursor's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.codex.md` — Codex-specific variant, present only where Codex's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.zed.md` — Zed-specific variant, present only where Zed's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.opencode.md` — OpenCode-specific variant, present only where OpenCode's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
 
-`SKILL.md` is always required. Platform variants are optional — if absent, `keryx update` installs `SKILL.md` as fallback.
+`SKILL.md` is always required. A `SKILL.<runtime>.md` variant is the
+exception, not the norm: create one only when that runtime's build genuinely
+differs from `SKILL.md`, and never add one as an identical copy. Falling
+back to `SKILL.md` is the normal case for every runtime without a variant —
+for `keryx update`/`keryx init` (installed mirror) and for `keryx skills
+export`/`keryx skills sync` (global destinations) alike — not a degraded
+path.
 
 ## Frontmatter Fields (Agent Skills spec alignment)
 
@@ -96,7 +102,7 @@ those instead.
 
 ## Mandatory Behavior
 1. Always create/update `SKILL.md` as the canonical source.
-2. Create platform variants only when platform-specific adaptations are needed; otherwise `SKILL.md` serves all platforms via fallback.
+2. Create a `SKILL.<runtime>.md` only when that runtime's build genuinely differs from `SKILL.md` — never as an identical copy. Otherwise `SKILL.md` serves that runtime via fallback; that fallback is the normal case, not an exception.
 3. Keep all profiles aligned in structure and intent.
 4. Validate skills before sync.
 5. For a **project-local** skill only: export it per runtime first (`keryx skills export <skill-name> --runtime <runtime>`), then sync every global destination that applies (`cursor`, `codex`, `zed`, `opencode` — four in total) with `keryx skills sync --runtime <runtime> --global`, run once per runtime that needs it. A shipped skill cannot be exported and has no global-sync route — it reaches a runtime only via the project-local installed mirror (`keryx update`/`keryx init`).
@@ -153,6 +159,23 @@ If validation fails, do not sync.
 
 ## Forbidden
 - Do not create skills in `~/.cursor/skills-cursor/`.
+
+## Rejected Changes
+Scope: keryx's own bundled skills and rules
+(`src/gdskills/bundled/**` in the keryx repository) only. This rule ships to
+every project via `keryx init`/`keryx update`, but the ledger below exists
+only in the keryx source repo — this section does not apply to
+project-local skills (`.metaproject/project-skills/<skill-name>/`).
+
+- Before proposing a change to a shipped skill or rule, search
+  `docs/skills/rejected-skill-changes.md` in the keryx repository for that
+  skill and that idea.
+- When a change to a shipped skill or rule is rejected (review, a
+  routing/behaviour-eval regression, or a user/maintainer decision), append a
+  row to that ledger — in the same change, on the default branch (`main`) —
+  recording what was tried, why it was rejected, and the evidence (e.g. a
+  routing-eval rank or behaviour-eval number, before → after). Never edit or
+  delete an existing row.
 
 ## Apply Changes Workflow
 Edit skills under `src/gdskills/bundled/skills/<category>/<skill-name>/`
