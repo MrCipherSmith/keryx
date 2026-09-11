@@ -1,34 +1,24 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-11-ingest-skills-quality-program",
+  "reviewId": "2026-09-11-ingest-skills-quality-program-r04",
   "mode": "ingest",
-  "status": "closed",
+  "status": "draft",
   "target": {
     "kind": "report",
     "ref": "skills/quality-program",
-    "head": "2078a9a645e34ffadbdadc544e50bc6650bd3f3f"
+    "head": "958f47aeecb2c0f389b406417a416ff60569b86d"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/scope.md",
-    "coverage": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/coverage.md",
-    "report": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/report.md",
-    "findings": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/findings.json",
-    "learning": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/learning.md",
-    "decisions": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/decisions.md"
+    "scope": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/scope.md",
+    "coverage": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/coverage.md",
+    "report": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/report.md",
+    "findings": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/findings.json",
+    "learning": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/learning.md",
+    "decisions": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r04/decisions.md"
   },
   "coverage": [
     {
-      "reviewer": "review-security-code",
-      "status": "run",
-      "reason": "selected for managed review package"
-    },
-    {
       "reviewer": "review-logic",
-      "status": "run",
-      "reason": "selected for managed review package"
-    },
-    {
-      "reviewer": "review-architecture",
       "status": "run",
       "reason": "selected for managed review package"
     },
@@ -36,17 +26,22 @@
       "reviewer": "review-testing-practices",
       "status": "run",
       "reason": "selected for managed review package"
+    },
+    {
+      "reviewer": "review-architecture",
+      "status": "run",
+      "reason": "selected for managed review package"
     }
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 23,
+    "total": 3,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 23,
+    "retained": 3,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -68,8 +63,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-11T20:54:52.934Z",
-  "updatedAt": "2026-09-11T20:54:53.424Z",
+  "createdAt": "2026-09-11T20:55:06.584Z",
+  "updatedAt": "2026-09-11T20:55:06.584Z",
   "flow": {
     "id": "256",
     "path": ".metaproject/flows/256-2026-09-11-skills-hygiene"

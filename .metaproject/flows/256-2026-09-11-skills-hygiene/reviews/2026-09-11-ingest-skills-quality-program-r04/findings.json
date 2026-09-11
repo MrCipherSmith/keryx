@@ -1,0 +1,41 @@
+[
+  {
+    "id": "N-2",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The boundary-commit per-path check does not exclude a deletion the worker already staged (git rm). For that path `git add -- <path>` prints `fatal: pathspec '<path>' did not match any files`; the script continues and `git commit -- <path>` records the deletion correctly. The explanatory text does not say the fatal line is harmless. Same in job-orchestrator :857 (5 builds) and all mirrors.",
+    "impact": "An orchestrator reading the transcript may treat a correct boundary commit as a failure and retry or stop. The recorded commit is right.",
+    "suggested_fix": "Add a sentence: a `fatal: pathspec` from `add` on an already-staged deletion is harmless; the commit line is authoritative. Or skip `add` for paths whose status is `D ` (staged deletion).",
+    "evidence": "T30 closure check scenario s9 (reviews/closure-check-T30.md) in bash and zsh for both skills: exit 0, HEAD `D del.txt`, with the fatal line printed by add. The snippet text is unchanged at 958f47ae (extracted verbatim by scratchpad/gate256/run.sh).",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": 381,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r04#N-2"
+  },
+  {
+    "id": "N-3",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "flow-orchestrator :332 says workers do not commit and flow-orchestrator owns every commit, while :375 says tests-creator commits its stubs itself. The auto-commit-off setting reaches task-implementer only as a free-text constraint (:360), because subagent-dispatch has no automation field, so nothing enforces it mechanically.",
+    "impact": "Wording tension about commit ownership. The outcome is correct either way, because the boundary step skips when the worker already committed.",
+    "suggested_fix": "Qualify :332 ('task-implementer workers do not commit; tests-creator commits its own stubs'), and in the quality-gate flow consider an automation field on subagent-dispatch.",
+    "evidence": "Site-check at 958f47ae: flow-orchestrator SKILL.md:332, :360 and :375. tests-creator SKILL.md commits its stubs. keryx ctx rg auto_commit over src/gdskills/contracts/subagent-dispatch.schema.json gives 0 matches. The boundary step skip was executed in s2 (scratchpad/gate256/run.sh, bash and zsh).",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": 332,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r04#N-3"
+  },
+  {
+    "id": "R4-001",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The flow renumber (c485772b) moved the review packages from flows/252-2026-09-11-skills-hygiene to flows/256-... without rewriting their manifests. All three rounds kept `flow.id: \"252\"` and `artifacts.*` paths under .metaproject/flows/252-2026-09-11-skills-hygiene/, a directory that does not exist at 958f47ae, and flow 252 is now a different flow (mcp-servers-p3b).",
+    "impact": "A reader following manifest.artifacts or manifest.flow finds nothing, or the wrong flow. The review gate reads packages by directory and is unaffected. The re-ingest of rounds 1-3 recorded in this closure rewrites the three manifests with flow 256 paths.",
+    "suggested_fix": "Have the flow renumber step rewrite `flow` and `artifacts` in every manifest.json under the moved reviews directory, with a test.",
+    "evidence": "Site-check: `git show 958f47ae:.metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/manifest.json` (and -r02, -r03) carries flow.id 252 and artifacts under 252-2026-09-11-skills-hygiene. `git ls-tree 958f47ae .metaproject/flows/` lists 252-2026-09-11-mcp-servers-p3b and no 252-2026-09-11-skills-hygiene.",
+    "confidence": "high",
+    "file": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program/manifest.json",
+    "line": null,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r04#R4-001"
+  }
+]

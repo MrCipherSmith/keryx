@@ -3,8 +3,8 @@
 target: report
 ref: skills/quality-program
 mode: ingest
-flow: 252 (explicit-flow-id)
-created_at: 2026-09-11T18:49:43.171Z
+flow: 256 (explicit-flow-id)
+created_at: 2026-09-11T20:54:52.934Z
 context_mode: light
 
 ## Stage counts
@@ -25,8 +25,8 @@ claims_received: 14
 claims_applied: 14
 claims_rejected: 0
 verdicts_capped_to_unverifiable: 0
-confirmed: 14
-refuted: 0
+confirmed: 0
+refuted: 14
 unverifiable: 0
 unverified: 9
 
@@ -35,6 +35,8 @@ unverified: 9
 findings_in: 23
 findings_removed_by_verifier: 0
 findings_retained: 23
+
+`annotate` records verdicts and removes nothing: 14 finding(s) are marked refuted and still reported.
 
 ### Verification claims discarded
 

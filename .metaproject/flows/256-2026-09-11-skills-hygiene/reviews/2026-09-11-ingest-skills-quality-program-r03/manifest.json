@@ -2,19 +2,19 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-11-ingest-skills-quality-program-r03",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "skills/quality-program",
     "head": "cb4175a3f24281b4da3f6b2781e4188c3c929f10"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/scope.md",
-    "coverage": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/coverage.md",
-    "report": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/report.md",
-    "findings": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/findings.json",
-    "learning": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/learning.md",
-    "decisions": ".metaproject/flows/252-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/decisions.md"
+    "scope": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/scope.md",
+    "coverage": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/coverage.md",
+    "report": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/report.md",
+    "findings": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/findings.json",
+    "learning": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/learning.md",
+    "decisions": ".metaproject/flows/256-2026-09-11-skills-hygiene/reviews/2026-09-11-ingest-skills-quality-program-r03/decisions.md"
   },
   "coverage": [
     {
@@ -68,10 +68,10 @@
       }
     ]
   },
-  "createdAt": "2026-09-11T20:04:30.797Z",
-  "updatedAt": "2026-09-11T20:04:30.797Z",
+  "createdAt": "2026-09-11T20:54:53.245Z",
+  "updatedAt": "2026-09-11T20:54:53.665Z",
   "flow": {
-    "id": "252",
-    "path": ".metaproject/flows/252-2026-09-11-skills-hygiene"
+    "id": "256",
+    "path": ".metaproject/flows/256-2026-09-11-skills-hygiene"
   }
 }
