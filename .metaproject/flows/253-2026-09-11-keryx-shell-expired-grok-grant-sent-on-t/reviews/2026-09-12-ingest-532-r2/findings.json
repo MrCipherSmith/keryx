@@ -1,0 +1,156 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "refreshSavedGrants ran before surface selection with no signal; neither refreshAccessToken nor exchangeGithubTokenForCopilot has a default timeout, and both providers were refreshed whatever the session used.",
+    "impact": "On a network that drops packets silently, keryx shell -p for any provider could hang for good; a copilot grant (≈30 min tokens) put a network call in front of nearly every launch.",
+    "suggested_fix": "Pass AbortSignal.timeout(5_000) and refresh only the provider the session uses.",
+    "evidence": "src/commands/shell.ts refresh block before chooseShellSurface; src/lib/oauth/login.ts refreshSavedGrants loop.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 2051,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts start-up refresh",
+        "src/lib/oauth/login.ts refreshSavedGrants"
+      ],
+      "enumeration_method": "Every caller of refreshSavedGrants / refreshProviderGrant (one production caller after this PR)."
+    },
+    "global_id": "2026-09-12-ingest-532-r2#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 5fbc78610dd14be87ddd22a7544de4774a4fa233: GRANT_REFRESH_TIMEOUT_MS = 5_000 via AbortSignal.timeout, providers limited to providerArg when given; sequential kept on purpose (each refresh rewrites auth.json)"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified the fix commit 5fbc78610dd14be87ddd22a7544de4774a4fa233. src/commands/shell-grant-refresh.test.ts asserts the refresh call passes AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) and runs before chooseShellSurface; refresh-saved-grants.test.ts shows a session on another provider never calls the grok token endpoint. 101 targeted tests and 731 terminal tests pass.",
+      "verifier": "author-test-run"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "src/tui/tui-shell.ts sets process.env[envKey] from a key typed into the provider picker without noteSavedCredentialEnv.",
+    "impact": "After /provider and entering a key, shell_exec in the same session still passed that key to commands — the K-015 leak on one path.",
+    "suggested_fix": "Call noteSavedCredentialEnv([envKey]) beside the write.",
+    "evidence": "tui-shell.ts picker key branch; the only other process.env writer from saved config.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1817,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/lib/shell-config.ts applySavedApiKeys",
+        "src/lib/oauth/grants.ts applyOAuthAccessToEnv",
+        "src/tui/tui-shell.ts picker key write"
+      ],
+      "enumeration_method": "Every writer of process.env from saved config or a typed credential (three)."
+    },
+    "global_id": "2026-09-12-ingest-532-r2#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 5fbc78610dd14be87ddd22a7544de4774a4fa233: noteSavedCredentialEnv([envKey]) at the picker write; test in src/harness/process/shell-env.test.ts"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified the fix commit 5fbc78610dd14be87ddd22a7544de4774a4fa233. shell-env.test.ts: a key recorded through noteSavedCredentialEnv — the call now made at the TUI picker write — is absent from resolveShellEnv's result.",
+      "verifier": "author-test-run"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Readline provider detection saw saved keys only because the first shell_exec used to load them into process.env; removing that side effect changed what /provider lists.",
+    "impact": "A provider configured only by a saved key disappeared from readline detection.",
+    "suggested_fix": "Build the readline selector's env with envWithSavedApiKeys.",
+    "evidence": "src/commands/shell.ts realSelectProviderModel env: process.env.",
+    "confidence": "medium",
+    "file": "src/commands/shell.ts",
+    "line": 589,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts realSelectProviderModel detectProviders",
+        "src/commands/shell.ts realSelectProviderModel pickProviderModel"
+      ],
+      "enumeration_method": "Both env reads in the readline selector."
+    },
+    "global_id": "2026-09-12-ingest-532-r2#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 5fbc78610dd14be87ddd22a7544de4774a4fa233: realSelectProviderModel uses envWithSavedApiKeys(process.env) for detection and picking"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified the fix commit 5fbc78610dd14be87ddd22a7544de4774a4fa233, pinned by test commit 9087c687e148ff5e7b122bf033ef24b38ae47835: src/commands/shell-grant-refresh.test.ts runs and passes an audit that realSelectProviderModel builds its env with envWithSavedApiKeys(process.env) and no longer passes env: process.env to detection or picking.",
+      "verifier": "author-test-run"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "An expired grant with no refresh token is skipped silently: grantNeedsRefresh returns false without a refresh token.",
+    "impact": "The same opaque 403 K-013 describes still follows for such a grant.",
+    "suggested_fix": "Warn when expires <= now and there is no refresh token.",
+    "evidence": "src/lib/oauth/login.ts refreshSavedGrants skip branch.",
+    "confidence": "high",
+    "file": "src/lib/oauth/login.ts",
+    "line": 202,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/lib/oauth/login.ts refreshSavedGrants"
+      ],
+      "enumeration_method": "The one place that decides whether a stored grant is refreshed."
+    },
+    "global_id": "2026-09-12-ingest-532-r2#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 5fbc78610dd14be87ddd22a7544de4774a4fa233: warning 'the saved login has expired and holds no refresh token'; test in src/lib/oauth/refresh-saved-grants.test.ts"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified the fix commit 5fbc78610dd14be87ddd22a7544de4774a4fa233. refresh-saved-grants.test.ts: an expired grant with no refresh token yields exactly the warning naming keryx auth login grok, with no endpoint call.",
+      "verifier": "author-test-run"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "An offline user on neither grok nor copilot got a stderr warning every launch from an unrelated grant's failed refresh.",
+    "impact": "Noise on every start for a provider the session does not use.",
+    "suggested_fix": "Scope the refresh to the chosen provider (as F-001).",
+    "evidence": "Same site as F-001.",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 2051,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts start-up refresh"
+      ],
+      "enumeration_method": "Same single call site as F-001."
+    },
+    "global_id": "2026-09-12-ingest-532-r2#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 5fbc78610dd14be87ddd22a7544de4774a4fa233: refresh limited to providerArg; test 'a session on another provider does not wait on the grok token endpoint'"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified the fix commit 5fbc78610dd14be87ddd22a7544de4774a4fa233. With providers ['deepseek'] an expired grok grant is neither refreshed nor warned about (refresh-saved-grants.test.ts).",
+      "verifier": "author-test-run"
+    }
+  }
+]

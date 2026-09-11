@@ -3,6 +3,37 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Changed
+
+- **`shell_exec` no longer hands your saved provider keys to the commands it
+  runs.** keryx loads the keys saved in `auth.json` into its own environment so
+  its providers can find them, and every `shell_exec` command inherited the lot:
+  an agent that ran `env` printed the operator's DeepSeek, OpenRouter and xAI keys,
+  none of which the session was using. A command now gets your own environment
+  minus every credential keryx set from its saved config; a key you exported
+  yourself still reaches it. `KERYX_SHELL_PASS_SAVED_KEYS=1` restores the old
+  behaviour. The restricted-network sandbox still injects the real values at its
+  proxy.
+
+### Fixed
+
+- **A scripted `keryx shell` no longer sends an expired grok login.** The refresh
+  of a stored grant ran only in the TUI's start-up, so `--no-tui` and `--print`
+  sent an access token hours past its expiry and got `HTTP 403: The OAuth2 access
+  token could not be validated` — which reads as a revoked login, not an expired
+  one. Every surface now refreshes first — only the provider the flags name, when
+  they name one, and for at most five seconds, so an offline start is not held
+  up. A refresh that fails, or an expired login with no refresh token, says so on
+  stderr and names `keryx auth login <provider>` instead of being swallowed.
+
+- **A `memory_search` that finds nothing says so in one line.** In a project that
+  has never deleted anything, every miss also carried the deletion journal's
+  absolute path and a ~700-character caveat about it. It now reads "no removal has
+  ever been recorded in this project", with the same bound and no path; other
+  trail verdicts keep their prose, with paths relative to the project.
+
 ## [0.2.97] — 2026-09-11
 `keryx mcp auth` — OAuth for remote MCP servers, so a server that needs a
 login can be used without pasting a bearer token into a config file.

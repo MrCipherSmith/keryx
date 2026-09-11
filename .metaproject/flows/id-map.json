@@ -177,6 +177,14 @@
   },
   {
     "from": "252",
+    "to": "253",
+    "fromDir": "252-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t",
+    "toDir": "253-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t",
+    "at": "2026-09-11T20:16:15.378Z",
+    "reason": "main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open"
+  },
+  {
+    "from": "252",
     "to": "256",
     "fromDir": "252-2026-09-11-skills-hygiene",
     "toDir": "256-2026-09-11-skills-hygiene",

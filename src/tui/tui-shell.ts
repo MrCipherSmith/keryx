@@ -134,7 +134,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -1815,6 +1815,8 @@ export function selectProviderModelInTui(
               }
               if (kr.kind === "key") {
                 process.env[envKey] = kr.value;
+                // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
+                noteSavedCredentialEnv([envKey]);
                 saveApiKey(envKey, kr.value); // persist (0600), opencode-style
               }
               // kind === "skip" → proceed without a key (curated fallback models)
