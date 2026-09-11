@@ -7,6 +7,19 @@ import { confirmTokenPath } from "../sac/review-confirm-token";
 import { createSession, persistHistory } from "../session/index";
 import { buildToolRegistry } from "../mcp/tools";
 
+/**
+ * Every test here drives the real CLI through `Bun.spawn`, which pays
+ * a full runtime startup per call. Bun's default 5s is not a budget
+ * for that: four of these failed together whenever the suite ran
+ * slow, always at exactly 5000ms and never with an assertion.
+ *
+ * Found while certifying a release on this suite's verdict. A flake
+ * in the gate teaches the reader to re-run instead of to look, which
+ * is worse than a slow test.
+ */
+const CLI_SPAWN_TIMEOUT_MS = 30_000;
+
+
 const cli = path.join(import.meta.dir, "..", "cli.ts");
 async function invoke(cwd: string, args: string[], dataDir?: string) {
   const child = Bun.spawn([process.execPath, cli, "workspace", ...args], {
@@ -29,7 +42,7 @@ test("workspace overview --explain keeps JSON on stdout and FWK labels on stderr
   expect(overview.stderr).toContain("SAC explain (FWK — Facts / Work / Know-how)");
   expect(overview.stderr).toContain("Know-how");
   expect(overview.stderr).toContain("graph nodes/edges (navigation only)");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace CLI exposes only offline create/list/show/add-resource and guarded read operations", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-cli-"))); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
@@ -40,7 +53,7 @@ test("workspace CLI exposes only offline create/list/show/add-resource and guard
   const unknownActor = await invoke(cwd, ["create", "--title", "No actor flag", "--actor", "user:other"]);
   expect(unknownActor.exitCode).toBe(1);
   expect((await invoke(cwd, ["add-resource", manifest.id, "--kind", "component", "--uri", "../escape"])).exitCode).toBe(1);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 // --- WSL-1..4 CLI subcommands (`archive`, `remove-resource`, `rename`,
 // `list --include-archived`) do not exist yet — see
@@ -59,7 +72,7 @@ test("workspace archive marks the workspace archived and hides it from list unle
   expect(defaultList.stdout).not.toContain(manifest.id);
   const withArchived = await invoke(cwd, ["list", "--include-archived"]);
   expect(withArchived.stdout).toContain(manifest.id);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace list --include-archived=<value> parses the `=` spelling the same as every other option in this file, and refuses an unrecognized value instead of silently hiding archived workspaces", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-includearchived-cli-")));
@@ -82,7 +95,7 @@ test("workspace list --include-archived=<value> parses the `=` spelling the same
   const unrecognized = await invoke(cwd, ["list", "--include-archived=maybe"]);
   expect(unrecognized.exitCode).toBe(1);
   expect(unrecognized.stderr).toContain("--include-archived");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace remove-resource removes a resource by uri and rejects a uri that was never added", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-removeresource-cli-"))); await mkdir(path.join(cwd, "src")); await writeFile(path.join(cwd, "src", "a.ts"), "export {};\n");
@@ -94,7 +107,7 @@ test("workspace remove-resource removes a resource by uri and rejects a uri that
   expect(removedManifest.resources).toEqual([]);
   const missing = await invoke(cwd, ["remove-resource", manifest.id, "--uri", "./src/missing.ts"]);
   expect(missing.exitCode).toBe(1);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace rename updates the title and it is visible via a subsequent show", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-rename-cli-")));
@@ -106,7 +119,7 @@ test("workspace rename updates the title and it is visible via a subsequent show
   const shown = await invoke(cwd, ["show", manifest.id]);
   expect(shown.stdout).toContain("New CLI Title");
   expect(shown.stdout).not.toContain("Original CLI Title");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace CLI ships no member-management or delete subcommand (AC-7, AC-8)", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-nongoal-cli-")));
@@ -115,7 +128,7 @@ test("workspace CLI ships no member-management or delete subcommand (AC-7, AC-8)
   expect((await invoke(cwd, ["add-member", manifest.id, "--subject", "user:other", "--role", "editor"])).exitCode).toBe(1);
   expect((await invoke(cwd, ["remove-member", manifest.id, "--subject", "user:other"])).exitCode).toBe(1);
   expect((await invoke(cwd, ["delete", manifest.id])).exitCode).toBe(1);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("F-001 fix: workspace list-proposals denies access for actor with no role in that workspace", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-workspace-listproposals-norole-")));
@@ -140,7 +153,7 @@ test("F-001 fix: workspace list-proposals denies access for actor with no role i
   // The authorization gate throws WorkspaceServiceError with code "access_denied",
   // but the message is the authorization result code ("role_revoked" for no role)
   expect(listResult.stderr).toContain("role_revoked");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 // The security acknowledgement has to be REAL. `consumeConfirmToken` refuses a
 // `needs-approval` proposal unless the token carries `securityAcknowledged:
@@ -185,7 +198,7 @@ test("confirm-review refuses a needs-approval proposal until the reviewer acknow
   // instead of the thing, which is the same defect it was written to catch.
   const stored = JSON.parse(await readFile(confirmTokenPath(cwd, "workspace-a", "proposal-a"), "utf8")) as { securityAcknowledged?: boolean };
   expect(stored.securityAcknowledged).toBe(true);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("confirm-review does not claim an acknowledgement a clean proposal never needed, and refuses one it cannot read", async () => {
   const cwd = await realpath(await mkdtemp(path.join(tmpdir(), "keryx-confirm-review-pass-")));
@@ -206,7 +219,7 @@ test("confirm-review does not claim an acknowledgement a clean proposal never ne
   const missing = await invoke(cwd, ["confirm-review", "workspace-a", "proposal-absent"]);
   expect(missing.exitCode).toBe(1);
   expect(missing.stderr).toContain("security gate is unknown");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("workspace propose refuses a note the security gate blocks, and creates no proposal", async () => {
   // The same guard exists in two places — this CLI handler and the harness
@@ -249,7 +262,7 @@ test("workspace propose refuses a note the security gate blocks, and creates no 
   // Exactly one proposal exists — the clean one. The blocked note added nothing.
   const landed = await readdir(path.join(cwd, ".metaproject", "workspaces", workspaceId, "proposals")).catch(() => [] as string[]);
   expect(landed.filter((entry) => entry.endsWith(".json"))).toHaveLength(1);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 // --- Flow 242 lane D: what the CLI and MCP say about a reference into deleted
 // --- knowledge, and whether they say the same thing at the same moment. ------
@@ -313,7 +326,7 @@ test("a workspace whose referenced page was deleted is still listed and still sh
   expect(unreadable.exitCode).toBe(1);
   expect(unreadable.stderr).toContain("unreadable");
   expect(unreadable.stderr).not.toContain("not-found");
-});
+}, CLI_SPAWN_TIMEOUT_MS);
 
 test("CLI and MCP do not disagree about the same workspace at the same moment, and MCP names a missing workspace instead of throwing a stack trace", async () => {
   const { cwd, workspaceId } = await projectWithDeletedReference();
@@ -339,4 +352,4 @@ test("CLI and MCP do not disagree about the same workspace at the same moment, a
   expect(missing).toMatchObject({ code: "sac_workspace_not_found", workspaceId: "workspace-never-existed00" });
   expect(JSON.stringify(missing)).not.toContain("workspace-service.ts");
   expect(JSON.stringify(missing)).not.toContain(import.meta.dir);
-});
+}, CLI_SPAWN_TIMEOUT_MS);
