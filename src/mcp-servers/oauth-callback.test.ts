@@ -258,6 +258,27 @@ describe("AC10 — the wait is bounded, with real margin", () => {
   });
 });
 
+describe("a configured callback port is honoured", () => {
+  test("the listener binds the port it was given", () => {
+    // An authorisation server that pre-registered a redirect URI knows
+    // exactly one port. An ephemeral one can never match it, which
+    // made the documented `oauth.clientId` path impossible to
+    // complete — the field was validated down to the port range and
+    // then ignored.
+    const listener = startCallbackListener({ port: 45_517, timeoutMs: 1_000 });
+    open.push(listener);
+    expect(listener.redirectUrl).toBe("http://127.0.0.1:45517/callback");
+  });
+
+  test("BOUNDARY — with no port configured it is still ephemeral", () => {
+    // Two flows at once must not collide, which is why the default
+    // stays 0.
+    const a = listen();
+    const b = listen();
+    expect(a.redirectUrl).not.toBe(b.redirectUrl);
+  });
+});
+
 describe("the budget is taken literally", () => {
   test("timeoutMs: 0 gives up at once rather than waiting five minutes", async () => {
     // `options.timeoutMs ?? CALLBACK_TIMEOUT_MS` must not become

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { readCredential, writeCredential } from "../mcp-servers/credentials";
 import type { McpServerConnection, McpToolDescriptor } from "../mcp-client/client";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
@@ -609,5 +610,115 @@ describe("AC4/AC13 — keryx mcp auth", () => {
   test("with no name at all, usage", async () => {
     const { run } = remote();
     expect((await run("auth", [])).err).toContain("usage: keryx mcp auth");
+  });
+});
+
+describe("keryx mcp logout — the missing half of auth", () => {
+  // A revoked refresh token is not recoverable by re-running `auth`:
+  // the SDK re-throws `invalid_grant` before any browser opens. Until
+  // this existed, the only escape was hand-editing a 0600 file.
+
+  function fixture(servers: Record<string, unknown>): { configDir: string; projectRoot: string } {
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-logout-"));
+    const configDir = path.join(base, "config");
+    const projectRoot = path.join(base, "project");
+    mkdirSync(configDir, { recursive: true });
+    mkdirSync(projectRoot, { recursive: true });
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers }),
+    );
+    return { configDir, projectRoot };
+  }
+
+  async function logout(
+    configDir: string,
+    projectRoot: string,
+    name: string,
+  ): Promise<{ code: number; out: string; err: string }> {
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("logout", [name], {
+      cwd: projectRoot,
+      configDir,
+      projectRoot,
+      home: path.join(projectRoot, "home"),
+      interactive: false,
+      log: (line) => out.push(line),
+      err: (line) => err.push(line),
+    });
+    return { code, out: out.join("\n"), err: err.join("\n") };
+  }
+
+  const URL_ = "https://mcp.linear.app/mcp";
+
+  test("it removes the stored credential", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    const result = await logout(configDir, projectRoot, "linear");
+    expect(result.code).toBe(0);
+    expect(readCredential("linear", URL_, configDir).record).toBeUndefined();
+  });
+
+  test("and leaves every OTHER server's credential alone", async () => {
+    // The whole file is rewritten to remove one key, which is exactly
+    // where a careless implementation takes the others with it.
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ }, other: { url: "https://o/mcp" } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    writeCredential("other", "https://o/mcp", { tokens: { access_token: "keep" } }, configDir);
+    await logout(configDir, projectRoot, "linear");
+    expect(readCredential("other", "https://o/mcp", configDir).record?.tokens?.access_token).toBe("keep");
+  });
+
+  test("it works for a server that has been REMOVED from the config", async () => {
+    // The case the keyed lookup cannot serve, and the one where a
+    // stale token actually hides: `keryx mcp remove` took the server
+    // away and left the credential behind, keyed to a name nothing
+    // looks up any more.
+    const { configDir, projectRoot } = fixture({});
+    writeCredential("ghost", "https://g/mcp", { tokens: { access_token: "orphan" } }, configDir);
+    const result = await logout(configDir, projectRoot, "ghost");
+    expect(result.code).toBe(0);
+    expect(readCredential("ghost", "https://g/mcp", configDir).record).toBeUndefined();
+  });
+
+  test("and that fallback does not take a similarly-named server with it", async () => {
+    // `{name}:{url}` is split on the FIRST colon, so "ghost" must not
+    // match "ghost-two".
+    const { configDir, projectRoot } = fixture({});
+    writeCredential("ghost", "https://g/mcp", { tokens: { access_token: "a" } }, configDir);
+    writeCredential("ghost-two", "https://g/mcp", { tokens: { access_token: "b" } }, configDir);
+    await logout(configDir, projectRoot, "ghost");
+    expect(readCredential("ghost-two", "https://g/mcp", configDir).record?.tokens?.access_token).toBe("b");
+  });
+
+  test("a server with no credential says so and does not fail", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    const result = await logout(configDir, projectRoot, "linear");
+    expect(result.code).toBe(0);
+    expect(result.out).toContain("nothing to forget");
+  });
+
+  test("an unknown name with no credential is an error, not a silent success", async () => {
+    const { configDir, projectRoot } = fixture({});
+    expect((await logout(configDir, projectRoot, "nosuch")).code).toBe(1);
+  });
+
+  test("it tells the operator how to authorise again", async () => {
+    const { configDir, projectRoot } = fixture({ linear: { url: URL_ } });
+    writeCredential("linear", URL_, { tokens: { access_token: "dead" } }, configDir);
+    expect((await logout(configDir, projectRoot, "linear")).out).toContain("keryx mcp auth linear");
+  });
+
+  test("usage when no name is given", async () => {
+    const { configDir, projectRoot } = fixture({});
+    const out: string[] = [];
+    const err: string[] = [];
+    const code = await runMcpConsumerCommand("logout", [], {
+      cwd: projectRoot, configDir, projectRoot, home: projectRoot,
+      interactive: false, log: (l) => out.push(l), err: (l) => err.push(l),
+    });
+    expect(code).toBe(1);
+    expect(err.join()).toContain("usage: keryx mcp logout");
   });
 });

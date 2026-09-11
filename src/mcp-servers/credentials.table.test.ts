@@ -496,6 +496,54 @@ describe("clearing a credential against a store that cannot be read", () => {
   });
 });
 
+describe("concurrent writers do not lose each other's tokens", () => {
+  test("two servers written from separate processes both survive", async () => {
+    // The defect this guards, stated as the interleaving: A reads, B
+    // reads, A writes {A-new, B-old}, B writes {A-old, B-new}. An
+    // atomic write prevents a TORN file and does nothing about a LOST
+    // update, and read-modify-write is exactly the shape that loses
+    // one. Sessions dial four servers at a time, so two refreshes
+    // overlapping is ordinary, not exotic.
+    //
+    // Real processes, because the race is between processes: two
+    // promises in one process would interleave only where this code
+    // awaits, and it never does.
+    const dir = store();
+    const script = (name: string, url: string, token: string): string =>
+      `import { writeCredential } from "${path.resolve("src/mcp-servers/credentials.ts")}";` +
+      `writeCredential(${JSON.stringify(name)}, ${JSON.stringify(url)},` +
+      ` { tokens: { access_token: ${JSON.stringify(token)} } }, ${JSON.stringify(dir)});`;
+
+    await Promise.all(
+      Array.from({ length: 6 }, (_unused, i) =>
+        Bun.spawn(["bun", "-e", script(`s${i}`, `https://h/${i}`, `tok-${i}`)], {
+          stdout: "ignore",
+          stderr: "ignore",
+        }).exited,
+      ),
+    );
+
+    // Every one of them, not just the last writer.
+    for (let i = 0; i < 6; i++) {
+      expect(readCredential(`s${i}`, `https://h/${i}`, dir).record?.tokens?.access_token).toBe(`tok-${i}`);
+    }
+  }, 30_000);
+
+  test("and the file is still valid JSON and still 0600 afterwards", async () => {
+    const dir = store();
+    const script = (i: number): string =>
+      `import { writeCredential } from "${path.resolve("src/mcp-servers/credentials.ts")}";` +
+      `writeCredential("s${i}", "https://h/${i}", { tokens: { access_token: "t${i}" } }, ${JSON.stringify(dir)});`;
+    await Promise.all(
+      Array.from({ length: 4 }, (_unused, i) =>
+        Bun.spawn(["bun", "-e", script(i)], { stdout: "ignore", stderr: "ignore" }).exited,
+      ),
+    );
+    expect(() => JSON.parse(readFileSync(credentialsFile(dir), "utf8")) as unknown).not.toThrow();
+    expect(statSync(credentialsFile(dir)).mode & 0o777).toBe(0o600);
+  }, 30_000);
+});
+
 describe("clearing", () => {
   test("removes one server and leaves the others", () => {
     const dir = store();

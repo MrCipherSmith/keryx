@@ -33,6 +33,7 @@ import {
   writeOwnerOnlyFileAtomic,
 } from "../lib/config-dir";
 import { parseJsonTolerant } from "./config";
+import { withFileLock } from "../lib/file-lock";
 
 /** What an authorisation server gave us, as the SDK models it. */
 export type StoredTokens = {
@@ -134,13 +135,38 @@ export function writeCredential(
   patch: CredentialRecord,
   configDir?: string,
 ): { ok: true; file: string } | { ok: false; error: string } {
+  const target = credentialsFile(configDir);
+  // UNDER A LOCK, because this is read-modify-write on a file more
+  // than one process writes.
+  //
+  // `writeOwnerOnlyFileAtomic` prevents a TORN file and does nothing
+  // about a LOST update. Sessions dial four servers at a time, so two
+  // refreshes overlap routinely: A reads, B reads, A writes {A-new,
+  // B-old}, B writes {A-old, B-new}. On an authorisation server that
+  // rotates refresh tokens — the RFC 9700 recommendation, and what
+  // the common providers do — A's surviving token has already been
+  // invalidated server-side, so that server is logged out for good.
+  const outcome = withFileLock(`${target}.lock`, () => mergeUnlocked(target, serverName, serverUrl, patch, configDir));
+  if (outcome === null) {
+    return { ok: false, error: `${target} is locked by another keryx; nothing was written` };
+  }
+  return outcome;
+}
+
+/** The critical section. Only ever called with the lock held. */
+function mergeUnlocked(
+  target: string,
+  serverName: string,
+  serverUrl: string,
+  patch: CredentialRecord,
+  configDir?: string,
+): { ok: true; file: string } | { ok: false; error: string } {
   const { file, problem } = readAll(configDir);
   if (problem !== undefined) {
     // A corrupt store is not overwritten. Losing every other server's
     // token to save this one is not a trade the operator agreed to.
     return { ok: false, error: problem };
   }
-  const target = credentialsFile(configDir);
   const key = credentialKey(serverName, serverUrl);
   const credentials = { ...file.credentials, [key]: { ...file.credentials?.[key], ...patch } };
   writeOwnerOnlyFileAtomic(
@@ -156,16 +182,60 @@ export function clearCredential(
   serverUrl: string,
   configDir?: string,
 ): { ok: true; file: string } | { ok: false; error: string } {
-  const { file, problem } = readAll(configDir);
-  if (problem !== undefined) return { ok: false, error: problem };
-  const credentials = { ...file.credentials };
-  delete credentials[credentialKey(serverName, serverUrl)];
   const target = credentialsFile(configDir);
-  writeOwnerOnlyFileAtomic(
-    target,
-    `${JSON.stringify({ schemaVersion: CREDENTIALS_SCHEMA_VERSION, credentials }, null, 2)}\n`,
-  );
-  return { ok: true, file: target };
+  const outcome = withFileLock(`${target}.lock`, () => {
+    const { file, problem } = readAll(configDir);
+    if (problem !== undefined) return { ok: false as const, error: problem };
+    const credentials = { ...file.credentials };
+    delete credentials[credentialKey(serverName, serverUrl)];
+    writeOwnerOnlyFileAtomic(
+      target,
+      `${JSON.stringify({ schemaVersion: CREDENTIALS_SCHEMA_VERSION, credentials }, null, 2)}\n`,
+    );
+    return { ok: true as const, file: target };
+  });
+  if (outcome === null) {
+    return { ok: false, error: `${target} is locked by another keryx; nothing was removed` };
+  }
+  return outcome;
+}
+
+/**
+ * Forget every credential filed under a server NAME, whatever url.
+ *
+ * For the case the keyed lookup cannot serve: the server is gone from
+ * the config, or its url was edited, so the caller has a name and no
+ * way to reconstruct the key. Parsing the key back is safe because
+ * this module is the only thing that writes it — `{name}:{url}`, and
+ * a url always contains `://`, so the first colon that precedes it
+ * ends the name.
+ */
+export function forgetByName(
+  serverName: string,
+  configDir?: string,
+): { count: number; error?: string } {
+  const target = credentialsFile(configDir);
+  const outcome = withFileLock(`${target}.lock`, () => {
+    const { file, problem } = readAll(configDir);
+    if (problem !== undefined) return { count: 0, error: problem };
+    const credentials = { ...file.credentials };
+    let count = 0;
+    for (const key of Object.keys(credentials)) {
+      const separator = key.indexOf(":");
+      if (separator === -1) continue;
+      if (key.slice(0, separator) !== serverName) continue;
+      delete credentials[key];
+      count++;
+    }
+    if (count > 0) {
+      writeOwnerOnlyFileAtomic(
+        target,
+        `${JSON.stringify({ schemaVersion: CREDENTIALS_SCHEMA_VERSION, credentials }, null, 2)}\n`,
+      );
+    }
+    return { count };
+  });
+  return outcome ?? { count: 0, error: `${target} is locked by another keryx; nothing was removed` };
 }
 
 /** Is this access token still usable, with a margin for the round trip? */

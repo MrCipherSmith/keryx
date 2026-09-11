@@ -88,6 +88,7 @@ describe("AC3 — token material reaches no surface", () => {
     ["disable", ["linear"]],
     ["remove", ["linear"]],
     ["add", ["linear", "--url", URL_]],
+    ["logout", ["linear"]],
   ];
 
   for (const [sub, args] of INVOCATIONS) {
@@ -105,23 +106,21 @@ describe("AC3 — token material reaches no surface", () => {
     expect([...MCP_CONSUMER_SUBCOMMANDS].filter((sub) => !covered.has(sub))).toEqual([]);
   });
 
-  test("BOUNDARY — the sentinel WOULD have been caught", async () => {
-    // Without this, every test above passes for a `surface` helper
-    // that returns the empty string.
-    const { configDir, projectRoot, home } = fixture();
-    const lines: string[] = [];
-    await runMcpConsumerCommand("list", [], {
-      cwd: projectRoot,
-      configDir,
-      projectRoot,
-      home,
-      interactive: false,
-      log: (line) => lines.push(line),
-      err: (line) => lines.push(line),
-    });
-    // The server IS listed — so the renderer ran and had the chance.
-    expect(lines.join("\n")).toContain("linear");
-    expect(`${lines.join("\n")}\n${ACCESS}`).toContain(ACCESS);
+  test("BOUNDARY — every surface actually produced output", async () => {
+    // The previous version of this test ended with
+    //   expect(`${lines.join("\n")}\n${ACCESS}`).toContain(ACCESS)
+    // which interpolates the expectation into its own subject: true
+    // for every possible value of `lines`, and therefore proof of
+    // nothing. It was the only backstop against a `surface()` call
+    // that renders nothing at all, so `not.toContain` was passing
+    // vacuously for any silent subcommand.
+    //
+    // The real guard is per-invocation: each surface must have
+    // rendered something before its secrecy assertion means anything.
+    for (const [sub, args] of INVOCATIONS) {
+      const output = await surface(sub, args);
+      expect({ sub, empty: output.trim().length === 0 }).toEqual({ sub, empty: false });
+    }
   });
 
   test("nor does the JSON report carry it in a field nobody renders", async () => {

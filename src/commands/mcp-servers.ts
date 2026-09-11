@@ -30,7 +30,14 @@ import type { ConnectFn } from "../mcp-servers/manager";
 import { displayUrl, remoteTargetProblem } from "../mcp-servers/http-headers";
 import { browserOpenPlan, openVerificationUrl } from "../lib/oauth/open-url";
 import { sanitiseForDisplay } from "../mcp-servers/tools";
-import { credentialsFile, describeCredential, readCredential, usesOAuth } from "../mcp-servers/credentials";
+import {
+  clearCredential,
+  credentialsFile,
+  describeCredential,
+  forgetByName,
+  readCredential,
+  usesOAuth,
+} from "../mcp-servers/credentials";
 import { createOAuthProvider } from "../mcp-servers/oauth-provider";
 import { startCallbackListener } from "../mcp-servers/oauth-callback";
 import { connectHttpMcpServer } from "../mcp-client/client";
@@ -62,6 +69,7 @@ export const MCP_CONSUMER_SUBCOMMANDS = [
   "untrust",
   "doctor",
   "auth",
+  "logout",
 ] as const;
 
 export type McpConsumerSubcommand = (typeof MCP_CONSUMER_SUBCOMMANDS)[number];
@@ -134,6 +142,8 @@ export async function runMcpConsumerCommand(
       return doctorCommand(args, deps);
     case "auth":
       return authCommand(args, deps);
+    case "logout":
+      return logoutCommand(args, deps);
   }
 }
 
@@ -367,6 +377,64 @@ function addCommand(argv: readonly string[], deps: McpConsumerDeps): number {
  * process about itself, and the headless path is testable without
  * lying to stdio.
  */
+/**
+ * Forget a stored credential.
+ *
+ * The missing half of `auth`. A revoked refresh token is not
+ * recoverable by re-running `auth` — the SDK re-throws the
+ * `invalid_grant` before any browser opens — so without this the only
+ * escape from a dead credential was hand-editing
+ * `mcp-credentials.json`, which is not a supported operation and
+ * which the file's own mode discourages.
+ *
+ * It also removes a token for a server that has since been deleted
+ * from the config: `keryx mcp remove` takes the server away and left
+ * its credential behind, keyed to a name nothing looks up.
+ */
+function logoutCommand(args: readonly string[], deps: McpConsumerDeps): number {
+  const own = splitAtSeparator(args).own;
+  const name = own[0];
+  if (name === undefined || name.startsWith("-")) {
+    deps.err("usage: keryx mcp logout <name>");
+    return 1;
+  }
+
+  const config = load(deps);
+  const server = config.servers.find((candidate) => candidate.name === name);
+
+  // A server that is GONE from the config is exactly the case where a
+  // stale credential hides, so this does not require the server to
+  // exist — it requires a url to key by, and falls back to scanning.
+  const url = server?.url;
+  if (url === undefined) {
+    const removed = forgetByName(name, deps.configDir);
+    if (removed.count === 0) {
+      deps.err(`no stored credential for "${name}".`);
+      return 1;
+    }
+    deps.log(`Forgot ${removed.count} stored credential(s) for "${name}".`);
+    return 0;
+  }
+
+  const existing = readCredential(name, url, deps.configDir);
+  if (existing.problem !== undefined) {
+    deps.err(existing.problem);
+    return 1;
+  }
+  if (existing.record === undefined) {
+    deps.log(`"${name}" has no stored credential; nothing to forget.`);
+    return 0;
+  }
+  const cleared = clearCredential(name, url, deps.configDir);
+  if (!cleared.ok) {
+    deps.err(cleared.error);
+    return 1;
+  }
+  deps.log(`Forgot the stored credential for "${name}".`);
+  deps.log(`Run \`keryx mcp auth ${name}\` to authorise again.`);
+  return 0;
+}
+
 async function authCommand(args: readonly string[], deps: McpConsumerDeps): Promise<number> {
   const own = splitAtSeparator(args).own;
   const unknown = own.filter((arg, index, all) => isUnknownFlag(arg, index, all));
@@ -460,7 +528,11 @@ async function authCommand(args: readonly string[], deps: McpConsumerDeps): Prom
  * failed flow is a port that accepts a code nobody is waiting for.
  */
 async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): Promise<number> {
-  const listener = startCallbackListener();
+  // The configured callback port, when there is one. An authorisation
+  // server that pre-registered a redirect URI knows exactly one port,
+  // and an ephemeral one can never match it.
+  const configuredPort = server.oauth === false ? undefined : server.oauth?.callbackPort;
+  const listener = startCallbackListener(configuredPort === undefined ? {} : { port: configuredPort });
   try {
     const provider = createOAuthProvider({
       serverName: server.name,
@@ -473,6 +545,9 @@ async function runOAuthFlow(server: ResolvedMcpServer, deps: McpConsumerDeps): P
       ...(server.oauth === false || server.oauth?.clientId === undefined
         ? {}
         : { clientId: server.oauth.clientId }),
+      ...(server.oauth === false || server.oauth?.scopes === undefined
+        ? {}
+        : { scopes: server.oauth.scopes }),
     });
 
     // The SDK's first connect attempt performs discovery and calls

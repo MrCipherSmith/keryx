@@ -249,6 +249,27 @@ describe("AC11 — dynamic registration happens only when there is no configured
   });
 });
 
+describe("the configured oauth fields actually reach the wire", () => {
+  test("scopes are sent at registration", async () => {
+    // Validated, typed, documented in the schema — and read by
+    // nothing, so an operator provisioning a least-privilege token
+    // silently received whatever the server hands out by default. A
+    // token MORE powerful than the config asked for.
+    const as = mockAuthorisationServer();
+    const dir = store();
+    await fullFlow(provider(as, dir, { scopes: ["read", "write"] }), as.url);
+    const registration = as.seen.find((entry) => entry.path === "/register");
+    expect(String(registration?.body.scope)).toBe("read write");
+  });
+
+  test("BOUNDARY — with no scopes configured, none is declared", async () => {
+    const as = mockAuthorisationServer();
+    await fullFlow(provider(as, store()), as.url);
+    const registration = as.seen.find((entry) => entry.path === "/register");
+    expect(registration?.body.scope).toBeUndefined();
+  });
+});
+
 describe("AC12 — refresh, and what happens when it fails", () => {
   test("an expired access token with a refresh token is refreshed, with no browser", async () => {
     const as = mockAuthorisationServer();

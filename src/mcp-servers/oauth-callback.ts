@@ -98,6 +98,15 @@ function page(title: string, detail: string): string {
 
 export type StartCallbackOptions = {
   readonly timeoutMs?: number;
+  /**
+   * A FIXED loopback port, when the operator configured one.
+   *
+   * Ephemeral by default, so two flows cannot collide. But an
+   * authorisation server that pre-registered a redirect URI knows one
+   * exact port, and a random one can never match it — which made the
+   * documented `oauth.clientId` path impossible to complete.
+   */
+  readonly port?: number | undefined;
   /** Injected in tests. Real `Bun.serve` otherwise. */
   readonly serve?: typeof Bun.serve;
 };
@@ -125,7 +134,7 @@ export function startCallbackListener(options: StartCallbackOptions = {}): Callb
 
   const server = serve({
     hostname: LOOPBACK_HOST,
-    port: 0,
+    port: options.port ?? 0,
     fetch(request): Response {
       const url = new URL(request.url);
 

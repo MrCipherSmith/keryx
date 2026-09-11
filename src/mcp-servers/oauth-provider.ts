@@ -58,6 +58,16 @@ export type ProviderDeps = {
   readonly now?: (() => number) | undefined;
   /** A configured client id skips dynamic registration entirely. */
   readonly clientId?: string | undefined;
+  /**
+   * The scopes the operator asked for.
+   *
+   * Reaches `clientMetadata.scope`, which is the SDK's last fallback
+   * when resolving a scope. Configured and unread, it meant an
+   * operator provisioning a least-privilege token silently received
+   * whatever the authorisation server hands out by default — a token
+   * MORE powerful than the config says.
+   */
+  readonly scopes?: readonly string[] | undefined;
 };
 
 /**
@@ -97,6 +107,9 @@ export function createOAuthProvider(deps: ProviderDeps) {
         redirect_uris: deps.redirectUrl === undefined ? [] : [deps.redirectUrl],
         grant_types: ["authorization_code", "refresh_token"],
         response_types: ["code"],
+        ...(deps.scopes === undefined || deps.scopes.length === 0
+          ? {}
+          : { scope: deps.scopes.join(" ") }),
         token_endpoint_auth_method: "none",
       };
     },

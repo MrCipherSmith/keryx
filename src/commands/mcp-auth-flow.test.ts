@@ -15,7 +15,8 @@
 // zero, which is why an exit-code test proves nothing here.
 
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readCredential, writeCredential } from "../mcp-servers/credentials";
@@ -256,6 +257,87 @@ async function authenticate(
   });
   return { code, out: out.join("\n"), err: err.join("\n"), configDir };
 }
+
+/** Every file under `dir`, relative path -> sha256 of its bytes. */
+function fingerprint(dir: string): Record<string, string> {
+  const out: Record<string, string> = {};
+  const walk = (current: string): void => {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      out[path.relative(dir, full)] = createHash("sha256").update(readFileSync(full)).digest("hex");
+    }
+  };
+  walk(dir);
+  return out;
+}
+
+describe("AC14 — a COMPLETED flow writes one file, across every root", () => {
+  test("config, project and home are byte-identical except the credential store", async () => {
+    // The existing isolation test brackets direct `writeCredential`
+    // calls, which is not what the criterion says: it says "after a
+    // completed flow", and it names compat files and native config
+    // files — which live under the home and project roots, not the
+    // keryx config dir the other test fingerprints.
+    //
+    // So this runs the real `keryx mcp auth` against the mock
+    // authorisation server, with a genuine code exchange, and hashes
+    // all three roots.
+    const mock = mockAuthServer();
+    const base = mkdtempSync(path.join(tmpdir(), "keryx-ac14-"));
+    const configDir = path.join(base, "config");
+    const projectRoot = path.join(base, "project");
+    const home = path.join(base, "home");
+    for (const dir of [configDir, projectRoot, home]) mkdirSync(dir, { recursive: true });
+
+    writeFileSync(
+      path.join(configDir, "mcp-servers.json"),
+      JSON.stringify({ schemaVersion: 1, servers: { mock: { url: mock.url } } }),
+    );
+    // The compat and native files the criterion names by name.
+    writeFileSync(path.join(home, ".claude.json"), '{"mcpServers":{}}\n');
+    mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    writeFileSync(path.join(home, ".cursor", "mcp.json"), '{"mcpServers":{}}\n');
+    writeFileSync(path.join(projectRoot, ".mcp.json"), '{"mcpServers":{}}\n');
+    mkdirSync(path.join(projectRoot, ".keryx"), { recursive: true });
+    writeFileSync(path.join(projectRoot, ".keryx", "mcp-servers.json"), '{"schemaVersion":1}\n');
+
+    const before = { config: fingerprint(configDir), project: fingerprint(projectRoot), home: fingerprint(home) };
+
+    const code = await runMcpConsumerCommand("auth", ["mock"], {
+      cwd: projectRoot,
+      configDir,
+      projectRoot,
+      home,
+      interactive: true,
+      openBrowser: async (url) => {
+        const redirect = url.searchParams.get("redirect_uri");
+        const state = url.searchParams.get("state");
+        if (redirect === null || state === null) return;
+        const back = new URL(redirect);
+        back.searchParams.set("code", "the-authorisation-code");
+        back.searchParams.set("state", state);
+        await fetch(back.toString()).catch(() => undefined);
+      },
+      log: () => {},
+      err: () => {},
+    });
+    expect(code).toBe(0);
+
+    const after = { config: fingerprint(configDir), project: fingerprint(projectRoot), home: fingerprint(home) };
+
+    // The credential store is the ONLY difference, and it did appear.
+    expect(after.config["mcp-credentials.json"]).toBeDefined();
+    const { "mcp-credentials.json": _new, ...configRest } = after.config;
+    const { "mcp-credentials.json": _old, ...configWas } = before.config;
+    expect(configRest).toEqual(configWas);
+    expect(after.project).toEqual(before.project);
+    expect(after.home).toEqual(before.home);
+  });
+});
 
 describe("the happy path, so the failures below mean something", () => {
   test("it exits zero and stores a token", async () => {

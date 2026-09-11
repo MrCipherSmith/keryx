@@ -369,6 +369,9 @@ export function sessionAuthProviderOptions(
     ...(server.oauth === false || server.oauth?.clientId === undefined
       ? {}
       : { clientId: server.oauth.clientId }),
+    ...(server.oauth === false || server.oauth?.scopes === undefined
+      ? {}
+      : { scopes: server.oauth.scopes }),
   };
 }
 

@@ -356,6 +356,18 @@ function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
       problems.push(`server "${name}" oauth.scopes must be an array of strings`);
     }
   }
+  if (typeof oauth.clientSecretEnvVar === "string" && oauth.clientSecretEnvVar !== "") {
+    // ACCEPTED BY THE SCHEMA, IMPLEMENTED BY NOTHING.
+    //
+    // Said out loud rather than ignored, because the silent version is
+    // the dangerous one: keryx registers `token_endpoint_auth_method:
+    // "none"`, so a server configured as a confidential client would
+    // authenticate as a public one and the operator would never learn
+    // that the secret they configured was not used.
+    problems.push(
+      `server "${name}" oauth.clientSecretEnvVar is not implemented; keryx authenticates as a public client and this value is ignored`,
+    );
+  }
   const port = oauth.callbackPort;
   if (port !== undefined && !(typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535)) {
     problems.push(`server "${name}" oauth.callbackPort must be an integer between 1 and 65535`);
