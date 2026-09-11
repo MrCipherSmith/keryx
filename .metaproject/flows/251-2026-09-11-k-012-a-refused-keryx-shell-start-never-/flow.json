@@ -9,13 +9,26 @@
   "title": "K-012: a refused keryx shell start never exits when MCP servers are configured",
   "status": "in-progress",
   "createdAt": "2026-09-11T14:35:04.062Z",
-  "updatedAt": "2026-09-11T15:13:59.098Z",
+  "updatedAt": "2026-09-11T15:18:29.521Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:23fa110df06c55c6a9618b854d54ecdace0d349dbaa8e8d44166e88f3f755258",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T15:18:15.131Z"
+    },
+    "AC2": {
+      "at": "2026-09-11T15:18:29.169Z"
+    },
+    "AC3": {
+      "at": "2026-09-11T15:18:29.351Z"
+    },
+    "AC4": {
+      "at": "2026-09-11T15:18:29.521Z"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -76,7 +89,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +97,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -240,6 +254,31 @@
       "at": "2026-09-11T15:13:59.098Z",
       "event": "task-done",
       "detail": "T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)"
+    },
+    {
+      "at": "2026-09-11T15:17:33.499Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T15:18:15.131Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-11T15:18:29.169Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-11T15:18:29.351Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-11T15:18:29.521Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
     }
   ]
 }

@@ -16,3 +16,8 @@
 - 2026-09-11T14:50:36.711Z - task-done: T8: Verification: test:client:terminal, typecheck, lint, CI green
 - 2026-09-11T15:13:58.899Z - task-added: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)
 - 2026-09-11T15:13:59.098Z - task-done: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)
+- 2026-09-11T15:17:33.499Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T15:18:15.131Z - ac-confirmed: AC1
+- 2026-09-11T15:18:29.169Z - ac-confirmed: AC2
+- 2026-09-11T15:18:29.351Z - ac-confirmed: AC3
+- 2026-09-11T15:18:29.521Z - ac-confirmed: AC4
