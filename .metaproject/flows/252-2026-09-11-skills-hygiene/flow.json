@@ -9,7 +9,7 @@
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T18:05:21.283Z",
+  "updatedAt": "2026-09-11T19:55:59.669Z",
   "source": {
     "type": "description",
     "ref": null
@@ -60,7 +60,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -78,12 +78,19 @@
         "T18"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:05:33.761Z",
+            "outcome": "started",
+            "detail": "252-T3 full verification run by orchestrator"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -92,11 +99,39 @@
       "origin": "scaffold",
       "status": "todo",
       "dependsOn": [
-        "T3"
+        "T3",
+        "T24",
+        "T28"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 5,
+        "log": [
+          {
+            "at": "2026-09-11T18:12:32.040Z",
+            "outcome": "started",
+            "detail": "252-T4 review-orchestrator round over main..HEAD"
+          },
+          {
+            "at": "2026-09-11T18:50:49.420Z",
+            "outcome": "failed",
+            "detail": "round 1: 5 major, 9 minor confirmed by execution/site checks; fix tasks T19-T23, re-verify T24"
+          },
+          {
+            "at": "2026-09-11T19:18:52.833Z",
+            "outcome": "started",
+            "detail": "review round 2 over main..HEAD after round-1 fixes"
+          },
+          {
+            "at": "2026-09-11T19:29:37.251Z",
+            "outcome": "failed",
+            "detail": "round 2: C-003 partial; new C-009 major, C-010/C-011/L-008 minor; review loop escalate: no; fixes T25-T27, re-verify T28"
+          },
+          {
+            "at": "2026-09-11T19:55:59.669Z",
+            "outcome": "started",
+            "detail": "review round 3 (final) over round-2 fix diff 0cdc36d1..HEAD + closure"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -436,6 +471,242 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "R1 fix: retired-rule cleanup never follows or aborts on non-regular entries, hashes CRLF/BOM-normalised text, explains its warning (S-001, L-001, L-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:50:50.136Z",
+            "outcome": "started",
+            "detail": "252-T19 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "R1 fix: review-orchestrator schemas and templates carry only ask|adaptive and the tier vocabulary (C-001)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:50:51.069Z",
+            "outcome": "started",
+            "detail": "252-T20 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "R1 fix: plan locations, skill storage/sync and rule-management rules match the code; learn tier and verifier description aligned (C-002, C-003, C-005, C-006)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:50:51.639Z",
+            "outcome": "started",
+            "detail": "252-T21 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "R1 fix: task-implementer git templates follow git-concurrency (C-004)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:50:52.786Z",
+            "outcome": "started",
+            "detail": "252-T22 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "R1 fix: close the test gaps mutation testing found (T-001..T-005)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T18:57:16.210Z",
+            "outcome": "started",
+            "detail": "252-T23 after T19; T21 still editing templates.ts README and catalog.ts:74"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "R1 re-verify: full suite, typecheck, bundled verify, mirror identity after round-1 fixes",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T19",
+        "T20",
+        "T21",
+        "T22",
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T19:11:50.418Z",
+            "outcome": "started",
+            "detail": "252-T24 full re-verification after round-1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "R2 fix: skill sync and rule editing instructions name what exists (C-009, C-011, C-014)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T19:29:38.242Z",
+            "outcome": "started",
+            "detail": "252-T25 round-2 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T26",
+      "title": "R2 fix: orchestrators commit a worker's reported files when auto-commit is off (C-010, C-012)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T19:29:38.403Z",
+            "outcome": "started",
+            "detail": "252-T26 round-2 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T27",
+      "title": "R2 fix: a retired rule that cannot be removed says so, not that it cannot be read (L-008)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T19:29:38.555Z",
+            "outcome": "started",
+            "detail": "252-T27 round-2 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T28",
+      "title": "R2 re-verify: full suite, typecheck, bundled verify, mirror identity after round-2 fixes",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T25",
+        "T26",
+        "T27"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T19:38:27.636Z",
+            "outcome": "started",
+            "detail": "252-T28 full re-verification after round-2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -696,6 +967,201 @@
       "at": "2026-09-11T18:05:21.283Z",
       "event": "task-done",
       "detail": "T11: D6: compatible_harnesses includes claude, categories match catalog, both checked"
+    },
+    {
+      "at": "2026-09-11T18:05:33.762Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 252-T3 full verification run by orchestrator"
+    },
+    {
+      "at": "2026-09-11T18:12:31.917Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T18:12:32.040Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 252-T4 review-orchestrator round over main..HEAD"
+    },
+    {
+      "at": "2026-09-11T18:39:21.101Z",
+      "event": "task-added",
+      "detail": "T19: R1 fix: retired-rule cleanup never follows or aborts on non-regular entries, hashes CRLF/BOM-normalised text, explains its warning (S-001, L-001, L-002)"
+    },
+    {
+      "at": "2026-09-11T18:39:21.357Z",
+      "event": "task-added",
+      "detail": "T20: R1 fix: review-orchestrator schemas and templates carry only ask|adaptive and the tier vocabulary (C-001)"
+    },
+    {
+      "at": "2026-09-11T18:39:21.597Z",
+      "event": "task-added",
+      "detail": "T21: R1 fix: plan locations, skill storage/sync and rule-management rules match the code; learn tier and verifier description aligned (C-002, C-003, C-005, C-006)"
+    },
+    {
+      "at": "2026-09-11T18:39:21.878Z",
+      "event": "task-added",
+      "detail": "T22: R1 fix: task-implementer git templates follow git-concurrency (C-004)"
+    },
+    {
+      "at": "2026-09-11T18:39:22.082Z",
+      "event": "task-added",
+      "detail": "T23: R1 fix: close the test gaps mutation testing found (T-001..T-005)"
+    },
+    {
+      "at": "2026-09-11T18:39:22.445Z",
+      "event": "task-added",
+      "detail": "T24: R1 re-verify: full suite, typecheck, bundled verify, mirror identity after round-1 fixes"
+    },
+    {
+      "at": "2026-09-11T18:39:22.816Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3, T24 (was T3) — review round 2 runs on the re-verified branch after round-1 fixes"
+    },
+    {
+      "at": "2026-09-11T18:50:49.421Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 5 major, 9 minor confirmed by execution/site checks; fix tasks T19-T23, re-verify T24"
+    },
+    {
+      "at": "2026-09-11T18:50:50.137Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 252-T19 round-1 fix"
+    },
+    {
+      "at": "2026-09-11T18:50:51.070Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 252-T20 round-1 fix"
+    },
+    {
+      "at": "2026-09-11T18:50:51.639Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 252-T21 round-1 fix"
+    },
+    {
+      "at": "2026-09-11T18:50:52.786Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 252-T22 round-1 fix"
+    },
+    {
+      "at": "2026-09-11T18:55:35.360Z",
+      "event": "task-done",
+      "detail": "T22: R1 fix: task-implementer git templates follow git-concurrency (C-004)"
+    },
+    {
+      "at": "2026-09-11T18:57:00.586Z",
+      "event": "task-done",
+      "detail": "T19: R1 fix: retired-rule cleanup never follows or aborts on non-regular entries, hashes CRLF/BOM-normalised text, explains its warning (S-001, L-001, L-002)"
+    },
+    {
+      "at": "2026-09-11T18:57:16.210Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 252-T23 after T19; T21 still editing templates.ts README and catalog.ts:74"
+    },
+    {
+      "at": "2026-09-11T18:58:31.627Z",
+      "event": "task-done",
+      "detail": "T20: R1 fix: review-orchestrator schemas and templates carry only ask|adaptive and the tier vocabulary (C-001)"
+    },
+    {
+      "at": "2026-09-11T18:59:48.222Z",
+      "event": "task-done",
+      "detail": "T21: R1 fix: plan locations, skill storage/sync and rule-management rules match the code; learn tier and verifier description aligned (C-002, C-003, C-005, C-006)"
+    },
+    {
+      "at": "2026-09-11T19:11:50.280Z",
+      "event": "task-done",
+      "detail": "T23: R1 fix: close the test gaps mutation testing found (T-001..T-005)"
+    },
+    {
+      "at": "2026-09-11T19:11:50.418Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 252-T24 full re-verification after round-1 fixes"
+    },
+    {
+      "at": "2026-09-11T19:18:52.689Z",
+      "event": "task-done",
+      "detail": "T24: R1 re-verify: full suite, typecheck, bundled verify, mirror identity after round-1 fixes"
+    },
+    {
+      "at": "2026-09-11T19:18:52.833Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — review round 2 over main..HEAD after round-1 fixes"
+    },
+    {
+      "at": "2026-09-11T19:29:37.251Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 2: C-003 partial; new C-009 major, C-010/C-011/L-008 minor; review loop escalate: no; fixes T25-T27, re-verify T28"
+    },
+    {
+      "at": "2026-09-11T19:29:37.419Z",
+      "event": "task-added",
+      "detail": "T25: R2 fix: skill sync and rule editing instructions name what exists (C-009, C-011, C-014)"
+    },
+    {
+      "at": "2026-09-11T19:29:37.551Z",
+      "event": "task-added",
+      "detail": "T26: R2 fix: orchestrators commit a worker's reported files when auto-commit is off (C-010, C-012)"
+    },
+    {
+      "at": "2026-09-11T19:29:37.697Z",
+      "event": "task-added",
+      "detail": "T27: R2 fix: a retired rule that cannot be removed says so, not that it cannot be read (L-008)"
+    },
+    {
+      "at": "2026-09-11T19:29:37.836Z",
+      "event": "task-added",
+      "detail": "T28: R2 re-verify: full suite, typecheck, bundled verify, mirror identity after round-2 fixes"
+    },
+    {
+      "at": "2026-09-11T19:29:38.096Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3, T24, T28 (was T3, T24) — review round 3 runs after round-2 fixes are re-verified"
+    },
+    {
+      "at": "2026-09-11T19:29:38.247Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 252-T25 round-2 fix"
+    },
+    {
+      "at": "2026-09-11T19:29:38.403Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 252-T26 round-2 fix"
+    },
+    {
+      "at": "2026-09-11T19:29:38.555Z",
+      "event": "task-attempt",
+      "detail": "T27: started (attempt 1) — 252-T27 round-2 fix"
+    },
+    {
+      "at": "2026-09-11T19:34:32.998Z",
+      "event": "task-done",
+      "detail": "T27: R2 fix: a retired rule that cannot be removed says so, not that it cannot be read (L-008)"
+    },
+    {
+      "at": "2026-09-11T19:35:41.394Z",
+      "event": "task-done",
+      "detail": "T25: R2 fix: skill sync and rule editing instructions name what exists (C-009, C-011, C-014)"
+    },
+    {
+      "at": "2026-09-11T19:38:27.496Z",
+      "event": "task-done",
+      "detail": "T26: R2 fix: orchestrators commit a worker's reported files when auto-commit is off (C-010, C-012)"
+    },
+    {
+      "at": "2026-09-11T19:38:27.636Z",
+      "event": "task-attempt",
+      "detail": "T28: started (attempt 1) — 252-T28 full re-verification after round-2 fixes"
+    },
+    {
+      "at": "2026-09-11T19:55:59.502Z",
+      "event": "task-done",
+      "detail": "T28: R2 re-verify: full suite, typecheck, bundled verify, mirror identity after round-2 fixes"
+    },
+    {
+      "at": "2026-09-11T19:55:59.669Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 5) — review round 3 (final) over round-2 fix diff 0cdc36d1..HEAD + closure"
     }
   ]
 }
