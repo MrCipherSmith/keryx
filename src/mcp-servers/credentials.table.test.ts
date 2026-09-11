@@ -135,6 +135,155 @@ describe("AC1 — the bits on disk, not the name of the helper", () => {
   });
 });
 
+// AC2 as a table on its OWN axis: does the stored token come back?
+//
+// Both halves of the key have to matter, and a table makes the
+// asymmetry impossible to write away — a one-sided key passes half
+// these rows and fails the other half, where two prose tests can
+// drift until only the convenient one is left.
+type KeyRow = {
+  readonly label: string;
+  readonly writeAs: readonly [name: string, url: string];
+  readonly readAs: readonly [name: string, url: string];
+  readonly outcome: "found" | "not found";
+};
+
+const KEY_TABLE: Array<{ klass: string; why: string; rows: KeyRow[] }> = [
+  {
+    klass: "a token is filed under the identity AND the host",
+    why: "either half alone hands a live credential to somewhere it was never issued",
+    rows: [
+      {
+        label: "the same name at a DIFFERENT url does not reuse the token",
+        // Repointing a server at another host must not send it a
+        // credential issued to the first, because somebody edited a
+        // string in a config file.
+        writeAs: ["linear", "https://mcp.linear.app/mcp"],
+        readAs: ["linear", "https://evil.test/mcp"],
+        outcome: "not found",
+      },
+      {
+        label: "a DIFFERENT name at the same url does not either",
+        // Two servers can share a host and hold different scopes.
+        writeAs: ["a", "https://shared/mcp"],
+        readAs: ["b", "https://shared/mcp"],
+        outcome: "not found",
+      },
+      {
+        label: "neither half matching is certainly not found",
+        writeAs: ["a", "https://a/mcp"],
+        readAs: ["b", "https://b/mcp"],
+        outcome: "not found",
+      },
+      {
+        label: "a url differing only in path is a different server",
+        // `/mcp` and `/v2/mcp` at one host are routinely two
+        // deployments with two token audiences.
+        writeAs: ["api", "https://h/mcp"],
+        readAs: ["api", "https://h/v2/mcp"],
+        outcome: "not found",
+      },
+      {
+        label: "BOUNDARY — the same name AND the same url IS found",
+        writeAs: ["a", "https://shared/mcp"],
+        readAs: ["a", "https://shared/mcp"],
+        outcome: "found",
+      },
+    ],
+  },
+];
+
+describe("AC2/AC15 — which key finds a token, by CLASS", () => {
+  for (const { klass, why, rows } of KEY_TABLE) {
+    describe(`${klass} — ${why}`, () => {
+      for (const row of rows) {
+        test(row.label, () => {
+          const dir = store();
+          writeCredential(row.writeAs[0], row.writeAs[1], { tokens: tokens() }, dir);
+          const found = readCredential(row.readAs[0], row.readAs[1], dir).record !== undefined;
+          expect({ label: row.label, outcome: found ? "found" : "not found" }).toEqual({
+            label: row.label,
+            outcome: row.outcome,
+          });
+        });
+      }
+    });
+  }
+
+  test("every class has three rows and both outcomes", () => {
+    expect(classTableProblems(KEY_TABLE, (row) => row.outcome)).toEqual([]);
+  });
+});
+
+// The store's own states, on the axis of what a WRITE is allowed to do
+// to them. The rule being tabulated: a store that cannot be understood
+// is never replaced, because replacing it logs the operator out of
+// every server at once and reports success.
+type StoreRow = {
+  readonly label: string;
+  /** Written to the store file before the attempt. Undefined = absent. */
+  readonly existing: string | undefined;
+  readonly outcome: "write accepted" | "write refused";
+};
+
+const STORE_TABLE: Array<{ klass: string; why: string; rows: StoreRow[] }> = [
+  {
+    klass: "a store that cannot be understood is refused, never reset",
+    why: "unlike the disable overlay, this file holds tokens that cost a browser round trip each",
+    rows: [
+      { label: "truncated JSON is refused", existing: "{not json", outcome: "write refused" },
+      {
+        label: "a JSON array is refused — it is not the shape this file has",
+        existing: "[]",
+        outcome: "write refused",
+      },
+      {
+        label: "a JSON string is refused for the same reason",
+        existing: '"nope"',
+        outcome: "write refused",
+      },
+      {
+        label: "BOUNDARY — an ABSENT store is not corrupt, it is empty",
+        // Refusing here would mean the first authorisation on a new
+        // machine could never succeed.
+        existing: undefined,
+        outcome: "write accepted",
+      },
+      {
+        label: "BOUNDARY — a well-formed store accepts the write",
+        existing: '{"schemaVersion":1,"credentials":{}}',
+        outcome: "write accepted",
+      },
+    ],
+  },
+];
+
+describe("AC15 — what a write may do to each store state, by CLASS", () => {
+  for (const { klass, why, rows } of STORE_TABLE) {
+    describe(`${klass} — ${why}`, () => {
+      for (const row of rows) {
+        test(row.label, () => {
+          const dir = store();
+          if (row.existing !== undefined) writeFileSync(credentialsFile(dir), row.existing);
+          const result = writeCredential("new", "https://n/mcp", { tokens: tokens() }, dir);
+          expect({ label: row.label, outcome: result.ok ? "write accepted" : "write refused" }).toEqual({
+            label: row.label,
+            outcome: row.outcome,
+          });
+          if (row.outcome === "write refused" && row.existing !== undefined) {
+            // Refused means UNTOUCHED, so a human can still repair it.
+            expect(Bun.file(credentialsFile(dir)).size).toBe(Buffer.byteLength(row.existing));
+          }
+        });
+      }
+    });
+  }
+
+  test("every class has three rows and both outcomes", () => {
+    expect(classTableProblems(STORE_TABLE, (row) => row.outcome)).toEqual([]);
+  });
+});
+
 describe("AC2 — a token belongs to an identity AT A HOST", () => {
   test("the same name at a different url does not reuse the token", () => {
     // Repointing a server at another host must not send it a
