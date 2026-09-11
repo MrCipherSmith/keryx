@@ -21,3 +21,9 @@
 - 2026-09-11T15:18:29.169Z - ac-confirmed: AC2
 - 2026-09-11T15:18:29.351Z - ac-confirmed: AC3
 - 2026-09-11T15:18:29.521Z - ac-confirmed: AC4
+- 2026-09-11T15:25:52.079Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/530 (warning: PR is not a draft)
+- 2026-09-11T15:27:23.822Z - completing
+- 2026-09-11T15:27:33.180Z - completion-failed: review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against d57ecbec7dd43075cae17c0e4153fbdb24e31f2a, but the PR head is f93a4d832e5784cf983217b6680ad562f8fee0dd. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#530 was last collected against d57ecbec7dd43075cae17c0e4153fbdb24e31f2a (round 1), but the PR head is f93a4d832e5784cf983217b6680ad562f8fee0dd. Everything anyone said after d57ecbec7dd43075cae17c0e4153fbdb24e31f2a is missing from this record, so "nothing outstanding" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 530 --sha <pr-head>`.
+- 2026-09-11T15:28:04.964Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/530 (warning: PR is not a draft)
+- 2026-09-11T15:28:05.139Z - completing
+- 2026-09-11T15:28:13.877Z - done: all gates passed
