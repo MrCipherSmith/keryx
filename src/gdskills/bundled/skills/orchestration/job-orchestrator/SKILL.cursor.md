@@ -767,9 +767,15 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
   Wait for ALL of them.
 
   Read each result's STATUS line:
-    all DONE                  → continue to next wave
-    any DONE_WITH_CONCERNS    → record the concerns, continue
-    any BLOCKED               → STOP, read the result file, resolve or ask the user
+    DONE / DONE_WITH_CONCERNS → accept it (record every concern)
+    BLOCKED                   → do not accept it; read its result file
+
+  # Task boundary commit, for EVERY accepted result, before anything else,
+  # whatever auto_commit was (see "Task boundary commit" below):
+  FOR each accepted result: commit its still-changed reported paths, or skip
+
+  any BLOCKED → STOP, resolve or ask the user
+  otherwise   → continue to next wave
 ```
 
 #### tests-creator dispatch (Step A)
@@ -819,10 +825,13 @@ Task({
     - job_name:         <job-name>
     - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
 
+    ## Automation (task-implementer input `automation`)
+    - auto_commit:      <implementer_settings.auto_commit>   # false: do not commit; report exact paths
+
     ## Required response format (compact — no inline JSON)
     STATUS: DONE
     Task: <task_id>
-    Commits: [abc1234 feat(x): ...]
+    Commits: [abc1234 feat(x): ...]    # auto_commit=false: Commits: none (auto_commit=false)
     Tests: <N passed, M failed>
     Result file: <JOBS_ROOT>/<job-name>/results/<task_id>.json
 
@@ -830,18 +839,41 @@ Task({
 })
 ```
 
-**Task boundary commit (`implementer_settings.auto_commit=false` only):** the
-worker did not commit (`rules/core/git-concurrency.mdc`, "Reporting Back"). As
-soon as a task's result is accepted (`STATUS: DONE` or `DONE_WITH_CONCERNS`),
-stage and commit exactly its reported `files_modified`/`files_created`/
-`files_deleted` — never `-A`/`--all`/`.`:
-```bash
-git -C <worktree_path> add <files_modified/files_created/files_deleted from the result file>
-git -C <worktree_path> commit -m "<type>(<scope>): <task description>
+**Who commits is set by the dispatch, never by a default.** Step B always passes
+`auto_commit` explicitly. The worker's own default is `true`, so a dispatch that
+leaves it out gets a worker that commits even when `implementer_settings.auto_commit`
+is `false`.
 
-task: <task_id>"
+**Task boundary commit, for every accepted result, whatever `auto_commit` was:**
+a task is not done until its diff is committed (`rules/core/git-concurrency.mdc`
+rule 4, "Reporting Back"). As soon as a result is accepted (`STATUS: DONE` or
+`DONE_WITH_CONCERNS`), take its reported `files_modified`/`files_created`/
+`files_deleted` from the result file and commit the ones git still shows as
+changed, never `-A`/`--all`/`.`:
+```bash
+set -- <files_modified files_created files_deleted from the result file>   # may be none
+PENDING=()
+for p in "$@"; do
+  [ -n "$(git -C <worktree_path> status --porcelain -- "$p")" ] && PENDING+=("$p")
+done
+if [ ${#PENDING[@]} -eq 0 ]; then
+  echo "boundary commit: nothing left to commit, skipped"
+else
+  git -C <worktree_path> add -- "${PENDING[@]}"
+  git -C <worktree_path> commit -m "<type>(<scope>): <task description>
+
+task: <task_id>" -- "${PENDING[@]}"
+fi
 ```
-When `auto_commit=true`, the worker already committed — skip this step.
+With `auto_commit=false` this commits exactly the worker's paths. With
+`auto_commit=true` the worker already committed, so nothing is left and the step
+skips. That is the expected outcome, not an error. If paths remain after an
+`auto_commit=true` worker, it left part of its diff uncommitted: the step
+commits it, and you record that as a concern. Each path is checked on its own
+because `git status --porcelain --` with no path lists the whole tree, `git add`
+fails on a path that is neither on disk nor tracked, and `git commit` with
+nothing staged exits 1. The trailing `-- "${PENDING[@]}"` commits only these
+paths, so a file another lane staged is not swept into this commit.
 
 **Each wave runs in ONE worktree.** The worktree created in 2.4 is the whole job's
 workspace — waves are ordered, not isolated from each other, and a later wave sees
@@ -914,7 +946,7 @@ git log <merge_base>..HEAD --oneline
 
 | Check | Pass | Fail action |
 |-------|------|-------------|
-| At least 1 commit exists | ≥1 commit | `implementer_settings.auto_commit=true`: `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." `auto_commit=false`: the task-boundary commit step (Step B) should already have committed each accepted result's files — if none exist, `retryable`: re-run that commit step for the wave's result files instead of re-dispatching workers. |
+| At least 1 commit exists | ≥1 commit | `implementer_settings.auto_commit=true`: `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." `auto_commit=false`: the task-boundary commit (wave loop, after Step B) should already have committed each accepted result's files — if none exist, `retryable`: re-run that commit step for the wave's result files instead of re-dispatching workers. |
 | At least 1 file modified | ≥1 file changed | Same as above |
 | Claimed files actually modified | All files named in the result files appear in the diff | Log discrepancy as a concern, continue |
 

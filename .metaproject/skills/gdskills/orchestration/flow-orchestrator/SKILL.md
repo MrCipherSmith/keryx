@@ -321,6 +321,19 @@ worker reply is a `subagent-result` object
 line is `STATUS: <status>`
 (`.metaproject/rules/core/subagent-status-protocol.md`).
 
+`<worktree_path>` below is the absolute root of the checkout this flow's work
+happens in: the git worktree the flow runs in, or the project root when it runs
+in the main checkout. Resolve it once, before the first dispatch
+(`git rev-parse --show-toplevel` from that checkout), check
+`git -C <worktree_path> branch --show-current` is the branch the work belongs
+on, and pin every dispatch to it (`rules/core/git-concurrency.mdc`, "Pinning A
+Dispatch To Its Worktree").
+
+Workers do not commit: flow-orchestrator owns every commit and dispatches with
+auto-commit off (task-implementer's `automation.auto_commit: false`). A
+`subagent-dispatch` has no `automation` field, so the setting travels as the
+explicit constraint below — never as the worker's default, which is `true`.
+
 Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 
 ```json
@@ -342,7 +355,9 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
     "Never edit flow.json.",
     "Never edit frozen acceptance criteria.",
     "Return a subagent-result; first line must be STATUS:.",
-    "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A."
+    "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A.",
+    "Root: <worktree_path>. Before the first write run `cd <worktree_path> && pwd && git branch --show-current`; run every git command as `git -C <worktree_path>`.",
+    "Auto-commit is off (automation.auto_commit: false): do not commit; list every path you changed in changed_files. flow-orchestrator commits them at the task boundary."
   ],
   "allowed_actions": ["read", "write", "run-command", "git"],
   "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/<dir>/journal.md" },
@@ -351,17 +366,36 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 }
 ```
 
-After a worker succeeds, stage and commit exactly the worker's `changed_files`
-from its `subagent-result` — never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc`
-rule 4, "Reporting Back") — then mark task progress:
+**Task boundary commit, after every accepted worker result** (`DONE` or
+`DONE_WITH_CONCERNS`), then mark task progress. It commits exactly those
+`changed_files` from the worker's `subagent-result` that git still shows as
+changed, never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc` rule 4 and
+"Reporting Back"). It skips cleanly when none remain. That is expected, not an
+error, for a worker that reported no files (review, context, docs) or that
+committed on its own (tests-creator's stubs):
 
 ```bash
-git -C <worktree_path> add <changed_files from the subagent-result>
-git -C <worktree_path> commit -m "<type>(<scope>): <Tn title>
+set -- <changed_files from the subagent-result>   # may be none
+PENDING=()
+for p in "$@"; do
+  [ -n "$(git -C <worktree_path> status --porcelain -- "$p")" ] && PENDING+=("$p")
+done
+if [ ${#PENDING[@]} -eq 0 ]; then
+  echo "boundary commit: nothing left to commit, skipped"
+else
+  git -C <worktree_path> add -- "${PENDING[@]}"
+  git -C <worktree_path> commit -m "<type>(<scope>): <Tn title>
 
-task: <Tn>"
+task: <Tn>" -- "${PENDING[@]}"
+fi
 keryx flow task done <id> <Tn>
 ```
+
+Why each path is checked on its own: `git status --porcelain --` with no path
+lists the whole tree, `git add` fails on a path that is neither on disk nor
+tracked, and `git commit` with nothing staged exits 1. The trailing
+`-- "${PENDING[@]}"` commits only these paths, so a file another lane staged is
+not swept into this commit.
 
 If new work is discovered:
 
@@ -377,8 +411,8 @@ properly formatted `subagent-result`.
 
 | Worker `status` | flow-orchestrator action |
 |---|---|
-| `DONE` | Accept, commit `changed_files`, `keryx flow task done <id> <Tn>`. Continue. |
-| `DONE_WITH_CONCERNS` | Accept, commit `changed_files`, record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
+| `DONE` | Accept, run the task boundary commit (above), `keryx flow task done <id> <Tn>`. Continue. |
+| `DONE_WITH_CONCERNS` | Accept, run the task boundary commit (above), record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
 | `NEEDS_CONTEXT` | Do not fail. Enrich `context_refs`/`files_to_read` from gdgraph/gdctx/wiki/memory, then re-dispatch the same `dispatch_id`. |
 | `BLOCKED` | `keryx flow block <id> --reason "<worker reason>"`; resolve or escalate one concise question, then `flow unblock` and re-dispatch. |
 | `FAILED` | Emitted by harness **child** workers (`src/harness/child/contract.ts`), never by skill workers — `task-implementer` maps its own `failed` onto `BLOCKED`. Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
