@@ -1,6 +1,6 @@
 ---
 name: security-audit
-description: "Use when checking for dependency vulnerabilities, accidentally committed secrets, or security issues in Docker images."
+description: "Use when checking for dependency vulnerabilities, accidentally committed secrets, or security issues in Docker images. NOT for Metaproject security policy — prompt-injection, redaction and memory/wiki/report writes belong to `metaproject-security` — and NOT for performing the upgrades a finding calls for (use `dependency-update`)."
 triggers:
   - "security audit"
   - "audit dependencies"
@@ -106,3 +106,24 @@ Otherwise report `container-scan: NOT RUN — <no Dockerfile | docker unavailabl
   selected, could not run, or returned no vulnerability data. Report `not
   measured` and name the reason. In a security report, silence read as "clean"
   is the most expensive defect available.
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|---|---|
+| "The advisory is informational / low severity — ship it" | This skill reports severity, it does not filter it. Accepting a known CVE is the caller's decision to make explicitly, not one you make for them by omission |
+| "`npm audit` returned JSON with no vulnerabilities in it, so the project is clean" | Check for the `vulnerabilities` / `advisories` key before grouping. `ENOLOCK` is ~240 bytes of error that groups to zero in every severity — indistinguishable from clean, and that is the whole point of Step 1 |
+| "No lockfile row matched, but `npm audit` is the usual one" | Falling through to another package manager's audit is a guess dressed as a result. The outcome is `dependency-audit: NOT RUN — no recognised lockfile`, with no totals attached |
+| "There's no Dockerfile, so container scan: 0 issues" | "No Dockerfile" and "scanned, found nothing" are different results and only one of them is evidence. Report `container-scan: NOT RUN — no Dockerfile` |
+| "`npm audit fix --force` clears the whole list" | `--force` installs semver-major upgrades across the tree. Never recommend it without stating which packages it would move and by how much |
+| "That key looks like a test fixture, not a real secret" | A committed credential gets reported with its path and rotated first; whether it was live is decided afterwards, by someone who can check. Never print its value in the report |
+
+## Verification
+
+Do not report the audit as done until all of the following hold:
+
+- Every step carries `RAN` or `NOT RUN — <reason>`, and no step marked NOT RUN carries a numeric total
+- Severity totals appear only for steps that ran; everywhere else the report reads `not measured`, never `0`
+- Every critical/high entry names a CVE or advisory id, the package, and the version range that pulls it in
+- No raw secret value appears anywhere in the report — only path, line, and a redacted preview
+- The report names the package manager and lockfile detected in Step 1, so a reader can tell which tree was audited

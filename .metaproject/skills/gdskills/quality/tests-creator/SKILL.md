@@ -1,6 +1,6 @@
 ---
 name: tests-creator
-description: "Use when writing test cases BEFORE implementation — converts acceptance criteria into failing test stubs that task-implementer will make pass. Mandatory step in the TDD pipeline between issue-analyzer and task-implementer."
+description: "Use when writing test cases BEFORE implementation — converts acceptance criteria into failing test stubs that task-implementer will make pass. Mandatory step in the TDD pipeline between issue-analyzer and task-implementer. NOT for adding tests to code that already exists (use `test-gen`)."
 triggers:
   - "create tests first"
   - "test scenarios"
@@ -329,6 +329,19 @@ This ensures the TDD cycle is maintained end-to-end.
 5. **DO** follow the project's existing test conventions (discovered in Phase 1).
 6. **DO** commit the test files before reporting.
 7. Return `TEST_CASE_SPECS` as the final message to the orchestrator/caller.
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|---|---|
+| "The module doesn't exist, so the import breaks the whole suite — I'll create a stub module first" | That stub is implementation code, and it is exactly what Rule 1 forbids. A failing import IS the RED phase; `task-implementer` creates the module |
+| "A placeholder like `expect(true).toBe(true)` gets the file committed and the pipeline moving" | A test that passes before implementation proves nothing and goes green forever after. RED means failing (Rule 2) — use `it.todo`, or the forward-declared assertion from 3.3 |
+| "I know how this will be built, so I'll assert it calls the repository method" | That tests HOW, not WHAT (Rule 3), and it fails the moment the implementer picks a different — valid — structure. Assert observable behaviour |
+| "This acceptance criterion is too vague to test, so I'll skip it" | Every criterion needs at least one test (Rule 4). Derive from the task description, log the warning, and say in `notes` what you assumed — an untested criterion silently leaves the pipeline |
+| "`verify_red` shows the test passing already; close enough, report DONE" | A test green before implementation is a wrong test, not an early win. Fix the assertion, or report it as a concern — do not pass it downstream as covered |
+| "I'll leave the stubs uncommitted and let `task-implementer` commit everything together" | The handoff assumes committed RED files (Rule 6): the implementer's first step is to run them and confirm they fail. Uncommitted stubs make that step unverifiable |
 
 ---
 

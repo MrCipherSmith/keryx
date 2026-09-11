@@ -1,6 +1,6 @@
 ---
 name: pr
-description: "Use when opening a pull request for the current branch."
+description: "Use when opening a pull request for the current branch. NOT for rewriting the body of a pull request that already exists or its linked issue (use `pr-issue-documenter`)."
 triggers:
   - "open PR"
   - "create pull request"
@@ -73,3 +73,23 @@ Return the PR URL to the user.
 - Always analyze ALL commits, not just the last one
 - If the branch has linked GitHub issues, reference them in the body
 - Ask user for confirmation before creating if there are 10+ commits
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|---|---|
+| "The last commit message already summarizes the work, use it as the body" | A PR is the whole branch, not its tip. Read `main...HEAD`; the earliest commits are usually where the design decision a reviewer needs actually happened |
+| "The branch isn't pushed, but `gh pr create` will sort that out" | It either fails or opens a PR against a stale remote head, so the diff a reviewer sees is not the diff you analyzed. Push with `-u origin <branch>` first |
+| "The tree is dirty, but the commits are what get reviewed anyway" | Exactly — which means the uncommitted half of the change quietly does not exist in the PR, and the reviewer approves something incomplete. Ask before opening over a dirty tree |
+| "There's an open issue that sounds like this work, I'll write `Closes #N`" | `Closes` shuts an issue on merge. Reference only issues the branch or its commits actually link to; a guess closes someone else's ticket |
+| "The user asked for a PR, so 40 commits is still just 'create the PR'" | 10+ commits gets a confirmation first. A branch that large is usually two PRs, and saying so is cheaper before the PR exists than after review starts |
+
+## Verification
+
+Do not report the PR as done until all of the following hold:
+
+- `gh pr view --json url,title,body` returns the created PR, with a non-empty body carrying Summary, Changes and Test plan
+- The title is under 70 chars and describes the branch, not the last commit
+- Every commit in `git log <base>..HEAD` is represented somewhere in the body — no area of the diff goes unmentioned
+- The branch has an upstream and the remote head equals local `HEAD`
+- The PR URL is returned to the user
