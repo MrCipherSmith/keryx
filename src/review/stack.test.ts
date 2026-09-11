@@ -50,6 +50,83 @@ test("AC13: detects react, mobx, and prisma from exact dependency names", async 
   expect(detected.tags.mobx).toBe(true);
   expect(detected.tags.prisma).toBe(true);
   expect(detected.tags.nestjs).toBe(false);
+  expect(detected.tags.playwright).toBe(false);
+  expect(detected.tags.sql).toBe(true); // prisma also satisfies the broader sql tag
+  expect(detected.tags["http-server"]).toBe(false);
+});
+
+test("AC13: detects playwright from @playwright/test or the plain playwright package", async () => {
+  const viaTestPackage = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ devDependencies: { "@playwright/test": "^1.40.0" } }),
+    }),
+  });
+  expect(viaTestPackage.tags.playwright).toBe(true);
+  expect(viaTestPackage.matched).toContain("@playwright/test");
+
+  const viaPlainPackage = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ dependencies: { playwright: "^1.40.0" } }),
+    }),
+  });
+  expect(viaPlainPackage.tags.playwright).toBe(true);
+});
+
+test("AC13: does not detect playwright when neither package is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { zod: "^3" } }) }),
+  });
+  expect(detected.tags.playwright).toBe(false);
+});
+
+test.each([
+  ["prisma"],
+  ["@prisma/client"],
+  ["typeorm"],
+  ["sequelize"],
+  ["knex"],
+  ["drizzle-orm"],
+  ["pg"],
+  ["mysql2"],
+  ["better-sqlite3"],
+  ["kysely"],
+])("AC13: detects sql from %s", async (dep) => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { [dep]: "^1.0.0" } }) }),
+  });
+  expect(detected.tags.sql).toBe(true);
+});
+
+test("AC13: does not detect sql when no matching database dependency is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { react: "^18" } }) }),
+  });
+  expect(detected.tags.sql).toBe(false);
+});
+
+test.each([["express"], ["fastify"], ["koa"], ["hono"], ["@nestjs/core"], ["@hapi/hapi"]])(
+  "AC13: detects http-server from %s",
+  async (dep) => {
+    const detected = await detectProjectStack("/proj", {
+      readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { [dep]: "^1.0.0" } }) }),
+    });
+    expect(detected.tags["http-server"]).toBe(true);
+  },
+);
+
+test("AC13: does not detect http-server when no matching server framework is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { react: "^18" } }) }),
+  });
+  expect(detected.tags["http-server"]).toBe(false);
+});
+
+test("AC13: @nestjs/core sets both nestjs and http-server", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.0.0" } }) }),
+  });
+  expect(detected.tags.nestjs).toBe(true);
+  expect(detected.tags["http-server"]).toBe(true);
 });
 
 test("AC13: a clean package.json naming none of the tags reports all false, not uncertain", async () => {
@@ -221,21 +298,21 @@ test("parseStackRequires parses a CSV, lowercases, dedupes, and drops unknown to
 // ---------------------------------------------------------------------------
 
 const CERTAIN_NONE: DetectedStack = {
-  tags: { nestjs: false, react: false, mobx: false, prisma: false },
+  tags: { nestjs: false, react: false, mobx: false, prisma: false, playwright: false, sql: false, "http-server": false },
   uncertain: false,
   reason: "detected from /proj/package.json (1 declared dependency)",
   matched: [],
 };
 
 const CERTAIN_REACT: DetectedStack = {
-  tags: { nestjs: false, react: true, mobx: false, prisma: false },
+  tags: { nestjs: false, react: true, mobx: false, prisma: false, playwright: false, sql: false, "http-server": false },
   uncertain: false,
   reason: "detected from /proj/package.json (2 declared dependencies)",
   matched: ["react"],
 };
 
 const UNCERTAIN: DetectedStack = {
-  tags: { nestjs: true, react: true, mobx: true, prisma: true },
+  tags: { nestjs: true, react: true, mobx: true, prisma: true, playwright: true, sql: true, "http-server": true },
   uncertain: true,
   reason: "package.json not found at /proj/package.json",
   matched: [],
