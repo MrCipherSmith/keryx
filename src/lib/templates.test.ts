@@ -13,6 +13,8 @@ import {
   ROUTING_FILENAME,
   renderMetaprojectGitignoreBlock,
   renderMetaprojectDashboardHtml,
+  renderAgentEntrypoint,
+  renderImportedAgentRules,
 } from "./templates";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
@@ -326,4 +328,55 @@ test("dashboard hero KPI tiles for wiki pages and memory entries carry a 'not co
   expect(memoryKpi).not.toBeNull();
   expect(wikiKpi?.[1]).toMatch(/not a coverage measure/i);
   expect(memoryKpi?.[1]).toMatch(/not a coverage measure/i);
+});
+
+// D8 (flow 252 defect map): `extractAgentRuleBody` strips the managed
+// `<!-- keryx:index -->` block, but a fresh `renderAgentEntrypoint` source
+// (or any entrypoint reduced to just its heading) leaves only the leading H1
+// behind. That text is non-empty, so the old `body.length > 0` check treated
+// it as real content and skipped the fallback — the mirror in
+// `.metaproject/rules/` shipped as a bare heading pointing nowhere.
+
+test("imported agent rules fall back when only the heading survives block removal", () => {
+  const source = "AGENTS.md";
+  const content = renderAgentEntrypoint({ source });
+
+  const rendered = renderImportedAgentRules({ source, content });
+
+  expect(rendered).not.toContain("# AGENTS.md Instructions");
+  expect(rendered).toMatch(/delegates agent routing to `\.metaproject\/index\.md`/);
+  expect(rendered).toMatch(/Read `\.metaproject\/index\.md` first/);
+});
+
+test("imported agent rules preserve real content past the heading", () => {
+  const source = "AGENTS.md";
+  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: true });
+  const content = `# AGENTS.md Instructions
+
+Always run the linter before committing. Never touch \`main\` directly.
+
+${block}
+`;
+
+  const rendered = renderImportedAgentRules({ source, content });
+
+  expect(rendered).toContain("# AGENTS.md Instructions");
+  expect(rendered).toContain("Always run the linter before committing. Never touch `main` directly.");
+  expect(rendered).not.toMatch(/delegates agent routing to `\.metaproject\/index\.md`/);
+});
+
+test("imported agent rules always drop the managed keryx:index block, heading-only or not", () => {
+  const source = "AGENTS.md";
+  const headingOnly = renderImportedAgentRules({ source, content: renderAgentEntrypoint({ source }) });
+
+  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: true });
+  const withRealContent = renderImportedAgentRules({
+    source,
+    content: `# AGENTS.md Instructions\n\nSome real instructions here.\n\n${block}\n`,
+  });
+
+  for (const rendered of [headingOnly, withRealContent]) {
+    expect(rendered).not.toContain("<!-- keryx:index -->");
+    expect(rendered).not.toContain("<!-- /keryx:index -->");
+  }
 });

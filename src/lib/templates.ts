@@ -1723,13 +1723,29 @@ export function renderMetaprojectGitignoreBlock(): string {
 export function renderProjectRulesReadme(): string {
   return `# Project Rules
 
-This directory stores repository-level instructions imported from root agent entrypoints such as \`AGENTS.md\` or \`CLAUDE.md\`.
+This directory holds two different kinds of rule files. Do not treat them the same way.
 
-Rules:
+## Imported entrypoint rules (this directory)
+
+The \`.md\` files here (e.g. \`agents-md.md\`, \`claude-md.md\`) are repository-level instructions
+imported from root agent entrypoints such as \`AGENTS.md\` or \`CLAUDE.md\`.
 
 - treat files here as high-priority agent-readable mirrors of root instructions;
 - update the root entrypoint first when changing project-wide instructions;
 - rerun \`keryx rules sync\`, \`keryx init\`, or \`keryx update\` to resync imported rule files.
+
+## Core rule library (\`core/*.mdc\`)
+
+\`core/*.mdc\` is an on-demand rule library, not something loaded automatically. A rule file is
+read only when a skill or \`routing.md\` cites it by path.
+
+- \`alwaysApply\` and \`globs\` in each rule's frontmatter are Cursor-format metadata for Cursor's
+  own auto-attach behavior; keryx itself does not read or act on either field;
+- a stack-specific rule (e.g. \`nestjs-dto.mdc\`, \`mobx-store-template.mdc\`) declares the stack(s)
+  it applies to via a \`stack_requires\` frontmatter key, using the same tag vocabulary as a
+  skill's \`metadata.stack_requires\`; it is only relevant to projects on that stack;
+- the bundled tree (\`src/gdskills/bundled/rules/core/\`) is the source of truth — \`core/\` here is
+  an installed mirror, and \`keryx init\`/\`keryx update\` overwrite it wholesale on install.
 `;
 }
 
@@ -1742,7 +1758,7 @@ export function renderImportedAgentRules({
 }): string {
   const body = extractAgentRuleBody(content);
   const normalizedBody =
-    body.length > 0
+    body.length > 0 && !isHeadingOnlyBody(body)
       ? body
       : `This root entrypoint delegates agent routing to \`.metaproject/index.md\`.
 
@@ -1768,6 +1784,18 @@ This file is generated from the repository root agent entrypoint. Edit \`${sourc
 
 ${normalizedBody}
 `;
+}
+
+// After the managed `<!-- keryx:index -->` block is stripped, a root
+// entrypoint created by `renderAgentEntrypoint` (or otherwise trimmed down to
+// just its heading) leaves behind nothing but a leading H1 like
+// `# AGENTS.md Instructions`. That text is non-empty, so a plain
+// `body.length > 0` check treats it as real content and skips the fallback —
+// the mirror in `.metaproject/rules/` then ships as a bare heading instead of
+// pointing readers at `.metaproject/index.md`. This checks whether anything
+// survives once that leading heading line is also removed.
+function isHeadingOnlyBody(body: string): boolean {
+  return body.replace(/^#[^\n]*\n?/, "").trim().length === 0;
 }
 
 function extractAgentRuleBody(content: string): string {
