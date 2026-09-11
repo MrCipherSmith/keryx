@@ -1,0 +1,26 @@
+# Flow Journal
+
+- 2026-09-11T07:29:26.898Z - flow created
+- 2026-09-11T07:36:29.136Z - task-added: T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit
+- 2026-09-11T07:36:29.357Z - task-added: T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped
+- 2026-09-11T07:36:29.550Z - task-added: T7: K-009: no .metaproject tools in a project without .metaproject
+- 2026-09-11T07:36:29.773Z - task-added: T8: S-1: read_file reads by start_line past the 20 KB head
+- 2026-09-11T07:36:29.974Z - task-added: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
+- 2026-09-11T07:36:30.252Z - task-added: T10: Changelog entry for the five fixes
+- 2026-09-11T07:36:30.569Z - task-added: T11: Verification: typecheck, related tests, full suite vs base 9fba208
+- 2026-09-11T07:36:53.624Z - task-done: T1: Collect remaining context
+- 2026-09-11T07:36:53.894Z - task-done: T2: Implement per plan
+- 2026-09-11T07:36:54.143Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T07:36:54.358Z - frozen: 8 criteria; checksum recorded
+- 2026-09-11T07:36:54.579Z - started
+- 2026-09-11T07:42:08.651Z - ac-updated: AC1: the grok registry label is 'xAI (Grok)', not 'Grok' — the criterion now names the label actually shipped. AC2: non-JSON bodies are deliberately never surfaced by any provider adapter (C-01 test in compat, OpenAI and Anthropic); the criterion now covers the JSON shapes only and keeps that invariant.
+- 2026-09-11T07:42:34.894Z - task-done: T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit
+- 2026-09-11T07:46Z - evidence: K-005 proved itself on its first real call. The arena's keryx 403s, blamed on the x.ai balance because the grok CLI reported a 402 at the same time, were a REJECTED OAUTH TOKEN: a probe through this branch printed `xAI (Grok) API returned HTTP 403: The OAuth2 access token could not be validated.` while `keryx auth status grok` still said `active`. Logged as K-010 (auth status claims a state nobody checked; no refresh or login hint on 401/403). Out of this flow's scope; the arena defect log on `arena/measurement` must be corrected when leaving the worktree (the session cannot write the shared checkout from here).
+- 2026-09-11T07:47Z - operator: fix keryx shell before the next arena run, merge into main, cut a release; the changelog must also carry main's unreleased changes from other work.
+- 2026-09-11 - K-010 confirmed by its remedy: after the operator ran `keryx auth login grok`, the same one-line probe through this branch answered `ok` with 6,370 input tokens and no error. The 403 was the token, not the balance.
+- 2026-09-11 - the arena comparison that motivated this flow is contaminated: grok-build's 4/4 on t1-53254e0e came from `git show 53254e0e3` run against the SOURCE clone (`/Users/…/arena/clear/vantage-frontend`), found through the arm checkout's `.git/config` / `FETCH_HEAD`. The five fixes stand on the keryx transcript alone; the PR and changelog no longer claim "keryx loses to grok". K-006 (hunting the commit in git) is the model's habit — grok does it too. Arena isolation fix scheduled after the release.
+- 2026-09-11T07:52:18.019Z - task-done: T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped
+- 2026-09-11T07:54:54.577Z - task-done: T7: K-009: no .metaproject tools in a project without .metaproject
+- 2026-09-11T07:57:12.481Z - task-done: T8: S-1: read_file reads by start_line past the 20 KB head
+- 2026-09-11T07:59:16.589Z - task-done: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
+- 2026-09-11T08:02:23.436Z - task-done: T10: Changelog entry for the five fixes

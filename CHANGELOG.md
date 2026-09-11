@@ -3,9 +3,61 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.2.89] — 2026-09-10
+## [0.2.94] — 2026-09-11
+
+The first release since 0.2.88. `package.json` moved through 0.2.89–0.2.93 on
+`main` as each change below merged, but none of those versions was tagged or
+published — npm and the GitHub releases stop at 0.2.88. Everything they carried
+ships here, and this section is the whole of it; there are no separate entries
+for versions nobody could install.
 
 ### Added
+
+- **keryx consumes third-party MCP servers** (#522). keryx has published an MCP
+  server for a while; this is the other direction — the shell connects to servers
+  the operator configures (user and project JSON, `${VAR}` / `${VAR:-default}`, a
+  personal enable/disable overlay), and the model can search and call their tools.
+  Two tools of fixed cost, `search_tool` and `use_tool`, rather than one registered
+  tool per MCP tool: the alternative grows the advertised surface with every server
+  added, and the model pays for all of it every turn. `use_tool` stays
+  `destructive`, so every call goes through the existing approval decision — a
+  server's own `readOnlyHint` never skips the prompt. A project-committed server is
+  held at `needs-approval` until `keryx mcp trust`, because the first cut contained
+  a path from `git clone` to arbitrary code execution. `keryx mcp doctor` reports
+  config problems, a real connect, the tool count and every skipped tool with its
+  reason. Child processes get a credential-stripped environment.
+
+- **Remote MCP servers over streamable HTTP** (#526). A `url` server inherits every
+  control a local one has — same handshake bound, abort handling, catalog, approval
+  and trust gates — asserted by running the same checks over both transports.
+  Credential headers and `bearer_token_env_var` are supported, and a header whose
+  variable is unset never reaches a socket: `Bearer ${TOKEN}` with `TOKEN` unset is
+  refused before the request, not sent hollow and rejected by somebody else's
+  server. A credential in the url is refused, and a redirect is not followed — on
+  all three of the SDK's fetches, including the SSE stream the SDK did not protect.
+  `doctor` now dials remote servers and tells apart nothing listening, DNS, TLS,
+  refused credentials, an HTTP error, a handshake that never completed, and a url
+  serving a web page instead of MCP.
+
+- **`/mcp` is the servers keryx connects to** (#527). It opened the installer
+  through the first two phases; `/integrations` stays the installer. The approval
+  prompt for `use_tool` now renders what is being approved. A server's error, which
+  for HTTP embeds the server's own response body, is sanitised here as `doctor`
+  already sanitised it, and urls render without credentials.
+
+- **`keryx shell --print <prompt>`, `--events-file <path>`, `--events-max-field
+  <n>`** (#524). One agent turn through the same loop a person drives, and an
+  NDJSON transcript of it — turn boundaries, tool calls and results, provider usage
+  — written beside the rendered output, never instead of it. Every string passes the
+  redaction floor before it is clipped, and that order is tested: the other order
+  looks identical on short values and leaks on long ones. A turn that failed and a
+  turn that answered nothing are kept apart in the transcript.
+
+- **`read_file` reads past the first 20 KB** — optional `start_line` (1-based).
+  The tool returned the first 20,000 bytes of a file and nothing else; content past
+  them was unreachable however the model asked. A truncated read now ends with the
+  `start_line` to continue from, and a line reported by `search_code` or
+  `graph_symbol` can be read directly. Streamed, so memory stays bounded.
 
 - **`keryx shell --deny-tools <a,b>`** — withhold named tools from a session
   entirely. There was no way to say "this session does not need the web". Both
@@ -28,6 +80,67 @@ All notable changes to `keryx` are documented here. The format follows
   Written for two cases: a sensitive checkout where a tool that fetches from
   outside it is a liability, and any comparison that needs the roster to match
   another tool's.
+
+### Changed
+
+The five entries below come from reading a transcript of keryx's own shell on a
+research task, run beside the grok CLI on the same model. The shell's own tools
+and error handling were working against the model; each entry is one of those
+defects, fixed whatever any comparison says.
+
+- **A project without `.metaproject/` is no longer offered the tools that need
+  one.** The graph, wiki, memory, flow, health, testing and skill tools read
+  artifacts under `.metaproject/`, and in a plain repository they could only fail —
+  the measured session called `graph_find` and got `index-incomplete … never built
+  here`. Each was also a description the model re-read every round. `search_code`
+  stays. A project with `.metaproject/` gets exactly the roster it had.
+  `--deny-tools` still accepts those names in a plain repository, so one command
+  line does not pass in one directory and fail as "unknown tool" in the next.
+
+- **`search_code` output is project-relative, long lines are capped, and a clip
+  says how much it dropped.** A path argument went to ripgrep absolute, so every
+  match line carried the checkout's root — about 65 bytes of noise per line. One
+  matching line of an SVG or a minified bundle is the whole file (8 KB came back
+  from a single SVG); lines are now capped at 400 columns. A result over the cap
+  said `…(truncated)`; it now says `showing N of M lines`, cut at a line boundary.
+
+### Fixed
+
+- **An OpenAI-compatible provider's errors name that provider, keep the server's
+  reason, and classify auth and rate limits.** Every registry provider was built
+  with Ollama's identity, so a grok session reported `Ollama API returned HTTP 403`.
+  The message now uses the registry label, keeps the status, and carries the
+  server's reason from the JSON shapes gateways use — `error.message`, `error` as a
+  string, `message`, `detail` — redacted and capped at 300 characters. A non-JSON
+  body is still never surfaced. 401 and 403 are `authentication`, 429 is a
+  retryable `rate_limit` honouring `Retry-After`; every 4xx was `invalid_request`
+  before. The first real call through it turned a bare 403 into `xAI (Grok) API
+  returned HTTP 403: The OAuth2 access token could not be validated.` — which had
+  been blamed on an exhausted balance. The provider id stays `ollama` for now;
+  giving each provider its own is a separate change.
+
+- **The subprocess runner runs the keryx that is running.** It spawned whichever
+  `keryx` PATH resolved, which is routinely a different build: a shell run from
+  source had its tool fallbacks answered by an installed release four versions
+  behind. It now re-runs the current entry script with the current bun, or the
+  compiled binary itself, and uses PATH only when the process is not keryx at all.
+
+### Security
+
+- **A credentials file was masked on one line and printed in full on the next**
+  (#524). `redactSensitiveText` exists so that `cat ~/.aws/credentials` does not
+  leak into the model context, and both forms of that file passed through: the key
+  id was masked and `aws_secret_access_key` printed in full. The uppercase rule
+  missed names ending in `ACCESS_KEY`, and the credentials file writes the name in
+  lower case. A short case-insensitive list of names that mean one thing now covers
+  it, tested in both directions — prose and camelCase identifiers stay untouched.
+
+- **`keryx mcp list` printed the credential `doctor` refuses the config over.**
+  `doctor` refuses a url carrying userinfo because "it would be printed in every
+  report", and `list` was that report. Fixed for every surface that renders a url,
+  which found the worse one: the approval prompt, read while deciding whether to
+  trust a server a repository committed. The host stays visible, since that is
+  what the operator is deciding to trust.
 
 ## [0.2.88] — 2026-09-10
 

@@ -250,10 +250,26 @@ function confineToProject(cwd: string, candidate: string): string | null {
   return target;
 }
 
+/**
+ * Cap a search result, and say how much the cap removed.
+ *
+ * The note used to be `…(truncated)` alone. A model cannot tell from that whether
+ * it saw nearly everything or a tenth, so it cannot decide between reading on and
+ * narrowing the search. Cut at a line boundary so the last line shown is whole.
+ */
 function boundOutput(raw: string): { output: string; truncated: boolean } {
-  return raw.length > MAX_SEARCH_OUTPUT_BYTES
-    ? { output: `${raw.slice(0, MAX_SEARCH_OUTPUT_BYTES)}\n…(truncated)`, truncated: true }
-    : { output: raw, truncated: false };
+  if (raw.length <= MAX_SEARCH_OUTPUT_BYTES) {
+    return { output: raw, truncated: false };
+  }
+  const kept = raw.slice(0, MAX_SEARCH_OUTPUT_BYTES);
+  const lastBreak = kept.lastIndexOf("\n");
+  const head = lastBreak > 0 ? kept.slice(0, lastBreak) : kept;
+  const shown = head.split("\n").length;
+  const total = raw.split("\n").length;
+  return {
+    output: `${head}\n…(truncated: showing ${shown} of ${total} lines — narrow the pattern or pass a path)`,
+    truncated: true,
+  };
 }
 
 function errorMessage(cause: unknown): string {
@@ -551,6 +567,11 @@ export function createMetaprojectAdapter(
         "--line-number",
         "--column",
         "--no-heading",
+        // One matching line of a minified bundle or an SVG is the whole file. A
+        // search for `6435` in the arena returned 8 KB from a single SVG line and
+        // pushed real matches past the output cap.
+        "--max-columns=400",
+        "--max-columns-preview",
         "--",
         input.pattern,
       ];
@@ -563,7 +584,10 @@ export function createMetaprojectAdapter(
             isError: true,
           };
         }
-        argv.push(confined);
+        // Relative, so ripgrep prints project-relative paths — the form every
+        // other tool takes. Passed absolute, every match line carried the
+        // checkout's absolute root, ~65 bytes of noise per line in the arena.
+        argv.push(relative(cwd, confined) || ".");
       }
       let run: { stdout: string; stderr: string; exitCode: number };
       try {

@@ -13,6 +13,7 @@
 // even with a port, `search_code` — which has no in-process backing — degrades to
 // the subprocess runner rather than surfacing the port's "unavailable" result.
 
+import { existsSync } from "node:fs";
 import {
   METAPROJECT_OPERATIONS,
   formatAffected,
@@ -70,14 +71,45 @@ export function normalizeSearchResult(result: InteractiveToolResult): Interactiv
 }
 
 /**
- * The default runner: invoke `keryx` via an argv array (NO shell string) from the
+ * The argv that runs THIS keryx, not whichever `keryx` PATH resolves.
+ *
+ * The runner used to spawn `keryx` from PATH, which is routinely a different build
+ * from the one running: the installed release lags the tree (memory:
+ * `constraints/stale-installed-keryx-binary.md`), and in the arena a shell run
+ * from source had its tools answered by the 0.2.84 release. Three shapes of
+ * "this keryx":
+ *
+ * - from source or an npm install — `Bun.main` is the CLI entry script
+ *   (`src/cli.ts`, or `dist/cli.js`, which is the package's `bin`), run by the
+ *   same bun that is running now;
+ * - a standalone compiled binary — `Bun.main` lives in bun's embedded filesystem
+ *   and the executable IS keryx;
+ * - anything else (a library consumer, a test runner) is not a keryx process, so
+ *   PATH is the only honest answer left.
+ */
+export function keryxSelfCommand(
+  main: string = Bun.main,
+  execPath: string = process.execPath,
+  exists: (file: string) => boolean = existsSync,
+): string[] {
+  if (/[\\/](?:src[\\/]cli\.ts|dist[\\/]cli\.js)$/.test(main) && exists(main)) {
+    return [execPath, main];
+  }
+  if (main.startsWith("/$bunfs/") || /^[A-Za-z]:[\\/]~BUN[\\/]/.test(main)) {
+    return [execPath];
+  }
+  return ["keryx"];
+}
+
+/**
+ * The default runner: invoke keryx via an argv array (NO shell string) from the
  * project root, capturing bounded stdout. Never throws — a failure or a missing
  * binary becomes `{ isError: true }`.
  */
-export function makeKeryxRunner(root: string): KeryxRunner {
+export function makeKeryxRunner(root: string, command: readonly string[] = keryxSelfCommand()): KeryxRunner {
   return async (args) => {
     try {
-      const proc = Bun.spawn(["keryx", ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
+      const proc = Bun.spawn([...command, ...args], { cwd: root, stdout: "pipe", stderr: "pipe" });
       const [stdout, stderr] = await Promise.all([
         new Response(proc.stdout).text(),
         new Response(proc.stderr).text(),

@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "249",
+  "slug": "keryx-shell-loses-the-arena-on-tools-and",
+  "title": "keryx shell loses the arena on tools and errors: self-spawned keryx, provider identity and error bodies, search noise, project-blind roster, head-only read_file",
+  "status": "in-progress",
+  "createdAt": "2026-09-11T07:29:26.898Z",
+  "updatedAt": "2026-09-11T08:02:23.436Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ae2df11111c0fbaa3d39fba365f226ec22e3cc0f01254b6a0c5e1ba521816e95",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the per-defect implement tasks T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each implement task T5-T9 carries its own tests; the suite run is T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "K-005: compat errors name the provider, keep the reason, classify auth and rate limit",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "K-008: search_code prints relative paths, caps long lines, says how much a clip dropped",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "K-009: no .metaproject tools in a project without .metaproject",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "S-1: read_file reads by start_line past the 20 KB head",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "K-004: makeKeryxRunner spawns the running keryx, not PATH",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Changelog entry for the five fixes",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verification: typecheck, related tests, full suite vs base 9fba208",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-11T07:29:26.898Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-11T07:36:29.136Z",
+      "event": "task-added",
+      "detail": "T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit"
+    },
+    {
+      "at": "2026-09-11T07:36:29.357Z",
+      "event": "task-added",
+      "detail": "T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped"
+    },
+    {
+      "at": "2026-09-11T07:36:29.550Z",
+      "event": "task-added",
+      "detail": "T7: K-009: no .metaproject tools in a project without .metaproject"
+    },
+    {
+      "at": "2026-09-11T07:36:29.773Z",
+      "event": "task-added",
+      "detail": "T8: S-1: read_file reads by start_line past the 20 KB head"
+    },
+    {
+      "at": "2026-09-11T07:36:29.974Z",
+      "event": "task-added",
+      "detail": "T9: K-004: makeKeryxRunner spawns the running keryx, not PATH"
+    },
+    {
+      "at": "2026-09-11T07:36:30.252Z",
+      "event": "task-added",
+      "detail": "T10: Changelog entry for the five fixes"
+    },
+    {
+      "at": "2026-09-11T07:36:30.569Z",
+      "event": "task-added",
+      "detail": "T11: Verification: typecheck, related tests, full suite vs base 9fba208"
+    },
+    {
+      "at": "2026-09-11T07:36:53.624Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T07:36:53.894Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T07:36:54.143Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T07:36:54.358Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T07:36:54.579Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T07:42:08.651Z",
+      "event": "ac-updated",
+      "detail": "AC1: the grok registry label is 'xAI (Grok)', not 'Grok' — the criterion now names the label actually shipped. AC2: non-JSON bodies are deliberately never surfaced by any provider adapter (C-01 test in compat, OpenAI and Anthropic); the criterion now covers the JSON shapes only and keeps that invariant."
+    },
+    {
+      "at": "2026-09-11T07:42:34.894Z",
+      "event": "task-done",
+      "detail": "T5: K-005: compat errors name the provider, keep the reason, classify auth and rate limit"
+    },
+    {
+      "at": "2026-09-11T07:52:18.019Z",
+      "event": "task-done",
+      "detail": "T6: K-008: search_code prints relative paths, caps long lines, says how much a clip dropped"
+    },
+    {
+      "at": "2026-09-11T07:54:54.577Z",
+      "event": "task-done",
+      "detail": "T7: K-009: no .metaproject tools in a project without .metaproject"
+    },
+    {
+      "at": "2026-09-11T07:57:12.481Z",
+      "event": "task-done",
+      "detail": "T8: S-1: read_file reads by start_line past the 20 KB head"
+    },
+    {
+      "at": "2026-09-11T07:59:16.589Z",
+      "event": "task-done",
+      "detail": "T9: K-004: makeKeryxRunner spawns the running keryx, not PATH"
+    },
+    {
+      "at": "2026-09-11T08:02:23.436Z",
+      "event": "task-done",
+      "detail": "T10: Changelog entry for the five fixes"
+    }
+  ]
+}

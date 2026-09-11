@@ -73,6 +73,61 @@ test("a small file is returned verbatim, with no notice", async () => {
   });
 });
 
+// S-1 (arena, flow 249): content past the first 20 KB was unreachable — there was
+// no offset or range, so re-reading returned the same head forever.
+function numbered(count: number): string {
+  return Array.from({ length: count }, (_, i) => `line ${i + 1} ${"-".repeat(40)}`).join("\n") + "\n";
+}
+
+test("start_line reaches a line located past the first 20,000 bytes", async () => {
+  await withRoot(async (root) => {
+    writeFileSync(path.join(root, "long.ts"), numbered(2000)); // ~100 KB
+    const head = await readTool(root).invoke({ path: "long.ts" });
+    expect(head.output).not.toContain("line 1500 ");
+    const deep = await readTool(root).invoke({ path: "long.ts", start_line: 1500 });
+    expect(deep.isError).toBe(false);
+    expect(deep.output.startsWith("line 1500 ")).toBe(true);
+  });
+});
+
+test("a truncated read names the start_line to continue from, and paging loses nothing", async () => {
+  await withRoot(async (root) => {
+    writeFileSync(path.join(root, "long.ts"), numbered(2000));
+    const seen: string[] = [];
+    let start = 1;
+    for (let guard = 0; guard < 50; guard++) {
+      const result = await readTool(root).invoke({ path: "long.ts", start_line: start });
+      const notice = /…\(truncated: read \d+ of \d+ bytes; continue with start_line: (\d+)\)$/.exec(result.output);
+      const body = notice === null ? result.output : result.output.slice(0, notice.index - 1);
+      seen.push(...body.split("\n").filter(Boolean));
+      if (notice === null) break;
+      start = Number(notice[1]);
+    }
+    expect(seen).toHaveLength(2000);
+    expect(seen[0]).toStartWith("line 1 ");
+    expect(seen.at(-1)).toStartWith("line 2000 ");
+  });
+});
+
+test("start_line past the end is an error that states the file's length", async () => {
+  await withRoot(async (root) => {
+    writeFileSync(path.join(root, "short.txt"), "a\nb\nc\n");
+    const result = await readTool(root).invoke({ path: "short.txt", start_line: 10 });
+    expect(result.isError).toBe(true);
+    expect(result.output).toMatch(/past the end/);
+  });
+});
+
+test("a non-positive or fractional start_line is refused", async () => {
+  await withRoot(async (root) => {
+    writeFileSync(path.join(root, "short.txt"), "a\n");
+    for (const bad of [0, -3, 1.5, "2"]) {
+      const result = await readTool(root).invoke({ path: "short.txt", start_line: bad });
+      expect(result.isError).toBe(true);
+    }
+  });
+});
+
 test("a missing file and a directory are still errors, not crashes", async () => {
   await withRoot(async (root) => {
     const missing = await readTool(root).invoke({ path: "nope.txt" });

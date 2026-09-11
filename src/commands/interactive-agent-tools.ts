@@ -2,6 +2,8 @@
 // Adding a tool here is the only way either surface gets it.
 
 import { randomUUID } from "node:crypto";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
@@ -153,14 +155,28 @@ export function assertDeniableTools(tools: readonly InteractiveTool[], denied: r
   }
 }
 
+/**
+ * The metaproject tools that work in a project with no `.metaproject/`.
+ *
+ * Every other metaproject operation reads an artifact under `.metaproject/` — the
+ * graph database, the wiki, memory, flows, health and testing reports, the skill
+ * tree — and in a project without one it can only fail. The arena's control arm
+ * was offered all of them, called `graph_find`, and got `index-incomplete … never
+ * built here`; each was also a description the model re-read every round.
+ * `search_code` runs ripgrep over the tree and needs nothing.
+ */
+export const METAPROJECT_FREE_TOOLS: ReadonlySet<string> = new Set(["search_code"]);
+
 export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): InteractiveTool[] {
   const getSessionDir = input.getSessionDir ?? (() => undefined);
   const idSeq = input.idSeq ?? (() => randomUUID());
   const clock = input.clock ?? (() => new Date().toISOString());
   const jobRegistry = input.jobRegistry;
+  const metaprojectTools = builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort);
+  const hasMetaproject = existsSync(join(input.cwd, ".metaproject"));
   const built: InteractiveTool[] = [
     ...builtinReadOnlyTools(input.cwd),
-    ...builtinMetaprojectTools(input.cwd, makeKeryxRunner(input.cwd), input.metaprojectPort),
+    ...metaprojectTools,
     webFetchTool(),
     webSearchTool(input.searchController),
     shellExecTool(input.cwd, undefined, jobRegistry),
@@ -188,8 +204,15 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     input.spawnTool,
   ];
   const denied = input.denyTools ?? [];
+  // Checked against the FULL set, before the project filter: `--deny-tools graph_find`
+  // names a real tool whether or not this project can run it, and refusing it as
+  // "unknown" in a plain repository would make the same command line fail in one
+  // directory and pass in the next.
   assertDeniableTools(built, denied);
-  return denyInteractiveTools(built, denied);
+  const offered = hasMetaproject
+    ? built
+    : built.filter((tool) => !metaprojectTools.includes(tool) || METAPROJECT_FREE_TOOLS.has(tool.definition.name));
+  return denyInteractiveTools(offered, denied);
 }
 
 export function interactiveAgentToolNames(tools: readonly InteractiveTool[]): string[] {
