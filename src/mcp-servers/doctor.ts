@@ -364,7 +364,35 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
  */
 export function needsAuthorisation(error: unknown): boolean {
   if (httpStatusOf(error) === 401) return true;
-  return error instanceof OAuthInteractionRequiredError;
+  if (error instanceof OAuthInteractionRequiredError) return true;
+  return DEAD_CREDENTIAL_CODES.has(oauthErrorCodeOf(error));
+}
+
+/**
+ * OAuth error codes that mean "the credential you hold is finished".
+ *
+ * Found by driving the real SDK against a mock authorisation server
+ * rather than by reading its source: `auth()` does NOT fall back to a
+ * fresh authorisation when a refresh fails with a client error — it
+ * re-throws. So a revoked refresh token came out of the transport as
+ * an unclassified error and was reported as a connection failure,
+ * which sends the operator to debug a server that is working and
+ * correctly refusing a dead token.
+ *
+ * Both of these are fixed by the same one command:
+ *   - `invalid_grant`: the refresh token was revoked, rotated or expired.
+ *   - `invalid_client`: the registration this client was using is gone.
+ *
+ * `server_error` and `temporarily_unavailable` are deliberately absent:
+ * they are the authorisation server having a bad day, and re-running
+ * `keryx mcp auth` would fail the same way at the same endpoint.
+ */
+const DEAD_CREDENTIAL_CODES = new Set(["invalid_grant", "invalid_client"]);
+
+function oauthErrorCodeOf(error: unknown): string {
+  if (typeof error !== "object" || error === null) return "";
+  const code = (error as { errorCode?: unknown }).errorCode;
+  return typeof code === "string" ? code : "";
 }
 
 export function explainConnectFailure(
