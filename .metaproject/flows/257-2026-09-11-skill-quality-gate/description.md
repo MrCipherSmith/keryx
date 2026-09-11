@@ -44,7 +44,7 @@ request reaches the right skill:
 
 ## Out of Scope
 
-- Model-graded or repeated-run evals (flow 255).
-- New skills (flow 254).
+- Model-graded or repeated-run evals (flow 259).
+- New skills (flow 258).
 - Splitting `job-orchestrator` / `review-orchestrator` into smaller files beyond
   what the length ratchet requires (they are held, not cut, here).

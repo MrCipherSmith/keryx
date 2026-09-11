@@ -1,6 +1,6 @@
 # Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done
 
-Status: formalized (not frozen; freezes after flow 253 finishes)
+Status: formalized (not frozen; freezes after flow 257 finishes)
 Source: user request 2026-09-11 after the agent-skills comparison
 Program: docs/plans/skills-quality-program.md (flow 3 of 4)
 
@@ -30,7 +30,7 @@ Lifecycle areas with no skill or rule in the bundled set:
 
 ## Expected Outcome
 
-New skills and rules written in our own words, passing the flow 253 gate
+New skills and rules written in our own words, passing the flow 257 gate
 (anatomy lint, routing eval cases, no collisions), registered in the catalog
 and installed mirrors; the floor guard is a real, tested check wired into
 health or review; the `task-implementer` output contract gains the structured
@@ -39,6 +39,6 @@ recorded in `THIRD_PARTY_NOTICES.md`.
 
 ## Out of Scope
 
-- Behavioural evals of the new skills (flow 255).
+- Behavioural evals of the new skills (flow 259).
 - Frontend-UI, observability, CI/CD and shipping skills (not selected for this
   program).
