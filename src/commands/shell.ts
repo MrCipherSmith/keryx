@@ -2222,6 +2222,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           mcp: getMcpRuntime(),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
+        // The EXISTING runtime, never a new one. `/mcp` is a read-only
+        // view; opening it must not be the thing that spawns every
+        // configured server, which calling `getMcpRuntime()` here would
+        // do for `--chat` sessions that never build a tool list.
+        mcpRuntime: () => mcpRuntime,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,

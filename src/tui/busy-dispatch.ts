@@ -27,6 +27,7 @@ export type BusyDispatchTarget =
   | "workspace"
   | "review"
   | "mcp"
+  | "mcp-consumer"
   | "think"
   | "expand"
   | "copy"
@@ -48,8 +49,10 @@ export function classifyBusyDispatch(params: {
   isWorkspace: boolean;
   isReview: boolean;
   isMcp: boolean;
+  /** `/mcp`, the consumer view. Read-only, so allowed while busy. */
+  isMcpConsumer: boolean;
 }): BusyDispatchTarget {
-  const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp } = params;
+  const { line, commandName, isSessionInfo, isFlows, isWorkspace, isReview, isMcp, isMcpConsumer } = params;
   if (commandName === "/exit") return "exit";
   if (commandName === "/help") return "help";
   if (commandName === "/interrupt") return "interrupt";
@@ -60,11 +63,15 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/copy") return "copy";
   if (commandName === "/mode") return "mode";
   if (commandName === "/game") return "game";
-  const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp;
+  const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";
   if (isBusyReadonlyCommand && isWorkspace) return "workspace";
   if (isBusyReadonlyCommand && isReview) return "review";
+  // BEFORE `isMcp`, mirroring the live if-chain, which this function
+  // exists to predict. The two must stay in the same order or this
+  // classifier answers for a route the shell does not take.
+  if (isBusyReadonlyCommand && isMcpConsumer) return "mcp-consumer";
   if (isBusyReadonlyCommand && isMcp) return "mcp";
   if (commandName !== undefined || line.startsWith("/")) return "deferred";
   return "not-a-command";

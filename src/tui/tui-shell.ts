@@ -72,6 +72,12 @@ import { isReviewCommand, openReview } from "./review-inspector";
 import { acceptProposalViaShell, declineProposalViaShell } from "./review-accept";
 import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
+  buildConsumerModel,
+  formatConsumerRow,
+  isMcpConsumerCommand,
+} from "./mcp-consumer";
+import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
+import {
   describeUseToolApproval,
   isMcpToolCall,
   MAX_ARGUMENT_CHARS,
@@ -3574,6 +3580,47 @@ export async function launchTuiAgentShell(opts: {
         });
       })();
     };
+    /**
+     * `/mcp` — the servers keryx CONNECTS TO.
+     *
+     * Reads the runtime if the session has one; otherwise the config
+     * alone, and says which it did. A read-only view must not spawn
+     * anything, so it never creates the runtime.
+     */
+    const showMcpConsumer = (): void => {
+      const runtime = deps.mcpRuntime?.();
+      const cwd = inspectorCwd();
+      const model =
+        runtime === undefined
+          ? undefined
+          : buildConsumerModel({
+              configured: runtime.configured(),
+              states: runtime.servers(),
+              problems: runtime.problems(),
+              userFile: userConfigFile(),
+              projectFile: projectConfigFile(cwd),
+            });
+      const lines =
+        model === undefined
+          ? [
+              "No MCP session yet — this shell has not built a tool list.",
+              "Configured servers are listed by `keryx mcp list`; `keryx mcp doctor` dials them.",
+            ]
+          : [
+              ...model.problems.map((p) => `config problem — ${p}`),
+              ...(model.emptyHint === undefined ? [] : model.emptyHint.split("\n")),
+              ...model.rows.flatMap((row) => {
+                const out = [formatConsumerRow(row)];
+                if (row.detail !== undefined) out.push(`    ${row.detail}`);
+                if (row.action !== undefined) out.push(`    → ${row.action}`);
+                return out;
+              }),
+            ];
+      for (const line of lines) {
+        transcript.add(new otui.TextRenderable(r, { id: `mcp${uid++}`, content: otui.t`${otui.dim(line)}` }));
+      }
+    };
+
     const showTools = (): void => {
       void (async () => {
         const cwd = inspectorCwd();
@@ -4231,6 +4278,7 @@ export async function launchTuiAgentShell(opts: {
           isWorkspace: isWorkspaceCommand(line),
           isReview: isReviewCommand(line),
           isMcp: isMcpToolsCommand(line),
+          isMcpConsumer: isMcpConsumerCommand(line),
         });
         switch (decision) {
           case "exit": {
@@ -4339,6 +4387,10 @@ export async function launchTuiAgentShell(opts: {
           }
           case "mcp": {
             showTools();
+            return;
+          }
+          case "mcp-consumer": {
+            showMcpConsumer();
             return;
           }
           case "game": {
@@ -4612,6 +4664,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isReviewCommand(command.name)) {
           showReview();
+          return;
+        }
+        if (isMcpConsumerCommand(command.name)) {
+          showMcpConsumer();
           return;
         }
         if (isMcpToolsCommand(command.name)) {

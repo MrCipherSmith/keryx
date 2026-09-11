@@ -71,6 +71,16 @@ export type McpRuntime = {
   readonly toolTimeoutSec: (server: string, rawName: string) => number | undefined;
   /** Problems from reading the config files. Surfaced by the shell, not thrown. */
   readonly problems: () => readonly McpConfigProblem[];
+  /**
+   * The servers as CONFIGURED, joined by name to the states above.
+   *
+   * Exposed so the `/mcp` view can show a server's source, transport and
+   * target without loading the config a second time. A second read is how
+   * the shell and `keryx mcp list` came to disagree about which project
+   * root to walk — two surfaces, two answers, and the one the operator
+   * was looking at was the wrong one.
+   */
+  readonly configured: () => readonly ResolvedMcpServer[];
   /** Resolves when every dial has settled. For tests and for `doctor`-like callers. */
   readonly ready: () => Promise<void>;
   readonly close: () => Promise<void>;
@@ -185,6 +195,7 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     servers: () => states,
     toolTimeoutSec: (server, rawName) => timeoutFor(byName.get(server), rawName),
     problems: () => config.problems,
+    configured: () => config.servers,
     ready: async () => {
       await settled;
     },
