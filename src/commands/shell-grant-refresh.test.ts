@@ -26,6 +26,17 @@ test("the refresh is bounded, so a silent network cannot hang a scripted run (re
   expect(source).toMatch(/const GRANT_REFRESH_TIMEOUT_MS = \d[\d_]*;/);
 });
 
+test("readline provider detection reads saved keys itself, not through a shell_exec side effect (review F-003)", () => {
+  // `resolveShellEnv` used to load saved keys into `process.env`, so a provider
+  // configured only by a saved key appeared in readline `/provider` once any
+  // command had run. It no longer does (K-015); the selector reads them directly.
+  const start = source.indexOf("function realSelectProviderModel(");
+  const body = source.slice(start, source.indexOf("\n}\n", start));
+  expect(start).toBeGreaterThan(-1);
+  expect(body).toContain("const env = envWithSavedApiKeys(process.env);");
+  expect(body).not.toContain("env: process.env");
+});
+
 test("no refresh failure is swallowed silently any more", () => {
   expect(source).not.toContain('refreshProviderGrant("grok", { fetch: oauthFetch }, opts.configDir).catch(() => undefined)');
 });
