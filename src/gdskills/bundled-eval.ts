@@ -81,6 +81,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { normalizeRouteText, routeTokens } from "../commands/skills";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
@@ -102,6 +103,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "description:trigger-phrase",
   "description:bare-imperative",
   "description:length",
+  "description:collision",
   "anatomy:sections",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
@@ -532,6 +534,153 @@ export function bareImperativeOpening(description: string): string | undefined {
 export const MAX_DESCRIPTION_LENGTH = 1024;
 
 // ---------------------------------------------------------------------------
+// Description collision (flow 257 T11, AC6)
+// ---------------------------------------------------------------------------
+//
+// The three checks above each judge ONE description in isolation. None of
+// them can see two descriptions that read as near-duplicates of EACH OTHER —
+// a router scores both skills for the same request and an agent choosing
+// between them has no signal beyond a coin flip. `context-router`'s own
+// SKILL.md carries a comment (`catalog.ts`) explicitly carving "collect
+// context" out of its trigger list because `context-collector` already owns
+// that phrase; nothing before this check verified the tree does not have
+// OTHER pairs quietly reproducing what that one hand-written comment guards
+// against.
+//
+// MEASURE: Jaccard similarity — |intersection| / |union| — over
+// `routeTokens(normalizeRouteText(description))` for each of two skills' own
+// descriptions. Both functions are imported from `../commands/skills`
+// (`routeTokens` exported for exactly this use; see its comment there) rather
+// than restated, so this check judges a description on the IDENTICAL
+// tokenisation the router itself scores it with — not a second guess at what
+// counts as a token. Unexpanded (`expand` left `false`): expansion adds
+// Russian-prefix synonyms to an INCOMING QUERY (see `expandQueryTokens`), and
+// a skill's own description is never a query — `scoreBundledSkillRoute`
+// builds its own haystack the same unexpanded way.
+//
+// Jaccard, not cosine/TF-IDF: `scoreBundledSkillRoute`'s own overlap term is
+// `overlap.length * 10`, a plain per-token count with no frequency or rarity
+// weighting anywhere in the router. A weighted measure here would judge a
+// pair by a signal the router never consults when it actually decides between
+// them. Intersection-over-union of the two token sets asks the same question
+// the router's own scoring asks: of everything either description would
+// match a query against, how much do both share.
+//
+// THRESHOLD: >= `DESCRIPTION_COLLISION_THRESHOLD` (0.75) is a finding, naming
+// both skills and the score. AC6 also asks for pairs at >= 0.50 to be visible
+// as a non-failing note — but neither `BundledSkillEvaluation` nor
+// `renderBundledEvaluation` carries any channel for a non-failing observation
+// alongside `findings`; every existing check reports by being silent or by
+// adding a finding, nothing between. Inventing a second reporting channel for
+// one check would be exactly the kind of aspiration `ALLOWED_DESCRIPTION_
+// TRIGGER_PHRASES`'s comment above refuses ("derived from what the tree
+// already does", not from what one check alone would like to have). The
+// 0.50 tier is therefore left OUT of `findings` entirely: `collisionPairs`
+// below is exported so a caller — an operator, or the top-10 report flow 257
+// T11 hands to T12 — can still ask "what is close to the line" directly,
+// without this check treating "close" as a failure.
+//
+// Pairwise, not per-file: unlike every check above, one description's
+// collision status depends on every OTHER skill's description, not on its own
+// text. It cannot run inside the per-document loop below; `evaluateBundledTree`
+// collects every non-empty served description first and sweeps pairs once
+// all of them are known.
+
+/** Jaccard similarity threshold at which two descriptions are a finding. */
+export const DESCRIPTION_COLLISION_THRESHOLD = 0.75;
+
+/**
+ * The tier AC6 asks to be visible without failing. Not read by
+ * `evaluateBundledTree` — see the comment above for why no non-failing
+ * channel exists to gate on it — kept here so the number this check
+ * distinguishes from a real finding is written down once, not repeated at
+ * every call site that reports on `collisionPairs`.
+ */
+export const DESCRIPTION_COLLISION_WATCH_THRESHOLD = 0.5;
+
+/** One pair of skills whose descriptions collide, and the score they collided at. */
+export interface DescriptionCollisionPair {
+  /** `${category}/${name}`, the lexicographically earlier of the two. */
+  readonly a: string;
+  /** `${category}/${name}`, the lexicographically later of the two. */
+  readonly b: string;
+  /** Jaccard similarity of the two descriptions' route tokens, in `[0, 1]`. */
+  readonly similarity: number;
+}
+
+/** `routeTokens(normalizeRouteText(description))` — see the MEASURE note above for why this exact pipeline, unexpanded. */
+export function descriptionRouteTokens(description: string): ReadonlySet<string> {
+  return routeTokens(normalizeRouteText(description));
+}
+
+/** Jaccard similarity of two token sets: `|intersection| / |union|`. `0` when either is empty — an empty description never "collides". */
+export function jaccardSimilarity(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection += 1;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Every pair of `entries` (key -> description) at or above `minSimilarity`,
+ * sorted by similarity descending (ties broken by key, for a deterministic
+ * report). `entries` is keyed by `${category}/${name}`, matching every other
+ * exemption map in this file (`PENDING_ANATOMY_BACKFILL` and friends).
+ */
+export function collisionPairs(
+  entries: ReadonlyMap<string, string>,
+  minSimilarity: number,
+): DescriptionCollisionPair[] {
+  const keys = [...entries.keys()].sort();
+  const tokensByKey = new Map(keys.map((key) => [key, descriptionRouteTokens(entries.get(key) ?? "")]));
+  const out: DescriptionCollisionPair[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const a = keys[i] as string;
+      const b = keys[j] as string;
+      const similarity = jaccardSimilarity(tokensByKey.get(a) ?? new Set(), tokensByKey.get(b) ?? new Set());
+      if (similarity >= minSimilarity) out.push({ a, b, similarity });
+    }
+  }
+  return out.sort((x, y) => y.similarity - x.similarity || x.a.localeCompare(y.a) || x.b.localeCompare(y.b));
+}
+
+/** Canonical, order-independent key for one pair — `(a, b)` and `(b, a)` resolve to the same entry, since similarity is symmetric. */
+export function collisionPairKey(a: string, b: string): string {
+  return [a, b].sort().join(" :: ");
+}
+
+/** An exemption from one `description:collision` finding, with the reason a human can check. */
+export interface DescriptionCollisionExemption {
+  /** Why this pair ships at or above the threshold anyway. Must name T12 — see `collisionReasonNamesOwner`. */
+  readonly reason: string;
+}
+
+/**
+ * Real collisions the shipped tree has TODAY, each owed to flow 257's T12 (the
+ * task this dispatch hands the list to, per AC6) rather than fixed here: T11
+ * owns this check and its fixtures, not the wording of any bundled skill's
+ * description, and three OTHER tasks (T13, T14, T15) are editing skill bodies
+ * and descriptions concurrently as this file is written — editing a
+ * description out from under one of them is exactly the collision a worktree
+ * split exists to prevent. An entry here is what keeps the shipped tree's
+ * `description:collision` finding count at zero while T12 has not yet acted;
+ * it is not a permanent allowance the way `PERMANENT_ANATOMY_EXEMPTIONS` is; a
+ * key surviving here after T12 lands is itself something T3 (flow 257's final
+ * verification task) should notice, the same role `PENDING_ANATOMY_BACKFILL`
+ * plays for the anatomy checks above.
+ */
+export const KNOWN_DESCRIPTION_COLLISIONS: ReadonlyMap<string, DescriptionCollisionExemption> = new Map([]);
+
+/** Every entry's reason must name flow 257's T12, or this map has quietly become a silent, unowned suppression list. */
+export function collisionReasonNamesOwner(reason: string): boolean {
+  return /\bT12\b/.test(reason);
+}
+
+// ---------------------------------------------------------------------------
 // Anatomy sections (flow 257 T8, AC3)
 // ---------------------------------------------------------------------------
 //
@@ -784,9 +933,9 @@ export interface AnatomySectionExemption {
  * AC9 requires every workflow skill to earn both outright, and a subagent
  * being un-invocable by a user says nothing about whether ITS OWN failure
  * modes are documented or its own output has a checkable shape. Ten of these
- * twelve are missing `red-flags` today and are carried in
- * `PENDING_ANATOMY_BACKFILL` below (owed to T14, the planning-category
- * backfill), not exempted here.
+ * twelve were missing `red-flags`; T14 wrote a phase-specific Red Flags table
+ * into each rather than widening this map, so none of them is carried in
+ * `PENDING_ANATOMY_BACKFILL` below any more.
  *
  * What a Phase subagent must still have, in place of the exempted section:
  * every one of the twelve already ships an Iron Laws table (its equivalent of
@@ -930,66 +1079,20 @@ export const PERMANENT_ANATOMY_EXEMPTIONS: ReadonlyMap<string, AnatomySectionExe
  *     quite cover it).
  */
 export const PENDING_ANATOMY_BACKFILL: ReadonlyMap<string, AnatomySectionExemption> = new Map([
-  // --- T13: quality ----------------------------------------------------
-  ["quality/commit", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/changelog", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/db-migrate", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/dependency-update", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
-  ["quality/deploy", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
-  ["quality/perf-check", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/pr", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/pr-issue-documenter", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/push", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/security-audit", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/test-gen", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
-  ["quality/tests-creator", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
-  ["quality/metaproject-security", { sections: ["red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  // --- T13: quality — LANDED, all 13 quality skills now earn all three sections outright.
 
-  // --- T14: platform, planning, orchestration ---------------------------
-  ["platform/agent-entrypoint-distiller", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["platform/claude-md-management", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["platform/hookify", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  // --- T14: platform, planning, orchestration — LANDED, all 29 entries removed.
+  // The three platform skills, the ten planning skills and the nine
+  // orchestration skills now state a "NOT for" clause, carry a Red Flags table
+  // and state their own exit criteria outright. The ten Phase subagents
+  // (`autodoc-*`, `consistency-checker`, `planner`, `problem-definer`,
+  // `project-discovery`, `patterns-researcher`) were BACKFILLED rather than
+  // moved to `PERMANENT_ANATOMY_EXEMPTIONS`: each one's Red Flags table names
+  // rationalizations specific to its own phase, which is what AC9 asks for and
+  // what an Iron Laws table — firm rules, not named excuses — does not supply.
 
-  ["planning/autodoc-analyst", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/autodoc-architect", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/autodoc-assembler", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/autodoc-scanner", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/autodoc-writer", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/autodoc-orchestrator", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/consistency-checker", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/planner", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/problem-definer", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/project-discovery", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/patterns-researcher", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
-  ["planning/docpack-review", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/docpack-orchestrator", { sections: ["red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/brainstorm", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/interview", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/interviewer", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["planning/prd-creator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-
-  ["orchestration/code-verifier", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/context-collector", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/feature-analyzer", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/feature-dev", { sections: ["trigger-not-for", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/flow-orchestrator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/issue-analyzer", { sections: ["trigger-not-for"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/job-documenter", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills) — its `status: success | error` line reports the DOCUMENT's outcome, not this skill's own STATUS contract" }],
-  ["orchestration/job-orchestrator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-  ["orchestration/task-implementer", { sections: ["trigger-not-for"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
-
-  // --- T15: review, plus core/reviewer-skill-creator (see comment above) -
-  ["review/code-ai-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/code-learned-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/code-mobx-store-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/code-style-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-core-boundaries", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-flow-graph", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-frontend-conventions", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-layout", { sections: ["verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-regression", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["review/review-testing-practices", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
-  ["core/reviewer-skill-creator", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills) — shipped under core/, not review/, but its subject is authoring reviewer skills" }],
+  // --- T15: review, plus core/reviewer-skill-creator — LANDED, entries removed.
+  // All eleven now carry the sections outright; nothing here excuses them.
 ]);
 
 /** Every entry's reason must name the flow-257 task doing the backfill, or this map has quietly become a second permanent exemption list. */
@@ -1352,6 +1455,19 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
   const declaredNames = new Map<string, { dir: string; file: string }>();
   /** `<category>/<directory>` pairs the install catalogue names. */
   const catalogued = new Set(BUNDLED_GDSKILLS.map((entry) => `${entry.category}/${entry.name}`));
+  /**
+   * `${category}/${skill}` -> its served description, one entry per skill.
+   *
+   * Populated only from the CANONICAL `SKILL.md` (see the guard where this is
+   * written, below) — a harness build's description is supposed to be the
+   * same text (`document:build-parity` catches drift), and a pairwise sweep
+   * over builds too would report the same collision once per build pair
+   * instead of once per skill pair. `description:collision` (after the main
+   * loop) reads this map once every document has been walked.
+   */
+  const descriptionsByKey = new Map<string, string>();
+  /** `${category}/${skill}` -> the relative canonical file path, for the finding location. */
+  const descriptionFileByKey = new Map<string, string>();
 
   for (const file of files) {
     const skillDir = path.dirname(file);
@@ -1413,6 +1529,16 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
             "frontmatter `description` is present but resolves to nothing a harness can match a request against; a block scalar (`description: |`) needs its text on the following indented lines.",
           );
         } else {
+          // Collected here, before the three per-description checks below,
+          // guarded to the canonical file only (see `descriptionsByKey`'s
+          // comment above) — a harness build reaching this branch with the
+          // same skill key would otherwise overwrite nothing incorrectly, but
+          // there is no reason to let it try.
+          if (path.basename(file) === "SKILL.md") {
+            const key = `${category}/${skill}`;
+            descriptionsByKey.set(key, served);
+            descriptionFileByKey.set(key, rel);
+          }
           // The three content-quality checks only judge text that actually
           // exists — an empty description already failed above, and judging
           // the shape of nothing would double-report the same defect twice.
@@ -1555,6 +1681,28 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
 
     // --- cross-references resolve ------------------------------------------
     scanCrossReferences(text, root, known, true, add);
+  }
+
+  // --- description collisions across every catalog skill (flow 257 T11, AC6) -
+  //
+  // Runs once, over every skill's description collected above, not inside the
+  // per-document loop — a description's collision status is a property of the
+  // PAIR, decidable only once both sides are known. `KNOWN_DESCRIPTION_
+  // COLLISIONS` (see its comment) is checked here so a pair T12 has not yet
+  // resolved does not fail the shipped tree while it is still in flight.
+  for (const { a, b, similarity } of collisionPairs(descriptionsByKey, DESCRIPTION_COLLISION_THRESHOLD)) {
+    if (KNOWN_DESCRIPTION_COLLISIONS.has(collisionPairKey(a, b))) continue;
+    // Attributed to `b` (the lexicographically later skill of the pair, per
+    // `collisionPairs`' sort) so the finding still has exactly one home
+    // directory, the same convention `frontmatter:name-unique` uses for its
+    // own two-file finding above — the message names BOTH skills regardless.
+    findings.push({
+      check: "description:collision",
+      skill: b.split("/").slice(1).join("/") || b,
+      file: descriptionFileByKey.get(b) ?? `skills/${b}/SKILL.md`,
+      line: null,
+      message: `description collides with \`${a}\` at Jaccard similarity ${similarity.toFixed(2)} (>= ${DESCRIPTION_COLLISION_THRESHOLD}) on the router's own tokenisation — an agent routing between \`${a}\` and \`${b}\` has near-identical text to choose between; narrow one or both descriptions, or record the pair in KNOWN_DESCRIPTION_COLLISIONS with a reason naming its owner.`,
+    });
   }
 
   // --- rule files: xref:path only, not the SKILL.md checks -------------------

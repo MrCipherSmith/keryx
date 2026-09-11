@@ -696,7 +696,21 @@ export function expandQueryTokens(normalized: string): ReadonlySet<string> {
   return routeTokens(normalized, true);
 }
 
-function routeTokens(normalized: string, expand = false): Set<string> {
+/**
+ * Exported for `bundled-eval.ts`'s `description:collision` check (flow 257
+ * T11, AC6), which has to judge two descriptions on the IDENTICAL
+ * tokenisation this router scores them with — a second implementation here
+ * would let the check and the router disagree about what counts as a token,
+ * the exact drift `expandQueryTokens` above already refuses for the synonym
+ * table. `bundled-eval.ts` imports only this function and `normalizeRouteText`
+ * (already exported); neither is called at module-load time in either file,
+ * so the resulting import cycle (this module already imports
+ * `evaluateBundledTree` from `bundled-eval.ts`) resolves the same way any
+ * cycle of pure, lazily-invoked functions does — there is nothing in the
+ * cycle for `bun test`/`tsc` to trip on, and both suites are green with it in
+ * place.
+ */
+export function routeTokens(normalized: string, expand = false): Set<string> {
   const tokens = new Set(
     normalized
       .split(" ")

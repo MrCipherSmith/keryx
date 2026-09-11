@@ -25,7 +25,9 @@ import path from "node:path";
 import {
   ANATOMY_RED_FLAGS_MIN_ROWS,
   BUNDLED_SKILL_CHECKS,
+  DESCRIPTION_COLLISION_THRESHOLD,
   GENERATED_PATH_ROOTS,
+  KNOWN_DESCRIPTION_COLLISIONS,
   KNOWN_EXTERNAL_SKILL_REFERENCES,
   KNOWN_SKILL_COMPANION_DOCUMENTS,
   PENDING_ANATOMY_BACKFILL,
@@ -34,12 +36,17 @@ import {
   bareImperativeOpening,
   bundledSkillDocuments,
   bundledSkillFiles,
+  collisionPairKey,
+  collisionPairs,
+  collisionReasonNamesOwner,
   defaultBundledRoot,
+  descriptionRouteTokens,
   evaluateBundledTree,
   hasNotForClause,
   hasRedFlagsSection,
   hasVerificationSection,
   homePathOffenders,
+  jaccardSimilarity,
   pendingReasonNamesBackfillTask,
   personaOffenders,
   renderBundledEvaluation,
@@ -216,14 +223,32 @@ metadata:
 # Versionless Metadata
 `;
 
-const DUPLICATE_NAME_SKILL = `---
+/**
+ * Two DIFFERENT descriptions on purpose — only the `name: collides` field is
+ * supposed to match here; flow 257 T11's `description:collision` sweep would
+ * otherwise also fire on this pair (an identical description trivially
+ * collides at similarity 1.0), which is a real defect this fixture is not
+ * trying to demonstrate and would confuse "two checks fired" with "one check
+ * fired and a coincidence also did".
+ */
+const DUPLICATE_NAME_SKILL_A = `---
 name: collides
-description: Two skills declaring one name.
+description: Two skills declare the identical frontmatter name for this ambiguity fixture.
 metadata:
   version: 1.0.0
 ---
 
-# Collides
+# Collides (first)
+`;
+
+const DUPLICATE_NAME_SKILL_B = `---
+name: collides
+description: A harness cannot tell two skills apart when they share one frontmatter name.
+metadata:
+  version: 1.0.0
+---
+
+# Collides (second)
 `;
 
 /**
@@ -330,6 +355,43 @@ metadata:
 # Too Long Description
 
 VIOLATION description:length — the description above is over 1024 characters.
+`;
+
+/**
+ * Flow 257 T11 — `description:collision`. Two descriptions differing by a
+ * single word — "timeout" vs "outage" — collide at Jaccard similarity ~0.818
+ * on `routeTokens`, well past `DESCRIPTION_COLLISION_THRESHOLD` (0.75).
+ * Deliberately distinctive vocabulary ("triaging", "escalation", "gateway")
+ * absent from every other fixture in this file, so the pair's own collision
+ * is the only one this addition can introduce — the CONTROL skill and every
+ * other fixture below stay unaffected, which the exhaustive "CONTROL skill
+ * draws only the catalogue finding" test downstream would otherwise catch.
+ */
+const DESCRIPTION_COLLISION_A_SKILL = `---
+name: description-collision-a
+description: Use when triaging incoming support escalation tickets that mention a payment gateway timeout.
+metadata:
+  version: 1.0.0
+---
+
+# Description Collision A
+
+VIOLATION description:collision — this description and
+\`description-collision-b\`'s differ by one word and collide at Jaccard
+similarity >= 0.75 on the router's own tokenisation.
+`;
+
+/** The other half of the colliding pair — see `DESCRIPTION_COLLISION_A_SKILL`. */
+const DESCRIPTION_COLLISION_B_SKILL = `---
+name: description-collision-b
+description: Use when triaging incoming support escalation tickets that mention a payment gateway outage.
+metadata:
+  version: 1.0.0
+---
+
+# Description Collision B
+
+VIOLATION description:collision — see \`description-collision-a\`.
 `;
 
 /**
@@ -621,13 +683,15 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "empty-name", EMPTY_NAME_SKILL);
   writeSkill(fixtureRoot, "quality", "empty-block-description", EMPTY_BLOCK_DESCRIPTION_SKILL);
   writeSkill(fixtureRoot, "quality", "versionless-metadata", VERSIONLESS_METADATA_SKILL);
-  writeSkill(fixtureRoot, "quality", "collides-a", DUPLICATE_NAME_SKILL);
-  writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL);
+  writeSkill(fixtureRoot, "quality", "collides-a", DUPLICATE_NAME_SKILL_A);
+  writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL_B);
   writeSkill(fixtureRoot, "quality", "harness-excludes-claude", HARNESS_EXCLUDES_CLAUDE_SKILL);
   writeSkill(fixtureRoot, "quality", "category-mismatch", CATEGORY_MISMATCH_SKILL);
   writeSkill(fixtureRoot, "quality", "no-trigger-phrase", NO_TRIGGER_PHRASE_SKILL);
   writeSkill(fixtureRoot, "quality", "bare-imperative-example", BARE_IMPERATIVE_SKILL);
   writeSkill(fixtureRoot, "quality", "too-long-description", TOO_LONG_DESCRIPTION_SKILL);
+  writeSkill(fixtureRoot, "quality", "description-collision-a", DESCRIPTION_COLLISION_A_SKILL);
+  writeSkill(fixtureRoot, "quality", "description-collision-b", DESCRIPTION_COLLISION_B_SKILL);
   writeSkill(fixtureRoot, "quality", "no-not-for-example", NO_NOT_FOR_SKILL);
   writeSkill(fixtureRoot, "quality", "no-red-flags-example", NO_RED_FLAGS_SKILL);
   writeSkill(fixtureRoot, "quality", "too-few-red-flags-rows-example", TOO_FEW_RED_FLAGS_ROWS_SKILL);
@@ -677,14 +741,16 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    // Twenty-one skills: the original fourteen, flow 257 T7's three
-    // `description:*` fixtures, and T8's four `anatomy:sections` fixtures
-    // (no-not-for-example, no-red-flags-example, too-few-red-flags-rows-example,
-    // no-verification-example), each shipping one plain SKILL.md.
-    expect(evaluation.skills).toBe(21);
-    // Twenty-three documents: twenty-one skills, plus `build-drift-example`
+    // Twenty-three skills: the original fourteen, flow 257 T7's three
+    // `description:*` fixtures, T11's colliding pair
+    // (description-collision-a, description-collision-b), and T8's four
+    // `anatomy:sections` fixtures (no-not-for-example, no-red-flags-example,
+    // too-few-red-flags-rows-example, no-verification-example), each shipping
+    // one plain SKILL.md.
+    expect(evaluation.skills).toBe(23);
+    // Twenty-five documents: twenty-three skills, plus `build-drift-example`
     // and `harness-field-only` each also shipping a Codex build.
-    expect(evaluation.documents).toBe(23);
+    expect(evaluation.documents).toBe(25);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -794,6 +860,102 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   });
 
   // -------------------------------------------------------------------------
+  // Flow 257 T11: `description:collision`
+  // -------------------------------------------------------------------------
+
+  test("two descriptions that collide draw exactly one finding naming the pair and the score", () => {
+    const evaluation = evaluateBundledTree(fixtureRoot);
+    const collisions = evaluation.findings.filter((finding) => finding.check === "description:collision");
+    // Exactly one finding for the whole fixture tree — proving both halves of
+    // AC6 at once: the colliding pair fires, and every OTHER pair among the
+    // ~23 fixture skills (the CONTROL skill included) stays below the
+    // threshold and draws nothing. A second, unrelated collision here would
+    // mean this fixture's deliberately distinctive vocabulary leaked into
+    // another fixture's description.
+    expect(collisions).toHaveLength(1);
+    const [finding] = collisions;
+    expect(finding?.skill).toBe("description-collision-b");
+    expect(finding?.message).toContain("quality/description-collision-a");
+    expect(finding?.message).toContain("quality/description-collision-b");
+    // ~0.818 (9 shared tokens / 11 total) — pinned to two decimal places so a
+    // change to the measure or the fixture text is visible here.
+    expect(finding?.message).toContain("0.82");
+    expect(finding?.message).toContain(`>= ${DESCRIPTION_COLLISION_THRESHOLD}`);
+
+    // Attributed to exactly one of the two skill directories — the same
+    // one-home-per-finding convention `frontmatter:name-unique` uses above —
+    // and specifically the one this evaluator's sort settled on.
+    const attributedToOther = evaluation.findings.filter(
+      (f) => f.check === "description:collision" && f.skill === "description-collision-a",
+    );
+    expect(attributedToOther).toEqual([]);
+  });
+
+  test("descriptionRouteTokens and jaccardSimilarity compose the way the check's comment claims", () => {
+    // Pinned directly, not only through the fixture above: the measure is
+    // Jaccard over `routeTokens(normalizeRouteText(description))`, the
+    // IDENTICAL pipeline the router scores an entry's haystack with.
+    const a = descriptionRouteTokens(
+      "Use when triaging incoming support escalation tickets that mention a payment gateway timeout.",
+    );
+    const b = descriptionRouteTokens(
+      "Use when triaging incoming support escalation tickets that mention a payment gateway outage.",
+    );
+    expect([...a].sort()).toEqual(
+      ["when", "triaging", "incoming", "support", "escalation", "tickets", "mention", "payment", "gateway", "timeout"].sort(),
+    );
+    // 9 shared tokens, 11 in the union (10 + 10 - 9).
+    expect(jaccardSimilarity(a, b)).toBeCloseTo(9 / 11, 5);
+
+    // Two empty sets, or one empty against a real one, never "collide" — an
+    // empty description already fails `frontmatter:description` and must not
+    // also report a spurious 100% match against every other empty one.
+    expect(jaccardSimilarity(new Set(), new Set())).toBe(0);
+    expect(jaccardSimilarity(new Set(), a)).toBe(0);
+
+    // Identical text is similarity 1, not merely "high".
+    expect(jaccardSimilarity(a, a)).toBe(1);
+  });
+
+  test("collisionPairs finds every pair at or above the threshold, sorted by similarity, and collisionPairKey is order-independent", () => {
+    const entries = new Map([
+      ["quality/alpha", "Use when triaging incoming support escalation tickets that mention a payment gateway timeout."],
+      ["quality/beta", "Use when triaging incoming support escalation tickets that mention a payment gateway outage."],
+      ["quality/gamma", "Use when scheduling a periodic health report unrelated to anything else here."],
+    ]);
+    const pairs = collisionPairs(entries, DESCRIPTION_COLLISION_THRESHOLD);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]).toMatchObject({ a: "quality/alpha", b: "quality/beta" });
+    expect(pairs[0]?.similarity).toBeCloseTo(9 / 11, 5);
+
+    // A threshold of 0 surfaces every pair, including the unrelated one, and
+    // the descending sort puts the real collision first.
+    const allPairs = collisionPairs(entries, 0);
+    expect(allPairs.length).toBeGreaterThan(1);
+    expect(allPairs[0]).toMatchObject({ a: "quality/alpha", b: "quality/beta" });
+
+    expect(collisionPairKey("quality/alpha", "quality/beta")).toBe(collisionPairKey("quality/beta", "quality/alpha"));
+  });
+
+  test("every known description collision exemption names flow 257 T12 as the owner", () => {
+    // `KNOWN_DESCRIPTION_COLLISIONS` is expected to reach empty — AC6 requires
+    // the shipped tree to end at zero `description:collision` findings, and an
+    // entry here is what buys that while T12 has not yet acted (see the map's
+    // own comment). This runs over whatever is in it today rather than
+    // asserting it is non-empty, since empty is the map's own success state.
+    for (const [key, exemption] of KNOWN_DESCRIPTION_COLLISIONS) {
+      expect(key).toContain(" :: ");
+      expect(collisionReasonNamesOwner(exemption.reason)).toBe(true);
+      expect(exemption.reason.trim().length).toBeGreaterThan(0);
+    }
+    // The predicate itself, pinned directly: it must accept a reason naming
+    // T12 and reject one that does not, or the loop above could pass vacuously
+    // on a reason that names no one.
+    expect(collisionReasonNamesOwner("owed to flow 257's T12")).toBe(true);
+    expect(collisionReasonNamesOwner("no owner named")).toBe(false);
+  });
+
+  // -------------------------------------------------------------------------
   // Flow 257 T8: `anatomy:sections`
   // -------------------------------------------------------------------------
 
@@ -892,8 +1054,14 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     }
   });
 
-  test("PENDING_ANATOMY_BACKFILL is non-empty, every entry carries a reason naming a flow-257 backfill task", () => {
-    expect(PENDING_ANATOMY_BACKFILL.size).toBeGreaterThan(0);
+  test("PENDING_ANATOMY_BACKFILL is empty now that T13-T15 landed, and any future entry names the task that owns it", () => {
+    // The map started at 53 entries and T13/T14/T15 emptied it by writing the
+    // sections rather than by deleting the rows: every skill they list now
+    // passes `anatomy:sections` on its own. An empty map is therefore the end
+    // state AC9 asks for — a non-empty one would mean a workflow skill is
+    // still excused. The loop below stays because the map is a live mechanism:
+    // a later flow may park a skill here, and its reason must name the task.
+    expect(PENDING_ANATOMY_BACKFILL.size).toBe(0);
     for (const [key, entry] of PENDING_ANATOMY_BACKFILL) {
       expect(entry.reason.length).toBeGreaterThan(0);
       expect(entry.sections.length).toBeGreaterThan(0);
