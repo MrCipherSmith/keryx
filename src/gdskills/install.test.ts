@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { installGdskills, normalizeRetiredRuleContent } from "./install";
+import { installGdskills, normalizeRetiredRuleContent, removeUnmodifiedRetiredRules, retiredRuleWarning } from "./install";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -443,12 +443,61 @@ test("an unreadable retired rule file is kept, warned about, and does not abort 
 // failure. This drives that path specifically: unlike the chmod-000 test
 // above, the file stays readable — only removing it from its directory
 // fails, because the directory itself has no write permission.
+// The unlink-failure branch itself, on every platform: a confirmed-unmodified
+// copy whose removal fails is kept, and the warning names the removal — not a
+// read — as what failed (round-2 finding L-008). The failure is injected
+// because no filesystem setup makes only this one unlink fail portably.
+test("a confirmed-unmodified retired rule whose removal fails is kept and reported as a removal failure", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-"));
+  try {
+    const rulesCore = path.join(root, "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+    const filePath = path.join(rulesCore, retiredEntry.fileName);
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName), "utf8");
+    await writeFile(filePath, unmodifiedContent, "utf8");
+
+    const attempted: string[] = [];
+    const outcomes = await removeUnmodifiedRetiredRules(rulesCore, {
+      unlink: async (target) => {
+        attempted.push(target);
+        throw Object.assign(new Error(`EACCES: permission denied, unlink '${target}'`), { code: "EACCES" });
+      },
+    });
+
+    // The unlink was reached, so the file was read and matched a shipped hash.
+    expect(attempted).toEqual([filePath]);
+    expect(outcomes).toEqual([
+      { fileName: retiredEntry.fileName, action: "kept-error", stage: "unlink", errorCode: "EACCES" },
+    ]);
+    expect(await readFile(filePath, "utf8")).toBe(unmodifiedContent);
+
+    const [outcome] = outcomes;
+    if (!outcome) {
+      throw new Error("expected exactly one outcome");
+    }
+    const warning = retiredRuleWarning(outcome) ?? "";
+    expect(warning).toStartWith(`${retiredEntry.fileName} is no longer shipped by keryx`);
+    expect(warning).toContain("matches a shipped version but could not be removed (EACCES)");
+    expect(warning).not.toContain("could not be read");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("an unmodified retired rule in a read-only rules/core directory is kept, warned about as a removal failure (not a read failure), and does not abort the install", async () => {
   // Unlinking a file requires write permission on its *containing
   // directory*, not the file itself — root bypasses that check, and
-  // directory permission bits don't carry the same meaning on Windows, so
-  // this scenario isn't worth emulating there.
-  if (process.getuid?.() === 0 || process.platform === "win32") {
+  // directory permission bits don't carry the same meaning on Windows.
+  // macOS only: on Linux, Bun's `cp({ force: true })` unlinks each
+  // destination before copying, so a read-only rules/core aborts the bulk
+  // rule copy before the retired-rule cleanup runs (seen in CI on PR #533).
+  // The test above covers the removal-failure branch on every platform.
+  if (process.getuid?.() === 0 || process.platform !== "darwin") {
     return;
   }
 
@@ -472,9 +521,10 @@ test("an unmodified retired rule in a read-only rules/core directory is kept, wa
     // A retired name isn't in the bundle anymore, so the second install's
     // `cp` never needs to create *this* directory entry — every bundled
     // file it does write already exists from the first install, and
-    // overwriting an existing file only needs write permission on that
-    // file, not on the directory. So making rules/core read-only here
-    // blocks nothing but this function's own `unlink` call.
+    // overwriting an existing file in place only needs write permission on
+    // that file, not on the directory. On macOS, where Bun's `cp` overwrites
+    // in place, making rules/core read-only here blocks nothing but this
+    // function's own `unlink` call (hence the platform gate above).
     await chmod(rulesCore, 0o555);
 
     try {

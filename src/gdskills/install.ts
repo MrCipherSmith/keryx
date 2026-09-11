@@ -141,7 +141,14 @@ async function installBundledRules(metaprojectRoot: string): Promise<RetiredRule
  * the size of what it will read; and let no single entry's failure escape
  * this loop — every failure becomes a warning instead.
  */
-async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<RetiredRuleOutcome[]> {
+export async function removeUnmodifiedRetiredRules(
+  rulesTarget: string,
+  // Injectable so the unlink-failure branch can be tested on every platform:
+  // a read-only directory is not a portable way to make only this unlink fail,
+  // because on Linux Bun's `cp({ force: true })` unlinks every destination
+  // first and aborts the bulk copy before this function runs.
+  fsOps: { unlink: (target: string) => Promise<void> } = { unlink },
+): Promise<RetiredRuleOutcome[]> {
   const outcomes: RetiredRuleOutcome[] = [];
   for (const retired of RETIRED_RULES) {
     const installedPath = path.join(rulesTarget, retired.fileName);
@@ -173,7 +180,7 @@ async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<Retire
       const hash = createHash("sha256").update(normalizeRetiredRuleContent(content)).digest("hex");
       if (retired.shippedSha256.includes(hash)) {
         stage = "unlink";
-        await unlink(installedPath);
+        await fsOps.unlink(installedPath);
         outcomes.push({ fileName: retired.fileName, action: "removed" });
       } else {
         outcomes.push({ fileName: retired.fileName, action: "kept-modified" });
@@ -236,7 +243,7 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
  * and what to do about it, rather than one generic "modified" message that
  * repeats forever with no remedy (round-1 finding L-002).
  */
-function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
+export function retiredRuleWarning(outcome: RetiredRuleOutcome): string | null {
   if (outcome.action === "removed") {
     return null;
   }
