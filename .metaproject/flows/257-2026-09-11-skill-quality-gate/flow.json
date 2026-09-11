@@ -7,14 +7,14 @@
   "id": "257",
   "slug": "skill-quality-gate",
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-11T20:32:46.304Z",
+  "updatedAt": "2026-09-11T20:58:04.594Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:ec3af3a7d585c2a1a8bbd6fb9a8537a633c026b0e3ebc83bf43b862b42170ce5",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,7 +26,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +34,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context map collected (253-T1) and re-verified after #533 (257-T1), see context-map.md"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,7 +51,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by per-deliverable tasks T5-T17"
     },
     {
       "id": "T3",
@@ -57,7 +61,21 @@
       "kind": "test",
       "origin": "scaffold",
       "status": "todo",
-      "dependsOn": [],
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13",
+        "T14",
+        "T15",
+        "T16",
+        "T17"
+      ],
       "attempts": {
         "count": 0,
         "log": []
@@ -72,7 +90,223 @@
       "kind": "review",
       "origin": "scaffold",
       "status": "todo",
-      "dependsOn": [],
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "W1: description:* checks in bundled-eval with fixtures (AC2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "W2: anatomy:sections check with a reason-carrying exemption map (AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "W2: description:collision check on the scorer's tokenisation (AC6)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "W3: Red Flags + Verification backfill — quality skills (AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "W3: Red Flags + Verification backfill — review skills (AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11",
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "W3: rejected-change ledger and the rule that requires it (AC11)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
       "attempts": {
         "count": 0,
         "log": []
@@ -91,6 +325,100 @@
       "at": "2026-09-11T20:32:46.304Z",
       "event": "renumbered",
       "detail": "253 -> 257: main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+    },
+    {
+      "at": "2026-09-11T20:58:02.377Z",
+      "event": "task-added",
+      "detail": "T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.489Z",
+      "event": "task-added",
+      "detail": "T6: W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.602Z",
+      "event": "task-added",
+      "detail": "T7: W1: description:* checks in bundled-eval with fixtures (AC2)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.713Z",
+      "event": "task-added",
+      "detail": "T8: W2: anatomy:sections check with a reason-carrying exemption map (AC3)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.827Z",
+      "event": "task-added",
+      "detail": "T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.939Z",
+      "event": "task-added",
+      "detail": "T10: W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.061Z",
+      "event": "task-added",
+      "detail": "T11: W2: description:collision check on the scorer's tokenisation (AC6)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.184Z",
+      "event": "task-added",
+      "detail": "T12: W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.315Z",
+      "event": "task-added",
+      "detail": "T13: W3: Red Flags + Verification backfill — quality skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.428Z",
+      "event": "task-added",
+      "detail": "T14: W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.538Z",
+      "event": "task-added",
+      "detail": "T15: W3: Red Flags + Verification backfill — review skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.652Z",
+      "event": "task-added",
+      "detail": "T16: W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.844Z",
+      "event": "task-added",
+      "detail": "T17: W3: rejected-change ledger and the rule that requires it (AC11)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.968Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification after every task"
+    },
+    {
+      "at": "2026-09-11T20:58:04.101Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — review on the verified branch"
+    },
+    {
+      "at": "2026-09-11T20:58:04.241Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T20:58:04.357Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T20:58:04.479Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T20:58:04.594Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
     }
   ]
 }

@@ -2,3 +2,23 @@
 
 - 2026-09-11T16:54:12.985Z - flow created
 - 2026-09-11T20:32:46.304Z - renumbered: 253 -> 257: main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next
+- 2026-09-11T20:58:02.377Z - task-added: T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)
+- 2026-09-11T20:58:02.489Z - task-added: T6: W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)
+- 2026-09-11T20:58:02.602Z - task-added: T7: W1: description:* checks in bundled-eval with fixtures (AC2)
+- 2026-09-11T20:58:02.713Z - task-added: T8: W2: anatomy:sections check with a reason-carrying exemption map (AC3)
+- 2026-09-11T20:58:02.827Z - task-added: T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)
+- 2026-09-11T20:58:02.939Z - task-added: T10: W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)
+- 2026-09-11T20:58:03.061Z - task-added: T11: W2: description:collision check on the scorer's tokenisation (AC6)
+- 2026-09-11T20:58:03.184Z - task-added: T12: W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)
+- 2026-09-11T20:58:03.315Z - task-added: T13: W3: Red Flags + Verification backfill — quality skills (AC9)
+- 2026-09-11T20:58:03.428Z - task-added: T14: W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)
+- 2026-09-11T20:58:03.538Z - task-added: T15: W3: Red Flags + Verification backfill — review skills (AC9)
+- 2026-09-11T20:58:03.652Z - task-added: T16: W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)
+- 2026-09-11T20:58:03.844Z - task-added: T17: W3: rejected-change ledger and the rule that requires it (AC11)
+- 2026-09-11T20:58:03.968Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification after every task
+- 2026-09-11T20:58:04.101Z - task-depends-set: T4: dependsOn T3 (was empty) — review on the verified branch
+- 2026-09-11T20:58:04.241Z - frozen: 13 criteria; checksum recorded
+- 2026-09-11T20:58:04.357Z - started
+- 2026-09-11T20:58:04.479Z - task-done: T1: Collect remaining context
+- 2026-09-11T20:58:04.594Z - task-done: T2: Implement per plan
+- 2026-09-11T20:58:39Z - Context: collected in 253-T1 (before flow 256's fixes) and re-verified in 257-T1 after #533; corrections are in context-map.md 'Re-verification 2026-09-12'. Branch skills/quality-gate cut from main 56934fe2 with flow 256's closure commit (75d63f8e) on top. Baseline (AC12) running at 61ab55d8 before any worker starts.

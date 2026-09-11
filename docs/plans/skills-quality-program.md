@@ -66,8 +66,10 @@ acceptance criteria are written against the tree it will actually change.
 
 ## Constraints for every task
 
-- Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`,
-  branch `skills/quality-program`. Use absolute paths and `git -C <root>`.
+- Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`.
+  Each flow runs on its own branch cut from main after the previous one merged
+  (256: `skills/quality-program`, merged as #533; 257: `skills/quality-gate`).
+  Use absolute paths and `git -C <root>`.
 - Source of truth for shipped skills and rules is `src/gdskills/bundled/**`;
   `.metaproject/skills/gdskills/**` and `.metaproject/rules/core/**` are
   install mirrors that must stay byte-identical (`src/gdskills/install.test.ts`).
