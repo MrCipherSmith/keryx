@@ -9,13 +9,74 @@
   "title": "MCP servers P3a: read-only compat readers (Cursor, Claude, .mcp.json, Grok) and D-13 FQN sanitisation",
   "status": "in-progress",
   "createdAt": "2026-09-11T06:45:12.911Z",
-  "updatedAt": "2026-09-11T06:46:13.437Z",
+  "updatedAt": "2026-09-11T08:43:57.994Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:c5dca1752125c1fdff9a1af1714082c111cd9cb0dbc39cabd84a697e2660877b",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC11": {
+      "at": "2026-09-11T07:08:31.435Z",
+      "note": "Measured on the real server: keryx mcp add self -- keryx serve-mcp --cwd /home/altsay/keryx, then doctor self. Result: 40 tools reachable, 5 skipped — against P0's recorded 19 reachable / 26 skipped. Zero are skipped for an INVALID FQN, which is what this criterion asks; all 26 dotted names now sanitise. The 5 skips are COLLISIONS, and the collision rule is working as designed: the server advertises 45 names from two registries (src/harness/tool/* underscore-named, src/mcp/tools.ts dotted), and 5 pairs are the same capability under both spellings — memory_search/memory.search, health_status/health.status, wiki_ask/wiki.ask, wiki_evidence/wiki.evidence, flow_status/flow.status. In every pair the underscore name wins and was ALREADY the reachable one before D-13, so nothing became unreachable; 21 previously-dropped tools became reachable. Each skip message names the winner, so an operator can see which spelling answers."
+    },
+    "AC8": {
+      "at": "2026-09-11T07:08:31.712Z",
+      "note": "sanitiseRawName maps every character the FQN pattern forbids to exactly one underscore, one-to-one on length so a..b and a.b do not collide needlessly. catalogForServer sanitises then validates; the regex is unchanged. fqn-sanitise.table.test.ts covers dotted, multi-dot, slash/space/at, plus BOUNDARY rows for an already-valid name (untouched), a too-long name (still skipped — renaming cannot shorten it) and an unusable SERVER name (still skipped — sanitising the tool cannot fix the server). Verified end to end: doctor self went 19 reachable to 40."
+    },
+    "AC9": {
+      "at": "2026-09-11T07:08:31.950Z",
+      "note": "First-wins in tools/list order, loser recorded with a reason NAMING the winner. Asserted with a.b/a_b in BOTH orders, so the order-dependence is by design and pinned in both directions — if it ever became order-independent one of the two fails. Two BOUNDARY rows: two genuinely identical raw names keep the older 'duplicate qualified name' message (no renaming was involved, so blaming one would mislead), and names that sanitise to different things do not collide. Confirmed live: the 5 real collisions on keryx's own server each name their winner."
+    },
+    "AC10": {
+      "at": "2026-09-11T07:08:32.221Z",
+      "note": "http.live.test.ts: a server advertising sac.read and gdgraph.find yields fqns remote__sac_read and remote__gdgraph_find with zero skipped, and use_tool on remote__sac_read causes the MOCK SERVER to record a tools/call for 'sac.read' — asserted by reading server.requests(), what arrived, not what keryx believes it sent. BOUNDARY: an already-valid name is unchanged in both directions, so sanitising everything unconditionally would fail."
+    },
+    "AC1": {
+      "at": "2026-09-11T07:08:51.155Z",
+      "note": "compatFiles enumerates all six locations the spec names. compat.integration.test.ts asserts all four sources contribute at once, each tagged with its own source (cursor/mcp.json/claude/grok). compat.table.test.ts covers each reader's own shape, plus Claude's projects.<cwd>.mcpServers with a BOUNDARY that another project's block is NOT read."
+    },
+    "AC2": {
+      "at": "2026-09-11T07:08:51.408Z",
+      "note": "Measured, not intended: four fixtures (cursor, .mcp.json, claude, grok TOML) are read byte-for-byte before and after addServer, setServerEnabled on two compat names, and removeServer all run — and compared with toEqual. A BOUNDARY test confirms the NATIVE file really was written, so the comparison is not vacuous."
+    },
+    "AC3": {
+      "at": "2026-09-11T07:08:51.665Z",
+      "note": "removeCommand: a name defined only in a compat source now reports which source and which file, states that keryx never writes there, and offers 'keryx mcp disable <name>' as the thing that records the preference in keryx's own overlay. Exit 1. Previously it said 'not defined in either native config file' and listed two files that correctly do not mention it — sending the operator to look in the wrong place."
+    },
+    "AC4": {
+      "at": "2026-09-11T07:08:51.922Z",
+      "note": "Native project > native user > compat, implemented by reading compat FIRST so native overwrites. Tested: a native user entry beats cursor; a native project entry beats native user; one name defined in ALL SIX compat locations resolves to project .cursor/mcp.json with the order asserted explicitly; and project-local beats user-global within a source."
+    },
+    "AC5": {
+      "at": "2026-09-11T07:08:52.155Z",
+      "note": "setServerEnabled writes only the overlay unless source === 'user', so a compat server toggles without touching the source — true by construction and asserted: disabling 'shared' from .cursor/mcp.json flips enabled to false while the fixture stays byte-identical, and re-enabling lifts it."
+    },
+    "AC6": {
+      "at": "2026-09-11T07:08:52.281Z",
+      "note": "Per source: invalid JSON, a JSON array, a non-object mcpServers, one bad entry among good ones (good still load), and TOML this reader cannot parse naming the LINE. Every problem carries the file. Integration test: a broken .cursor/mcp.json is reported while .mcp.json and the native file still load. A compat entry failing ENTRY validation is reported against its own file, not the native one."
+    },
+    "AC7": {
+      "at": "2026-09-11T07:08:52.401Z",
+      "note": "No TOML dependency added. parseGrokToml reads the subset Grok writes: [mcp_servers.NAME] and [mcp_servers.NAME.env] tables, string/bool/integer scalars, arrays of strings, and # comments outside quotes. It REFUSES what it does not understand with a line number rather than guessing — a parser that silently drops a line is how args go missing and a command runs with arguments nobody wrote. An array that is not all strings is refused whole rather than half-read."
+    },
+    "AC12": {
+      "at": "2026-09-11T07:30:31.903Z",
+      "note": "Two class tables, both using the shared classTableProblems rule. compat.table.test.ts: 2 classes (each tool's shape is read; a malformed source is reported) with axes servers/none and reported/clean — the rule caught my first attempt, which gave both classes one vocabulary and made class 1 one-sided. fqn-sanitise.table.test.ts: 2 classes (renamed rather than dropped; collisions resolved first-wins) with axes renamed/untouched/skipped and collided/renamed. Every class carries BOUNDARY rows, including the two that prove sanitising is a cap and not a blanket rewrite."
+    },
+    "AC14": {
+      "at": "2026-09-11T07:30:32.184Z",
+      "note": "bun test: 9276 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean (it caught real dead state in the TOML parser — an assigned-never-read variable left from an earlier shape — which I removed rather than silenced)."
+    },
+    "AC13": {
+      "at": "2026-09-11T07:30:43.364Z",
+      "note": "75 mutants over the diff in six foreground slices (the environment reaps detached runs). Non-equivalent survivors all killed: three on the compat-only remove predicate (AC3 behaviour I had confirmed by reading rather than running), and eight in the hand-rolled TOML parser — comment stripping whose only test had the hash inside a string, false, escaped quotes, newline/tab escapes, an unknown escape, a comma inside a quoted array item, a nameless [mcp_servers], and collectEntries undefined guard which is dead through the Cursor path and live only through Claude project block. Remaining survivors: two nullish-coalescing-to-or on a string-or-undefined where the empty string is unreachable."
+    },
+    "AC15": {
+      "at": "2026-09-11T08:43:57.994Z",
+      "note": "Smoke-tested on the INSTALLED 0.2.94 binary BEFORE merging. In a scratch directory standing in for a cloned repo: keryx mcp list showed both compat servers with their tags, and the footer read \"2 server(s) from committed config are not started until approved\" — so the project-local ones are HELD, which is the D-14 hole this branch reopened and closed. keryx mcp remove fromCursor named the defining file, stated that keryx never writes there, and offered keryx mcp disable instead. The run also proved the feature on real data: the operator own ~/.claude.json servers (helyx, helyx-channel, playwright) appeared tagged (claude) and were NOT held, because a home file is one they wrote themselves. Operator config backed up and restored; the scratch directory removed."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -26,7 +87,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +95,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,14 +111,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -64,14 +127,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,7 +143,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -95,6 +160,101 @@
     {
       "at": "2026-09-11T06:46:13.437Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-11T07:08:31.436Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Measured on the real server: keryx mcp add self -- keryx serve-mcp --cwd /home/altsay/keryx, then doctor self. Result: 40 tools reachable, 5 skipped — against P0's recorded 19 reachable / 26 skipped. Zero are skipped for an INVALID FQN, which is what this criterion asks; all 26 dotted names now sanitise. The 5 skips are COLLISIONS, and the collision rule is working as designed: the server advertises 45 names from two registries (src/harness/tool/* underscore-named, src/mcp/tools.ts dotted), and 5 pairs are the same capability under both spellings — memory_search/memory.search, health_status/health.status, wiki_ask/wiki.ask, wiki_evidence/wiki.evidence, flow_status/flow.status. In every pair the underscore name wins and was ALREADY the reachable one before D-13, so nothing became unreachable; 21 previously-dropped tools became reachable. Each skip message names the winner, so an operator can see which spelling answers."
+    },
+    {
+      "at": "2026-09-11T07:08:31.713Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: sanitiseRawName maps every character the FQN pattern forbids to exactly one underscore, one-to-one on length so a..b and a.b do not collide needlessly. catalogForServer sanitises then validates; the regex is unchanged. fqn-sanitise.table.test.ts covers dotted, multi-dot, slash/space/at, plus BOUNDARY rows for an already-valid name (untouched), a too-long name (still skipped — renaming cannot shorten it) and an unusable SERVER name (still skipped — sanitising the tool cannot fix the server). Verified end to end: doctor self went 19 reachable to 40."
+    },
+    {
+      "at": "2026-09-11T07:08:31.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: First-wins in tools/list order, loser recorded with a reason NAMING the winner. Asserted with a.b/a_b in BOTH orders, so the order-dependence is by design and pinned in both directions — if it ever became order-independent one of the two fails. Two BOUNDARY rows: two genuinely identical raw names keep the older 'duplicate qualified name' message (no renaming was involved, so blaming one would mislead), and names that sanitise to different things do not collide. Confirmed live: the 5 real collisions on keryx's own server each name their winner."
+    },
+    {
+      "at": "2026-09-11T07:08:32.221Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: http.live.test.ts: a server advertising sac.read and gdgraph.find yields fqns remote__sac_read and remote__gdgraph_find with zero skipped, and use_tool on remote__sac_read causes the MOCK SERVER to record a tools/call for 'sac.read' — asserted by reading server.requests(), what arrived, not what keryx believes it sent. BOUNDARY: an already-valid name is unchanged in both directions, so sanitising everything unconditionally would fail."
+    },
+    {
+      "at": "2026-09-11T07:08:51.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: compatFiles enumerates all six locations the spec names. compat.integration.test.ts asserts all four sources contribute at once, each tagged with its own source (cursor/mcp.json/claude/grok). compat.table.test.ts covers each reader's own shape, plus Claude's projects.<cwd>.mcpServers with a BOUNDARY that another project's block is NOT read."
+    },
+    {
+      "at": "2026-09-11T07:08:51.408Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Measured, not intended: four fixtures (cursor, .mcp.json, claude, grok TOML) are read byte-for-byte before and after addServer, setServerEnabled on two compat names, and removeServer all run — and compared with toEqual. A BOUNDARY test confirms the NATIVE file really was written, so the comparison is not vacuous."
+    },
+    {
+      "at": "2026-09-11T07:08:51.665Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: removeCommand: a name defined only in a compat source now reports which source and which file, states that keryx never writes there, and offers 'keryx mcp disable <name>' as the thing that records the preference in keryx's own overlay. Exit 1. Previously it said 'not defined in either native config file' and listed two files that correctly do not mention it — sending the operator to look in the wrong place."
+    },
+    {
+      "at": "2026-09-11T07:08:51.922Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: Native project > native user > compat, implemented by reading compat FIRST so native overwrites. Tested: a native user entry beats cursor; a native project entry beats native user; one name defined in ALL SIX compat locations resolves to project .cursor/mcp.json with the order asserted explicitly; and project-local beats user-global within a source."
+    },
+    {
+      "at": "2026-09-11T07:08:52.155Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: setServerEnabled writes only the overlay unless source === 'user', so a compat server toggles without touching the source — true by construction and asserted: disabling 'shared' from .cursor/mcp.json flips enabled to false while the fixture stays byte-identical, and re-enabling lifts it."
+    },
+    {
+      "at": "2026-09-11T07:08:52.281Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Per source: invalid JSON, a JSON array, a non-object mcpServers, one bad entry among good ones (good still load), and TOML this reader cannot parse naming the LINE. Every problem carries the file. Integration test: a broken .cursor/mcp.json is reported while .mcp.json and the native file still load. A compat entry failing ENTRY validation is reported against its own file, not the native one."
+    },
+    {
+      "at": "2026-09-11T07:08:52.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: No TOML dependency added. parseGrokToml reads the subset Grok writes: [mcp_servers.NAME] and [mcp_servers.NAME.env] tables, string/bool/integer scalars, arrays of strings, and # comments outside quotes. It REFUSES what it does not understand with a line number rather than guessing — a parser that silently drops a line is how args go missing and a command runs with arguments nobody wrote. An array that is not all strings is refused whole rather than half-read."
+    },
+    {
+      "at": "2026-09-11T07:30:31.903Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: Two class tables, both using the shared classTableProblems rule. compat.table.test.ts: 2 classes (each tool's shape is read; a malformed source is reported) with axes servers/none and reported/clean — the rule caught my first attempt, which gave both classes one vocabulary and made class 1 one-sided. fqn-sanitise.table.test.ts: 2 classes (renamed rather than dropped; collisions resolved first-wins) with axes renamed/untouched/skipped and collided/renamed. Every class carries BOUNDARY rows, including the two that prove sanitising is a cap and not a blanket rewrite."
+    },
+    {
+      "at": "2026-09-11T07:30:32.184Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: bun test: 9276 pass / 19 skip / 0 fail. bunx tsc --noEmit: clean. bun run lint: clean (it caught real dead state in the TOML parser — an assigned-never-read variable left from an earlier shape — which I removed rather than silenced)."
+    },
+    {
+      "at": "2026-09-11T07:30:43.364Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: 75 mutants over the diff in six foreground slices (the environment reaps detached runs). Non-equivalent survivors all killed: three on the compat-only remove predicate (AC3 behaviour I had confirmed by reading rather than running), and eight in the hand-rolled TOML parser — comment stripping whose only test had the hash inside a string, false, escaped quotes, newline/tab escapes, an unknown escape, a comma inside a quoted array item, a nameless [mcp_servers], and collectEntries undefined guard which is dead through the Cursor path and live only through Claude project block. Remaining survivors: two nullish-coalescing-to-or on a string-or-undefined where the empty string is unreachable."
+    },
+    {
+      "at": "2026-09-11T07:30:50.982Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T07:30:51.233Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T07:30:51.495Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T08:43:23.681Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T08:43:57.994Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Smoke-tested on the INSTALLED 0.2.94 binary BEFORE merging. In a scratch directory standing in for a cloned repo: keryx mcp list showed both compat servers with their tags, and the footer read \"2 server(s) from committed config are not started until approved\" — so the project-local ones are HELD, which is the D-14 hole this branch reopened and closed. keryx mcp remove fromCursor named the defining file, stated that keryx never writes there, and offered keryx mcp disable instead. The run also proved the feature on real data: the operator own ~/.claude.json servers (helyx, helyx-channel, playwright) appeared tagged (claude) and were NOT held, because a home file is one they wrote themselves. Operator config backed up and restored; the scratch directory removed."
     }
   ]
 }

