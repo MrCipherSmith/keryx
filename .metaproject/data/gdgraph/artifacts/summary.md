@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 1416
+- Source files indexed: 1432
 - Imported asset files indexed: 4
-- Total nodes: 1420
-- Edges: 4250
-- Import edges: 4177
+- Total nodes: 1436
+- Edges: 4286
+- Import edges: 4213
 - Asset edges: 10
 - Unresolved imports: 63
 - Import resolution: 98.5%
@@ -16,19 +16,19 @@
 
 | Module | Source Files |
 |---|---:|
-| harness | 260 |
-| commands | 155 |
+| harness | 263 |
+| commands | 158 |
 | lib | 114 |
 | tui | 102 |
 | sac | 58 |
 | wiki | 57 |
 | health | 52 |
+| mcp-servers | 52 |
 | scripts | 50 |
 | security | 50 |
 | gdgraph | 48 |
 | gdskills | 46 |
 | memory | 45 |
-| mcp-servers | 42 |
 | flow | 38 |
 | metrics | 38 |
 | review | 32 |
