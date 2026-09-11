@@ -7,17 +7,30 @@
   "id": "253",
   "slug": "keryx-shell-expired-grok-grant-sent-on-t",
   "title": "keryx shell: expired grok grant sent on the readline path (K-013), saved provider keys leak into shell_exec (K-015), memory_search miss prints the absolute path (K-016)",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-11T20:01:39.233Z",
-  "updatedAt": "2026-09-11T20:19:49.128Z",
+  "updatedAt": "2026-09-11T20:26:26.210Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:938fb92dafc8deda587264fa0b83dde0573f5162b2b9dd9c84e00d769d665cc1",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T20:23:34.968Z"
+    },
+    "AC2": {
+      "at": "2026-09-11T20:23:35.102Z"
+    },
+    "AC3": {
+      "at": "2026-09-11T20:23:35.236Z"
+    },
+    "AC4": {
+      "at": "2026-09-11T20:26:14.544Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/532"
   },
   "baseBranch": "main",
   "tasks": [
@@ -74,7 +87,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -82,7 +95,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -243,6 +257,45 @@
       "at": "2026-09-11T20:19:49.128Z",
       "event": "task-done",
       "detail": "T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)"
+    },
+    {
+      "at": "2026-09-11T20:23:34.968Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-11T20:23:35.103Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-11T20:23:35.236Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-11T20:26:14.544Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-11T20:26:14.684Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T20:26:17.870Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/532 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T20:26:18.074Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T20:26:26.210Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
