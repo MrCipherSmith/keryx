@@ -9,7 +9,7 @@
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T19:55:59.669Z",
+  "updatedAt": "2026-09-11T20:05:24.815Z",
   "source": {
     "type": "description",
     "ref": null
@@ -104,7 +104,7 @@
         "T28"
       ],
       "attempts": {
-        "count": 5,
+        "count": 6,
         "log": [
           {
             "at": "2026-09-11T18:12:32.040Z",
@@ -130,6 +130,11 @@
             "at": "2026-09-11T19:55:59.669Z",
             "outcome": "started",
             "detail": "review round 3 (final) over round-2 fix diff 0cdc36d1..HEAD + closure"
+          },
+          {
+            "at": "2026-09-11T20:05:24.815Z",
+            "outcome": "failed",
+            "detail": "round 3 (final): round-2 findings closed; fix for C-010 introduced C-015 major (flow-orchestrator boundary commit fails when worker auto-commits) and C-016 minor (job-orchestrator never passes auto_commit); loop bound reached, escalated to user"
           }
         ]
       },
@@ -1162,6 +1167,11 @@
       "at": "2026-09-11T19:55:59.669Z",
       "event": "task-attempt",
       "detail": "T4: started (attempt 5) — review round 3 (final) over round-2 fix diff 0cdc36d1..HEAD + closure"
+    },
+    {
+      "at": "2026-09-11T20:05:24.815Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 6) — round 3 (final): round-2 findings closed; fix for C-010 introduced C-015 major (flow-orchestrator boundary commit fails when worker auto-commits) and C-016 minor (job-orchestrator never passes auto_commit); loop bound reached, escalated to user"
     }
   ]
 }
