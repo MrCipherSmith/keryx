@@ -11,9 +11,9 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "testing"
+  category: "quality"
   agent_worthy: true
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 

@@ -12,8 +12,8 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "2.4.0"
-  category: "analysis"
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  category: "orchestration"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 

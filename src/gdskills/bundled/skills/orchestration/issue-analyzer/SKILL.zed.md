@@ -10,9 +10,9 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"
-  category: "analysis"
+  category: "orchestration"
   agent_worthy: true
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 

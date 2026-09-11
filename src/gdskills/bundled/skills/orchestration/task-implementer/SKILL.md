@@ -11,7 +11,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.3.1"
-  category: "implementation"
+  category: "orchestration"
   agent_worthy: true
   compatible_harnesses: "claude,cursor,codex,zed,opencode"
 license: "MIT"

@@ -100,6 +100,8 @@ export const BUNDLED_SKILL_CHECKS = [
   "frontmatter:name-unique",
   "frontmatter:description",
   "frontmatter:metadata",
+  "frontmatter:harness-claude",
+  "frontmatter:category",
   "catalog:registered",
   "model:concrete-declaration",
   "persona:name",
@@ -723,6 +725,11 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     const skillDir = path.dirname(file);
     const skill = path.basename(skillDir);
     const rel = path.relative(skillsRoot, file).split(path.sep).join("/");
+    // The directory a document ships under. Computed here, ahead of the
+    // frontmatter checks, because `frontmatter:category` needs it to judge a
+    // declared `metadata.category` and `catalog:registered` (below) already
+    // needed it — one source rather than two that could disagree.
+    const category = path.dirname(rel).split("/")[0] ?? "";
     const text = readFileSync(file, "utf8");
     const add = (check: BundledSkillCheck, line: number | null, message: string): void => {
       findings.push({ check, skill, file: rel, line, message });
@@ -784,6 +791,51 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
             "frontmatter `metadata` declares no `version`; without one a skill cannot be said to have changed.",
           );
         }
+        // `metadata.category` is free text, not read by any runtime — the one
+        // consumer (`import-skills.ts`'s `frontmatterCategory`) reads it off a
+        // skill being IMPORTED, never off this shipped tree. That makes a
+        // mismatch harmless to behavior and still worth catching: it is the
+        // label an operator reads when deciding where a skill belongs, and it
+        // drifted on 23 shipped skills with nothing to notice. Ground truth is
+        // the directory the skill actually ships under — `catalog:registered`
+        // above already ties that directory to `BUNDLED_GDSKILLS`, so a
+        // skill that passes both checks has one category, not two.
+        const metadataCategory = /^\s{2,}category\s*:\s*(.+)$/m.exec(block);
+        if (metadataCategory !== null) {
+          const declaredCategory = (metadataCategory[1] ?? "").trim().replace(/^["']|["']$/g, "");
+          if (declaredCategory.length > 0 && declaredCategory !== category) {
+            add(
+              "frontmatter:category",
+              1,
+              `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
+            );
+          }
+        }
+      }
+      // `compatible_harnesses` is per-build metadata (see
+      // BUILD_DIVERGENCE_ALLOWED_FIELDS above) — a harness build is allowed to
+      // list only the non-Claude family it serves. `SKILL.md` is different: it
+      // IS the Claude build (`skillBuildFileName("claude") === "SKILL.md"`), so
+      // a list that excludes `claude` is not a narrower build, it is this
+      // build lying about the harness that loads it. Checked by exact
+      // filename, not by runtime lookup, so the check reads the same way in a
+      // fixture tree that never calls `evaluateBundledTree` through the CLI.
+      if (path.basename(file) === "SKILL.md") {
+        const compatibleHarnesses = /^\s{2,}compatible_harnesses\s*:\s*(.+)$/m.exec(block);
+        if (compatibleHarnesses !== null) {
+          const declared = (compatibleHarnesses[1] ?? "").trim().replace(/^["']|["']$/g, "");
+          const harnesses = declared
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0);
+          if (!harnesses.includes("claude")) {
+            add(
+              "frontmatter:harness-claude",
+              1,
+              `frontmatter \`compatible_harnesses\` ("${declared}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
+            );
+          }
+        }
       }
     }
 
@@ -794,7 +846,6 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     // not name is never copied anywhere: it ships inside the package, is read by
     // nobody, and every claim its prose makes is inert. That is decidable here
     // and nowhere else, because the sweep is the only thing that sees both lists.
-    const category = path.dirname(rel).split("/")[0] ?? "";
     if (!catalogued.has(`${category}/${skill}`)) {
       add(
         "catalog:registered",

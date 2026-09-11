@@ -9,7 +9,7 @@ metadata:
   author: "keryx"
   version: "2.0.0"
   category: "review"
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 
