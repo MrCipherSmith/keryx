@@ -164,6 +164,10 @@ failures are the account, not the shell:
 The smoke (23:09–23:37) and this run's first 15 rounds spent it. The claude leg is a
 different account and is unaffected.
 
+Retried 2026-09-11 10:34 (`/tmp/arena-diag2`): all four arms failed the same way —
+grok CLI 402 with the balance message, keryx 403 with no reason. Same account state,
+two different reports of it; K-005 again.
+
 ## K-005 — a provider refusal kills the turn, and is reported as Ollama · confirmed
 
 **Evidence:** `turn_end.errorMessage = "[error] Ollama API returned HTTP 403"` on a

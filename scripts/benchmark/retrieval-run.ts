@@ -54,6 +54,8 @@ export interface AgentPort {
     gold: readonly string[];
     /** Where to keep the raw stream. Optional: the pilot never asked for one. */
     transcriptFile?: string;
+    /** Watch the child while it runs. Optional: without it the adapter's own timeout is the only bound. */
+    supervise?: import("./retrieval-supervision").Supervise;
   }): Promise<AgentAnswer>;
 }
 

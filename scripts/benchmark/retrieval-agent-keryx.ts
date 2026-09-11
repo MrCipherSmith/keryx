@@ -11,11 +11,12 @@
 // terminal rendering would measure the renderer, and would break on the next
 // change to it.
 
-import { mkdtempSync, readFileSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, existsSync, statSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import path from "node:path";
 import { assertEnvIsolated, buildIsolatedEnv, createIsolatedHome, type IsolatedHome } from "./retrieval-isolation";
 import type { AgentAnswer, AgentPort } from "./retrieval-run";
+import { throwIfKilled } from "./retrieval-supervision";
 import { writeTranscript } from "./retrieval-transcript";
 
 export const KERYX_HARNESS = "keryx";
@@ -398,7 +399,7 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
 
   return {
     harness,
-    async run({ cwd, prompt, model, gold, transcriptFile }): Promise<AgentAnswer> {
+    async run({ cwd, prompt, model, gold, transcriptFile, supervise }): Promise<AgentAnswer> {
       const dir = mkdtempSync(path.join(tmpdir(), "keryx-events-"));
       const eventsFile = path.join(dir, "events.jsonl");
       const { isolated, dataHome } = createKeryxHome(options.realHome ?? homedir());
@@ -409,6 +410,14 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
           env: buildKeryxEnv(process.env, isolated.home, dataHome),
           stdout: "pipe",
           stderr: "pipe",
+        });
+        // Silence is how long the events file has gone without growing. Before the
+        // shell creates it, the clock runs from the spawn, so a shell that hangs
+        // at startup is silent rather than forever fresh.
+        const spawnedAt = Date.now();
+        const supervision = supervise?.({
+          pid: proc.pid,
+          silenceMs: () => Math.max(0, Date.now() - (existsSync(eventsFile) ? statSync(eventsFile).mtimeMs : spawnedAt)),
         });
         let timedOut = false;
         const timer = setTimeout(() => {
@@ -423,11 +432,13 @@ export function createKeryxAgent(options: KeryxAgentOptions): AgentPort {
           await proc.exited;
         } finally {
           clearTimeout(timer);
+          supervision?.stop();
         }
 
         const raw = existsSync(eventsFile) ? readFileSync(eventsFile, "utf8") : "";
         // Kept before interpretation, so a refused arm still leaves its evidence.
         writeTranscript(transcriptFile, raw, stderr);
+        throwIfKilled(supervision);
         const lines = raw.split("\n").filter((line) => line.trim().length > 0);
         const turn = parseKeryxEvents(lines, gold);
         // interpretKeryxTurn first, so a timeout is reported as a timeout rather

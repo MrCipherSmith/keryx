@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs";
 import { homedir, userInfo } from "node:os";
 import path from "node:path";
+import { readTracked, throwIfKilled } from "./retrieval-supervision";
 import { writeTranscript } from "./retrieval-transcript";
 import {
   assertEnvIsolated,
@@ -485,7 +486,7 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
 
   return {
     harness,
-    async run({ cwd, prompt, model, gold, transcriptFile }): Promise<AgentAnswer> {
+    async run({ cwd, prompt, model, gold, transcriptFile, supervise }): Promise<AgentAnswer> {
       const args = buildClaudeArgs(prompt, model, options.allowedTools);
       assertNoManagedSettings();
       const isolated = createClaudeHome(options.realHome ?? homedir());
@@ -496,6 +497,10 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
           stdout: "pipe",
           stderr: "pipe",
         });
+        // stream-json prints an event per message, so the last stdout chunk is the
+        // last sign of life.
+        let lastActivity = Date.now();
+        const supervision = supervise?.({ pid: proc.pid, silenceMs: () => Date.now() - lastActivity });
         let timedOut = false;
         const timer = setTimeout(() => {
           timedOut = true;
@@ -504,13 +509,20 @@ export function createClaudeAgent(options: ClaudeAgentOptions = {}): AgentPort {
         let stdout: string;
         let stderr: string;
         try {
-          [stdout, stderr] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+          [stdout, stderr] = await Promise.all([
+            readTracked(proc.stdout, () => {
+              lastActivity = Date.now();
+            }),
+            new Response(proc.stderr).text(),
+          ]);
           await proc.exited;
         } finally {
           clearTimeout(timer);
+          supervision?.stop();
         }
 
         writeTranscript(transcriptFile, stdout, stderr);
+        throwIfKilled(supervision);
         const parsed = parseStream(stdout.split("\n").filter(Boolean), gold);
         // interpretRun first, so a timeout is reported as a timeout rather than
         // as "no init event" — a killed process can lose the transcript entirely,

@@ -21,6 +21,7 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { completionKey } from "../benchmark/retrieval-sweep";
+import { ArmKilledError } from "../benchmark/retrieval-supervision";
 import type { Arm, ArenaArmResult } from "./arena-run";
 
 export interface ArenaFailure {
@@ -195,6 +196,7 @@ export async function runArenaSweep(options: ArenaSweepOptions): Promise<ArenaSw
           arm,
           harness: options.harness,
           reason,
+          ...(error instanceof ArmKilledError ? { killReason: error.killReason } : {}),
           at: new Date().toISOString(),
         };
         appendJsonl(options.failuresPath, failure);

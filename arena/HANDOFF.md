@@ -50,10 +50,24 @@ claude leg is a different account and works.
 **Not done, in order:**
 
 1. **Top up the x.ai balance** (operator).
-2. **Wire the watchdog into `runArenaArm`** (§6.4) — needs no model; was next when
-   this stopped. The adapters own the child process, so they have to expose its pid
-   and a last-activity signal (the keryx events file's mtime; stdout activity for
-   grok and claude) to a poll loop that calls `evaluate`.
+2. ~~**Wire the watchdog into `runArenaArm`** (§6.4)~~ — done, 2026-09-11. Each
+   adapter hands `{ pid, silenceMs }` to a `supervise` callback
+   (`scripts/benchmark/retrieval-supervision.ts`); silence is the keryx events
+   file's mtime, and the last stdout chunk for grok and claude. `superviseArm`
+   (`scripts/arena/arena-supervisor.ts`) polls every 5s, calls `evaluate`, appends
+   one line per poll to `<out>/watchdog.jsonl`, and kills the tree by walking pids
+   (`killPidTree`) — not by process group, because spawning detached would stop an
+   operator's Ctrl-C reaching the agents. A kill surfaces as `ArmKilledError` and
+   lands in `failures.jsonl` with `killReason`. **Live:** wall clock, silence
+   (suspended while `gdgraph`, `keryx`, `tsc`… are alive), dead-and-silent.
+   **Deliberately not fed:** tokens — the research ceiling is 1,500,000 and the
+   smoke's honest grok-build control arm used 1,495,992, so it must be recalibrated
+   before it may kill; repeated calls — no adapter streams tool calls live yet.
+   The adapter's own timeout (ceiling + 60s) stays as the backstop.
+
+   **2026-09-11 10:34, still blocked:** the diagnostic rerun (`/tmp/arena-diag2`)
+   failed all four arms — grok CLI `402 … Grok Build usage balance exhausted`,
+   keryx `Ollama API returned HTTP 403`. The balance had not come back yet.
 3. **Rerun the diagnostic** to close K-006 — does grok-build, on the same model,
    also hunt for the commit in git history, or is that keryx's prompt?
    ```bash

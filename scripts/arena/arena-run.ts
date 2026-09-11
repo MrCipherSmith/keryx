@@ -36,6 +36,9 @@ import { assertProvisionAncestry, type BaseTreeCache } from "./arena-checkout";
 import { buildArenaPrompt } from "./arena-prompts";
 import { scorerFor, type ArenaScore } from "./arena-scoring";
 import type { ArenaTask } from "./arena-tasks";
+import { superviseArm } from "./arena-supervisor";
+import type { WatchdogThresholds } from "./arena-watchdog";
+import type { SupervisedChild } from "../benchmark/retrieval-supervision";
 
 export type Arm = "context-on" | "context-off";
 
@@ -83,6 +86,16 @@ export interface ArenaRunOptions {
    * the tests' fake runs stay free of filesystem side effects.
    */
   readonly transcriptsDir?: string;
+  /**
+   * Supervise the agent while it runs. Without it the adapter's own timeout is the
+   * only bound — a wall clock with no silence detection, which the handoff called
+   * tolerable for a six-arm smoke and not for 84 arms.
+   */
+  readonly watchdog?: {
+    readonly thresholds: WatchdogThresholds;
+    readonly logFile?: string;
+    readonly pollMs?: number;
+  };
   /** Gates and diff statistics for an `implement` task. Absent for `research`. */
   readonly evaluateImplementation?: (treePath: string) => Promise<{
     readonly gates: import("./arena-gates").GateVerdict;
@@ -158,6 +171,18 @@ export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOp
       ...(options.transcriptsDir === undefined
         ? {}
         : { transcriptFile: path.join(options.transcriptsDir, `${task.id}-${options.agent.harness}-${arm}.jsonl`) }),
+      ...(options.watchdog === undefined
+        ? {}
+        : {
+            supervise: (child: SupervisedChild) =>
+              superviseArm(child, {
+                thresholds: options.watchdog!.thresholds,
+                worktreePath: treePath,
+                cell: `${task.id}-${options.agent.harness}-${arm}`,
+                ...(options.watchdog!.logFile === undefined ? {} : { logFile: options.watchdog!.logFile }),
+                ...(options.watchdog!.pollMs === undefined ? {} : { pollMs: options.watchdog!.pollMs }),
+              }),
+          }),
     });
     const wallClockMs = Date.now() - started;
 

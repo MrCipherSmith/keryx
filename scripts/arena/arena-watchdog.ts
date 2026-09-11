@@ -312,6 +312,76 @@ export function killProcessTree(pgid: number, worktreePath: string, graceMs = 50
   return { signalled, survivors };
 }
 
+/** Pids of live descendants of `pid`, breadth-first, bounded like `descendantCommands`. */
+export function descendantPids(pid: number, limit: number = DESCENDANT_SCAN_LIMIT): number[] {
+  const seen = new Set<number>([pid]);
+  const queue = [pid];
+  const found: number[] = [];
+  while (queue.length > 0 && found.length < limit) {
+    const current = queue.shift();
+    if (current === undefined) continue;
+    for (const line of run(["pgrep", "-P", String(current)]).split("\n")) {
+      const child = Number.parseInt(line.trim(), 10);
+      if (Number.isNaN(child) || seen.has(child)) continue;
+      seen.add(child);
+      found.push(child);
+      queue.push(child);
+    }
+  }
+  return found;
+}
+
+/**
+ * Take down a child and everything under it, when the child does not lead its own
+ * process group.
+ *
+ * `killProcessTree` needs a group, and a group means spawning detached — which
+ * also means an operator's Ctrl-C on the sweep no longer reaches the agents, and
+ * leaves them running. So the adapters stay in the sweep's group and this walks
+ * the tree instead: descendants listed BEFORE the signal, because a killed parent
+ * reparents its children to init and the walk would find nothing afterwards.
+ */
+export function killPidTree(pid: number, worktreePath: string, graceMs = 5000): KillOutcome {
+  const signalled: string[] = [];
+  const tree = [pid, ...descendantPids(pid)];
+  const alive = (target: number): boolean => {
+    try {
+      process.kill(target, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  const signal = (sig: NodeJS.Signals): void => {
+    for (const target of tree) {
+      try {
+        process.kill(target, sig);
+        signalled.push(`${sig}(${target})`);
+      } catch {
+        // Exited between listing and signalling.
+      }
+    }
+  };
+
+  signal("SIGTERM");
+  if (tree.some(alive)) sleepSync(graceMs);
+  if (tree.some(alive)) signal("SIGKILL");
+
+  const strays = run(["pgrep", "-f", worktreePath]).split("\n").map((line) => line.trim()).filter(Boolean);
+  for (const stray of strays) {
+    const target = Number.parseInt(stray, 10);
+    if (Number.isNaN(target) || target === process.pid) continue;
+    try {
+      process.kill(target, "SIGKILL");
+      signalled.push(`SIGKILL(${target})`);
+    } catch {
+      // Exited between listing and killing.
+    }
+  }
+  const survivors = tree.filter(alive).map(String);
+  return { signalled, survivors };
+}
+
 // ---------------------------------------------------------------------------
 // Telemetry
 // ---------------------------------------------------------------------------

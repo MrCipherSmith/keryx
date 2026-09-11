@@ -227,6 +227,8 @@ async function sweep(args: Args, tasks: readonly ArenaTask[]): Promise<void> {
           provisioner: createArenaProvisioner({ commitFor: () => full.base }),
           checkLeakage,
           transcriptsDir: path.join(args.out, "transcripts"),
+          // The human tails this file while the sweep runs — one line per poll.
+          watchdog: { thresholds: thresholdsFor(full.type), logFile: path.join(args.out, "watchdog.jsonl") },
         });
       },
     });
