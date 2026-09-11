@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
@@ -267,6 +269,26 @@ describe("buildKeryxEnv", () => {
   });
 });
 
+/**
+ * The environment the CLI is probed under: a throwaway HOME, the way the arena runs
+ * every keryx arm. Under the operator's own HOME, 0.2.95+ starts every MCP server
+ * configured there before building the tool list, and after refusing a bad
+ * `--deny-tools` name the process did not exit at all (K-012, measured 90 s and
+ * still running against 1.3 s here). Neither is what these tests are about: they
+ * ask which names keryx's registry holds.
+ */
+function isolatedCliEnv(): Record<string, string> {
+  const home = mkdtempSync(path.join(tmpdir(), "keryx-deny-home-"));
+  return {
+    PATH: process.env.PATH ?? "",
+    HOME: home,
+    XDG_DATA_HOME: path.join(home, ".local", "share"),
+    XDG_CONFIG_HOME: path.join(home, ".config"),
+    TMPDIR: tmpdir(),
+    ...(process.env.NODE_EXTRA_CA_CERTS === undefined ? {} : { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS }),
+  };
+}
+
 describe("the keryx leg's denied tools", () => {
   test("the flag is passed, with the names comma-separated", () => {
     const args = buildKeryxArgs("find it", "grok-4.6", "grok", "/tmp/e.jsonl", 1000);
@@ -299,11 +321,14 @@ describe("the keryx leg's denied tools", () => {
         "-p",
         "x",
       ],
-      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe", env: isolatedCliEnv() },
     );
     const output = `${proc.stdout.toString()}${proc.stderr.toString()}`;
     expect(output).not.toContain("unknown tool name(s) in --deny-tools");
-  });
+    // Valid names pass the check and the shell goes on to run the `-p` turn
+    // offline — measured 4.9 s, which is bun's whole default 5 s budget and over it
+    // under a loaded suite. The time is the real CLI starting, not a hang.
+  }, 30_000);
 
   test("and a name keryx does NOT offer is refused, so the check above is not vacuous", () => {
     const proc = Bun.spawnSync(
@@ -321,11 +346,11 @@ describe("the keryx leg's denied tools", () => {
         "-p",
         "x",
       ],
-      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+      { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe", env: isolatedCliEnv() },
     );
     const output = `${proc.stdout.toString()}${proc.stderr.toString()}`;
     expect(output).toContain("unknown tool name(s) in --deny-tools");
-  });
+  }, 30_000);
 
   test("the roster markers still name something the denied list covers", () => {
     // The two lists are different shapes — substrings for judging a roster after

@@ -316,6 +316,34 @@ The transcript check catches the first when the path appears in what the arm ran
 second is bounded only by the isolated HOME holding no GitHub credential. A real
 sandbox for the arm's shell is the complete fix.
 
+## K-012 — a refused `keryx shell` start does not exit when MCP servers are configured · open (product, 0.2.95)
+
+**Evidence:** after merging 0.2.95 into this branch, the two tests that check
+`--deny-tools` names against the real CLI timed out. Measured with the tests' own
+command, `bun src/cli.ts shell --provider deepseek --model unused --no-tui
+--deny-tools web_serch -p x`:
+
+| HOME | time | exit | refusal printed |
+|---|---|---|---|
+| operator's own | killed at 90 s | 143 | yes |
+| isolated (the arena's) | 1.3 s | 1 | yes |
+
+Under the operator's HOME the shell prints `unknown tool name(s) in --deny-tools`
+and then never exits. The difference is the MCP servers configured in that HOME
+(and read through the new compat readers — the run also warns about
+`~/.grok/config.toml`): the tool list is built through the MCP runtime, which starts
+them first, and after the refusal they keep the process alive.
+
+**Impact:** any start that fails after the MCP runtime is up — a typo in
+`--deny-tools` is the reproduced case — hangs instead of exiting, for every user with
+MCP servers configured. A script or CI step that expected exit code 1 waits forever.
+The arena is not affected (isolated HOME, no user servers), so the tests now run the
+CLI under an isolated HOME, the way the arena does; that fixes the tests, not this.
+
+**Fix direction:** validate `--deny-tools` against the static roster before starting
+the MCP runtime; and on any startup error, close the runtime (or exit explicitly) so
+live child connections cannot hold the process.
+
 ---
 
 ## Status after 0.2.95 (2026-09-11)
@@ -334,6 +362,7 @@ sandbox for the arm's shell is the complete fix.
 | K-009 | fixed in 0.2.95 (#529), plus the prompt now follows the roster |
 | K-010 | open |
 | K-011 | fixed on this branch; residual risk recorded |
+| K-012 | open — product defect in 0.2.95; tests now probe under an isolated HOME |
 | S-1 | fixed in 0.2.95 (#529) |
 | S-2 | improved — clip notes now say how much was dropped (K-008) |
 | S-3 | partly — the prompt's tool statements are now true of the roster |
