@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "250",
+  "id": "252",
   "slug": "mcp-servers-p3b",
   "title": "MCP servers P3b: OAuth for remote servers — browser flow, owner-only token store, headless refusal",
   "status": "in-progress",
   "createdAt": "2026-09-11T09:12:05.678Z",
-  "updatedAt": "2026-09-11T19:00:22.710Z",
+  "updatedAt": "2026-09-11T19:42:50.129Z",
   "source": {
     "type": "description",
     "ref": null
@@ -336,6 +336,11 @@
       "at": "2026-09-11T19:00:22.710Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T19:42:50.129Z",
+      "event": "renumbered",
+      "detail": "250 -> 252: Flow id 250 collided after rebasing onto main: main already carries 250-keryx-shell-loses-the-arena-on-tools (PR #529) and 251-k-012. This flow was numbered 250 locally before either landed, so it takes the next free id."
     }
   ]
 }

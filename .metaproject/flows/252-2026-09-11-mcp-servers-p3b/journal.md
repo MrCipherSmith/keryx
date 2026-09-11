@@ -89,3 +89,4 @@ which silently dropped a headless guard.
 - 2026-09-11T19:00:22.481Z - task-done: T2: Implement per plan
 - 2026-09-11T19:00:22.595Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-11T19:00:22.710Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T19:42:50.129Z - renumbered: 250 -> 252: Flow id 250 collided after rebasing onto main: main already carries 250-keryx-shell-loses-the-arena-on-tools (PR #529) and 251-k-012. This flow was numbered 250 locally before either landed, so it takes the next free id.
