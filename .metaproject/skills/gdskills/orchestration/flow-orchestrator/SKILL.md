@@ -375,7 +375,7 @@ error, for a worker that reported no files (review, context, docs) or that
 committed on its own (tests-creator's stubs):
 
 ```bash
-set -- <changed_files from the subagent-result>   # may be none
+set -- <each changed_files path, single-quoted: 'src/a.ts' 'docs/b c.md'>   # may be none; an unquoted path with a space splits and is skipped
 PENDING=()
 for p in "$@"; do
   [ -n "$(git -C <worktree_path> status --porcelain -- "$p")" ] && PENDING+=("$p")

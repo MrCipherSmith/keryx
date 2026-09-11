@@ -851,7 +851,7 @@ rule 4, "Reporting Back"). As soon as a result is accepted (`STATUS: DONE` or
 `files_deleted` from the result file and commit the ones git still shows as
 changed, never `-A`/`--all`/`.`:
 ```bash
-set -- <files_modified files_created files_deleted from the result file>   # may be none
+set -- <each files_modified/files_created/files_deleted path, single-quoted: 'src/a.ts' 'docs/b c.md'>   # may be none; an unquoted path with a space splits and is skipped
 PENDING=()
 for p in "$@"; do
   [ -n "$(git -C <worktree_path> status --porcelain -- "$p")" ] && PENDING+=("$p")
