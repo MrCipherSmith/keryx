@@ -1,0 +1,818 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/gdgraph/artifacts/module-map.json",
+    ".metaproject/data/gdgraph/artifacts/summary.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/acceptance-criteria.md",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/context.md",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/description.md",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/flow.json",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/journal.md",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/plan.md",
+    ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/tasks.md",
+    "docs/requirements/roadmap.md",
+    "package.json",
+    "src/commands/mcp-servers.test.ts",
+    "src/commands/mcp-servers.ts",
+    "src/mcp-servers/catalog.ts",
+    "src/mcp-servers/compat.integration.test.ts",
+    "src/mcp-servers/compat.table.test.ts",
+    "src/mcp-servers/compat.ts",
+    "src/mcp-servers/config.ts",
+    "src/mcp-servers/fqn-sanitise.table.test.ts",
+    "src/mcp-servers/http.live.test.ts",
+    "src/mcp-servers/manager.test.ts",
+    "src/mcp-servers/trust.test.ts",
+    "src/mcp-servers/trust.ts"
+  ],
+  "files": [
+    {
+      "file": "src/mcp-servers/manager.ts",
+      "hop": 1,
+      "fanIn": 13,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/manager.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/doctor.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/doctor.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/runtime.ts",
+      "hop": 1,
+      "fanIn": 9,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/runtime.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/shell.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "package.json",
+      "path": [
+        "src/commands/shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/http-headers.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/http-headers.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/store.ts",
+      "hop": 1,
+      "fanIn": 8,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/store.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/install-plan.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "package.json",
+      "path": [
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/tools.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/tools.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "package.json",
+      "path": [
+        "src/cli.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/mcp-servers/approval-render.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/approval-render.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/commands/interactive-agent-tools.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/tui-shell.ts",
+      "hop": 1,
+      "fanIn": 3,
+      "via": "package.json",
+      "path": [
+        "src/tui/tui-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/version.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/commands/version.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/chat-shell.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "package.json",
+      "path": [
+        "src/tui/chat-shell.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/tui/mcp-consumer.ts",
+      "hop": 1,
+      "fanIn": 2,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/tui/mcp-consumer.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/mcp-servers.argv.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "path": [
+        "src/commands/mcp-servers.argv.test.ts",
+        "src/commands/mcp-servers.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-tool-surface.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/commands/mcp-tool-surface.test.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-untrusted.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/commands/mcp-untrusted.test.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/catalog.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/catalog.test.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.overlay-states.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/config.overlay-states.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.schema-parity.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/config.schema-parity.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/config.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/config.types.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/config.types.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/constraints.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/constraints.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/doctor.failures.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/doctor.failures.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/doctor.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/doctor.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/http-headers.table.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/http-headers.table.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/http.credentials.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/http.credentials.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/invariants.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/invariants.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/mutation-gaps.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/mutation-gaps.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/runtime.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/runtime.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/stdio.live.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/stdio.live.test.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/store.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/mcp-servers/store.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/mcp-servers/tools.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/mcp-servers/tools.test.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/tui/mcp-consumer.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "path": [
+        "src/tui/mcp-consumer.test.ts",
+        "src/mcp-servers/config.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 2,
+      "fanIn": 25,
+      "via": "src/mcp-servers/catalog.ts",
+      "path": [
+        "src/commands/agent.ts",
+        "src/mcp-servers/runtime.ts",
+        "src/mcp-servers/catalog.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/init.ts",
+      "hop": 2,
+      "fanIn": 15,
+      "via": "package.json",
+      "path": [
+        "src/commands/init.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/update.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "package.json",
+      "path": [
+        "src/commands/update.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/lib/routing-entrypoint.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "package.json",
+      "path": [
+        "src/lib/routing-entrypoint.ts",
+        "src/lib/install-plan.ts",
+        "package.json"
+      ],
+      "source": "graph",
+      "isTest": false
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/commands/rules.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 64 at hop 2, fan-in 3, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/install-lifecycle.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 44 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/interactive-agent-tools.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 45 of 64 at hop 2, fan-in 0, reached via src/mcp-servers/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-help.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 46 of 64 at hop 2, fan-in 0, reached via src/commands/mcp-servers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-install.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/mcp-servers.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 47 of 64 at hop 2, fan-in 0, reached via src/commands/mcp-servers.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 48 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 49 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/select.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 50 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-cli-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 51 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-launch.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 52 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell-slash-registry.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 53 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 54 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 55 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/install-plan.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 56 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/lib/routing-entrypoint.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 57 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/approval-decision.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 58 of 64 at hop 2, fan-in 0, reached via src/mcp-servers/config.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/approval-render.table.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/config.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 59 of 64 at hop 2, fan-in 0, reached via src/mcp-servers/config.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/mcp-servers/approval-wiring.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/mcp-servers/catalog.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 60 of 64 at hop 2, fan-in 0, reached via src/mcp-servers/catalog.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 61 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/chat-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 62 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/tui/tui-shell.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 63 of 64 at hop 2, fan-in 0, reached via package.json. It was NOT reviewed."
+    },
+    {
+      "file": "src/core-package.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "package.json",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 64 of 64 at hop 3, fan-in 0, reached via package.json. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/module-map.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/gdgraph/artifacts/summary.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/249-2026-09-11-mcp-servers-p3a/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/roadmap.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 25,
+    "changedFilesResolved": 13,
+    "changedFilesUnresolved": 12,
+    "candidates": 64,
+    "retained": 40,
+    "droppedByCap": 24,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 1,
+    "testsRetained": 20,
+    "hopHistogram": {
+      "1": 36,
+      "2": 4
+    }
+  },
+  "graph": {
+    "nodes": 1420,
+    "edges": 4250
+  }
+}

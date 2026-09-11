@@ -88,6 +88,7 @@ describe("a committed project server is not launched on sight", () => {
     const server: ResolvedMcpServer = {
       name: "docs",
       source: "project",
+    projectLocal: true,
       file: path.join(projectRoot, ".keryx", "mcp-servers.json"),
       enabled: true,
       command: "npx",
@@ -115,6 +116,7 @@ describe("approval is bound to the COMMAND, not to the name", () => {
   const base: ResolvedMcpServer = {
     name: "docs",
     source: "project",
+    projectLocal: true,
     file: "/repo/.keryx/mcp-servers.json",
     enabled: true,
     command: "npx",
@@ -185,6 +187,7 @@ describe("the store fails closed", () => {
       {
         name: "d",
         source: "project",
+    projectLocal: true,
         file: "/r/.keryx/mcp-servers.json",
         enabled: true,
         command: "x",
@@ -203,6 +206,7 @@ describe("the store fails closed", () => {
       {
         name: "d",
         source: "project",
+    projectLocal: true,
         file: "/r/.keryx/mcp-servers.json",
         enabled: true,
         command: "x",

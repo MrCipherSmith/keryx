@@ -79,6 +79,14 @@ export type McpConsumerDeps = {
    * environment and have half the command ignore it.
    */
   readonly env?: Record<string, string | undefined> | undefined;
+  /**
+   * Home directory for the compat readers. Overridden in tests.
+   *
+   * Same seam `loadMcpServers` has, and for the same reason: a test
+   * that lets this default to the real home reads the developer's own
+   * Cursor and Claude configs, so its result depends on who ran it.
+   */
+  readonly home?: string | undefined;
   readonly log: (line: string) => void;
   readonly err: (line: string) => void;
 };
@@ -114,7 +122,13 @@ function projectRootOf(deps: McpConsumerDeps): string {
 
 function load(deps: McpConsumerDeps): ResolvedMcpConfig {
   const root = projectRootOf(deps);
-  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir, env: deps.env });
+  return loadMcpServers({
+    cwd: deps.cwd,
+    gitRoot: root,
+    configDir: deps.configDir,
+    env: deps.env,
+    home: deps.home,
+  });
 }
 
 /** Redacted view of one server, safe to print or paste into an issue. */
@@ -189,7 +203,7 @@ function listCommand(args: readonly string[], deps: McpConsumerDeps): number {
     // is the state they will otherwise debug as "it does not connect".
     deps.log("");
     deps.log(
-      `${held} project server(s) are not started until approved — a committed config is code someone else wrote.`,
+      `${held} server(s) from committed config are not started until approved — a committed config is code someone else wrote.`,
     );
     deps.log("Read what it launches above, then: keryx mcp trust <name>");
   }
@@ -356,6 +370,22 @@ function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
     // Removing from a guessed scope is a delete the operator did not ask for.
     const defining = definingScopes(name, deps, projectRoot);
     if (defining.length === 0) {
+      // A COMPAT-only name lands here, and "not defined in either native
+      // config file" would send the operator to look in two files that
+      // correctly do not mention it. keryx never writes to a compat
+      // source, so the honest answer names the file that does define it
+      // and the two things they can actually do.
+      const fromCompat = load(deps).servers.find(
+        (server) => server.name === name && server.source !== "user" && server.source !== "project",
+      );
+      if (fromCompat !== undefined) {
+        deps.err(`server "${name}" comes from ${fromCompat.source}, not from keryx's own config:`);
+        deps.err(`  ${fromCompat.file}`);
+        deps.err("keryx reads that file and never writes to it. Either edit it there, or run");
+        deps.err(`  keryx mcp disable ${name}`);
+        deps.err("which records your preference in keryx's own overlay and leaves their file alone.");
+        return 1;
+      }
       deps.err(`server "${name}" is not defined in either native config file.`);
       deps.err(`  user:    ${userConfigFile(deps.configDir)}`);
       deps.err(`  project: ${projectConfigFile(projectRoot)}`);
@@ -463,11 +493,21 @@ function trustCommand(args: readonly string[], deps: McpConsumerDeps, approve: b
     return 1;
   }
 
-  if (server.source !== "project") {
-    // Nothing to approve: the operator wrote this file themselves, on this
-    // machine. Asking them to confirm their own `keryx mcp add` would train
-    // them to say yes without reading.
-    deps.err(`"${name}" is a user-scope server; only project-scope servers need approval.`);
+  if (!server.projectLocal) {
+    // `projectLocal`, not `source === "project"`, and this is the second
+    // half of the same fix. The trust GATE was corrected to hold every
+    // committable source; this command — the only way to release one —
+    // still asked about the tag. So a server read from a cloned repo's
+    // `.mcp.json` was held, told to run `keryx mcp trust <name>`, and
+    // that command refused it as "a user-scope server". Held, with no
+    // path to approval, and the refusal misdescribed a file the operator
+    // never wrote.
+    //
+    // Fixed at the site it was found and broken one step to the side —
+    // in a fix for exactly that pattern, two commits after writing the
+    // pattern down.
+    deps.err(`"${name}" did not come from a file this project can commit; only those need approval.`);
+    deps.err(`  it came from ${server.file} (${server.source})`);
     return 1;
   }
 
