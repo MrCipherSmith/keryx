@@ -28,6 +28,7 @@ import {
   KNOWN_EXTERNAL_SKILL_REFERENCES,
   KNOWN_SKILL_COMPANION_DOCUMENTS,
   type BundledSkillCheck,
+  bareImperativeOpening,
   bundledSkillDocuments,
   bundledSkillFiles,
   defaultBundledRoot,
@@ -257,13 +258,81 @@ VIOLATION frontmatter:category — this skill ships under
 `;
 
 /**
+ * Flow 257 T7 — the `description:*` family. Each fixture below trips exactly
+ * one of the three new checks; `CONTROL_SKILL`'s rewritten description (below)
+ * is the control that passes all three at once.
+ */
+
+/** No "Use when"/"Use to"/"Use for" anywhere in the description. */
+const NO_TRIGGER_PHRASE_SKILL = `---
+name: no-trigger-phrase
+description: Reviews pull requests for correctness and style before merge.
+metadata:
+  version: 1.0.0
+---
+
+# No Trigger Phrase
+
+VIOLATION description:trigger-phrase — the description above never says
+"Use when", "Use to", or "Use for"; an agent has no situational cue for when
+to reach for this skill, only a summary of what it does.
+`;
+
+/**
+ * "Use when <bare imperative verb>" — the shape flow 257 T6 removed. Must NOT
+ * fire on a gerund ("Use when reviewing…"), a colon-led gerund ("Use when:
+ * reviewing…"), or a noun-phrase opening ("Use when a request…") — those three
+ * shapes are exactly what the shipped tree's 67 descriptions already use, and
+ * a check that flagged any of them would fail on the real tree, not the
+ * fixture.
+ */
+const BARE_IMPERATIVE_SKILL = `---
+name: bare-imperative-example
+description: Use when implement a feature end-to-end, from task breakdown to a merge-ready PR.
+metadata:
+  version: 1.0.0
+---
+
+# Bare Imperative Example
+
+VIOLATION description:bare-imperative — "Use when implement" is a command
+aimed at the skill, not a description of the triggering situation; it should
+read "Use when implementing".
+`;
+
+/**
+ * Over the 1024-character cap agentskills.io's skill spec sets. Written with a
+ * trigger phrase and a gerund opening so this fixture trips ONLY
+ * \`description:length\`, proving the three checks are independent rather than
+ * one long broken description satisfying all three by accident.
+ */
+const LONG_DESCRIPTION_TEXT =
+  "Use when reviewing a fixture description deliberately padded well past the length a routing prompt can afford. " +
+  ("Repeating harmless filler words about the eleven hundred and twenty four character cap that agentskills.io's " +
+    "skill specification sets for every description field, so that this one check and only this one check has " +
+    "something real to reject. ").repeat(6) +
+  "The end.";
+
+const TOO_LONG_DESCRIPTION_SKILL = `---
+name: too-long-description
+description: ${LONG_DESCRIPTION_TEXT}
+metadata:
+  version: 1.0.0
+---
+
+# Too Long Description
+
+VIOLATION description:length — the description above is over 1024 characters.
+`;
+
+/**
  * The control. Correct in every respect the evaluator checks, and sitting in the
  * SAME fixture tree as the broken ones — so "the evaluator rejected the fixture"
  * cannot be satisfied by an evaluator that rejects everything it is shown.
  */
 const CONTROL_SKILL = `---
 name: control-example
-description: A structurally correct skill, used to prove the checks are selective.
+description: Use when validating that a structurally correct skill draws no findings, proving the sweep's checks are selective rather than a blanket failure.
 metadata:
   version: 1.0.0
 ---
@@ -429,6 +498,9 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL);
   writeSkill(fixtureRoot, "quality", "harness-excludes-claude", HARNESS_EXCLUDES_CLAUDE_SKILL);
   writeSkill(fixtureRoot, "quality", "category-mismatch", CATEGORY_MISMATCH_SKILL);
+  writeSkill(fixtureRoot, "quality", "no-trigger-phrase", NO_TRIGGER_PHRASE_SKILL);
+  writeSkill(fixtureRoot, "quality", "bare-imperative-example", BARE_IMPERATIVE_SKILL);
+  writeSkill(fixtureRoot, "quality", "too-long-description", TOO_LONG_DESCRIPTION_SKILL);
   writeSkill(fixtureRoot, "quality", "control-example", CONTROL_SKILL);
   writeSkill(fixtureRoot, "quality", "build-drift-example", BUILD_ONLY_DEFECT_CANONICAL);
   writeSkillFile(
@@ -474,10 +546,13 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    expect(evaluation.skills).toBe(14);
-    // Fourteen skills, sixteen documents: `build-drift-example` and
-    // `harness-field-only` each also ship a Codex build.
-    expect(evaluation.documents).toBe(16);
+    // Seventeen skills: the original fourteen plus flow 257 T7's three
+    // `description:*` fixtures (no-trigger-phrase, bare-imperative-example,
+    // too-long-description), each shipping one plain SKILL.md.
+    expect(evaluation.skills).toBe(17);
+    // Nineteen documents: seventeen skills, plus `build-drift-example` and
+    // `harness-field-only` each also shipping a Codex build.
+    expect(evaluation.documents).toBe(19);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -526,6 +601,63 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     const control = findingsFor("control-example").filter(
       (finding) => finding.check === "frontmatter:description",
     );
+    expect(control).toEqual([]);
+  });
+
+  test("a description with no trigger phrase is rejected; the control passes", () => {
+    const found = findingsFor("no-trigger-phrase").filter(
+      (finding) => finding.check === "description:trigger-phrase",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain('"Use when"');
+    expect(found[0]?.message).toContain('"Use to"');
+    expect(found[0]?.message).toContain('"Use for"');
+
+    const control = findingsFor("control-example").filter(
+      (finding) => finding.check === "description:trigger-phrase",
+    );
+    expect(control).toEqual([]);
+  });
+
+  test("a bare imperative opening is rejected; a gerund opening is not", () => {
+    const found = findingsFor("bare-imperative-example").filter(
+      (finding) => finding.check === "description:bare-imperative",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain('"Use when implement');
+    expect(found[0]?.message).toContain('"Use when implementing');
+
+    // The control opens with "Use when validating…" — a gerund — and must not
+    // trip the rule that exists specifically to catch the BARE form.
+    const control = findingsFor("control-example").filter(
+      (finding) => finding.check === "description:bare-imperative",
+    );
+    expect(control).toEqual([]);
+
+    // The shape the rule must NOT fire on, stated directly rather than only
+    // through the shipped tree: a gerund, a colon-led gerund, and a
+    // noun-phrase opening all pass.
+    expect(bareImperativeOpening("Use when reviewing a diff for correctness.")).toBeUndefined();
+    expect(bareImperativeOpening("Use when: reviewing a diff for correctness.")).toBeUndefined();
+    expect(bareImperativeOpening("Use when a request is ambiguous.")).toBeUndefined();
+    // The shape it MUST fire on.
+    expect(bareImperativeOpening("Use when implement a feature.")).toBe("implement");
+  });
+
+  test("a description over the 1024-character cap is rejected; a shorter one is not", () => {
+    const found = findingsFor("too-long-description").filter((finding) => finding.check === "description:length");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("over the 1024-character cap");
+    expect(found[0]?.message).toContain("agentskills.io");
+
+    // The fixture trips ONLY `description:length` — it opens with a proper
+    // trigger phrase and a gerund, so the other two checks must stay silent.
+    const others = findingsFor("too-long-description").filter(
+      (finding) => finding.check === "description:trigger-phrase" || finding.check === "description:bare-imperative",
+    );
+    expect(others).toEqual([]);
+
+    const control = findingsFor("control-example").filter((finding) => finding.check === "description:length");
     expect(control).toEqual([]);
   });
 

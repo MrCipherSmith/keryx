@@ -99,6 +99,9 @@ export const BUNDLED_SKILL_CHECKS = [
   "frontmatter:name",
   "frontmatter:name-unique",
   "frontmatter:description",
+  "description:trigger-phrase",
+  "description:bare-imperative",
+  "description:length",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
   "frontmatter:category",
@@ -368,6 +371,164 @@ export const REQUIRED_FRONTMATTER_CHECKS = {
 export const REQUIRED_FRONTMATTER_FIELDS = Object.keys(
   REQUIRED_FRONTMATTER_CHECKS,
 ) as readonly (keyof typeof REQUIRED_FRONTMATTER_CHECKS)[];
+
+// ---------------------------------------------------------------------------
+// Description quality (flow 257 T7)
+// ---------------------------------------------------------------------------
+//
+// `frontmatter:description` (above) answers one question: does the field exist
+// and resolve to text a harness can serve at all. It fires on absence and on a
+// block scalar that resolves to nothing. It does NOT judge the text's shape,
+// and three shapes slip past it while still routing badly:
+//
+//   - no trigger phrase at all, so an agent choosing between skills has no
+//     situational cue and has to infer one from a summary of what the skill
+//     DOES rather than WHEN to reach for it;
+//   - a trigger phrase followed by a bare imperative verb ("Use when
+//     implement a feature…") — grammatically a command aimed at the skill,
+//     not a description of the situation that should trigger it, and the
+//     shape flow 257 T6 removed from the tree;
+//   - a description past the length a harness's routing prompt can afford,
+//     concretely the 1024-character cap agentskills.io's skill spec sets.
+//
+// These are kept as a SEPARATE `description:*` family rather than folded into
+// `frontmatter:description`, on purpose: that check is a parse-level fact
+// ("does this resolve to text"), these three are a content-quality judgment
+// ("is that text shaped to route on"), and collapsing four unrelated failure
+// reasons into one id is exactly what `REQUIRED_FRONTMATTER_CHECKS`'s own
+// comment above warns against — an operator reading `frontmatter:description:
+// 3 finding(s)` could not tell an empty field from a well-formed paragraph
+// that is merely too long.
+
+/**
+ * Trigger phrases a description's routing clause may open with.
+ *
+ * Derived empirically, not guessed: every one of the 67 shipped `SKILL.md`
+ * descriptions contains at least one of these three, and none contains "Use
+ * before", "Use after", or "Use while" — phrases that read as equally valid
+ * English but that this sweep has no shipped example to verify against. A
+ * set that admits a phrase nothing on disk uses is an aspiration, the same
+ * defect `REQUIRED_FRONTMATTER_FIELDS`'s comment already refuses for required
+ * fields. Widen this set only once a shipped description actually needs the
+ * wider phrase — the check adapts to the tree, not the other way round.
+ */
+export const ALLOWED_DESCRIPTION_TRIGGER_PHRASES: readonly string[] = ["Use when", "Use to", "Use for"];
+
+const TRIGGER_PHRASE_PATTERN = new RegExp(
+  `\\b(?:${ALLOWED_DESCRIPTION_TRIGGER_PHRASES.map((phrase) => phrase.replace(/\s+/g, "\\s+")).join("|")})\\b`,
+  "i",
+);
+
+/** Whether `description` carries none of `ALLOWED_DESCRIPTION_TRIGGER_PHRASES`. */
+export function descriptionLacksTriggerPhrase(description: string): boolean {
+  return !TRIGGER_PHRASE_PATTERN.test(description);
+}
+
+/**
+ * Verb infinitives that read as a command when they follow "Use when" —
+ * "Use when implement a feature" says to the reader "implement", not "use
+ * this when a feature needs implementing".
+ *
+ * Not an attempt at an exhaustive English verb list — that trades a false
+ * negative on some verb missing from it for a false positive on every common
+ * noun this sweep cannot tell apart from a verb (a list of ALL infinitives
+ * would have to include words like "test" and "plan" that are ordinary nouns
+ * as often as they are verbs, e.g. "Use when test coverage drops"). Sized to
+ * the mistake this rule exists to catch: an author writing the clause as an
+ * instruction to the skill out of habit, using the bare form of a verb that
+ * unambiguously reads as an action when it opens a sentence.
+ */
+export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
+  "implement",
+  "create",
+  "write",
+  "add",
+  "build",
+  "review",
+  "check",
+  "analyze",
+  "generate",
+  "deploy",
+  "measure",
+  "document",
+  "push",
+  "run",
+  "save",
+  "explore",
+  "open",
+  "take",
+  "decompose",
+  "fix",
+  "refactor",
+  "migrate",
+  "extract",
+  "convert",
+  "summarize",
+  "classify",
+  "rewrite",
+  "verify",
+  "validate",
+  "audit",
+  "execute",
+  "distill",
+  "split",
+  "customize",
+  "configure",
+  "launch",
+  "start",
+  "debug",
+  "update",
+  "remove",
+  "delete",
+  "install",
+  "commit",
+  "scaffold",
+  "draft",
+  "edit",
+  "replace",
+  "rename",
+  "investigate",
+  "diagnose",
+  "resolve",
+]);
+
+/**
+ * Match "Use when" (any casing, an optional colon/dash after it) followed
+ * immediately by one bare word — the token this rule classifies.
+ */
+const USE_WHEN_OPENING = /\buse\s+when\s*[:\-—]?\s*([A-Za-z][\w'-]*)/gi;
+
+/**
+ * The offending verb, if `description` opens a "Use when" clause with a bare
+ * imperative — `undefined` otherwise.
+ *
+ * Deliberately conservative in what it calls a verb: a capitalized token
+ * ("Use when MobX…") is a proper noun, not a verb in imperative mood, and a
+ * token ending in "-ing" ("Use when reviewing…") is already the gerund this
+ * rule wants, not the defect. Only a lowercase, non-gerund token that matches
+ * `BARE_IMPERATIVE_VERBS` fires — an unrecognized lowercase word (e.g. "Use
+ * when a…", "Use when dispatched…") is left alone rather than guessed at,
+ * because a false positive here breaks a description this sweep did not
+ * write and cannot safely rewrite on its own.
+ */
+export function bareImperativeOpening(description: string): string | undefined {
+  for (const match of description.matchAll(USE_WHEN_OPENING)) {
+    const token = match[1] ?? "";
+    if (token.length === 0) continue;
+    if (/^[A-Z]/.test(token)) continue;
+    if (/ing$/i.test(token)) continue;
+    if (BARE_IMPERATIVE_VERBS.has(token.toLowerCase())) return token;
+  }
+  return undefined;
+}
+
+/**
+ * The description length cap agentskills.io's skill spec sets. Past this, a
+ * harness's routing prompt pays for prose that will not fit whatever budget
+ * it allotted the description, on every request it ever considers this
+ * skill for.
+ */
+export const MAX_DESCRIPTION_LENGTH = 1024;
 
 // ---------------------------------------------------------------------------
 // Cross-references
@@ -784,6 +945,32 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
             1,
             "frontmatter `description` is present but resolves to nothing a harness can match a request against; a block scalar (`description: |`) needs its text on the following indented lines.",
           );
+        } else {
+          // The three content-quality checks only judge text that actually
+          // exists — an empty description already failed above, and judging
+          // the shape of nothing would double-report the same defect twice.
+          if (descriptionLacksTriggerPhrase(served)) {
+            add(
+              "description:trigger-phrase",
+              1,
+              `frontmatter \`description\` has no trigger phrase (${ALLOWED_DESCRIPTION_TRIGGER_PHRASES.map((p) => `"${p}"`).join(", ")}); without one an agent has no situational cue for when to reach for this skill, only a summary of what it does.`,
+            );
+          }
+          const bareVerb = bareImperativeOpening(served);
+          if (bareVerb !== undefined) {
+            add(
+              "description:bare-imperative",
+              1,
+              `frontmatter \`description\` opens "Use when ${bareVerb} …" — a bare imperative reads as an instruction aimed at the skill, not a description of the situation that should trigger it; use the gerund ("Use when ${bareVerb}ing …") or rephrase around the situation.`,
+            );
+          }
+          if (served.length > MAX_DESCRIPTION_LENGTH) {
+            add(
+              "description:length",
+              1,
+              `frontmatter \`description\` is ${served.length} characters, over the ${MAX_DESCRIPTION_LENGTH}-character cap agentskills.io's skill spec sets for descriptions; trim it.`,
+            );
+          }
         }
       }
       if (keys.has("metadata")) {
