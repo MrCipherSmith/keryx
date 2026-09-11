@@ -356,6 +356,22 @@ function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {
     // Removing from a guessed scope is a delete the operator did not ask for.
     const defining = definingScopes(name, deps, projectRoot);
     if (defining.length === 0) {
+      // A COMPAT-only name lands here, and "not defined in either native
+      // config file" would send the operator to look in two files that
+      // correctly do not mention it. keryx never writes to a compat
+      // source, so the honest answer names the file that does define it
+      // and the two things they can actually do.
+      const fromCompat = load(deps).servers.find(
+        (server) => server.name === name && server.source !== "user" && server.source !== "project",
+      );
+      if (fromCompat !== undefined) {
+        deps.err(`server "${name}" comes from ${fromCompat.source}, not from keryx's own config:`);
+        deps.err(`  ${fromCompat.file}`);
+        deps.err("keryx reads that file and never writes to it. Either edit it there, or run");
+        deps.err(`  keryx mcp disable ${name}`);
+        deps.err("which records your preference in keryx's own overlay and leaves their file alone.");
+        return 1;
+      }
       deps.err(`server "${name}" is not defined in either native config file.`);
       deps.err(`  user:    ${userConfigFile(deps.configDir)}`);
       deps.err(`  project: ${projectConfigFile(projectRoot)}`);

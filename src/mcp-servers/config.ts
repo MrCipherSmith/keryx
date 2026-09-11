@@ -10,6 +10,7 @@
 
 import path from "node:path";
 import { keryxConfigDir, isDefiniteAbsence, readConfigFile } from "../lib/config-dir";
+import { compatFiles, readCompatFile } from "./compat";
 
 /** One server as written in a config file. Shape mirrors the package schema. */
 export type McpServerEntry = {
@@ -27,7 +28,14 @@ export type McpServerEntry = {
   tool_timeouts?: Record<string, number>;
 };
 
-export type McpServerSource = "project" | "user";
+/**
+ * Which layer a server came from.
+ *
+ * The compat values are separate rather than one `"compat"` because
+ * `keryx mcp list` tags each row, and "go edit the file it came from"
+ * is only actionable if the row says which tool wrote it.
+ */
+export type McpServerSource = "project" | "user" | "cursor" | "claude" | "mcp.json" | "grok";
 
 export type ResolvedMcpServer = McpServerEntry & {
   name: string;
@@ -436,12 +444,31 @@ export function projectConfigFiles(cwd: string, gitRoot?: string): string[] {
   return files.reverse();
 }
 
+/**
+ * Sentinel home for an isolated run: a path nothing can live under.
+ *
+ * Not `undefined`, because that means "use the real home"; not a real
+ * temp dir, because then an isolated run could still pick something up.
+ */
+const NO_HOME = path.join(path.sep, "\u0000keryx-no-home");
+
 export type LoadOptions = {
   cwd: string;
   gitRoot?: string | undefined;
   /** Overridden in tests; defaults to the real user config directory. */
   configDir?: string | undefined;
   env?: Record<string, string | undefined> | undefined;
+  /**
+   * The home directory the compat readers look in. Overridden in tests.
+   *
+   * A test that let this default to the real `os.homedir()` would read
+   * the developer's own Cursor and Claude configs, so its result would
+   * depend on who ran it — and it would pass on a clean CI box while
+   * failing on the machine of anyone who uses those tools.
+   */
+  home?: string | undefined;
+  /** Set false to read native config only. Used by `store.ts`'s writers. */
+  compat?: boolean | undefined;
 };
 
 /**
@@ -462,6 +489,44 @@ export function loadMcpServers(options: LoadOptions): ResolvedMcpConfig {
   problems.push(...user.problems);
 
   const winner = new Map<string, { entry: McpServerEntry; source: McpServerSource; file: string }>();
+
+  // COMPAT FIRST, so native overwrites it. Native is what keryx owns and
+  // what `add` writes; a compat source is a courtesy read of a file
+  // whose author never agreed to keryx's semantics, so it must never
+  // shadow the operator's own keryx config. Within compat the order is
+  // `compatFiles`', fixed and asserted rather than emergent.
+  if (options.compat !== false) {
+    // An ISOLATED config directory means an isolated environment.
+    //
+    // When a caller supplies `configDir` and no `home`, the user-global
+    // compat files are skipped and only project-local ones are read.
+    // Without this, every test that injects a temp `configDir` also
+    // read the developer's real `~/.claude.json` and `~/.cursor/mcp.json`
+    // — 69 of them failed the moment compat landed, because their
+    // results depended on who ran them and on what that person happened
+    // to have configured in other tools.
+    //
+    // I wrote that hazard into `LoadOptions.home`'s doc comment and then
+    // shipped the unsafe default anyway; the tests caught it in one run.
+    const home = options.home ?? (options.configDir === undefined ? undefined : NO_HOME);
+    for (const entry of compatFiles(options.cwd, home)) {
+      const read = readCompatFile(entry, options.cwd);
+      problems.push(...read.problems);
+      for (const [name, value] of Object.entries(read.servers) as Array<[string, McpServerEntry]>) {
+        const found = entryProblems(name, value);
+        if (found.length > 0) {
+          // Validated exactly like a native entry, and rejected out loud.
+          // A malformed compat entry that is silently dropped is
+          // indistinguishable from one that was never written — and the
+          // operator would go looking in the wrong file.
+          for (const message of found) problems.push({ file: entry.file, message });
+          continue;
+        }
+        winner.set(name, { entry: value, source: entry.source, file: entry.file });
+      }
+    }
+  }
+
   for (const [name, entry] of Object.entries(user.servers)) {
     winner.set(name, { entry, source: "user", file: userFile });
   }
