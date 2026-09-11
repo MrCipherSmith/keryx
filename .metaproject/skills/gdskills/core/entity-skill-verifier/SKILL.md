@@ -7,7 +7,7 @@ description: "Use when an existing project-skill's claims need checking against 
 
 ## Purpose
 
-Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.
+Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.
 
 ## When To Use
 
@@ -17,10 +17,10 @@ Verify project-skills against current code, graph, wiki, health, memory, tests, 
 
 ## Workflow
 
-1. Resolve candidate skills through ownership and gdgraph affected context.
-2. Compare skill claims with current code, wiki decisions, health reports, and memory.
-3. Classify each skill as fresh, stale, needs-review, or blocked.
-4. Write a verification report and only update generated sections when policy allows it.
+1. Resolve the target project-skill through gdgraph affected context or `keryx skills route <target>`.
+2. Run `keryx skills verify <module>/<skill-name>` (`--dry-run` previews without writing).
+3. The command checks required files, SKILL.md metadata (version, target, last-verified), manifest registration, target path existence, and evidence artifacts for gdgraph, gdctx, gdwiki, Code Health, and memory consultation, then classifies the skill fresh, needs-review, stale, or blocked and writes the JSON report plus `verification.md`.
+4. Manually read the skill and the code, wiki, and health evidence it points at to check its claims — the command does not do this comparison — then route stale or blocked findings to entity-skill-learner.
 
 ## Local-First Rules
 

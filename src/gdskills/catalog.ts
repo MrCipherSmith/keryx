@@ -65,11 +65,11 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Confirm with `keryx review reviewers` — creating files is not registration, and registration is not discovery.",
     "For existing SKILL.md packages, run `keryx skills import --from <dir|file|https-url> --module <module>`; `keryx review import` is the review-shaped alias with the review-vantage-* prefix.",
   ], ["create a reviewer", "new reviewer for review-orchestrator", "make a reviewer from this profile", "создай ревьюера", "создай нового ревьюера на основании", "import vantage reviewers", "import overlay reviewers"]),
-  skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.", [
-    "Resolve candidate skills through ownership and gdgraph affected context.",
-    "Compare skill claims with current code, wiki decisions, health reports, and memory.",
-    "Classify each skill as fresh, stale, needs-review, or blocked.",
-    "Write a verification report and only update generated sections when policy allows it.",
+  skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.", [
+    "Resolve the target project-skill through gdgraph affected context or `keryx skills route <target>`.",
+    "Run `keryx skills verify <module>/<skill-name>` (`--dry-run` previews without writing).",
+    "The command checks required files, SKILL.md metadata (version, target, last-verified), manifest registration, target path existence, and evidence artifacts for gdgraph, gdctx, gdwiki, Code Health, and memory consultation, then classifies the skill fresh, needs-review, stale, or blocked and writes the JSON report plus `verification.md`.",
+    "Manually read the skill and the code, wiki, and health evidence it points at to check its claims — the command does not do this comparison — then route stale or blocked findings to entity-skill-learner.",
   ], ["verify skill", "skill-verify-skill", "stale skill"],
     "Use when an existing project-skill's claims need checking against current code, graph, wiki, health, memory, tests, or review lessons before it is trusted. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."),
   skill("entity-skill-learner", "core", ["minimal", "recommended", "full"], "Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.", [

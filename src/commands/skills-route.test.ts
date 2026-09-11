@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
+import { BUNDLED_GDSKILLS, renderBundledSkill } from "../gdskills/catalog";
 import { normalizeRouteText, scoreBundledSkillRoute } from "./skills";
 
 function topBundled(query: string): { name: string; score: number } | undefined {
@@ -123,5 +123,25 @@ describe("rendered description reads as a trigger, not an echoed imperative", ()
       (entry) => AC9_SCOPED_SKILLS.includes(entry.name) && echoedImperative.test(entry.description),
     ).map((entry) => entry.name);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("AC14: entity-skill-verifier describes only what `keryx skills verify` checks", () => {
+  // `keryx skills verify` (src/gdskills/verify.ts) checks required files,
+  // SKILL.md metadata, manifest registration, target-path existence, and the
+  // presence/validity of gdgraph/gdctx/gdwiki/health/memory evidence — it
+  // never reads the skill's prose and diffs it against the code it describes.
+  // A "compares"+"claims" sentence in the rendered skill is only honest when
+  // it marks that comparison as the agent's manual step, not the command's.
+  test("a 'compares' + 'claims' sentence, if present, marks the comparison as a manual agent step", () => {
+    const entry = BUNDLED_GDSKILLS.find((skillEntry) => skillEntry.name === "entity-skill-verifier");
+    expect(entry).toBeTruthy();
+    const rendered = renderBundledSkill(entry!);
+    const sentences = rendered.split(/(?<=[.!?])\s+/);
+    const claimSentences = sentences.filter((sentence) => /compar\w*/i.test(sentence) && /claims?/i.test(sentence));
+    expect(claimSentences.length).toBeGreaterThan(0);
+    for (const sentence of claimSentences) {
+      expect(sentence, sentence).toMatch(/manual|does not|the command does not do this/i);
+    }
   });
 });
