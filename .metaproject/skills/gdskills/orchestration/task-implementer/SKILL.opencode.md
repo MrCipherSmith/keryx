@@ -315,14 +315,20 @@ Execute the change plan. Write production-quality code.
 
 **4.5 Commit after implementation:**
 
-When auto-commit is enabled, create a conventional commit with the changes. Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
+When auto-commit is enabled, create a conventional commit with the changes. Stage explicit paths only — never `-A`/`--all`/`.` — and run every git command as `git -C "<codebase_path>"` (`rules/core/git-concurrency.mdc`). Include the `refs #<issue_number>` line below only when a positive real issue number was supplied; otherwise omit that entire line:
 ```bash
-git add <modified files>
-git commit -m "<type>(<scope>): <description>
+git -C "<codebase_path>" add <modified files, explicit paths>
+git -C "<codebase_path>" commit -m "<type>(<scope>): <description>
 
 refs #<issue_number>
 task: <task_id>"
 ```
+
+When auto-commit is disabled, do not commit. Report the exact list of files you
+changed — nothing inferred — in the Phase 6 STATUS response and the result
+file's `files_modified`/`files_created`/`files_deleted`; the orchestrator stages
+and commits those exact paths at the task boundary (`rules/core/git-concurrency.mdc`,
+"Reporting Back").
 
 Commit type mapping:
 | Task Type | Commit Type |
@@ -394,21 +400,24 @@ identical outputs cost the whole budget to learn what the second one already
 said. Report the block instead, naming what repeated.
 
 
-**ROLLBACK POLICY**: If implementation fatally fails (tests still failing after 3 attempts, or unresolvable compilation errors), restore ONLY the files this task changed — `git checkout -- <your files>` for tracked ones, delete the untracked ones you created — then report the failure in Phase 6.
+**ROLLBACK POLICY**: If implementation fatally fails (tests still failing after 3 attempts, or unresolvable compilation errors), restore ONLY the files this task changed — `git -C "<codebase_path>" checkout -- <your files>` for tracked ones, delete the untracked ones you created — then report the failure in Phase 6.
 
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
-**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/core/git-concurrency.mdc`.
+**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git -C "<codebase_path>" add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/core/git-concurrency.mdc`.
 
 **5.5 Re-commit fixes if any:**
-When auto-commit is enabled, use the template below. Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
+When auto-commit is enabled, use the template below — explicit paths only, `git -C "<codebase_path>"` for every command (`rules/core/git-concurrency.mdc`). Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
 ```bash
-git add <fixed files>
-git commit -m "fix(<scope>): resolve lint/type/test issues
+git -C "<codebase_path>" add <fixed files, explicit paths>
+git -C "<codebase_path>" commit -m "fix(<scope>): resolve lint/type/test issues
 
 refs #<issue_number>
 task: <task_id>"
 ```
+
+When auto-commit is disabled, do not commit; report the exact fixed-file list in
+Phase 6 as in 4.5 — the orchestrator commits it at the task boundary.
 
 ### Phase 6: REPORT
 

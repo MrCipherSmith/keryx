@@ -9,7 +9,7 @@ alwaysApply: false
 Prevent one agent's git operation from destroying or corrupting another agent's or session's in-flight work when multiple sessions or subagents share a checkout, a stash stack, or run in parallel git worktrees.
 
 ## When To Apply
-Apply whenever more than one agent session or subagent may be active against the same repository — parallel `task-implementer` waves, concurrent flow workers, or any dispatch that runs inside a worktree cut for a specific task. Always loaded alongside `flow-orchestrator`, `job-orchestrator`, and `task-implementer`.
+Apply whenever more than one agent session or subagent may be active against the same repository — parallel `task-implementer` waves, concurrent flow workers, or any dispatch that runs inside a worktree cut for a specific task. Cited by `flow-orchestrator`, `job-orchestrator`, and `task-implementer`.
 
 ---
 
@@ -64,6 +64,8 @@ git -C /absolute/path/to/worktree commit -m "fix(foo): ..."
 
 ### 4. Commit at every task boundary
 Uncommitted work handed between workers — "the next task can build on my uncommitted edit" — has been destroyed here by a concurrent checkout running in another lane. A task is not done until its diff is committed; leaving it uncommitted is leaving it deletable by someone else's git command.
+
+This holds whether or not the worker itself commits. When auto-commit is enabled, the worker commits its own diff before reporting. When it is disabled, the worker does not commit — but the task is still not done until the diff is committed, so it reports its exact changed-file list (see "Reporting Back" below) and the orchestrator stages and commits those paths at the task boundary. Either way, the task's diff is committed at the boundary by whoever owns commits — never left uncommitted for a later step to inherit.
 
 ---
 
