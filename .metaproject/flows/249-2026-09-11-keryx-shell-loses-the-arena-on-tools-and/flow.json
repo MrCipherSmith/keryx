@@ -9,7 +9,7 @@
   "title": "keryx shell loses the arena on tools and errors: self-spawned keryx, provider identity and error bodies, search noise, project-blind roster, head-only read_file",
   "status": "in-progress",
   "createdAt": "2026-09-11T07:29:26.898Z",
-  "updatedAt": "2026-09-11T08:02:23.436Z",
+  "updatedAt": "2026-09-11T09:33:35.468Z",
   "source": {
     "type": "description",
     "ref": null
@@ -188,6 +188,20 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -288,6 +302,11 @@
       "at": "2026-09-11T08:02:23.436Z",
       "event": "task-done",
       "detail": "T10: Changelog entry for the five fixes"
+    },
+    {
+      "at": "2026-09-11T09:33:35.468Z",
+      "event": "task-added",
+      "detail": "T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry"
     }
   ]
 }

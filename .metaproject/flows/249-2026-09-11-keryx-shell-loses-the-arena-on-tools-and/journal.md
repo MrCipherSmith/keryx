@@ -24,3 +24,4 @@
 - 2026-09-11T07:57:12.481Z - task-done: T8: S-1: read_file reads by start_line past the 20 KB head
 - 2026-09-11T07:59:16.589Z - task-done: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
 - 2026-09-11T08:02:23.436Z - task-done: T10: Changelog entry for the five fixes
+- 2026-09-11T09:33:35.468Z - task-added: T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry

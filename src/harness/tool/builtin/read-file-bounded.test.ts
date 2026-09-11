@@ -97,7 +97,7 @@ test("a truncated read names the start_line to continue from, and paging loses n
     let start = 1;
     for (let guard = 0; guard < 50; guard++) {
       const result = await readTool(root).invoke({ path: "long.ts", start_line: start });
-      const notice = /…\(truncated: read \d+ of \d+ bytes; continue with start_line: (\d+)\)$/.exec(result.output);
+      const notice = /…\(truncated: showed lines \d+–\d+ of a \d+-byte file; continue with start_line: (\d+)\)$/.exec(result.output);
       const body = notice === null ? result.output : result.output.slice(0, notice.index - 1);
       seen.push(...body.split("\n").filter(Boolean));
       if (notice === null) break;
@@ -109,12 +109,32 @@ test("a truncated read names the start_line to continue from, and paging loses n
   });
 });
 
-test("start_line past the end is an error that states the file's length", async () => {
+test("start_line past the end is an error that states the file's real length", async () => {
   await withRoot(async (root) => {
     writeFileSync(path.join(root, "short.txt"), "a\nb\nc\n");
-    const result = await readTool(root).invoke({ path: "short.txt", start_line: 10 });
-    expect(result.isError).toBe(true);
-    expect(result.output).toMatch(/past the end/);
+    const far = await readTool(root).invoke({ path: "short.txt", start_line: 10 });
+    expect(far.isError).toBe(true);
+    expect(far.output).toContain("it has 3 lines");
+    // One past the last line of a newline-terminated file is past the end too —
+    // not an empty success (review F-002).
+    const justPast = await readTool(root).invoke({ path: "short.txt", start_line: 4 });
+    expect(justPast.isError).toBe(true);
+    expect(justPast.output).toContain("it has 3 lines");
+    expect((await readTool(root).invoke({ path: "short.txt", start_line: 3 })).output).toBe("c\n");
+    writeFileSync(path.join(root, "open.txt"), "a\nb");
+    expect((await readTool(root).invoke({ path: "open.txt", start_line: 2 })).output).toBe("b");
+    const openPast = await readTool(root).invoke({ path: "open.txt", start_line: 3 });
+    expect(openPast.output).toContain("it has 2 lines");
+    writeFileSync(path.join(root, "empty.txt"), "");
+    expect((await readTool(root).invoke({ path: "empty.txt", start_line: 2 })).output).toContain("it has 0 lines");
+  });
+});
+
+test("the truncation notice counts lines from start_line, not bytes against the whole file", async () => {
+  await withRoot(async (root) => {
+    writeFileSync(path.join(root, "long.ts"), numbered(2000));
+    const result = await readTool(root).invoke({ path: "long.ts", start_line: 1500 });
+    expect(result.output).toMatch(/…\(truncated: showed lines 1500–\d+ of a \d+-byte file; continue with start_line: \d+\)$/);
   });
 });
 

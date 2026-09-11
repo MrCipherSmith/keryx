@@ -208,9 +208,12 @@ function mergeUsage(
 /**
  * Classify a non-2xx HTTP response into the neutral error taxonomy.
  *
- * Mirrors the native OpenAI adapter. Every 4xx used to be `invalid_request`, so an
- * account the gateway refuses to serve and a request with a malformed field were
- * the same error — and a rate limit was not retryable.
+ * 401 and 429 as the native OpenAI adapter maps them. 403 joins 401 here, where
+ * the OpenAI adapter keeps it `invalid_request`: an OAuth-backed gateway answers a
+ * rejected token with 403 — x.ai does, `The OAuth2 access token could not be
+ * validated.` — and that is a credential problem, not a malformed request. Every
+ * 4xx used to be `invalid_request`, so a refused credential and a request with a
+ * bad field were the same error, and a rate limit was not retryable.
  */
 function classifyHttpError(status: number, headers: Headers): NormalizedError {
   if (status === 401 || status === 403) {

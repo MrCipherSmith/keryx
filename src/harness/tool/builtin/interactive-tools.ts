@@ -55,10 +55,16 @@ async function readFromLine(
   let line = 1;
   let out = "";
   let overflowed = false;
+  let sawAny = false;
+  let endsWithNewline = false;
   try {
     for (;;) {
       const { done, value } = await reader.read();
       let text = done ? decoder.decode() : decoder.decode(value, { stream: true });
+      if (text.length > 0) {
+        sawAny = true;
+        endsWithNewline = text.endsWith("\n");
+      }
       if (line < startLine) {
         let from = 0;
         while (line < startLine) {
@@ -79,11 +85,15 @@ async function readFromLine(
   } finally {
     await reader.cancel().catch(() => {});
   }
-  if (line < startLine) {
-    return { text: "", pastEnd: true, lines: line };
+  // `line` counts newlines + 1, so a file ending in "\n" would read one line longer
+  // than it is — and start_line = length + 1 would return nothing instead of saying
+  // it was past the end.
+  const lines = !sawAny ? 0 : endsWithNewline ? line - 1 : line;
+  if (!overflowed && (line < startLine || (out.length === 0 && startLine > lines))) {
+    return { text: "", pastEnd: true, lines };
   }
   if (!overflowed) {
-    return { text: out, pastEnd: false, lines: line };
+    return { text: out, pastEnd: false, lines };
   }
   const kept = out.slice(0, cap);
   const lastBreak = kept.lastIndexOf("\n");
@@ -221,14 +231,14 @@ export function builtinReadOnlyTools(root: string): InteractiveTool[] {
         if (part.nextLine === undefined) {
           return { output: part.text, isError: false };
         }
-        const next =
+        // Lines, not a byte count: "read 19,990 of 100,000 bytes" at start_line 1500
+        // compared characters from that line with the whole file's bytes, and told
+        // the model something false about how much was left.
+        const notice =
           part.nextLine > startLine
-            ? `continue with start_line: ${part.nextLine}`
-            : `line ${startLine} alone is longer than the cap — search_code finds text inside it`;
-        return {
-          output: `${part.text}\n…(truncated: read ${part.text.length} of ${size} bytes; ${next})`,
-          isError: false,
-        };
+            ? `truncated: showed lines ${startLine}–${part.nextLine - 1} of a ${size}-byte file; continue with start_line: ${part.nextLine}`
+            : `truncated: line ${startLine} alone is longer than ${MAX_READ_BYTES} characters, in a ${size}-byte file — search_code finds text inside it`;
+        return { output: `${part.text}\n…(${notice})`, isError: false };
       } catch (cause) {
         return {
           output: `read_file failed: ${cause instanceof Error ? cause.message : String(cause)}`,

@@ -14,6 +14,7 @@
 // the subprocess runner rather than surfacing the port's "unavailable" result.
 
 import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import {
   METAPROJECT_OPERATIONS,
   formatAffected,
@@ -71,6 +72,16 @@ export function normalizeSearchResult(result: InteractiveToolResult): Interactiv
 }
 
 /**
+ * keryx's CLI entry, derived from where this module lives rather than from a
+ * file name: `src/cli.ts` three directories up in the source tree, and `cli.js`
+ * beside it in the bundle (`dist/`, where every module shares one directory).
+ */
+const KERYX_ENTRIES: readonly string[] = [
+  resolve(import.meta.dir, "..", "..", "..", "cli.ts"),
+  resolve(import.meta.dir, "cli.js"),
+];
+
+/**
  * The argv that runs THIS keryx, not whichever `keryx` PATH resolves.
  *
  * The runner used to spawn `keryx` from PATH, which is routinely a different build
@@ -91,8 +102,12 @@ export function keryxSelfCommand(
   main: string = Bun.main,
   execPath: string = process.execPath,
   exists: (file: string) => boolean = existsSync,
+  entries: readonly string[] = KERYX_ENTRIES,
 ): string[] {
-  if (/[\\/](?:src[\\/]cli\.ts|dist[\\/]cli\.js)$/.test(main) && exists(main)) {
+  // Only keryx's OWN entry. Matching any `…/src/cli.ts` would treat a host
+  // application whose entry shares that common name as keryx, and hand it
+  // model-influenced arguments (review F-004).
+  if (entries.includes(resolve(main)) && exists(main)) {
     return [execPath, main];
   }
   if (main.startsWith("/$bunfs/") || /^[A-Za-z]:[\\/]~BUN[\\/]/.test(main)) {
