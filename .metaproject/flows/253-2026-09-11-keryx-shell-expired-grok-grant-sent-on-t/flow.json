@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "252",
+  "id": "253",
   "slug": "keryx-shell-expired-grok-grant-sent-on-t",
   "title": "keryx shell: expired grok grant sent on the readline path (K-013), saved provider keys leak into shell_exec (K-015), memory_search miss prints the absolute path (K-016)",
   "status": "in-progress",
   "createdAt": "2026-09-11T20:01:39.233Z",
-  "updatedAt": "2026-09-11T20:10:04.398Z",
+  "updatedAt": "2026-09-11T20:19:49.128Z",
   "source": {
     "type": "description",
     "ref": null
@@ -143,6 +143,21 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -213,6 +228,21 @@
       "at": "2026-09-11T20:10:04.398Z",
       "event": "task-done",
       "detail": "T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite"
+    },
+    {
+      "at": "2026-09-11T20:16:15.378Z",
+      "event": "renumbered",
+      "detail": "252 -> 253: main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open"
+    },
+    {
+      "at": "2026-09-11T20:19:48.912Z",
+      "event": "task-added",
+      "detail": "T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)"
+    },
+    {
+      "at": "2026-09-11T20:19:49.128Z",
+      "event": "task-done",
+      "detail": "T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)"
     }
   ]
 }

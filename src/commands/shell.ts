@@ -77,7 +77,7 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { loadSessionLimits } from "./model-limits";
-import { applySavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
@@ -584,9 +584,12 @@ function oauthCredentialsFor(name: string): { credentials?: Record<string, strin
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
 function realSelectProviderModel(baseUrl: string | undefined): NonNullable<ShellDeps["selectProviderModel"]> {
   return async (io, opts) => {
+    // Saved keys count toward detection. They used to reach `process.env` only as a
+    // side effect of the first `shell_exec`, which no longer loads them (K-015).
+    const env = envWithSavedApiKeys(process.env);
     const detected = await detectProviders({
       fetch: globalThis.fetch,
-      env: process.env,
+      env,
       platform: process.platform,
       ...(baseUrl !== undefined ? { baseUrl } : {}),
     });
@@ -594,9 +597,12 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
       opts?.onlyProvider !== undefined ? detected.filter((d) => d.name === opts.onlyProvider) : detected;
     const list = filtered.length > 0 ? filtered : detected;
     // Always re-probe live `/models` (when online) inside pickProviderModel.
-    return pickProviderModel(io, list, { fetch: globalThis.fetch, env: process.env });
+    return pickProviderModel(io, list, { fetch: globalThis.fetch, env });
   };
 }
+
+/** How long the start-up grant refresh may hold the shell before it gives up (K-013). */
+const GRANT_REFRESH_TIMEOUT_MS = 5_000;
 
 const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 const PROMPT_MARK = "❯ ";
@@ -2048,12 +2054,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // Before any surface builds a provider from a stored grant (K-013). This ran
   // only inside the TUI's start-up, so the readline surface — `--no-tui`,
   // `--print`, every scripted run — sent an access token hours past its expiry.
+  //
+  // Bounded, because it runs before anything else and a network that drops
+  // packets silently would otherwise hang a scripted run for good. Only the
+  // provider the flags name, when they name one — the TUI picker may choose any.
   {
     const { refreshSavedGrants } = await import("../lib/oauth/login");
     const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
-    for (const warning of await refreshSavedGrants({ fetch: oauthFetch }, runtime.cacheDir)) {
-      process.stderr.write(`keryx: ${warning}\n`);
-    }
+    const http = { fetch: oauthFetch, signal: AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS) };
+    const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
+    for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
   }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {

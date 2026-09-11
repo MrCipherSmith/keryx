@@ -20,6 +20,12 @@ test("the shell refreshes stored grants before it picks a surface", () => {
   expect(refresh).toBeLessThan(surface);
 });
 
+test("the refresh is bounded, so a silent network cannot hang a scripted run (review F-001)", () => {
+  const call = source.slice(source.indexOf("const { refreshSavedGrants }"), source.indexOf("const surface = chooseShellSurface("));
+  expect(call).toContain("AbortSignal.timeout(GRANT_REFRESH_TIMEOUT_MS)");
+  expect(source).toMatch(/const GRANT_REFRESH_TIMEOUT_MS = \d[\d_]*;/);
+});
+
 test("no refresh failure is swallowed silently any more", () => {
   expect(source).not.toContain('refreshProviderGrant("grok", { fetch: oauthFetch }, opts.configDir).catch(() => undefined)');
 });

@@ -8,7 +8,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { applySavedApiKeys, saveShellConfig } from "../../lib/shell-config";
+import { applySavedApiKeys, noteSavedCredentialEnv, saveShellConfig } from "../../lib/shell-config";
 import { resolveShellEnv } from "./shell-spawn";
 
 const TOUCHED = ["K015_SAVED_API_KEY", "K015_UNAPPLIED_API_KEY", "K015_OPERATOR_API_KEY", "KERYX_SHELL_PASS_SAVED_KEYS"];
@@ -43,6 +43,16 @@ test("building the command env no longer loads saved keys as a side effect", asy
 
   expect(env.K015_UNAPPLIED_API_KEY).toBeUndefined();
   expect(process.env.K015_UNAPPLIED_API_KEY).toBeUndefined();
+});
+
+test("a key recorded as set by keryx — the TUI picker's path — is withheld too (review F-002)", async () => {
+  const dir = savedKeys({});
+  process.env.K015_OPERATOR_API_KEY = "typed-into-the-picker";
+  noteSavedCredentialEnv(["K015_OPERATOR_API_KEY"]);
+
+  const env = await resolveShellEnv(dir);
+
+  expect(env.K015_OPERATOR_API_KEY).toBeUndefined();
 });
 
 test("KERYX_SHELL_PASS_SAVED_KEYS=1 hands the saved keys over, as before", async () => {

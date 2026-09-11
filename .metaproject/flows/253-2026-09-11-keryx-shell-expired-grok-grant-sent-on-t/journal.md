@@ -14,3 +14,6 @@
 - 2026-09-11T20:10:04.041Z - task-done: T6: K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values
 - 2026-09-11T20:10:04.213Z - task-done: T7: K-016: trail-absent miss as one short line, project-relative paths in other verdicts
 - 2026-09-11T20:10:04.398Z - task-done: T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite
+- 2026-09-11T20:16:15.378Z - renumbered: 252 -> 253: main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open
+- 2026-09-11T20:19:48.912Z - task-added: T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)
+- 2026-09-11T20:19:49.128Z - task-done: T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)

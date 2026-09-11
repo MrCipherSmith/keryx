@@ -23,7 +23,9 @@ All notable changes to `keryx` are documented here. The format follows
   of a stored grant ran only in the TUI's start-up, so `--no-tui` and `--print`
   sent an access token hours past its expiry and got `HTTP 403: The OAuth2 access
   token could not be validated` — which reads as a revoked login, not an expired
-  one. Every surface now refreshes first, and a refresh that fails says so on
+  one. Every surface now refreshes first — only the provider the flags name, when
+  they name one, and for at most five seconds, so an offline start is not held
+  up. A refresh that fails, or an expired login with no refresh token, says so on
   stderr and names `keryx auth login <provider>` instead of being swallowed.
 
 - **A `memory_search` that finds nothing says so in one line.** In a project that

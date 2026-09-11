@@ -77,3 +77,27 @@ test("a refresh that fails says so, names the way out, and carries no token", as
   // A failed refresh leaves the stored grant as it was.
   expect(loadOAuthGrant("grok", dir)?.access).toBe("old-access");
 });
+
+test("a session on another provider does not wait on the grok token endpoint", async () => {
+  // Review of flow 253 (F-001): the refresh runs before anything else, so an
+  // unrelated grant must not put a network call in front of every start-up.
+  const dir = configWithGrokGrant(NOW - 1000);
+  const endpoint = tokenEndpoint(200, { access_token: "new-access", expires_in: 21_600 });
+
+  expect(await refreshSavedGrants({ fetch: endpoint.fetch, now: () => NOW }, dir, ["deepseek"])).toEqual([]);
+  expect(endpoint.calls).toHaveLength(0);
+});
+
+test("an expired grant with no refresh token is reported, not skipped in silence", async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), "keryx-k013-"));
+  saveShellConfig(
+    { oauthGrants: { grok: { method: "device-code", access: "old-access", expires: NOW - 1000, obtainedAt: "2026-09-11T09:02:00Z" } } },
+    dir,
+  );
+  const endpoint = tokenEndpoint(200, {});
+
+  const warnings = await refreshSavedGrants({ fetch: endpoint.fetch, now: () => NOW }, dir);
+
+  expect(endpoint.calls).toHaveLength(0);
+  expect(warnings).toEqual(["grok: the saved login has expired and holds no refresh token. Run `keryx auth login grok`."]);
+});
