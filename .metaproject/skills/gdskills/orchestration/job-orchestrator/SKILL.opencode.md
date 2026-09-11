@@ -830,6 +830,19 @@ Task({
 })
 ```
 
+**Task boundary commit (`implementer_settings.auto_commit=false` only):** the
+worker did not commit (`rules/core/git-concurrency.mdc`, "Reporting Back"). As
+soon as a task's result is accepted (`STATUS: DONE` or `DONE_WITH_CONCERNS`),
+stage and commit exactly its reported `files_modified`/`files_created`/
+`files_deleted` — never `-A`/`--all`/`.`:
+```bash
+git -C <worktree_path> add <files_modified/files_created/files_deleted from the result file>
+git -C <worktree_path> commit -m "<type>(<scope>): <task description>
+
+task: <task_id>"
+```
+When `auto_commit=true`, the worker already committed — skip this step.
+
 **Each wave runs in ONE worktree.** The worktree created in 2.4 is the whole job's
 workspace — waves are ordered, not isolated from each other, and a later wave sees
 what an earlier one committed. That is what makes the dependency order mean anything.
@@ -901,7 +914,7 @@ git log <merge_base>..HEAD --oneline
 
 | Check | Pass | Fail action |
 |-------|------|-------------|
-| At least 1 commit exists | ≥1 commit | `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." |
+| At least 1 commit exists | ≥1 commit | `implementer_settings.auto_commit=true`: `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." `auto_commit=false`: the task-boundary commit step (Step B) should already have committed each accepted result's files — if none exist, `retryable`: re-run that commit step for the wave's result files instead of re-dispatching workers. |
 | At least 1 file modified | ≥1 file changed | Same as above |
 | Claimed files actually modified | All files named in the result files appear in the diff | Log discrepancy as a concern, continue |
 

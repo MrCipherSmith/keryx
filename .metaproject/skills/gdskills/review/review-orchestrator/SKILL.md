@@ -87,10 +87,11 @@ code — and it is the step that was documented as running for a whole release
 while nothing called it.
 
 The command names no model. It ranks whatever your provider reports at runtime
-and places the tiers relative to your own model; when it cannot rank anything it
-prints `inherit: true` and exits 0, which means the dispatch runs on the session
-model. That is a correct answer, not a failure — never "fix" it by writing a
-model id into a dispatch.
+and places the tiers relative to your own model; when ranking fails it still
+names the session's own provider and model as a fallback. Only when the session
+itself has no provider/model to name does it print `inherit: true` and exit 0,
+which means the dispatch runs on the session model. That is a correct answer,
+not a failure — never "fix" it by writing a model id into a dispatch.
 
 ---
 
@@ -669,7 +670,7 @@ whether it is computed:
 
 Rules:
 - Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
-- When the command cannot rank anything it prints `inherit: true` and exits 0; that means the dispatch runs on the session model. Record that as `model_assignment: unsupported`, not as a failure.
+- When the session has no provider/model to name it prints `inherit: true` and exits 0; that means the dispatch runs on the session model. Record that as `model_assignment: unsupported`, not as a failure.
 - With `model_strategy: ask`, present the model plan once before dispatch, then proceed with the computed model.
 
 ---
@@ -1564,7 +1565,7 @@ Severity ordering for sort: `blocker` > `major` > `minor` > `info`.
 
 ### Model Metadata Rules
 
-`unsupported` is a model-assignment outcome recorded when `keryx review tier` cannot rank anything (it prints `inherit: true`), not a model name. Never render it as `model: unsupported` or as the PR comment `Model` value.
+`unsupported` is a model-assignment outcome recorded when `keryx review tier` has no session provider/model to name (it prints `inherit: true`), not a model name. Never render it as `model: unsupported` or as the PR comment `Model` value.
 
 When writing review report metadata or a PR comment:
 1. Read `review_context.token_policy.model_plan`.

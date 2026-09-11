@@ -351,9 +351,15 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
 }
 ```
 
-After a worker succeeds, the flow-orchestrator marks task progress:
+After a worker succeeds, stage and commit exactly the worker's `changed_files`
+from its `subagent-result` — never `-A`/`--all`/`.` (`rules/core/git-concurrency.mdc`
+rule 4, "Reporting Back") — then mark task progress:
 
 ```bash
+git -C <worktree_path> add <changed_files from the subagent-result>
+git -C <worktree_path> commit -m "<type>(<scope>): <Tn title>
+
+task: <Tn>"
 keryx flow task done <id> <Tn>
 ```
 
@@ -371,8 +377,8 @@ properly formatted `subagent-result`.
 
 | Worker `status` | flow-orchestrator action |
 |---|---|
-| `DONE` | Accept. `keryx flow task done <id> <Tn>`. Continue. |
-| `DONE_WITH_CONCERNS` | Accept, record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
+| `DONE` | Accept, commit `changed_files`, `keryx flow task done <id> <Tn>`. Continue. |
+| `DONE_WITH_CONCERNS` | Accept, commit `changed_files`, record every concern in `journal.md`, decide continue vs. add a fix task, then `flow task done`. Never silently drop concerns. |
 | `NEEDS_CONTEXT` | Do not fail. Enrich `context_refs`/`files_to_read` from gdgraph/gdctx/wiki/memory, then re-dispatch the same `dispatch_id`. |
 | `BLOCKED` | `keryx flow block <id> --reason "<worker reason>"`; resolve or escalate one concise question, then `flow unblock` and re-dispatch. |
 | `FAILED` | Emitted by harness **child** workers (`src/harness/child/contract.ts`), never by skill workers — `task-implementer` maps its own `failed` onto `BLOCKED`. Retry once with the same dispatch. If it fails again, block the flow and surface the error to the user. |
