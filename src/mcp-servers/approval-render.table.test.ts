@@ -16,6 +16,7 @@ import { classTableProblems } from "./class-table";
 import {
   describeUseToolApproval,
   MAX_ARGUMENT_CHARS,
+  renderUseToolApprovalLines,
   splitFqn,
   summariseUseToolApproval,
 } from "./approval-render";
@@ -229,6 +230,50 @@ describe("an MCP call is never rememberable", () => {
         expect(describeUseToolApproval(row.input).rememberable).toBe(false);
       }
     }
+  });
+});
+
+describe("the printed lines, not just the description", () => {
+  // Found by the mutation sweep. With the prompt inlined in `shell.ts`,
+  // inverting `if (meta?.destructive === true)` survived — nothing in
+  // the suite drives the readline approval path, because every test
+  // stubs `requestApproval` wholesale. The same is quietly true of the
+  // `apply_patch` and elicitation branches beside it; this one is now
+  // the exception rather than another instance.
+
+  const described = describeUseToolApproval(
+    JSON.stringify({ tool_name: "linear__create_issue", tool_input: { title: "x" } }),
+  );
+
+  test("the tool and server come BEFORE any argument line", () => {
+    const lines = renderUseToolApprovalLines(described);
+    const server = lines.findIndex((l) => l.includes("server:"));
+    const tool = lines.findIndex((l) => l.includes("tool:"));
+    const firstArg = lines.findIndex((l) => l.includes("title"));
+    expect(server).toBeGreaterThanOrEqual(0);
+    expect(tool).toBeGreaterThan(server);
+    expect(firstArg).toBeGreaterThan(tool);
+  });
+
+  test("a destructive call says so", () => {
+    expect(renderUseToolApprovalLines(described, { destructive: true }).join("\n")).toContain("destructive");
+  });
+
+  test("BOUNDARY — a non-destructive one does NOT", () => {
+    // The mutant that survived. Without this row, inverting the check
+    // adds the warning to every call and nothing notices — which is
+    // worse than it sounds: a warning on everything is a warning on
+    // nothing.
+    expect(renderUseToolApprovalLines(described, { destructive: false }).join("\n")).not.toContain("destructive");
+    expect(renderUseToolApprovalLines(described).join("\n")).not.toContain("destructive");
+  });
+
+  test("truncation is announced when it happens, and not when it does not", () => {
+    const big = describeUseToolApproval(
+      JSON.stringify({ tool_name: "a__b", tool_input: { blob: "z".repeat(MAX_ARGUMENT_CHARS + 100) } }),
+    );
+    expect(renderUseToolApprovalLines(big).join("\n")).toContain("truncated");
+    expect(renderUseToolApprovalLines(described).join("\n")).not.toContain("truncated");
   });
 });
 

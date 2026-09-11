@@ -140,6 +140,41 @@ export function describeUseToolApproval(inputJson: string): ToolApprovalDescript
 }
 
 /**
+ * The exact lines a text surface prints, in order.
+ *
+ * Separated from the printing so the PROMPT is testable and not only the
+ * description. The mutation sweep forced this: with the branch inlined
+ * in `shell.ts`, inverting `if (meta?.destructive === true)` survived,
+ * because nothing in the suite drives the readline approval path at all
+ * — every test stubs `requestApproval` wholesale. The same is quietly
+ * true of the `apply_patch` and elicitation branches beside it.
+ *
+ * What remains untested in the caller is the `[y/N]` read, which is
+ * identical in all four branches.
+ */
+export function renderUseToolApprovalLines(
+  description: ToolApprovalDescription,
+  meta?: { readonly destructive?: boolean | undefined },
+): string[] {
+  const lines = [
+    description.title,
+    // The server and the tool FIRST, on their own lines, above anything
+    // the model wrote — so nothing in the payload can push them out of
+    // view, because they are not in the payload. F-033.
+    `  server: ${description.server}`,
+    `  tool:   ${description.tool}`,
+    ...description.argumentLines.map((line) => `  ${line}`),
+  ];
+  if (description.argumentsTruncated) {
+    lines.push(`  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`);
+  }
+  if (meta?.destructive === true) {
+    lines.push("  this tool is treated as destructive — it is a third party's code");
+  }
+  return lines;
+}
+
+/**
  * The one-line summary, for a surface with a single line to give.
  *
  * The TUI's choice dock has a subtitle, and the subtitle is what an

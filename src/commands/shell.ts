@@ -39,7 +39,7 @@ import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGran
 import {
   describeUseToolApproval,
   isMcpToolCall,
-  MAX_ARGUMENT_CHARS,
+  renderUseToolApprovalLines,
 } from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
@@ -1118,21 +1118,16 @@ async function runAgentRepl(
         //
         // The description comes from a shared module, so this surface and
         // the TUI cannot drift — they had already drifted once.
+        // Lines built by the shared module, printed here. The split is
+        // what makes the PROMPT testable and not only the description —
+        // the mutation sweep found that inverting the destructive check
+        // survived while it was inlined, because nothing drives this
+        // path: every test in the suite stubs `requestApproval` whole.
         const described = describeUseToolApproval(input);
-        out(`\n${GUTTER}${style.yellow(described.title)}\n`);
-        // The server and the tool FIRST, on their own lines, above
-        // anything the model wrote. Nothing in the payload can push them
-        // out of view because they are not in the payload.
-        out(`${GUTTER}${style.yellow(`  server: ${described.server}`)}\n`);
-        out(`${GUTTER}${style.yellow(`  tool:   ${described.tool}`)}\n`);
-        for (const line of described.argumentLines) {
-          out(`${GUTTER}${style.dim(`  ${line}`)}\n`);
-        }
-        if (described.argumentsTruncated) {
-          out(`${GUTTER}${style.dim(`  … arguments truncated at ${MAX_ARGUMENT_CHARS} characters`)}\n`);
-        }
-        if (meta?.destructive === true) {
-          out(`${GUTTER}${style.yellow("  this tool is treated as destructive — it is a third party's code")}\n`);
+        const lines = renderUseToolApprovalLines(described, meta);
+        out("\n");
+        for (const [index, line] of lines.entries()) {
+          out(`${GUTTER}${index === 0 ? style.yellow(line) : style.dim(line)}\n`);
         }
         // No `A=always`. The grant pattern would be a qualified tool name
         // the MODEL supplied, stored in the operator's permission file.

@@ -143,7 +143,16 @@ test("Tools tab opens with an explanatory caption, then one clickable-free row p
   );
   const rows = body.rows();
   expect(rows).toHaveLength(3); // caption + 2 tools
-  expect(findRow(rows, "mcp-tools-header")?.content).toContain("Built into keryx");
+  const caption = String(findRow(rows, "mcp-tools-header")?.content ?? "");
+  expect(caption).toContain("Built into keryx");
+  // Spec AC17, closed in P2. The caption originally ended "…keryx doesn't
+  // consume MCP servers as a client yet", which P0 made false. P0 pointed
+  // it at the CLI because the consumer view did not exist — a caption
+  // naming a missing screen is the failure the rename avoided. P2 built
+  // the view, so the caption names the view.
+  expect(caption).toContain("/mcp");
+  expect(caption).not.toContain("doesn't consume");
+  expect(caption).not.toContain("does not consume");
   expect(rows[1]?.content).toContain("gdgraph_affected");
   expect(rows[1]?.onMouseDown).toBeUndefined();
   expect(rows[2]?.content).toContain("shell_exec");

@@ -31,6 +31,15 @@
 //
 // It edits files in place and restores them. It refuses to start on a
 // dirty tree for exactly that reason.
+//
+// DO NOT EDIT `src/` WHILE THIS IS RUNNING. The dirty-tree guard stops
+// it STARTING on top of your work; nothing stops your work landing on
+// top of it. Measured, by doing it: an edit made mid-run was restored
+// out of existence by the sweep's in-memory copy of the file, and the
+// same file was left holding a live mutant (`<=` narrowed to `<`) that
+// type-checked and would have been committed. `.mutation-sweep-journal`
+// named the file, which is how it was found. Treat a running sweep as a
+// lock on `src/`.
 
 import { readFileSync, writeFileSync } from "node:fs";
 
@@ -239,6 +248,21 @@ async function main(): Promise<void> {
 
   try {
     for (const [index, mutant] of chosen.entries()) {
+      // Has someone edited this file since the run began? If so, STOP.
+      //
+      // Restoring `mutant.source` would silently discard their work —
+      // which is not hypothetical: it happened, and the file was left
+      // holding a live mutant that type-checked. The dirty-tree guard
+      // only covers the start. This covers the middle.
+      const onDisk = readFileSync(mutant.file, "utf8");
+      if (onDisk !== mutant.source && onDisk !== mutant.mutated) {
+        console.error(
+          `\n\nSTOPPING: ${mutant.file} changed on disk since this run began.\n` +
+            "Restoring from memory would discard that change, so nothing was written.\n" +
+            "A running sweep is a lock on src/ — re-run when the tree is settled.",
+        );
+        break;
+      }
       writeFileSync(journal, `${mutant.file}\n`);
       writeFileSync(mutant.file, mutant.mutated);
       const { code } = await sh(["bun", "test", ...testPath.split(" ")]);
