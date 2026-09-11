@@ -2310,6 +2310,7 @@ keryx mcp enable | disable <name>
 keryx mcp trust | untrust <name>
 keryx mcp doctor [name] [--json]
 keryx mcp auth <name>
+keryx mcp logout <name>
 ```
 
 | Command | Description |
@@ -2322,6 +2323,7 @@ keryx mcp auth <name>
 | `trust` / `untrust` | Approve (or withdraw approval for) a PROJECT-scoped server. See "Project servers need approval" below. Prints the command it would launch before recording anything. |
 | `doctor` | Config problems, a real connection attempt, the tool count, and every tool that had to be skipped with the reason why. `--json` for the machine-readable form. Exits non-zero when anything needs you. |
 | `auth` | Runs a remote server's OAuth flow in your browser and stores the result owner-only. The only command that opens a browser — see "Servers that need a login" below. |
+| `logout` | Forgets a stored credential. Needed because a revoked refresh token cannot be repaired by re-running `auth`, and because a server removed from the config leaves its credential behind. |
 
 **Config files.**
 
@@ -2420,10 +2422,19 @@ linear [user] http: needs_auth — no stored credential; run `keryx mcp auth lin
 If the server has a header or a `bearer_token_env_var`, `keryx mcp auth`
 says so and changes nothing: it would be starting a flow that cannot help.
 
-Optional, in the config entry: `"oauth": {"clientId": "…"}` to use a client
-you registered yourself, which also stops keryx registering one
-dynamically; or `"oauth": false` to say a server is public and should never
-be diagnosed as needing a login.
+Optional, in the config entry:
+
+| Field | Effect |
+|---|---|
+| `"oauth": {"clientId": "…"}` | Use a client you registered yourself; keryx then registers none dynamically. |
+| `"oauth": {"scopes": ["read"]}` | Request specific scopes at registration. Without it you get whatever the server issues by default. |
+| `"oauth": {"callbackPort": 8765}` | A fixed loopback port, for an authorisation server that pre-registered one exact redirect URI. Ephemeral otherwise, so two flows cannot collide. |
+| `"oauth": false` | This server is public; never diagnose it as needing a login. |
+
+`keryx mcp logout <name>` forgets the stored credential. Re-running
+`keryx mcp auth` does **not** repair a revoked refresh token — the
+authorisation server rejects it before any browser opens — so forgetting
+it first is the way back.
 
 **Three things keryx refuses on purpose.** Each of these is a working
 configuration elsewhere and a refusal here, so `doctor` names it rather
