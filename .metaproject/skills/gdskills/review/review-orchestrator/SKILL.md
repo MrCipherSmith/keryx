@@ -160,7 +160,7 @@ which of its inputs were recovered and which were never written down.
 | `context_doc` | string | no | Path to job context document (e.g., `.metaproject/jobs/<job>/ai/context.md`). |
 | `context_mode` | string | no | `none`, `light`, or `full`. Default: `light` for PR review, `none` for small path reviews. `full` may call `context-collector` before dispatch. |
 | `token_budget` | object | no | Optional budget controls: `{total, per_reviewer, diff_max_chars, file_max_chars}`. |
-| `model_strategy` | string | no | `current`, `ask`, or `adaptive`. Default: `current`; do not switch models unless user or automation allows it. |
+| `model_strategy` | string | no | `ask` or `adaptive`. Default: `adaptive`; the model per dispatch is computed by `keryx review tier`, never chosen by hand (see Step 6). |
 | `managed_review` | object | no | Optional managed review mode: `{mode, target, target_ref, flow_id, reviewers}` where mode is `lightweight`, `attach-review`, `review-flow`, or `ingest`. |
 | `verification_mode` | string | no | `off`, `annotate`, or `filter`. Default `annotate` — verdicts are recorded and nothing is removed. See Wave C. |
 | `pr_comments` | object | no | `{enabled, max_replies_total, max_sentences_per_reply}`. Defaults: enabled when a PR exists, `30`, `2`. Collect every round, reply once at the end. See External PR comments. |
@@ -646,27 +646,31 @@ Default budget guidance:
 | small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
 | medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
 | large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
-| high-risk | auth/API/core/security/data migrations | ask `full` | include strict synthesis |
+| high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
 
 ---
 
 ## Model Strategy
 
-Default: keep the current model for all reviewers.
+The model for each dispatch is computed, not chosen — see Step 6. Before every
+reviewer dispatch, run `keryx review tier` with the signals you hold and paste
+the `model` block it prints into that dispatch. Do not assign a model class by
+reading a table or by hand; that mechanical step is exactly what the command
+replaced (see Step 6 above and `job-orchestrator` Step 5, which pins the same
+rule: `model_strategy: "current"` is gone).
 
-If the platform supports assigning models to sub-agents and the user/automation allows it, the orchestrator may use `model_strategy: adaptive`:
+`model_strategy` now governs only how the *computed* model is surfaced, not
+whether it is computed:
 
-| Complexity | Suggested model class | Reviewers |
-|---|---|---|
-| simple | cheaper/faster coding model | `review-style`, `review-clean-code`, docs-only convention checks, legacy/profile checks |
-| normal | current/default model | `review-frontend`, `review-backend`, `review-testing-practices`, convention reviewers |
-| complex | strongest available coding/reasoning model | `review-logic`, `review-architecture`, `review-security-code`, `review-highload`, strict synthesis |
+| `model_strategy` | Behavior |
+|---|---|
+| `ask` | Present the `keryx review tier` model plan once before dispatch. |
+| `adaptive` (default) | Dispatch on the computed model directly; record the chosen model per reviewer in the final report metadata. |
 
 Rules:
-- Do not silently change model class when `model_strategy` is `current`.
-- With `model_strategy: ask`, present the model plan once before dispatch.
-- With `model_strategy: adaptive`, record chosen model class per reviewer in the final report metadata.
-- If model assignment is unsupported, record `model_strategy: current-session`.
+- Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
+- When the command cannot rank anything it prints `inherit: true` and exits 0; that means the dispatch runs on the session model. Record that as `model_assignment: unsupported`, not as a failure.
+- With `model_strategy: ask`, present the model plan once before dispatch, then proceed with the computed model.
 
 ---
 
@@ -1599,7 +1603,7 @@ STATUS: DONE | DONE_WITH_CONCERNS
 - Reviewers dispatched: <comma-separated list>
 - Changed files: <count>
 - Context mode: `<none | light | full>`
-- Model strategy: `<current | ask | adaptive | economy | per-group | current-session>`
+- Model strategy: `<ask | adaptive | economy | per-group | current-session>`
 - Current model: `<actual current model id/name, or unknown>`
 - Model assignment: `<single current session | adaptive classes | per reviewer classes | unsupported>`
 - Token budget: `<used/limit if known; omissions count>`
@@ -1753,7 +1757,7 @@ here is the failure this rule names.
 |---|---|
 | Orchestrator | `review-orchestrator` |
 | Model | `<actual current model id/name, or unknown; never current-session>` |
-| Model strategy | `<current | ask | adaptive | economy | per-group | current-session>` |
+| Model strategy | `<ask | adaptive | economy | per-group | current-session>` |
 | Model assignment | `<current session | adaptive classes | per reviewer classes | unsupported>` |
 | Agents run | `<reviewers actually dispatched, including fallback runtimes when used>` |
 | Available reviewers | `<all reviewers considered by the orchestrator for this repository/runtime, grouped briefly as generic/convention/project/legacy when useful>` |
@@ -1794,7 +1798,7 @@ review_run_id: <stable id, e.g. pr-5462-2026-06-13T10-22-00Z>
 orchestrator: review-orchestrator
 verdict: <APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES>
 context_mode: <none | light | full>
-model_strategy: <current | ask | adaptive | economy | per-group | current-session>
+model_strategy: <ask | adaptive | economy | per-group | current-session>
 current_model: <actual current model id/name, or unknown>
 model_assignment: <current session | adaptive classes | per reviewer classes | unsupported>
 agents:
