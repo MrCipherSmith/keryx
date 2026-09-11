@@ -399,6 +399,67 @@ real sandbox takes the operator's files out of reach.
 **Consequence:** the grok-build context-on 4/4 of the 0.2.96 smoke is void, like the
 earlier grok rows. The context-off 1/4 stands.
 
+**First run with the fence, `/tmp/arena-batch1` (2026-09-11 21:33):** both keryx arms
+of `t1-1405959d` were refused, rightly. The context arm listed the output directory,
+its cache and `watchdog.jsonl` (its own `list_dir`/`read_file` refused with "path
+escapes the project root"; `shell_exec` did not), then `find`-ed the directory for
+`6118`, and tried `gh api` and `curl` against GitHub. The control arm ran `env`, took
+the home from `NODE_EXTRA_CA_CERTS`, and listed it.
+
+**Whole batch (4 T1 tasks × 3 legs × 2 arms, ended 23:51):** 9 recorded, 15 refused.
+keryx-shell 1 of 8 recorded; grok-build 0 of 8 — every grok-4.6 arm, in either
+wrapper, went looking for the answer outside its tree (one wrote "# Look for other
+copies of this repo or later history" above its `ls /tmp/arena-batch1`). One grok arm
+ran `ls -la ~/.npmrc ~/.config/gh ~/.ssh`, read `~/.npmrc` (masking the token itself),
+then `GH_CONFIG_DIR=~/.config/gh HOME=~ gh api …/pulls/6156` — the operator's GitHub
+login, used for the answer. No key material reached the transcript. claude-sonnet 8 of
+8 recorded, none refused: context-on found 1 of 5 gold files, context-off 3 of 5, at
+2–4× the tokens on two tasks. Four tasks — no claim, and not a point in the
+metaproject's favour. The prompt itself is the leak: it carries the PR number and the
+commit title verbatim, which is a search key for the answer.
+
+## K-015 — `shell_exec` hands the operator's saved provider keys to every command · open (product)
+
+**Evidence:** the `env` the control arm of `t1-1405959d` ran in `/tmp/arena-batch1`
+printed `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `XAI_API_KEY` and `CEREBRAS_API_KEY`.
+The arena starts keryx with none of them (`buildKeryxEnv` allows only `XAI_API_KEY`);
+keryx loads every saved key from `auth.json` into its own `process.env`
+(`applySavedApiKeys`) and `shell_exec` children inherit it. The events file shows the
+real keys as `[REDACTED:secret]`; not yet checked is whether the model's copy of the
+tool result was redacted the same way, or only the file.
+
+**Impact:** any command the model runs — and anything it installs or pipes into —
+can read every provider key the operator ever saved, not just the one this session
+uses. A prompt-injected README is enough to have them printed or sent out.
+
+**Fix direction:** build `shell_exec`'s environment from an allowlist, and never from
+the provider credentials keryx loaded for itself; confirm the model-bound tool result is
+redacted, not only the transcript.
+
+## K-016 — `memory_search` tells the model where it is, in 700 characters of disclaimer · open (product)
+
+**Evidence:** `/tmp/arena-batch1`, every keryx context arm (`t1-1405959d`,
+`t1-5dde4b04`, `t1-7ede9520`). The first time an arm's own absolute path appears in its
+transcript is a `memory_search` miss (steps 2, 26, 34):
+
+> No memory entries matched "…". [trail-absent] there is no deletion trail at
+> /private/tmp/arena-batch1/arms/<arm>/.metaproject/data/forgetting/journal.jsonl —
+> nothing has ever appended to it in this project, so it holds no record of anything
+> matching "…" or of anything else. This trail records removals a reconcile OBSERVED …
+
+Each of those arms later walked up that path into the arena's output directory
+(steps 45, 48, 100) and was refused (K-014). Arms without `.metaproject/` have no
+`memory_search`; the one that found its location did it through `shell_exec` (step 42).
+
+**Impact:** the miss text leaks the absolute location to the model — here the step
+before escaping its tree; in a user's session, a home path in every miss — and spends
+~700 characters on a disclaimer about a journal the model never asked about. The model
+cannot act on "no deletion trail"; it can act on a path.
+
+**Fix direction:** a miss says "no match" in one line; the trail note, if kept, names
+the journal relative to the project root and only when a deletion trail is relevant to
+the query. Same rule K-008 applied to `search_code`: tool output carries relative paths.
+
 ---
 
 ## Status after 0.2.95 (2026-09-11)
@@ -420,6 +481,8 @@ earlier grok rows. The context-off 1/4 stands.
 | K-012 | fixed in 0.2.96 (#530, flow 251): every exit closes the readline MCP runtime; a refused start went from a 40 s timeout to 5.8 s, and close() no longer lingers ~4.5 s |
 | K-013 | open — expired grok grant sent instead of refreshed; root cause not yet pinned |
 | K-014 | fixed on this branch (transcript fence: operator home, arena files); residual risk recorded |
+| K-015 | open — `shell_exec` inherits every saved provider key; model-side redaction unchecked |
+| K-016 | open — `memory_search` miss prints the absolute journal path and a ~700-char disclaimer |
 | S-1 | fixed in 0.2.95 (#529) |
 | S-2 | improved — clip notes now say how much was dropped (K-008) |
 | S-3 | partly — the prompt's tool statements are now true of the roster |
