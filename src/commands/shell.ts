@@ -33,7 +33,7 @@ import { buildOrientation } from "../ctx/orient";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
-import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
@@ -2181,28 +2181,32 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
+      const tools = buildInteractiveAgentTools({
+        cwd,
+        metaprojectPort,
+        searchController: searchProviderController,
+        spawnTool,
+        getSessionDir,
+        jobRegistry,
+        mcp: getMcpRuntime(),
+        ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+      });
       return {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools: buildInteractiveAgentTools({
-          cwd,
-          metaprojectPort,
-          searchController: searchProviderController,
-          spawnTool,
-          getSessionDir,
-          jobRegistry,
-          mcp: getMcpRuntime(),
-          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-        }),
+        tools,
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
         // view; opening it must not be the thing that spawns every
         // configured server, which calling `getMcpRuntime()` here would
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
+        // Built from the roster it describes, so the prompt never names a tool
+        // the session was not given.
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,
+          toolNames: interactiveAgentToolNames(tools),
         }),
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
@@ -2473,23 +2477,27 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           resetSubagentBudget = controls.resetBudget;
         },
       });
+      const agentTools = buildInteractiveAgentTools({
+        cwd: agentCwd,
+        metaprojectPort,
+        searchController: searchProviderController,
+        spawnTool,
+        getSessionDir: () => slateSessionBox.current?.dir,
+        jobRegistry,
+        mcp: mcpRuntime,
+        ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+      });
       const agentDeps: AgentDeps = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: buildInteractiveAgentTools({
-          cwd: agentCwd,
-          metaprojectPort,
-          searchController: searchProviderController,
-          spawnTool,
-          getSessionDir: () => slateSessionBox.current?.dir,
-          jobRegistry,
-          mcp: mcpRuntime,
-          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-        }),
+        tools: agentTools,
+        // Built from the roster it describes, so the prompt never names a tool
+        // the session was not given.
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: provider,
           modelId: model,
+          toolNames: interactiveAgentToolNames(agentTools),
         }),
         maxRounds: resolveAgentMaxRounds(),
         idSeq: () => randomUUID(),

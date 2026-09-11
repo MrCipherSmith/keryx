@@ -451,3 +451,53 @@ describe("AC7 — failures are told apart", () => {
     expect(Date.now() - started).toBeLessThan(10_000);
   }, 40_000);
 });
+
+describe("AC10 — a SANITISED fqn calls the server with its RAW name", () => {
+  // The half that makes D-13 safe. `sac.read` is shown to the model as
+  // `remote__sac_read`, and the server must still be asked for
+  // `sac.read` — asserted by reading what the server RECEIVED, not what
+  // keryx believes it sent. If this were wrong, every renamed tool
+  // would be advertised and then fail at call time, which is worse than
+  // the skip it replaced.
+  test("the wire carries the dotted name, the model sees the underscored one", async () => {
+    const server = await mock({ tools: [{ name: "sac.read" }, { name: "gdgraph.find" }] });
+    const { servers: states, catalog } = await startServers([remote(server.url)], async (s) =>
+      connect(s.url as string),
+    );
+    expect(states[0]?.status).toBe("connected");
+
+    // The model's view: sanitised, and nothing skipped.
+    expect(catalog.entries.map((e) => e.fqn).sort()).toEqual(["remote__gdgraph_find", "remote__sac_read"]);
+    expect(catalog.skipped).toEqual([]);
+
+    const [, use] = createMcpInteractiveTools({ catalog: () => catalog, servers: () => states });
+    const result = await use?.invoke({ tool_name: "remote__sac_read", tool_input: { q: "x" } });
+    expect(result?.isError).toBe(false);
+
+    // The server's view: the raw name, on the wire.
+    const called = server
+      .requests()
+      .map((r) => (r.body as { method?: string; params?: { name?: string } } | undefined))
+      .filter((b) => b?.method === "tools/call")
+      .map((b) => b?.params?.name);
+    expect(called).toEqual(["sac.read"]);
+  }, 30_000);
+
+  test("BOUNDARY — an already-valid name is unchanged in both directions", async () => {
+    // Without this, sanitising everything unconditionally would pass the
+    // test above.
+    const server = await mock({ tools: [{ name: "search" }] });
+    const { servers: states, catalog } = await startServers([remote(server.url)], async (s) =>
+      connect(s.url as string),
+    );
+    const [, use] = createMcpInteractiveTools({ catalog: () => catalog, servers: () => states });
+    await use?.invoke({ tool_name: "remote__search", tool_input: { q: "x" } });
+
+    const called = server
+      .requests()
+      .map((r) => (r.body as { method?: string; params?: { name?: string } } | undefined))
+      .filter((b) => b?.method === "tools/call")
+      .map((b) => b?.params?.name);
+    expect(called).toEqual(["search"]);
+  }, 30_000);
+});

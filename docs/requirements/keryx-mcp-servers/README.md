@@ -16,10 +16,14 @@ OpenCode's "register every MCP tool on the model" shape.
 
 ## Status
 
-**P0 released in keryx 0.2.90 (flow 246, PR #522). P1 released in keryx 0.2.91
-(flow 247, PR #526). P2–P3 open.**
+**P0–P3a are merged and SHIPPED in keryx 0.2.94** — the first published
+release carrying any of this package (flows 246–249; PRs #522, #526,
+#527, #528). Versions 0.2.90 through 0.2.93 were bumped in
+`package.json` during development and never tagged, so they were never
+published; a release here fires on a `v*` tag push and nothing else.
+**P3b (OAuth) is open.**
 
-Updated 2026-09-10.
+Updated 2026-09-11.
 
 Shipped in P0 — `src/mcp-servers/` plus `src/commands/mcp-servers.ts`:
 

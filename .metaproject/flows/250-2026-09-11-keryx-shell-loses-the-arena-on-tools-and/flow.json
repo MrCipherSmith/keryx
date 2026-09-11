@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "249",
+  "id": "250",
   "slug": "keryx-shell-loses-the-arena-on-tools-and",
   "title": "keryx shell loses the arena on tools and errors: self-spawned keryx, provider identity and error bodies, search noise, project-blind roster, head-only read_file",
   "status": "in-progress",
   "createdAt": "2026-09-11T07:29:26.898Z",
-  "updatedAt": "2026-09-11T09:33:35.468Z",
+  "updatedAt": "2026-09-11T09:51:44.813Z",
   "source": {
     "type": "description",
     "ref": null
@@ -193,7 +193,7 @@
       "id": "T12",
       "title": "Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -201,7 +201,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -306,6 +307,16 @@
     {
       "at": "2026-09-11T09:33:35.468Z",
       "event": "task-added",
+      "detail": "T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry"
+    },
+    {
+      "at": "2026-09-11T09:51:25.530Z",
+      "event": "renumbered",
+      "detail": "249 -> 250: id 249 was taken on main by flow mcp-servers-p3a (#528) while this flow was created on the older base 9fba208; both inits saw 248 as the last id"
+    },
+    {
+      "at": "2026-09-11T09:51:44.813Z",
+      "event": "task-done",
       "detail": "T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry"
     }
   ]

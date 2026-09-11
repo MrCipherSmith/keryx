@@ -25,3 +25,5 @@
 - 2026-09-11T07:59:16.589Z - task-done: T9: K-004: makeKeryxRunner spawns the running keryx, not PATH
 - 2026-09-11T08:02:23.436Z - task-done: T10: Changelog entry for the five fixes
 - 2026-09-11T09:33:35.468Z - task-added: T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry
+- 2026-09-11T09:51:25.530Z - renumbered: 249 -> 250: id 249 was taken on main by flow mcp-servers-p3a (#528) while this flow was created on the older base 9fba208; both inits saw 248 as the last id
+- 2026-09-11T09:51:44.813Z - task-done: T12: Review round 1 (F-001..F-004): prompt states the real roster and read_file paging; read_file line count and notice; keryxSelfCommand trusts only keryx's own entry

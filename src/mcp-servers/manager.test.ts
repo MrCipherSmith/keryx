@@ -4,7 +4,15 @@ import type { ResolvedMcpServer } from "./config";
 import { closeServers, DEFAULT_CONNECT_CONCURRENCY, startServers } from "./manager";
 
 function server(name: string, over: Partial<ResolvedMcpServer> = {}): ResolvedMcpServer {
-  const base = { name, command: "cmd", source: "user" as const, file: "/x", enabled: true, ...over };
+  const base = {
+    name,
+    command: "cmd",
+    source: "user" as const,
+    projectLocal: false,
+    file: "/x",
+    enabled: true,
+    ...over,
+  };
   return { ...base, raw: { command: base.command, ...(base.args === undefined ? {} : { args: base.args }) } };
 }
 
