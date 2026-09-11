@@ -23,7 +23,6 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { auth } from "@modelcontextprotocol/sdk/client/auth.js";
 import { readCredential, writeCredential } from "./credentials";
 import { createOAuthProvider } from "./oauth-provider";
 import { needsAuthorisation } from "./doctor";
@@ -141,6 +140,21 @@ function mockAuthorisationServer(): MockAs {
 
 function store(): string {
   return mkdtempSync(path.join(tmpdir(), "keryx-oauth-int-"));
+}
+
+/**
+ * The SDK's `auth`, loaded lazily.
+ *
+ * A static import here fails the repo-wide C0-2 boundary, which bans
+ * top-level `@modelcontextprotocol/sdk` imports anywhere under `src/`
+ * so the SDK never lands in keryx's cold start. A test file is not on
+ * that path, but the rule is written repo-wide on purpose and the
+ * scan has its own sentinel — exempting tests to spare one import
+ * would weaken a boundary this file does not own.
+ */
+async function auth(provider: never, options: Record<string, unknown>): Promise<unknown> {
+  const mod = await import("@modelcontextprotocol/sdk/client/auth.js");
+  return await (mod as { auth: (p: never, o: unknown) => Promise<unknown> }).auth(provider, options);
 }
 
 function provider(as: MockAs, dir: string, over: Record<string, unknown> = {}) {
