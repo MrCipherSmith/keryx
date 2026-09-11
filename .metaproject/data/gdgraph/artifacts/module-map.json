@@ -183,6 +183,7 @@
     "src/commands/interactive-agent-tools.test.ts",
     "src/commands/interactive-agent-tools.ts",
     "src/commands/job.ts",
+    "src/commands/mcp-help.test.ts",
     "src/commands/mcp-install.test.ts",
     "src/commands/mcp-naming.test.ts",
     "src/commands/mcp-serve-root.test.ts",
@@ -934,6 +935,10 @@
     "src/mcp-client/wire.ts"
   ],
   "mcp-servers": [
+    "src/mcp-servers/approval-decision.test.ts",
+    "src/mcp-servers/approval-render.table.test.ts",
+    "src/mcp-servers/approval-render.ts",
+    "src/mcp-servers/approval-wiring.test.ts",
     "src/mcp-servers/catalog.test.ts",
     "src/mcp-servers/catalog.ts",
     "src/mcp-servers/class-table.ts",
@@ -1367,6 +1372,8 @@
     "src/tui/job-bridge.ts",
     "src/tui/main-queue.test.ts",
     "src/tui/main-queue.ts",
+    "src/tui/mcp-consumer.test.ts",
+    "src/tui/mcp-consumer.ts",
     "src/tui/mcp-inspector.test.ts",
     "src/tui/mcp-inspector.ts",
     "src/tui/modal-host.test.ts",

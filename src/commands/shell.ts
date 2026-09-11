@@ -36,6 +36,7 @@ import { buildApprovalContext } from "./agent-approval-context";
 import { buildInteractiveAgentTools } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
+import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
@@ -1098,6 +1099,26 @@ async function runAgentRepl(
         return meta?.fingerprint !== undefined
           ? { approved: true, fingerprint: meta.fingerprint }
           : true;
+      }
+      if (isMcpToolCall(tool)) {
+        // F-032/F-033, deferred from P0 to P2 by operator decision.
+        //
+        // The WHOLE prompt — printing, reading the answer, and the
+        // verdict — lives in the shared module with its IO injected. An
+        // earlier version kept the decision here and a reviewer showed
+        // it had no coverage whatsoever: inverting `if (!approved)`, so
+        // that `y` denies and anything else approves and RUNS, left the
+        // full suite green. Extracting only the line building was not
+        // enough, because the part that decides whether a third party
+        // acts was the part still out of reach.
+        return await promptUseToolApproval(
+          { out, readLine: async () => await readLine() },
+          input,
+          meta,
+          catalogResolver(deps.mcpRuntime?.()?.catalog()),
+          style,
+          GUTTER,
+        );
       }
       if (tool !== "shell_exec") {
         const preview = input.length > 120 ? `${input.slice(0, 117)}…` : input;
@@ -2174,6 +2195,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           mcp: getMcpRuntime(),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
+        // The EXISTING runtime, never a new one. `/mcp` is a read-only
+        // view; opening it must not be the thing that spawns every
+        // configured server, which calling `getMcpRuntime()` here would
+        // do for `--chat` sessions that never build a tool list.
+        mcpRuntime: () => mcpRuntime,
         systemInstruction: buildAgentSystemInstruction(orient, {
           providerId: sel.provider,
           modelId: sel.model,

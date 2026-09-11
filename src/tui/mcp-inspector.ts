@@ -42,21 +42,25 @@ export const MCP_INSPECTOR_FOOTER = [
 export const MCP_TOOLS_COMMAND = "/integrations";
 
 /**
- * The retired spelling, still accepted.
+ * `/mcp` is NO LONGER this view.
  *
- * `/mcp` opened this view before the rename. It keeps working rather than
- * becoming an error, because a user mid-session should not have a command
- * vanish under them — the same promise the CLI aliases make.
+ * It opened the installer before the rename and kept doing so through P0
+ * and P1, with a comment saying why: "It is deliberately NOT repointed at
+ * the MCP-server consumer: that surface does not exist yet, and a slash
+ * command aimed at nothing is worse than one aimed at the old thing."
  *
- * It is deliberately NOT repointed at the MCP-server consumer: that surface
- * does not exist yet, and a slash command aimed at nothing is worse than one
- * aimed at the old thing.
+ * P2 built that surface, so `/mcp` now means what D-04 says it means —
+ * the servers keryx CONNECTS TO (`mcp-consumer.ts`). This view keeps
+ * `/integrations`, which is what it always was: where keryx ITSELF is
+ * registered into an editor's config.
+ *
+ * The two are genuinely easy to confuse — this file's own header says the
+ * MCP tab "is easy to misread as 'the MCP servers this agent is connected
+ * to'". They are now two commands with two captions, which is the only
+ * version of that distinction a user can act on.
  */
-export const MCP_TOOLS_COMMAND_RETIRED = "/mcp";
-
 export function isMcpToolsCommand(line: string): boolean {
-  const token = line.trim().split(/\s+/)[0] ?? "";
-  return token === MCP_TOOLS_COMMAND || token === MCP_TOOLS_COMMAND_RETIRED;
+  return (line.trim().split(/\s+/)[0] ?? "") === MCP_TOOLS_COMMAND;
 }
 
 export type ModalTab = { id: string; label: string };
@@ -89,14 +93,14 @@ export type OpenModalFn = (otui: unknown, chrome: unknown, input: OpenModalInput
  * server into an editor's config, alongside whatever else that editor
  * already has configured (surfaced per row via `otherServers`).
  */
-// Updated when keryx-mcp-servers P0 shipped. The old wording ended "…keryx
-// doesn't consume MCP servers as a client yet", which became false the moment
-// `search_tool`/`use_tool` reached the shell's tool list. The consumer MODAL
-// is still P2 work, so this points at the CLI rather than at a view that does
-// not exist — a caption naming a missing screen is the failure the rename
-// avoided in the first place.
+// Spec AC17. The original wording ended "…keryx doesn't consume MCP servers
+// as a client yet", which became false the moment `search_tool`/`use_tool`
+// reached the shell's tool list in P0. It was then pointed at the CLI,
+// because the consumer view did not exist and a caption naming a missing
+// screen is the failure the rename avoided in the first place. P2 built the
+// view, so it names the view.
 const TOOLS_TAB_HEADER =
-  "Built into keryx — not from an external MCP server. For those, see `keryx mcp list` / `doctor`.";
+  "Built into keryx — not from an external MCP server. For those, see `/mcp` (or `keryx mcp list`).";
 const MCP_TAB_HEADER_1 = "Connects/disconnects ONLY keryx's own MCP server, one editor config at a time.";
 const MCP_TAB_HEADER_2 = "Other MCP servers already configured there (context7, playwright, …) show per row, read-only.";
 

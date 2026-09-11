@@ -20,6 +20,7 @@ import { classifyPatchRisk } from "../lib/patch-risk";
 import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type {
@@ -163,6 +164,18 @@ export interface AgentDeps {
   providerId: string;
   modelId: string;
   tools: InteractiveTool[];
+  /**
+   * The session's MCP runtime, if one was ever created.
+   *
+   * Read by `/mcp` so the view can show LIVE status — connected, failed,
+   * held for approval — beside the configuration. An accessor rather
+   * than a value, and deliberately one that does NOT create the runtime:
+   * `keryx shell --chat` has no tool list and never builds one, and
+   * opening a read-only view must not be what spawns every configured
+   * server. When it returns undefined the view falls back to the config
+   * alone and says so.
+   */
+  mcpRuntime?: () => McpRuntime | undefined;
   /** Trusted system instruction (assembled by `buildAgentSystemInstruction`). */
   systemInstruction: string;
   idSeq: () => string;

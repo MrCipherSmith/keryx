@@ -207,7 +207,7 @@ child, not a `use_tool` target.
 `gatedSuperviseCodexMcpRun`, and present Codex's internal tools to the
 parent model. AC13 exists to keep the suites separate.
 
-## D-13 (OPEN — raised by P0 implementation evidence, 2026-09-10)
+## D-13 (RESOLVED 2026-09-11 — sanitise, first-wins on collision)
 
 **Question.** Should a tool whose qualified name fails
 `^[a-zA-Z_][a-zA-Z0-9_-]{0,63}$` be SKIPPED (specification §5.1 as written),
@@ -237,10 +237,30 @@ cannot produce — `a.b` and `a_b` would both map to `a_b`. `catalogForServer`
 already records a duplicate FQN as skipped with a reason, so a fallback
 exists, but which name wins is a choice this note does not make.
 
-**Status.** P0 ships the specification as written (skip + `doctor` warning),
-so the behaviour is the one that was reviewed. The evidence above is
-reproducible: `keryx mcp add self -- keryx serve-mcp --cwd <repo>`, then
-`keryx mcp doctor self`. Resolving D-13 is P1 work.
+**Decision.** SANITISE. A tool whose qualified name fails the pattern is
+renamed for the model and keeps its wire name: `sac.read` becomes
+`self__sac_read` in `fqn` and stays `sac.read` in `rawName`. The regex is
+unchanged — it is still what keeps a `.` from reaching a provider that
+rejects it — and the separation `CatalogEntry` already had is what makes
+this cost nothing.
+
+**Collision.** `a.b` and `a_b` both sanitise to `a_b`. FIRST WINS, in the
+order the server's own `tools/list` returns, and the loser is recorded as
+skipped with a reason. This reuses the duplicate-FQN path
+`catalogForServer` already has rather than adding a second mechanism. A
+numeric suffix (`a_b_2`) was rejected: it invents a name that exists
+neither on the server nor in any config, so the operator has nothing to
+match it against.
+
+decided-by: altsay (operator), 2026-09-11, in the helyx channel — shown
+both questions with options and a recommendation, answered with the
+recommendation on each and confirmed in text.
+
+**Status.** P0 and P1 shipped the specification as written (skip +
+`doctor` warning), so the behaviour through 0.2.92 is the one that was
+reviewed. The evidence above is reproducible: `keryx mcp add self --
+keryx serve-mcp --cwd <repo>`, then `keryx mcp doctor self`. Implementing
+this decision is P3 work, alongside the compat readers.
 
 ## D-14: a project-scoped server is not started until the operator approves it
 
