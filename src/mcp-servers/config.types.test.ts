@@ -345,24 +345,17 @@ describe("the oauth block — validated fields, and the one that is not implemen
     return loadMcpServers({ configDir, cwd }).problems.map((p) => p.message);
   }
 
-  test("a configured clientSecretEnvVar is reported as not implemented", () => {
+  test("clientSecretEnvVar is refused as an unknown field, consistently with the schema", () => {
     // keryx registers `token_endpoint_auth_method: "none"`, so a
     // server configured as a confidential client would authenticate
-    // as a public one — and the operator would never learn the secret
-    // they configured was not used.
-    const problems = problemsFor({ clientSecretEnvVar: "LINEAR_SECRET" });
-    expect(problems.join("\n")).toContain("not implemented");
-  });
-
-  test("BOUNDARY — an EMPTY clientSecretEnvVar is not reported", () => {
-    // The condition is `!== ""`, and inverting it to `=== ""` survived
-    // a sweep: an empty string configures nothing, so warning about it
-    // would be noise on a field the operator effectively left unset.
-    expect(problemsFor({ clientSecretEnvVar: "" }).join("\n")).not.toContain("not implemented");
-  });
-
-  test("BOUNDARY — an absent clientSecretEnvVar is not reported either", () => {
-    expect(problemsFor({ clientId: "c" }).join("\n")).not.toContain("not implemented");
+    // as a public one. The first fix for that reported it as "not
+    // implemented" while the schema still declared it — which made
+    // the runtime stricter than the specification, the exact parity
+    // failure a comment in config.ts warns about. The field is now
+    // absent from both, so the document is invalid in one way.
+    expect(problemsFor({ clientSecretEnvVar: "LINEAR_SECRET" }).join("\n")).toContain(
+      'unknown field "clientSecretEnvVar"',
+    );
   });
 
   test("an unknown oauth field is refused by name", () => {

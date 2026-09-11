@@ -339,14 +339,22 @@ function entryProblems(name: string, entry: McpServerEntry): string[] {
 /** `$defs/oauth` from the schema, enforced. */
 function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
   const problems: string[] = [];
-  // Every field `$defs/oauth` declares. Omitting `clientSecretEnvVar` made
-  // the runtime STRICTER than the specification, so a legal document was
-  // refused — the parity failure in the opposite direction from the usual.
-  const known = new Set(["clientId", "clientSecretEnvVar", "scopes", "callbackPort"]);
+  // Every field `$defs/oauth` declares, and only those.
+  //
+  // `clientSecretEnvVar` used to be here and in the schema, accepted by
+  // both and implemented by neither. Reporting it as "not implemented"
+  // while the schema still declared it made the runtime stricter than
+  // the specification — the exact parity failure a comment here once
+  // warned about, reintroduced from the other side. It is now absent
+  // from both, so a document using it is invalid in one consistent
+  // way, and an editor validating against the schema says so too.
+  //
+  // Whoever implements confidential-client auth adds it back to both.
+  const known = new Set(["clientId", "scopes", "callbackPort"]);
   for (const key of Object.keys(oauth)) {
     if (!known.has(key)) problems.push(`server "${name}" oauth has unknown field "${key}"`);
   }
-  for (const field of ["clientId", "clientSecretEnvVar"] as const) {
+  for (const field of ["clientId"] as const) {
     if (oauth[field] !== undefined && typeof oauth[field] !== "string") {
       problems.push(`server "${name}" oauth.${field} must be a string`);
     }
@@ -355,18 +363,6 @@ function oauthProblems(name: string, oauth: Record<string, unknown>): string[] {
     if (!Array.isArray(oauth.scopes) || !oauth.scopes.every((v) => typeof v === "string")) {
       problems.push(`server "${name}" oauth.scopes must be an array of strings`);
     }
-  }
-  if (typeof oauth.clientSecretEnvVar === "string" && oauth.clientSecretEnvVar !== "") {
-    // ACCEPTED BY THE SCHEMA, IMPLEMENTED BY NOTHING.
-    //
-    // Said out loud rather than ignored, because the silent version is
-    // the dangerous one: keryx registers `token_endpoint_auth_method:
-    // "none"`, so a server configured as a confidential client would
-    // authenticate as a public one and the operator would never learn
-    // that the secret they configured was not used.
-    problems.push(
-      `server "${name}" oauth.clientSecretEnvVar is not implemented; keryx authenticates as a public client and this value is ignored`,
-    );
   }
   const port = oauth.callbackPort;
   if (port !== undefined && !(typeof port === "number" && Number.isInteger(port) && port >= 1 && port <= 65535)) {
