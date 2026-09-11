@@ -333,24 +333,14 @@ Wait for user confirmation before generating full report.
 ### Output Structure
 
 ```
-<DOCS_ROOT>/analysis/<feature-name>-<YYYY-MM-DD>/
-├── README.md                    # Index and navigation
-├── report/
-│   ├── en/report.md             # English for humans
-│   ├── ru/report.md             # Russian for humans
-│   └── ai/report.md             # Structured for AI agents (EN)
-├── plans/
-│   ├── en/implementation-plan.md
-│   ├── ru/implementation-plan.md
-│   └── ai/implementation-plan.md
-├── contracts/
-│   ├── api-changes.md           # API contract diff
-│   └── dto-comparison.md        # Before/after DTOs
-└── metrics/
-    └── analysis-metrics.md      # Analysis metadata
+<DOCS_ROOT>/analysis/<feature-name>/
+├── report.md                    # Findings, API contract diff, DTO comparison, cross-repo impact, analysis metrics
+└── implementation-plan.md       # Actionable implementation plan derived from the analysis
 ```
 
-The AI-readable format (`report/ai/`, `plans/ai/`) uses Gherkin-style scenarios.
+No date-stamped folder: update `report.md`/`implementation-plan.md` in place for a rerun on the same feature rather than creating a parallel copy. Default output is a single English (`en`) pair. Add other language variants only if the user explicitly asks for them, and keep any variants you create synchronized.
+
+`report.md` should use Gherkin-style scenarios where they make findings easier for other AI agents to parse.
 > For full Gherkin output format and syntax rules, see `SKILL.detail.md`.
 
 ---
@@ -360,7 +350,7 @@ The AI-readable format (`report/ai/`, `plans/ai/`) uses Gherkin-style scenarios.
 - Every claim MUST reference specific code: `[filename.ts:L123](file:///absolute/path#L123)`
 - Minimum 3 code examples per report
 - Mermaid diagrams for architecture, tables for DTO changes, flowcharts for data flow
-- Multi-language: `en/` for humans, `ru/` for humans, `ai/` for AI agents
+- Default to a single `en` document; add `ru`/`ai` (or other) variants only when the user explicitly asks, keeping them synchronized
 
 ---
 
@@ -378,7 +368,7 @@ The AI-readable format (`report/ai/`, `plans/ai/`) uses Gherkin-style scenarios.
 
 ## Step 13: Analysis Metrics
 
-Track and include in `metrics/analysis-metrics.md`:
+Track and include in the `## Analysis Metrics` section of `report.md`:
 - Duration, files analyzed (P0/P1/P2), lines changed
 - Cross-repo dependencies, API endpoints changed, DTOs modified
 - Breaking changes count, test coverage %, risk level
@@ -415,7 +405,7 @@ Follow `documentation-management.mdc`: update `<DOCS_ROOT>/readme.md`, add entry
 4. **Never assume** — ask user when unclear
 5. **Never skip** intermediate review for complex analyses (P0 files > 3)
 6. **Always provide** concrete, actionable recommendations
-7. **Always include** both human-readable and AI-readable formats
+7. **Always default** to a single-language document (`en`); add other language variants only when the user explicitly asks
 
 ---
 

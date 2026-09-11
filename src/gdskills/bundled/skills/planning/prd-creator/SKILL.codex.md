@@ -93,6 +93,8 @@ When generating the final PRD, follow this exact structure:
 ```markdown
 # PRD: {Feature Name}
 
+Version: 0.1.0
+
 ## 1. Overview
 Brief summary of the feature.
 
@@ -145,13 +147,11 @@ Then
 ## 6. Output Location & Format
 
 **Direct Mode:**
-- You MUST follow `rules/core/documentation-management.mdc` for the `requirements` category.
+- You MUST follow `rules/core/requirements-package-standard.mdc` (via `rules/core/documentation-management.mdc` for the `requirements` category).
 - Before saving, ASK the user to confirm the feature name (`<name>`) or to suggest a custom path.
-- The default target path is: `<current_project_root>/docs/requirements/<name>-<YYYY-MM-DD>/`
-- You MUST generate 3 synchronized language variants:
-  - `ru/<name>.md` (Russian for humans)
-  - `en/<name>.md` (English for humans)
-  - `ai/<name>.md` (AI-readable format, heavily using Gherkin)
+- The default target path is: `<current_project_root>/docs/requirements/<name>/prd.md` — no date-stamped folder.
+- If the requirements package (`README.md`, `prd.md`, `specification.md`) does not exist yet, create it; otherwise update `prd.md` in place and bump its `Version` field rather than creating a parallel copy.
+- Default to a single document in the project's documentation language (`en` unless the project states otherwise). Generate additional language variants only when the user explicitly asks for them, and keep any variants you create synchronized.
 - You MUST NOT create a single file in the generic `docs/` root.
 
 **Orchestrated Mode:**
