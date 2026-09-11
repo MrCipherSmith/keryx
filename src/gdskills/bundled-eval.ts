@@ -139,9 +139,11 @@ export interface BundledSkillEvaluation {
    * How many skill DOCUMENTS were read — `SKILL.md` plus every harness build.
    *
    * A second denominator, not a replacement: `skills` counts the skills, this
-   * counts the files whose bytes were actually checked. They differ by the 111
-   * harness builds, and reporting only the first is what let a build diverge
-   * from its own `SKILL.md` while the sweep reported everything clean.
+   * counts the files whose bytes were actually checked. They differ by the
+   * harness builds that ship (111 when this was written; 14 once flow 257
+   * deleted the byte-identical ones), and reporting only the first is what let
+   * a build diverge from its own `SKILL.md` while the sweep reported everything
+   * clean.
    */
   readonly documents: number;
   /** Every skill directory name found, sorted — the resolvable cross-reference set. */
@@ -636,11 +638,13 @@ export function bundledSkillFiles(root: string): string[] {
  * build beside it.
  *
  * This is the set the sweep actually walks, and it is a different number from
- * `bundledSkillFiles`. The tree ships 65 `SKILL.md` and 111 harness builds; a
+ * `bundledSkillFiles`. The tree shipped 65 `SKILL.md` and 111 harness builds; a
  * sweep that reads only the first spelling reported `xref:path` clean over 65 of
  * 176 documents and said nothing about the other 111 — which is how
  * `task-implementer` shipped four builds missing their entire reporting
- * contract while every check reported "pass".
+ * contract while every check reported "pass". Flow 257 deleted the builds that
+ * were byte-identical to their `SKILL.md` (a runtime with no build of its own
+ * reads `SKILL.md`), so only genuinely different builds remain to be walked.
  */
 export function bundledSkillDocuments(root: string): string[] {
   return walkSkillDocuments(root, (name) => SKILL_DOCUMENT_NAMES.has(name));
@@ -899,7 +903,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
 
   // --- every SKILL*.md in the tree is either read above or named a companion --
   //
-  // The sweep now reads `SKILL.md` and the four harness builds. That is only
+  // The sweep now reads `SKILL.md` and every harness build that ships. That is only
   // full coverage if nothing ELSE in a skill directory is spelled like a build,
   // so this closes the set: a `SKILL.<x>.md` that no runtime addresses is a
   // document that ships, is never opened, and whose every claim is inert.
@@ -985,7 +989,7 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   lines.push(`evaluator: ${evaluatorSource()}`);
   lines.push(`skills_evaluated: ${evaluation.skills}`);
   // Both denominators, always. `skills_evaluated` alone read as full coverage
-  // while 111 harness builds went unread; printing the document count is what
+  // while 111 harness builds went unread (flow 209); printing the document count is what
   // makes the gap visible without anyone having to know it exists.
   lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds)`);
   lines.push(`findings: ${evaluation.findings.length}`);

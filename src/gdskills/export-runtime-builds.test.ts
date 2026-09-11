@@ -15,11 +15,16 @@ import {
 /**
  * Flow 205: every harness build must actually reach its harness.
  *
- * `job-orchestrator` ships five builds — SKILL.md, SKILL.codex.md,
- * SKILL.cursor.md, SKILL.opencode.md, SKILL.zed.md — and before this flow
+ * `job-orchestrator` then shipped five builds — SKILL.md, SKILL.codex.md,
+ * SKILL.cursor.md, SKILL.opencode.md, SKILL.zed.md — and before flow 205
  * `exportProjectSkill` copied SKILL.md for every runtime. `--runtime codex`
  * shipped the Claude build with the Codex build sitting unread beside it, and
  * `SkillRuntime` did not model cursor, zed or opencode at all.
+ *
+ * Flow 257: `SKILL.md` is the normal build, not a fallback. Most skills now
+ * ship no per-runtime build (the byte-identical copies were deleted), so the
+ * export reports which build it used (`sourceBuild`) and carries no
+ * "fallback" flag that would present the shared `SKILL.md` as degraded.
  *
  * These tests drive the real `exportProjectSkill` over a real temp tree.
  */
@@ -83,7 +88,6 @@ test("export copies the runtime's OWN build when the skill ships one", async () 
       const result = await exportProjectSkill(root, { input: packageRoot, runtime });
 
       expect(result.sourceBuild).toBe(skillBuildFileName(runtime));
-      expect(result.usedFallbackBuild).toBe(false);
 
       // The bytes that actually landed, not just the label on them.
       const exported = await readFile(path.join(root, result.outputPath, "SKILL.md"), "utf8");
@@ -94,16 +98,16 @@ test("export copies the runtime's OWN build when the skill ships one", async () 
 
       const manifest = JSON.parse(
         await readFile(path.join(root, result.outputPath, "export-manifest.json"), "utf8"),
-      ) as { sourceBuild: string; usedFallbackBuild: boolean };
+      ) as Record<string, unknown>;
       expect(manifest.sourceBuild).toBe(skillBuildFileName(runtime));
-      expect(manifest.usedFallbackBuild).toBe(false);
+      expect("usedFallbackBuild" in manifest).toBe(false);
     }
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test("export falls back to SKILL.md when a runtime has no build, and says so", async () => {
+test("a skill that ships only SKILL.md exports SKILL.md to every runtime, as the normal case", async () => {
   const { root, packageRoot } = await makeFixture(["SKILL.md"]);
   try {
     const runtimes: HarnessSkillRuntime[] = [...HARNESS_SKILL_RUNTIMES];
@@ -111,9 +115,16 @@ test("export falls back to SKILL.md when a runtime has no build, and says so", a
 
     for (const runtime of runtimes) {
       const result = await exportProjectSkill(root, { input: packageRoot, runtime });
+      // The build used is still stated — truthfully, as SKILL.md.
       expect(result.sourceBuild).toBe("SKILL.md");
-      // claude's own build IS SKILL.md, so it is not a fallback for claude.
-      expect(result.usedFallbackBuild).toBe(runtime !== "claude");
+      // …and nothing marks it as a degraded/fallback outcome, in the result or
+      // in the manifest a consumer reads.
+      expect("usedFallbackBuild" in result).toBe(false);
+      const manifest = JSON.parse(
+        await readFile(path.join(root, result.outputPath, "export-manifest.json"), "utf8"),
+      ) as Record<string, unknown>;
+      expect(manifest.sourceBuild).toBe("SKILL.md");
+      expect(Object.keys(manifest).some((key) => /fallback/i.test(key))).toBe(false);
       expect(await readFile(path.join(root, result.outputPath, "SKILL.md"), "utf8"))
         .toContain(BUILD_MARKER("claude"));
     }
@@ -122,19 +133,18 @@ test("export falls back to SKILL.md when a runtime has no build, and says so", a
   }
 });
 
-test("export picks per-runtime: a partial build set falls back only where it must", async () => {
-  // The realistic middle case a blanket rule would get wrong.
+test("export picks per-runtime: a partial build set uses SKILL.md only where no own build exists", async () => {
+  // The realistic middle case a blanket rule would get wrong — and the shape
+  // the bundled gproject-* skills have (codex + cursor builds only).
   const { root, packageRoot } = await makeFixture(["SKILL.md", "SKILL.codex.md"]);
   try {
     const codex = await exportProjectSkill(root, { input: packageRoot, runtime: "codex" });
     expect(codex.sourceBuild).toBe("SKILL.codex.md");
-    expect(codex.usedFallbackBuild).toBe(false);
     expect(await readFile(path.join(root, codex.outputPath, "SKILL.md"), "utf8"))
       .toContain(BUILD_MARKER("codex"));
 
     const zed = await exportProjectSkill(root, { input: packageRoot, runtime: "zed" });
     expect(zed.sourceBuild).toBe("SKILL.md");
-    expect(zed.usedFallbackBuild).toBe(true);
     expect(await readFile(path.join(root, zed.outputPath, "SKILL.md"), "utf8"))
       .toContain(BUILD_MARKER("claude"));
   } finally {

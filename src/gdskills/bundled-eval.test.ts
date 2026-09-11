@@ -19,7 +19,7 @@
 // implementation for the negative case could pass while the real sweep is broken.
 
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
@@ -63,11 +63,14 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
   });
 
   test("the sweep reads harness builds, not only SKILL.md", () => {
-    // AC5. The tree ships 65 `SKILL.md` and 100-odd harness builds; the sweep
+    // AC5. The tree shipped 65 `SKILL.md` and 100-odd harness builds; the sweep
     // used to walk the first set only, so `xref:path` reported clean over 65 of
     // 167 shipped documents and said nothing about the rest. That is how
     // `task-implementer` shipped four builds missing their whole reporting
-    // contract with every check green.
+    // contract with every check green. Flow 257 deleted the builds that were
+    // byte-identical to their SKILL.md, so fewer ship now (the seven gproject-*
+    // skills' codex/cursor builds) — which is why the named files below are
+    // derived from the tree instead of pinned to task-implementer.
     const skillsRoot = path.join(defaultBundledRoot(), "skills");
     const canonical = bundledSkillFiles(skillsRoot);
     const documents = bundledSkillDocuments(skillsRoot);
@@ -83,12 +86,17 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     expect(evaluation.skills).toBe(canonical.length);
 
     // Named files, so a walker that finds builds "somewhere" cannot pass while
-    // missing the one the measurement found broken.
-    for (const runtime of HARNESS_SKILL_RUNTIMES) {
-      expect(documents).toContain(
-        path.join(skillsRoot, "orchestration", "task-implementer", skillBuildFileName(runtime)),
-      );
-    }
+    // missing some. Every build that exists beside a SKILL.md, found per
+    // directory by exact name rather than by the walker under test, is in the
+    // set — and there is at least one, or "strictly more" above is the only
+    // thing standing between this test and vacuity.
+    const shippedBuilds = canonical.flatMap((file) =>
+      HARNESS_SKILL_RUNTIMES.map((runtime) => path.join(path.dirname(file), skillBuildFileName(runtime)))
+        .filter((build) => build !== file && existsSync(build)),
+    );
+    expect(shippedBuilds.length).toBeGreaterThan(0);
+    for (const build of shippedBuilds) expect(documents).toContain(build);
+    expect(documents.length).toBe(canonical.length + shippedBuilds.length);
     // …and the denominator is printed, not just returned.
     expect(renderBundledEvaluation(evaluation)).toContain(
       `documents_evaluated: ${documents.length}`,

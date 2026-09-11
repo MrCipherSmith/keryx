@@ -5,7 +5,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
 import { CONTRACTS, contractPath } from "./contracts";
+import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import {
+  BUNDLED_GDSKILLS,
   type GdskillsProfile,
   getBundledSkillsForProfile,
   renderBundledSkill,
@@ -28,8 +30,10 @@ export type InstallGdskillsResult = {
   /**
    * Human-readable notices surfaced from the install, same convention as
    * `createProjectSkill`'s result (`src/gdskills/project-skills.ts`): plain
-   * strings a caller can print under a "Warnings:" heading. Currently only
-   * populated by retired-rule cleanup — see `retired-rules.ts`.
+   * strings a caller can print under a "Warnings:" heading. Populated by
+   * retired-rule cleanup (see `retired-rules.ts`) and by stale per-runtime
+   * build cleanup when a stale build could not be removed (see
+   * `removeStaleRuntimeBuilds`).
    */
   warnings: string[];
 };
@@ -74,6 +78,7 @@ export async function installGdskills(
     }
   }
 
+  const staleBuildOutcomes = await removeStaleRuntimeBuilds(skillsRoot);
   await installBundledSharedSkills(skillsRoot);
   const retiredRuleOutcomes = await installBundledRules(metaprojectRoot);
 
@@ -85,9 +90,11 @@ export async function installGdskills(
 
   await installContracts(contractsRoot);
 
-  const warnings = retiredRuleOutcomes
-    .map(retiredRuleWarning)
-    .filter((warning): warning is string => warning !== null);
+  const projectRoot = path.dirname(metaprojectRoot);
+  const warnings = [
+    ...retiredRuleOutcomes.map(retiredRuleWarning),
+    ...staleBuildOutcomes.map((outcome) => staleRuntimeBuildWarning(outcome, projectRoot)),
+  ].filter((warning): warning is string => warning !== null);
 
   return {
     profile,
@@ -97,6 +104,103 @@ export async function installGdskills(
     manifestPath,
     warnings,
   };
+}
+
+/** `SKILL.codex.md`, `SKILL.cursor.md`, … — every per-runtime build name. */
+const RUNTIME_BUILD_FILE_NAMES: readonly string[] = HARNESS_SKILL_RUNTIMES
+  .filter((runtime) => runtime !== "claude")
+  .map((runtime) => skillBuildFileName(runtime));
+
+export type StaleRuntimeBuildOutcome =
+  | { path: string; action: "removed" }
+  | { path: string; action: "kept-not-regular-file" }
+  | { path: string; action: "kept-error"; errorCode: string };
+
+/**
+ * Remove per-runtime builds (`SKILL.<runtime>.md`) the bundle no longer ships
+ * from the installed keryx-managed skill directories.
+ *
+ * `installGdskills` copies each bundled skill directory over the installed one
+ * with `cp(force)`, which overwrites but never deletes. A project installed
+ * before flow 257 therefore keeps a `SKILL.codex.md` (etc.) that the bundle
+ * dropped because it was a byte-identical copy of `SKILL.md` — and
+ * `resolveSkillBuild` prefers an existing `SKILL.<runtime>.md`, so that stale
+ * copy would win every later `--runtime` export over the current `SKILL.md`.
+ *
+ * Scope is deliberately narrow:
+ *   - only directories of catalogued bundled skills
+ *     (`<skillsRoot>/<category>/<name>/`), never `project-skills/`, `shared/`,
+ *     or anything else under the tree;
+ *   - only the per-runtime build file names, never `SKILL.md`, companions such
+ *     as `SKILL.detail.md`, or any other file;
+ *   - only names the bundle does not ship for that skill — a build it still
+ *     ships was just refreshed by the copy and is left in place.
+ *
+ * These directories are keryx-managed: the copy above overwrites their
+ * `SKILL.md` unconditionally, so a stale build is removed without a content
+ * check, the same way. Following the retired-rule cleanup, each entry is
+ * `lstat`ed (a symlink or other non-regular file is kept, never followed or
+ * read), and no single entry's failure escapes the loop — it becomes an
+ * outcome that `staleRuntimeBuildWarning` turns into a warning.
+ */
+export async function removeStaleRuntimeBuilds(
+  skillsRoot: string,
+  fsOps: { unlink: (target: string) => Promise<void> } = { unlink },
+): Promise<StaleRuntimeBuildOutcome[]> {
+  const outcomes: StaleRuntimeBuildOutcome[] = [];
+  for (const skillEntry of BUNDLED_GDSKILLS) {
+    const bundledDir = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
+    const installedDir = path.join(skillsRoot, skillEntry.category, skillEntry.name);
+    for (const buildName of RUNTIME_BUILD_FILE_NAMES) {
+      // A skill rendered from the catalogue (no bundled directory) ships no
+      // per-runtime build, so every such name in its installed dir is stale.
+      if (existsSync(path.join(bundledDir, buildName))) continue;
+      const installedPath = path.join(installedDir, buildName);
+      try {
+        const stats = await lstat(installedPath);
+        if (!stats.isFile()) {
+          outcomes.push({ path: installedPath, action: "kept-not-regular-file" });
+          continue;
+        }
+        await fsOps.unlink(installedPath);
+        outcomes.push({ path: installedPath, action: "removed" });
+      } catch (error) {
+        if (isErrnoException(error) && (error.code === "ENOENT" || error.code === "ENOTDIR")) {
+          // Nothing there — the steady state, and the case for every skill
+          // this profile did not install.
+          continue;
+        }
+        outcomes.push({
+          path: installedPath,
+          action: "kept-error",
+          errorCode: isErrnoException(error) && error.code ? error.code : "UNKNOWN",
+        });
+      }
+    }
+  }
+  return outcomes;
+}
+
+/**
+ * Notice for one stale-build outcome, or `null` when it was removed (nothing
+ * to tell the operator). `projectRoot` only shortens the path in the message.
+ */
+export function staleRuntimeBuildWarning(outcome: StaleRuntimeBuildOutcome, projectRoot: string): string | null {
+  if (outcome.action === "removed") {
+    return null;
+  }
+  const shown = path.relative(projectRoot, outcome.path).split(path.sep).join("/");
+  const prefix = `${shown} is a per-runtime build keryx no longer ships (that runtime now reads SKILL.md), and a runtime export would still prefer it over SKILL.md`;
+  switch (outcome.action) {
+    case "kept-not-regular-file":
+      return `${prefix}; kept because it is not a regular file (a symlink, directory, or similar) — keryx will not read or remove it; delete it yourself if appropriate`;
+    case "kept-error":
+      return `${prefix}; it could not be removed (${outcome.errorCode}) — delete it by hand`;
+    default: {
+      const exhaustive: never = outcome;
+      throw new Error(`unhandled stale runtime build outcome: ${JSON.stringify(exhaustive)}`);
+    }
+  }
 }
 
 async function installBundledSharedSkills(skillsRoot: string): Promise<void> {

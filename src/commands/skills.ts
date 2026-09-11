@@ -814,9 +814,7 @@ async function exportSkillCommand(args: string[]): Promise<void> {
     console.log(`Runtime: ${result.runtime}`);
     console.log(`Source: ${result.sourcePath}`);
     if (result.sourceBuild !== null) {
-      console.log(
-        `Build: ${result.sourceBuild}${result.usedFallbackBuild ? ` (fallback — no SKILL.${result.runtime}.md in this skill)` : ""}`,
-      );
+      console.log(`Build: ${result.sourceBuild}`);
     }
     console.log(`Output: ${result.outputPath}`);
     console.log("Files:");
@@ -1511,17 +1509,18 @@ Usage:
   keryx skills export <project-skill> --runtime <runtime> [--dry-run] [--json]
 
 Runtimes:
-  claude    canonical SKILL.md
-  codex     SKILL.codex.md    (falls back to SKILL.md)
-  cursor    SKILL.cursor.md   (falls back to SKILL.md)
-  zed       SKILL.zed.md      (falls back to SKILL.md)
-  opencode  SKILL.opencode.md (falls back to SKILL.md)
+  claude    SKILL.md
+  codex     SKILL.md, or SKILL.codex.md when the skill ships one
+  cursor    SKILL.md, or SKILL.cursor.md when the skill ships one
+  zed       SKILL.md, or SKILL.zed.md when the skill ships one
+  opencode  SKILL.md, or SKILL.opencode.md when the skill ships one
   plugin    marketplace package layout
 
 Notes:
-  Each harness receives its own build when the skill ships one. The chosen
-  build is reported as "Build:" and recorded in export-manifest.json, and a
-  fallback to SKILL.md is always stated rather than silent.
+  SKILL.md is the build every harness reads. A skill ships SKILL.<runtime>.md
+  only when that harness needs different content, and then that runtime gets
+  it. The build used is reported as "Build:" and recorded as sourceBuild in
+  export-manifest.json.
 
 Examples:
   keryx skills export pipelines/pipeline-step-store --runtime codex

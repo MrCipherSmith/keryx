@@ -6,7 +6,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { installGdskills, normalizeRetiredRuleContent, removeUnmodifiedRetiredRules, retiredRuleWarning } from "./install";
+import {
+  installGdskills,
+  normalizeRetiredRuleContent,
+  removeStaleRuntimeBuilds,
+  removeUnmodifiedRetiredRules,
+  retiredRuleWarning,
+  staleRuntimeBuildWarning,
+} from "./install";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -60,6 +67,165 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
       "utf8",
     )).toContain("Git");
     await access(path.join(metaprojectRoot, "jobs"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- flow 257: stale per-runtime builds in an existing install ---------------
+//
+// install copies each bundled skill directory over the installed one and never
+// deleted anything, so a project installed before the byte-identical
+// SKILL.<runtime>.md copies were dropped keeps them — and a runtime export
+// prefers an existing SKILL.<runtime>.md over SKILL.md.
+
+const INSTALLED_JOB_ORCHESTRATOR = ["skills", "gdskills", "orchestration", "job-orchestrator"];
+
+test("a per-runtime build the bundle no longer ships is removed from an existing install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    const bundledDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled", "skills", "orchestration", "job-orchestrator");
+    // Precondition: the bundle ships SKILL.md alone for this skill.
+    expect(existsSync(path.join(bundledDir, "SKILL.md"))).toBe(true);
+    expect(existsSync(path.join(bundledDir, "SKILL.codex.md"))).toBe(false);
+
+    // What a pre-257 install left behind, plus files that must survive.
+    for (const stale of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
+      await writeFile(path.join(skillDir, stale), "# stale build from an older keryx\n", "utf8");
+    }
+    await writeFile(path.join(skillDir, "SKILL.detail.md"), "companion, not a build\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.claude.md"), "not a harness build name\n", "utf8");
+    await writeFile(path.join(skillDir, "notes.md"), "unrelated file\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    for (const stale of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
+      expect(existsSync(path.join(skillDir, stale))).toBe(false);
+    }
+    // Only runtime-build names are touched.
+    expect(await readFile(path.join(skillDir, "SKILL.detail.md"), "utf8")).toBe("companion, not a build\n");
+    expect(await readFile(path.join(skillDir, "SKILL.claude.md"), "utf8")).toBe("not a harness build name\n");
+    expect(await readFile(path.join(skillDir, "notes.md"), "utf8")).toBe("unrelated file\n");
+    expect(await readFile(path.join(skillDir, "SKILL.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.md"), "utf8"));
+    // Removal succeeded, so there is nothing to tell the operator.
+    expect(result.warnings.filter((warning) => warning.includes("per-runtime build"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a per-runtime build the bundle still ships is replaced, not removed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    // `planner` (a gproject-* subagent) is in the full profile and still ships
+    // its codex and cursor builds, which differ by `compatible_harnesses`.
+    await installGdskills(metaprojectRoot, "full");
+    const skillDir = path.join(metaprojectRoot, "skills", "gdskills", "planning", "planner");
+    const bundledDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled", "skills", "planning", "planner");
+    expect(existsSync(path.join(bundledDir, "SKILL.codex.md"))).toBe(true);
+    expect(existsSync(path.join(bundledDir, "SKILL.zed.md"))).toBe(false);
+
+    await writeFile(path.join(skillDir, "SKILL.codex.md"), "# locally edited codex build\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale zed build\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "full");
+
+    // Shipped: refreshed to the bundled bytes.
+    expect(await readFile(path.join(skillDir, "SKILL.codex.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.codex.md"), "utf8"));
+    expect(await readFile(path.join(skillDir, "SKILL.cursor.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.cursor.md"), "utf8"));
+    // Not shipped for this skill: removed, in the same run.
+    expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
+    expect(result.warnings.filter((warning) => warning.includes("per-runtime build"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a project-skill's SKILL.codex.md is never touched by install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    // A project-skill that happens to share a bundled skill's name and category
+    // path shape — install must still leave it alone.
+    const projectSkillDir = path.join(metaprojectRoot, "project-skills", "orchestration", "job-orchestrator");
+    await mkdir(projectSkillDir, { recursive: true });
+    await writeFile(path.join(projectSkillDir, "SKILL.md"), "# project skill\n", "utf8");
+    await writeFile(path.join(projectSkillDir, "SKILL.codex.md"), "# project codex build\n", "utf8");
+    // …and a skill directory in the gdskills tree that keryx does not ship.
+    const unmanagedDir = path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "not-a-bundled-skill");
+    await mkdir(unmanagedDir, { recursive: true });
+    await writeFile(path.join(unmanagedDir, "SKILL.codex.md"), "# someone else's build\n", "utf8");
+
+    await installGdskills(metaprojectRoot, "recommended");
+
+    expect(await readFile(path.join(projectSkillDir, "SKILL.codex.md"), "utf8")).toBe("# project codex build\n");
+    expect(await readFile(path.join(unmanagedDir, "SKILL.codex.md"), "utf8")).toBe("# someone else's build\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlink at a stale build name is kept, not followed, and warned about", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    const target = path.join(root, "outside-target.md");
+    await writeFile(target, "outside\n", "utf8");
+    await symlink(target, path.join(skillDir, "SKILL.codex.md"));
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(path.join(skillDir, "SKILL.codex.md"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(target, "utf8")).toBe("outside\n");
+    const warning = result.warnings.find((entry) => entry.includes("per-runtime build"));
+    expect(warning).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
+    expect(warning).toContain("not a regular file");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a stale build whose removal fails is kept and becomes a warning, without aborting", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const skillDir = path.join(skillsRoot, ...INSTALLED_JOB_ORCHESTRATOR.slice(2));
+    await writeFile(path.join(skillDir, "SKILL.codex.md"), "stale\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "stale\n", "utf8");
+
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot, {
+      unlink: async (target) => {
+        if (target.endsWith("SKILL.codex.md")) {
+          throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+        }
+        await rm(target);
+      },
+    });
+
+    // One failure did not stop the next entry.
+    expect(existsSync(path.join(skillDir, "SKILL.codex.md"))).toBe(true);
+    expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
+    expect(outcomes.map((outcome) => `${path.basename(outcome.path)}:${outcome.action}`).sort())
+      .toEqual(["SKILL.codex.md:kept-error", "SKILL.zed.md:removed"]);
+
+    const warnings = outcomes
+      .map((outcome) => staleRuntimeBuildWarning(outcome, root))
+      .filter((warning): warning is string => warning !== null);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
+    expect(warnings[0]).toContain("could not be removed (EPERM)");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

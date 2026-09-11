@@ -22,7 +22,7 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { bundledSkillDocuments, defaultBundledRoot } from "./bundled-eval";
+import { bundledSkillDocuments, bundledSkillFiles, defaultBundledRoot } from "./bundled-eval";
 
 /**
  * Commands whose blast radius is the whole worktree.
@@ -96,7 +96,14 @@ test("the sweep reads something — an empty denominator would pass vacuously", 
   // `bundledSkillDocuments` returns [] for a missing root, and a guard that walks
   // nothing reports a clean tree. This is the fourth place that assertion has been
   // needed; it is cheaper than the fifth time it is missing.
-  expect(bundledSkillDocuments(defaultBundledRoot()).length).toBeGreaterThan(100);
+  //
+  // The floor was `> 100` while every skill shipped up to five builds. Flow 257
+  // deleted the byte-identical harness builds, so the documents are now every
+  // SKILL.md plus the few builds that genuinely differ: assert both halves.
+  const root = defaultBundledRoot();
+  const canonical = bundledSkillFiles(root);
+  expect(canonical.length).toBeGreaterThan(50);
+  expect(bundledSkillDocuments(root).length).toBeGreaterThan(canonical.length);
 });
 
 test("the detector fires on the exact line that shipped, and not on its correction", () => {
