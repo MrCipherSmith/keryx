@@ -33,6 +33,17 @@ editor (#6435)`. Gold, four files: `src/context/case-context.ts`,
 grok-build and keryx-shell drive the same model, grok-4.6. The difference between
 those two rows is the shell and nothing else.
 
+> **CORRECTION, 2026-09-11 — the grok-build rows are contaminated (K-011).** In the
+> kept transcripts of `/tmp/arena-diag3` the grok CLI read `.git/FETCH_HEAD` in its
+> own checkout, learned the absolute path of the SOURCE clone, and ran `git -C
+> ~/sandbox/arena/clear/vantage-frontend show 53254e0e3` — the answer commit — in
+> both arms. Its 4/4 is an answer it took from outside its tree. The smoke's grok
+> 1.0 recall very likely came the same way (no transcripts were kept then). keryx
+> tried the same kind of search (`git show-ref`, `ls` of the arms directory) and did
+> not find the path. **Nothing in this table compares the two shells.** The keryx
+> defects below stand on keryx's own transcript and are real regardless; K-001 is
+> withdrawn.
+
 ---
 
 ## K-000 — the arena kept no transcripts · fixed in this branch
@@ -50,7 +61,7 @@ evidence too. `runArenaArm` names the file; `run-arena` puts them under
 
 ---
 
-## K-001 — same model, a quarter of the recall · observed
+## K-001 — same model, a quarter of the recall · WITHDRAWN (the comparison leaked, K-011)
 
 **Evidence:** smoke rows above. keryx-shell and grok-build, both grok-4.6, both arms:
 grok found 4/4 in both arms, keryx found 1/4 in both. keryx's two answers are
@@ -165,8 +176,14 @@ The smoke (23:09–23:37) and this run's first 15 rounds spent it. The claude le
 different account and is unaffected.
 
 Retried 2026-09-11 10:34 (`/tmp/arena-diag2`): all four arms failed the same way —
-grok CLI 402 with the balance message, keryx 403 with no reason. Same account state,
-two different reports of it; K-005 again.
+grok CLI 402 with the balance message, keryx 403 with no reason.
+
+**CORRECTION — keryx's 403 was never the balance (K-010).** After the balance
+returned, the grok CLI recorded arms and keryx still failed with a bare 403. A probe
+through a build with the K-005 fix printed the reason the old code dropped: `xAI
+(Grok) API returned HTTP 403: The OAuth2 access token could not be validated.` —
+while `keryx auth status grok` said `active`. `keryx auth login grok` fixed it. The
+two CLIs were failing for two different reasons that looked like one.
 
 ## K-005 — a provider refusal kills the turn, and is reported as Ollama · confirmed
 
@@ -254,4 +271,70 @@ and graph tools only when a graph exists.
   The one file the smoke's keryx answer did contain was read only up to the cap.
 - **S-4:** 15 rounds of a 40-round budget. The round cap did not end this turn.
 
-### keryx-shell context-on — pending
+### keryx-shell context-on — never ran (the 403 was the token, K-010)
+
+---
+
+## K-010 — `auth status` says active while x.ai rejects the token · open
+
+**Evidence:** `keryx auth status grok --json` at ~00:05 → `state: "active"`, expiry
+2026-09-11T00:54Z, refreshable. At 11:45 the same grant was refused on every request
+with `The OAuth2 access token could not be validated.`, arena and real home alike;
+`keryx auth login grok` fixed it at once. The smoke used the grant successfully
+until ~23:35 on 2026-09-10.
+
+**Two defects.** `auth status` reports a state computed from the local record, not
+from whether the provider accepts the token. And a 401/403 on a refreshable grant
+neither tries a refresh nor says "run `keryx auth login grok`" — the turn ends on the
+first request. Why the token stopped validating early is not known; a newer login
+by another client invalidating a single-session grant is a candidate, not verified.
+
+**Fix direction:** on an `authentication` error from an OAuth-backed provider, try
+one refresh, and if that fails name the fix in the error. `auth status` should probe,
+or say its state is local.
+
+## K-011 — the arena's checkout pointed at the source clone · fixed on this branch
+
+**Evidence:** `.git/FETCH_HEAD` in every arm checkout read `'<base>' of
+/Users/…/arena/clear/vantage-frontend`. `createIsolatedCheckout` removed the remote
+(closing `git fetch origin`) but left FETCH_HEAD. The grok CLI in `/tmp/arena-diag3`
+read it (step 19 of the control arm: `cat .git/config`, `cat .git/FETCH_HEAD`) and
+ran `git -C <source> show 53254e0e3` — the answer — in both arms. It also tried
+`gh pr view 6435 --repo <the real repository>` and `curl` against GitHub.
+
+**Fix (this branch):** FETCH_HEAD is deleted after checkout;
+`assertNoSourcePointer` refuses a tree when any text file under `.git` names the
+source clone (both spellings of the path), before the agent runs and in the dry run;
+and an arm whose kept transcript or stderr names the source clone fails as "reached
+the source clone … cannot be scored" instead of recording a result. Tests:
+`scripts/arena/arena-escape.test.ts`, `retrieval-checkout.test.ts`.
+
+**Residual, recorded rather than closed:** an arm with a shell can still search the
+filesystem for another copy of the repository, and can reach the network through
+`curl`/`gh` (the grok CLI's `--disable-web-search` does not cover shell commands).
+The transcript check catches the first when the path appears in what the arm ran; the
+second is bounded only by the isolated HOME holding no GitHub credential. A real
+sandbox for the arm's shell is the complete fix.
+
+---
+
+## Status after 0.2.95 (2026-09-11)
+
+| id | status |
+|---|---|
+| K-000 | fixed on this branch (transcripts kept) |
+| K-001 | withdrawn — comparison contaminated (K-011) |
+| K-002 | open — needs an uncontaminated comparison to say anything |
+| K-003 | open — same |
+| K-004 | fixed in 0.2.95 (#529) |
+| K-005 | fixed in 0.2.95 (#529); proved itself on the first real call |
+| K-006 | answered — the model's habit, grok does it too; not a keryx prompt defect |
+| K-007 | open — prompt change, deferred by the operator |
+| K-008 | fixed in 0.2.95 (#529) |
+| K-009 | fixed in 0.2.95 (#529), plus the prompt now follows the roster |
+| K-010 | open |
+| K-011 | fixed on this branch; residual risk recorded |
+| S-1 | fixed in 0.2.95 (#529) |
+| S-2 | improved — clip notes now say how much was dropped (K-008) |
+| S-3 | partly — the prompt's tool statements are now true of the roster |
+| S-4 | not live — dropped |

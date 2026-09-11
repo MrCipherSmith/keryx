@@ -9,7 +9,46 @@ Branch: `arena/measurement`. Pushed to `origin`. Based on
 
 ---
 
-## 00. Where it stopped, 2026-09-11 ~00:10 — read this first
+## 000. Where it stopped, 2026-09-11 ~15:00 — read this first
+
+**The comparison so far is contaminated, and the hole is closed.** The grok CLI's
+4/4 on `t1-53254e0e` was the answer read from the SOURCE clone: every arm checkout
+kept `.git/FETCH_HEAD` naming `~/sandbox/arena/clear/vantage-frontend`, and grok ran
+`git -C <that> show <answer sha>` in both arms. Fixed on this branch (K-011 in
+`arena/keryx-shell-defects.md`): FETCH_HEAD removed, a pre-run refusal of any tree
+whose `.git` names the source, and a post-run refusal of any arm whose transcript
+does. Earlier grok numbers — smoke and diagnostics — must not be used.
+
+**keryx 0.2.95 is released** (npm `latest`, GitHub release with binaries; PR #529,
+flow 250). It fixes the keryx-shell defects read off keryx's own transcript: provider
+errors name the provider and keep the reason (K-005), `search_code` output is
+relative and says how much a clip dropped (K-008), no metaproject tools without
+`.metaproject/` and a prompt that describes the real roster (K-009), `read_file`
+pages by `start_line` (S-1), the subprocess runner runs this keryx (K-004).
+`KERYX_DEV_COMMAND` still points at this checkout's `src/cli.ts`; to measure the
+release, merge `main` into this branch first — it is behind 0.2.95.
+
+**The keryx grok grant was re-issued** (`keryx auth login grok`) after x.ai rejected
+the old token while `auth status` said active (K-010, open).
+
+**Next, in order:**
+
+1. Merge `main` (0.2.95) into `arena/measurement`, so the keryx leg runs the fixed
+   shell.
+2. Dry run on a fresh `--out` (old caches under `/tmp/arena*` hold FETCH_HEAD and
+   are now refused).
+3. Diagnostic rerun on `t1-53254e0e`, all three legs, transcripts kept, and read
+   them: the first uncontaminated comparison.
+4. Recalibrate the watchdog's token ceiling (see 00, step 2), then the full sweep.
+
+**Residual isolation risk** (not closed): an arm with a shell can still search the
+filesystem for another clone, or reach GitHub with `curl`/`gh`. The transcript check
+catches the first when the path shows in what the arm ran; only a real sandbox closes
+both.
+
+---
+
+## 00. Where it stopped, 2026-09-11 ~00:10 — superseded by 000 above
 
 **Blocked on the x.ai balance.** Both grok-4.6 legs (`keryx-shell`, `grok-build`)
 fail until it is topped up. `grok` says it plainly — `402 Payment Required: Grok

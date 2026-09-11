@@ -26,10 +26,11 @@
 // absent from the tree says nothing about whether the provisioning step wrote the
 // answer into the workspace in prose.
 
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { assertAnswerUnreachable } from "../benchmark/retrieval-checkout";
+import { assertAnswerUnreachable, assertNoSourcePointer } from "../benchmark/retrieval-checkout";
 import type { AgentPort } from "../benchmark/retrieval-run";
 import { arenaInventory, arenaStripContext, assertArenaArmContext, assertBuildable, type ArenaInventory } from "./arena-context";
 import { assertProvisionAncestry, type BaseTreeCache } from "./arena-checkout";
@@ -126,6 +127,29 @@ export function firstArmFor(harness: string, taskId: string): Arm {
   return first % 2 === 0 ? "context-on" : "context-off";
 }
 
+/**
+ * The transcript file (or its stderr) that names the source clone, if any.
+ *
+ * Both spellings of the path, as in `sourcePointersIn`. A transcript that was
+ * never written — no transcriptsDir, or an adapter that died first — names nothing.
+ */
+export function transcriptNamingSource(transcriptFile: string | undefined, sourceRoot: string): string | undefined {
+  if (transcriptFile === undefined) return undefined;
+  let real = sourceRoot;
+  try {
+    real = realpathSync(sourceRoot);
+  } catch {
+    // A root that does not resolve is looked for as written.
+  }
+  const needles = [...new Set([sourceRoot, real])];
+  for (const file of [transcriptFile, `${transcriptFile}.stderr`]) {
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, "utf8");
+    if (needles.some((needle) => text.includes(needle))) return file;
+  }
+  return undefined;
+}
+
 export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOptions): Promise<ArenaArmResult> {
   // The harness is in the path because one results file holds several, and two
   // legs sweeping the same task would otherwise check out into, and delete, each
@@ -161,16 +185,23 @@ export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOp
       options.checkLeakage?.(treePath, task.answerNeedles);
     }
 
+    // And a third: the tree must not say where the full clone lives. The answer
+    // being unreachable inside the tree was checked; a signpost to a repository
+    // where it IS reachable was not, and an arm followed one.
+    assertNoSourcePointer(treePath, options.repoRoot);
+
     const prompt = buildArenaPrompt(task);
+    const transcriptFile =
+      options.transcriptsDir === undefined
+        ? undefined
+        : path.join(options.transcriptsDir, `${task.id}-${options.agent.harness}-${arm}.jsonl`);
     const started = Date.now();
     const answer = await options.agent.run({
       cwd: treePath,
       prompt,
       model: options.model,
       gold: task.gold,
-      ...(options.transcriptsDir === undefined
-        ? {}
-        : { transcriptFile: path.join(options.transcriptsDir, `${task.id}-${options.agent.harness}-${arm}.jsonl`) }),
+      ...(transcriptFile === undefined ? {} : { transcriptFile }),
       ...(options.watchdog === undefined
         ? {}
         : {
@@ -185,6 +216,17 @@ export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOp
           }),
     });
     const wallClockMs = Date.now() - started;
+
+    // The tree can be sealed and an agent with a shell can still go looking. A
+    // transcript that names the source clone is an arm that reached outside its
+    // tree, and its answer is not a measurement of anything the arm was given.
+    const escapedVia = transcriptNamingSource(transcriptFile, options.repoRoot);
+    if (escapedVia !== undefined) {
+      throw new Error(
+        `the arm reached the source clone ${options.repoRoot} from outside its tree (named in ` +
+          `${path.basename(escapedVia)}) — its answer cannot be scored`,
+      );
+    }
 
     const implementation =
       task.type === "implement" && options.evaluateImplementation !== undefined

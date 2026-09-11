@@ -2,11 +2,13 @@ import { describe, expect, test } from "bun:test";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { existsSync } from "node:fs";
 import {
   assertAnswerUnreachable,
   commitReachable,
   createIsolatedCheckout,
   remotesOf,
+  sourcePointersIn,
 } from "./retrieval-checkout";
 
 function git(cwd: string, args: string[]): string {
@@ -49,6 +51,24 @@ describe("createIsolatedCheckout", () => {
       await createIsolatedCheckout({ repoRoot: root, path: path.join(tree, "t"), ref: parent });
       expect(commitReachable(path.join(tree, "t"), sha)).toBe(false);
       expect(commitReachable(path.join(tree, "t"), parent)).toBe(true);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+      await rm(tree, { recursive: true, force: true });
+    }
+  });
+
+  test("nothing in the tree's .git says where the full clone lives", async () => {
+    // The arena, 2026-09-11: FETCH_HEAD kept `'<sha>' of <source path>`, an arm
+    // read it, and `git -C <source path> show <sha>` handed it the answer. The
+    // commit was unreachable from the tree; the repository that holds it was one
+    // `cat` away.
+    const { root, parent } = await repoWithAnswer();
+    const tree = await mkdtemp(path.join(tmpdir(), "keryx-checkout-tree-"));
+    try {
+      const t = path.join(tree, "t");
+      await createIsolatedCheckout({ repoRoot: root, path: t, ref: parent });
+      expect(existsSync(path.join(t, ".git", "FETCH_HEAD"))).toBe(false);
+      expect(sourcePointersIn(t, root)).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
       await rm(tree, { recursive: true, force: true });

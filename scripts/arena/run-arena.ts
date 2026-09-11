@@ -17,6 +17,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createBaseTreeCache } from "./arena-checkout";
+import { assertNoSourcePointer } from "../benchmark/retrieval-checkout";
 import { arenaInventory } from "./arena-context";
 import { buildArenaEnv } from "./arena-env";
 import { ARENA_HARNESSES, harnessById, type ArenaHarnessSpec } from "./arena-harnesses";
@@ -174,6 +175,8 @@ async function dryRun(args: Args, tasks: readonly ArenaTask[]): Promise<void> {
   for (const arm of ["context-on", "context-off"] as Arm[]) {
     const treePath = path.join(args.out, "dry", `${sample.id}-${probeHarness.id}-${arm}`);
     await cache.materialize(sample.base, treePath);
+    // The same refusal the sweep makes, before a dollar is spent.
+    assertNoSourcePointer(treePath, args.repo);
     if (arm === "context-on") {
       await provisioner.provision(treePath);
       if (sample.answerNeedles.length > 0) checkLeakage(treePath, sample.answerNeedles);

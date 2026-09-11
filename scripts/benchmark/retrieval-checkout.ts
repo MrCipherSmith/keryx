@@ -19,7 +19,7 @@
 // The remote is removed afterwards. Leaving it would leave `git fetch origin
 // main` as a one-command route to the same answer.
 
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
@@ -84,6 +84,65 @@ export async function createIsolatedCheckout(request: CheckoutRequest): Promise<
     if (result.code !== 0) {
       throw new Error(`git ${args.join(" ")} failed in ${request.path}: ${result.stderr.trim()}`);
     }
+  }
+
+  // FETCH_HEAD names the source clone by absolute path — `'<sha>' of /…/repo` —
+  // and the tree is on a detached HEAD, so nothing needs it. Left in place it was
+  // a signpost: an arena arm ran `cat .git/FETCH_HEAD`, found the full clone, and
+  // read the answer out of it with `git -C <that path> show <sha>` (2026-09-11).
+  // Removing the remote had closed `git fetch origin`; it had not closed this.
+  await rm(path.join(request.path, ".git", "FETCH_HEAD"), { force: true });
+}
+
+/** Entries directly under `.git` that hold binary objects or the index, never a path. */
+const GIT_BINARY_ENTRIES: ReadonlySet<string> = new Set(["objects", "index"]);
+
+function realpathOr(candidate: string): string {
+  try {
+    return realpathSync(candidate);
+  } catch {
+    return candidate;
+  }
+}
+
+/**
+ * Files under `<tree>/.git` that name the source clone, relative to the tree.
+ *
+ * The answer being unreachable INSIDE the tree says nothing about whether the tree
+ * tells an agent where the full repository lives. Both spellings of the path are
+ * looked for, because `/tmp` and `/private/tmp` are the same directory on macOS and
+ * a check that knew only one of them would pass the other.
+ */
+export function sourcePointersIn(treePath: string, sourceRoot: string): string[] {
+  const gitDir = path.join(treePath, ".git");
+  if (!existsSync(gitDir)) return [];
+  const needles = [...new Set([sourceRoot, realpathOr(sourceRoot)])].filter((needle) => needle.length > 0);
+  const found: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      if (dir === gitDir && GIT_BINARY_ENTRIES.has(entry.name)) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+        continue;
+      }
+      if (!entry.isFile() || statSync(full).size > 1_000_000) continue;
+      const text = readFileSync(full, "utf8");
+      if (needles.some((needle) => text.includes(needle))) found.push(path.relative(treePath, full));
+    }
+  };
+  walk(gitDir);
+  return found.sort();
+}
+
+/** Refuse a tree whose `.git` tells an agent where the full repository is. */
+export function assertNoSourcePointer(treePath: string, sourceRoot: string): void {
+  const found = sourcePointersIn(treePath, sourceRoot);
+  if (found.length > 0) {
+    throw new Error(
+      `${treePath} names the source clone ${sourceRoot} in ${found.join(", ")} — an agent that reads it can run ` +
+        `\`git -C ${sourceRoot} show <sha>\` and take the answer from outside its own tree`,
+    );
   }
 }
 
