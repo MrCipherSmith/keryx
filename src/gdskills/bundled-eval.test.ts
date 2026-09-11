@@ -154,7 +154,7 @@ VIOLATION persona:name — this paragraph asks for a boss review.
 VIOLATION persona:marker — and calls the result ducttape.
 VIOLATION path:personal-home — read /home/altsay/keryx/notes.md first.
 VIOLATION xref:skill — Launch \`does-not-exist\` skill on the diff.
-VIOLATION xref:path — write findings per \`skills/review-orchestrator/reviewer-finding.schema.json\`.
+VIOLATION xref:path — write findings per \`skills/gdskills/review/does-not-exist.schema.json\`.
 `;
 
 const NO_FRONTMATTER_SKILL = `# No Frontmatter
@@ -224,8 +224,10 @@ metadata:
 
 # Control Example
 
-Reads \`skills/quality/control-example/SKILL.md\` — a path that resolves inside
-this tree — and mentions \`review-logic\` without asking for it as a skill.
+Reads \`.metaproject/skills/gdskills/quality/control-example/SKILL.md\` — the
+installed spelling, which resolves — and mentions \`review-logic\` without
+asking for it as a skill. Also names its own skill by directory only,
+\`skills/quality/control-example\`, the accepted bare form.
 `;
 
 /**
@@ -298,6 +300,57 @@ metadata:
 # Unaddressed Build
 `;
 
+/**
+ * Proves `xref:path` resolves against the INSTALLED layout, not the checkout.
+ *
+ * `skills/shared/example-script.md` is written to disk in THIS fixture tree
+ * below, on purpose — mirroring `skills/shared/git-merge-base.md`, a real file
+ * in the bundled source tree that eleven shipped skills once cited bare while
+ * no installed project ever had it at that address. The bare form must be
+ * rejected regardless of what sits on disk here; the installed spelling of the
+ * exact same file must resolve clean.
+ */
+const SOURCE_TREE_ONLY_SKILL = `---
+name: source-tree-only-example
+description: A source-tree-only path is rejected; the installed spelling of the same file passes.
+metadata:
+  version: 1.0.0
+---
+
+# Source Tree Only Example
+
+VIOLATION xref:path — \`skills/shared/example-script.md\` resolves on disk in
+this fixture tree, but no installed project has a top-level \`skills/\`; only
+\`.metaproject/skills/gdskills/shared/example-script.md\` exists in an install.
+
+The installed spelling of that same file draws nothing:
+\`.metaproject/skills/gdskills/shared/example-script.md\`.
+`;
+
+/**
+ * A rule file with one dead cross-reference and one live one — the control
+ * proving rule sweeping is selective, not a blanket failure the moment a rule
+ * mentions a path at all.
+ */
+const BROKEN_RULE = `---
+description: Fixture rule proving rule files are swept for cross-references too.
+---
+
+# Fixture Rule
+
+VIOLATION xref:path — see \`rules/core/does-not-exist.mdc\` for the missing half.
+
+The sibling rule resolves and draws nothing: \`rules/core/sibling-rule.mdc\`.
+`;
+
+/** Exists only so \`BROKEN_RULE\` above has something real to cite. */
+const SIBLING_RULE = `---
+description: Referenced by the fixture rule above; carries no violation of its own.
+---
+
+# Sibling Rule
+`;
+
 let fixtureRoot = "";
 
 function writeSkill(root: string, category: string, name: string, body: string): void {
@@ -308,6 +361,12 @@ function writeSkill(root: string, category: string, name: string, body: string):
 
 function writeSkillFile(root: string, category: string, name: string, file: string, body: string): void {
   const dir = path.join(root, "skills", category, name);
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, file), body, "utf8");
+}
+
+function writeRule(root: string, file: string, body: string): void {
+  const dir = path.join(root, "rules", "core");
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, file), body, "utf8");
 }
@@ -347,6 +406,11 @@ beforeAll(() => {
     "SKILL.gemini.md",
     UNADDRESSED_BUILD,
   );
+  writeSkill(fixtureRoot, "quality", "source-tree-only-example", SOURCE_TREE_ONLY_SKILL);
+  mkdirSync(path.join(fixtureRoot, "skills", "shared"), { recursive: true });
+  writeFileSync(path.join(fixtureRoot, "skills", "shared", "example-script.md"), "# Example\n", "utf8");
+  writeRule(fixtureRoot, "sibling-rule.mdc", SIBLING_RULE);
+  writeRule(fixtureRoot, "broken-rule.mdc", BROKEN_RULE);
 });
 
 afterAll(() => {
@@ -362,11 +426,42 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    expect(evaluation.skills).toBe(11);
-    // Eleven skills, thirteen documents: `build-drift-example` and
+    expect(evaluation.skills).toBe(12);
+    // Twelve skills, fourteen documents: `build-drift-example` and
     // `harness-field-only` each also ship a Codex build.
-    expect(evaluation.documents).toBe(13);
+    expect(evaluation.documents).toBe(14);
     expect(evaluation.findings.length).toBeGreaterThan(0);
+  });
+
+  test("a reference valid only in the source tree is reported; the installed spelling passes", () => {
+    // AC7: `xref:path` has to resolve against the layout an installed project
+    // actually has, not against whatever this checkout happens to hold on
+    // disk at the same string.
+    const found = findingsFor("source-tree-only-example").filter((finding) => finding.check === "xref:path");
+    // Exactly one: the bare form is rejected, and — since this is the only
+    // `xref:path` finding for the skill — the installed spelling of the SAME
+    // file, cited right below it, drew nothing at all.
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("skills/shared/example-script.md");
+    expect(found[0]?.message).toContain("SOURCE tree's own layout");
+    expect(found[0]?.message).toContain(".metaproject/skills/gdskills/shared/example-script.md");
+  });
+
+  test("a reference inside a rule file to a missing path is reported", () => {
+    // Item 2: rule files under `rules/core/` are swept for cross-references
+    // the same way skill documents are — nothing read them before this.
+    const evaluation = evaluateBundledTree(fixtureRoot);
+    const broken = evaluation.findings.filter(
+      (finding) => finding.check === "xref:path" && finding.file === "rules/core/broken-rule.mdc",
+    );
+    expect(broken).toHaveLength(1);
+    expect(broken[0]?.message).toContain("rules/core/does-not-exist.mdc");
+    expect(broken[0]?.message).toContain("resolves to nothing under the shipped tree");
+
+    // The control: a rule citing a SIBLING rule that exists draws nothing —
+    // proving the sweep is selective, not a blanket failure on any mention.
+    const sibling = evaluation.findings.filter((finding) => finding.file === "rules/core/sibling-rule.mdc");
+    expect(sibling).toEqual([]);
   });
 
   test("a description that resolves to nothing is rejected, not just an absent one", () => {
@@ -476,7 +571,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(reason("persona:marker")).toContain("the reviewer's own term");
     expect(reason("path:personal-home")).toContain("absolute path into altsay's home directory");
     expect(reason("xref:skill")).toContain("names a skill `does-not-exist` that this tree does not ship");
-    expect(reason("xref:path")).toContain("skills/review-orchestrator/reviewer-finding.schema.json");
+    expect(reason("xref:path")).toContain("skills/gdskills/review/does-not-exist.schema.json");
     expect(reason("xref:path")).toContain("resolves to nothing under the shipped tree");
   });
 

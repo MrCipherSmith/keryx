@@ -69,7 +69,7 @@ Two modules must recognise the same terminal prompt.
 ```ts
 // Wrong — a claim, unchecked. Four attempts to restate this rule from a
 // reading of the other module each got it wrong in a different way.
-/** Same signals scripts/watchdog.ts uses. */
+/** Same signals the watchdog script uses. */
 const SIGNAL = /do you want to proceed\?/i;
 ```
 
