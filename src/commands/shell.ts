@@ -2181,33 +2181,25 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
-      const tools = buildInteractiveAgentTools({
-        cwd,
-        metaprojectPort,
-        searchController: searchProviderController,
-        spawnTool,
-        getSessionDir,
-        jobRegistry,
-        mcp: getMcpRuntime(),
-        ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-      });
-      return {
+      const deps = {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
-        tools,
+        tools: buildInteractiveAgentTools({
+          cwd,
+          metaprojectPort,
+          searchController: searchProviderController,
+          spawnTool,
+          getSessionDir,
+          jobRegistry,
+          mcp: getMcpRuntime(),
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+        }),
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
         // view; opening it must not be the thing that spawns every
         // configured server, which calling `getMcpRuntime()` here would
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
-        // Built from the roster it describes, so the prompt never names a tool
-        // the session was not given.
-        systemInstruction: buildAgentSystemInstruction(orient, {
-          providerId: sel.provider,
-          modelId: sel.model,
-          toolNames: interactiveAgentToolNames(tools),
-        }),
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
         maxRounds: resolveAgentMaxRounds(),
@@ -2216,6 +2208,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+      };
+      // The instruction is built from the roster it describes, so it never
+      // names a tool this session was not given.
+      return {
+        ...deps,
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: sel.provider,
+          modelId: sel.model,
+          toolNames: interactiveAgentToolNames(deps.tools),
+        }),
       };
     };
     const redetect = (): Promise<DetectedProvider[]> =>
@@ -2477,33 +2479,35 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           resetSubagentBudget = controls.resetBudget;
         },
       });
-      const agentTools = buildInteractiveAgentTools({
-        cwd: agentCwd,
-        metaprojectPort,
-        searchController: searchProviderController,
-        spawnTool,
-        getSessionDir: () => slateSessionBox.current?.dir,
-        jobRegistry,
-        mcp: mcpRuntime,
-        ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-      });
-      const agentDeps: AgentDeps = {
+      const agentDepsBase = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
-        tools: agentTools,
-        // Built from the roster it describes, so the prompt never names a tool
-        // the session was not given.
-        systemInstruction: buildAgentSystemInstruction(orient, {
-          providerId: provider,
-          modelId: model,
-          toolNames: interactiveAgentToolNames(agentTools),
+        tools: buildInteractiveAgentTools({
+          cwd: agentCwd,
+          metaprojectPort,
+          searchController: searchProviderController,
+          spawnTool,
+          getSessionDir: () => slateSessionBox.current?.dir,
+          jobRegistry,
+          mcp: mcpRuntime,
+          ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         maxRounds: resolveAgentMaxRounds(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+      };
+      // The instruction is built from the roster it describes, so it never
+      // names a tool this session was not given.
+      const agentDeps: AgentDeps = {
+        ...agentDepsBase,
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: provider,
+          modelId: model,
+          toolNames: interactiveAgentToolNames(agentDepsBase.tools),
+        }),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
       // created (flow 067), so it never runs here. This is the readline agent
