@@ -1,10 +1,123 @@
 import { access, mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { renderGdgraphPostCommitHook } from "../lib/templates";
 import { withCwd } from "../lib/test-cwd";
+import { RETIRED_RULES } from "../gdskills/retired-rules";
 import { updateCommand } from "./update";
+
+// Round-1 finding T-001: the retired-rule warning print was tested only at
+// the `keryx skills install` call site (skills-install-warnings.test.ts).
+// `installGdskills` is also called from `keryx update` (update.ts:478,
+// printed at update.ts:240) and `keryx init` (init.ts, see init.test.ts) —
+// a regression that silences either print stayed green under the old
+// coverage. These two tests drive `keryx update` directly.
+const retiredFixturesRootForUpdate = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "gdskills",
+  "__fixtures__",
+  "retired-rules",
+);
+
+/** Patches `console.log` to capture every call's stringified arguments. */
+function captureUpdateConsoleLog(): { logs: string[]; restore: () => void } {
+  const logs: string[] = [];
+  const original = console.log;
+  // biome-ignore lint: intentional console capture for assertions in this test only.
+  console.log = (...values: unknown[]) => {
+    logs.push(values.map((v) => (typeof v === "string" ? v : JSON.stringify(v))).join(" "));
+  };
+  return { logs, restore: () => { console.log = original; } };
+}
+
+function retiredEntryForUpdateOrThrow() {
+  const retiredEntry = RETIRED_RULES[0];
+  if (!retiredEntry) {
+    throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+  }
+  return retiredEntry;
+}
+
+test("keryx update: a modified retired rule prints a Warnings heading and the warning line", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-retired-rules-"));
+  try {
+    const retiredEntry = retiredEntryForUpdateOrThrow();
+    const rulesCore = path.join(root, ".metaproject", "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRootForUpdate, retiredEntry.fileName), "utf8");
+    const modifiedContent = `${unmodifiedContent}\n<!-- project-local note added after install -->\n`;
+    await writeFile(path.join(rulesCore, retiredEntry.fileName), modifiedContent, "utf8");
+
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdskills: { enabled: true } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(await readFile(path.join(rulesCore, retiredEntry.fileName), "utf8")).toBe(modifiedContent);
+    expect(logs.some((line) => line.includes("Warnings"))).toBe(true);
+    expect(logs.some((line) => line.includes(
+      `${retiredEntry.fileName} is no longer shipped by keryx (${retiredEntry.reason}); kept because it differs from every shipped version — delete it, or rename it if you still rely on it`,
+    ))).toBe(true);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keryx update: an unmodified retired rule is removed with no Warnings printed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-retired-rules-"));
+  try {
+    const retiredEntry = retiredEntryForUpdateOrThrow();
+    const rulesCore = path.join(root, ".metaproject", "rules", "core");
+    await mkdir(rulesCore, { recursive: true });
+
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRootForUpdate, retiredEntry.fileName));
+    await writeFile(path.join(rulesCore, retiredEntry.fileName), unmodifiedContent);
+
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdskills: { enabled: true } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
+    expect(logs.some((line) => line.includes("Warnings"))).toBe(false);
+    expect(logs.some((line) => line.includes("is no longer shipped by keryx"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("refreshes service files without touching data artifacts", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-update-"));

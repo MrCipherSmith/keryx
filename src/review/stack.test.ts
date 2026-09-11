@@ -7,6 +7,7 @@ import {
   scopeReviewerByStack,
   STACK_TAGS,
   type DetectedStack,
+  type StackTag,
 } from "./stack";
 
 function readFileFrom(files: Record<string, string>): (path: string) => Promise<string> {
@@ -363,3 +364,80 @@ test("renderStackScopingMarkdown on uncertain detection says so and never claims
   expect(markdown).toContain("uncertain");
   expect(markdown).toContain("Every stack-gated reviewer is included");
 });
+
+// ---------------------------------------------------------------------------
+// Round-1 finding T-004(b): the eight stack-specific bundled CORE RULES
+// (as opposed to bundled SKILLs, which `extractStackRequiresField` above
+// already covers via `metadata.stack_requires`) declare `stack_requires` as
+// a TOP-LEVEL frontmatter key, e.g. `stack_requires: "nestjs"` — not nested
+// under a `metadata:` key the way a SKILL.md does. `extractStackRequiresField`
+// only recognises the nested `metadata.stack_requires` shape (it requires a
+// line indented under a `metadata:` top-level key), so it returns
+// `undefined` for every one of these rule files; reusing it here would
+// silently test nothing. `extractRuleTopLevelStackRequires` below is a
+// small rule-frontmatter-shaped counterpart, written for this test only —
+// no such extractor existed for rule files anywhere in the codebase at the
+// time this test was added. `parseStackRequires` itself (the part that
+// turns a raw CSV string into `StackTag[]`) is the same exported function
+// SKILL.md parsing uses; only the frontmatter shape it is fed differs.
+// ---------------------------------------------------------------------------
+
+const BUNDLED_CORE_RULES_DIR = new URL("../gdskills/bundled/rules/core/", import.meta.url);
+
+/**
+ * Extract a TOP-LEVEL `stack_requires:` frontmatter value from a bundled
+ * rule's raw `.mdc` content (e.g. `src/gdskills/bundled/rules/core/nestjs-dto.mdc`).
+ * Unlike `extractStackRequiresField` (SKILL.md shape: nested under
+ * `metadata:`), a rule's `stack_requires` sits at the top level of the
+ * frontmatter block, alongside `description`/`alwaysApply`/`globs`.
+ */
+function extractRuleTopLevelStackRequires(mdcContent: string): string | undefined {
+  if (!mdcContent.startsWith("---")) {
+    return undefined;
+  }
+  const end = mdcContent.indexOf("\n---", 3);
+  if (end === -1) {
+    return undefined;
+  }
+  const frontmatterLines = mdcContent.slice(3, end).split("\n");
+  for (const line of frontmatterLines) {
+    const match = /^stack_requires:\s*(.+)$/.exec(line);
+    if (match?.[1] !== undefined) {
+      const raw = match[1].trim();
+      return raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+    }
+  }
+  return undefined;
+}
+
+// Every bundled core rule this dispatch names as stack-specific, and the
+// exact tag set it must declare and parse to. A missing or misspelled tag
+// (e.g. "moxb" instead of "mobx", or an unrecognised STACK_TAGS token) means
+// `parseStackRequires` silently drops it — the resulting array would come
+// back shorter than expected, which is exactly what these assertions pin.
+const EXPECTED_STACK_RULE_TAGS: Record<string, StackTag[]> = {
+  "mobx-store-template.mdc": ["mobx"],
+  "code-style-patterns.mdc": ["react", "mobx"],
+  "frontend-assistant.mdc": ["react", "mobx"],
+  "nestjs-dto.mdc": ["nestjs"],
+  "storybook-guidelines.mdc": ["react"],
+  "playwright-testing.mdc": ["playwright"],
+  "database-patterns.mdc": ["sql"],
+  "api-contracts.mdc": ["http-server"],
+};
+
+for (const [fileName, expectedTags] of Object.entries(EXPECTED_STACK_RULE_TAGS)) {
+  test(`bundled core rule ${fileName} declares stack_requires that parses to ${JSON.stringify(expectedTags)}`, async () => {
+    const content = await Bun.file(new URL(fileName, BUNDLED_CORE_RULES_DIR)).text();
+    const rawField = extractRuleTopLevelStackRequires(content);
+    expect(rawField).toBeDefined();
+    const parsed = parseStackRequires(rawField);
+    expect(parsed).toEqual(expectedTags);
+    // Every parsed tag must also be a currently-known STACK_TAGS member —
+    // parseStackRequires already drops unknown tokens, so this doubles as a
+    // guard that nothing here silently shrank below what's expected above.
+    for (const tag of parsed) {
+      expect(STACK_TAGS).toContain(tag);
+    }
+  });
+}

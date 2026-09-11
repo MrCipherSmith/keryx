@@ -231,6 +231,111 @@ test("a modified retired rule is kept and reported as a warning", async () => {
   }
 });
 
+// Round-1 finding T-002: the two tests above only ever exercise
+// `RETIRED_RULES[0]` (`review-agent-profile.mdc`, one shipped hash).
+// `review-strict-profile.mdc` and its second shipped hash (the ff9dd071
+// revision) were never driven through the installer at all — a wrong hash
+// for either version would leave an unmodified copy installed forever with
+// every test above still green. These tests loop over every (entry,
+// shippedSha256) pair, backed by a byte-exact fixture per shipped version
+// (src/gdskills/__fixtures__/retired-rules/), recovered with
+// `git show <shipped-blob>:src/gdskills/bundled/rules/core/<name> >
+// __fixtures__/retired-rules/<name>.<short-sha>.mdc` for the multi-version
+// entry, matching the naming convention already used for the single-version
+// entry (`review-agent-profile.mdc`, no suffix).
+//
+// `normalizeRetiredRuleContentForTest` below replicates
+// `normalizeRetiredRuleContent` from install.ts (not exported — see that
+// file) rather than importing it, so it is deliberately identical to the
+// installer's own normalisation: decode UTF-8, strip one leading BOM,
+// `\r\n` -> `\n`. The registered hashes are of the shipped files
+// LF/BOM-less already, so normalisation is a no-op for these fixtures, but
+// keeping the same function here means a future entry that recorded a
+// hash of non-normalised content would be caught by these tests too.
+function normalizeRetiredRuleContentForTest(content: Buffer): string {
+  let text = content.toString("utf8");
+  if (text.charCodeAt(0) === 0xfeff) {
+    text = text.slice(1);
+  }
+  return text.replace(/\r\n/g, "\n");
+}
+
+type RetiredRuleFixtureCase = {
+  /** `RetiredRuleEntry.fileName` this fixture is a version of. */
+  fileName: string;
+  /** File name inside `__fixtures__/retired-rules/`. */
+  fixtureFile: string;
+  /** sha256 (of normalised content) this fixture actually hashes to. */
+  sha256: string;
+};
+
+/**
+ * Every fixture file registered under `__fixtures__/retired-rules/` for a
+ * `RETIRED_RULES` entry, paired with the entry it belongs to and the hash it
+ * hashes to. An entry with one shipped version uses the fixture at its bare
+ * `fileName`; an entry with more than one shipped version uses every fixture
+ * whose name is `<basename>.<anything>.<ext>` (e.g.
+ * `review-strict-profile.fd43d35a.mdc`) — the short git commit each version
+ * was recovered from, not part of the content hash itself.
+ */
+async function listRetiredRuleFixtureCases(): Promise<RetiredRuleFixtureCase[]> {
+  const allFixtureFiles = await readdir(retiredFixturesRoot);
+  const cases: RetiredRuleFixtureCase[] = [];
+  for (const entry of RETIRED_RULES) {
+    const parsed = path.parse(entry.fileName);
+    const fixtureFiles =
+      entry.shippedSha256.length === 1
+        ? [entry.fileName]
+        : allFixtureFiles
+            .filter((name) => name.startsWith(`${parsed.name}.`) && name.endsWith(parsed.ext))
+            .sort();
+    for (const fixtureFile of fixtureFiles) {
+      const content = await readFile(path.join(retiredFixturesRoot, fixtureFile));
+      const sha256 = createHash("sha256").update(normalizeRetiredRuleContentForTest(content)).digest("hex");
+      cases.push({ fileName: entry.fileName, fixtureFile, sha256 });
+    }
+  }
+  return cases;
+}
+
+test("every RETIRED_RULES shippedSha256, for every registered entry, has a byte-exact fixture", async () => {
+  const cases = await listRetiredRuleFixtureCases();
+  for (const entry of RETIRED_RULES) {
+    const hashesFromFixtures = cases.filter((c) => c.fileName === entry.fileName).map((c) => c.sha256);
+    for (const shippedSha256 of entry.shippedSha256) {
+      expect(hashesFromFixtures).toContain(shippedSha256);
+    }
+  }
+});
+
+test("an unmodified copy of every shipped version of every retired rule is removed", async () => {
+  const cases = await listRetiredRuleFixtureCases();
+  // Guard the loop itself: if fixture discovery came back empty, every
+  // assertion below would vacuously pass instead of exercising anything.
+  expect(cases.length).toBeGreaterThanOrEqual(
+    RETIRED_RULES.reduce((total, entry) => total + entry.shippedSha256.length, 0),
+  );
+
+  for (const { fileName, fixtureFile } of cases) {
+    const root = await mkdtemp(path.join(tmpdir(), "keryx-retired-rules-t002-"));
+    try {
+      const metaprojectRoot = path.join(root, ".metaproject");
+      const rulesCore = path.join(metaprojectRoot, "rules", "core");
+      await mkdir(rulesCore, { recursive: true });
+
+      const fixtureContent = await readFile(path.join(retiredFixturesRoot, fixtureFile));
+      await writeFile(path.join(rulesCore, fileName), fixtureContent);
+
+      const result = await installGdskills(metaprojectRoot, "recommended");
+
+      expect(existsSync(path.join(rulesCore, fileName))).toBe(false);
+      expect(result.warnings).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  }
+});
+
 // Round-1 finding S-001: `removeUnmodifiedRetiredRules` used to gate on
 // `existsSync` + `readFile` with no `lstat`/`isFile`, no size bound, and no
 // try/catch — a directory, symlink, FIFO, or unreadable file at a retired
@@ -378,7 +483,7 @@ test("a UTF-8 BOM-prefixed copy of an unmodified retired rule is removed", async
       throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
     }
     const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName), "utf8");
-    const bomContent = `﻿${unmodifiedContent}`;
+    const bomContent = String.fromCharCode(0xfeff) + unmodifiedContent;
     await writeFile(path.join(rulesCore, retiredEntry.fileName), bomContent, "utf8");
 
     const result = await installGdskills(metaprojectRoot, "recommended");

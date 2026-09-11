@@ -15,6 +15,7 @@ import {
   renderMetaprojectDashboardHtml,
   renderAgentEntrypoint,
   renderImportedAgentRules,
+  renderProjectRulesReadme,
 } from "./templates";
 import { renderProjectMetaprojectReferenceBlock } from "./agent-entrypoint-blocks";
 import { GDGRAPH_CORE_SOURCES } from "../gdgraph/core-sources";
@@ -362,6 +363,43 @@ ${block}
 
   expect(rendered).toContain("# AGENTS.md Instructions");
   expect(rendered).toContain("Always run the linter before committing. Never touch `main` directly.");
+  expect(rendered).not.toMatch(/delegates agent routing to `\.metaproject\/index\.md`/);
+});
+
+// Round-1 finding T-004(a): the rules README's core claims — core rules are
+// read on demand only when cited (never loaded automatically), and keryx
+// itself does not act on Cursor's `alwaysApply`/`globs` fields — were
+// asserted nowhere. Pinning the whole rendered string would be brittle (any
+// unrelated wording tweak breaks the test) and wouldn't catch a REVERSAL of
+// the claim (e.g. "loaded automatically" instead of "on-demand"), so this
+// pins short, specific phrases lifted from the current text instead.
+test("project rules README states core rules are on-demand and that keryx ignores alwaysApply/globs", () => {
+  const readme = renderProjectRulesReadme();
+
+  // "loaded on demand when cited" claim.
+  expect(readme).toContain("on-demand rule library");
+  expect(readme).toContain("read only when a skill or `routing.md` cites it");
+
+  // "keryx does not read alwaysApply/globs" claim.
+  expect(readme).toContain("`alwaysApply` and `globs`");
+  expect(readme).toContain("keryx itself does not read or act on either field");
+});
+
+// Round-1 finding T-003: `isHeadingOnlyBody`'s `#` anchor
+// (`/^#[^\n]*\n?/`) was not pinned by any test — a body whose FIRST line is
+// a plain instruction with no leading `#` must keep that line and must not
+// take the heading-only fallback. Without the `#` anchor, the regex would
+// strip any first line (heading or not), leaving nothing behind and
+// wrongly triggering the fallback for ordinary AGENTS.md/CLAUDE.md content
+// that simply doesn't open with a heading.
+test("imported agent rules keep a first line with no leading '#' — not a heading to strip", () => {
+  const source = "AGENTS.md";
+  const block = renderProjectMetaprojectReferenceBlock({ enableTasks: true });
+  const content = `Always run the linter.\n\n${block}\n`;
+
+  const rendered = renderImportedAgentRules({ source, content });
+
+  expect(rendered).toContain("Always run the linter.");
   expect(rendered).not.toMatch(/delegates agent routing to `\.metaproject\/index\.md`/);
 });
 
