@@ -379,8 +379,14 @@ describe("a server that came from another tool's config", () => {
   });
 
   test("BOUNDARY — a NATIVE name is removed normally, not diverted", async () => {
-    // With the source check inverted, a native server would be reported
-    // as coming from a compat file and never removed.
+    // What this actually pins is the ENCLOSING guard: the compat branch
+    // sits behind `defining.length === 0`, so a native name never
+    // reaches the predicate at all. My original comment claimed it
+    // caught an inverted source check, and a reviewer showed it does
+    // not — dropping either source conjunct leaves 782 tests green.
+    //
+    // Kept, because "a native name is removed and not diverted" is
+    // worth pinning on its own. The claim it used to make is gone.
     const { run } = withCursor();
     await run("add", ["mine", "--", "cmd"]);
     const result = await run("remove", ["mine"]);
@@ -393,5 +399,106 @@ describe("a server that came from another tool's config", () => {
     const result = await run("list", []);
     expect(result.out).toContain("theirs");
     expect(result.out).toContain("(cursor)");
+  });
+});
+
+describe("releasing a held server — the other half of the trust gate", () => {
+  // The gate that HOLDS a committable server was covered by a class
+  // test. The command that RELEASES one had no test at all: reverting
+  // its guard to the exact pre-fix `source !== "project"` left 1975
+  // tests green, as did `if (false)` (everything approvable, including
+  // user scope) and `if (true)` (nothing ever approvable, every held
+  // server permanently stuck).
+  //
+  // The class written was "every committable source is HELD". Its
+  // complement — "every committable source can be RELEASED, and
+  // nothing else can" — is where the second half of the fix lives, and
+  // it is the half that was missing.
+
+  function inRepo(rel: string, text: string): { run: (s: McpConsumerSubcommand, a: string[]) => Promise<Run>; root: string } {
+    const h = harness();
+    const file = path.join(h.projectRoot, rel);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text);
+    return { run: h.run, root: h.projectRoot };
+  }
+
+  const COMMITTABLE: ReadonlyArray<readonly [string, string, string]> = [
+    [".mcp.json", ".mcp.json", JSON.stringify({ mcpServers: { held: { command: "sh" } } })],
+    [".cursor/mcp.json", ".cursor/mcp.json", JSON.stringify({ mcpServers: { held: { command: "sh" } } })],
+    [".grok/config.toml", ".grok/config.toml", '[mcp_servers.held]\ncommand = "sh"\n'],
+    [
+      ".keryx/mcp-servers.json",
+      ".keryx/mcp-servers.json",
+      JSON.stringify({ schemaVersion: 1, servers: { held: { command: "sh" } } }),
+    ],
+  ];
+
+  for (const [label, rel, text] of COMMITTABLE) {
+    test(`a server from ${label} CAN be trusted`, async () => {
+      const { run } = inRepo(rel, text);
+      const before = await run("list", []);
+      expect(before.out).toContain("(needs approval)");
+
+      const trusted = await run("trust", ["held"]);
+      expect({ label, code: trusted.code, err: trusted.err }).toEqual({ label, code: 0, err: "" });
+
+      // And the hold is actually lifted, which is the point.
+      const after = await run("list", []);
+      expect(after.out).not.toContain("(needs approval)");
+    });
+  }
+
+  test("BOUNDARY — a USER-scope server cannot, and the refusal says why", async () => {
+    // Without this, `if (false)` — approve anything — passes every row
+    // above. Asking the operator to confirm their own `keryx mcp add`
+    // would train them to say yes without reading.
+    const h = harness();
+    await h.run("add", ["mine", "--", "cmd"]);
+    const result = await h.run("trust", ["mine"]);
+    expect(result.code).toBe(1);
+    expect(result.err).toContain("did not come from a file this project can commit");
+  });
+
+  test("BOUNDARY — and neither can one from the operator's OWN cursor config", async () => {
+    // `cursor` is the tag that appears on both sides of this line, so
+    // it is the one that proves the command asks about the file and not
+    // about the tag.
+    const h = harness();
+    const home = mkdtempSync(path.join(tmpdir(), "keryx-home-"));
+    mkdirSync(path.join(home, ".cursor"), { recursive: true });
+    writeFileSync(
+      path.join(home, ".cursor", "mcp.json"),
+      JSON.stringify({ mcpServers: { theirs: { command: "sh" } } }),
+    );
+    const result = await runMcpConsumerCommand("trust", ["theirs"], {
+      cwd: h.projectRoot,
+      configDir: h.configDir,
+      projectRoot: h.projectRoot,
+      home,
+      log: () => {},
+      err: () => {},
+    });
+    expect(result).toBe(1);
+  });
+
+  test("untrust puts a released server back under the gate", async () => {
+    const { run } = inRepo(".mcp.json", JSON.stringify({ mcpServers: { held: { command: "sh" } } }));
+    await run("trust", ["held"]);
+    expect((await run("list", [])).out).not.toContain("(needs approval)");
+
+    const revoked = await run("untrust", ["held"]);
+    expect(revoked.code).toBe(0);
+    expect((await run("list", [])).out).toContain("(needs approval)");
+  });
+
+  test("the held footer counts committed config, not 'project servers'", async () => {
+    // The reworded footer is a diff line whose whole point is that a
+    // held compat server is not a "project server". Reverting the
+    // wording left 782 tests green.
+    const { run } = inRepo(".mcp.json", JSON.stringify({ mcpServers: { held: { command: "sh" } } }));
+    const listed = await run("list", []);
+    expect(listed.out).toContain("from committed config");
+    expect(listed.out).not.toContain("project server(s)");
   });
 });

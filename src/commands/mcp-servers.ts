@@ -79,6 +79,14 @@ export type McpConsumerDeps = {
    * environment and have half the command ignore it.
    */
   readonly env?: Record<string, string | undefined> | undefined;
+  /**
+   * Home directory for the compat readers. Overridden in tests.
+   *
+   * Same seam `loadMcpServers` has, and for the same reason: a test
+   * that lets this default to the real home reads the developer's own
+   * Cursor and Claude configs, so its result depends on who ran it.
+   */
+  readonly home?: string | undefined;
   readonly log: (line: string) => void;
   readonly err: (line: string) => void;
 };
@@ -114,7 +122,13 @@ function projectRootOf(deps: McpConsumerDeps): string {
 
 function load(deps: McpConsumerDeps): ResolvedMcpConfig {
   const root = projectRootOf(deps);
-  return loadMcpServers({ cwd: deps.cwd, gitRoot: root, configDir: deps.configDir, env: deps.env });
+  return loadMcpServers({
+    cwd: deps.cwd,
+    gitRoot: root,
+    configDir: deps.configDir,
+    env: deps.env,
+    home: deps.home,
+  });
 }
 
 /** Redacted view of one server, safe to print or paste into an issue. */

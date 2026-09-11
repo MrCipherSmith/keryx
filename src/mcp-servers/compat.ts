@@ -111,15 +111,13 @@ function readMcpServersShape(file: string, text: string): CompatServers {
   if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
     return { servers: {}, problems: [{ file, message: "must be a JSON object" }] };
   }
-  const block = (parsed as { mcpServers?: unknown }).mcpServers;
-  if (block === undefined) {
-    // NOT a problem. A `.cursor/mcp.json` with no `mcpServers` is a
-    // valid Cursor config that simply configures no servers, and
-    // reporting it would put a warning in front of every operator who
-    // has Cursor installed and no MCP set up in it.
-    return { servers: {}, problems: [] };
-  }
-  return collectEntries(file, block);
+  // `collectEntries` handles `undefined` itself — a `.cursor/mcp.json`
+  // with no `mcpServers` is a valid Cursor config that configures no
+  // servers, and reporting it would warn every operator who has Cursor
+  // installed and no MCP set up in it. A second early return here was
+  // redundant, and redundant guards are what made the prototype fix
+  // untestable two findings ago.
+  return collectEntries(file, (parsed as { mcpServers?: unknown }).mcpServers);
 }
 
 /** Claude also keys servers per project under `projects.<cwd>.mcpServers`. */
@@ -243,10 +241,15 @@ export function parseGrokToml(file: string, text: string): CompatServers {
           current = undefined;
           continue;
         }
-        const held = Object.prototype.hasOwnProperty.call(current, subTable)
-          ? (current[subTable] as Record<string, unknown> | undefined)
-          : undefined;
-        const nested = held ?? (Object.create(null) as Record<string, unknown>);
+        // No `hasOwnProperty` dance: `current` has a NULL prototype, so
+        // `current[subTable]` cannot resolve through `Object.prototype`
+        // and the guard would be dead code. It was there, and a
+        // reviewer showed the two protections together meant no test
+        // could tell which one was load-bearing — reverting either
+        // alone stayed green. One protection, pinned.
+        const nested =
+          (current[subTable] as Record<string, unknown> | undefined) ??
+          (Object.create(null) as Record<string, unknown>);
         current[subTable] = nested;
         current = nested;
       }

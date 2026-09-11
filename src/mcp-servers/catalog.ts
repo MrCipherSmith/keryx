@@ -111,12 +111,19 @@ export function catalogForServer(server: string, tools: readonly McpToolDescript
   const byFqn = new Map<string, string>();
 
   for (const tool of tools) {
-    const rawFqn = buildFqn(server, tool.name);
 
     // SANITISE, then validate. D-13: a name the pattern rejects is
     // renamed for the model rather than dropped, and `rawName` below
     // still carries what goes on the wire.
-    const fqn = FQN_PATTERN.test(rawFqn) ? rawFqn : buildFqn(server, sanitiseRawName(tool.name));
+    //
+    // Unconditional, because the conditional form was dead:
+    // `sanitiseRawName`'s keep-set is character-for-character the
+    // pattern's, so a name that passes the test is returned unchanged
+    // anyway. A reviewer found the branch could be removed with
+    // nothing failing — which is true, and the honest response is to
+    // remove it rather than to write a test for a distinction that
+    // does not exist.
+    const fqn = buildFqn(server, sanitiseRawName(tool.name));
 
     if (!FQN_PATTERN.test(fqn)) {
       // Still invalid after sanitising: the length limit, or a SERVER

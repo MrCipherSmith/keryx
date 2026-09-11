@@ -12,7 +12,7 @@
 // silently skipped source is indistinguishable from one that was never
 // configured, which is the state an operator debugs for an hour.
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -408,6 +408,28 @@ describe("Claude's project block with nothing in it", () => {
 });
 
 describe("the TOML parser cannot be made to write onto Object.prototype", () => {
+  // CLEAN UP between tests, and it is not hygiene theatre.
+  //
+  // Nothing removed a leaked `Object.prototype.args`, so a reviewer
+  // watched the `[[hooks]]` test fail inside the file run and PASS in
+  // isolation — it was failing on pollution leaked from an earlier
+  // test, not on anything about `[[hooks]]`. A false red today, and
+  // worse in the other direction: every later `servers.x?.args` in
+  // this file changes meaning once any earlier test pollutes, so a
+  // real regression could read as a pass.
+  afterEach(() => {
+    for (const key of ["args", "command", "keys", "env"]) {
+      delete (Object.prototype as Record<string, unknown>)[key];
+    }
+  });
+
+  test("the harness itself starts clean", () => {
+    // Guards the guard: if a previous FILE leaked, every assertion
+    // below is measuring the leak rather than the parser.
+    expect(({} as Record<string, unknown>).args).toBeUndefined();
+    expect(({} as Record<string, unknown>).command).toBeUndefined();
+  });
+
   // CRITICAL, found by review and measured to RCE. The per-table object
   // was a plain `{}`, so `current["__proto__"]` read back
   // `Object.prototype` — truthy, so the `?? {}` never fired — and
@@ -516,5 +538,42 @@ describe("a value this reader cannot read drops the whole server", () => {
     );
     expect(servers.bad).toBeUndefined();
     expect(servers.good?.command).toBe("keep");
+  });
+});
+
+describe("a compat file that EXISTS but cannot be read", () => {
+  // The class above is named "a malformed source is REPORTED, never
+  // silently skipped", and every row in it exercised malformation
+  // AFTER a successful read. The read-failure branch had no row, so
+  // replacing the whole `isDefiniteAbsence` ternary with "return
+  // nothing, say nothing" left 752 tests green — in the one class
+  // whose entire subject is that silence is unacceptable.
+  //
+  // Only one direction was pinned, and it was the direction the class
+  // is not about.
+
+  test("a directory where a file belongs is reported, not skipped", () => {
+    const { cwd } = workspace();
+    // `.mcp.json` as a DIRECTORY: the read fails with EISDIR, which is
+    // not absence.
+    mkdirSync(path.join(cwd, ".mcp.json"), { recursive: true });
+    const result = readCompatFile(
+      { source: "mcp.json", file: path.join(cwd, ".mcp.json"), projectLocal: true },
+      cwd,
+    );
+    expect(result.servers).toEqual({});
+    expect(result.problems.length).toBeGreaterThan(0);
+    expect(result.problems[0]?.message).toContain("could not be read");
+  });
+
+  test("BOUNDARY — and a genuinely absent file is still silent", () => {
+    // Both directions now, so neither can be collapsed into the other.
+    const { cwd } = workspace();
+    const result = readCompatFile(
+      { source: "mcp.json", file: path.join(cwd, "nothing-here.json"), projectLocal: true },
+      cwd,
+    );
+    expect(result.servers).toEqual({});
+    expect(result.problems).toEqual([]);
   });
 });

@@ -67,15 +67,41 @@ describe("AC1 — every source contributes, tagged with where it came from", () 
     expect(off.servers).toEqual([]);
   });
 
-  test("an isolated configDir with no home does not read the real one", () => {
-    // The hazard this option exists for, asserted rather than trusted:
-    // 69 tests failed the moment compat landed, because every one that
-    // injected a temp configDir also read the developer's real
-    // ~/.claude.json. Results that depend on who ran them.
+  test("an isolated configDir with no home behaves like an isolated home", () => {
+    // The hazard this option exists for. My first version asserted only
+    // `servers === []`, which is ALSO what an unguarded read of a clean
+    // home produces — green by environment: it failed on my machine,
+    // which has `~/.claude.json`, and passed on a clean one. On CI it
+    // proved nothing, and neither did the guard it guarded.
+    //
+    // My second version tried to redirect `process.env.HOME`, which
+    // `os.homedir()` ignores — it read my real Cursor and Claude
+    // configs instead. That is the same defect a third time: an
+    // assertion whose outcome depends on the machine.
+    //
+    // So assert the MECHANISM. Omitting `home` with an isolated
+    // `configDir` must give exactly what an explicitly isolated home
+    // gives, whatever this machine happens to have configured.
     const w = workspace();
-    const isolated = loadMcpServers({ cwd: w.cwd, gitRoot: w.cwd, configDir: w.configDir });
-    expect(isolated.servers).toEqual([]);
-    expect(isolated.problems).toEqual([]);
+    const nowhere = path.join(w.home, "definitely-not-a-home");
+
+    const implicit = loadMcpServers({ cwd: w.cwd, gitRoot: w.cwd, configDir: w.configDir });
+    const explicit = loadMcpServers({ cwd: w.cwd, gitRoot: w.cwd, configDir: w.configDir, home: nowhere });
+    expect(implicit.servers.map((s) => s.name)).toEqual(explicit.servers.map((s) => s.name));
+    expect(implicit.problems).toEqual(explicit.problems);
+
+    // BOUNDARY — a home that IS given is read, so the equality above is
+    // about the guard and not about every home being empty.
+    mkdirSync(path.join(w.home, ".cursor"), { recursive: true });
+    writeFileSync(
+      path.join(w.home, ".cursor", "mcp.json"),
+      JSON.stringify({ mcpServers: { fromHome: { command: "x" } } }),
+    );
+    const given = loadMcpServers({ cwd: w.cwd, gitRoot: w.cwd, configDir: w.configDir, home: w.home });
+    expect(given.servers.map((s) => s.name)).toContain("fromHome");
+    // And the implicit one still cannot see it.
+    const stillIsolated = loadMcpServers({ cwd: w.cwd, gitRoot: w.cwd, configDir: w.configDir });
+    expect(stillIsolated.servers.map((s) => s.name)).not.toContain("fromHome");
   });
 });
 
