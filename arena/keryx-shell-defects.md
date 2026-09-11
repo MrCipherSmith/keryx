@@ -418,6 +418,21 @@ login, used for the answer. No key material reached the transcript. claude-sonne
 metaproject's favour. The prompt itself is the leak: it carries the PR number and the
 commit title verbatim, which is a search key for the answer.
 
+## K-017 — a resumed sweep re-runs the arms of a half-finished task · open (arena)
+
+**Evidence:** `/tmp/arena-batch2`, 2026-09-12. The runner was killed by the OS (low
+memory) between the two arms of `t1-71916287`. `settledKeys`
+(`scripts/arena/arena-sweep.ts`) treats a key as settled only when EVERY arm has a
+result or a failure, so the resumed run re-ran the context arm that had already been
+recorded: `results.jsonl` now holds two rows for `t1-71916287 context-on`.
+
+**Impact:** paid work is repeated, and a naive read of the results counts one arm
+twice. Any analysis has to de-duplicate by `(harness, task, arm)`.
+
+**Fix direction:** settle per arm, not per task — skip an arm that already has a row
+and run only its missing partner; or write the row for the surviving arm and refuse
+the task's other arm as unpaired.
+
 ## K-015 — `shell_exec` hands the operator's saved provider keys to every command · open (product)
 
 **Evidence:** the `env` the control arm of `t1-1405959d` ran in `/tmp/arena-batch1`
