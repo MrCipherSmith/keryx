@@ -1,0 +1,25 @@
+# Decisions
+
+- S-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-004: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-005: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-006: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-001: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-004: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-005: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-002: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- S-003: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-005: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-006: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- L-007: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-007: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- C-008: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-006: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
+- T-007: create follow-up task or learning proposal (valid_followup, post_flow_feedback).
