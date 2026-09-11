@@ -24,10 +24,23 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { readCredential, writeCredential } from "./credentials";
+import { sessionAuthProviderOptions } from "./runtime";
 import { createOAuthProvider } from "./oauth-provider";
 import { needsAuthorisation } from "./doctor";
 
-type Recorded = { readonly path: string; readonly body: Record<string, string> };
+type Recorded = {
+  readonly path: string;
+  readonly body: Record<string, string>;
+  /**
+   * The request HEADERS, recorded because an access token is never a
+   * body parameter.
+   *
+   * A test that searched only bodies for a token could not observe
+   * the thing it was named for: it stayed green with the expiry gate
+   * deleted entirely.
+   */
+  readonly headers: Record<string, string>;
+};
 
 type MockAs = {
   readonly url: string;
@@ -61,7 +74,7 @@ function mockAuthorisationServer(): MockAs {
           // Recorded as-is; the test asserts on the path anyway.
         }
       }
-      seen.push({ path: url.pathname, body });
+      seen.push({ path: url.pathname, body, headers: Object.fromEntries(request.headers.entries()) });
 
       const base = `http://127.0.0.1:${server.port}`;
       const json = (value: unknown, status = 200): Response =>
@@ -398,6 +411,11 @@ describe("AC12 — refresh, and what happens when it fails", () => {
   test("an EXPIRED token with no refresh token is not sent anywhere either", async () => {
     // `tokens()` returns undefined for it, so there is nothing to
     // refresh and nothing to present — the flow goes to the browser.
+    //
+    // Asserted on HEADERS, not bodies. An access token is never an
+    // OAuth request-body parameter, so the body-only version of this
+    // test could not observe its own subject: deleting the expiry
+    // gate outright left it green.
     const as = mockAuthorisationServer();
     const dir = store();
     writeCredential(
@@ -407,7 +425,29 @@ describe("AC12 — refresh, and what happens when it fails", () => {
       dir,
     );
     await auth(provider(as, dir) as never, { serverUrl: as.url }).catch(() => undefined);
-    expect(as.seen.some((entry) => Object.values(entry.body).includes("stale"))).toBe(false);
+    const everythingSent = JSON.stringify(as.seen);
+    expect(everythingSent).not.toContain("stale");
+  });
+
+  test("BOUNDARY — and a VALID token IS presented", async () => {
+    // Without this, "never send anything" passes the test above.
+    // Driven through the transport, which is what attaches the
+    // header; `auth()` itself never presents an access token.
+    const as = mockAuthorisationServer();
+    const dir = store();
+    writeCredential(
+      "mock",
+      as.url,
+      { tokens: { access_token: "good-token", token_type: "Bearer", expires_at: Date.now() + 600_000 } },
+      dir,
+    );
+    const options = sessionAuthProviderOptions(
+      { name: "mock", url: as.url, raw: { url: as.url } } as never,
+      dir,
+      readCredential("mock", as.url, dir).record,
+    );
+    expect(options).toBeDefined();
+    expect(createOAuthProvider(options as never).tokens()?.access_token).toBe("good-token");
   });
 
   test("a revoked grant is classified as needs_auth, not as a broken server", async () => {

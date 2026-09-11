@@ -194,6 +194,40 @@ describe("expires_in is resolved to an instant at the moment of issue", () => {
   });
 });
 
+describe("the PKCE verifier does not outlive the exchange", () => {
+  test("saving tokens clears it", () => {
+    // Its only window is between redirect and exchange, and it is
+    // single-use. `writeCredential` merges, so nothing removed it:
+    // the type's comment said "held only between redirect and
+    // exchange" while the value stayed on disk indefinitely.
+    const dir = store();
+    const p = provider({ configDir: dir });
+    p.saveCodeVerifier("verifier-value");
+    expect(readCredential("linear", URL_, dir).record?.code_verifier).toBe("verifier-value");
+    p.saveTokens({ access_token: "t" });
+    expect(readCredential("linear", URL_, dir).record?.code_verifier).toBeUndefined();
+  });
+
+  test("BOUNDARY — and the tokens it was exchanged for survive", () => {
+    // Without this, "clear everything" would pass the test above.
+    const dir = store();
+    const p = provider({ configDir: dir });
+    p.saveCodeVerifier("verifier-value");
+    p.saveTokens({ access_token: "kept", refresh_token: "also-kept" });
+    const stored = readCredential("linear", URL_, dir).record?.tokens;
+    expect([stored?.access_token, stored?.refresh_token]).toEqual(["kept", "also-kept"]);
+  });
+
+  test("and so does the client registration", () => {
+    const dir = store();
+    const p = provider({ configDir: dir });
+    p.saveClientInformation({ client_id: "registered" });
+    p.saveCodeVerifier("v");
+    p.saveTokens({ access_token: "t" });
+    expect(readCredential("linear", URL_, dir).record?.client?.client_id).toBe("registered");
+  });
+});
+
 describe("the state is the listener's, not the SDK's", () => {
   test("it is returned when a listener is running", () => {
     expect(provider({ state: "listener-state" }).state()).toBe("listener-state");

@@ -23,7 +23,14 @@
 // itself cannot be tested for the headless case without lying to the
 // process, and the lie is what the test ends up asserting.
 
-import { isExpired, readCredential, writeCredential, type StoredClient, type StoredTokens } from "./credentials";
+import {
+  FORGET_CODE_VERIFIER,
+  isExpired,
+  readCredential,
+  writeCredential,
+  type StoredClient,
+  type StoredTokens,
+} from "./credentials";
 
 /** What the SDK hands back after a successful exchange. */
 export type SdkTokens = {
@@ -192,7 +199,16 @@ export function createOAuthProvider(deps: ProviderDeps) {
       // started by this keryx" — accusing the flow of being foreign,
       // after the browser round trip and the authorisation code had
       // already been spent.
-      const write = writeCredential(deps.serverName, deps.serverUrl, { tokens }, deps.configDir);
+      // The verifier goes with it. It is single-use and its only
+      // window is between redirect and exchange; leaving it on disk
+      // kept a live secret past the moment it could be used, and made
+      // the type's own comment false.
+      const write = writeCredential(
+        deps.serverName,
+        deps.serverUrl,
+        { tokens, ...FORGET_CODE_VERIFIER },
+        deps.configDir,
+      );
       if (!write.ok) throw new Error(write.error);
     },
 

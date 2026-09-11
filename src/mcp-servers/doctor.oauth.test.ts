@@ -117,6 +117,14 @@ describe("AC5 — a declared OAuth server with no credential is diagnosed, not d
     expect(result.status).toBe("connected");
   });
 
+  test("BOUNDARY — a declared oauth block WITH a bearer variable is dialled, not pre-empted", async () => {
+    // Both conjuncts of the pre-flight gate have to matter. An
+    // operator who writes both has said how to authenticate; the
+    // `oauth` block does not override that.
+    const result = await diagnose({ url: URL_, oauth: {}, bearer_token_env_var: "T" });
+    expect(result.dialled).toBe(1);
+  });
+
   test("BOUNDARY — `oauth: false` is dialled even with no credential at all", async () => {
     expect((await diagnose({ url: URL_, oauth: false })).dialled).toBe(1);
   });
@@ -146,6 +154,30 @@ describe("AC5 — and a server that turns out to want OAuth once dialled", () =>
       { connect: async () => { throw new OAuthInteractionRequiredError("linear"); } },
     );
     expect(result.status).toBe("needs_auth");
+  });
+
+  test("BOUNDARY — a 401 against a BEARER server stays failed, naming the header", async () => {
+    // Two keryx surfaces must not contradict each other. Without the
+    // `usesOAuth` gate, doctor told the operator to run
+    // `keryx mcp auth <name>` and that command answered "does not use
+    // OAuth" — a loop with no exit.
+    const error = Object.assign(new Error("Unauthorized"), { code: 401 });
+    const result = await diagnose(
+      { url: URL_, bearer_token_env_var: "LINEAR_TOKEN" },
+      { connect: async () => { throw error; } },
+    );
+    expect(result.status).toBe("failed");
+    expect(result.detail).toContain("bearer_token_env_var");
+    expect(result.detail).not.toContain("keryx mcp auth");
+  });
+
+  test("and a 401 against a server with a declared Authorization header does too", async () => {
+    const error = Object.assign(new Error("Unauthorized"), { code: 401 });
+    const result = await diagnose(
+      { url: URL_, headers: { Authorization: "Bearer x" } },
+      { connect: async () => { throw error; } },
+    );
+    expect(result.status).toBe("failed");
   });
 
   test("BOUNDARY — a 403 stays failed: authenticated, not permitted", async () => {

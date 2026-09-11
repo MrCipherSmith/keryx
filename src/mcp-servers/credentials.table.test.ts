@@ -44,8 +44,16 @@ type Row = {
   readonly tokens: StoredTokens | undefined;
   /** What `describeCredential` must say. */
   readonly says: string;
-  /** The axis for this class. */
-  readonly outcome: string;
+  /**
+   * The axis for this class: WHAT THE OPERATOR MUST DO.
+   *
+   * It used to be "absent"/"present", which is a fact about the
+   * record rather than the distinction the rows assert — four of five
+   * collapsed onto one label, so `classTableProblems` was satisfied
+   * by a label instead of by a real second outcome. The rule buys
+   * nothing when the axis does not describe what varies.
+   */
+  readonly outcome: "nothing stored" | "nothing to do" | "operator must act";
 };
 
 const DESCRIBE_TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
@@ -57,19 +65,19 @@ const DESCRIBE_TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         label: "no credential at all",
         tokens: undefined,
         says: "no stored credential",
-        outcome: "absent",
+        outcome: "nothing stored",
       },
       {
         label: "a valid credential says how long it has",
         tokens: tokens({ expires_at: NOW + 10 * 60_000 }),
         says: "valid for about 10 more minute(s)",
-        outcome: "present",
+        outcome: "nothing to do",
       },
       {
         label: "an expired one with a refresh token says it will be refreshed",
         tokens: tokens({ expires_at: NOW - 60_000 }),
         says: "will be refreshed",
-        outcome: "present",
+        outcome: "nothing to do",
       },
       {
         label: "an expired one WITHOUT a refresh token says re-authenticate",
@@ -77,7 +85,7 @@ const DESCRIBE_TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         // something in one case and nothing in the other.
         tokens: { access_token: TOKEN, expires_at: NOW - 60_000 },
         says: "re-authenticate",
-        outcome: "present",
+        outcome: "operator must act",
       },
       {
         label: "BOUNDARY — no stated expiry is not the same as expired",
@@ -85,7 +93,7 @@ const DESCRIBE_TABLE: Array<{ klass: string; why: string; rows: Row[] }> = [
         // not expire. Reporting it as expired would refresh forever.
         tokens: tokens(),
         says: "no stated expiry",
-        outcome: "present",
+        outcome: "nothing to do",
       },
     ],
   },
@@ -340,6 +348,39 @@ describe("a corrupt store is refused, never reset", () => {
     const read = readCredential("nothing", "https://n/mcp", dir);
     expect(read.record).toBeUndefined();
     expect(read.problem).toBeUndefined();
+  });
+});
+
+describe("the schema version is read, not just written", () => {
+  test("a store from a NEWER keryx is refused, not merged into", () => {
+    // The stamp was written on every save and read on none, so an
+    // older keryx would merge into a v2 file and rewrite it as v1 —
+    // the silent downgrade the version exists to catch.
+    const dir = store();
+    writeFileSync(credentialsFile(dir), JSON.stringify({ schemaVersion: 99, credentials: {} }));
+    const result = writeCredential("a", "https://a/mcp", { tokens: tokens() }, dir);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.error).toContain("newer keryx");
+  });
+
+  test("and reading one says so rather than reporting an empty store", () => {
+    const dir = store();
+    writeFileSync(credentialsFile(dir), JSON.stringify({ schemaVersion: 99, credentials: {} }));
+    expect(readCredential("a", "https://a/mcp", dir).problem).toContain("newer keryx");
+  });
+
+  test("BOUNDARY — the current version is accepted", () => {
+    const dir = store();
+    writeFileSync(credentialsFile(dir), JSON.stringify({ schemaVersion: 1, credentials: {} }));
+    expect(writeCredential("a", "https://a/mcp", { tokens: tokens() }, dir).ok).toBe(true);
+  });
+
+  test("BOUNDARY — a store with no version at all is accepted", () => {
+    // Written before the stamp existed; refusing it would lock the
+    // operator out of their own tokens.
+    const dir = store();
+    writeFileSync(credentialsFile(dir), JSON.stringify({ credentials: {} }));
+    expect(writeCredential("a", "https://a/mcp", { tokens: tokens() }, dir).ok).toBe(true);
   });
 });
 

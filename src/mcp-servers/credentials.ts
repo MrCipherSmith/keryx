@@ -56,9 +56,24 @@ export type StoredClient = {
 export type CredentialRecord = {
   readonly tokens?: StoredTokens;
   readonly client?: StoredClient;
-  /** PKCE verifier, held only between redirect and exchange. */
-  readonly code_verifier?: string;
+  /**
+   * PKCE verifier, held only between redirect and exchange.
+   *
+   * "Only" is enforced, not merely stated: `writeCredential` merges,
+   * so nothing removed it and the comment described a lifetime the
+   * code did not keep. `saveTokens` now clears it — see
+   * `FORGET_CODE_VERIFIER`.
+   */
+  readonly code_verifier?: string | undefined;
 };
+
+/**
+ * Patch that removes the verifier as part of a successful exchange.
+ *
+ * `undefined` survives the merge and then vanishes through
+ * `JSON.stringify`, which is exactly the removal wanted.
+ */
+export const FORGET_CODE_VERIFIER: CredentialRecord = { code_verifier: undefined };
 
 type CredentialFile = {
   schemaVersion?: number;
@@ -98,7 +113,25 @@ function readAll(configDir?: string): { file: CredentialFile; problem?: string }
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { file: {}, problem: `${file} must be a JSON object` };
     }
-    return { file: parsed as CredentialFile };
+    const parsedFile = parsed as CredentialFile;
+    // A FUTURE store is refused, not merged into.
+    //
+    // The version was written on every save and read on none, so an
+    // older keryx handed a v2 file would merge into it and rewrite it
+    // as v1 — the silent downgrade the stamp exists to catch. Refused
+    // rather than reset, for the same reason a corrupt one is.
+    if (
+      typeof parsedFile.schemaVersion === "number" &&
+      parsedFile.schemaVersion > CREDENTIALS_SCHEMA_VERSION
+    ) {
+      return {
+        file: {},
+        problem:
+          `${file} was written by a newer keryx ` +
+          `(schemaVersion ${parsedFile.schemaVersion} > ${CREDENTIALS_SCHEMA_VERSION}); nothing was changed`,
+      };
+    }
+    return { file: parsedFile };
   } catch (error) {
     // REFUSED, not reset. Unlike the disable overlay — which holds only
     // toggles and is rebuilt in one command — this file holds tokens

@@ -216,15 +216,23 @@ describe("AC9 — the authorisation server's own refusal is reported as itself",
     }
   });
 
-  test("BOUNDARY — an error does NOT yield a code", async () => {
+  test("BOUNDARY — an error accompanied by a code STILL yields no code", async () => {
+    // The previous version of this test drove the identical URL as
+    // the one sixteen lines above and made a subset of its
+    // assertions — a BOUNDARY that crossed no axis. The axis is
+    // whether a `code` present alongside an `error` can be taken:
+    // an authorisation server that sends both must not have its
+    // refusal quietly upgraded into a grant.
     const listener = listen();
-    await fetch(`${listener.redirectUrl}?error=access_denied&state=${listener.state}`);
+    await fetch(
+      `${listener.redirectUrl}?error=access_denied&code=sneaky-code&state=${listener.state}`,
+    );
     const result = await resultOf(listener);
-    // Named "never settled" rather than hanging: a listener broken in
-    // that direction used to produce three 5s bun timeouts saying only
-    // "this test timed out", which is the least diagnosable outcome.
     expect(result).not.toBe("never settled");
-    if (result !== "never settled") expect(result.ok).toBe(false);
+    if (result !== "never settled") {
+      expect(result.ok).toBe(false);
+      expect(JSON.stringify(result)).not.toContain("sneaky-code");
+    }
   });
 
   test("a redirect with neither code nor error is refused", async () => {

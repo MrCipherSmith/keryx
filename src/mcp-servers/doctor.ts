@@ -300,7 +300,15 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
     // is public. Reporting it as `failed` with "check the header"
     // sends the operator to edit a config that has nothing wrong with
     // it, when the answer is one command.
-    if (base.transport === "http" && needsAuthorisation(error)) {
+    // Gated on `usesOAuth` too, or the two surfaces contradict each
+    // other: a server with a bearer variable whose token is wrong
+    // answers 401, and without this gate doctor sent the operator to
+    // `keryx mcp auth <name>` — which refuses with "does not use
+    // OAuth". It also shadowed `explainConnectFailure`'s correct
+    // message for that case ("rejected the credentials it was given
+    // … check the header or bearer_token_env_var"), leaving that arm
+    // unreachable for 401.
+    if (base.transport === "http" && usesOAuth(server.raw) && needsAuthorisation(error)) {
       return {
         ...base,
         status: "needs_auth",
