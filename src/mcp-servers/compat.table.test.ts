@@ -325,3 +325,76 @@ describe("which files are consulted, and in what order", () => {
     expect(files[2]?.file).toBe("/home/v/.claude.json");
   });
 });
+
+describe("the TOML parser's details — every one found by the sweep", () => {
+  // A hand-rolled parser is exactly where a table has to be thorough,
+  // and mine was not: eight decisions in it could be inverted or
+  // deleted with nothing failing. Each row below is one of them.
+
+  test("`false` parses as false, not as true and not as a string", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\nenabled = false\n');
+    expect(servers.a?.enabled).toBe(false);
+  });
+
+  test("BOUNDARY — and `true` is still true", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\nenabled = true\n');
+    expect(servers.a?.enabled).toBe(true);
+  });
+
+  test("a `#` OUTSIDE quotes really is stripped", () => {
+    // Deleting the comment check survived, because the only row with a
+    // `#` had it inside a string — so it tested the exception and not
+    // the rule.
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x" # trailing note\n');
+    expect(servers.a?.command).toBe("x");
+  });
+
+  test("a quote ESCAPED inside a string does not end it", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "say \\"hi\\" now"\n');
+    expect(servers.a?.command).toBe('say "hi" now');
+  });
+
+  test("escapes become the characters they name", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "a\\nb\\tc"\n');
+    expect(servers.a?.command).toBe("a\nb\tc");
+  });
+
+  test("BOUNDARY — an unknown escape is the character itself, not dropped", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "a\\qb"\n');
+    expect(servers.a?.command).toBe("aqb");
+  });
+
+  test("a comma inside a quoted array item does not split it", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\nargs = ["one,two", "three"]\n');
+    expect(servers.a?.args).toEqual(["one,two", "three"]);
+  });
+
+  test("[mcp_servers] with no server name is reported, not silently ignored", () => {
+    const { problems } = parseGrokToml("/g.toml", '[mcp_servers]\ncommand = "x"\n');
+    expect(problems.map((p) => p.message).join()).toContain("needs a server name");
+  });
+
+  test("BOUNDARY — [mcp_servers.a] with a name is not", () => {
+    const { problems, servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x"\n');
+    expect(problems).toEqual([]);
+    expect(servers.a?.command).toBe("x");
+  });
+
+  test("a quoted table name is unquoted", () => {
+    const { servers } = parseGrokToml("/g.toml", '[mcp_servers."my-server"]\ncommand = "x"\n');
+    expect(Object.keys(servers)).toEqual(["my-server"]);
+  });
+});
+
+describe("Claude's project block with nothing in it", () => {
+  test("a projects.<cwd> entry with no mcpServers is silence, not a problem", () => {
+    // `collectEntries`' undefined guard was unreachable through the
+    // Cursor path (which returns earlier) and reachable only here, so
+    // deleting it survived every test.
+    const { home, cwd } = workspace();
+    const file = place(home, ".claude.json", JSON.stringify({ projects: { [cwd]: { other: true } } }));
+    const result = readCompatFile({ source: "claude", file }, cwd);
+    expect(result.problems).toEqual([]);
+    expect(Object.keys(result.servers)).toEqual([]);
+  });
+});
