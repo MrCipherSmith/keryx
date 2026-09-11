@@ -1491,6 +1491,13 @@ export async function searchProviderWizardInTui(
 /** Ask for a local provider endpoint, keeping its configured value editable. */
 function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
   return new Promise((resolve) => {
+    const normalizeUrl = (url: string): string => {
+      if (url.length === 0) return "";
+      if (!/^https?:\/\//.test(url)) {
+        return `http://${url}`;
+      }
+      return url;
+    };
     const box = overlayBox(otui, r, "base-url-picker");
     r.root.add(box);
   box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
@@ -1502,7 +1509,7 @@ function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: s
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
     });
-    input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); cleanup(); resolve(value.length > 0 ? value : undefined); });
+    input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); const normalized = normalizeUrl(value); cleanup(); resolve(normalized.length > 0 ? normalized : undefined); });
   });
 }
 
@@ -1652,9 +1659,8 @@ function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Prom
  * the provider is OpenAI-compat (network available + optional Bearer key);
  * curated registry list is offline/401 fallback only.
  */
-export async function modelsForPicker(prov: DetectedProvider): Promise<string[]> {
-  const result = await resolveModelsForPicker(globalThis.fetch, prov, process.env);
-  return result.models;
+export async function modelsForPicker(prov: DetectedProvider): Promise<{ models: string[]; source: "live" | "fallback" }> {
+  return resolveModelsForPicker(globalThis.fetch, prov, process.env);
 }
 
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
@@ -1825,8 +1831,31 @@ export function selectProviderModelInTui(
         }
 
         // Fetch AFTER key is available so live GET /models can authenticate.
-        const models = await modelsForPicker(selectedProvider);
-        const model = await pickModelInTui(otui, r, models);
+        const result = await modelsForPicker(selectedProvider);
+        if (result.source === "fallback" && result.models.length === 0) {
+          const retryUrl = await promptBaseUrlStep(otui, r, prov.label ?? prov.name, selectedBaseUrl ?? prov.baseUrl ?? "");
+          if (retryUrl !== undefined) {
+            const updatedProvider = { ...selectedProvider, baseUrl: retryUrl };
+            saveProviderBaseUrl(prov.name, retryUrl);
+            // Retry with the corrected URL by looping back to re-fetch models
+            const retryResult = await modelsForPicker(updatedProvider);
+            if (retryResult.source === "live") {
+              const model = await pickModelInTui(otui, r, retryResult.models);
+              if (model !== undefined) {
+                resolve(
+                  retryUrl === undefined
+                    ? { provider: prov.name, model }
+                    : { provider: prov.name, model, baseUrl: retryUrl },
+                );
+                return;
+              }
+            } else {
+              continue; // Still failed, go back to provider selection
+            }
+          }
+          continue; // User canceled on error
+        }
+        const model = await pickModelInTui(otui, r, result.models);
         if (model === undefined) {
           continue; // Esc at the model step → re-pick the provider
         }
@@ -4722,8 +4751,13 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const prov = detected.find((d) => d.name === currentSel.provider);
             // Registered providers fetch their live, filterable list; others use detected.
-            const models = prov !== undefined ? await modelsForPicker(prov) : [];
-            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models));
+            const result = prov !== undefined ? await modelsForPicker(prov) : { models: [], source: "fallback" as const };
+            if (result.source === "fallback" && prov !== undefined) {
+              io.onSystem?.(`✗ Failed to fetch models for ${prov.label ?? prov.name}. Check the endpoint URL and network connectivity.\n`);
+              input.focus();
+              return;
+            }
+            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, result.models));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined

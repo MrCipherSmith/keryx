@@ -648,7 +648,8 @@ export async function launchTuiChatShell(opts: {
           return await selectProviderModelInTui(otui, r, detected);
         }
         const prov = detected.find((d) => d.name === only);
-        const chosen = await pickModelInTui(otui, r, prov !== undefined ? await modelsForPicker(prov) : []);
+        const result = prov !== undefined ? await modelsForPicker(prov) : { models: [], source: "fallback" as const };
+        const chosen = await pickModelInTui(otui, r, result.models);
         if (chosen === undefined) {
           return undefined;
         }
