@@ -3,6 +3,65 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.95] — 2026-09-11
+
+Five defects in keryx's own agent tools and error handling, read off a transcript
+of the shell on a research task. Each is a place where the shell worked against the
+model it was driving; each is fixed whatever any comparison says.
+
+### Added
+
+- **`read_file` reads past the first 20 KB** — optional `start_line` (1-based).
+  The tool returned the first 20,000 bytes of a file and nothing else; content past
+  them was unreachable however the model asked. A truncated read now ends with the
+  lines it showed and the `start_line` to continue from, and a line reported by
+  `search_code` or `graph_symbol` can be read directly. Streamed, so memory stays
+  bounded; a `start_line` past the end is an error that states the file's length.
+
+### Changed
+
+- **A project without `.metaproject/` is no longer offered the tools that need
+  one.** The graph, wiki, memory, flow, health, testing and skill tools read
+  artifacts under `.metaproject/`, and in a plain repository they could only fail —
+  the measured session called `graph_find` and got `index-incomplete … never built
+  here`. Each was also a description the model re-read every round. `search_code`
+  stays, and a project with `.metaproject/` gets exactly the roster it had.
+  `--deny-tools` still accepts those names in a plain repository, so one command
+  line does not pass in one directory and fail as "unknown tool" in the next.
+
+- **The agent's instruction describes the tools it was actually given.** It named
+  every metaproject tool and told the model to call `graph_symbol` first whatever
+  the roster held, and it said `read_file` "cannot page forward". It is now built
+  from the session's roster, and says how to page.
+
+- **`search_code` output is project-relative, long lines are capped, and a clip
+  says how much it dropped.** A path argument went to ripgrep absolute, so every
+  match line carried the checkout's root — about 65 bytes of noise per line. One
+  matching line of an SVG or a minified bundle is the whole file (8 KB came back
+  from a single SVG); lines are now capped at 400 columns. A result over the cap
+  said `…(truncated)`; it now says `showing N of M lines`, cut at a line boundary.
+
+### Fixed
+
+- **An OpenAI-compatible provider's errors name that provider, keep the server's
+  reason, and classify auth and rate limits.** Every registry provider was built
+  with Ollama's identity, so a grok session reported `Ollama API returned HTTP 403`.
+  The message now uses the registry label, keeps the status, and carries the
+  server's reason from the JSON shapes gateways use — `error.message`, `error` as a
+  string, `message`, `detail` — redacted and capped at 300 characters. A non-JSON
+  body is still never surfaced. 401 and 403 are `authentication`, 429 is a
+  retryable `rate_limit` honouring `Retry-After`; every 4xx was `invalid_request`
+  before. The first real call through it turned a bare 403 into `xAI (Grok) API
+  returned HTTP 403: The OAuth2 access token could not be validated.` — which had
+  been blamed on an exhausted balance. The provider id stays `ollama` for now;
+  giving each provider its own is a separate change.
+
+- **The subprocess runner runs the keryx that is running.** It spawned whichever
+  `keryx` PATH resolved, which is routinely a different build: a shell run from
+  source had its tool fallbacks answered by an installed release four versions
+  behind. It now re-runs keryx's own entry script with the current bun, or the
+  compiled binary itself, and uses PATH only when the process is not keryx.
+
 ## [0.2.94] — 2026-09-11
 `keryx mcp` — keryx as a CLIENT of other people's MCP servers. This entry
 covers 0.2.90 through 0.2.94: those versions were tagged in `package.json`

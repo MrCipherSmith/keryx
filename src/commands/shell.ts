@@ -33,7 +33,7 @@ import { buildOrientation } from "../ctx/orient";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import { buildApprovalContext } from "./agent-approval-context";
-import { buildInteractiveAgentTools } from "./interactive-agent-tools";
+import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interactive-agent-tools";
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
@@ -2181,7 +2181,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
-      return {
+      const deps = {
         provider: agentProvider,
         providerId: sel.provider,
         modelId: sel.model,
@@ -2200,10 +2200,6 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // configured server, which calling `getMcpRuntime()` here would
         // do for `--chat` sessions that never build a tool list.
         mcpRuntime: () => mcpRuntime,
-        systemInstruction: buildAgentSystemInstruction(orient, {
-          providerId: sel.provider,
-          modelId: sel.model,
-        }),
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
         maxRounds: resolveAgentMaxRounds(),
@@ -2212,6 +2208,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+      };
+      // The instruction is built from the roster it describes, so it never
+      // names a tool this session was not given.
+      return {
+        ...deps,
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: sel.provider,
+          modelId: sel.model,
+          toolNames: interactiveAgentToolNames(deps.tools),
+        }),
       };
     };
     const redetect = (): Promise<DetectedProvider[]> =>
@@ -2473,7 +2479,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           resetSubagentBudget = controls.resetBudget;
         },
       });
-      const agentDeps: AgentDeps = {
+      const agentDepsBase = {
         provider: agentProvider,
         providerId: provider,
         modelId: model,
@@ -2487,15 +2493,21 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           mcp: mcpRuntime,
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
-        systemInstruction: buildAgentSystemInstruction(orient, {
-          providerId: provider,
-          modelId: model,
-        }),
         maxRounds: resolveAgentMaxRounds(),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+      };
+      // The instruction is built from the roster it describes, so it never
+      // names a tool this session was not given.
+      const agentDeps: AgentDeps = {
+        ...agentDepsBase,
+        systemInstruction: buildAgentSystemInstruction(orient, {
+          providerId: provider,
+          modelId: model,
+          toolNames: interactiveAgentToolNames(agentDepsBase.tools),
+        }),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
       // created (flow 067), so it never runs here. This is the readline agent

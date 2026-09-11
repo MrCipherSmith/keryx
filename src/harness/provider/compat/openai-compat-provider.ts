@@ -37,6 +37,7 @@
 // W14 flow-019 fix): an abort mid-read yields `cancelled`, any other read
 // failure `malformed`.
 
+import { redactSensitiveText } from "../../../security/service";
 import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
@@ -204,13 +205,67 @@ function mergeUsage(
   return usage;
 }
 
-/** Classify a non-2xx HTTP response into the neutral error taxonomy. */
-function classifyHttpError(status: number): NormalizedError {
+/**
+ * Classify a non-2xx HTTP response into the neutral error taxonomy.
+ *
+ * 401 and 429 as the native OpenAI adapter maps them. 403 joins 401 here, where
+ * the OpenAI adapter keeps it `invalid_request`: an OAuth-backed gateway answers a
+ * rejected token with 403 — x.ai does, `The OAuth2 access token could not be
+ * validated.` — and that is a credential problem, not a malformed request. Every
+ * 4xx used to be `invalid_request`, so a refused credential and a request with a
+ * bad field were the same error, and a rate limit was not retryable.
+ */
+function classifyHttpError(status: number, headers: Headers): NormalizedError {
+  if (status === 401 || status === 403) {
+    // A refused credential or account. The same request cannot succeed on retry.
+    return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
+  }
+  if (status === 429) {
+    const error: NormalizedError = { kind: "rate_limit", retryable: retryableFor("rate_limit", true), message: "" };
+    const retryAfter = headers.get("retry-after");
+    const seconds = retryAfter === null ? undefined : Number.parseInt(retryAfter, 10);
+    if (seconds !== undefined && Number.isFinite(seconds)) {
+      error.retryAfterMs = seconds * 1000;
+    }
+    return error;
+  }
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
   }
   // 404 (model not found) and any other 4xx are non-retryable invalid requests.
   return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
+}
+
+/** Longest server reason kept in an error message. */
+const MAX_ERROR_REASON_CHARS = 300;
+
+/**
+ * The server's own reason for a refusal, from the JSON shapes gateways use.
+ *
+ * Only `error.message` used to be read, so a gateway answering
+ * `{"error": "…"}` or `{"message": "…"}` lost its reason and the operator got a
+ * bare status. Redacted and bounded because it is upstream text on its way into a
+ * transcript. A NON-JSON body is still never surfaced (C-01, shared with the
+ * OpenAI and Anthropic adapters): an HTML error page or a proxy banner is not a
+ * reason.
+ */
+function errorReason(bodyText: string): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
+  const record = asRecord(parsed);
+  const raw =
+    asString(asRecord(record.error).message) ??
+    asString(record.error) ??
+    asString(record.message) ??
+    asString(record.detail);
+  if (raw === undefined) return undefined;
+  const flat = redactSensitiveText(raw.replace(/\s+/g, " ").trim());
+  if (flat.length === 0) return undefined;
+  return flat.length > MAX_ERROR_REASON_CHARS ? `${flat.slice(0, MAX_ERROR_REASON_CHARS)}…` : flat;
 }
 
 /**
@@ -410,18 +465,17 @@ export class OpenAiCompatEngine implements ProviderPort {
 
     // Provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
-      const error = classifyHttpError(response.status);
-      let providerMessage = `${this.label} API returned HTTP ${response.status}`;
+      const error = classifyHttpError(response.status, response.headers);
+      let reason: string | undefined;
       try {
-        const parsed = asRecord(JSON.parse(await response.text()));
-        const detail = asString(asRecord(parsed.error).message);
-        if (detail !== undefined && detail.length > 0) {
-          providerMessage = detail;
-        }
+        reason = errorReason(await response.text());
       } catch {
-        // Non-JSON error body: keep the generic status message.
+        // An unreadable body has no reason to give; the status still stands.
       }
-      error.message = providerMessage;
+      // The status stays in the message even when the server gave a reason: a
+      // reason alone ("balance exhausted") does not say which provider or which
+      // class of failure, and the label is what names the gateway.
+      error.message = `${this.label} API returned HTTP ${response.status}${reason === undefined ? "" : `: ${reason}`}`;
       yield stamp({ kind: "provider_error", error });
       return;
     }

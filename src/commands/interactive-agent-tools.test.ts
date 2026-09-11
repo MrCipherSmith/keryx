@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test";
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDefaultSearchProviderController } from "../harness/search";
@@ -40,8 +40,69 @@ const stubSpawn: InteractiveTool = {
   invoke: async () => ({ output: "ok", isError: false }),
 };
 
+/** Every metaproject operation that reads `.metaproject/`, pinned so the set cannot drift quietly. */
+const METAPROJECT_BOUND = [
+  "flow_status",
+  "graph_affected",
+  "graph_find",
+  "graph_path",
+  "graph_query",
+  "graph_symbol",
+  "health_status",
+  "memory_search",
+  "read_wiki",
+  "repomap",
+  "skill_load",
+  "skills_catalog",
+  "test_related",
+  "wiki_ask",
+  "wiki_backlinks",
+  "wiki_evidence",
+  "wiki_freshness",
+  "wiki_resolve",
+];
+
+async function rosterIn(cwd: string, denyTools: string[] = []): Promise<string[]> {
+  return interactiveAgentToolNames(
+    buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+      jobRegistry: stubJobRegistry(),
+      denyTools,
+    }),
+  );
+}
+
+describe("K-009: the roster follows the project it is in", () => {
+  test("without .metaproject/, exactly the metaproject-bound tools are withheld and search_code stays", async () => {
+    // The arena's control arm was offered all of these, called graph_find, and got
+    // `index-incomplete … never built here`.
+    const bare = await mkdtemp(join(tmpdir(), "keryx-tools-bare-"));
+    const withMeta = await mkdtemp(join(tmpdir(), "keryx-tools-meta-"));
+    await mkdir(join(withMeta, ".metaproject"));
+    const full = await rosterIn(withMeta);
+    const reduced = await rosterIn(bare);
+    expect(full.filter((name) => !reduced.includes(name))).toEqual(METAPROJECT_BOUND);
+    expect(reduced.filter((name) => !full.includes(name))).toEqual([]);
+    expect(reduced).toContain("search_code");
+  });
+
+  test("denying a metaproject tool is accepted in a project that cannot run it", async () => {
+    // The denial is checked against the full set, so one command line does not
+    // pass in one directory and fail as "unknown tool" in the next.
+    const bare = await mkdtemp(join(tmpdir(), "keryx-tools-bare-"));
+    expect(await rosterIn(bare, ["graph_find"])).not.toContain("graph_find");
+    await expect(rosterIn(bare, ["graph_fnid"])).rejects.toThrow(/unknown tool name/);
+  });
+});
+
 test("TUI and readline share one factory that includes web_fetch", async () => {
   const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-"));
+  // The full roster is a project WITH a metaproject; without one, K-009 withholds
+  // the tools that could only fail there (pinned in the describe block above).
+  await mkdir(join(cwd, ".metaproject"));
   const tools = buildInteractiveAgentTools({
     cwd,
     metaprojectPort: createMetaprojectAdapter(cwd),
