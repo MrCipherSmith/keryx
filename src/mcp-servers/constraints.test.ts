@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 import { CAPABILITY_REGISTRY } from "../capability/registry";
 import { addServer, removeServer, setServerEnabled } from "./store";
 import { approveServer } from "./trust";
+import { clearCredential, writeCredential } from "./credentials";
 import type { ResolvedMcpServer } from "./config";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -160,8 +161,21 @@ describe("AC11 — this package writes no config it does not own", () => {
       configDir,
     );
 
-    const written = [...walk(base)].map((f) => path.relative(base, f)).sort();
+    // The OAuth store is a writer too, and adding it without adding it
+    // here is exactly the omission this test was rewritten to catch:
+    // "a fourth writer passes untouched". P3b added two.
+    writeCredential("u", "https://h/mcp", { tokens: { access_token: "t" } }, configDir);
+    clearCredential("u", "https://h/mcp", configDir);
+
+    const written = [...walk(base)]
+      .map((f) => path.relative(base, f))
+      // The lock file is transient by construction — `withFileLock`
+      // removes it — but a crashed holder can leave one behind, and
+      // its presence is not a claim about which config files exist.
+      .filter((f) => !f.endsWith(".lock"))
+      .sort();
     expect(written).toEqual([
+      "config/mcp-credentials.json",
       "config/mcp-servers-disabled.json",
       "config/mcp-servers-trust.json",
       "config/mcp-servers.json",

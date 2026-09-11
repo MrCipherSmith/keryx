@@ -85,7 +85,6 @@
       "additionalProperties": false,
       "properties": {
         "clientId": { "type": "string" },
-        "clientSecretEnvVar": { "type": "string" },
         "scopes": {
           "type": "array",
           "items": { "type": "string" }

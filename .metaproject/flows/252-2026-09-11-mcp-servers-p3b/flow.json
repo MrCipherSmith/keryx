@@ -1,0 +1,346 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "252",
+  "slug": "mcp-servers-p3b",
+  "title": "MCP servers P3b: OAuth for remote servers — browser flow, owner-only token store, headless refusal",
+  "status": "in-progress",
+  "createdAt": "2026-09-11T09:12:05.678Z",
+  "updatedAt": "2026-09-11T19:42:50.129Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:e173640a04a3105ec506fb3440e0bed8b86a71ec0973c3a9f47f3711376cbad0",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T17:18:07.753Z",
+      "note": "RE-VERIFIED after review. Unchanged in substance — writes still go only through writeOwnerOnlyFileAtomic and the mode is still asserted from the filesystem — but the write path now runs under withFileLock, so the mode assertions were re-run against the locked path and a new concurrency test (six real processes) confirms the file is valid JSON and still 0600 afterwards. The review found the unlocked read-modify-write lost concurrent updates; that is fixed and proven by negative control (without the lock, tok-0 is lost)."
+    },
+    "AC2": {
+      "at": "2026-09-11T10:27:52.642Z",
+      "note": "26363d9e: KEY_TABLE in credentials.table.test.ts — same name/different url not found, different name/same url not found, neither found, url differing only in path not found, BOUNDARY same name AND url found. classTableProblems enforces >=3 rows and both outcomes."
+    },
+    "AC4": {
+      "at": "2026-09-11T10:27:52.761Z",
+      "note": "8279296a: src/commands/mcp-servers.test.ts 'AC4/AC13' — non-TTY run asserts exit 1, opener array empty, and elapsed < 2s, as three separate tests because one exit code cannot distinguish the three failures."
+    },
+    "AC13": {
+      "at": "2026-09-11T10:27:52.877Z",
+      "note": "8279296a: same describe — a bearer_token_env_var server and an explicit-Authorization server both get 'does not use OAuth' with no browser opened; a stdio server is told OAuth does not apply. This test found a real defect: usesOAuth was reading RESOLVED headers, which are empty exactly when the variable is unset, so a declared credential looked absent (fixed in the same commit)."
+    },
+    "AC3": {
+      "at": "2026-09-11T17:17:52.851Z",
+      "note": "CORRECTED after review: previously PARTIALLY met. The criterion names the `/mcp` view explicitly and my test enumerated MCP_CONSUMER_SUBCOMMANDS, which is the CLI surface only — the TUI was never driven with a token. Added to src/tui/mcp-consumer.test.ts: a stored access and refresh token, buildConsumerModel + renderConsumerLines, asserting neither string appears in the rendered lines or in the model. The secrecy suite's own sentinel was also a literal tautology (it interpolated ACCESS into its own subject, true for any output) and was the only backstop against a surface that renders nothing; replaced with a per-invocation check that every surface produced output. The new `logout` subcommand was caught immediately by the coverage guard and added."
+    },
+    "AC5": {
+      "at": "2026-09-11T17:18:07.636Z",
+      "note": "RE-VERIFIED after review. The post-dial half needed a fix the original confirmation did not cover: the 401 branch had no usesOAuth gate, so a server with a bearer_token_env_var whose token was wrong was told to run `keryx mcp auth` — which refuses with 'does not use OAuth'. Two surfaces contradicting each other, and it also shadowed explainConnectFailure's correct message for 401. Gated now, with boundaries for a bearer server and a declared-Authorization server both staying 'failed', and for a declared oauth block WITH a bearer variable still being dialled."
+    },
+    "AC14": {
+      "at": "2026-09-11T17:17:52.963Z",
+      "note": "CORRECTED after review: previously PARTIALLY met. The criterion says 'after a completed flow' and names compat and native config files; my test bracketed direct writeCredential/provider calls and fingerprinted the keryx config dir only, where those files do not live. Added to mcp-auth-flow.test.ts: a real `keryx mcp auth` against the mock authorisation server with a genuine code exchange, fingerprinting config + projectRoot + home, with ~/.claude.json, ~/.cursor/mcp.json, <project>/.mcp.json and <project>/.keryx/mcp-servers.json present. Only mcp-credentials.json differs; it is asserted to have appeared, so the equality is not passing on a no-op."
+    },
+    "AC6": {
+      "at": "2026-09-11T17:17:38.322Z",
+      "note": "CORRECTED after review. My earlier confirmation was FALSE: the test asserted listener.redirectUrl, which startCallbackListener builds from the same LOOPBACK_HOST constant it passes to serve() — the constant compared with itself. Proven by the spec reviewer and reproduced here: changing hostname to 0.0.0.0 left all 19 callback tests green, so the listener could have offered the authorisation code to the whole network. The mutation sweep could not have caught it either — its operator table has no string-literal substitution. Fixed: CallbackListener.boundHost is read back from the running Bun server, and oauth-callback.test.ts asserts it equals 127.0.0.1 and is neither 0.0.0.0 nor ::. Negative control: binding 0.0.0.0 now fails 2 tests where it previously failed none."
+    },
+    "AC7": {
+      "at": "2026-09-11T10:28:15.872Z",
+      "note": "ea91fa02: wrong state -> 400 and the flow is NOT settled (a stray request must not be a denial of service; the real browser still arrives and succeeds); missing state -> 400; state is >=32 chars and differs between listeners. The happy path is asserted first so the rejections mean something."
+    },
+    "AC8": {
+      "at": "2026-09-11T10:28:15.987Z",
+      "note": "ea91fa02: two requests issued — the first returns 200, the replay reaches 410 (or a closed socket), and the FIRST code is the one kept."
+    },
+    "AC9": {
+      "at": "2026-09-11T10:28:16.104Z",
+      "note": "ea91fa02: ?error=access_denied resolves to a failure whose reason contains access_denied, error_description is included when sent, and the BOUNDARY asserts an error yields no code. Reporting it as a timeout would send the operator to retry something that refuses them again for the same reason."
+    },
+    "AC10": {
+      "at": "2026-09-11T10:28:16.221Z",
+      "note": "ea91fa02: budget 300ms, assertion <5000ms and >=250ms — two numbers that are not the same number, so the test cannot pass whether or not the timeout fired. BOUNDARY: a flow completing inside a 10s budget is not cut off."
+    },
+    "AC11": {
+      "at": "2026-09-11T10:28:28.053Z",
+      "note": "ca9cf3cd: oauth-integration.test.ts runs the REAL SDK auth() against a mock authorisation server on a loopback socket that records every request. With no configured id /register is hit once and the id persisted; with oauth.clientId set /register is hit ZERO times and the configured id is what reaches /token; a stored registration is reused. Asserted on the server's request log, which is the only place the criterion can actually be observed."
+    },
+    "AC12": {
+      "at": "2026-09-11T17:17:38.197Z",
+      "note": "CORRECTED after review. My earlier confirmation was FALSE: every AC12 test built a provider with redirectUrl hard-coded in the integration helper — the `keryx mcp auth` shape — while sessionAuthProviderOptions omitted it, and the SDK reads a missing redirectUrl as a client-credentials flow and short-circuits BEFORE the refresh branch. No session ever refreshed. Found independently by review-logic and review-security-code, both by driving the real SDK; reproduced before accepting. Fixed and re-verified empirically: with SESSION_REDIRECT_URL the mock AS receives grant_type=refresh_token and the stored token becomes REFRESHED. Two further consequences found by probing: the headless gate was unreachable because the SDK calls state() before redirectToAuthorization (state() now throws OAuthInteractionRequiredError when non-interactive), and a session with no credential silently POSTed a dynamic client registration to the operator's authorisation server (a session now attaches no provider it cannot use; verified /register is no longer hit). Tests: session-oauth.test.ts (redirectUrl present, loopback, and the three usable-credential boundaries), oauth-integration.test.ts AC12 block, oauth-provider.test.ts state()/saveClientInformation refusals."
+    },
+    "AC15": {
+      "at": "2026-09-11T18:59:37.424Z",
+      "note": "RE-VERIFIED after review. Now four class tables in credentials.table.test.ts (describeCredential, KEY_TABLE, STORE_TABLE, USES_OAUTH), each checked by classTableProblems. The review found the describeCredential axis was 'absent'/'present' — a fact about the record rather than the distinction the rows assert, so four of five rows collapsed onto one label and the rule was satisfied by a label rather than a second outcome. The axis is now what the operator must do: 'nothing stored' / 'nothing to do' / 'operator must act'."
+    },
+    "AC16": {
+      "at": "2026-09-11T17:18:07.870Z",
+      "note": "RE-RUN after the review fixes: 170 mutants over the enlarged diff (up from 116). The first post-review run scored 148 killed / 22 survivors / 0 hung, and ten of those survivors were in code the review fixes had just added — guards that existed but that nothing proved, including all three 'if (!write.ok) throw' statements added an hour earlier. All ten are now killed by new tests; the remaining twelve are the equivalents recorded in docs/requirements/keryx-mcp-servers/mutation-equivalents.md. A confirming sweep is in progress at time of writing and its result is recorded in the flow journal."
+    },
+    "AC17": {
+      "at": "2026-09-11T17:17:53.075Z",
+      "note": "RE-VERIFIED after the review fixes: bun test 9566 pass / 19 skip / 0 fail across 738 files; bunx tsc --noEmit, bun run lint and skills verify --bundled all clean. One intermittent failure during this round was hunted rather than dismissed and turned out to be unrelated: src/sac/fwk-parity.test.ts spawns a real process and drives a real stdio MCP handshake against bun's default 5s timeout, failing about one run in three. Raised to 30s and fixed, because the release was about to be certified on this suite's verdict."
+    },
+    "AC18": {
+      "at": "2026-09-11T18:59:37.302Z",
+      "note": "RE-RUN after the review fixes, and CORRECTED: the earlier smoke evidence was partly vacuous. That sweep looped `run $a` with the subcommand in a variable, and zsh does not word-split unquoted expansions, so every invocation became one argument, the binary answered 'Unknown command', and I measured 85KB of usage text for absent secrets. Caught by following an anomaly — `keryx mcp auth` was missing from output that had to name it — rather than accepting the green. Redone on a freshly built 0.2.95 tarball, clean-room npm install, env -i with isolated HOME and XDG_DATA_HOME: 7.2KB of real output across 11 invocations, 0 'Unknown command', zero occurrences of a stored access token, refresh token, PKCE verifier or client secret; needs_auth x4 naming `keryx mcp auth needslogin`; bearer and stdio servers refused with their own reasons; `mcp logout` removes the credential and reports 'nothing to forget' on a second run; credential file 0600 with no stray lock files; `mcp list` exits 0 on a legal config. The run also found that `auth` and `logout` appeared in no help text at all — fixed, with an enumeration guard over MCP_CONSUMER_SUBCOMMANDS so the list cannot drift again. CHANGELOG.md has the 0.2.95 section and package.json matches."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context was collected inline across the phase; the review round then produced a bounded context pack at .metaproject/reviews/flow-250-review-context.md that five reviewers worked from."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "OAuth implemented: credential store, loopback callback, provider, auth and logout commands, session wiring, needs_auth diagnosis. Reworked substantially after the review round found two false criterion confirmations."
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Tests added and green: 9566 pass / 0 fail. Mutation sweep over the diff 158/170 killed, 0 hung, 11 recorded equivalents. Three flaky or vacuous tests found and fixed during verification."
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Managed review round with five reviewers instead of a self-review: 3 blockers, 14 majors, all dispositioned. Record at .metaproject/reviews/flow-250-review-round.md."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-11T09:12:05.678Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-11T09:12:59.714Z",
+      "event": "frozen",
+      "detail": "18 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T09:12:59.832Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T10:27:52.523Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: 89c01134 + 56bb2108: credentials.table.test.ts asserts statSync(mode) & 0o777 === 0o600 after write, after a SECOND write (the read-modify-write path that loses the mode), and after clear; credentials.isolation.test.ts repeats all three. The assertion reads the filesystem rather than trusting the helper's name."
+    },
+    {
+      "at": "2026-09-11T10:27:52.642Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: 26363d9e: KEY_TABLE in credentials.table.test.ts — same name/different url not found, different name/same url not found, neither found, url differing only in path not found, BOUNDARY same name AND url found. classTableProblems enforces >=3 rows and both outcomes."
+    },
+    {
+      "at": "2026-09-11T10:27:52.761Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: 8279296a: src/commands/mcp-servers.test.ts 'AC4/AC13' — non-TTY run asserts exit 1, opener array empty, and elapsed < 2s, as three separate tests because one exit code cannot distinguish the three failures."
+    },
+    {
+      "at": "2026-09-11T10:27:52.878Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: 8279296a: same describe — a bearer_token_env_var server and an explicit-Authorization server both get 'does not use OAuth' with no browser opened; a stdio server is told OAuth does not apply. This test found a real defect: usesOAuth was reading RESOLVED headers, which are empty exactly when the variable is unset, so a declared credential looked absent (fixed in the same commit)."
+    },
+    {
+      "at": "2026-09-11T10:28:04.838Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: 56bb2108: src/commands/mcp-auth-secrecy.test.ts drives an access token, refresh token, PKCE verifier and client secret through every entry in MCP_CONSUMER_SUBCOMMANDS (enumerated, with a guard test that fails if a subcommand is uncovered), both streams, and the --json forms; doctor.oauth.test.ts covers the report object. Verified by NEGATIVE CONTROL: injecting the credential record into doctor's connected path failed 4 surfaces, 15 green once reverted."
+    },
+    {
+      "at": "2026-09-11T10:28:04.983Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: 56bb2108: doctor.oauth.test.ts — a declared-oauth server with no credential reports needs_auth naming 'keryx mcp auth linear' and dialled==0; a 401 or the provider's headless refusal after dialling reclassifies from failed to needs_auth. BOUNDARIES: a PUBLIC remote server, oauth:false, a valid credential and an expired-with-refresh credential are all still dialled. The first version of the branch used usesOAuth as the gate and stopped doctor dialling every public remote server; an existing test caught it."
+    },
+    {
+      "at": "2026-09-11T10:28:05.113Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: 56bb2108: credentials.isolation.test.ts hashes every file in a populated config dir before and after a write, a full provider round trip (register + verifier + tokens) and a clear; all non-credential hashes equal, mcp-servers.json byte-identical including its comments and ordering. BOUNDARY asserts the credential file itself DID change, so the others are not passing on a no-op. No tmp file survives the atomic write."
+    },
+    {
+      "at": "2026-09-11T10:28:15.751Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: ea91fa02: oauth-callback.test.ts asserts redirectUrl starts http://127.0.0.1: and contains neither 0.0.0.0 nor localhost, driven against a REAL listener on a real socket; two listeners get different ephemeral ports."
+    },
+    {
+      "at": "2026-09-11T10:28:15.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: ea91fa02: wrong state -> 400 and the flow is NOT settled (a stray request must not be a denial of service; the real browser still arrives and succeeds); missing state -> 400; state is >=32 chars and differs between listeners. The happy path is asserted first so the rejections mean something."
+    },
+    {
+      "at": "2026-09-11T10:28:15.988Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: ea91fa02: two requests issued — the first returns 200, the replay reaches 410 (or a closed socket), and the FIRST code is the one kept."
+    },
+    {
+      "at": "2026-09-11T10:28:16.104Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: ea91fa02: ?error=access_denied resolves to a failure whose reason contains access_denied, error_description is included when sent, and the BOUNDARY asserts an error yields no code. Reporting it as a timeout would send the operator to retry something that refuses them again for the same reason."
+    },
+    {
+      "at": "2026-09-11T10:28:16.222Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: ea91fa02: budget 300ms, assertion <5000ms and >=250ms — two numbers that are not the same number, so the test cannot pass whether or not the timeout fired. BOUNDARY: a flow completing inside a 10s budget is not cut off."
+    },
+    {
+      "at": "2026-09-11T10:28:28.053Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: ca9cf3cd: oauth-integration.test.ts runs the REAL SDK auth() against a mock authorisation server on a loopback socket that records every request. With no configured id /register is hit once and the id persisted; with oauth.clientId set /register is hit ZERO times and the configured id is what reaches /token; a stored registration is reused. Asserted on the server's request log, which is the only place the criterion can actually be observed."
+    },
+    {
+      "at": "2026-09-11T10:28:28.176Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: ca9cf3cd: same mock server. An expired token with a refresh token is refreshed with openBrowser never called. A refresh rejected with invalid_grant is classified needs_auth by needsAuthorisation(), the refresh token is NOT destroyed, and auth() throws rather than returning something a caller could read as 'carry on unauthenticated'. BOUNDARY: ServerError is NOT needs_auth. This found a real gap — the SDK re-throws a client-side refresh failure instead of falling back to the browser, so the provider's headless gate is never reached and invalid_grant was arriving unclassified. Negative control: emptying DEAD_CREDENTIAL_CODES fails 2 tests."
+    },
+    {
+      "at": "2026-09-11T10:28:28.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: 26363d9e: three class tables in credentials.table.test.ts, each with its own axis and each checked by the shared classTableProblems rule — describeCredential (what a surface may show), KEY_TABLE (which key finds a token), STORE_TABLE (what a write may do to each store state). Every table has >=3 rows, both outcomes, and an explicit BOUNDARY row."
+    },
+    {
+      "at": "2026-09-11T14:01:44.436Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: Sweep over the P3b diff, 116 mutants: 108 killed, 8 equivalent, 0 unexplained survivors, 0 hangs. Confirmed by a VERIFICATION sweep run after the killing tests landed (logs verify-0/28/56/84/112), so the list is what the sweep reports now, not what it reported once. The 8 equivalents are recorded with per-entry reasoning in docs/requirements/keryx-mcp-servers/mutation-equivalents.md, which also states what is deliberately NOT in it and why. Three findings the sweep produced: one mutant I had filed as equivalent was not (an explicit interactive:false falls through to the TTY probe under ||, and the test I first wrote for it was vacuous because no stream is a TTY under bun test); two mutants HUNG rather than failed, which was the sweep reporting that those tests lacked a deadline of their own; and clearCredential's corrupt-store guard survived deletion, which would destroy every other server's token while reporting success."
+    },
+    {
+      "at": "2026-09-11T14:01:44.561Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: All four clean at 0b1a4e0-and-later: bun test 9505 pass / 19 skip / 0 fail across 738 files; bunx tsc --noEmit silent; bun run lint silent; bun src/cli.ts skills verify --bundled all pass. The full run caught a real violation the scoped runs could not — C0-2 bans top-level @modelcontextprotocol/sdk imports anywhere under src/ and my integration test had one; fixed by lazy import rather than by exempting tests."
+    },
+    {
+      "at": "2026-09-11T14:04:20.397Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: Smoke-tested on the INSTALLED binary, not the source tree: npm pack -> clean-room npm install of mrciphersmith-keryx-0.2.95.tgz -> run with env -i and an isolated HOME and XDG_DATA_HOME. The first attempt used a config-dir variable that does not exist and silently read my REAL config (it listed my actual servers), which is exactly the class of mistake this criterion exists to catch. Verified on the real binary: --version reports 0.2.95; auth refuses headless naming the command; auth on a bearer server and on a stdio server both refuse with their own reasons; doctor reports needs_auth for a declared-oauth server with no credential and for one expired beyond refresh, naming the command each time, and still DIALS an oauth:false server (the boundary holds in the real build); 66KB of output across seven surfaces contains zero occurrences of the stored access or refresh token; the credential file is 0600 after every command. CHANGELOG.md has the 0.2.95 section (commit 0c238400) and package.json is bumped to match."
+    },
+    {
+      "at": "2026-09-11T17:17:38.197Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: CORRECTED after review. My earlier confirmation was FALSE: every AC12 test built a provider with redirectUrl hard-coded in the integration helper — the `keryx mcp auth` shape — while sessionAuthProviderOptions omitted it, and the SDK reads a missing redirectUrl as a client-credentials flow and short-circuits BEFORE the refresh branch. No session ever refreshed. Found independently by review-logic and review-security-code, both by driving the real SDK; reproduced before accepting. Fixed and re-verified empirically: with SESSION_REDIRECT_URL the mock AS receives grant_type=refresh_token and the stored token becomes REFRESHED. Two further consequences found by probing: the headless gate was unreachable because the SDK calls state() before redirectToAuthorization (state() now throws OAuthInteractionRequiredError when non-interactive), and a session with no credential silently POSTed a dynamic client registration to the operator's authorisation server (a session now attaches no provider it cannot use; verified /register is no longer hit). Tests: session-oauth.test.ts (redirectUrl present, loopback, and the three usable-credential boundaries), oauth-integration.test.ts AC12 block, oauth-provider.test.ts state()/saveClientInformation refusals."
+    },
+    {
+      "at": "2026-09-11T17:17:38.323Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: CORRECTED after review. My earlier confirmation was FALSE: the test asserted listener.redirectUrl, which startCallbackListener builds from the same LOOPBACK_HOST constant it passes to serve() — the constant compared with itself. Proven by the spec reviewer and reproduced here: changing hostname to 0.0.0.0 left all 19 callback tests green, so the listener could have offered the authorisation code to the whole network. The mutation sweep could not have caught it either — its operator table has no string-literal substitution. Fixed: CallbackListener.boundHost is read back from the running Bun server, and oauth-callback.test.ts asserts it equals 127.0.0.1 and is neither 0.0.0.0 nor ::. Negative control: binding 0.0.0.0 now fails 2 tests where it previously failed none."
+    },
+    {
+      "at": "2026-09-11T17:17:52.851Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: CORRECTED after review: previously PARTIALLY met. The criterion names the `/mcp` view explicitly and my test enumerated MCP_CONSUMER_SUBCOMMANDS, which is the CLI surface only — the TUI was never driven with a token. Added to src/tui/mcp-consumer.test.ts: a stored access and refresh token, buildConsumerModel + renderConsumerLines, asserting neither string appears in the rendered lines or in the model. The secrecy suite's own sentinel was also a literal tautology (it interpolated ACCESS into its own subject, true for any output) and was the only backstop against a surface that renders nothing; replaced with a per-invocation check that every surface produced output. The new `logout` subcommand was caught immediately by the coverage guard and added."
+    },
+    {
+      "at": "2026-09-11T17:17:52.964Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: CORRECTED after review: previously PARTIALLY met. The criterion says 'after a completed flow' and names compat and native config files; my test bracketed direct writeCredential/provider calls and fingerprinted the keryx config dir only, where those files do not live. Added to mcp-auth-flow.test.ts: a real `keryx mcp auth` against the mock authorisation server with a genuine code exchange, fingerprinting config + projectRoot + home, with ~/.claude.json, ~/.cursor/mcp.json, <project>/.mcp.json and <project>/.keryx/mcp-servers.json present. Only mcp-credentials.json differs; it is asserted to have appeared, so the equality is not passing on a no-op."
+    },
+    {
+      "at": "2026-09-11T17:17:53.075Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: RE-VERIFIED after the review fixes: bun test 9566 pass / 19 skip / 0 fail across 738 files; bunx tsc --noEmit, bun run lint and skills verify --bundled all clean. One intermittent failure during this round was hunted rather than dismissed and turned out to be unrelated: src/sac/fwk-parity.test.ts spawns a real process and drives a real stdio MCP handshake against bun's default 5s timeout, failing about one run in three. Raised to 30s and fixed, because the release was about to be certified on this suite's verdict."
+    },
+    {
+      "at": "2026-09-11T17:18:07.636Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: RE-VERIFIED after review. The post-dial half needed a fix the original confirmation did not cover: the 401 branch had no usesOAuth gate, so a server with a bearer_token_env_var whose token was wrong was told to run `keryx mcp auth` — which refuses with 'does not use OAuth'. Two surfaces contradicting each other, and it also shadowed explainConnectFailure's correct message for 401. Gated now, with boundaries for a bearer server and a declared-Authorization server both staying 'failed', and for a declared oauth block WITH a bearer variable still being dialled."
+    },
+    {
+      "at": "2026-09-11T17:18:07.753Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: RE-VERIFIED after review. Unchanged in substance — writes still go only through writeOwnerOnlyFileAtomic and the mode is still asserted from the filesystem — but the write path now runs under withFileLock, so the mode assertions were re-run against the locked path and a new concurrency test (six real processes) confirms the file is valid JSON and still 0600 afterwards. The review found the unlocked read-modify-write lost concurrent updates; that is fixed and proven by negative control (without the lock, tok-0 is lost)."
+    },
+    {
+      "at": "2026-09-11T17:18:07.870Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: RE-RUN after the review fixes: 170 mutants over the enlarged diff (up from 116). The first post-review run scored 148 killed / 22 survivors / 0 hung, and ten of those survivors were in code the review fixes had just added — guards that existed but that nothing proved, including all three 'if (!write.ok) throw' statements added an hour earlier. All ten are now killed by new tests; the remaining twelve are the equivalents recorded in docs/requirements/keryx-mcp-servers/mutation-equivalents.md. A confirming sweep is in progress at time of writing and its result is recorded in the flow journal."
+    },
+    {
+      "at": "2026-09-11T18:59:37.302Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: RE-RUN after the review fixes, and CORRECTED: the earlier smoke evidence was partly vacuous. That sweep looped `run $a` with the subcommand in a variable, and zsh does not word-split unquoted expansions, so every invocation became one argument, the binary answered 'Unknown command', and I measured 85KB of usage text for absent secrets. Caught by following an anomaly — `keryx mcp auth` was missing from output that had to name it — rather than accepting the green. Redone on a freshly built 0.2.95 tarball, clean-room npm install, env -i with isolated HOME and XDG_DATA_HOME: 7.2KB of real output across 11 invocations, 0 'Unknown command', zero occurrences of a stored access token, refresh token, PKCE verifier or client secret; needs_auth x4 naming `keryx mcp auth needslogin`; bearer and stdio servers refused with their own reasons; `mcp logout` removes the credential and reports 'nothing to forget' on a second run; credential file 0600 with no stray lock files; `mcp list` exits 0 on a legal config. The run also found that `auth` and `logout` appeared in no help text at all — fixed, with an enumeration guard over MCP_CONSUMER_SUBCOMMANDS so the list cannot drift again. CHANGELOG.md has the 0.2.95 section and package.json matches."
+    },
+    {
+      "at": "2026-09-11T18:59:37.424Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: RE-VERIFIED after review. Now four class tables in credentials.table.test.ts (describeCredential, KEY_TABLE, STORE_TABLE, USES_OAUTH), each checked by classTableProblems. The review found the describeCredential axis was 'absent'/'present' — a fact about the record rather than the distinction the rows assert, so four of five rows collapsed onto one label and the rule was satisfied by a label rather than a second outcome. The axis is now what the operator must do: 'nothing stored' / 'nothing to do' / 'operator must act'."
+    },
+    {
+      "at": "2026-09-11T19:00:22.364Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T19:00:22.481Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T19:00:22.595Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T19:00:22.710Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-11T19:42:50.129Z",
+      "event": "renumbered",
+      "detail": "250 -> 252: Flow id 250 collided after rebasing onto main: main already carries 250-keryx-shell-loses-the-arena-on-tools (PR #529) and 251-k-012. This flow was numbered 250 locally before either landed, so it takes the next free id."
+    }
+  ]
+}
