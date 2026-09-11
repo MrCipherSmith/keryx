@@ -46,8 +46,10 @@ Flow:
    sections, file-locked).
 
 `learn` is bounded, mechanical synthesis. **Dispatch it as a subagent at
-`model_tier: light`, resolved via `keryx review tier` per `model-selection.mdc`
-— do not pick a model by hand.** The flagship's only job here is to review the
+`model_tier: light`, resolved via `keryx review tier --findings 1 --diff-lines 0`
+per `model-selection.mdc` — do not pick a model by hand, and do not substitute
+a different `review tier` invocation (e.g. `--scope narrow`, which resolves
+heavier than `light`).** The flagship's only job here is to review the
 proposal before apply.
 
 ## Never

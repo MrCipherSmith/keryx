@@ -6,21 +6,28 @@ alwaysApply: false
 # Implementation Plans Rules
 
 ## Purpose
-Define structure and storage for implementation plans.
+Define structure and storage for an implementation plan that belongs to a
+requirements package.
 
 ## When To Apply
-Apply when creating or updating an implementation plan document.
+Apply when creating or updating an implementation plan document that lives
+inside a requirements package (`docs/requirements/<name>/`). Two other
+locations are outside this rule's scope and are governed by
+`documentation-management.mdc` instead:
+- A standalone plan not tied to a requirements package: `docs/plans/<name>/`.
+- A feature/branch analysis plan written by the `feature-analyzer` skill:
+  `docs/analysis/<feature>/implementation-plan.md`.
 
 ## Location
-`implementation-plan.md` lives inside its requirements package, per
-`requirements-package-standard.mdc`:
-`docs/requirements/<requirement-name>/implementation-plan.md`. No date folder
-and no separate `plans/` tree — the plan is versioned in place alongside
-README/prd/specification.
+`implementation-plan.md` for a requirements-package plan lives inside that
+package, per `requirements-package-standard.mdc`:
+`docs/requirements/<requirement-name>/implementation-plan.md`. No date
+folder — the plan is versioned in place alongside README/prd/specification.
+For the standalone and analysis locations, see `documentation-management.mdc`.
 
 ## Mandatory Behavior
 1. Ask for target location and folder name before creation, if not already established.
-2. If the requirements package does not exist yet, create it first (README, prd, specification) before adding the plan.
+2. If the plan belongs inside a requirements package and that package does not exist yet, create it first (README, prd, specification) before adding the plan.
 3. Update `implementation-plan.md` in place for each new iteration and bump its `Version` field instead of forking a new folder.
 
 ## Required Plan Structure
@@ -41,7 +48,7 @@ README/prd/specification.
 | "I'll start a new folder instead of updating the package in place" | The package is the single source of truth; forking a parallel copy is exactly what `requirements-package-standard.mdc` forbids |
 | "The user knows what we discussed, I'll skip asking for the folder name" | The location question is a confirmation gate, not a convenience; skipping it causes misplaced files |
 
-**IRON LAW: ALWAYS ASK FOR TARGET LOCATION AND FOLDER NAME BEFORE CREATING ANY PLAN FILE, AND KEEP IT INSIDE ITS REQUIREMENTS PACKAGE.**
+**IRON LAW: ALWAYS ASK FOR TARGET LOCATION AND FOLDER NAME BEFORE CREATING A REQUIREMENTS-PACKAGE PLAN FILE, AND KEEP IT INSIDE ITS REQUIREMENTS PACKAGE. FOR A STANDALONE OR FEATURE-ANALYSIS PLAN, USE `documentation-management.mdc` INSTEAD.**
 
 ## Template
 ```markdown

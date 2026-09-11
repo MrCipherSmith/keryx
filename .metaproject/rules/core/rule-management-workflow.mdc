@@ -12,7 +12,7 @@ Define a deterministic workflow for adding, editing, and syncing rules.
 Apply when user asks to create, update, move, reorganize, or sync rules.
 
 ## Source of Truth
-- Repository source: `src/gdskills/bundled/rules/` — installed into `.metaproject/rules/` by `keryx install`/`keryx update` (the installed copy is regenerated on every run; edit the source, not the installed copy).
+- Repository source: `src/gdskills/bundled/rules/` — installed into `.metaproject/rules/` by `keryx init`/`keryx update` (the installed copy is regenerated on every run; edit the source, not the installed copy). There is no `keryx install` command.
 - Root always-on file: `AGENTS.md`
 - Thematic files: `.metaproject/rules/core/*.mdc`
 
@@ -31,17 +31,20 @@ Before creating or editing any rule, the agent MUST ask and confirm:
 5. Run synchronization only after source files are updated.
 
 ## How to Run Synchronization
-After editing rules under `.metaproject/rules/` or `AGENTS.md`, sync to all targets:
+After editing rules under `src/gdskills/bundled/rules/`, run `keryx update`
+(or `keryx init` on a fresh project) to regenerate the installed copy at
+`.metaproject/rules/`. This stays inside the project — it never writes to a
+home-directory (`~`) location.
+
+After editing the project's own root `AGENTS.md`/`CLAUDE.md`, run:
 
 ```bash
-keryx update
+keryx rules sync
 ```
 
-### Sync Targets
-- `~/.cursor/rules/AGENTS.md` — Cursor global rules
-- `~/.codex/AGENTS.md` — Codex global rules
-- `~/.config/zed/AGENTS.md` — Zed global rules
-- `~/.config/opencode/AGENTS.md` — OpenCode global rules
+This imports the root `AGENTS.md`/`CLAUDE.md` into `.metaproject/rules/` and
+refreshes the routing index. It is also project-local and writes no
+home-directory (`~`) path.
 
 ## Rule File Standard
 Every core rule MUST include:

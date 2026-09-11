@@ -1745,7 +1745,9 @@ read only when a skill or \`routing.md\` cites it by path.
   it applies to via a \`stack_requires\` frontmatter key, using the same tag vocabulary as a
   skill's \`metadata.stack_requires\`; it is only relevant to projects on that stack;
 - the bundled tree (\`src/gdskills/bundled/rules/core/\`) is the source of truth — \`core/\` here is
-  an installed mirror, and \`keryx init\`/\`keryx update\` overwrite it wholesale on install.
+  an installed mirror, and \`keryx init\`/\`keryx update\` overwrite it wholesale on install;
+  a rule retired from the bundled tree is removed from here too if your copy is unmodified, but
+  kept (with a warning) if you edited it, since deleting a changed file would discard that edit.
 `;
 }
 

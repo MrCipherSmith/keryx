@@ -1,6 +1,6 @@
 ---
 name: entity-skill-verifier
-description: "Use when an existing project-skill's claims need checking against current code, graph, wiki, health, memory, tests, or review lessons before it is trusted. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."
+description: "Use when an existing project-skill needs classifying — fresh, needs-review, stale, or blocked — from its required files, metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, gdwiki, Code Health, memory), followed by a manual read of its claims against current code as this skill's next step. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."
 ---
 
 # entity-skill-verifier

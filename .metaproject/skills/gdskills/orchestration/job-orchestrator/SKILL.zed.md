@@ -1423,7 +1423,7 @@ IF no skill_drift and Skill Learning == none:
 ELSE for each flagged project-skill:
   1. Dispatch a subagent to build the learning proposal:
      - Model: COMPUTED, not chosen — run
-         keryx review tier --scope narrow --json
+         keryx review tier --findings 1 --diff-lines 0 --json
        and paste the `model` block into the dispatch. The command names no model:
        it ranks what the provider reports at runtime, and when it cannot rank
        anything it prints `inherit: true`, which means the dispatch runs on the

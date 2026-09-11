@@ -71,7 +71,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "The command checks required files, SKILL.md metadata (version, target, last-verified), manifest registration, target path existence, and evidence artifacts for gdgraph, gdctx, gdwiki, Code Health, and memory consultation, then classifies the skill fresh, needs-review, stale, or blocked and writes the JSON report plus `verification.md`.",
     "Manually read the skill and the code, wiki, and health evidence it points at to check its claims — the command does not do this comparison — then route stale or blocked findings to entity-skill-learner.",
   ], ["verify skill", "skill-verify-skill", "stale skill"],
-    "Use when an existing project-skill's claims need checking against current code, graph, wiki, health, memory, tests, or review lessons before it is trusted. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."),
+    "Use when an existing project-skill needs classifying — fresh, needs-review, stale, or blocked — from its required files, metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, gdwiki, Code Health, memory), followed by a manual read of its claims against current code as this skill's next step. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."),
   skill("entity-skill-learner", "core", ["minimal", "recommended", "full"], "Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.", [
     "Parse the source report and map findings to project-skills.",
     "Classify lessons as anti-patterns, checklist changes, template changes, workflow changes, or architecture rules.",
