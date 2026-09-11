@@ -1,5 +1,6 @@
-import { cp, copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, copyFile, mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pathExists } from "../lib/fs";
@@ -11,6 +12,7 @@ import {
   renderGdskillsCatalog,
   renderGdskillsManifest,
 } from "./catalog";
+import { RETIRED_RULES, type RetiredRuleOutcome } from "./retired-rules";
 
 export type InstallGdskillsResult = {
   profile: GdskillsProfile;
@@ -18,6 +20,13 @@ export type InstallGdskillsResult = {
   skillsRoot: string;
   catalogPath: string;
   manifestPath: string;
+  /**
+   * Human-readable notices surfaced from the install, same convention as
+   * `createProjectSkill`'s result (`src/gdskills/project-skills.ts`): plain
+   * strings a caller can print under a "Warnings:" heading. Currently only
+   * populated by retired-rule cleanup — see `retired-rules.ts`.
+   */
+  warnings: string[];
 };
 
 export type InstallGdskillsOptions = {
@@ -61,7 +70,7 @@ export async function installGdskills(
   }
 
   await installBundledSharedSkills(skillsRoot);
-  await installBundledRules(metaprojectRoot);
+  const retiredRuleOutcomes = await installBundledRules(metaprojectRoot);
 
   const catalogPath = path.join(metaprojectRoot, "skills", "catalog.md");
   await writeFile(catalogPath, await preserveProjectSkillsSection(catalogPath, renderGdskillsCatalog(profile)), "utf8");
@@ -71,12 +80,17 @@ export async function installGdskills(
 
   await installContracts(contractsRoot);
 
+  const warnings = retiredRuleOutcomes
+    .filter((outcome) => outcome.action === "kept-modified")
+    .map((outcome) => `retired rule kept because it was modified: ${outcome.fileName}`);
+
   return {
     profile,
     installedSkills: skills.length,
     skillsRoot,
     catalogPath,
     manifestPath,
+    warnings,
   };
 }
 
@@ -88,12 +102,44 @@ async function installBundledSharedSkills(skillsRoot: string): Promise<void> {
   await cp(sharedSource, path.join(skillsRoot, "shared"), { recursive: true, force: true });
 }
 
-async function installBundledRules(metaprojectRoot: string): Promise<void> {
+/**
+ * Force-copy the bundled rules over the project's installed copy, then clean
+ * up any rule this bundle no longer ships (see `retired-rules.ts` for why a
+ * plain `cp` can't do that itself).
+ *
+ * Returns one `RetiredRuleOutcome` per retired-rule file name found in the
+ * target directory (after the copy — so a rule retired in this very release
+ * is caught on the run that retires it, not the next one). A retired name
+ * absent from the target directory produces no outcome; that is the steady
+ * state once every installation has caught up.
+ */
+async function installBundledRules(metaprojectRoot: string): Promise<RetiredRuleOutcome[]> {
   const rulesSource = bundledRulesSourcePath();
+  const rulesTarget = path.join(metaprojectRoot, "rules", "core");
   if (!existsSync(rulesSource)) {
-    return;
+    return [];
   }
-  await cp(rulesSource, path.join(metaprojectRoot, "rules", "core"), { recursive: true, force: true });
+  await cp(rulesSource, rulesTarget, { recursive: true, force: true });
+  return removeUnmodifiedRetiredRules(rulesTarget);
+}
+
+async function removeUnmodifiedRetiredRules(rulesTarget: string): Promise<RetiredRuleOutcome[]> {
+  const outcomes: RetiredRuleOutcome[] = [];
+  for (const retired of RETIRED_RULES) {
+    const installedPath = path.join(rulesTarget, retired.fileName);
+    if (!existsSync(installedPath)) {
+      continue;
+    }
+    const content = await readFile(installedPath);
+    const hash = createHash("sha256").update(content).digest("hex");
+    if (retired.shippedSha256.includes(hash)) {
+      await unlink(installedPath);
+      outcomes.push({ fileName: retired.fileName, action: "removed" });
+    } else {
+      outcomes.push({ fileName: retired.fileName, action: "kept-modified" });
+    }
+  }
+  return outcomes;
 }
 
 async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: string): Promise<string> {
