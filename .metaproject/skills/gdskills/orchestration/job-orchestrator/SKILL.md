@@ -610,19 +610,14 @@ CONTEXT_RESULT:
 into every subsequent dispatch prompt:
 
 ```
-CONTEXT_LOCATION: <JOBS_ROOT>/<job-name>/context_v<N>.md
+CONTEXT_LOCATION: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
-**Context versioning:** never overwrite an existing context file — write snapshots as
-`context_v1.md`, `context_v2.md`, and so on. Version 1 comes from the first collect in
-2.3; each update writes the next number.
-
-The current version is the highest-numbered file in the package, which is a fact on
-disk that any session can read:
-
-```bash
-ls .metaproject/jobs/<job-name>/context_v*.md
-```
+**Context versioning:** the file lives at this one fixed path and is overwritten in
+place on every update — never written to a new, version-numbered filename. Each
+collect/update instead increments the `Version` field in the document's own
+"Document Metadata" table and appends a line to its `Update Log` section (see
+context-collector SKILL.md §4.1, §4.3); that table on disk is the current version.
 
 `state.json` does not carry a context pointer and nothing writes one — do not tell a
 sub-agent to look for one. The orchestrator passes the path (Constructing Subagent
@@ -645,7 +640,7 @@ Task({
     JOB_NAME: <job-name>
     JOBS_ROOT: <JOBS_ROOT>
     PROJECT_DIR: <project_dir>
-    CONTEXT_VERSION: <current version + 1>  ← write to context_v<N+1>.md
+    CONTEXT_VERSION: <current version + 1>  ← written into ai/context.md's Version field; file overwritten in place
 
     DATA:
       TASK_DESCRIPTION: <original task description>
@@ -792,7 +787,7 @@ Task({
     - branch:           <branch name>
     - package_manager:  <pm>
     - run_command:      <runner>
-    - context_path:     <JOBS_ROOT>/<job-name>/context_v<N>.md
+    - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
 
     ## Required response
     Begin with STATUS: <STATUS>. Return the test_case_specs for this task and
@@ -820,7 +815,7 @@ Task({
     - run_command:      <runner>
     - issue_number:     <N>
     - job_name:         <job-name>
-    - context_path:     <JOBS_ROOT>/<job-name>/context_v<N>.md
+    - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
 
     ## Required response format (compact — no inline JSON)
     STATUS: DONE
@@ -1095,7 +1090,7 @@ Task({
     flags:            <selected flags, e.g. --backend --security --testing-practices>
     commit_range:     <BASE_SHA>..HEAD
     issue_url:        <issue URL, when the job has one — enables the Stage 1 spec gate>
-    context_doc:      <JOBS_ROOT>/<job-name>/context_v<N>.md
+    context_doc:      <JOBS_ROOT>/<job-name>/ai/context.md
     verification_mode: annotate
     managed_review:   { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
     is_fix_round:     <true on any round after the first>
@@ -1514,7 +1509,7 @@ JOB_NAME: <job-name>
 BRANCH: <feature_branch>
 BASE: <base_branch>
 ISSUE_NUMBER: <issue_number if available>
-CONTEXT_PATH: <JOBS_ROOT>/<job-name>/context_v<N>.md
+CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
 `pr-issue-documenter` will analyze the branch diff and produce a structured PR description (Summary + Changes by area + Key Files table). Use its output as the `body` for the PR.
@@ -1704,7 +1699,7 @@ the dispatch prompt, or it does not reach the sub-agent:
 ```
 branch:      { name, worktree_path, merge_base, package_manager, run_command }
 analysis:    { total_tasks, tasks, dependency_order }
-context_doc: the path to the highest-numbered context_v<N>.md in the package
+context_doc: the path to the job's ai/context.md
 review:      the current round's findings — the durable copy is the managed review
              package, not this
 ```
