@@ -1,3 +1,59 @@
 # Flow Journal
 
 - 2026-09-11T16:54:12.310Z - flow created
+- 2026-09-11T17:05:51.065Z - task-added: T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis
+- 2026-09-11T17:05:51.186Z - task-added: T6: D1: prune unmodified retired bundled rules from installations
+- 2026-09-11T17:05:51.299Z - task-added: T7: D3: verification skills use keryx health/test run and a bound of 3
+- 2026-09-11T17:05:51.420Z - task-added: T8: D4: one job context path, <job>/ai/context.md
+- 2026-09-11T17:05:51.550Z - task-added: T9: D5: remove dead references in shipped skills and rules
+- 2026-09-11T17:05:51.669Z - task-added: T10: D5: xref resolves against the installed layout and sweeps rules
+- 2026-09-11T17:05:51.779Z - task-added: T11: D6: compatible_harnesses includes claude, categories match catalog, both checked
+- 2026-09-11T17:05:51.891Z - task-added: T12: D7: rendered core/platform skill descriptions read as triggers
+- 2026-09-11T17:05:52.159Z - task-added: T13: D8: heading-only entrypoint body falls back instead of an empty mirror
+- 2026-09-11T17:05:52.451Z - task-added: T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier
+- 2026-09-11T17:05:52.576Z - task-added: T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns
+- 2026-09-11T17:05:52.696Z - task-added: T16: D11: stack labels on stack-specific rules and an honest rules README
+- 2026-09-11T17:05:52.831Z - task-added: T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status
+- 2026-09-11T17:06:07.635Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification runs after every fix task
+- 2026-09-11T17:06:07.916Z - task-depends-set: T4: dependsOn T3 (was empty) — review runs on the verified branch
+- 2026-09-11T17:06:08.123Z - frozen: 16 criteria; checksum recorded
+- 2026-09-11T17:06:08.249Z - started
+- 2026-09-11T17:06:08.372Z - task-done: T1: Collect remaining context
+- 2026-09-11T17:06:08.500Z - task-done: T2: Implement per plan
+- 2026-09-11T17:06:48.522Z - task-attempt: T5: started (attempt 1) — 252-T5 wave W1
+- 2026-09-11T17:06:48.647Z - task-attempt: T7: started (attempt 1) — 252-T7 wave W1
+- 2026-09-11T17:06:48.764Z - task-attempt: T12: started (attempt 1) — 252-T12 wave W1
+- 2026-09-11T17:06:49.081Z - task-attempt: T13: started (attempt 1) — 252-T13 wave W1
+- 2026-09-11T17:06:49.201Z - task-attempt: T14: started (attempt 1) — 252-T14 wave W1
+- 2026-09-11T17:06:49.322Z - task-attempt: T16: started (attempt 1) — 252-T16 wave W1
+- 2026-09-11T17:08:36.358Z - task-attempt: T8: started (attempt 1) — 252-T8 pulled into W1, no file overlap
+- 2026-09-11T17:10:15Z - BASELINE (AC15): worktree at c44f5f0f (main bb0e36b4 + program docs), `bun test` 9335 pass / 20 skip / 0 fail across 734 files (339.7s); `bunx tsc --noEmit -p .` clean. The run started before W1 workers began writing (dispatch 17:06:48) and finished while they worked; with 0 failures it is still a valid "no failure absent from baseline" reference. Raw: .metaproject/data/gdctx/raw/2026-09-11T17-10-01-182Z-b76487_run.log
+- 2026-09-11T17:11:32.069Z - task-done: T13: D8: heading-only entrypoint body falls back instead of an empty mirror
+- 2026-09-11T17:12:26.257Z - task-done: T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis
+- 2026-09-11T17:13:16.060Z - task-attempt: T16: started (attempt 2) — 252-T16b: detector-backed playwright/sql/http-server tags
+- 2026-09-11T17:14:00Z - COMMIT ATTRIBUTION: T16's renderProjectRulesReadme change in src/lib/templates.ts landed in T13's commit 65e9dd99 (both workers edited templates.ts; the orchestrator staged the whole file for T13). a3df058c carries the README output and rule labels. Not rewritten (workers active); to be stated in the PR body. From here, a file shared by two running tasks is committed only after both finish.
+- 2026-09-11T17:14:00.901Z - task-attempt: T6: started (attempt 1) — 252-T6 (T5 done, no file overlap with running tasks)
+- 2026-09-11T17:14:01.023Z - task-attempt: T9: started (attempt 1) — 252-T9 (T5 done, no file overlap with running tasks)
+- 2026-09-11T17:14:55.979Z - task-done: T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier
+- 2026-09-11T17:14:56.099Z - task-added: T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout
+- 2026-09-11T17:14:56.216Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — T18 added: skills that contradict the rewritten documentation rules
+- 2026-09-11T17:15:11.345Z - task-done: T8: D4: one job context path, <job>/ai/context.md
+- 2026-09-11T17:17:42.118Z - task-done: T12: D7: rendered core/platform skill descriptions read as triggers
+- 2026-09-11T17:17:42.356Z - task-attempt: T17: started (attempt 1) — 252-T17 after T12
+- 2026-09-11T17:17:42Z - NOTE for flow 253: T12 found the 'Use when <imperative>' description pattern on ~20 more BUNDLED_GDSKILLS entries outside the 11 rendered skills (reviewer-skill-creator, agent-entrypoint-distiller, claude-md-management, job-orchestrator, flow-orchestrator, job-documenter, context-collector, code-verifier, feature-dev, review-verifier, code-*-review, security-audit, perf-check, test-gen, tests-creator, deploy, pr-issue-documenter, changelog, docpack-orchestrator). Out of AC9's frozen scope; the 253 description lint must cover it.
+- 2026-09-11T17:18:17.493Z - task-done: T16: D11: stack labels on stack-specific rules and an honest rules README
+- 2026-09-11T17:20:40.638Z - task-attempt: T6: started (attempt 2) — 252-T6b: print install warnings in init/update/skills install
+- 2026-09-11T17:21:47.229Z - task-done: T7: D3: verification skills use keryx health/test run and a bound of 3
+- 2026-09-11T17:21:47Z - NOTE for flow 253/254: T7 found feature-dev, hookify and deploy also hardcode 'npx tsc --noEmit' (out of D3 scope); tests-creator/output-contract.schema.json:75 keeps 'npx vitest run src/' as an illustrative run_command example. T7 also ran 'health run --help' and 'test run --help', which executed for real and rewrote .metaproject/data/health and data/testing artifacts; those are regenerable and not committed.
+- 2026-09-11T17:23:58.024Z - task-done: T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status
+- 2026-09-11T17:26:10.296Z - task-done: T9: D5: remove dead references in shipped skills and rules
+- 2026-09-11T17:26:10.417Z - task-attempt: T10: started (attempt 1) — 252-T10 after T9
+- 2026-09-11T17:26:10.667Z - task-attempt: T15: started (attempt 1) — 252-T15 after T9
+- 2026-09-11T17:26:10.899Z - task-attempt: T18: started (attempt 1) — 252-T18 after T9
+- 2026-09-11T17:27:20.666Z - task-done: T6: D1: prune unmodified retired bundled rules from installations
+- 2026-09-11T17:35:49.299Z - task-done: T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns
+- 2026-09-11T17:37:18.418Z - task-done: T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout
+- 2026-09-11T17:53:56.304Z - task-done: T10: D5: xref resolves against the installed layout and sweeps rules
+- 2026-09-11T17:53:56.488Z - task-attempt: T11: started (attempt 1) — 252-T11 after T10 and T7
+- 2026-09-11T17:53:56Z - NOTE for flow 253: after T10, orchestrator-prompt.md files are not swept by xref; bare skills/gdskills/... and 2-segment skills/<category>/<name> citations are still accepted (installed-equivalent) but inconsistent with the .metaproject/... spelling used elsewhere.
+- 2026-09-11T18:05:21.283Z - task-done: T11: D6: compatible_harnesses includes claude, categories match catalog, both checked

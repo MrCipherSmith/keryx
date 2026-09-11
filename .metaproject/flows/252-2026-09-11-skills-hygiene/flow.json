@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,14 +7,14 @@
   "id": "252",
   "slug": "skills-hygiene",
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T16:54:12.310Z",
+  "updatedAt": "2026-09-11T18:05:21.283Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:1d78e3f2d0b220c5a5f374eea1c6b0d4052b3a3b39012f567ad2104544862345",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,34 +26,676 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "defect map verified by dispatch 252-T1, see defect-map.md"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by per-defect tasks T5-T17"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13",
+        "T14",
+        "T15",
+        "T16",
+        "T17",
+        "T18"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:48.521Z",
+            "outcome": "started",
+            "detail": "252-T5 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "D1: prune unmodified retired bundled rules from installations",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-11T17:14:00.901Z",
+            "outcome": "started",
+            "detail": "252-T6 (T5 done, no file overlap with running tasks)"
+          },
+          {
+            "at": "2026-09-11T17:20:40.638Z",
+            "outcome": "started",
+            "detail": "252-T6b: print install warnings in init/update/skills install"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "D3: verification skills use keryx health/test run and a bound of 3",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:48.647Z",
+            "outcome": "started",
+            "detail": "252-T7 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "D4: one job context path, <job>/ai/context.md",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:08:36.358Z",
+            "outcome": "started",
+            "detail": "252-T8 pulled into W1, no file overlap"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "D5: remove dead references in shipped skills and rules",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:14:01.023Z",
+            "outcome": "started",
+            "detail": "252-T9 (T5 done, no file overlap with running tasks)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "D5: xref resolves against the installed layout and sweeps rules",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:26:10.416Z",
+            "outcome": "started",
+            "detail": "252-T10 after T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "D6: compatible_harnesses includes claude, categories match catalog, both checked",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10",
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:53:56.488Z",
+            "outcome": "started",
+            "detail": "252-T11 after T10 and T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "D7: rendered core/platform skill descriptions read as triggers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:48.764Z",
+            "outcome": "started",
+            "detail": "252-T12 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "D8: heading-only entrypoint body falls back instead of an empty mirror",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:49.081Z",
+            "outcome": "started",
+            "detail": "252-T13 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "D9: one unhandled-rejection rule, one documentation layout, model choice via review tier",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:49.201Z",
+            "outcome": "started",
+            "detail": "252-T14 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "D10: git-concurrency rule, wired into orchestrators, destructive-git patterns",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:26:10.667Z",
+            "outcome": "started",
+            "detail": "252-T15 after T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "D11: stack labels on stack-specific rules and an honest rules README",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-11T17:06:49.322Z",
+            "outcome": "started",
+            "detail": "252-T16 wave W1"
+          },
+          {
+            "at": "2026-09-11T17:13:16.060Z",
+            "outcome": "started",
+            "detail": "252-T16b: detector-backed playwright/sql/http-server tags"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "D12: verifier describes what verify.ts checks; project-skill footer stops asserting status",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:17:42.356Z",
+            "outcome": "started",
+            "detail": "252-T17 after T12"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "D9b: prd-creator and feature-analyzer write the requirements-package-standard layout",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T14",
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T17:26:10.899Z",
+            "outcome": "started",
+            "detail": "252-T18 after T9"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
     {
       "at": "2026-09-11T16:54:12.310Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-11T17:05:51.065Z",
+      "event": "task-added",
+      "detail": "T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis"
+    },
+    {
+      "at": "2026-09-11T17:05:51.186Z",
+      "event": "task-added",
+      "detail": "T6: D1: prune unmodified retired bundled rules from installations"
+    },
+    {
+      "at": "2026-09-11T17:05:51.299Z",
+      "event": "task-added",
+      "detail": "T7: D3: verification skills use keryx health/test run and a bound of 3"
+    },
+    {
+      "at": "2026-09-11T17:05:51.420Z",
+      "event": "task-added",
+      "detail": "T8: D4: one job context path, <job>/ai/context.md"
+    },
+    {
+      "at": "2026-09-11T17:05:51.550Z",
+      "event": "task-added",
+      "detail": "T9: D5: remove dead references in shipped skills and rules"
+    },
+    {
+      "at": "2026-09-11T17:05:51.669Z",
+      "event": "task-added",
+      "detail": "T10: D5: xref resolves against the installed layout and sweeps rules"
+    },
+    {
+      "at": "2026-09-11T17:05:51.779Z",
+      "event": "task-added",
+      "detail": "T11: D6: compatible_harnesses includes claude, categories match catalog, both checked"
+    },
+    {
+      "at": "2026-09-11T17:05:51.891Z",
+      "event": "task-added",
+      "detail": "T12: D7: rendered core/platform skill descriptions read as triggers"
+    },
+    {
+      "at": "2026-09-11T17:05:52.159Z",
+      "event": "task-added",
+      "detail": "T13: D8: heading-only entrypoint body falls back instead of an empty mirror"
+    },
+    {
+      "at": "2026-09-11T17:05:52.451Z",
+      "event": "task-added",
+      "detail": "T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier"
+    },
+    {
+      "at": "2026-09-11T17:05:52.576Z",
+      "event": "task-added",
+      "detail": "T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns"
+    },
+    {
+      "at": "2026-09-11T17:05:52.696Z",
+      "event": "task-added",
+      "detail": "T16: D11: stack labels on stack-specific rules and an honest rules README"
+    },
+    {
+      "at": "2026-09-11T17:05:52.831Z",
+      "event": "task-added",
+      "detail": "T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status"
+    },
+    {
+      "at": "2026-09-11T17:06:07.635Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification runs after every fix task"
+    },
+    {
+      "at": "2026-09-11T17:06:07.916Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — review runs on the verified branch"
+    },
+    {
+      "at": "2026-09-11T17:06:08.123Z",
+      "event": "frozen",
+      "detail": "16 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T17:06:08.249Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T17:06:08.372Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T17:06:08.500Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T17:06:48.522Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 252-T5 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:06:48.647Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 252-T7 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:06:48.764Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 252-T12 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:06:49.081Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 252-T13 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:06:49.201Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 252-T14 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:06:49.322Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 252-T16 wave W1"
+    },
+    {
+      "at": "2026-09-11T17:08:36.358Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 252-T8 pulled into W1, no file overlap"
+    },
+    {
+      "at": "2026-09-11T17:11:32.069Z",
+      "event": "task-done",
+      "detail": "T13: D8: heading-only entrypoint body falls back instead of an empty mirror"
+    },
+    {
+      "at": "2026-09-11T17:12:26.257Z",
+      "event": "task-done",
+      "detail": "T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis"
+    },
+    {
+      "at": "2026-09-11T17:13:16.060Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 2) — 252-T16b: detector-backed playwright/sql/http-server tags"
+    },
+    {
+      "at": "2026-09-11T17:14:00.901Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 252-T6 (T5 done, no file overlap with running tasks)"
+    },
+    {
+      "at": "2026-09-11T17:14:01.023Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 252-T9 (T5 done, no file overlap with running tasks)"
+    },
+    {
+      "at": "2026-09-11T17:14:55.979Z",
+      "event": "task-done",
+      "detail": "T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier"
+    },
+    {
+      "at": "2026-09-11T17:14:56.099Z",
+      "event": "task-added",
+      "detail": "T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout"
+    },
+    {
+      "at": "2026-09-11T17:14:56.216Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — T18 added: skills that contradict the rewritten documentation rules"
+    },
+    {
+      "at": "2026-09-11T17:15:11.345Z",
+      "event": "task-done",
+      "detail": "T8: D4: one job context path, <job>/ai/context.md"
+    },
+    {
+      "at": "2026-09-11T17:17:42.118Z",
+      "event": "task-done",
+      "detail": "T12: D7: rendered core/platform skill descriptions read as triggers"
+    },
+    {
+      "at": "2026-09-11T17:17:42.356Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 252-T17 after T12"
+    },
+    {
+      "at": "2026-09-11T17:18:17.493Z",
+      "event": "task-done",
+      "detail": "T16: D11: stack labels on stack-specific rules and an honest rules README"
+    },
+    {
+      "at": "2026-09-11T17:20:40.638Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 2) — 252-T6b: print install warnings in init/update/skills install"
+    },
+    {
+      "at": "2026-09-11T17:21:47.229Z",
+      "event": "task-done",
+      "detail": "T7: D3: verification skills use keryx health/test run and a bound of 3"
+    },
+    {
+      "at": "2026-09-11T17:23:58.024Z",
+      "event": "task-done",
+      "detail": "T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status"
+    },
+    {
+      "at": "2026-09-11T17:26:10.296Z",
+      "event": "task-done",
+      "detail": "T9: D5: remove dead references in shipped skills and rules"
+    },
+    {
+      "at": "2026-09-11T17:26:10.417Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 252-T10 after T9"
+    },
+    {
+      "at": "2026-09-11T17:26:10.667Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 252-T15 after T9"
+    },
+    {
+      "at": "2026-09-11T17:26:10.899Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 252-T18 after T9"
+    },
+    {
+      "at": "2026-09-11T17:27:20.666Z",
+      "event": "task-done",
+      "detail": "T6: D1: prune unmodified retired bundled rules from installations"
+    },
+    {
+      "at": "2026-09-11T17:35:49.299Z",
+      "event": "task-done",
+      "detail": "T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns"
+    },
+    {
+      "at": "2026-09-11T17:37:18.418Z",
+      "event": "task-done",
+      "detail": "T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout"
+    },
+    {
+      "at": "2026-09-11T17:53:56.304Z",
+      "event": "task-done",
+      "detail": "T10: D5: xref resolves against the installed layout and sweeps rules"
+    },
+    {
+      "at": "2026-09-11T17:53:56.488Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 252-T11 after T10 and T7"
+    },
+    {
+      "at": "2026-09-11T18:05:21.283Z",
+      "event": "task-done",
+      "detail": "T11: D6: compatible_harnesses includes claude, categories match catalog, both checked"
     }
   ]
 }
