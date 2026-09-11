@@ -37,7 +37,7 @@
 // W14 flow-019 fix): an abort mid-read yields `cancelled`, any other read
 // failure `malformed`.
 
-import { redactSensitiveText } from "../../../security/redact";
+import { redactSensitiveText } from "../../../security/service";
 import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mutation/guard";
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
