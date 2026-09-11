@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "252",
+  "slug": "keryx-shell-expired-grok-grant-sent-on-t",
+  "title": "keryx shell: expired grok grant sent on the readline path (K-013), saved provider keys leak into shell_exec (K-015), memory_search miss prints the absolute path (K-016)",
+  "status": "in-progress",
+  "createdAt": "2026-09-11T20:01:39.233Z",
+  "updatedAt": "2026-09-11T20:10:04.398Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:938fb92dafc8deda587264fa0b83dde0573f5162b2b9dd9c84e00d769d665cc1",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "K-013: refreshSavedGrants before the surface is chosen; no swallowed refresh in resolveTuiStartup",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "K-016: trail-absent miss as one short line, project-relative paths in other verdicts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-11T20:01:39.233Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-11T20:09:41.561Z",
+      "event": "frozen",
+      "detail": "4 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T20:09:41.683Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T20:10:02.589Z",
+      "event": "task-added",
+      "detail": "T5: K-013: refreshSavedGrants before the surface is chosen; no swallowed refresh in resolveTuiStartup"
+    },
+    {
+      "at": "2026-09-11T20:10:02.757Z",
+      "event": "task-added",
+      "detail": "T6: K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values"
+    },
+    {
+      "at": "2026-09-11T20:10:02.964Z",
+      "event": "task-added",
+      "detail": "T7: K-016: trail-absent miss as one short line, project-relative paths in other verdicts"
+    },
+    {
+      "at": "2026-09-11T20:10:03.140Z",
+      "event": "task-added",
+      "detail": "T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite"
+    },
+    {
+      "at": "2026-09-11T20:10:03.328Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T20:10:03.515Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T20:10:03.701Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T20:10:03.858Z",
+      "event": "task-done",
+      "detail": "T5: K-013: refreshSavedGrants before the surface is chosen; no swallowed refresh in resolveTuiStartup"
+    },
+    {
+      "at": "2026-09-11T20:10:04.041Z",
+      "event": "task-done",
+      "detail": "T6: K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values"
+    },
+    {
+      "at": "2026-09-11T20:10:04.213Z",
+      "event": "task-done",
+      "detail": "T7: K-016: trail-absent miss as one short line, project-relative paths in other verdicts"
+    },
+    {
+      "at": "2026-09-11T20:10:04.398Z",
+      "event": "task-done",
+      "detail": "T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite"
+    }
+  ]
+}

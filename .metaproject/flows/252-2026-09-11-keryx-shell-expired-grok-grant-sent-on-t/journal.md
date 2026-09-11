@@ -1,0 +1,16 @@
+# Flow Journal
+
+- 2026-09-11T20:01:39.233Z - flow created
+- 2026-09-11T20:09:41.561Z - frozen: 4 criteria; checksum recorded
+- 2026-09-11T20:09:41.683Z - started
+- 2026-09-11T20:10:02.589Z - task-added: T5: K-013: refreshSavedGrants before the surface is chosen; no swallowed refresh in resolveTuiStartup
+- 2026-09-11T20:10:02.757Z - task-added: T6: K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values
+- 2026-09-11T20:10:02.964Z - task-added: T7: K-016: trail-absent miss as one short line, project-relative paths in other verdicts
+- 2026-09-11T20:10:03.140Z - task-added: T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite
+- 2026-09-11T20:10:03.328Z - task-done: T1: Collect remaining context
+- 2026-09-11T20:10:03.515Z - task-done: T2: Implement per plan
+- 2026-09-11T20:10:03.701Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T20:10:03.858Z - task-done: T5: K-013: refreshSavedGrants before the surface is chosen; no swallowed refresh in resolveTuiStartup
+- 2026-09-11T20:10:04.041Z - task-done: T6: K-015: withhold saved-config credentials from shell_exec; KERYX_SHELL_PASS_SAVED_KEYS opt-in; masks keep real values
+- 2026-09-11T20:10:04.213Z - task-done: T7: K-016: trail-absent miss as one short line, project-relative paths in other verdicts
+- 2026-09-11T20:10:04.398Z - task-done: T8: Tests for K-013/K-015/K-016; changelog [Unreleased]; typecheck, lint, terminal suite

@@ -112,12 +112,25 @@ export function resolveShellRestrictedMasks(
   };
 }
 
-export async function resolveShellEnv(): Promise<Record<string, string>> {
-  const { applySavedApiKeys } = await import("../../lib/shell-config");
-  applySavedApiKeys();
+/**
+ * The environment a `shell_exec` command starts from (K-015).
+ *
+ * This used to load every provider key saved in `auth.json` into the env and hand
+ * the lot to each command: an agent that ran `env` printed the operator's DeepSeek,
+ * OpenRouter and xAI keys, none of which the session was using. A command now gets
+ * the operator's own environment minus every credential keryx set from its saved
+ * config. `KERYX_SHELL_PASS_SAVED_KEYS=1` restores the old behaviour for an operator
+ * whose scripts rely on it. The restricted-network sandbox still injects the real
+ * values at its proxy — see `resolveShellSpawn`.
+ */
+export async function resolveShellEnv(configDir?: string): Promise<Record<string, string>> {
+  const { envWithSavedApiKeys, savedCredentialEnvKeys } = await import("../../lib/shell-config");
+  const passSaved = process.env.KERYX_SHELL_PASS_SAVED_KEYS === "1";
+  const source = passSaved ? envWithSavedApiKeys(process.env, configDir) : process.env;
+  const withheld = passSaved ? new Set<string>() : savedCredentialEnvKeys();
   const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (typeof value === "string") env[key] = value;
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === "string" && !withheld.has(key)) env[key] = value;
   }
   return env;
 }
@@ -145,7 +158,10 @@ export async function resolveShellSpawn(
 
   let netClose: () => Promise<void> = async () => {};
   if (profile.network === "restricted") {
-    const masks = resolveShellRestrictedMasks(env, undefined, root);
+    // The proxy injects a masked credential's real value per allowed host, so it
+    // needs the saved keys the child's own env no longer carries (K-015).
+    const { envWithSavedApiKeys } = await import("../../lib/shell-config");
+    const masks = resolveShellRestrictedMasks(envWithSavedApiKeys(env), undefined, root);
     if (!masks.ok) return { ok: false, error: `shell_exec: ${masks.reason}` };
     const net = await setupNetworkRun(profile, {
       ...(masks.masks.length === 0 ? {} : { masks: masks.masks }),

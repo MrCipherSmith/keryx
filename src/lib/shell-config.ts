@@ -51,6 +51,27 @@ export interface ShellConfig {
   externalAgents?: unknown;
 }
 
+/**
+ * Env var names this process set from the saved config rather than inherited.
+ *
+ * keryx loads saved provider keys and grant tokens into its own `process.env` so
+ * its providers can find them. That makes them indistinguishable, afterwards, from
+ * a key the operator exported — and `shell_exec` used to hand the whole env to
+ * every command (K-015). Recording them where they are applied is the only place
+ * the difference is still known.
+ */
+const savedCredentialKeys = new Set<string>();
+
+/** Record env var names that were just set from the saved config. */
+export function noteSavedCredentialEnv(keys: Iterable<string>): void {
+  for (const key of keys) savedCredentialKeys.add(key);
+}
+
+/** Env var names this process set from the saved config (see `noteSavedCredentialEnv`). */
+export function savedCredentialEnvKeys(): ReadonlySet<string> {
+  return savedCredentialKeys;
+}
+
 /** Absolute path to the `auth.json` config file. */
 export function shellConfigPath(dir?: string): string {
   return path.join(keryxConfigDir(dir), "auth.json");
@@ -186,5 +207,6 @@ export function applySavedApiKeys(dir?: string): string[] {
   } catch {
     // best-effort — a failure just means the user re-enters the key this session
   }
+  noteSavedCredentialEnv(applied);
   return applied;
 }

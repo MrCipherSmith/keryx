@@ -1707,10 +1707,8 @@ export async function resolveTuiStartup(opts: {
   // Saved keys populate the env (env always wins); the saved provider+model
   // become the default selection when no `--provider` flag is given.
   const savedCfg = loadShellConfig(opts.configDir);
-  const { refreshProviderGrant } = await import("../lib/oauth/login");
-  const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
-  await refreshProviderGrant("grok", { fetch: oauthFetch }, opts.configDir).catch(() => undefined);
-  await refreshProviderGrant("github-copilot", { fetch: oauthFetch }, opts.configDir).catch(() => undefined);
+  // Stored grants are refreshed by the shell command before it picks a surface
+  // (`refreshSavedGrants`, K-013), so the readline surface gets it too.
   const appliedKeys = applySavedApiKeys(opts.configDir);
   const { providerArg, modelArg, baseUrl } = opts;
   if (providerArg !== undefined && modelArg !== undefined) {
@@ -2047,6 +2045,16 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // dispatches on the mode — agent → `launchTuiAgentShell`, chat → the chat
   // driver, which renders `ShellIO` through the same chrome and is driven by the
   // very `runShell` the readline fallback runs.
+  // Before any surface builds a provider from a stored grant (K-013). This ran
+  // only inside the TUI's start-up, so the readline surface — `--no-tui`,
+  // `--print`, every scripted run — sent an access token hours past its expiry.
+  {
+    const { refreshSavedGrants } = await import("../lib/oauth/login");
+    const oauthFetch = (input: string, init?: RequestInit) => globalThis.fetch(input, init);
+    for (const warning of await refreshSavedGrants({ fetch: oauthFetch }, runtime.cacheDir)) {
+      process.stderr.write(`keryx: ${warning}\n`);
+    }
+  }
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {
     const cwd = process.cwd();
