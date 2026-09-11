@@ -102,6 +102,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "description:trigger-phrase",
   "description:bare-imperative",
   "description:length",
+  "anatomy:sections",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
   "frontmatter:category",
@@ -529,6 +530,472 @@ export function bareImperativeOpening(description: string): string | undefined {
  * skill for.
  */
 export const MAX_DESCRIPTION_LENGTH = 1024;
+
+// ---------------------------------------------------------------------------
+// Anatomy sections (flow 257 T8, AC3)
+// ---------------------------------------------------------------------------
+//
+// The `description:*` family above judges the ROUTING clause in isolation. It
+// says nothing about the rest of the document, and three structural gaps slip
+// past every check above while a skill still routes fine and still "works" on
+// a lucky run:
+//
+//   - no disambiguation for the agent that already chose this skill and needs
+//     to know what it is NOT the tool for;
+//   - no catalogue of the specific ways an agent talks itself into skipping
+//     this skill's own rules — the exact failure mode a generic reminder to
+//     "be careful" cannot prevent, because it names nothing concrete;
+//   - no stated shape for "done" — a caller (a human, or an orchestrator
+//     reading a subagent's final line) has nothing to check the result
+//     against.
+//
+// Each of the three is defined below precisely enough that "does this skill
+// have it" is decidable by reading the file, not a judgment call — the same
+// bar `ALLOWED_DESCRIPTION_TRIGGER_PHRASES` and `BARE_IMPERATIVE_VERBS` above
+// hold themselves to: derived from what the 67 shipped skills that already do
+// this well actually wrote, not from an aspiration nothing on disk uses.
+
+/**
+ * The three anatomy sections this check requires, and the vocabulary the
+ * exemption maps below key their entries by. Not check ids on their own —
+ * every deficiency reports under the single `anatomy:sections` id, per AC3,
+ * with the finding's message naming which of these three is missing.
+ */
+export const ANATOMY_SECTIONS = ["trigger-not-for", "red-flags", "verification"] as const;
+
+export type AnatomySection = (typeof ANATOMY_SECTIONS)[number];
+
+/**
+ * DEFINITION 1 — trigger + "NOT for" clause.
+ *
+ * WHERE IT MAY LIVE: anywhere in the shipped document — the frontmatter
+ * `description` (as a trailing sentence of a single-line or block-scalar
+ * value) or the Markdown body (as a bullet, a sentence, or its own line). Both
+ * shapes ship today: 34 of the 35 skills that already have this clause carry
+ * it inside `description`, folded into the routing text an agent reads before
+ * ever opening the file (e.g. `review-architecture`'s `description: |` block
+ * ends "NOT for: style/naming preferences, …"); exactly one
+ * (`metaproject-security`) states it as body prose directly under the H1
+ * instead ("Use this skill for the `security` module, not for dependency CVEs
+ * …"). Restricting the check to `description` only would report that one
+ * skill as missing a disambiguation it already states in plain English one
+ * line into the file — a false positive this definition exists to avoid.
+ *
+ * ACCEPTED SPELLING: the literal phrase "not for" (case-insensitive — the
+ * shipped tree spells it "NOT for" every time, but nothing about the
+ * disambiguation depends on capitalisation, unlike the trigger-phrase check
+ * above whose whole point IS the exact opening words a harness pattern-
+ * matches). No other spelling ("not applicable to", "never for", "excludes")
+ * is accepted, for the same reason `ALLOWED_DESCRIPTION_TRIGGER_PHRASES`
+ * accepts only three phrases: a spelling nothing on disk uses is a guess, not
+ * a rule derived from the tree.
+ *
+ * This intentionally does NOT require the clause to sit inside the
+ * `description:trigger-phrase` clause specifically (i.e. literally following
+ * "Use when …") — `description:trigger-phrase` (above) already guarantees a
+ * trigger exists somewhere in the description; this check only adds "and did
+ * the document also say what it is not for", wherever that statement lives.
+ */
+const NOT_FOR_CLAUSE_PATTERN = /not for/i;
+
+/** Whether `text` (the whole document: frontmatter + body) states a "NOT for" disambiguation. */
+export function hasNotForClause(text: string): boolean {
+  return NOT_FOR_CLAUSE_PATTERN.test(text);
+}
+
+/**
+ * DEFINITION 2 — Red Flags / rationalization table.
+ *
+ * HEADING SPELLINGS: a Markdown heading (`#` through `####`) whose text
+ * contains, case-insensitively, "red flag" (matches "Red Flags", "Red Flags
+ * Table", and the singular "Red Flag") or "rationali" (matches
+ * "Rationalization"/"Rationalisation", either spelling). Both stems are
+ * already shipped headings — "Red Flags" (11 skills), "Red Flags Table" (4
+ * skills, all `review-*`) — and matched by heading text rather than by an
+ * exact string so a heading such as `## Red Flags — Stop and re-read this
+ * skill if you are thinking:` (task-implementer, feature-dev, issue-analyzer)
+ * still counts.
+ *
+ * WHAT MAKES IT A TABLE (OR A TWO-COLUMN LIST): the heading alone is not
+ * enough — `job-orchestrator` has two `### Red Flag` headings, and each is
+ * one bolded rationalization quote followed by one paragraph of rebuttal,
+ * scattered numbers of paragraphs apart under unrelated parent sections. That
+ * is a single inline catch, not the consolidated reference table this check
+ * requires, and it must not satisfy the same bar a real table does. So the
+ * heading's own section (every line up to the next heading at the same or a
+ * shallower level) must additionally contain either:
+ *
+ *   - a Markdown table with at least `ANATOMY_RED_FLAGS_MIN_ROWS` DATA rows
+ *     (the header row itself does not count), or
+ *   - at least `ANATOMY_RED_FLAGS_MIN_ROWS` consecutive two-column bullet
+ *     rows (`- <quote> — <why>`) — no shipped skill uses this shape today,
+ *     but AC3 names it as an accepted alternative to a table, so a future
+ *     skill that lists rationalizations as bullets rather than a `|…|…|`
+ *     table is not forced into table syntax just to pass this check.
+ *
+ * WHY 3 ROWS: every genuine shipped table has at least 4 data rows
+ * (`stack-advisor`'s is the shortest, at 4; `review-logic` and
+ * `review-performance` both have 6). Three sits one below that observed floor
+ * — high enough that a single scattered callout (one row, by construction)
+ * cannot pass, low enough that no compliant skill on the tree today is
+ * pushed into non-compliance by a threshold picked too high. It is not "the
+ * smallest number that rules out one row": two would already do that. Three
+ * is chosen so the bar reads as "a handful of ways this goes wrong", plural
+ * in the ordinary sense, rather than the bare minimum that defeats a single
+ * counterexample.
+ */
+export const ANATOMY_RED_FLAGS_MIN_ROWS = 3;
+
+const RED_FLAGS_HEADING_PATTERN = /^(#{1,4})\s.*(red flag|rationali)/i;
+const MARKDOWN_HEADING_PATTERN = /^(#{1,4})\s/;
+const TABLE_ROW_PATTERN = /^\|.*\|\s*$/;
+const TABLE_SEPARATOR_PATTERN = /^\|[\s:|-]+\|\s*$/;
+const TWO_COLUMN_BULLET_PATTERN = /^-\s+\S.*(—|--|:).+\S/;
+
+/** Every line of `text` from just after `start` up to the next heading at `level` or shallower. */
+function sectionBody(lines: readonly string[], start: number, level: number): readonly string[] {
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    const heading = MARKDOWN_HEADING_PATTERN.exec(line);
+    if (heading !== null && (heading[1] ?? "").length <= level) break;
+    out.push(line);
+  }
+  return out;
+}
+
+/** Whether `text` carries a Red Flags / rationalization table, per the definition above. */
+export function hasRedFlagsSection(text: string): boolean {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const heading = RED_FLAGS_HEADING_PATTERN.exec(lines[i] ?? "");
+    if (heading === null) continue;
+    const level = (heading[1] ?? "").length;
+    const body = sectionBody(lines, i, level);
+    const tableRows = body.filter((line) => TABLE_ROW_PATTERN.test(line) && !TABLE_SEPARATOR_PATTERN.test(line));
+    const dataRows = Math.max(0, tableRows.length - 1); // the first table row is the header.
+    const bulletRows = body.filter((line) => TWO_COLUMN_BULLET_PATTERN.test(line));
+    if (dataRows >= ANATOMY_RED_FLAGS_MIN_ROWS || bulletRows.length >= ANATOMY_RED_FLAGS_MIN_ROWS) return true;
+  }
+  return false;
+}
+
+/**
+ * DEFINITION 3 — Verification / exit-criteria / STATUS section.
+ *
+ * HEADING SPELLINGS: a Markdown heading (`#` through `####`) whose text
+ * contains, case-insensitively, "verification" or "exit criteria" (hyphen or
+ * space) ANYWHERE in the heading, not only at its start — `flow-orchestrator`
+ * ships `## Phase 3: Verification And Review` and `task-implementer` ships a
+ * bare `## Verification`; both must count, so the pattern is not anchored
+ * past the `#` marks. A heading containing only the bare word "status"
+ * ("Status Updates", "Status line (first line of response)") does NOT count
+ * on its own — those are formatting notes about where a line goes, not a
+ * statement of what "done" looks like, and admitting them would make this
+ * leg of the check nearly vacuous (half the `review-*` skills have a "Status
+ * line" heading purely by formatting convention).
+ *
+ * WHAT ELSE COUNTS, PER THE TASK'S OWN CONTENT LIST: a heading is not the only
+ * shape this repository already uses for "what done looks like":
+ *
+ *   - the STATUS CONTRACT LINE for subagent skills — a line, once leading
+ *     Markdown decoration (`*`, `` ` ``, whitespace) is stripped, of the exact
+ *     shape `STATUS: <UPPER_CASE_TOKEN>` (e.g. `STATUS: DONE`,
+ *     `STATUS: BLOCKED`). This is the literal first-line-of-response contract
+ *     `code-verifier`, `context-collector`, `tests-creator` and
+ *     `job-orchestrator` all document, and for a skill dispatched only as a
+ *     subagent it plays exactly the role a "## Verification" heading plays
+ *     for a skill a user runs directly: a finite, checkable set of terminal
+ *     states. Matched by the CAPITALISED form only — a YAML field such as
+ *     `status: pass | fail | skipped` describing some OTHER thing's outcome
+ *     (a single check's result, a job step's state) is not this skill's own
+ *     reporting contract, and the shipped convention already reserves
+ *     upper-case `STATUS:` for exactly this purpose;
+ *   - an EXPLICIT EXIT-CRITERIA LIST in the shape the Phase-subagent family
+ *     (`autodoc-analyst` and its siblings) uses instead of a prose contract:
+ *     an Output Contract's `status:` field enumerating its own terminal
+ *     values with `|`, e.g. `status: "DONE" | "DONE_WITH_CONCERNS" |
+ *     "NEEDS_CONTEXT"`. This is the same information the STATUS line encodes
+ *     — a finite named set of outcomes — spelled as a YAML enum because the
+ *     subagent's contract IS a YAML block, not a prose response line.
+ *
+ * A bare checkbox list (`- [ ] …`) is deliberately NOT accepted as its own
+ * qualifying shape here: several shipped skills use `- [ ]` purely for a
+ * WORKFLOW progress tracker ("Phase 1: …", "Phase 2: …"), which is not an
+ * exit criterion — it says what to do, not when the skill is done. Widen this
+ * only if a shipped skill needs a genuine checkbox-shaped exit list that none
+ * of the three shapes above already covers, per the same "widen once the tree
+ * needs it" rule the trigger-phrase set states above.
+ */
+const VERIFICATION_HEADING_PATTERN = /^#{1,4}\s.*(verification|exit[\s-]criteria)/i;
+const STATUS_CONTRACT_LINE_PATTERN = /^[\s*`]*STATUS:\s*[A-Z_]/;
+// Requires the FIRST alternative to be a quoted, all-caps token — the shape
+// `autodoc-analyst` and its siblings use for their own terminal states
+// (`status: "DONE" | "DONE_WITH_CONCERNS" | "NEEDS_CONTEXT"`). A lowercase,
+// unquoted enum such as `status: pass | fail | skipped` (a single check's
+// result, not the skill's own exit state — see the comment above) must NOT
+// match, so the first alternative is anchored to `"UPPER_CASE"`.
+const STATUS_CONTRACT_ENUM_PATTERN = /^[\s*`]*status:\s*"[A-Z][A-Z0-9_]*"\s*\|/;
+
+/** Whether `text` carries a Verification / exit-criteria / STATUS section, per the definition above. */
+export function hasVerificationSection(text: string): boolean {
+  for (const line of text.split("\n")) {
+    if (
+      VERIFICATION_HEADING_PATTERN.test(line) ||
+      STATUS_CONTRACT_LINE_PATTERN.test(line) ||
+      STATUS_CONTRACT_ENUM_PATTERN.test(line)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** What each `AnatomySection` reports as, when a finding names it. */
+const ANATOMY_SECTION_LABELS: Record<AnatomySection, string> = {
+  "trigger-not-for": 'a trigger with a "NOT for" clause',
+  "red-flags": "a Red Flags / rationalization table",
+  verification: "a Verification / exit-criteria / STATUS section",
+};
+
+/**
+ * An exemption from one or more `anatomy:sections` findings, with the reason
+ * a human can check.
+ */
+export interface AnatomySectionExemption {
+  /** Which of the three sections this entry excuses — never all-purpose. */
+  readonly sections: readonly AnatomySection[];
+  /** Why, stated so a reviewer can tell a real reason from a rubber stamp. */
+  readonly reason: string;
+}
+
+/**
+ * PERMANENT exemptions — never expected to empty out.
+ *
+ * Every entry here is a Phase subagent: dispatched exactly once, by exactly
+ * one orchestrator, at a fixed point in that orchestrator's pipeline, and
+ * never by a user typing a request or an agent choosing among skills by
+ * description. The `trigger-not-for` section — a disambiguation aimed at
+ * whoever is CHOOSING this skill from a list — has no audience for a skill
+ * nothing ever chooses; the caller already decided by writing `Task({
+ * subagent_type: "…", … })` with this skill's name literally in the dispatch.
+ *
+ * This does NOT exempt a Phase subagent from `red-flags` or `verification` —
+ * AC9 requires every workflow skill to earn both outright, and a subagent
+ * being un-invocable by a user says nothing about whether ITS OWN failure
+ * modes are documented or its own output has a checkable shape. Ten of these
+ * twelve are missing `red-flags` today and are carried in
+ * `PENDING_ANATOMY_BACKFILL` below (owed to T14, the planning-category
+ * backfill), not exempted here.
+ *
+ * What a Phase subagent must still have, in place of the exempted section:
+ * every one of the twelve already ships an Iron Laws table (its equivalent of
+ * Red Flags — firm rules rather than named rationalizations) and an Output
+ * Contract with an explicit `status:` enum (its equivalent of Verification —
+ * see `hasVerificationSection`'s third bullet above), so the exemption trades
+ * one document shape for another rather than for nothing.
+ *
+ * Non-vacuous today in name only: all twelve already carry a "NOT for" clause
+ * in their `description` regardless (see `hasNotForClause` — none of the
+ * twelve appear in the "missing NOT-for" set the shipped-tree survey
+ * produced), so this map currently excuses zero live findings. It is kept
+ * because the exemption is a statement of POLICY — a Phase subagent is
+ * allowed to drop that clause without becoming non-compliant — not a patch
+ * for a defect on today's tree, the same distinction `GENERATED_PATH_ROOTS`
+ * draws above ("an allowance is not an exemption from the check; it is a
+ * statement that the referent exists in a place this sweep cannot see").
+ */
+export const PERMANENT_ANATOMY_EXEMPTIONS: ReadonlyMap<string, AnatomySectionExemption> = new Map([
+  [
+    "planning/autodoc-analyst",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 2 subagent dispatched only by autodoc-orchestrator, one instance per module; never chosen by a user from a description, so the description needs no user-facing NOT-for disambiguation. Its Iron Laws table and Output Contract status enum are the discipline that substitutes for it.",
+    },
+  ],
+  [
+    "planning/autodoc-architect",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 3 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-assembler",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 5 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-scanner",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 1 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-writer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 4 subagent dispatched only by autodoc-orchestrator, one instance per section; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/consistency-checker",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 5 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/planner",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 6 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/problem-definer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 1 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/project-discovery",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 0 subagent dispatched only by gproject-orchestrator, always called through it; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/spec-writer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 4 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/stack-advisor",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 2 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/patterns-researcher",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 3 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+]);
+
+/**
+ * PENDING exemptions — flow 257's own backfill debt, and expected to reach
+ * empty.
+ *
+ * Every entry here names a skill this sweep would otherwise fail today, and a
+ * REASON that must name the flow-257 task doing the backfill (T13, T14 or
+ * T15 — see `pendingReasonNamesBackfillTask` below, which a test asserts over
+ * every entry) so this map cannot quietly turn into a second permanent
+ * exemption list by omission. T3 (flow 257's final verification task) checks
+ * this map is EMPTY once T13-T15 land; until then it is what keeps the
+ * shipped tree's `anatomy:sections` finding count at zero while the backfill
+ * is still in flight.
+ *
+ * Grouped by the task that owns the fix:
+ *   - T13 — quality-category skills;
+ *   - T14 — platform, planning and orchestration-category skills (this is
+ *     also where the ten Phase subagents missing `red-flags` live, since they
+ *     ship under `planning/`);
+ *   - T15 — review-category skills, plus `core/reviewer-skill-creator`
+ *     (shipped under `core/`, not `review/`, but its whole subject is
+ *     authoring reviewer skills — closer to T15's remit than to T14's
+ *     "platform, planning, orchestration" one; flagged here rather than
+ *     silently folded in, since the task split names categories that do not
+ *     quite cover it).
+ */
+export const PENDING_ANATOMY_BACKFILL: ReadonlyMap<string, AnatomySectionExemption> = new Map([
+  // --- T13: quality ----------------------------------------------------
+  ["quality/commit", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/changelog", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/db-migrate", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/dependency-update", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
+  ["quality/deploy", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
+  ["quality/perf-check", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/pr", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/pr-issue-documenter", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/push", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/security-audit", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/test-gen", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+  ["quality/tests-creator", { sections: ["trigger-not-for", "red-flags"], reason: "T13 backfill (quality skills)" }],
+  ["quality/metaproject-security", { sections: ["red-flags", "verification"], reason: "T13 backfill (quality skills)" }],
+
+  // --- T14: platform, planning, orchestration ---------------------------
+  ["platform/agent-entrypoint-distiller", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["platform/claude-md-management", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["platform/hookify", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+
+  ["planning/autodoc-analyst", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/autodoc-architect", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/autodoc-assembler", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/autodoc-scanner", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/autodoc-writer", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/autodoc-orchestrator", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/consistency-checker", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/planner", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/problem-definer", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/project-discovery", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/patterns-researcher", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills) — Iron Laws exist; Red Flags does not yet" }],
+  ["planning/docpack-review", { sections: ["red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/docpack-orchestrator", { sections: ["red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/brainstorm", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/interview", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/interviewer", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["planning/prd-creator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+
+  ["orchestration/code-verifier", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/context-collector", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/feature-analyzer", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/feature-dev", { sections: ["trigger-not-for", "verification"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/flow-orchestrator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/issue-analyzer", { sections: ["trigger-not-for"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/job-documenter", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T14 backfill (platform, planning, orchestration skills) — its `status: success | error` line reports the DOCUMENT's outcome, not this skill's own STATUS contract" }],
+  ["orchestration/job-orchestrator", { sections: ["trigger-not-for", "red-flags"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+  ["orchestration/task-implementer", { sections: ["trigger-not-for"], reason: "T14 backfill (platform, planning, orchestration skills)" }],
+
+  // --- T15: review, plus core/reviewer-skill-creator (see comment above) -
+  ["review/code-ai-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/code-learned-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/code-mobx-store-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/code-style-review", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-core-boundaries", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-flow-graph", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-frontend-conventions", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-layout", { sections: ["verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-regression", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["review/review-testing-practices", { sections: ["trigger-not-for", "red-flags", "verification"], reason: "T15 backfill (review skills)" }],
+  ["core/reviewer-skill-creator", { sections: ["red-flags", "verification"], reason: "T15 backfill (review skills) — shipped under core/, not review/, but its subject is authoring reviewer skills" }],
+]);
+
+/** Every entry's reason must name the flow-257 task doing the backfill, or this map has quietly become a second permanent exemption list. */
+export function pendingReasonNamesBackfillTask(reason: string): boolean {
+  return /\bT1[345]\b/.test(reason);
+}
 
 // ---------------------------------------------------------------------------
 // Cross-references
@@ -1027,6 +1494,29 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
             );
           }
         }
+      }
+    }
+
+    // --- anatomy: trigger/NOT-for, Red Flags, Verification -----------------
+    //
+    // Runs over the whole document (`text`), not only the frontmatter parsed
+    // above — `hasNotForClause` explicitly reads body prose too (see its
+    // definition comment). Keyed by `${category}/${skill}` because that is
+    // the same key `catalogued` (above) and `BUNDLED_GDSKILLS` use, and
+    // because a skill's category is exactly what routes it to a T13/T14/T15
+    // pending entry.
+    {
+      const exemptionKey = `${category}/${skill}`;
+      const permanent = PERMANENT_ANATOMY_EXEMPTIONS.get(exemptionKey);
+      const pending = PENDING_ANATOMY_BACKFILL.get(exemptionKey);
+      const missing: AnatomySection[] = [];
+      if (!hasNotForClause(text)) missing.push("trigger-not-for");
+      if (!hasRedFlagsSection(text)) missing.push("red-flags");
+      if (!hasVerificationSection(text)) missing.push("verification");
+      for (const section of missing) {
+        if (permanent?.sections.includes(section) === true) continue;
+        if (pending?.sections.includes(section) === true) continue;
+        add("anatomy:sections", null, `missing ${ANATOMY_SECTION_LABELS[section]}.`);
       }
     }
 

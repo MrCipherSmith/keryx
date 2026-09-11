@@ -23,17 +23,24 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  ANATOMY_RED_FLAGS_MIN_ROWS,
   BUNDLED_SKILL_CHECKS,
   GENERATED_PATH_ROOTS,
   KNOWN_EXTERNAL_SKILL_REFERENCES,
   KNOWN_SKILL_COMPANION_DOCUMENTS,
+  PENDING_ANATOMY_BACKFILL,
+  PERMANENT_ANATOMY_EXEMPTIONS,
   type BundledSkillCheck,
   bareImperativeOpening,
   bundledSkillDocuments,
   bundledSkillFiles,
   defaultBundledRoot,
   evaluateBundledTree,
+  hasNotForClause,
+  hasRedFlagsSection,
+  hasVerificationSection,
   homePathOffenders,
+  pendingReasonNamesBackfillTask,
   personaOffenders,
   renderBundledEvaluation,
 } from "./bundled-eval";
@@ -326,13 +333,119 @@ VIOLATION description:length — the description above is over 1024 characters.
 `;
 
 /**
+ * Flow 257 T8 — the `anatomy:sections` family. Each fixture below trips
+ * exactly one of the three anatomy checks; `CONTROL_SKILL`'s rewritten body
+ * (below) is the control that passes all three at once, alongside every
+ * other check this file exercises.
+ */
+
+/**
+ * No "NOT for" anywhere — trips exactly `trigger-not-for`. Carries a
+ * qualifying Red Flags table and a Verification heading so the other two
+ * anatomy legs stay silent, proving the three are independent.
+ */
+const NO_NOT_FOR_SKILL = `---
+name: no-not-for-example
+description: Use when a fixture must prove the anatomy sweep catches a document with no NOT-for disambiguation anywhere in it.
+metadata:
+  version: 1.0.0
+---
+
+# Missing Disambiguation Fixture
+
+VIOLATION anatomy:sections (trigger-not-for) — nothing in this document, not
+the description and not the body, ever says what this skill excludes.
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "This fixture doesn't need three rows" | \`ANATOMY_RED_FLAGS_MIN_ROWS\` requires at least three |
+| "One row would already prove the table works" | A single row reads as a scattered callout, not a table |
+| "The heading alone should be enough" | A heading with no table is what \`job-orchestrator\`'s two \`### Red Flag\` callouts ship, and must not pass |
+
+## Verification
+
+- [ ] This fixture trips only the \`trigger-not-for\` leg of \`anatomy:sections\`
+`;
+
+/**
+ * No Red Flags heading anywhere — trips exactly `red-flags`. The description
+ * carries a NOT-for clause and the body a Verification heading, so those two
+ * legs stay silent.
+ */
+const NO_RED_FLAGS_SKILL = `---
+name: no-red-flags-example
+description: Use when a fixture must prove the anatomy sweep catches a document with no Red Flags table. NOT for anything real — this skill only exists to trip one check.
+metadata:
+  version: 1.0.0
+---
+
+# No Consolidated Warnings Fixture
+
+## Verification
+
+Nothing to verify — this fixture exists only to trip \`anatomy:sections\` on
+its missing Red Flags table.
+`;
+
+/**
+ * A Red Flags heading with a table below the row threshold — still trips
+ * `red-flags`, proving the check enforces the row count and not merely the
+ * heading's presence. Two data rows, one short of \`ANATOMY_RED_FLAGS_MIN_ROWS\`.
+ */
+const TOO_FEW_RED_FLAGS_ROWS_SKILL = `---
+name: too-few-red-flags-rows-example
+description: Use when a fixture must prove the row-count threshold is enforced, not just the heading. NOT for anything real.
+metadata:
+  version: 1.0.0
+---
+
+# Sparse Warnings Table Fixture
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "Two rows should already count" | \`ANATOMY_RED_FLAGS_MIN_ROWS\` is three |
+| "A heading with any table passes" | The single scattered callouts this check exists to reject also have "a table", of sorts, at one row |
+
+## Verification
+
+- [ ] Confirms two data rows still trips \`anatomy:sections\` (\`red-flags\`)
+`;
+
+/**
+ * No Verification/exit-criteria/STATUS content anywhere — trips exactly
+ * `verification`. The description carries a NOT-for clause and the body a
+ * qualifying Red Flags table, so those two legs stay silent.
+ */
+const NO_VERIFICATION_SKILL = `---
+name: no-verification-example
+description: Use when a fixture must prove the anatomy sweep catches a document with no Verification, exit-criteria, or STATUS content. NOT for anything real.
+metadata:
+  version: 1.0.0
+---
+
+# No Completion Contract Fixture
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "Two rows should be enough" | The check requires at least three |
+| "The heading alone should be enough" | A heading with no table must not pass |
+| "This fixture doesn't need a real table" | Fixtures are checked by the same code as the shipped tree |
+`;
+
+/**
  * The control. Correct in every respect the evaluator checks, and sitting in the
  * SAME fixture tree as the broken ones — so "the evaluator rejected the fixture"
  * cannot be satisfied by an evaluator that rejects everything it is shown.
  */
 const CONTROL_SKILL = `---
 name: control-example
-description: Use when validating that a structurally correct skill draws no findings, proving the sweep's checks are selective rather than a blanket failure.
+description: Use when validating that a structurally correct skill draws no findings, proving the sweep's checks are selective rather than a blanket failure. NOT for a fixture that is deliberately broken — see BROKEN_SKILL and its neighbors.
 metadata:
   version: 1.0.0
 ---
@@ -343,6 +456,20 @@ Reads \`.metaproject/skills/gdskills/quality/control-example/SKILL.md\` — the
 installed spelling, which resolves — and mentions \`review-logic\` without
 asking for it as a skill. Also names its own skill by directory only,
 \`skills/quality/control-example\`, the accepted bare form.
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "One finding proves the sweep works" | Every check needs both a fixture that fails and a control that passes |
+| "The control doesn't need real content" | It must survive every check introduced later, or it goes stale silently |
+| "Skipping Verification here is fine, it's a fixture" | \`anatomy:sections\` does not know this is a fixture |
+
+## Verification
+
+Every declared check must fire on at least one fixture in this file, and this
+control must draw no finding from any content check — only the deliberately
+uncatalogued \`catalog:registered\` finding.
 `;
 
 /**
@@ -501,6 +628,10 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "no-trigger-phrase", NO_TRIGGER_PHRASE_SKILL);
   writeSkill(fixtureRoot, "quality", "bare-imperative-example", BARE_IMPERATIVE_SKILL);
   writeSkill(fixtureRoot, "quality", "too-long-description", TOO_LONG_DESCRIPTION_SKILL);
+  writeSkill(fixtureRoot, "quality", "no-not-for-example", NO_NOT_FOR_SKILL);
+  writeSkill(fixtureRoot, "quality", "no-red-flags-example", NO_RED_FLAGS_SKILL);
+  writeSkill(fixtureRoot, "quality", "too-few-red-flags-rows-example", TOO_FEW_RED_FLAGS_ROWS_SKILL);
+  writeSkill(fixtureRoot, "quality", "no-verification-example", NO_VERIFICATION_SKILL);
   writeSkill(fixtureRoot, "quality", "control-example", CONTROL_SKILL);
   writeSkill(fixtureRoot, "quality", "build-drift-example", BUILD_ONLY_DEFECT_CANONICAL);
   writeSkillFile(
@@ -546,13 +677,14 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    // Seventeen skills: the original fourteen plus flow 257 T7's three
-    // `description:*` fixtures (no-trigger-phrase, bare-imperative-example,
-    // too-long-description), each shipping one plain SKILL.md.
-    expect(evaluation.skills).toBe(17);
-    // Nineteen documents: seventeen skills, plus `build-drift-example` and
-    // `harness-field-only` each also shipping a Codex build.
-    expect(evaluation.documents).toBe(19);
+    // Twenty-one skills: the original fourteen, flow 257 T7's three
+    // `description:*` fixtures, and T8's four `anatomy:sections` fixtures
+    // (no-not-for-example, no-red-flags-example, too-few-red-flags-rows-example,
+    // no-verification-example), each shipping one plain SKILL.md.
+    expect(evaluation.skills).toBe(21);
+    // Twenty-three documents: twenty-one skills, plus `build-drift-example`
+    // and `harness-field-only` each also shipping a Codex build.
+    expect(evaluation.documents).toBe(23);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -659,6 +791,120 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
     const control = findingsFor("control-example").filter((finding) => finding.check === "description:length");
     expect(control).toEqual([]);
+  });
+
+  // -------------------------------------------------------------------------
+  // Flow 257 T8: `anatomy:sections`
+  // -------------------------------------------------------------------------
+
+  test("a document with no NOT-for clause anywhere is rejected; the control passes", () => {
+    const found = findingsFor("no-not-for-example").filter((finding) => finding.check === "anatomy:sections");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("NOT for");
+
+    // Trips ONLY the trigger-not-for leg — its Red Flags table and
+    // Verification heading must stay silent, proving the three legs of
+    // `anatomy:sections` are independent.
+    expect(found[0]?.message).not.toContain("Red Flags");
+    expect(found[0]?.message).not.toContain("Verification");
+
+    const control = findingsFor("control-example").filter((finding) => finding.check === "anatomy:sections");
+    expect(control).toEqual([]);
+  });
+
+  test("a document with no Red Flags table is rejected", () => {
+    const found = findingsFor("no-red-flags-example").filter((finding) => finding.check === "anatomy:sections");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("Red Flags");
+  });
+
+  test("a Red Flags heading with fewer than the minimum rows still fails — the row count is enforced, not just the heading", () => {
+    const found = findingsFor("too-few-red-flags-rows-example").filter(
+      (finding) => finding.check === "anatomy:sections",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("Red Flags");
+    // Two rows in the fixture, one short of the threshold — pin the constant
+    // itself, not just its effect, so a change to the threshold is visible here.
+    expect(ANATOMY_RED_FLAGS_MIN_ROWS).toBe(3);
+  });
+
+  test("a document with no Verification / exit-criteria / STATUS content is rejected", () => {
+    const found = findingsFor("no-verification-example").filter((finding) => finding.check === "anatomy:sections");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("Verification");
+  });
+
+  test("hasNotForClause reads the whole document, description or body, not description alone", () => {
+    // `metaproject-security` is the one shipped skill that states its
+    // disambiguation as body prose rather than inside `description` — the
+    // reason this predicate is not scoped to the frontmatter.
+    expect(hasNotForClause("description: Use when doing X.\n\nUse this for Y, not for Z.")).toBe(true);
+    expect(hasNotForClause("description: Use when doing X, NOT for Y.")).toBe(true);
+    expect(hasNotForClause("description: Use when doing X.\n\nNo disambiguation here.")).toBe(false);
+  });
+
+  test("hasRedFlagsSection requires a heading AND a table or list of at least the minimum rows", () => {
+    const headingOnly = "## Red Flags\n\nJust a paragraph, no table.\n";
+    expect(hasRedFlagsSection(headingOnly)).toBe(false);
+
+    const oneRow = "## Red Flags\n| A | B |\n|---|---|\n| one | row |\n";
+    expect(hasRedFlagsSection(oneRow)).toBe(false);
+
+    const threeRows =
+      "## Red Flags\n| A | B |\n|---|---|\n| one | row |\n| two | row |\n| three | row |\n";
+    expect(hasRedFlagsSection(threeRows)).toBe(true);
+
+    // The two-column bullet-list alternative AC3 names, with no shipped
+    // example today: still accepted once it reaches the row threshold.
+    const bulletList = "## Red Flags\n- \"one\" — why\n- \"two\" — why\n- \"three\" — why\n";
+    expect(hasRedFlagsSection(bulletList)).toBe(true);
+
+    // job-orchestrator's actual shape: an isolated single-row callout under
+    // its own heading, nowhere near the threshold — must not pass.
+    const scatteredCallout = "### Red Flag\n**\"a rationalization\"**\nA paragraph of rebuttal, no table.\n";
+    expect(hasRedFlagsSection(scatteredCallout)).toBe(false);
+  });
+
+  test("hasVerificationSection accepts a heading, a STATUS contract line, or an explicit exit-criteria enum", () => {
+    expect(hasVerificationSection("## Verification\n")).toBe(true);
+    expect(hasVerificationSection("## Phase 3: Verification And Review\n")).toBe(true);
+    expect(hasVerificationSection("## Exit Criteria\n")).toBe(true);
+    expect(hasVerificationSection("STATUS: DONE\n")).toBe(true);
+    expect(hasVerificationSection('status: "DONE" | "DONE_WITH_CONCERNS" | "NEEDS_CONTEXT"\n')).toBe(true);
+    // A bare mention of "status" as a formatting note, not a contract, must
+    // not satisfy this — it says where a line goes, not what "done" means.
+    expect(hasVerificationSection("### Status line (first line of response)\n")).toBe(false);
+    expect(hasVerificationSection("status: pass | fail | skipped\n")).toBe(false);
+    expect(hasVerificationSection("# Nothing relevant here\n")).toBe(false);
+  });
+
+  test("PERMANENT_ANATOMY_EXEMPTIONS is non-empty, every entry carries a reason, and none excuses red-flags or verification", () => {
+    expect(PERMANENT_ANATOMY_EXEMPTIONS.size).toBeGreaterThan(0);
+    for (const [key, entry] of PERMANENT_ANATOMY_EXEMPTIONS) {
+      expect(entry.reason.length).toBeGreaterThan(0);
+      expect(entry.sections.length).toBeGreaterThan(0);
+      // The permanent exemption is scoped to the user-facing trigger only —
+      // AC9 requires every workflow skill to earn Red Flags and Verification
+      // outright, Phase subagents included.
+      expect(entry.sections).toEqual(["trigger-not-for"]);
+      expect(key).toMatch(/^planning\//);
+    }
+  });
+
+  test("PENDING_ANATOMY_BACKFILL is non-empty, every entry carries a reason naming a flow-257 backfill task", () => {
+    expect(PENDING_ANATOMY_BACKFILL.size).toBeGreaterThan(0);
+    for (const [key, entry] of PENDING_ANATOMY_BACKFILL) {
+      expect(entry.reason.length).toBeGreaterThan(0);
+      expect(entry.sections.length).toBeGreaterThan(0);
+      // The non-vacuity rule item 2 in the dispatch asked for: a pending
+      // entry whose reason does not name T13/T14/T15 could sit here forever
+      // and quietly become a second permanent exemption list.
+      expect(pendingReasonNamesBackfillTask(entry.reason)).toBe(true);
+      if (key.startsWith("quality/")) expect(entry.reason).toContain("T13");
+      else if (key.startsWith("review/") || key === "core/reviewer-skill-creator") expect(entry.reason).toContain("T15");
+      else expect(entry.reason).toContain("T14");
+    }
   });
 
   test("a defect that exists ONLY in a harness build is found", () => {
