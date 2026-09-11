@@ -2404,11 +2404,30 @@ handshake that never completed, a redirect, and a URL that serves a web
 page rather than MCP each get their own message. `doctor` exits non-zero whenever something needs
 you — including a server awaiting `trust` or a variable you have not set.
 
+**In a session: `/mcp`.** Inside `keryx shell`, `/mcp` lists the servers
+keryx is connected to — status, tool count, why a failed one failed, and
+the exact `keryx mcp trust <name>` a held one is waiting for. It reads the
+session's live state and never dials anything itself, so opening it is
+free.
+
+Do not confuse it with `/integrations`, which is the opposite direction:
+that is where keryx ITSELF is registered into an editor's MCP config.
+`/mcp` meant the installer before this release and now means the
+consumer, matching what `keryx mcp` has meant on the command line since
+the rename.
+
 **Approval of tool calls.** Every `use_tool` call goes through the same approval gate as
 `shell_exec` and `apply_patch`. Under `--trust` a call still asks, and with no
 approver present (headless) it is denied rather than allowed. A server's own
 "this tool is read-only" annotation is shown to the model as a hint and is
 never allowed to skip the prompt.
+
+The prompt for an MCP call names the **server** and the **tool** on their
+own lines, above the arguments, and never offers "always allow". Both are
+deliberate: a tool call's arguments are written by the model, so nothing
+in them may be able to push the tool's identity out of view, and an
+"always" grant would store a pattern the model chose in your permission
+file.
 
 **Environment.** A server is spawned with your environment minus anything
 credential-shaped: provider keys (`ANTHROPIC_*`, `OPENAI_API_KEY`,
