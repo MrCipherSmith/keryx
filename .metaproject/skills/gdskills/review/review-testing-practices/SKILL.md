@@ -10,6 +10,9 @@ description: |
   cannot fail is found by executing it rather than by reading it.
   Dispatched by review-orchestrator for --testing-practices,
   --project-conventions, --all, or changed test/e2e/story files.
+  NOT for: the correctness of the production code a suite covers (review-logic),
+  or naming and readability inside a test with no effect on what it pins
+  (review-style).
 triggers:
   - "test review"
   - "testing practices"
@@ -279,4 +282,38 @@ The moment a surviving mutation is accompanied by a **reachable input that makes
 the unpinned code do the wrong thing**, that is a separate finding at the severity
 its own outcome earns — usually `major`. The coverage gap and the defect are two
 findings, not one, and conflating them loses whichever the adjudicator disbelieves.
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "The suite is green, so the tests pin the behaviour." | Green is the state before the mutation pass, not its result. Delete the gate, run the nearest suite, and report what happened — that is the one question this reviewer exists to answer. |
+| "I could not run the suite, so I worked out what the mutation would do." | A predicted mutation is `info` at best and this lane has no use for one. Say which command you ran, what stopped it, and skip the pass — do not report a result you did not observe. |
+| "I only published the mutations that survived; the rest were noise." | The reds are what makes the greens mean something. A table of survivors alone reads as cherry-picking and will be discounted whole. |
+| "The fixture is named `drift-only`, so it covers the drift case." | The name is the claim under review. Open the producer and compare every field, not only the one the test pins; a fixture that carries another scenario's shape is coverage that lies. |
+| "Mocking the API module is simpler than standing up the network boundary." | It also deletes the layer where the bug lives — serialisation, status handling, the error path. Simpler is the reason the convention exists to overrule. |
+| "This test is flaky, that is a `blocker`." | Flake wastes time; it does not ship a defect. `major`. The one `blocker` in this lane is a test that cannot fail while the behaviour it names is broken. |
+| "I mutated more gates than my budget allowed, but I got through most of them." | Say how many you did not reach. A stated cap is a result; silence reads as a complete sweep and the next round inherits the gap without knowing it. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- The mutation table is published in full, survivors and casualties both, or the
+  report says which command failed and that the pass was skipped.
+- The report states the cap: how many added or previously-requested gates were
+  mutated and how many were not reached.
+- Every finding names `file:line` and the evidence that settles it — the mutation
+  and its result, the producer line, or the selector that names the branch.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an
+  `enumeration_method` naming the search that produced them.
+- No finding invents a severity: each lands under **Severity (canonical)** in
+  `review-orchestrator/SKILL.md`, and a coverage gap is filed separately from any
+  defect it exposes.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or
+  `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
 

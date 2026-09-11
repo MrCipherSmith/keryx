@@ -182,3 +182,35 @@ Severity levels are defined once, in `review-orchestrator/SKILL.md` →
 **Severity (canonical)**. This reviewer does not restate them: `blocker` is the
 four merge-blocking shapes named there and nothing else, and the `major`/`minor`
 boundary is the trigger-and-outcome test.
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "This code in the blast radius is badly written, so I will say so." | Scope B asks one question, and it is not that one. The screen rejects it as `outside-set` or as `non-regression-severity`, and the round is spent on a finding nobody reads. |
+| "The caller might break." | Might is not a regression. Name the argument that is no longer passed, the type that narrowed, the branch that went away — or file nothing. Below `major` the screen rejects it by construction. |
+| "I will anchor the finding at the changed line, since that is the cause." | Scope A already reviewed that line. Anchor where the damage lands: the caller a human has to open is the one that breaks. |
+| "The blast radius came back empty, so the change breaks nothing." | An empty radius for a non-code change is recorded as unresolved, not clean. Say the radius could not answer the question — silence that reads as "nothing found" is the failure this lane was built to stop. |
+| "It is a `major` about a dependent and the anchor names the file, so the link to the change is obvious." | `no-link-to-change` is a substring match over your prose, and only a `blocker` is exempt from it. Name the changed file, module or symbol in the finding text or it is dropped before it reaches `findings.json`. |
+| "The set was capped, but I covered the important ones." | The cap is recorded. If files were dropped, say so in the summary; a report that implies a complete sweep over a truncated set is a false claim about coverage. |
+| "The change is only reached through a spawned process / a string-keyed lookup, so the graph must have missed it — I will report it anyway." | Report it, and say the graph could not see the edge. What you must not do is present a runtime path as if the computed set produced it. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- Every finding is anchored inside the computed set or the changed set, at the
+  code that **breaks** rather than the code that changed.
+- Every finding is `major` or above, and every `major` names the changed file,
+  module or symbol whose behaviour moved — the anchor alone does not carry it.
+- Every finding carries `class_scope` whose `sites` are the callers that break and
+  whose `enumeration_method` is the walk over the blast-radius set that produced
+  them.
+- The summary states whether the cap dropped files, and whether the radius could
+  answer the question at all for the shape of this change.
+- Nothing that is merely an observation about pre-existing code is filed here; it
+  is either raised under scope A or not at all.

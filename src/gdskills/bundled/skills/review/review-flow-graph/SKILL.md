@@ -7,6 +7,9 @@ description: |
   boundaries, selection lifecycle, and large-graph performance. Dispatched by
   review-orchestrator for --flow-graph, --project-conventions, --all, or
   src/core/flow/** / graph abstraction changes.
+  NOT for: React and MobX component structure outside the graph surface
+  (review-frontend), render cost elsewhere in the app (review-performance), or
+  the domain rules a graph happens to display (review-logic).
 triggers:
   - "flow graph review"
   - "graph ui review"
@@ -151,4 +154,35 @@ conditions land under that rubric.
 | A performance regression on large graphs, with the size that makes it a cost | `major` | Degradation, not an outage — see `review-performance` for the same boundary |
 | Internal helper reaching across a boundary with no observable consequence | `minor` | Correct today; the cost is to the next editor |
 | Surface concern with no named caller | `info` | Shared law 1 |
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "The domain module imports the internal shell directly, but it renders fine." | Rendering is not the contract. The public graph surface is what the next refactor of the shell is allowed to change; a consumer reaching past it is the break waiting to happen, and it is reportable today. |
+| "Only one consumer needs this helper, so exporting it from the graph surface is harmless." | An export is a promise to every future consumer. The rule in the checklist is two consumers, and one is the argument for leaving the helper internal. |
+| "This graph felt slow when I read the code." | A performance claim here is a claim about a node and edge count. Name the count at which it degrades, or the finding is `info` under shared law 1. |
+| "Deep observation on the nodes array is fine — the library is fast." | The cost is proxying every node on every write, and it scales with the array, not with the library. If you are rating it, state the array size the diff can produce. |
+| "The subclass sets up its own reactivity first; base initialisation order is an implementation detail." | The base store's state is what the base selection, click and reset behaviour reads. Initialising after it is the documented lifecycle, not a style preference. |
+| "The layout ran, so the lifecycle is intact." | Selection, expand/collapse and reset each have their own lifecycle. A layout that completes says nothing about whether a domain side effect swallowed the base selection reset. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- Every finding names `file:line` and the evidence that settles it — the import,
+  the export, the subclass member, or the measured count.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an
+  `enumeration_method` naming the search that produced them — for a surface
+  finding, every consumer of the symbol, not only the one in the diff.
+- Every performance finding states the node/edge count at which the cost applies;
+  without one it is `info`.
+- No finding invents a severity: each lands under **Severity (canonical)** in
+  `review-orchestrator/SKILL.md`.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or
+  `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
 

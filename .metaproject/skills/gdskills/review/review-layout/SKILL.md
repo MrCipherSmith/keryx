@@ -214,3 +214,25 @@ a claim that the class has exactly one member — make it deliberately.
 | "The class names look fine." | This lane does not review class names. That is `review-frontend-conventions`. |
 | "I could not run the visual tier, so I reasoned it out." | Then it is `info`, marked unverified. Reasoning does not become measurement by being careful. |
 | "RTL is handled, the component uses logical properties." | Check the gradients, shadows and transforms too. Those are the ones that do not flip. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- Every finding carries a **measurement**: the host width, the element width or
+  the offset in pixels, and the command or probe that produced it. An unmeasured
+  observation is filed as `info`, marked unverified, and says what would settle it.
+- The measurement was taken at the worst real case — the longest translation in
+  the catalog, the narrowest supported host, the state where the sibling is
+  absent — not at the convenient one.
+- Every finding names `file:line` on the component that renders the box.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an
+  `enumeration_method` naming the search that derived the set of elements sharing
+  the sizing shape.
+- No finding invents a severity: each lands under **Severity (canonical)** in
+  `review-orchestrator/SKILL.md`.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, with
+  finding ids prefixed `LY-`, or `NEEDS_CONTEXT` naming the context that was
+  missing — never a guess in its place.

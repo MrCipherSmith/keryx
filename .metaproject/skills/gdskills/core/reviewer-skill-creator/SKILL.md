@@ -241,3 +241,40 @@ undocumented is drift that will be silently "fixed" by whoever refreshes next.
 | Decide which reviewers a round dispatches | NO | `review-orchestrator` |
 | Import a tree of overlay reviewers | YES — `keryx skills import --from <dir> --module review` (`keryx review import` alias) | — |
 | Import a non-review SKILL.md / GitHub URL | NO | `entity-skill-creator` / `keryx skills import` |
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "The source's voice is what makes it a good standard — stripping it loses the edge." | A reviewer distilled from someone's tone reviews tone. Step 4 drops the persona pile whole and keeps the method with its reason beside it; a reason transplants into a codebase the author never saw, and an assertion does not. |
+| "I know where the source file lives, so `--origin` adds nothing." | Without the recorded hash, a reviewer built from last month's version of that file reads as current forever, and nobody finds out until its findings disagree with the standard it claims to encode. `drift: changed` is the whole point. |
+| "The target should say what the reviewer is for, so a sentence is clearer." | The target is a routing key that `keryx skills route` matches queries against. A sentence there produces a skill that matches nothing and verifies as permanently stale. The prose belongs in `--note`. |
+| "The source has a clear severity scale, so I will carry it over." | Ten private rubrics feeding one sorted report produce a ranking that means ten things at once. Point at **Severity (canonical)** and add one table saying where this reviewer's recurring conditions land under it. |
+| "The files are written and the frontmatter is valid, so the reviewer is wired." | Creating files is not registration, and registration is not discovery. Until `keryx review reviewers` prints the name, the orchestrator will never dispatch it. |
+| "The source's conventions are sensible, so they will hold in this project too." | They are true of the source's own codebase until verified here. Keep a convention only after checking it against this project, and say in your reply which ones you could not check. |
+| "`drift: changed` came back, so the reviewer is wrong and I will overwrite it." | It means the source moved, not that the reviewer is wrong. Diff the two and decide per change: fold it in, or write down why this project deliberately differs. An undocumented divergence is drift the next refresh silently "fixes". |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- `keryx skills verify review/<reviewer-name>` passes.
+- `keryx review reviewers` lists the reviewer, with `drift: clean`. This is the
+  same call `review-orchestrator` makes, so its output — not the presence of the
+  files — is what proves the reviewer will be dispatched.
+- The `SKILL.md` carries all six required parts from Step 3: Scope naming the
+  neighbouring reviewers it excludes, a Checklist of performable checks, a
+  pointer to the canonical severity rubric with no rubric of its own, the three
+  shared laws verbatim, the class-scope contract, and the Orchestrated Review
+  Contract with its own finding-id prefix.
+- `--origin` was passed whenever a source file exists, and the recorded path is
+  the one a human would read later.
+- Any method that only works when a command is run — a mutation, a measurement, a
+  probe — is stated as an iron law, together with what the finding is worth
+  without it.
+- The reply says which of Step 1's three piles were kept, which were dropped, and
+  what could not be verified against this project.

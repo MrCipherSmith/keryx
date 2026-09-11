@@ -200,3 +200,39 @@ If provided and the file exists, read the context document before starting the r
 - Reference context when justifying suggestions
 
 If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
+
+---
+
+## Red Flags
+
+This profile is a thin wrapper around `code-review-ai-assistant.mdc`, and it
+predates everything the review domain standardised afterwards. The rows below are
+the ways that gap makes it misfire.
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "A review was requested, so I will run this profile." | It is a legacy opt-in profile, reached by name or through `review --legacy-profiles`. An unqualified review request belongs to `review-orchestrator`; running this one instead silently drops every specialised lane along with the finding schema. |
+| "The output template has a Severity field, so my report is a review result." | It is not. This profile predates `reviewer-finding.schema.json`: it emits free prose with no machine-readable finding and no class enumeration, so nothing downstream can screen, verify or deduplicate it. Hand the report to a person, never to `keryx review ingest`. |
+| "Half these instructions are in Russian, so the report should be in Russian." | The mixed language is an artefact of when this file was written, not an instruction about the report. Write the report in the language the requester used. |
+| "I noticed a store problem and a naming problem, so I will include them here." | The Scope Boundaries table above routes those to `code-mobx-store-review` and `code-style-review`. A finding filed under the wrong profile is a finding the requester did not ask this profile for, and it arrives without the checks that lane would have applied. |
+| "One entry per occurrence is more thorough." | It is longer, not more thorough. Where one shape repeats, report it once and list every site — ten entries that are one problem hide the other nine. |
+| "I cannot reach the code path, but the pattern is usually wrong." | Then it is an observation, not a finding. Say what input, call or condition would reach it, and let the reader decide. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- The requester asked for this profile by name, or through
+  `review --legacy-profiles`. If they asked for "a review", stop and hand the
+  request to `review-orchestrator` instead.
+- The scope block carries the real branch, parent ref, merge-base and scope mode —
+  not the template placeholders.
+- Every finding carries Severity, Location (path plus the lines from the diff),
+  Problem, Why it matters and a concrete Suggested fix; a patch where the fix is
+  a line or two.
+- Every finding is anchored to a line the branch slice actually changed. Nothing
+  outside `merge-base..worktree` is discussed.
+- The report is free prose by design, so it is delivered to a person and is not
+  fed into the managed-review pipeline.

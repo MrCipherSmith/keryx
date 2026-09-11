@@ -165,3 +165,44 @@ If provided and the file exists, read the context document before starting the r
 - Provide more accurate findings by understanding the project's architectural decisions
 
 If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
+
+---
+
+## Red Flags
+
+This profile is a thin legacy wrapper around `code-style-patterns.mdc`. It
+predates the shared finding contract, it does not use the review domain's
+severity vocabulary at all, and it is written mostly in Russian — each of those
+is a way it misfires, and they are the rows below.
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "A style review was asked for, so I will run this profile." | It is a legacy opt-in profile pinned to one rules file, reached by name or through `review --legacy-profiles`. A general style request belongs to `review-style`, and an architecture request to `review-architecture`; running this instead answers a narrower question than the one that was asked. |
+| "The report has a Critical section, so downstream can consume it." | It cannot. `Critical` / `Warnings` / `Suggestions` are headings in a Markdown document, not a severity field: this profile predates `reviewer-finding.schema.json` and emits free prose with no machine-readable finding. Hand it to a person, never to `keryx review ingest`. |
+| "The instructions are in Russian, so the report should be." | The language is an artefact of when this file was written. Write the report in the language the requester used. |
+| "`public` reads more clearly than leaving the modifier off." | The project's ESLint configuration forbids the keyword outright, at error level. That is a build failure, not a matter of taste, and a reviewer arguing the taste is arguing with a gate that already decided. |
+| "This component does not look like it reads observables, so the wrapper is optional." | Check what it reads through props and through the store getters it calls. Missing `observer` is rated critical in the checklist above because the failure is silent: the component simply stops updating. |
+| "The `any` is temporary — the author will type it properly later." | Nothing records that intent and nothing revisits it. Rate the code in the diff, and propose `unknown` plus a type guard as the concrete fix. |
+| "While reading for style I found a real bug, so I will report it here." | This report has nowhere to carry it and the requester is not reading it for that. Route it to `code-ai-review` (or `review-logic`) and say in one line that you did. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- The requester asked for this profile by name, or through
+  `review --legacy-profiles`. A style or architecture request that names no
+  profile belongs to `review-style` or `review-architecture`.
+- The scope block carries the real branch, parent ref, merge-base and scope mode —
+  not the template placeholders.
+- Every entry carries Rule (the section of `code-style-patterns.mdc` it rests on),
+  Why, Where (path plus the lines from the diff) and Fix, with a minimal unified
+  diff rather than an edit applied to the tree.
+- Every entry is anchored to a line the branch slice actually changed; legacy code
+  outside that slice is not discussed.
+- Entries are sorted into this document's own Critical / Warnings / Suggestions
+  sections, and are not presented as a severity any other reviewer or tool
+  consumes.
+- The report is free prose by design, so it is delivered to a person and is not
+  fed into the managed-review pipeline.
