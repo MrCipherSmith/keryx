@@ -26,6 +26,8 @@ import { catalogForServer } from "./catalog";
 import type { ConnectFn, ServerStatus } from "./manager";
 import { describeHollow, displayUrl, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
 import { sanitiseForDisplay } from "./tools";
+import { isExpired, readCredential, usesOAuth } from "./credentials";
+import { OAuthInteractionRequiredError } from "./oauth-provider";
 import type { McpToolDescriptor } from "../mcp-client/client";
 
 /**
@@ -123,6 +125,15 @@ export type DoctorOptions = {
   readonly heldForApproval?: ((server: ResolvedMcpServer) => boolean) | undefined;
   /** Overridden in tests; otherwise the process environment. */
   readonly env?: Readonly<Record<string, string | undefined>> | undefined;
+  /**
+   * Where the OAuth credential store lives. Overridden in tests.
+   *
+   * Not optional in effect: with no override this reads the real one,
+   * and a test that forgets it diagnoses the developer's own tokens.
+   */
+  readonly configDir?: string | undefined;
+  /** Injected in tests so expiry is a fact, not a race against the clock. */
+  readonly now?: (() => number) | undefined;
 };
 
 const DEFAULT_DOCTOR_TIMEOUT_MS = 10_000;
@@ -235,6 +246,42 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
         detail: describeHollow(resolved.hollow),
       };
     }
+
+    // AC5. Diagnosed WITHOUT dialling, but ONLY for a server the
+    // operator has explicitly declared an `oauth` block on.
+    //
+    // `usesOAuth` was the wrong question here, and the first version
+    // asked it: it means "OAuth WOULD apply if authentication is
+    // needed", which is true of every remote server that declares no
+    // credential — including every PUBLIC one. Using it as "must
+    // authenticate before dialling" stopped doctor dialling those
+    // entirely and reported a working server as needing a login it
+    // does not have. An explicit `oauth` block is the operator saying
+    // this server does need one; everything else earns its 401 below.
+    const declaresOAuth = server.raw.oauth !== undefined && server.raw.oauth !== false;
+    if (declaresOAuth && usesOAuth(server.raw)) {
+      const stored = readCredential(server.name, server.url ?? "", options.configDir);
+      if (stored.problem !== undefined) {
+        // A store that cannot be read is not the same as no credential:
+        // the token may well be in there, behind a syntax error.
+        return { ...base, status: "needs_auth", toolCount: 0, skipped: [], detail: stored.problem };
+      }
+      const tokens = stored.record?.tokens;
+      // Expired WITH a refresh token is not a problem to report: the
+      // SDK refreshes it on the dial, with no operator involved.
+      if (tokens === undefined || (isExpired(tokens, (options.now ?? Date.now)()) && tokens.refresh_token === undefined)) {
+        return {
+          ...base,
+          status: "needs_auth",
+          toolCount: 0,
+          skipped: [],
+          detail:
+            tokens === undefined
+              ? `no stored credential; run \`keryx mcp auth ${server.name}\``
+              : `stored credential has expired and cannot be refreshed; run \`keryx mcp auth ${server.name}\``,
+        };
+      }
+    }
   }
 
   const timeoutMs =
@@ -246,6 +293,22 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
   try {
     connection = await withTimeout(options.connect(server), timeoutMs, server.name);
   } catch (error) {
+    // The other half of AC5: a server that turned out to want OAuth.
+    //
+    // For anything without an explicit `oauth` block the 401 IS the
+    // discovery — keryx cannot know in advance whether a remote server
+    // is public. Reporting it as `failed` with "check the header"
+    // sends the operator to edit a config that has nothing wrong with
+    // it, when the answer is one command.
+    if (base.transport === "http" && needsAuthorisation(error)) {
+      return {
+        ...base,
+        status: "needs_auth",
+        toolCount: 0,
+        skipped: [],
+        detail: `${displayUrl(server.raw.url)} requires authorisation; run \`keryx mcp auth ${server.name}\``,
+      };
+    }
     return {
       ...base,
       status: "failed",
@@ -287,6 +350,23 @@ async function diagnose(server: ResolvedMcpServer, options: DoctorOptions): Prom
  * "failed: <whatever the SDK said>" is the shape of report that sends
  * someone to restart a server that is running fine on a URL with a typo.
  */
+/**
+ * Is this failure "you are not authorised", as opposed to "broken"?
+ *
+ * Two shapes mean it. A 401 is the server saying so. The provider's
+ * own refusal is keryx saying so before the wire: the SDK asked for a
+ * browser, this process has none, and that is not a network fault.
+ *
+ * 403 is deliberately NOT here. It means authenticated and not
+ * permitted — re-running `keryx mcp auth` grants nothing, and sending
+ * the operator through a consent screen that cannot help is worse than
+ * telling them their token lacks the scope.
+ */
+export function needsAuthorisation(error: unknown): boolean {
+  if (httpStatusOf(error) === 401) return true;
+  return error instanceof OAuthInteractionRequiredError;
+}
+
 export function explainConnectFailure(
   transport: "stdio" | "http" | "unknown",
   server: ResolvedMcpServer,

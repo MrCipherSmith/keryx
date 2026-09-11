@@ -745,9 +745,15 @@ async function doctorCommand(args: readonly string[], deps: McpConsumerDeps): Pr
     const env = deps.env ?? process.env;
     report = await runDoctor(config, {
       only,
-      connect: deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills)),
+      connect:
+        deps.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills, deps.configDir)),
       heldForApproval: (server) => requiresApproval(server, approvals),
       env,
+      // Threaded, not defaulted. Without it `readCredential` falls back
+      // to the real config directory, and a test that forgets to pass
+      // one diagnoses the developer's own tokens — a hazard this
+      // package has already shipped once.
+      configDir: deps.configDir,
     });
   } finally {
     // Removed only once the dialling is done. Printing happens after this,
