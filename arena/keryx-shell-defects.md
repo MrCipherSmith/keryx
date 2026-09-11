@@ -316,7 +316,7 @@ The transcript check catches the first when the path appears in what the arm ran
 second is bounded only by the isolated HOME holding no GitHub credential. A real
 sandbox for the arm's shell is the complete fix.
 
-## K-012 — a refused `keryx shell` start does not exit when MCP servers are configured · open (product, 0.2.95)
+## K-012 — a refused `keryx shell` start does not exit when MCP servers are configured · fixed in 0.2.96 (#530)
 
 **Evidence:** after merging 0.2.95 into this branch, the two tests that check
 `--deny-tools` names against the real CLI timed out. Measured with the tests' own
@@ -344,6 +344,61 @@ CLI under an isolated HOME, the way the arena does; that fixes the tests, not th
 the MCP runtime; and on any startup error, close the runtime (or exit explicitly) so
 live child connections cannot hold the process.
 
+## K-013 — keryx sends an expired grok token it could have refreshed · open (product, 0.2.96)
+
+**Evidence:** the 0.2.96 smoke (`/tmp/arena-0296`, 2026-09-11 20:18) failed both
+keryx-shell arms on the first call: `xAI (Grok) API returned HTTP 403: The OAuth2
+access token could not be validated`, zero tool calls. `keryx auth status grok` then
+read `device-code expired (expires 2026-09-11T15:02:01Z), refreshable`. Calling
+`refreshProviderGrant("grok", …)` by hand against the same `auth.json` succeeded at
+once (new expiry 22:34 UTC) — the refresh token was good; the shell never used it.
+
+**What the code does:** the only caller of `refreshProviderGrant` is
+`resolveTuiStartup` (`src/commands/shell.ts`), with `.catch(() => undefined)` — a
+failed refresh is silent, and the expired token is sent. In the arena the arm's
+`auth.json` is a symlink to the operator's. Not yet established: whether the arena's
+`-p` path reaches that refresh, whether it ran and failed, or whether a refreshed grant
+was written somewhere the provider did not read. The operator's file still held the
+expired grant after both arms, so no refresh landed in it.
+
+**Impact:** every keryx grok session started more than ~6 h after login fails with a
+403 until the operator runs something that refreshes — and the error says "could not
+be validated", not "expired", so it reads as K-010 (a revoked grant) and sends the
+operator to `auth login`.
+
+**Fix direction:** refresh on every path that builds a provider from a grant, not
+only the TUI start-up; surface a failed refresh instead of swallowing it; and on a 403
+from a grant-backed provider, refresh once and retry before failing.
+
+## K-014 — an arm borrowed the operator's HOME and read the answer from GitHub · fixed on this branch
+
+**Evidence:** `/tmp/arena-0296/transcripts/t1-53254e0e-grok-build-context-on.jsonl`.
+With the source clone fenced off (K-011) the grok CLI, in the context arm, ran
+`HOME=<operator home> gh auth status` and then `HOME=<operator home> gh api
+repos/Presight-AI/vantage-frontend/pulls/6435/files` — the operator's GitHub login,
+and the answer PR's file list — and scored 4/4. On the way it listed
+`/private/tmp/arena-0296/cache/` and read the head of the arena's `transcripts/`.
+The control arm tried `gh` without the override (no credential, empty) and the public
+API (404), and scored 1/4. The claude arm tried `gh pr view 6435`, was refused for
+want of a login, and went back to the code. The K-011 transcript check named only
+the source clone, so the arm was recorded.
+
+**Fix (this branch):** `transcriptReachingOutside` (`scripts/arena/arena-run.ts`)
+refuses an arm whose transcript or stderr names the operator's real home (except PATH
+entries under it — naming `~/.nvm/…/bin/keryx` is resolving a binary; the entry's
+parent is not allowed, so `~/.local/bin` does not open `~/.local/share/keryx`) or
+anything in the arena's output directory outside the arm's own tree — the base-tree
+cache, other arms' transcripts, sibling trees. Tests: `scripts/arena/arena-escape.test.ts`.
+
+**Residual, still recorded rather than closed:** the fence reads what the arm showed.
+An arm that reaches the network without naming a path — a bare `gh` with a token it
+found some other way, or `curl` to a public mirror — is caught only if the transcript
+names what it touched. The arm runs as the operator's user; only a separate user or a
+real sandbox takes the operator's files out of reach.
+
+**Consequence:** the grok-build context-on 4/4 of the 0.2.96 smoke is void, like the
+earlier grok rows. The context-off 1/4 stands.
+
 ---
 
 ## Status after 0.2.95 (2026-09-11)
@@ -363,6 +418,8 @@ live child connections cannot hold the process.
 | K-010 | open |
 | K-011 | fixed on this branch; residual risk recorded |
 | K-012 | fixed in 0.2.96 (#530, flow 251): every exit closes the readline MCP runtime; a refused start went from a 40 s timeout to 5.8 s, and close() no longer lingers ~4.5 s |
+| K-013 | open — expired grok grant sent instead of refreshed; root cause not yet pinned |
+| K-014 | fixed on this branch (transcript fence: operator home, arena files); residual risk recorded |
 | S-1 | fixed in 0.2.95 (#529) |
 | S-2 | improved — clip notes now say how much was dropped (K-008) |
 | S-3 | partly — the prompt's tool statements are now true of the roster |

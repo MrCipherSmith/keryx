@@ -28,6 +28,7 @@
 
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { rm } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { assertAnswerUnreachable, assertNoSourcePointer } from "../benchmark/retrieval-checkout";
@@ -87,6 +88,8 @@ export interface ArenaRunOptions {
    * the tests' fake runs stay free of filesystem side effects.
    */
   readonly transcriptsDir?: string;
+  /** The operator's real home, fenced off from every arm (K-014). Defaults to `homedir()`. */
+  readonly operatorHome?: string;
   /**
    * Supervise the agent while it runs. Without it the adapter's own timeout is the
    * only bound — a wall clock with no silence detection, which the handoff called
@@ -146,6 +149,87 @@ export function transcriptNamingSource(transcriptFile: string | undefined, sourc
     if (!existsSync(file)) continue;
     const text = readFileSync(file, "utf8");
     if (needles.some((needle) => text.includes(needle))) return file;
+  }
+  return undefined;
+}
+
+/** What an arm may name in its transcript: its own tree, and nothing else the arena or the operator owns. */
+export interface ArmFence {
+  readonly ownTree: string;
+  /** Everything the arena wrote — the base-tree cache, every arm's transcript, every other arm's tree. */
+  readonly outRoot: string;
+  /** The operator's real home. Its credentials are the operator's, not the arm's. */
+  readonly operatorHome?: string;
+  /** PATH entries. One under the home is a toolchain directory, and naming it is resolving a binary. */
+  readonly pathEntries?: readonly string[];
+}
+
+const PATH_CHAR = /[A-Za-z0-9_.-]/;
+
+function spellings(p: string): string[] {
+  // The deepest ancestor that exists is resolved and the rest appended as written,
+  // so a tree already deleted still gets its `/private/tmp` spelling.
+  const tail: string[] = [];
+  for (let head = p; ; ) {
+    try {
+      return [...new Set([p, path.join(realpathSync(head), ...tail)])];
+    } catch {
+      const up = path.dirname(head);
+      if (up === head) return [p];
+      tail.unshift(path.basename(head));
+      head = up;
+    }
+  }
+}
+
+/**
+ * The first place outside its tree an arm's transcript (or its stderr) names, if any (K-014).
+ *
+ * The source-clone check misses the rest of the machine. On 2026-09-11 a grok arm
+ * ran `HOME=<operator home> gh api …/pulls/6435/files` — the operator's GitHub
+ * login, the answer PR's file list — and listed the arena's own cache and other
+ * arms' transcripts on the way. A mention is a path boundary match, so a longer
+ * name that merely starts with a root is not one.
+ */
+export function transcriptReachingOutside(
+  transcriptFile: string | undefined,
+  fence: ArmFence,
+): { file: string; where: string } | undefined {
+  if (transcriptFile === undefined) return undefined;
+  const outRoot = path.resolve(fence.outRoot);
+  // A root of `/` would name every path there is; there is no fence to check.
+  const roots = outRoot === path.parse(outRoot).root ? [] : spellings(outRoot);
+  const allowed = spellings(path.resolve(fence.ownTree));
+  if (fence.operatorHome !== undefined) {
+    const homes = spellings(path.resolve(fence.operatorHome));
+    roots.push(...homes);
+    for (const entry of fence.pathEntries ?? []) {
+      // The entry itself, never its parent: `~/.local/bin`'s parent holds keryx's auth.json.
+      if (homes.some((home) => entry.startsWith(`${home}/`))) allowed.push(...spellings(entry));
+    }
+  }
+  const endsAtBoundary = (text: string, end: number): boolean => {
+    const next = text[end];
+    return next === undefined || !PATH_CHAR.test(next);
+  };
+  for (const file of [transcriptFile, `${transcriptFile}.stderr`]) {
+    if (!existsSync(file)) continue;
+    const text = readFileSync(file, "utf8");
+    for (const root of roots) {
+      for (let at = text.indexOf(root); at !== -1; at = text.indexOf(root, at + 1)) {
+        if (!endsAtBoundary(text, at + root.length)) continue;
+        // `/tmp/x` inside `/private/tmp/x` is the tail of a longer path, and the
+        // longer spelling is a root of its own that matches where that path starts.
+        if (at > 0 && /[A-Za-z0-9_.\/-]/.test(text[at - 1] ?? "")) continue;
+        if (allowed.some((ok) => text.startsWith(ok, at) && endsAtBoundary(text, at + ok.length))) continue;
+        const where = text.slice(at).split(/["'\s\\`;|&)]/)[0] ?? root;
+        // A display that clipped a path of the arm's own tree (claude's step
+        // summaries: `…/arena-0296/a…`) cannot be told from one that did not.
+        const clipped = /(?:…|\.\.\.)$/.exec(where);
+        if (clipped !== null && allowed.some((ok) => ok.startsWith(where.slice(0, clipped.index)))) continue;
+        return { file, where };
+      }
+    }
   }
   return undefined;
 }
@@ -225,6 +309,20 @@ export async function runArenaArm(task: ArenaTask, arm: Arm, options: ArenaRunOp
       throw new Error(
         `the arm reached the source clone ${options.repoRoot} from outside its tree (named in ` +
           `${path.basename(escapedVia)}) — its answer cannot be scored`,
+      );
+    }
+    // The rest of the machine is outside the tree too: the operator's home and
+    // its credentials, and everything the arena wrote beside this arm.
+    const reached = transcriptReachingOutside(transcriptFile, {
+      ownTree: treePath,
+      outRoot: path.dirname(options.worktreesDir),
+      operatorHome: options.operatorHome ?? homedir(),
+      pathEntries: (process.env.PATH ?? "").split(path.delimiter).filter((entry) => entry.length > 0),
+    });
+    if (reached !== undefined) {
+      throw new Error(
+        `the arm reached ${reached.where} outside its tree (named in ${path.basename(reached.file)}) — ` +
+          "its answer cannot be scored",
       );
     }
 
