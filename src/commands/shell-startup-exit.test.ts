@@ -60,10 +60,14 @@ test("a refused start exits with its error, and leaves no MCP server behind", ()
   // Exit 1 is the refusal. 143 is this test's own timeout killing a shell that
   // printed the refusal and then never left — the defect.
   expect(proc.exitCode).toBe(1);
-  // A refusal is not slow work. `close()` waits at most a few seconds for a dial it
-  // aborted to die, which this leaves room for.
+  // A refusal is not slow work. Before the timer fix in `runtime.ts` every close
+  // held the process ~4.5 s after it had finished; the bound leaves room for a slow
+  // start-up on a loaded runner without leaving room for that linger to return.
   expect(elapsed).toBeLessThan(10_000);
-  // And the server it started is gone with it.
+  // With the fix the dial is aborted before it spawns anything, so this check
+  // guards against a regression that starts the server and then leaks it; it does
+  // not by itself prove a connected server is torn down. That is proved at the
+  // runtime level, in `src/mcp-servers/runtime-close.test.ts`.
   const survivors = Bun.spawnSync(["pgrep", "-f", MARKER]).stdout.toString().trim();
   expect(survivors).toBe("");
 }, 60_000);

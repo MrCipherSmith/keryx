@@ -13,3 +13,6 @@
 - 2026-09-11T14:39:45.324Z - task-done: T5: Regression test: a refused start with a handshaking user MCP server exits promptly, no server survives
 - 2026-09-11T14:42:03.077Z - task-done: T6: Close the readline MCP runtime in the shell command's outer finally
 - 2026-09-11T14:42:03.241Z - task-done: T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test
+- 2026-09-11T14:50:36.711Z - task-done: T8: Verification: test:client:terminal, typecheck, lint, CI green
+- 2026-09-11T15:13:58.899Z - task-added: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)
+- 2026-09-11T15:13:59.098Z - task-done: T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)

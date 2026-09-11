@@ -9,7 +9,7 @@
   "title": "K-012: a refused keryx shell start never exits when MCP servers are configured",
   "status": "in-progress",
   "createdAt": "2026-09-11T14:35:04.062Z",
-  "updatedAt": "2026-09-11T14:42:03.241Z",
+  "updatedAt": "2026-09-11T15:13:59.098Z",
   "source": {
     "type": "description",
     "ref": null
@@ -135,7 +135,7 @@
       "id": "T8",
       "title": "Verification: test:client:terminal, typecheck, lint, CI green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -143,7 +143,23 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -209,6 +225,21 @@
       "at": "2026-09-11T14:42:03.241Z",
       "event": "task-done",
       "detail": "T7: Changelog [Unreleased]; #524 recorded under 0.2.95; low-entropy fake key in the compat test"
+    },
+    {
+      "at": "2026-09-11T14:50:36.711Z",
+      "event": "task-done",
+      "detail": "T8: Verification: test:client:terminal, typecheck, lint, CI green"
+    },
+    {
+      "at": "2026-09-11T15:13:58.899Z",
+      "event": "task-added",
+      "detail": "T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)"
+    },
+    {
+      "at": "2026-09-11T15:13:59.098Z",
+      "event": "task-done",
+      "detail": "T9: Review round 1: close() timers cleared and close() idempotent (F-001); runtime-level teardown test for a connected server (F-002)"
     }
   ]
 }

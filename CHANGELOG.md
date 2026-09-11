@@ -14,7 +14,15 @@ All notable changes to `keryx` are documented here. The format follows
   runtime was closed. One live child per configured server then held the process
   open: the error printed and the shell never exited (measured: killed at 90 s,
   against 1.3 s with no servers). Every exit from the agent branch now closes the
-  runtime, and the server processes go with it.
+  runtime — aborting a dial still in flight, and closing any server that had
+  already connected.
+
+- **Closing the MCP runtime no longer holds the process for its full grace
+  period.** `close()` bounded its waits with timers it never cleared, and the CLI
+  exits by letting the event loop drain, so every close kept the process alive for
+  about 4.5 s after it had finished — after every refused start and after every
+  `keryx shell -p` run. The timers are now cleared as soon as the wait resolves,
+  and a second `close()` returns the first one's result instead of waiting again.
 
 ## [0.2.95] — 2026-09-11
 
