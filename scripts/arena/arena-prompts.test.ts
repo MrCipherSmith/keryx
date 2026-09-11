@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { assertPromptNeutral, buildArenaPrompt, FORBIDDEN_PROMPT_MARKERS } from "./arena-prompts";
+import { asRequest, assertPromptNeutral, buildArenaPrompt, FORBIDDEN_PROMPT_MARKERS } from "./arena-prompts";
 import { loadFrozenT1, parseTaskFile, type ArenaTask } from "./arena-tasks";
 
 const research: ArenaTask = {
@@ -26,7 +26,7 @@ const implement: ArenaTask = {
 describe("buildArenaPrompt", () => {
   test("a research prompt carries the query and asks for paths", () => {
     const prompt = buildArenaPrompt(research);
-    expect(prompt).toContain("a step cannot leave its iterator");
+    expect(prompt).toContain("step cannot leave its iterator");
     expect(prompt).toContain("repository-relative paths");
   });
 
@@ -59,6 +59,33 @@ describe("buildArenaPrompt", () => {
     // the cost of getting it wrong is that every number in the run is meaningless.
     expect(buildArenaPrompt(research)).toBe(buildArenaPrompt(research));
     expect(buildArenaPrompt(implement)).toBe(buildArenaPrompt(implement));
+  });
+});
+
+describe("a research task is asked forward, without its search keys (2026-09-11 batch1)", () => {
+  test("no PR number, no conventional prefix, and no 'a change was made' framing", () => {
+    const prompt = buildArenaPrompt(research);
+    expect(prompt).not.toContain("#1");
+    expect(prompt).not.toContain("fix(pipelines):");
+    expect(prompt).not.toContain("A change was made");
+    expect(prompt).toContain("A step cannot leave its iterator");
+    expect(prompt).toContain("not in this repository's history");
+  });
+
+  test("asRequest strips numbers, prefixes, trailers and squash bullets that repeat the subject", () => {
+    expect(asRequest("perf(lint): move import cycles to oxlint (#6118)")).toBe("Move import cycles to oxlint");
+    expect(asRequest("test(e2e): deflake menu clusters (#6061) (#6156)\n\n* test(e2e): deflake menu clusters (#6061)")).toBe(
+      "Deflake menu clusters",
+    );
+    expect(asRequest("controls fixes (#6594)")).toBe("Controls fixes");
+    expect(asRequest("fix: x\n\nvantage-backend#4539 item 5 asks for it\n\nCo-authored-by: A <a@b.c>")).toBe(
+      "X\n\nan upstream ticket item 5 asks for it",
+    );
+  });
+
+  test("every frozen T1 query loses its PR number", () => {
+    const tasks = loadFrozenT1(path.join(import.meta.dir, "..", "..", "arena", "tasks", "t1-tasks.json"));
+    for (const task of tasks) expect(buildArenaPrompt(task)).not.toMatch(/#\d{3,}/);
   });
 });
 

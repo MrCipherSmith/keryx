@@ -30,13 +30,44 @@ function researchPrompt(task: ArenaTask): string {
   return [
     "You are in a TypeScript repository you have not seen before.",
     "",
-    "A change was made to this codebase. Here is what it was for:",
+    "A developer is about to make this change:",
     "",
-    task.query,
+    asRequest(task.query),
     "",
-    "Identify which source files that change touched.",
+    "Before anyone edits code, name the source files that will have to change to make it.",
+    "The change has not been made yet, so it is not in this repository's history or anywhere else;",
+    "work it out from the code in this directory.",
     "Answer with repository-relative paths, one per line, and nothing else.",
   ].join("\n");
+}
+
+/**
+ * A commit message, rewritten as the request a developer would bring.
+ *
+ * The 2026-09-11 runs (`arena/keryx-shell-defects.md`, batch1) asked "a change was
+ * made … which files did it touch?" with the commit subject verbatim, PR number
+ * included. Every agent read that as a history lookup: `git log --grep`, `gh pr
+ * view`, the GitHub API, other arms' files, the operator's home. Three claude arms
+ * that found no commit refused to answer at all. So the task is now stated forward,
+ * and the search keys go: PR and issue numbers, the conventional-commit prefix,
+ * trailers, and squash bullets that only repeat the subject.
+ */
+export function asRequest(query: string): string {
+  const lines = query
+    .split("\n")
+    .filter((line) => !/^\s*(?:co-authored-by|signed-off-by):/i.test(line))
+    .map((line) =>
+      line
+        .replace(/\s*\((?:[\w.-]+)?#\d+\)/g, "")
+        .replace(/\b[\w.-]+#\d+\b/g, "an upstream ticket")
+        .replace(/(?<![\w&])#\d+\b/g, "")
+        .replace(/^(\s*(?:[*-]\s+)?)\w+(?:\([^)]*\))?!?:\s+/, "$1")
+        .replace(/[ \t]+$/, ""),
+    );
+  const subject = (lines[0] ?? "").trim();
+  const kept = lines.filter((line, i) => i === 0 || line.replace(/^\s*[*-]\s+/, "").trim() !== subject);
+  const text = kept.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
 /**

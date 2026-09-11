@@ -436,6 +436,11 @@ uses. A prompt-injected README is enough to have them printed or sent out.
 the provider credentials keryx loaded for itself; confirm the model-bound tool result is
 redacted, not only the transcript.
 
+**Fixing (flow 253, PR #532):** `shell_exec` withholds every key keryx set from its
+saved config (`KERYX_SHELL_PASS_SAVED_KEYS=1` restores it). Not covered, per the
+review: other child processes that inherit `process.env` — MCP servers, hooks,
+external agents — presumably still receive saved keys. Unchecked; the next item here.
+
 ## K-016 — `memory_search` tells the model where it is, in 700 characters of disclaimer · open (product)
 
 **Evidence:** `/tmp/arena-batch1`, every keryx context arm (`t1-1405959d`,
