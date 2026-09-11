@@ -5,6 +5,7 @@ globs:
   - "e2e/**"
   - "**/*.spec.ts"
   - "playwright.config.ts"
+stack_requires: "react"
 ---
 
 # Playwright E2E Testing Guidelines
