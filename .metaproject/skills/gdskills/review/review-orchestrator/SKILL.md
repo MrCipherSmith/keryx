@@ -1324,7 +1324,7 @@ reviewer: <skill-name>
 scope_mode: diff | path
 context_doc: <path or empty>
 issue_url: <url or empty>
-model_class: simple | normal | complex | current-session
+model: <the `model` block `keryx review tier` printed for this dispatch — paste verbatim>
 budget:
   max_prompt_tokens: <number or null>
   max_findings: <number>
@@ -1564,15 +1564,15 @@ Severity ordering for sort: `blocker` > `major` > `minor` > `info`.
 
 ### Model Metadata Rules
 
-`current-session` is a model assignment/runtime strategy, not a model name. Never render it as `model: current-session` or as the PR comment `Model` value.
+`unsupported` is a model-assignment outcome recorded when `keryx review tier` cannot rank anything (it prints `inherit: true`), not a model name. Never render it as `model: unsupported` or as the PR comment `Model` value.
 
 When writing review report metadata or a PR comment:
 1. Read `review_context.token_policy.model_plan`.
-2. Set `Model strategy` from `model_plan.strategy`.
+2. Set `Model strategy` from `model_plan.strategy` (`ask` or `adaptive`).
 3. Set `Current model` from the first available value: `model_plan.current_model`, detected tool output, current runtime model shown by the platform, or `unknown`.
-4. If `strategy` is `adaptive`, `economy`, or `per-group`, include model classes: `complex_model`, `normal_model`, and `simple_model` when known.
-5. If model assignment is unsupported and `strategy` is `current-session`, write `Model assignment: current session` and still write `Current model: <actual model or unknown>`.
-6. If the actual model is unknown, write `unknown`; do not substitute `current-session`.
+4. Record the model actually assigned per reviewer — the `tier` and (`provider`+`model` or `inherit`) from the `model` block `keryx review tier` printed for that dispatch — rather than a fixed set of classes; include `complex_model`, `normal_model`, and `simple_model` too when `model_plan` reports them.
+5. If model assignment is unsupported (the dispatch's `model` block carried `inherit: true`), write `Model assignment: unsupported` and still write `Current model: <actual model or unknown>`.
+6. If the actual model is unknown, write `unknown`; do not substitute `unsupported` or `inherit`.
 
 ---
 
@@ -1603,9 +1603,9 @@ STATUS: DONE | DONE_WITH_CONCERNS
 - Reviewers dispatched: <comma-separated list>
 - Changed files: <count>
 - Context mode: `<none | light | full>`
-- Model strategy: `<ask | adaptive | economy | per-group | current-session>`
+- Model strategy: `<ask | adaptive>`
 - Current model: `<actual current model id/name, or unknown>`
-- Model assignment: `<single current session | adaptive classes | per reviewer classes | unsupported>`
+- Model assignment: `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>`
 - Token budget: `<used/limit if known; omissions count>`
 
 ## Stats
@@ -1756,9 +1756,9 @@ here is the failure this rule names.
 | Field | Value |
 |---|---|
 | Orchestrator | `review-orchestrator` |
-| Model | `<actual current model id/name, or unknown; never current-session>` |
-| Model strategy | `<ask | adaptive | economy | per-group | current-session>` |
-| Model assignment | `<current session | adaptive classes | per reviewer classes | unsupported>` |
+| Model | `<actual current model id/name, or unknown; never inherit or unsupported>` |
+| Model strategy | `<ask | adaptive>` |
+| Model assignment | `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>` |
 | Agents run | `<reviewers actually dispatched, including fallback runtimes when used>` |
 | Available reviewers | `<all reviewers considered by the orchestrator for this repository/runtime, grouped briefly as generic/convention/project/legacy when useful>` |
 | Skipped reviewers | `<reviewers not dispatched with short reasons, e.g. no matching files, optional group not selected, unavailable native agent, PR number missing>` |
@@ -1798,9 +1798,9 @@ review_run_id: <stable id, e.g. pr-5462-2026-06-13T10-22-00Z>
 orchestrator: review-orchestrator
 verdict: <APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES>
 context_mode: <none | light | full>
-model_strategy: <ask | adaptive | economy | per-group | current-session>
+model_strategy: <ask | adaptive>
 current_model: <actual current model id/name, or unknown>
-model_assignment: <current session | adaptive classes | per reviewer classes | unsupported>
+model_assignment: <per-reviewer tier/model from each dispatch's `model` block | unsupported>
 agents:
   - <reviewer>
 scope:
@@ -1877,7 +1877,7 @@ Formatting rules for PR comments and AI artifacts:
 - `Skipped reviewers` must include short reasons from `review_context.routing.reasons`, `review_context.review_plan.skipped`, and dispatch/runtime compatibility checks.
 - If the list is long, keep `Agents run` complete and summarize `Available reviewers` / `Skipped reviewers` by group with counts plus notable names; put full details in the AI artifact when one is generated.
 - When `comment-and-ai-artifact` is selected, the PR comment meta section must include both `AI artifact` and `AI artifact description`; do not rely on the link alone.
-- In the metadata table, `Model` must be the actual model id/name. Put `current-session`, `adaptive`, or `per-group` under `Model strategy` / `Model assignment`, not under `Model`.
+- In the metadata table, `Model` must be the actual model id/name. Put `unsupported`, `adaptive`, or `ask` under `Model strategy` / `Model assignment`, not under `Model`.
 - If posting via CLI, write the body to a temp file and use `gh pr comment <pr-number> --body-file <file>`; never inline a large heredoc into shell history.
 
 ---
