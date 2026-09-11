@@ -9,7 +9,7 @@
   "title": "MCP servers P3b: OAuth for remote servers — browser flow, owner-only token store, headless refusal",
   "status": "in-progress",
   "createdAt": "2026-09-11T09:12:05.678Z",
-  "updatedAt": "2026-09-11T18:59:37.424Z",
+  "updatedAt": "2026-09-11T19:00:22.710Z",
   "source": {
     "type": "description",
     "ref": null
@@ -99,7 +99,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -107,14 +107,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context was collected inline across the phase; the review round then produced a bounded context pack at .metaproject/reviews/flow-250-review-context.md that five reviewers worked from."
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -122,14 +124,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "OAuth implemented: credential store, loopback callback, provider, auth and logout commands, session wiring, needs_auth diagnosis. Reworked substantially after the review round found two false criterion confirmations."
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -137,14 +141,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Tests added and green: 9566 pass / 0 fail. Mutation sweep over the diff 158/170 killed, 0 hung, 11 recorded equivalents. Three flaky or vacuous tests found and fixed during verification."
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -152,7 +158,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Managed review round with five reviewers instead of a self-review: 3 blockers, 14 majors, all dispositioned. Record at .metaproject/reviews/flow-250-review-round.md."
     }
   ],
   "history": [
@@ -308,6 +316,26 @@
       "at": "2026-09-11T18:59:37.424Z",
       "event": "ac-confirmed",
       "detail": "AC15: RE-VERIFIED after review. Now four class tables in credentials.table.test.ts (describeCredential, KEY_TABLE, STORE_TABLE, USES_OAUTH), each checked by classTableProblems. The review found the describeCredential axis was 'absent'/'present' — a fact about the record rather than the distinction the rows assert, so four of five rows collapsed onto one label and the rule was satisfied by a label rather than a second outcome. The axis is now what the operator must do: 'nothing stored' / 'nothing to do' / 'operator must act'."
+    },
+    {
+      "at": "2026-09-11T19:00:22.364Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T19:00:22.481Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T19:00:22.595Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-11T19:00:22.710Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }

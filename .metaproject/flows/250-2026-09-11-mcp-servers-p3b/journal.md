@@ -85,3 +85,7 @@ committed once on a red suite, having chained `git commit` after
 twice wrote my own version of something the repository already had
 (`src/lib/file-lock.ts`, `src/lib/oauth/open-url.ts`), the second of
 which silently dropped a headless guard.
+- 2026-09-11T19:00:22.364Z - task-done: T1: Collect remaining context
+- 2026-09-11T19:00:22.481Z - task-done: T2: Implement per plan
+- 2026-09-11T19:00:22.595Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T19:00:22.710Z - task-done: T4: Self-review and prepare draft PR
