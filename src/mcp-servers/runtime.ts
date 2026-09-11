@@ -369,9 +369,20 @@ export function sessionAuthProviderOptions(
     ...(server.oauth === false || server.oauth?.clientId === undefined
       ? {}
       : { clientId: server.oauth.clientId }),
-    ...(server.oauth === false || server.oauth?.scopes === undefined
-      ? {}
-      : { scopes: server.oauth.scopes }),
+    // `scopes` is deliberately NOT passed here.
+    //
+    // It reaches the SDK only through `clientMetadata.scope`, which is
+    // read during dynamic registration and during a new authorisation
+    // — both of which a session refuses. A refresh grant sends
+    // `grant_type`, `refresh_token`, `client_id` and `resource`, and
+    // no scope at all.
+    //
+    // So the field had no observable effect on this path, and a
+    // mutation sweep said so by surviving the inversion of the spread
+    // that used to be here. Deleted rather than tested: a test that
+    // asserts a value nothing reads is a test of the assignment, not
+    // of a behaviour. `keryx mcp auth` does pass it, and that is
+    // asserted against a recording authorisation server.
   };
 }
 

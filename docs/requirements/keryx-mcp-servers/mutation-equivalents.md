@@ -11,30 +11,64 @@ is a gap; it belongs in a test, not in this file. Two entries below
 were in the hard-to-reach category first, and moved out of it once the
 code was reshaped to make the case expressible.
 
-## P3b (flow 250) — 116 mutants over the diff
+## P3b (flow 250) — 170 mutants over the diff
 
-Final state: **108 killed, 8 equivalent, 0 unexplained survivors, 0
+Final state: **159 killed, 11 equivalent, 0 unexplained survivors, 0
 hangs.** Every entry below was confirmed still surviving by a
 verification sweep run after the killing tests landed, so this list is
 what the sweep actually reports and not what it reported once.
+
+The diff grew from 116 mutants to 170 during the review round, which
+added `keryx mcp logout`, the credential-store lock, `oauth.scopes`
+and `oauth.callbackPort`. The sweep over that larger diff found ten
+survivors **in the review fixes themselves** — guards that had just
+been written and that nothing yet proved, including all three
+`if (!write.ok) throw` statements added an hour earlier. All ten were
+killed by new tests. Worth recording as a pattern: remediation
+written straight after a review gets the behaviour right and the
+coverage thin.
+
+One survivor from that round was neither a gap nor an equivalent:
+`sessionAuthProviderOptions` passed `oauth.scopes` into the session
+provider, where `clientMetadata.scope` is read only during
+registration and during a new authorisation — both of which a session
+refuses — while a refresh grant sends no scope at all. The field had
+no observable effect on that path. Deleted rather than tested: a test
+asserting a value nothing reads is a test of the assignment, not of a
+behaviour. `keryx mcp auth` does pass it, and that is asserted
+against a recording authorisation server.
 
 ### `?? → ||` where the left operand is a function or `undefined`
 
 | Site | Expression |
 |---|---|
-| `src/commands/mcp-servers.ts:437` | `deps.openBrowser ?? defaultOpenBrowser` |
-| `src/commands/mcp-servers.ts:807` | `deps.connect ?? ((server) => defaultConnect(…))` |
+| `src/commands/mcp-servers.ts:491` | `deps.env ?? process.env` |
+| `src/commands/mcp-servers.ts:542` | `deps.openBrowser ?? ((url) => …)` |
+| `src/commands/mcp-servers.ts:955` | `deps.connect ?? ((server) => defaultConnect(…))` |
+| `src/mcp-servers/credentials.ts:271` | `outcome ?? { count: 0, error: … }` |
 | `src/mcp-servers/doctor.ts:272` | `options.now ?? Date.now` |
-| `src/mcp-servers/oauth-callback.ts:86` | `options.serve ?? Bun.serve` |
-| `src/mcp-servers/oauth-provider.ts:82` | `deps.now ?? Date.now` |
+| `src/mcp-servers/oauth-callback.ts:125` | `options.serve ?? Bun.serve` |
+| `src/mcp-servers/oauth-provider.ts:99` | `deps.now ?? Date.now` |
 | `src/mcp-servers/runtime.ts:159` | `options.connect ?? ((server) => defaultConnect(…))` |
 
 `??` and `||` differ only on values that are falsy but not nullish:
 `0`, `""`, `false`, `NaN`, `-0`, `0n`. Each left operand above is
-typed as a function or `undefined`, and **no function is falsy**, so
-the two operators select the same operand for every value the type
-admits. TypeScript refuses any call site that would supply one of the
-distinguishing values.
+typed as a function, an object or `undefined`, and **no function or
+object is falsy**, so the two operators select the same operand for
+every value the type admits. TypeScript refuses any call site that
+would supply one of the distinguishing values.
+
+### `src/mcp-servers/oauth-callback.ts:137` — `options.port ?? 0` → `|| 0`
+
+A separate argument, because this operand is a `number`. The only
+falsy non-nullish number the type admits is `0`, and `0 || 0` is `0`,
+exactly as `0 ?? 0` is. The two spellings cannot be distinguished by
+any input.
+
+Contrast `options.timeoutMs ?? CALLBACK_TIMEOUT_MS`, also a number,
+which is NOT equivalent: there `0` means "do not wait" and `||` would
+substitute five minutes. The difference is whether the fallback
+happens to equal the distinguishing value.
 
 Note what is NOT in this table. The same mutation on
 `credentialsFile`'s `configDir ?? ensureKeryxConfigDir()` is **not**

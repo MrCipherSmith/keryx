@@ -134,6 +134,21 @@ describe("what a session decides about OAuth", () => {
     ).toBeUndefined();
   });
 
+  test("scopes are NOT carried into the session provider", () => {
+    // They would have no effect: `clientMetadata.scope` is read only
+    // during registration and during a new authorisation, both of
+    // which a session refuses, and a refresh grant sends no scope.
+    // Carrying it anyway is a line no test can pin — the sweep proved
+    // that by surviving its inversion.
+    const options = sessionAuthProviderOptions(
+      server({ url: URL_, oauth: { scopes: ["read"] } }),
+      undefined,
+      USABLE,
+    );
+    expect(options).toBeDefined();
+    expect("scopes" in (options ?? {})).toBe(false);
+  });
+
   test("the server name and url are the ones the credential is keyed by", () => {
     const options = sessionAuthProviderOptions(server({ url: URL_ }, "linear"), undefined, USABLE);
     expect([options?.serverName, options?.serverUrl]).toEqual(["linear", URL_]);
