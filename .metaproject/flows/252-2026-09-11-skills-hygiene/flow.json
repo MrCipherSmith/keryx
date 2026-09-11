@@ -9,7 +9,7 @@
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T20:05:24.815Z",
+  "updatedAt": "2026-09-11T20:18:57.300Z",
   "source": {
     "type": "description",
     "ref": null
@@ -97,11 +97,12 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T3",
         "T24",
-        "T28"
+        "T28",
+        "T30"
       ],
       "attempts": {
         "count": 6,
@@ -140,7 +141,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -712,6 +714,52 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T29",
+      "title": "R3 fix (user-approved past the loop bound): orchestrator boundary commit works whether or not the worker committed (C-015, C-016, C-017)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T28"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T20:06:05.567Z",
+            "outcome": "started",
+            "detail": "252-T29 narrow boundary-commit fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T30",
+      "title": "R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T29"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T20:12:37.979Z",
+            "outcome": "started",
+            "detail": "252-T30 targeted closure check of C-015/C-016/C-017"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1172,6 +1220,46 @@
       "at": "2026-09-11T20:05:24.815Z",
       "event": "task-attempt",
       "detail": "T4: failed (attempt 6) — round 3 (final): round-2 findings closed; fix for C-010 introduced C-015 major (flow-orchestrator boundary commit fails when worker auto-commits) and C-016 minor (job-orchestrator never passes auto_commit); loop bound reached, escalated to user"
+    },
+    {
+      "at": "2026-09-11T20:06:03.290Z",
+      "event": "task-added",
+      "detail": "T29: R3 fix (user-approved past the loop bound): orchestrator boundary commit works whether or not the worker committed (C-015, C-016, C-017)"
+    },
+    {
+      "at": "2026-09-11T20:06:04.515Z",
+      "event": "task-added",
+      "detail": "T30: R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify"
+    },
+    {
+      "at": "2026-09-11T20:06:05.067Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3, T24, T28, T30 (was T3, T24, T28) — user-approved narrow fix after round 3; closure is checked by T30, not a fourth round"
+    },
+    {
+      "at": "2026-09-11T20:06:05.568Z",
+      "event": "task-attempt",
+      "detail": "T29: started (attempt 1) — 252-T29 narrow boundary-commit fix"
+    },
+    {
+      "at": "2026-09-11T20:12:37.859Z",
+      "event": "task-done",
+      "detail": "T29: R3 fix (user-approved past the loop bound): orchestrator boundary commit works whether or not the worker committed (C-015, C-016, C-017)"
+    },
+    {
+      "at": "2026-09-11T20:12:37.979Z",
+      "event": "task-attempt",
+      "detail": "T30: started (attempt 1) — 252-T30 targeted closure check of C-015/C-016/C-017"
+    },
+    {
+      "at": "2026-09-11T20:18:57.175Z",
+      "event": "task-done",
+      "detail": "T30: R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify"
+    },
+    {
+      "at": "2026-09-11T20:18:57.300Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
