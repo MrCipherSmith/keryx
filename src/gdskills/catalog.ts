@@ -26,7 +26,8 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "If the request asks to create, run, resume, track, or finish a managed flow and Task Manager is enabled, route implementation work to `gdskills/orchestration/flow-orchestrator/SKILL.md` before `job-orchestrator`.",
     "Prefer project-local skills and module manifests before broad raw file search.",
     "Route to the narrowest applicable skill and record unavailable modules explicitly.",
-  ], ["any repository task", "route context", "which skill should be used", "ordinary product-development request", "agent should decide tools"]),
+  ], ["any repository task", "route context", "which skill should be used", "ordinary product-development request", "agent should decide tools"],
+    "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: picking between gdgraph, gdctx, gdwiki, memory, and health once the module is already known (see context-router)."),
   skill("context-router", "core", ["minimal", "recommended", "full"], "Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.", [
     "Start from the user's goal, not from command names.",
     "Use gdgraph for file relationships and affected context.",
@@ -36,13 +37,15 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Use health for normalized quality and gate status; use testing for test selection and test context.",
     "Prefer MCP tools/resources for these capabilities when connected; otherwise use the matching skill and CLI command.",
     "Use project-skills for known modules, components, stores, services, and domain entities.",
-  ], ["find files", "understand code", "collect context", "what should I inspect", "agent routing"]),
+  ], ["find files", "understand code", "collect context", "what should I inspect", "agent routing"],
+    "Use when the Metaproject module or skill is already known and the next step is picking gdgraph, gdctx, gdwiki, memory, health, or project-skills before reading raw files. NOT for: deciding which top-level skill or module should handle a request (see metaproject-router)."),
   skill("entity-skill-router", "core", ["minimal", "recommended", "full"], "Select relevant project-skills for known modules, components, stores, services, and domain entities.", [
     "Check `.metaproject/project-skills` for matching module/entity skills.",
     "Use gdgraph affected context to find nearby entities when the target is a file.",
     "Load only the matching project-skill and directly referenced files.",
     "If no project-skill exists, suggest creating one with `keryx skills generate`.",
-  ], ["project skill", "component pattern", "module-specific work"]),
+  ], ["project skill", "component pattern", "module-specific work"],
+    "Use when a known module, component, store, service, or domain entity already has a project-skill that should be loaded instead of searched for from scratch. NOT for: scaffolding a project-skill that does not exist yet (see entity-skill-creator), checking one against current code (see entity-skill-verifier), or applying a finding to one (see entity-skill-learner)."),
   skill("entity-skill-creator", "core", ["minimal", "recommended", "full"], "Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.", [
     "Normalize the target into module, entity, files, symbols, and wiki references.",
     "Collect evidence from gdgraph, gdctx, gdwiki, health, and memory when available.",
@@ -51,7 +54,8 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "To refresh a project-skill from its Origin (or a new file), run `keryx skills update <module>/<name> [--from <origin>]`.",
     "Run `keryx skills route <target>` and `keryx skills inspect <module>/<skill-name>` to confirm registration and routing.",
     "Run `keryx skills verify <module>/<skill-name>` and finish with `keryx skills status`.",
-  ], ["create skill", "generate project skill", "new entity skill", "создай скил", "создай скилл для <path>", "import skill", "import skills from", "update skill from", "подтяни скилы", "обнови скил"]),
+  ], ["create skill", "generate project skill", "new entity skill", "создай скил", "создай скилл для <path>", "import skill", "import skills from", "update skill from", "подтяни скилы", "обнови скил"],
+    "Use when no project-skill exists yet for a target module, component, store, service, or domain entity, or one needs scaffolding, importing, or refreshing from its origin. NOT for: loading a project-skill that already exists (see entity-skill-router)."),
   skill("reviewer-skill-creator", "core", ["recommended", "full"], "Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.", [
     "Read the source in full and sort it into method, convention, and persona before writing anything.",
     "Scaffold with `keryx skills create <target> --module review --name <reviewer> --note <gist> --origin <source file>`; the target is a routing key, the note is the prose.",
@@ -61,18 +65,20 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Confirm with `keryx review reviewers` — creating files is not registration, and registration is not discovery.",
     "For existing SKILL.md packages, run `keryx skills import --from <dir|file|https-url> --module <module>`; `keryx review import` is the review-shaped alias with the review-vantage-* prefix.",
   ], ["create a reviewer", "new reviewer for review-orchestrator", "make a reviewer from this profile", "создай ревьюера", "создай нового ревьюера на основании", "import vantage reviewers", "import overlay reviewers"]),
-  skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.", [
-    "Resolve candidate skills through ownership and gdgraph affected context.",
-    "Compare skill claims with current code, wiki decisions, health reports, and memory.",
-    "Classify each skill as fresh, stale, needs-review, or blocked.",
-    "Write a verification report and only update generated sections when policy allows it.",
-  ], ["verify skill", "skill-verify-skill", "stale skill"]),
+  skill("entity-skill-verifier", "core", ["minimal", "recommended", "full"], "Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.", [
+    "Resolve the target project-skill through gdgraph affected context or `keryx skills route <target>`.",
+    "Run `keryx skills verify <module>/<skill-name>` (`--dry-run` previews without writing).",
+    "The command checks required files, SKILL.md metadata (version, target, last-verified), manifest registration, target path existence, and evidence artifacts for gdgraph, gdctx, gdwiki, Code Health, and memory consultation, then classifies the skill fresh, needs-review, stale, or blocked and writes the JSON report plus `verification.md`.",
+    "Manually read the skill and the code, wiki, and health evidence it points at to check its claims — the command does not do this comparison — then route stale or blocked findings to entity-skill-learner.",
+  ], ["verify skill", "skill-verify-skill", "stale skill"],
+    "Use when an existing project-skill needs classifying — fresh, needs-review, stale, or blocked — from its required files, metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, gdwiki, Code Health, memory), followed by a manual read of its claims against current code as this skill's next step. NOT for: applying a review, test, or health finding to update a skill (see entity-skill-learner)."),
   skill("entity-skill-learner", "core", ["minimal", "recommended", "full"], "Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.", [
     "Parse the source report and map findings to project-skills.",
     "Classify lessons as anti-patterns, checklist changes, template changes, workflow changes, or architecture rules.",
     "Respect manual sections and autonomy policy.",
     "Increment version and append `skill-changelog.md` entries with provenance.",
-  ], ["learn from review", "update skill", "skill lesson"]),
+  ], ["learn from review", "update skill", "skill lesson"],
+    "Use when a review finding, test failure, health report, memory entry, or verifier report points at a project-skill that needs updating. NOT for: checking a skill's current accuracy with no source report driving it (see entity-skill-verifier)."),
 
   skill("job-orchestrator", "orchestration", ["recommended", "full"], "Run full task pipelines: clarify, collect context, plan, implement, verify, review, and summarize.", [
     "Clarify ambiguity with interviewer-style questions only when required.",
@@ -440,7 +446,8 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Find existing root agent entrypoints.",
     "Keep managed Metaproject blocks idempotent.",
     "Ensure local `.metaproject/index.md` and skill catalog are first-class references.",
-  ], ["agents.md", "claude.md", "entrypoint"]),
+  ], ["agents.md", "claude.md", "entrypoint"],
+    "Use when AGENTS.md or CLAUDE.md needs its managed Metaproject block added, refreshed, or kept idempotent. NOT for: splitting an oversized entrypoint into rules and project-skills (see agent-entrypoint-distiller)."),
   skill("agent-entrypoint-distiller", "platform", ["minimal", "recommended", "full"], "Split large AGENTS.md/CLAUDE.md files into high-priority Metaproject rules and project-specific skills.", [
     "Run `keryx rules distill` when the user asks to decompose a large CLAUDE.md/AGENTS.md.",
     "Keep root entrypoints compact: non-project/highest-priority instructions plus `.metaproject/index.md` routing.",
@@ -450,7 +457,8 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Install hooks only when explicitly enabled.",
     "Keep hooks lightweight and idempotent.",
     "Avoid network and destructive behavior inside hooks.",
-  ], ["install hook", "git hook", "post-commit"]),
+  ], ["install hook", "git hook", "post-commit"],
+    "Use when a lightweight, explicitly-enabled git hook for graph, health, or skill verification needs installing or checking. NOT for: general hook design guidance not tied to these three (see hookify)."),
   skill("hookify", "platform", ["full"], "Use hook guidance for safe hook design and installation.", [
     "Detect existing hooks and preserve user content.",
     "Install idempotent managed blocks.",
@@ -465,17 +473,20 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Read bundled and project-local skill metadata.",
     "Generate concise catalog entries grouped by category.",
     "Keep catalog deterministic and local-first.",
-  ], ["skill catalog", "list skills", "skills registry"]),
+  ], ["skill catalog", "list skills", "skills registry"],
+    "Use when `.metaproject/skills/catalog.md` or the machine-readable skill registry is missing or out of date with bundled and project-local skill metadata. NOT for: turning skills into runtime artifacts (see skill-runtime-exporter) or pushing them to local runtimes (see skill-sync)."),
   skill("skill-runtime-exporter", "platform", ["full"], "Export canonical skills to runtime-compatible Codex or Claude artifacts.", [
     "Read canonical skill packages.",
     "Remove management-only files from runtime exports.",
     "Keep runtime `SKILL.md` concise with references, scripts, and assets as needed.",
-  ], ["export skill", "runtime skill", "codex skill"]),
+  ], ["export skill", "runtime skill", "codex skill"],
+    "Use when canonical skill packages need turning into runtime-compatible Codex or Claude artifacts, stripped of management-only files. NOT for: regenerating the skill catalog (see skill-catalog-manager) or pushing the export to local runtimes (see skill-sync)."),
   skill("skill-sync", "platform", ["full"], "Sync exported runtime skills to configured local runtimes only when explicitly enabled.", [
     "Read configured runtime targets.",
     "Validate runtime skill packages before sync.",
     "Sync only selected skills and report changed files.",
-  ], ["sync skills", "install runtime skills", "global skill sync"]),
+  ], ["sync skills", "install runtime skills", "global skill sync"],
+    "Use when already-exported runtime skills need pushing to configured local runtimes, and only when sync is explicitly enabled. NOT for: producing the runtime export itself (see skill-runtime-exporter)."),
 ];
 
 function skill(
@@ -485,11 +496,17 @@ function skill(
   purpose: string,
   workflow: string[],
   triggers: string[],
+  // Explicit routing trigger for the rendered `description:` field. When
+  // omitted, the description falls back to a lowercased echo of `purpose` —
+  // which reads as an instruction ("Use when choose between...") rather than
+  // a situation, and gives an agent nothing to route on. Pass this whenever
+  // the skill sits near a sibling a caller could reach for by mistake.
+  descriptionOverride?: string,
 ): BundledSkill {
   return {
     name,
     category,
-    description: `Use when ${purpose.charAt(0).toLowerCase()}${purpose.slice(1)}`,
+    description: descriptionOverride ?? `Use when ${purpose.charAt(0).toLowerCase()}${purpose.slice(1)}`,
     purpose,
     workflow,
     triggers,
@@ -519,10 +536,16 @@ export function renderBundledSkill(skillEntry: BundledSkill): string {
   const triggers = skillEntry.triggers.map((trigger) => `- ${trigger}`).join("\n");
   const workflow = skillEntry.workflow.map((step, index) => `${index + 1}. ${step}`).join("\n");
   const commandContract = renderAgentCommandContract(skillEntry);
+  // A `NOT for: <sibling>` clause carries a colon; quote the value whenever
+  // one is present so the frontmatter stays a valid YAML scalar (the same
+  // convention several bundled SKILL.md files already use for this reason).
+  const descriptionField = skillEntry.description.includes(":")
+    ? `description: ${JSON.stringify(skillEntry.description)}`
+    : `description: ${skillEntry.description}`;
 
   return `---
 name: ${skillEntry.name}
-description: ${skillEntry.description}
+${descriptionField}
 ---
 
 # ${skillEntry.name}

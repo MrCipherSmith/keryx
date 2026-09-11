@@ -12,9 +12,9 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "verification"
+  category: "orchestration"
   agent_worthy: true
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 
@@ -61,56 +61,43 @@ Code Verifier Progress:
 
 ### Phase 1: DETECT
 
-Auto-detect the project stack and available verification tools.
+Determine scope. Stack and tool discovery is delegated to `keryx health run`
+and `keryx test run` — do NOT hand-roll package-manager or
+lint/type-check/test tool detection here.
 
-**1.1 Package manager and runner:**
-
-```bash
-cd <codebase_path>
-
-if   [ -f bun.lock ] || [ -f bun.lockb ]; then PM=bun;    RUNNER="bun run"
-elif [ -f pnpm-lock.yaml ];    then PM=pnpm;   RUNNER="pnpm run"
-elif [ -f yarn.lock ];         then PM=yarn;   RUNNER="yarn"
-elif [ -f package-lock.json ]; then PM=npm;    RUNNER="npm run"
-elif [ -f pyproject.toml ] || [ -f requirements.txt ]; then PM=python; RUNNER=""
-elif [ -f go.mod ];            then PM=go;     RUNNER=""
-else PM=unknown; RUNNER=""
-fi
-```
-
-**1.2 Detect available check commands:**
-
-| Check | How to detect | Command |
-|---|---|---|
-| Lint | `package.json` has `"lint"` script | `$RUNNER lint` |
-| Lint (auto) | `eslint.config.*` or `.eslintrc*` present | `npx eslint . --max-warnings 0` |
-| Biome | `biome.json` present | `npx biome check .` |
-| Type-check | `package.json` has `"type-check"` or `"typecheck"` script | `$RUNNER type-check` |
-| Type-check (auto) | `tsconfig.json` present | `npx tsc --noEmit` |
-| Tests | `package.json` has `"test"` script | `$RUNNER test --run` (vitest) or `$RUNNER test` |
-| pytest | `pytest` in `pyproject.toml` or `requirements.txt` | `pytest --tb=short -q` |
-| Go tests | `go.mod` present | `go test ./...` |
-| Circular imports | `madge` in devDependencies | `npx madge --circular src/` |
-
-**1.3 Determine scope:**
+**1.1 Determine scope:**
 
 ```
 IF scope = "changed" (default when dispatched by orchestrator):
   FILES = git diff --name-only <base_branch>...HEAD
-  Run tests only for files related to changed code
-  Run lint only on changed files: npx eslint <changed_files>
-  Run type-check on full project (tsc doesn't support file-level scope)
+  Pass --changed to keryx health run and keryx test run below.
 
 IF scope = "full":
-  Run all checks on full project
+  Run all checks on the full project (omit --changed).
 ```
+
+**1.2 Checks used:**
+
+| Check | Command |
+|---|---|
+| Lint + type-check | `keryx health run --changed --source eslint,typescript` (drop `--changed` for full scope) |
+| Tests | `keryx test run --changed --strict` (drop `--changed` for full scope) |
+| Circular imports | the project's own package-manager runner + `madge --circular --extensions ts,tsx src/`, if `madge` is a devDependency — optional; not covered by `keryx health run` / `keryx test run` |
+
+`src/health/sources/eslint.ts` and `src/health/sources/typescript.ts` resolve
+the real lint/type-check invocation for the project; `src/testing/service.ts`
+detects `bun` / `pnpm` / `yarn` / `npm` from the lockfile and builds the test
+invocation from the project's own test script. Do NOT hard-code a package
+manager, linter, type-checker, or test binary here — that is the if-chain
+these commands already resolve. On a project with no keryx health/testing
+config, fall back to the project's own configured lint/type-check/test
+command (discovered from its `package.json` scripts or equivalent, not a
+hardcoded tool).
 
 **Output of Phase 1:**
 ```
 TOOLING:
-  pm: bun | pnpm | yarn | npm | python | go | unknown
-  runner: "bun run" | ...
-  checks_available: [lint, type-check, tests, circular-imports]
+  checks_available: [lint+type-check, tests, circular-imports]
   checks_skipped: [<reason>]
   scope: changed | full
   changed_files: [<paths>]
@@ -120,54 +107,44 @@ TOOLING:
 
 ### Phase 2: RUN
 
-Execute each available check in order. Capture full output.
+Execute each available check. Capture full output.
 
-**Execution order:** lint → type-check → tests → import-check
+**Execution order:** lint+type-check → tests → import-check
 
 **Do NOT abort early** — run all checks even if one fails. The orchestrator needs the complete picture.
 
-**2.1 Lint:**
+**2.1 Lint + type-check:**
 ```bash
-# Changed files only (faster, more actionable)
-npx eslint <changed_files> --format=json --max-warnings 0
-# OR if lint script exists:
-$RUNNER lint
+keryx health run --changed --source eslint,typescript
+# OR, full scope:
+keryx health run --source eslint,typescript
 ```
 
-Capture:
-- Exit code (0 = pass, non-zero = fail)
+Read the result with `keryx health status` (or the report path the command
+prints). Capture:
+- Gate status (pass/fail) per source
 - Number of errors and warnings
-- Per-file error list (file path, line, column, rule, message)
+- Per-finding: file, line, column, rule/TS code, message
 
-**2.2 Type-check:**
+**2.2 Tests:**
 ```bash
-npx tsc --noEmit 2>&1
-# OR:
-$RUNNER type-check
+keryx test run --changed --strict
+# OR, full scope:
+keryx test run --strict
 ```
 
 Capture:
-- Exit code
-- Number of errors
-- Per-error: file, line, column, message, TS error code
-
-**2.3 Tests:**
-```bash
-$RUNNER test --run 2>&1        # vitest
-# OR: npx jest --ci 2>&1
-# OR: pytest --tb=short -q 2>&1
-# OR: go test ./... 2>&1
-```
-
-Capture:
-- Exit code
+- Report status / exit code
 - Tests passed / failed / skipped counts
 - Per-failure: test name, file, error message, stack (first 5 lines)
 
-**2.4 Circular import check (if madge available):**
+**2.3 Circular import check (if madge available):**
 ```bash
-npx madge --circular --extensions ts,tsx src/ 2>&1
+<pm> exec madge --circular --extensions ts,tsx src/ 2>&1
 ```
+`<pm>` is the project's own package-manager runner for devDependency
+binaries (`pnpm exec`, `yarn`, or the npm-based equivalent), resolved the
+same way `keryx test run` resolves it from the lockfile — not hardcoded.
 
 Capture:
 - Exit code
@@ -298,7 +275,7 @@ code-verifier:
 code-verifier:
   codebase_path: <worktree_path>
   scope: changed
-→ If gate still FAIL after 2 iterations → report as BLOCKED, skip to report
+→ If gate still FAIL after 3 iterations → report as BLOCKED, skip to report
 → If gate: PASS → proceed to report
 ```
 

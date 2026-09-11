@@ -118,6 +118,12 @@ export async function skillsCommand(args: string[]): Promise<void> {
     note(`skills   ${relativeToCwd(result.skillsRoot)}`);
     note(`catalog  ${relativeToCwd(result.catalogPath)}`);
     note(`manifest ${relativeToCwd(result.manifestPath)}`);
+    if (result.warnings.length > 0) {
+      console.log("Warnings:");
+      for (const warning of result.warnings) {
+        console.log(`- ${warning}`);
+      }
+    }
     nextSteps([
       `Browse the catalog: ${style.cyan("keryx skills catalog")}.`,
       `Route a request: ${style.cyan("keryx skills route <target>")}.`,

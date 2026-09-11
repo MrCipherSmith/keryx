@@ -1,6 +1,6 @@
 ---
 name: context-router
-description: Use when choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.
+description: "Use when the Metaproject module or skill is already known and the next step is picking gdgraph, gdctx, gdwiki, memory, health, or project-skills before reading raw files. NOT for: deciding which top-level skill or module should handle a request (see metaproject-router)."
 ---
 
 # context-router

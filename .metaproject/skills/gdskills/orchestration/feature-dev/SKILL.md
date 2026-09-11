@@ -10,7 +10,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "2.0.0"
-  category: "workflow"
+  category: "orchestration"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
@@ -97,7 +97,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 Run `code-verifier` on the full diff:
 
 ```
-Invoke: skills/orchestration/code-verifier/SKILL.md
+Invoke: .metaproject/skills/gdskills/orchestration/code-verifier/SKILL.md
 Input:  codebase_path=<project_root>, scope=changed, base_branch=<base>
 ```
 

@@ -38,7 +38,19 @@ function baseInput(): Record<string, unknown> {
     },
     reviewer: "review-security-code",
     scope_mode: "diff",
-    model_class: "normal",
+    model: {
+      tier: "standard",
+      tier_reasons: ["base:standard"],
+      inherit: true,
+      tier_resolution: "session-fallback",
+      model_discovery: {
+        provider: "",
+        candidates: [],
+        ranked: [],
+        session_rank: null,
+        fallback_reason: "the session names no model to anchor the ranking on",
+      },
+    },
     budget: { max_findings: 20 },
   };
 }

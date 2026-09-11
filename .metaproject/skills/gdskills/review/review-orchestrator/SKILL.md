@@ -87,10 +87,11 @@ code — and it is the step that was documented as running for a whole release
 while nothing called it.
 
 The command names no model. It ranks whatever your provider reports at runtime
-and places the tiers relative to your own model; when it cannot rank anything it
-prints `inherit: true` and exits 0, which means the dispatch runs on the session
-model. That is a correct answer, not a failure — never "fix" it by writing a
-model id into a dispatch.
+and places the tiers relative to your own model; when ranking fails it still
+names the session's own provider and model as a fallback. Only when the session
+itself has no provider/model to name does it print `inherit: true` and exit 0,
+which means the dispatch runs on the session model. That is a correct answer,
+not a failure — never "fix" it by writing a model id into a dispatch.
 
 ---
 
@@ -160,7 +161,7 @@ which of its inputs were recovered and which were never written down.
 | `context_doc` | string | no | Path to job context document (e.g., `.metaproject/jobs/<job>/ai/context.md`). |
 | `context_mode` | string | no | `none`, `light`, or `full`. Default: `light` for PR review, `none` for small path reviews. `full` may call `context-collector` before dispatch. |
 | `token_budget` | object | no | Optional budget controls: `{total, per_reviewer, diff_max_chars, file_max_chars}`. |
-| `model_strategy` | string | no | `current`, `ask`, or `adaptive`. Default: `current`; do not switch models unless user or automation allows it. |
+| `model_strategy` | string | no | `ask` or `adaptive`. Default: `adaptive`; the model per dispatch is computed by `keryx review tier`, never chosen by hand (see Step 6). |
 | `managed_review` | object | no | Optional managed review mode: `{mode, target, target_ref, flow_id, reviewers}` where mode is `lightweight`, `attach-review`, `review-flow`, or `ingest`. |
 | `verification_mode` | string | no | `off`, `annotate`, or `filter`. Default `annotate` — verdicts are recorded and nothing is removed. See Wave C. |
 | `pr_comments` | object | no | `{enabled, max_replies_total, max_sentences_per_reply}`. Defaults: enabled when a PR exists, `30`, `2`. Collect every round, reply once at the end. See External PR comments. |
@@ -454,7 +455,7 @@ not ask for our reasoning and is reading between other tasks.
 
 ## Review Context Pack
 
-Before routing reviewers, build a compact `review_context` object. This is the shared source of truth for all sub-agents and must follow `skills/review/review-orchestrator/review-context.schema.json`.
+Before routing reviewers, build a compact `review_context` object. This is the shared source of truth for all sub-agents and must follow `.metaproject/skills/gdskills/review/review-orchestrator/review-context.schema.json`.
 
 Required content:
 - Request: raw user request, flags, review mode, explicit paths or commit range.
@@ -646,27 +647,31 @@ Default budget guidance:
 | small | <= 5 files and <= 300 changed lines | `light` | full relevant diff to selected reviewers |
 | medium | <= 20 files or <= 2,000 changed lines | `light` | per-domain filtered diff |
 | large | > 20 files or > 2,000 changed lines | ask `full` | staged waves by domain |
-| high-risk | auth/API/core/security/data migrations | ask `full` | include strict synthesis |
+| high-risk | auth/API/core/security/data migrations | ask `full` | staged waves, verifier included |
 
 ---
 
 ## Model Strategy
 
-Default: keep the current model for all reviewers.
+The model for each dispatch is computed, not chosen — see Step 6. Before every
+reviewer dispatch, run `keryx review tier` with the signals you hold and paste
+the `model` block it prints into that dispatch. Do not assign a model class by
+reading a table or by hand; that mechanical step is exactly what the command
+replaced (see Step 6 above and `job-orchestrator` Step 5, which pins the same
+rule: `model_strategy: "current"` is gone).
 
-If the platform supports assigning models to sub-agents and the user/automation allows it, the orchestrator may use `model_strategy: adaptive`:
+`model_strategy` now governs only how the *computed* model is surfaced, not
+whether it is computed:
 
-| Complexity | Suggested model class | Reviewers |
-|---|---|---|
-| simple | cheaper/faster coding model | `review-style`, `review-clean-code`, docs-only convention checks, legacy/profile checks |
-| normal | current/default model | `review-frontend`, `review-backend`, `review-testing-practices`, convention reviewers |
-| complex | strongest available coding/reasoning model | `review-logic`, `review-architecture`, `review-security-code`, `review-highload`, strict synthesis |
+| `model_strategy` | Behavior |
+|---|---|
+| `ask` | Present the `keryx review tier` model plan once before dispatch. |
+| `adaptive` (default) | Dispatch on the computed model directly; record the chosen model per reviewer in the final report metadata. |
 
 Rules:
-- Do not silently change model class when `model_strategy` is `current`.
-- With `model_strategy: ask`, present the model plan once before dispatch.
-- With `model_strategy: adaptive`, record chosen model class per reviewer in the final report metadata.
-- If model assignment is unsupported, record `model_strategy: current-session`.
+- Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
+- When the session has no provider/model to name it prints `inherit: true` and exits 0; that means the dispatch runs on the session model. Record that as `model_assignment: unsupported`, not as a failure.
+- With `model_strategy: ask`, present the model plan once before dispatch, then proceed with the computed model.
 
 ---
 
@@ -782,7 +787,7 @@ Before anything else, determine whether the request is **diff mode** or **path m
 
 ### Diff Mode
 
-See shared script: `skills/shared/git-merge-base.md`
+See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run the script to determine `BASE_SHA`, then let the pre-filter build the scope:
 
@@ -1312,7 +1317,7 @@ Runtime rules:
 
 Do not use vague fallback messages such as "running through available agent types" without naming which reviewers used fallback and why.
 
-Pass each sub-reviewer a payload matching `skills/review/review-orchestrator/reviewer-input.schema.json`:
+Pass each sub-reviewer a payload matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-input.schema.json`:
 
 ```yaml
 review_context: <bounded context pack>
@@ -1320,7 +1325,7 @@ reviewer: <skill-name>
 scope_mode: diff | path
 context_doc: <path or empty>
 issue_url: <url or empty>
-model_class: simple | normal | complex | current-session
+model: <the `model` block `keryx review tier` printed for this dispatch — paste verbatim>
 budget:
   max_prompt_tokens: <number or null>
   max_findings: <number>
@@ -1335,7 +1340,7 @@ target_path: <resolved path or file list>
 file_contents: <bounded file contents relevant to this reviewer>
 ```
 
-Each reviewer must return a `REVIEW_RESULT` object matching `skills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
+Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, followed by a concise markdown summary. The orchestrator must reject or normalize free-form reports before consolidation.
 
 **Important for path mode:** instruct each reviewer to check the **entire file**, not just changes. The scope report should say "Path: `<TARGET_PATH>`" instead of a branch/merge-base.
 
@@ -1560,15 +1565,15 @@ Severity ordering for sort: `blocker` > `major` > `minor` > `info`.
 
 ### Model Metadata Rules
 
-`current-session` is a model assignment/runtime strategy, not a model name. Never render it as `model: current-session` or as the PR comment `Model` value.
+`unsupported` is a model-assignment outcome recorded when `keryx review tier` has no session provider/model to name (it prints `inherit: true`), not a model name. Never render it as `model: unsupported` or as the PR comment `Model` value.
 
 When writing review report metadata or a PR comment:
 1. Read `review_context.token_policy.model_plan`.
-2. Set `Model strategy` from `model_plan.strategy`.
+2. Set `Model strategy` from `model_plan.strategy` (`ask` or `adaptive`).
 3. Set `Current model` from the first available value: `model_plan.current_model`, detected tool output, current runtime model shown by the platform, or `unknown`.
-4. If `strategy` is `adaptive`, `economy`, or `per-group`, include model classes: `complex_model`, `normal_model`, and `simple_model` when known.
-5. If model assignment is unsupported and `strategy` is `current-session`, write `Model assignment: current session` and still write `Current model: <actual model or unknown>`.
-6. If the actual model is unknown, write `unknown`; do not substitute `current-session`.
+4. Record the model actually assigned per reviewer — the `tier` and (`provider`+`model` or `inherit`) from the `model` block `keryx review tier` printed for that dispatch — rather than a fixed set of classes; include `complex_model`, `normal_model`, and `simple_model` too when `model_plan` reports them.
+5. If model assignment is unsupported (the dispatch's `model` block carried `inherit: true`), write `Model assignment: unsupported` and still write `Current model: <actual model or unknown>`.
+6. If the actual model is unknown, write `unknown`; do not substitute `unsupported` or `inherit`.
 
 ---
 
@@ -1599,9 +1604,9 @@ STATUS: DONE | DONE_WITH_CONCERNS
 - Reviewers dispatched: <comma-separated list>
 - Changed files: <count>
 - Context mode: `<none | light | full>`
-- Model strategy: `<current | ask | adaptive | economy | per-group | current-session>`
+- Model strategy: `<ask | adaptive>`
 - Current model: `<actual current model id/name, or unknown>`
-- Model assignment: `<single current session | adaptive classes | per reviewer classes | unsupported>`
+- Model assignment: `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>`
 - Token budget: `<used/limit if known; omissions count>`
 
 ## Stats
@@ -1752,9 +1757,9 @@ here is the failure this rule names.
 | Field | Value |
 |---|---|
 | Orchestrator | `review-orchestrator` |
-| Model | `<actual current model id/name, or unknown; never current-session>` |
-| Model strategy | `<current | ask | adaptive | economy | per-group | current-session>` |
-| Model assignment | `<current session | adaptive classes | per reviewer classes | unsupported>` |
+| Model | `<actual current model id/name, or unknown; never inherit or unsupported>` |
+| Model strategy | `<ask | adaptive>` |
+| Model assignment | `<per-reviewer tier/model from each dispatch's \`model\` block | unsupported>` |
 | Agents run | `<reviewers actually dispatched, including fallback runtimes when used>` |
 | Available reviewers | `<all reviewers considered by the orchestrator for this repository/runtime, grouped briefly as generic/convention/project/legacy when useful>` |
 | Skipped reviewers | `<reviewers not dispatched with short reasons, e.g. no matching files, optional group not selected, unavailable native agent, PR number missing>` |
@@ -1794,9 +1799,9 @@ review_run_id: <stable id, e.g. pr-5462-2026-06-13T10-22-00Z>
 orchestrator: review-orchestrator
 verdict: <APPROVE | APPROVE_WITH_SUGGESTIONS | REQUEST_CHANGES>
 context_mode: <none | light | full>
-model_strategy: <current | ask | adaptive | economy | per-group | current-session>
+model_strategy: <ask | adaptive>
 current_model: <actual current model id/name, or unknown>
-model_assignment: <current session | adaptive classes | per reviewer classes | unsupported>
+model_assignment: <per-reviewer tier/model from each dispatch's `model` block | unsupported>
 agents:
   - <reviewer>
 scope:
@@ -1873,7 +1878,7 @@ Formatting rules for PR comments and AI artifacts:
 - `Skipped reviewers` must include short reasons from `review_context.routing.reasons`, `review_context.review_plan.skipped`, and dispatch/runtime compatibility checks.
 - If the list is long, keep `Agents run` complete and summarize `Available reviewers` / `Skipped reviewers` by group with counts plus notable names; put full details in the AI artifact when one is generated.
 - When `comment-and-ai-artifact` is selected, the PR comment meta section must include both `AI artifact` and `AI artifact description`; do not rely on the link alone.
-- In the metadata table, `Model` must be the actual model id/name. Put `current-session`, `adaptive`, or `per-group` under `Model strategy` / `Model assignment`, not under `Model`.
+- In the metadata table, `Model` must be the actual model id/name. Put `unsupported`, `adaptive`, or `ask` under `Model strategy` / `Model assignment`, not under `Model`.
 - If posting via CLI, write the body to a temp file and use `gh pr comment <pr-number> --body-file <file>`; never inline a large heredoc into shell history.
 
 ---

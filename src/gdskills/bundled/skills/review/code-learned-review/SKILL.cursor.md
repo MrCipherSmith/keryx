@@ -9,7 +9,7 @@ metadata:
   author: "keryx"
   version: "2.0.0"
   category: "review"
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 
@@ -87,7 +87,7 @@ that is a supported state rather than an error.
 
 ## Scope Detection
 
-See shared script: `skills/shared/git-merge-base.md`
+See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run the script from that file to determine MERGE_BASE and SCOPE before
 proceeding with the review.

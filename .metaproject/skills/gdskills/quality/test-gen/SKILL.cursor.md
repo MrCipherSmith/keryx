@@ -10,7 +10,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "testing"
+  category: "quality"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
@@ -56,8 +56,13 @@ Auto-generate tests for specified files or modules.
 
 ### Step 5: Verify
 ```bash
-npx jest <test-file> --no-coverage
+keryx test run --changed --strict
 ```
+`src/testing/service.ts` detects the project's own test runner from its
+lockfile/scripts and builds the invocation — do not hard-code a test runner
+or binary here. On a project with no keryx testing config, run the project's
+own configured test command instead (discovered, not hardcoded).
+
 Fix failing tests (max 3 iterations) — fix the test, not the source.
 
 ### Step 6: Report

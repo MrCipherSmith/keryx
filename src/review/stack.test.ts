@@ -7,6 +7,7 @@ import {
   scopeReviewerByStack,
   STACK_TAGS,
   type DetectedStack,
+  type StackTag,
 } from "./stack";
 
 function readFileFrom(files: Record<string, string>): (path: string) => Promise<string> {
@@ -50,6 +51,83 @@ test("AC13: detects react, mobx, and prisma from exact dependency names", async 
   expect(detected.tags.mobx).toBe(true);
   expect(detected.tags.prisma).toBe(true);
   expect(detected.tags.nestjs).toBe(false);
+  expect(detected.tags.playwright).toBe(false);
+  expect(detected.tags.sql).toBe(true); // prisma also satisfies the broader sql tag
+  expect(detected.tags["http-server"]).toBe(false);
+});
+
+test("AC13: detects playwright from @playwright/test or the plain playwright package", async () => {
+  const viaTestPackage = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ devDependencies: { "@playwright/test": "^1.40.0" } }),
+    }),
+  });
+  expect(viaTestPackage.tags.playwright).toBe(true);
+  expect(viaTestPackage.matched).toContain("@playwright/test");
+
+  const viaPlainPackage = await detectProjectStack("/proj", {
+    readFile: readFileFrom({
+      "/proj/package.json": JSON.stringify({ dependencies: { playwright: "^1.40.0" } }),
+    }),
+  });
+  expect(viaPlainPackage.tags.playwright).toBe(true);
+});
+
+test("AC13: does not detect playwright when neither package is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { zod: "^3" } }) }),
+  });
+  expect(detected.tags.playwright).toBe(false);
+});
+
+test.each([
+  ["prisma"],
+  ["@prisma/client"],
+  ["typeorm"],
+  ["sequelize"],
+  ["knex"],
+  ["drizzle-orm"],
+  ["pg"],
+  ["mysql2"],
+  ["better-sqlite3"],
+  ["kysely"],
+])("AC13: detects sql from %s", async (dep) => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { [dep]: "^1.0.0" } }) }),
+  });
+  expect(detected.tags.sql).toBe(true);
+});
+
+test("AC13: does not detect sql when no matching database dependency is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { react: "^18" } }) }),
+  });
+  expect(detected.tags.sql).toBe(false);
+});
+
+test.each([["express"], ["fastify"], ["koa"], ["hono"], ["@nestjs/core"], ["@hapi/hapi"]])(
+  "AC13: detects http-server from %s",
+  async (dep) => {
+    const detected = await detectProjectStack("/proj", {
+      readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { [dep]: "^1.0.0" } }) }),
+    });
+    expect(detected.tags["http-server"]).toBe(true);
+  },
+);
+
+test("AC13: does not detect http-server when no matching server framework is declared", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { react: "^18" } }) }),
+  });
+  expect(detected.tags["http-server"]).toBe(false);
+});
+
+test("AC13: @nestjs/core sets both nestjs and http-server", async () => {
+  const detected = await detectProjectStack("/proj", {
+    readFile: readFileFrom({ "/proj/package.json": JSON.stringify({ dependencies: { "@nestjs/core": "^10.0.0" } }) }),
+  });
+  expect(detected.tags.nestjs).toBe(true);
+  expect(detected.tags["http-server"]).toBe(true);
 });
 
 test("AC13: a clean package.json naming none of the tags reports all false, not uncertain", async () => {
@@ -221,21 +299,21 @@ test("parseStackRequires parses a CSV, lowercases, dedupes, and drops unknown to
 // ---------------------------------------------------------------------------
 
 const CERTAIN_NONE: DetectedStack = {
-  tags: { nestjs: false, react: false, mobx: false, prisma: false },
+  tags: { nestjs: false, react: false, mobx: false, prisma: false, playwright: false, sql: false, "http-server": false },
   uncertain: false,
   reason: "detected from /proj/package.json (1 declared dependency)",
   matched: [],
 };
 
 const CERTAIN_REACT: DetectedStack = {
-  tags: { nestjs: false, react: true, mobx: false, prisma: false },
+  tags: { nestjs: false, react: true, mobx: false, prisma: false, playwright: false, sql: false, "http-server": false },
   uncertain: false,
   reason: "detected from /proj/package.json (2 declared dependencies)",
   matched: ["react"],
 };
 
 const UNCERTAIN: DetectedStack = {
-  tags: { nestjs: true, react: true, mobx: true, prisma: true },
+  tags: { nestjs: true, react: true, mobx: true, prisma: true, playwright: true, sql: true, "http-server": true },
   uncertain: true,
   reason: "package.json not found at /proj/package.json",
   matched: [],
@@ -286,3 +364,80 @@ test("renderStackScopingMarkdown on uncertain detection says so and never claims
   expect(markdown).toContain("uncertain");
   expect(markdown).toContain("Every stack-gated reviewer is included");
 });
+
+// ---------------------------------------------------------------------------
+// Round-1 finding T-004(b): the eight stack-specific bundled CORE RULES
+// (as opposed to bundled SKILLs, which `extractStackRequiresField` above
+// already covers via `metadata.stack_requires`) declare `stack_requires` as
+// a TOP-LEVEL frontmatter key, e.g. `stack_requires: "nestjs"` — not nested
+// under a `metadata:` key the way a SKILL.md does. `extractStackRequiresField`
+// only recognises the nested `metadata.stack_requires` shape (it requires a
+// line indented under a `metadata:` top-level key), so it returns
+// `undefined` for every one of these rule files; reusing it here would
+// silently test nothing. `extractRuleTopLevelStackRequires` below is a
+// small rule-frontmatter-shaped counterpart, written for this test only —
+// no such extractor existed for rule files anywhere in the codebase at the
+// time this test was added. `parseStackRequires` itself (the part that
+// turns a raw CSV string into `StackTag[]`) is the same exported function
+// SKILL.md parsing uses; only the frontmatter shape it is fed differs.
+// ---------------------------------------------------------------------------
+
+const BUNDLED_CORE_RULES_DIR = new URL("../gdskills/bundled/rules/core/", import.meta.url);
+
+/**
+ * Extract a TOP-LEVEL `stack_requires:` frontmatter value from a bundled
+ * rule's raw `.mdc` content (e.g. `src/gdskills/bundled/rules/core/nestjs-dto.mdc`).
+ * Unlike `extractStackRequiresField` (SKILL.md shape: nested under
+ * `metadata:`), a rule's `stack_requires` sits at the top level of the
+ * frontmatter block, alongside `description`/`alwaysApply`/`globs`.
+ */
+function extractRuleTopLevelStackRequires(mdcContent: string): string | undefined {
+  if (!mdcContent.startsWith("---")) {
+    return undefined;
+  }
+  const end = mdcContent.indexOf("\n---", 3);
+  if (end === -1) {
+    return undefined;
+  }
+  const frontmatterLines = mdcContent.slice(3, end).split("\n");
+  for (const line of frontmatterLines) {
+    const match = /^stack_requires:\s*(.+)$/.exec(line);
+    if (match?.[1] !== undefined) {
+      const raw = match[1].trim();
+      return raw.length >= 2 && raw.startsWith('"') && raw.endsWith('"') ? raw.slice(1, -1) : raw;
+    }
+  }
+  return undefined;
+}
+
+// Every bundled core rule this dispatch names as stack-specific, and the
+// exact tag set it must declare and parse to. A missing or misspelled tag
+// (e.g. "moxb" instead of "mobx", or an unrecognised STACK_TAGS token) means
+// `parseStackRequires` silently drops it — the resulting array would come
+// back shorter than expected, which is exactly what these assertions pin.
+const EXPECTED_STACK_RULE_TAGS: Record<string, StackTag[]> = {
+  "mobx-store-template.mdc": ["mobx"],
+  "code-style-patterns.mdc": ["react", "mobx"],
+  "frontend-assistant.mdc": ["react", "mobx"],
+  "nestjs-dto.mdc": ["nestjs"],
+  "storybook-guidelines.mdc": ["react"],
+  "playwright-testing.mdc": ["playwright"],
+  "database-patterns.mdc": ["sql"],
+  "api-contracts.mdc": ["http-server"],
+};
+
+for (const [fileName, expectedTags] of Object.entries(EXPECTED_STACK_RULE_TAGS)) {
+  test(`bundled core rule ${fileName} declares stack_requires that parses to ${JSON.stringify(expectedTags)}`, async () => {
+    const content = await Bun.file(new URL(fileName, BUNDLED_CORE_RULES_DIR)).text();
+    const rawField = extractRuleTopLevelStackRequires(content);
+    expect(rawField).toBeDefined();
+    const parsed = parseStackRequires(rawField);
+    expect(parsed).toEqual(expectedTags);
+    // Every parsed tag must also be a currently-known STACK_TAGS member —
+    // parseStackRequires already drops unknown tokens, so this doubles as a
+    // guard that nothing here silently shrank below what's expected above.
+    for (const tag of parsed) {
+      expect(STACK_TAGS).toContain(tag);
+    }
+  });
+}

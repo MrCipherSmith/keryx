@@ -80,8 +80,8 @@ review-pr-feedback Progress:
 | `comment_ids` | string[] | no | Restrict the run to these collected comment ids. Every excluded comment is listed with that reason. |
 | `max_fix_rounds` | integer | no | Sent in the Step 9 dispatch as an `attempt budget:` constraint. It only ever LOWERS the bound `flow-orchestrator` owns; omit it to take that skill's own. |
 
-Schemas: `skills/review/review-pr-feedback/input-contract.schema.json` and
-`skills/review/review-pr-feedback/output-contract.schema.json`. Nothing refuses a
+Schemas: `.metaproject/skills/gdskills/review/review-pr-feedback/input-contract.schema.json` and
+`.metaproject/skills/gdskills/review/review-pr-feedback/output-contract.schema.json`. Nothing refuses a
 dispatch that ignores them — no production code loads either file — so they are a
 contract between agents, and this skill validating its own output against the
 output schema is what makes them worth writing.
@@ -297,7 +297,7 @@ For each comment, classify intent before explaining:
 
 This maps the **intent of an incoming human comment**, which is not a code
 condition. It is not a second severity rubric: the levels themselves are defined
-once, in `skills/review/review-orchestrator/SKILL.md` → **Severity (canonical)**,
+once, in `.metaproject/skills/gdskills/review/review-orchestrator/SKILL.md` → **Severity (canonical)**,
 and a mapped value is a starting point that the canonical test overrides whenever
 the comment names a concrete trigger and outcome.
 
@@ -504,7 +504,7 @@ implementation loop of its own, and a second one would diverge from the one that
 is tested.
 
 Dispatch payload, conforming to
-`skills/orchestration/flow-orchestrator/input-contract.schema.json` — a registered
+`.metaproject/skills/gdskills/orchestration/flow-orchestrator/input-contract.schema.json` — a registered
 contract, so `keryx skills contracts validate <file> --schema flow-orchestrator-input`
 refuses a malformed one. Validate before dispatching.
 
@@ -539,13 +539,13 @@ criterion rather than by an author's assertion.
 ### The loop, and its bound
 
 The review→fix→review loop belongs to `flow-orchestrator`, and so does its exit
-threshold: `skills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix
+threshold: `.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix
 loop** defines it once, beside the bound. Do not restate the level here — the
 bound was centralised and the threshold was left copied four ways in the same
 edit, which is how one of them ends up stale while every guard stays green.
 
 The bound is defined once, in
-`skills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix loop**, along
+`.metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md` → **PR review/fix loop**, along
 with the evidence behind it and the `keryx review loop` repetition check that
 runs before any attempt is spent. Do not restate the number here: two copies of a
 bound are two things to edit when the evidence changes, and the copy nobody edits

@@ -1,6 +1,7 @@
 ---
 description: "API contract rules: OpenAPI-first design, semantic versioning, no breaking changes without major version bump, contract testing. Use when designing, modifying, or consuming HTTP APIs."
 alwaysApply: false
+stack_requires: "http-server"
 ---
 
 # API Contracts

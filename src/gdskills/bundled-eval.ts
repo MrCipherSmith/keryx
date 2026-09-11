@@ -57,6 +57,27 @@
 // the guard test and the command — asserts on that number. It is the same
 // non-vacuity rule flow 204 wrote into `model-tier.test.ts` after finding five
 // vacuous sweeps.
+//
+// RESOLVED AGAINST THE INSTALLED LAYOUT, NOT THE CHECKOUT (flow 252)
+//
+// `xref:path` existed to say whether a path resolves. It did not say WHERE a
+// path has to resolve, and the gap was the checkout: `skills/review/…` (no
+// `gdskills/` segment) is a real, walkable directory in THIS repository —
+// `src/gdskills/bundled/skills/review/…` — so the old normaliser accepted it
+// unconditionally and checked it against that same source tree. It never
+// exists in an installed project, which has no top-level `skills/` at all,
+// only `.metaproject/skills/gdskills/…`. `skills/shared/git-merge-base.md`
+// shipped in eleven review skills reading exactly that way — correct by the
+// sweep's own resolution, broken for every user who installed the package —
+// until it was rewritten by hand and the sweep never noticed either state.
+// `resolveInstalledReference` now answers the question the check's name always
+// implied: is this the address an installed project actually has. A bare
+// `skills/<category>/<name>` naming a whole skill (no file past it) is still
+// accepted, the same citation convention `rules/core/<file>` already used
+// elsewhere in this tree; anything reaching further into a skill is either the
+// `.metaproject/skills/gdskills/…` (or `skills/gdskills/…`) form or it is dead
+// on install regardless of what this checkout happens to have on disk. Rule
+// files under `rules/core/` are swept the same way — nothing read them before.
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -79,6 +100,8 @@ export const BUNDLED_SKILL_CHECKS = [
   "frontmatter:name-unique",
   "frontmatter:description",
   "frontmatter:metadata",
+  "frontmatter:harness-claude",
+  "frontmatter:category",
   "catalog:registered",
   "model:concrete-declaration",
   "persona:name",
@@ -395,15 +418,20 @@ const CHECKED_PATH_ROOTS = ["skills", "rules", "scripts"] as const;
  * Prefixes that address the same artifacts through the INSTALLED layout.
  *
  * A skill may name `.metaproject/skills/gdskills/review/…` (where the file lands
- * for a user) or `skills/review/…` (where it lives in the source tree). Both
- * denote one file, so both normalise to the bundled-relative form before
- * resolution.
+ * for a user) or the same address written `.metaproject`-relative,
+ * `skills/gdskills/review/…` (`installGdskills` writes the tree to
+ * `.metaproject/skills/gdskills/`, so both spellings denote one file). Both
+ * normalise to the bundled-relative form before resolution.
+ *
+ * What is deliberately NOT here: bare `skills/review/…`, missing the
+ * `gdskills/` segment entirely. That spelling is the SOURCE tree's own
+ * internal layout (`src/gdskills/bundled/skills/review/…`) — coincidentally
+ * one file, in this one repository, and never a path an installed project
+ * has. `resolveInstalledReference` below rejects it on purpose; see its
+ * comment for the one narrow exception.
  */
 const INSTALLED_PREFIXES: readonly [string, string][] = [
   [".metaproject/skills/gdskills/", "skills/"],
-  // The same address written `.metaproject`-relative rather than project-relative.
-  // `installGdskills` writes the tree to `.metaproject/skills/gdskills/`, so both
-  // spellings denote one file and both must resolve.
   ["skills/gdskills/", "skills/"],
   [".metaproject/rules/", "rules/"],
   [".metaproject/scripts/", "scripts/"],
@@ -422,16 +450,122 @@ export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string
   { prefix: "rules/entrypoints/", producedBy: "keryx rules distill" },
 ];
 
-const PATH_REFERENCE = /(?:^|[\s"'`([])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@-]*[\w.@-])/g;
+/**
+ * `*` joins the allowed characters so a glob such as a rule's own frontmatter
+ * `globs: skills/gproject-` followed by a wildcard segment gets captured
+ * whole and then excluded by the existing `raw.includes("*")` guard below,
+ * rather than truncated right before the star into something that LOOKS like
+ * a concrete path and gets existence-checked as one.
+ */
+const PATH_REFERENCE = /(?:^|[\s"'`([])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@*-]*[\w.@*-])/g;
 
-/** Normalise an installed-layout path to its bundled-relative form. */
-function normaliseReferencePath(reference: string): string | undefined {
+/**
+ * Resolve a reference the way an INSTALLED project would have to: as the
+ * address it names, not as whatever happens to sit at that string in THIS
+ * checkout.
+ *
+ * Returns:
+ *  - a bundled-relative path to existence-check (the reference names a real
+ *    installed-layout slot and might still be a typo within it);
+ *  - `null` when the reference is unconditionally wrong — it only ever
+ *    denoted a path in the source tree's own layout, never one an installed
+ *    project has, so no `existsSync` result could make it right;
+ *  - `undefined` when this sweep has no standing to judge the reference at
+ *    all (outside `skills/`, `rules/`, `scripts/`, or a `.metaproject/`
+ *    address this sweep does not own).
+ *
+ * The one bare form still accepted under `skills/` is `skills/<category>/<name>`
+ * naming a whole shipped skill by directory — three segments, nothing past the
+ * skill's own name — and only when `<name>` is a skill this tree actually
+ * ships (`known`). That is the same convention this tree already uses for
+ * `rules/core/<file>.mdc` cross-references elsewhere (a citation, not a literal
+ * read path), and closing it too would turn every "see the `code-style-review`
+ * skill" mention into a rewrite this sweep cannot make on its own in a file it
+ * does not own. A reference reaching INTO a skill — a specific file, one path
+ * segment further — has no such excuse: it is either the installed prefix or
+ * it is dead the moment a user installs.
+ */
+function resolveInstalledReference(reference: string, known: ReadonlySet<string>): string | null | undefined {
   for (const [from, to] of INSTALLED_PREFIXES) {
     if (reference.startsWith(from)) return to + reference.slice(from.length);
   }
   if (reference.startsWith(".metaproject/")) return undefined;
-  const root = reference.split("/")[0] ?? "";
+
+  const segments = reference.split("/");
+  const root = segments[0] ?? "";
+  if (root === "skills") {
+    if (segments.length === 3 && known.has(segments[2] ?? "")) return reference;
+    return null;
+  }
   return (CHECKED_PATH_ROOTS as readonly string[]).includes(root) ? reference : undefined;
+}
+
+/**
+ * Both cross-reference checks (`xref:skill`, `xref:path`), over one document's
+ * text. Shared between the `SKILL.md`/harness-build sweep and the rule-file
+ * sweep below so a path reference resolves the SAME way regardless of which
+ * kind of shipped document names it — a rule citing a dead skill path is
+ * exactly as broken as a skill citing one.
+ *
+ * `checkSkillNames` gates `xref:skill` only; rule files pass `false`.
+ * `SKILL_REFERENCE_PATTERNS` matches a bare name beside the word "skill" —
+ * exactly right for "Launch `code-review` skill" in a SKILL.md, and exactly
+ * wrong for `skill-lifecycle.mdc`'s "a `needs-review` skill", which is a
+ * STATUS value, not a name, that happens to sit next to the same word. Rule
+ * prose talks ABOUT skills in the abstract far more than a skill's own prose
+ * does; `xref:path` carries no such ambiguity and applies to both.
+ */
+function scanCrossReferences(
+  text: string,
+  root: string,
+  known: ReadonlySet<string>,
+  checkSkillNames: boolean,
+  add: (check: "xref:skill" | "xref:path", line: number, message: string) => void,
+): void {
+  text.split("\n").forEach((line, index) => {
+    if (checkSkillNames) {
+      for (const pattern of SKILL_REFERENCE_PATTERNS) {
+        for (const match of line.matchAll(pattern)) {
+          const referenced = match[1] as string;
+          if (!referenced.includes("-")) continue;
+          if (known.has(referenced)) continue;
+          if (KNOWN_EXTERNAL_SKILL_REFERENCES.has(referenced)) continue;
+          add(
+            "xref:skill",
+            index + 1,
+            `names a skill \`${referenced}\` that this tree does not ship; either bundle it or stop naming it.`,
+          );
+        }
+      }
+    }
+    for (const match of line.matchAll(PATH_REFERENCE)) {
+      const raw = match[1] as string;
+      if (raw.includes("<") || raw.includes("*") || raw.includes("$")) continue;
+      const resolved = resolveInstalledReference(raw, known);
+      if (resolved === undefined) continue;
+      if (resolved === null) {
+        add(
+          "xref:path",
+          index + 1,
+          `path \`${raw}\` names the SOURCE tree's own layout, not an installed one — an installed project has no top-level \`skills/\`, only \`.metaproject/skills/gdskills/…\`. Write \`.metaproject/skills/gdskills/${raw.slice("skills/".length)}\` (or the \`skills/gdskills/…\` form), or, to name the whole skill rather than a file in it, drop everything past its directory.`,
+        );
+        continue;
+      }
+      if (
+        GENERATED_PATH_ROOTS.some(
+          (entry) => resolved === entry.prefix.replace(/\/$/, "") || resolved.startsWith(entry.prefix),
+        )
+      ) {
+        continue;
+      }
+      if (existsSync(path.join(root, resolved))) continue;
+      add(
+        "xref:path",
+        index + 1,
+        `path \`${raw}\` resolves to nothing under the shipped tree (looked for \`${resolved}\`).`,
+      );
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -513,6 +647,24 @@ export function bundledSkillDocuments(root: string): string[] {
 }
 
 /**
+ * Every rule file under `<root>/rules/core` — the tree `installBundledRules`
+ * (`src/gdskills/install.ts`) copies verbatim to `.metaproject/rules/core/`.
+ * Flat by construction: `bundledRulesSourcePath` names one directory and
+ * `cp(..., { recursive: true })` mirrors whatever is in it, so a walk one
+ * level deep is enough today and still correct if a subdirectory is added
+ * later. `[]` for a root with no `rules/core`, same convention as
+ * `bundledSkillFiles`, so an absent tree reads as "swept zero", not "passed".
+ */
+export function bundledRuleFiles(root: string): string[] {
+  const rulesRoot = path.join(root, "rules", "core");
+  if (!existsSync(rulesRoot)) return [];
+  return readdirSync(rulesRoot, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => path.join(rulesRoot, entry.name))
+    .sort();
+}
+
+/**
  * The default tree: the 65 skills shipped inside this package.
  *
  * TWO LAYOUTS, AND THE SECOND ONE IS THE ONE USERS HAVE.
@@ -573,6 +725,11 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     const skillDir = path.dirname(file);
     const skill = path.basename(skillDir);
     const rel = path.relative(skillsRoot, file).split(path.sep).join("/");
+    // The directory a document ships under. Computed here, ahead of the
+    // frontmatter checks, because `frontmatter:category` needs it to judge a
+    // declared `metadata.category` and `catalog:registered` (below) already
+    // needed it — one source rather than two that could disagree.
+    const category = path.dirname(rel).split("/")[0] ?? "";
     const text = readFileSync(file, "utf8");
     const add = (check: BundledSkillCheck, line: number | null, message: string): void => {
       findings.push({ check, skill, file: rel, line, message });
@@ -634,6 +791,51 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
             "frontmatter `metadata` declares no `version`; without one a skill cannot be said to have changed.",
           );
         }
+        // `metadata.category` is free text, not read by any runtime — the one
+        // consumer (`import-skills.ts`'s `frontmatterCategory`) reads it off a
+        // skill being IMPORTED, never off this shipped tree. That makes a
+        // mismatch harmless to behavior and still worth catching: it is the
+        // label an operator reads when deciding where a skill belongs, and it
+        // drifted on 23 shipped skills with nothing to notice. Ground truth is
+        // the directory the skill actually ships under — `catalog:registered`
+        // above already ties that directory to `BUNDLED_GDSKILLS`, so a
+        // skill that passes both checks has one category, not two.
+        const metadataCategory = /^\s{2,}category\s*:\s*(.+)$/m.exec(block);
+        if (metadataCategory !== null) {
+          const declaredCategory = (metadataCategory[1] ?? "").trim().replace(/^["']|["']$/g, "");
+          if (declaredCategory.length > 0 && declaredCategory !== category) {
+            add(
+              "frontmatter:category",
+              1,
+              `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
+            );
+          }
+        }
+      }
+      // `compatible_harnesses` is per-build metadata (see
+      // BUILD_DIVERGENCE_ALLOWED_FIELDS above) — a harness build is allowed to
+      // list only the non-Claude family it serves. `SKILL.md` is different: it
+      // IS the Claude build (`skillBuildFileName("claude") === "SKILL.md"`), so
+      // a list that excludes `claude` is not a narrower build, it is this
+      // build lying about the harness that loads it. Checked by exact
+      // filename, not by runtime lookup, so the check reads the same way in a
+      // fixture tree that never calls `evaluateBundledTree` through the CLI.
+      if (path.basename(file) === "SKILL.md") {
+        const compatibleHarnesses = /^\s{2,}compatible_harnesses\s*:\s*(.+)$/m.exec(block);
+        if (compatibleHarnesses !== null) {
+          const declared = (compatibleHarnesses[1] ?? "").trim().replace(/^["']|["']$/g, "");
+          const harnesses = declared
+            .split(",")
+            .map((entry) => entry.trim())
+            .filter((entry) => entry.length > 0);
+          if (!harnesses.includes("claude")) {
+            add(
+              "frontmatter:harness-claude",
+              1,
+              `frontmatter \`compatible_harnesses\` ("${declared}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
+            );
+          }
+        }
       }
     }
 
@@ -644,7 +846,6 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     // not name is never copied anywhere: it ships inside the package, is read by
     // nobody, and every claim its prose makes is inert. That is decidable here
     // and nowhere else, because the sweep is the only thing that sees both lists.
-    const category = path.dirname(rel).split("/")[0] ?? "";
     if (!catalogued.has(`${category}/${skill}`)) {
       add(
         "catalog:registered",
@@ -672,40 +873,28 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     }
 
     // --- cross-references resolve ------------------------------------------
-    text.split("\n").forEach((line, index) => {
-      for (const pattern of SKILL_REFERENCE_PATTERNS) {
-        for (const match of line.matchAll(pattern)) {
-          const referenced = match[1] as string;
-          if (!referenced.includes("-")) continue;
-          if (known.has(referenced)) continue;
-          if (KNOWN_EXTERNAL_SKILL_REFERENCES.has(referenced)) continue;
-          add(
-            "xref:skill",
-            index + 1,
-            `names a skill \`${referenced}\` that this tree does not ship; either bundle it or stop naming it.`,
-          );
-        }
-      }
-      for (const match of line.matchAll(PATH_REFERENCE)) {
-        const raw = match[1] as string;
-        if (raw.includes("<") || raw.includes("*") || raw.includes("$")) continue;
-        const normalised = normaliseReferencePath(raw);
-        if (normalised === undefined) continue;
-        if (
-          GENERATED_PATH_ROOTS.some(
-            (entry) => normalised === entry.prefix.replace(/\/$/, "") || normalised.startsWith(entry.prefix),
-          )
-        ) {
-          continue;
-        }
-        if (existsSync(path.join(root, normalised))) continue;
-        add(
-          "xref:path",
-          index + 1,
-          `path \`${raw}\` resolves to nothing under the shipped tree (looked for \`${normalised}\`).`,
-        );
-      }
-    });
+    scanCrossReferences(text, root, known, true, add);
+  }
+
+  // --- rule files: xref:path only, not the SKILL.md checks -------------------
+  //
+  // Rule frontmatter (`description`, `globs`, `alwaysApply`) has no `name` or
+  // `metadata.version`, so running the frontmatter/catalog/model/persona checks
+  // here would fail on arrival on all 33 shipped rules for a shape they were
+  // never written to have. `xref:skill` is skipped too: rule prose talks ABOUT
+  // skills far more than a skill's own prose does — `skill-lifecycle.mdc` calls
+  // a skill's own status "a `needs-review` skill", which is a false positive
+  // for the naming pattern, not a dead reference. What generalises without
+  // qualification is `xref:path`: a rule citing `skills/shared/…` bare is
+  // exactly as dead in an installed project as a skill citing it, and until
+  // this loop existed nothing ever opened a rule file to check.
+  for (const file of bundledRuleFiles(root)) {
+    const rel = path.relative(root, file).split(path.sep).join("/");
+    const text = readFileSync(file, "utf8");
+    const add = (check: "xref:skill" | "xref:path", line: number, message: string): void => {
+      findings.push({ check, skill: path.basename(file, path.extname(file)), file: rel, line, message });
+    };
+    scanCrossReferences(text, root, known, false, add);
   }
 
   // --- every SKILL*.md in the tree is either read above or named a companion --

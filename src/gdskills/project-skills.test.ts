@@ -64,6 +64,22 @@ describe("createProjectSkill security guard", () => {
       await rm(root, { recursive: true, force: true });
     }
   });
+
+  // AC14 (flow 252, D12): the footer used to assert "Current state: not
+  // verified." as a static claim, which `keryx skills verify` immediately
+  // contradicts in verification.md once the skill is actually verified. The
+  // footer must not assert any status of its own.
+  test("the generated SKILL.md footer asserts no verification status of its own", async () => {
+    const root = await makeProjectRoot();
+    try {
+      const result = await createProjectSkill(root, { target: "src/example.ts", module: "example", name: "footer-check" });
+      const written = await readFile(path.join(root, result.skillPath, "SKILL.md"), "utf8");
+      expect(written).not.toContain("Current state:");
+      expect(written).toContain("Verification status: see `verification.md`");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
 });
 
 test("createProjectSkill refuses a prose target on the CLI path, not only the wrap-up path", () => {

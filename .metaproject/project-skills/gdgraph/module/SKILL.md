@@ -101,5 +101,5 @@ Read `references/context.md` for the initial evidence snapshot when details are 
 
 ## Verification
 
-- Current state: not verified.
+- Verification status: see `verification.md` (written by `keryx skills verify`).
 - Run: `keryx skills verify gdgraph/module`

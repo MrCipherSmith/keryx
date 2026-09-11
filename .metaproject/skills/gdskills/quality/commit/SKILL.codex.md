@@ -9,7 +9,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "workflow"
+  category: "quality"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
@@ -29,7 +29,7 @@ Create well-structured git commits from current changes.
 If nothing is staged, intelligently stage relevant files:
 - Stage modified and new files that are part of the logical change
 - **NEVER** stage `.env`, credentials, secrets, or large binary files
-- Prefer `git add <specific files>` over `git add -A`
+- Stage explicit pathspecs (`git add <specific files>`); **NEVER** `git add -A`, `--all`, or `.`
 - Ask the user before staging untracked files that look unrelated to recent work
 
 ### Phase 3: Generate Commit Message

@@ -1,6 +1,6 @@
 ---
 name: skill-sync
-description: Use when sync exported runtime skills to configured local runtimes only when explicitly enabled.
+description: "Use when already-exported runtime skills need pushing to configured local runtimes, and only when sync is explicitly enabled. NOT for: producing the runtime export itself (see skill-runtime-exporter)."
 ---
 
 # skill-sync

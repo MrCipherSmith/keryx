@@ -1,0 +1,92 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "14 candidates checked: 10 execution, 4 site-check, 0 reasoning; 14 confirmed, 0 refuted, 0 unverifiable. 9 info items not checked (by design). HEAD 2078a9a645e34ffadbdadc544e50bc6650bd3f3f. All experiments in scratchpad/verify (tmp projects + repo copy verify/mut); ROOT not mutated.",
+  "verifications": [
+    {
+      "finding": "S-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "bun scratchpad/verify/s001-l001.ts (imports installGdskills from ROOT/src/gdskills/install.ts; fresh tmp project per case, profile minimal): [dir] directory at rules/core/review-agent-profile.mdc -> install THREW code=EISDIR, catalog_written=false manifest_written=false contracts_written=false; [chmod000] -> THREW code=EACCES, none written; [symlink-dir] symlink to a directory -> THREW code=EISDIR, none written; control [lf-control] -> install OK, file removed, warnings=[]."
+    },
+    {
+      "finding": "L-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "git show c44f5f0f:src/gdskills/bundled/rules/core/review-agent-profile.mdc -> sha256 e29a832821e501fa8a0acb5130007db1e21f1cee29f8ab6b2a1a7b35f9945281 (= RETIRED_RULES[0].shippedSha256[0]), 1494 bytes. bun scratchpad/verify/s001-l001.ts: [lf-control] target_exists_after=false warnings=[]; [crlf] same content with \\n->\\r\\n -> target_exists_after=true warnings=[\"retired rule kept because it was modified: review-agent-profile.mdc\"]; [bom] U+FEFF + LF content -> target_exists_after=true, same warning."
+    },
+    {
+      "finding": "L-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Warning text observed from installGdskills in the [crlf]/[bom] runs of scratchpad/verify/s001-l001.ts is exactly 'retired rule kept because it was modified: review-agent-profile.mdc' - no retirement reason, no remedy. Source install.ts:83-85 maps only outcome.fileName; RETIRED_RULES[].reason (retired-rules.ts:49,60) is not read by install.ts (it is emitted on every install while the file stays)."
+    },
+    {
+      "finding": "C-001",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "keryx ctx rg over the review-orchestrator package at HEAD: review-context.schema.json:364-373 strategy enum = current, ask, adaptive, economy, per-group, current-session; reviewer-input.schema.json:39-46 model_class enum = simple, normal, complex, current-session; input-contract.schema.json:49-52 = ask|adaptive. SKILL.md:1327 'model_class: simple | normal | complex | current-session'; :1573 'If strategy is adaptive, economy, or per-group'; :1574-1575 current-session; :1606, :1760, :1801 '<ask | adaptive | economy | per-group | current-session>'; :1880. `bun ./src/cli.ts review tier --json` emits tier light/standard. Cited :1608 and :1803 carry no retired value at HEAD (the rest do)."
+    },
+    {
+      "finding": "C-002",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "implementation-plans.mdc:12 'Apply when creating or updating an implementation plan document' (any plan); :15-19 'lives inside its requirements package ... No date folder and no separate `plans/` tree'; :23 create the requirements package first; :44 iron law 'KEEP IT INSIDE ITS REQUIREMENTS PACKAGE'. documentation-management.mdc:56 defines `plans` = `docs/plans/<name>/` for standalone plans; :62-73 `docs/analysis/<feature-name>/implementation-plan.md` used by feature-analyzer. feature-analyzer (at skills/orchestration/feature-analyzer, not analysis/) SKILL.md:336-338 and SKILL.detail.md:230-232 write <DOCS_ROOT>/analysis/<feature-name>/implementation-plan.md."
+    },
+    {
+      "finding": "C-003",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "`bun ./src/cli.ts install` -> 'Unknown command: install', exit 1 (rule-management-workflow.mdc:15 cites `keryx install`; src/cli.ts command table :66-107 has none). keryx ctx rg '\\.cursor/rules/AGENTS' src (non-bundled) -> 0 hits (Sync Targets rule-management:41-44 written by no code). src/commands/update.ts: no homedir/~/.cursor/.codex writes; it calls installGdskills which cp(..., force:true) (install.ts:66,122). Global sync is `keryx skills sync --runtime <r> --target <dir> | --global` (skills.ts:1547-1548). skills-storage-workflow.mdc:21 `.metaproject/skills/gdskills/<skill-name>/` (no <category>), :24 'SKILL.md - canonical source of truth', :79 'Sync both global destinations' vs four listed at :69-72, :104-107 and :120 name `keryx update` as the sync."
+    },
+    {
+      "finding": "C-004",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "task-implementer SKILL.md:318 'When auto-commit is enabled', :320-321 bare `git add <modified files>` / `git commit -m`, :404-407 bare `git add <fixed files>` / `git commit`, while :139 uses `git -C`. git-concurrency.mdc:12 'Always loaded alongside `flow-orchestrator`, `job-orchestrator`, and `task-implementer`.' vs rules README source templates.ts:1739-1740 '`core/*.mdc` is an on-demand rule library, not something loaded automatically. A rule file is read only when a skill or `routing.md` cites it by path.'"
+    },
+    {
+      "finding": "C-005",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "`bun ./src/cli.ts review tier --scope narrow --json` -> tier 'standard', tier_reasons ['base:standard']; `bun ./src/cli.ts review tier --findings 1 --diff-lines 0 --json` -> tier 'light', tier_reasons ['base:standard','light:small-scope']. job-orchestrator SKILL.md:1426 prescribes the former; skill-lifecycle.mdc:48-49 requires 'model_tier: light, resolved via keryx review tier'."
+    },
+    {
+      "finding": "C-006",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "evidence": "catalog.ts:74 and installed .metaproject/skills/gdskills/core/entity-skill-verifier/SKILL.md:3: 'claims need checking against current code, graph, wiki, health, memory, tests, or review lessons'. catalog.ts:68-72 purpose/workflow name gdgraph, gdctx, gdwiki, Code Health, memory only. keryx ctx rg over src/gdskills/verify.ts: evidence signals gdgraph (:200), gdctx (:204), code-health (:208), memory-consultation (:221), gdwiki (:262-288) - no tests or review-lesson signal."
+    },
+    {
+      "finding": "T-001",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutations on repo copy scratchpad/verify/mut (not ROOT) via scratchpad/verify/mutate.ts; baseline of combined set green (exit 0, 135 pass 0 fail). update.ts:240 `if (summary.gdskillsWarnings.length > 0)` -> `if (false && ...)`: bun test src/commands/update.test.ts src/commands/skills-install-warnings.test.ts -> exit 0, 10 pass 0 fail (survived). init.ts:1089 same mutation: bun test src/commands/init.test.ts src/commands/skills-install-warnings.test.ts -> exit 0, 5 pass 0 fail (survived). skills-install-warnings.test.ts:8 'stands in for all three call sites'."
+    },
+    {
+      "finding": "T-002",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutation on repo copy: retired-rules.ts both review-strict-profile.mdc hashes replaced with 000...0 / 111...1: bun test src/gdskills/install.test.ts src/commands/skills-install-warnings.test.ts src/gdskills/installed-registry-integrity.test.ts -> exit 0, 16 pass 0 fail (survived). install.test.ts:186 and :215 use only RETIRED_RULES[0]."
+    },
+    {
+      "finding": "T-003",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutation on repo copy: templates.ts:1798 `body.replace(/^#[^\\n]*\\n?/, \"\")` -> `body.replace(/^[^\\n]*\\n?/, \"\")`: bun test src/lib/templates.test.ts src/commands/init.test.ts src/commands/update.test.ts -> exit 0, 31 pass 0 fail (survived)."
+    },
+    {
+      "finding": "T-004",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutations on repo copy. (a) templates.ts:1739-1740 on-demand sentence -> '`core/*.mdc` is loaded automatically into every session.': bun test src/lib/templates.test.ts src/commands/init.test.ts src/commands/update.test.ts -> exit 0, 31 pass 0 fail (survived). (b) nestjs-dto.mdc `stack_requires: \"nestjs\"` -> `\"bogus-tag\"` in bundled rule AND installed mirror (what keryx update produces): bun test src/review/stack.test.ts src/lib/templates.test.ts src/gdskills/install.test.ts src/gdskills/bundled-eval.test.ts src/gdskills/installed-registry-integrity.test.ts -> exit 0, 106 pass 0 fail (survived). Bundled-only edit fails only 'every bundled rule is byte-identical to its installed copy in this repo' - a drift check, not a stack_requires check."
+    },
+    {
+      "finding": "T-005",
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Mutation on repo copy: catalog.ts:542 `skillEntry.description.includes(\":\")` -> `false && skillEntry.description.includes(\":\")` (quoting disabled): bun test src/gdskills/install.test.ts src/gdskills/bundled-eval.test.ts src/gdskills/verify.test.ts src/gdskills/skill-name-matches-directory.test.ts src/gdskills/installed-registry-integrity.test.ts src/commands/skills.bundled-verify.test.ts src/commands/skills.bundled-verify.installed.test.ts -> exit 0, 57 pass 0 fail (survived)."
+    }
+  ],
+  "stats": { "confirmed": 14, "refuted": 0, "unverifiable": 0, "not_checked": 9 }
+}

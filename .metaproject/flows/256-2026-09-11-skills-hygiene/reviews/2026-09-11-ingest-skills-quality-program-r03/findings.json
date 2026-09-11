@@ -1,0 +1,53 @@
+[
+  {
+    "id": "C-015",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The new flow-orchestrator boundary commit is unconditional. Its task-implementer dispatch carries no auto_commit (subagent-dispatch.schema.json has none), so the worker runs with its default auto_commit=true and commits itself. The prescribed `git -C <worktree_path> add <changed_files>` + `git -C <worktree_path> commit` then has nothing to commit and exits 1. `<worktree_path>` is undefined in this skill.",
+    "impact": "On flow-orchestrator's default path, every successful task ends in a prescribed git command that fails. Workers with empty changed_files (review, context, docs) fail the same way. The text contradicts git-concurrency.mdc:68 ('whoever owns commits') and job-orchestrator :833/:844, where the orchestrator commits only when auto_commit=false. That leaves commit ownership ambiguous in exactly the area the rule governs.",
+    "suggested_fix": "Make the step conditional. Commit only the reported paths that `git -C <root> status --porcelain -- <paths>` still shows as changed, and skip when nothing is left or changed_files is empty. Alternatively, have flow-orchestrator own commits by adding an 'auto-commit disabled: do not commit, report changed_files' constraint to the dispatch. Replace the undefined <worktree_path> with the flow's bound project/worktree root. Mirror the change.",
+    "evidence": "Execution in scratchpad/r3/gitnoop: a worker commit of a.txt, then `git -C <repo> add a.txt` exits 0 and `git -C <repo> commit -m ...` prints 'nothing to commit, working tree clean' and exits 1. With no paths, `git add` prints 'Nothing specified, nothing added.' Site-check: flow-orchestrator SKILL.md:326-351 has no auto_commit field; `keryx ctx rg -n auto_commit src/gdskills/contracts/subagent-dispatch.schema.json` gives 0 matches; task-implementer input-contract.schema.json:206-209 has auto_commit default true; task-implementer SKILL.md:318-325 commits when auto-commit is enabled; `keryx ctx rg -n -i worktree` over flow-orchestrator SKILL.md finds only :234 (a rule citation) and :359-360.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md",
+    "line": 354,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:354-364",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:380",
+        "src/gdskills/bundled/skills/orchestration/flow-orchestrator/SKILL.md:381",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:354-364",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:380",
+        ".metaproject/skills/gdskills/orchestration/flow-orchestrator/SKILL.md:381",
+        "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md:833-844 (correct: conditional on auto_commit=false; same in SKILL.codex/cursor/zed/opencode.md and mirrors)"
+      ],
+      "enumeration_method": "`keryx ctx rg -n -i \"commit (exactly|the worker|changed_files)|stage and commit|task.boundary commit|orchestrator (stages|commits)\" src/gdskills/bundled --all` finds the orchestrator-side commit prescriptions only in flow-orchestrator and in the 5 job-orchestrator builds. task-implementer and git-concurrency hits describe the protocol and are not orchestrator steps. `cmp` shows the installed mirror is byte-identical, with the same line numbers."
+    },
+    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-015"
+  },
+  {
+    "id": "C-016",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "implementer_settings.auto_commit is described as 'Settings passed to task-implementer sub-agents' (input-contract.schema.json:165), but the Step B dispatch Workspace block (:813-821) never passes it, and the required response always asks for 'Commits: [...]'. The only auto_commit mentions in the skill are :833, :844 and :917.",
+    "impact": "With auto_commit=false, the worker defaults to true and commits anyway. The new task-boundary commit (:839-842) then has nothing to commit and exits 1. The auto-commit-off ownership that git-concurrency.mdc:68 and task-implementer :327-331 describe never actually happens under job-orchestrator.",
+    "suggested_fix": "Add `- auto_commit: <implementer_settings.auto_commit>` to the Step B Workspace block, and make the 'Commits:' response line conditional (e.g. 'Commits: none (auto_commit=false)'). Mirror across SKILL.codex/cursor/zed/opencode.md.",
+    "evidence": "Site-check: `keryx ctx rg -n \"implementer_settings|auto_commit\"` over job-orchestrator SKILL.md finds only :833, :844 and :917. The Step B template at :801-830 has no auto_commit. task-implementer input-contract.schema.json:206-209 has default true. Execution (scratchpad/r3/gitnoop): after a worker commit, the orchestrator's add+commit exits 1 with 'nothing to commit, working tree clean'.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 813,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-016"
+  },
+  {
+    "id": "C-017",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The wave-loop pseudo-code (:752-772) goes 'all DONE -> continue to next wave' with no commit step. The auto_commit=false task-boundary commit appears only as a paragraph after the dispatch template (:833), and :917 cites it as '(Step B)'.",
+    "impact": "An orchestrator following the loop can advance to the next wave before the boundary commit. The sanity check at :917 catches only the zero-commit case.",
+    "suggested_fix": "Add 'IF auto_commit=false: task-boundary commit per accepted result' inside the loop, after reading each STATUS and before the next wave. Mirror across the builds.",
+    "evidence": "Site-check of job-orchestrator SKILL.md:752-772, :833-844 and :917 (identical in the 4 builds).",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
+    "line": 769,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-017"
+  }
+]

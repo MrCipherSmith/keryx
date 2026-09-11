@@ -175,7 +175,7 @@ where its recurring conditions land under that one.
 
 When dispatched by `review-orchestrator`, follow the provided
 `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible
-with `skills/review/review-orchestrator/reviewer-finding.schema.json`, then a
+with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a
 concise markdown summary. Prefix finding ids `LY-`.
 
 ### Class scope — required for `blocker` and `major`

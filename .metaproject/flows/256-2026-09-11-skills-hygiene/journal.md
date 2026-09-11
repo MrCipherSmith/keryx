@@ -1,0 +1,123 @@
+# Flow Journal
+
+- 2026-09-11T16:54:12.310Z - flow created
+- 2026-09-11T17:05:51.065Z - task-added: T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis
+- 2026-09-11T17:05:51.186Z - task-added: T6: D1: prune unmodified retired bundled rules from installations
+- 2026-09-11T17:05:51.299Z - task-added: T7: D3: verification skills use keryx health/test run and a bound of 3
+- 2026-09-11T17:05:51.420Z - task-added: T8: D4: one job context path, <job>/ai/context.md
+- 2026-09-11T17:05:51.550Z - task-added: T9: D5: remove dead references in shipped skills and rules
+- 2026-09-11T17:05:51.669Z - task-added: T10: D5: xref resolves against the installed layout and sweeps rules
+- 2026-09-11T17:05:51.779Z - task-added: T11: D6: compatible_harnesses includes claude, categories match catalog, both checked
+- 2026-09-11T17:05:51.891Z - task-added: T12: D7: rendered core/platform skill descriptions read as triggers
+- 2026-09-11T17:05:52.159Z - task-added: T13: D8: heading-only entrypoint body falls back instead of an empty mirror
+- 2026-09-11T17:05:52.451Z - task-added: T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier
+- 2026-09-11T17:05:52.576Z - task-added: T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns
+- 2026-09-11T17:05:52.696Z - task-added: T16: D11: stack labels on stack-specific rules and an honest rules README
+- 2026-09-11T17:05:52.831Z - task-added: T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status
+- 2026-09-11T17:06:07.635Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification runs after every fix task
+- 2026-09-11T17:06:07.916Z - task-depends-set: T4: dependsOn T3 (was empty) — review runs on the verified branch
+- 2026-09-11T17:06:08.123Z - frozen: 16 criteria; checksum recorded
+- 2026-09-11T17:06:08.249Z - started
+- 2026-09-11T17:06:08.372Z - task-done: T1: Collect remaining context
+- 2026-09-11T17:06:08.500Z - task-done: T2: Implement per plan
+- 2026-09-11T17:06:48.522Z - task-attempt: T5: started (attempt 1) — 252-T5 wave W1
+- 2026-09-11T17:06:48.647Z - task-attempt: T7: started (attempt 1) — 252-T7 wave W1
+- 2026-09-11T17:06:48.764Z - task-attempt: T12: started (attempt 1) — 252-T12 wave W1
+- 2026-09-11T17:06:49.081Z - task-attempt: T13: started (attempt 1) — 252-T13 wave W1
+- 2026-09-11T17:06:49.201Z - task-attempt: T14: started (attempt 1) — 252-T14 wave W1
+- 2026-09-11T17:06:49.322Z - task-attempt: T16: started (attempt 1) — 252-T16 wave W1
+- 2026-09-11T17:08:36.358Z - task-attempt: T8: started (attempt 1) — 252-T8 pulled into W1, no file overlap
+- 2026-09-11T17:10:15Z - BASELINE (AC15): worktree at c44f5f0f (main bb0e36b4 + program docs), `bun test` 9335 pass / 20 skip / 0 fail across 734 files (339.7s); `bunx tsc --noEmit -p .` clean. The run started before W1 workers began writing (dispatch 17:06:48) and finished while they worked; with 0 failures it is still a valid "no failure absent from baseline" reference. Raw: .metaproject/data/gdctx/raw/2026-09-11T17-10-01-182Z-b76487_run.log
+- 2026-09-11T17:11:32.069Z - task-done: T13: D8: heading-only entrypoint body falls back instead of an empty mirror
+- 2026-09-11T17:12:26.257Z - task-done: T5: D1+D2: delete retired review rules; clean review-orchestrator model_strategy and strict synthesis
+- 2026-09-11T17:13:16.060Z - task-attempt: T16: started (attempt 2) — 252-T16b: detector-backed playwright/sql/http-server tags
+- 2026-09-11T17:14:00Z - COMMIT ATTRIBUTION: T16's renderProjectRulesReadme change in src/lib/templates.ts landed in T13's commit 65e9dd99 (both workers edited templates.ts; the orchestrator staged the whole file for T13). a3df058c carries the README output and rule labels. Not rewritten (workers active); to be stated in the PR body. From here, a file shared by two running tasks is committed only after both finish.
+- 2026-09-11T17:14:00.901Z - task-attempt: T6: started (attempt 1) — 252-T6 (T5 done, no file overlap with running tasks)
+- 2026-09-11T17:14:01.023Z - task-attempt: T9: started (attempt 1) — 252-T9 (T5 done, no file overlap with running tasks)
+- 2026-09-11T17:14:55.979Z - task-done: T14: D9: one unhandled-rejection rule, one documentation layout, model choice via review tier
+- 2026-09-11T17:14:56.099Z - task-added: T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout
+- 2026-09-11T17:14:56.216Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — T18 added: skills that contradict the rewritten documentation rules
+- 2026-09-11T17:15:11.345Z - task-done: T8: D4: one job context path, <job>/ai/context.md
+- 2026-09-11T17:17:42.118Z - task-done: T12: D7: rendered core/platform skill descriptions read as triggers
+- 2026-09-11T17:17:42.356Z - task-attempt: T17: started (attempt 1) — 252-T17 after T12
+- 2026-09-11T17:17:42Z - NOTE for flow 253: T12 found the 'Use when <imperative>' description pattern on ~20 more BUNDLED_GDSKILLS entries outside the 11 rendered skills (reviewer-skill-creator, agent-entrypoint-distiller, claude-md-management, job-orchestrator, flow-orchestrator, job-documenter, context-collector, code-verifier, feature-dev, review-verifier, code-*-review, security-audit, perf-check, test-gen, tests-creator, deploy, pr-issue-documenter, changelog, docpack-orchestrator). Out of AC9's frozen scope; the 253 description lint must cover it.
+- 2026-09-11T17:18:17.493Z - task-done: T16: D11: stack labels on stack-specific rules and an honest rules README
+- 2026-09-11T17:20:40.638Z - task-attempt: T6: started (attempt 2) — 252-T6b: print install warnings in init/update/skills install
+- 2026-09-11T17:21:47.229Z - task-done: T7: D3: verification skills use keryx health/test run and a bound of 3
+- 2026-09-11T17:21:47Z - NOTE for flow 253/254: T7 found feature-dev, hookify and deploy also hardcode 'npx tsc --noEmit' (out of D3 scope); tests-creator/output-contract.schema.json:75 keeps 'npx vitest run src/' as an illustrative run_command example. T7 also ran 'health run --help' and 'test run --help', which executed for real and rewrote .metaproject/data/health and data/testing artifacts; those are regenerable and not committed.
+- 2026-09-11T17:23:58.024Z - task-done: T17: D12: verifier describes what verify.ts checks; project-skill footer stops asserting status
+- 2026-09-11T17:26:10.296Z - task-done: T9: D5: remove dead references in shipped skills and rules
+- 2026-09-11T17:26:10.417Z - task-attempt: T10: started (attempt 1) — 252-T10 after T9
+- 2026-09-11T17:26:10.667Z - task-attempt: T15: started (attempt 1) — 252-T15 after T9
+- 2026-09-11T17:26:10.899Z - task-attempt: T18: started (attempt 1) — 252-T18 after T9
+- 2026-09-11T17:27:20.666Z - task-done: T6: D1: prune unmodified retired bundled rules from installations
+- 2026-09-11T17:35:49.299Z - task-done: T15: D10: git-concurrency rule, wired into orchestrators, destructive-git patterns
+- 2026-09-11T17:37:18.418Z - task-done: T18: D9b: prd-creator and feature-analyzer write the requirements-package-standard layout
+- 2026-09-11T17:53:56.304Z - task-done: T10: D5: xref resolves against the installed layout and sweeps rules
+- 2026-09-11T17:53:56.488Z - task-attempt: T11: started (attempt 1) — 252-T11 after T10 and T7
+- 2026-09-11T17:53:56Z - NOTE for flow 253: after T10, orchestrator-prompt.md files are not swept by xref; bare skills/gdskills/... and 2-segment skills/<category>/<name> citations are still accepted (installed-equivalent) but inconsistent with the .metaproject/... spelling used elsewhere.
+- 2026-09-11T18:05:21.283Z - task-done: T11: D6: compatible_harnesses includes claude, categories match catalog, both checked
+- 2026-09-11T18:05:33.762Z - task-attempt: T3: started (attempt 1) — 252-T3 full verification run by orchestrator
+- 2026-09-11T18:12:31Z - T3 VERIFICATION at 2078a9a6: skills verify --bundled exit 0 (0 findings); rules mirror byte-identical (diff -rq clean); skills mirror differs only by rendered-only dirs; tsc --noEmit clean; bun test 9375 pass / 20 skip / 0 fail across 735 files (baseline 9335/20/0 — +40 new tests, no failure absent from baseline). Raw: .metaproject/data/gdctx/raw/2026-09-11T18-12-11-474Z-45954b_run.log
+- 2026-09-11T18:12:31.917Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-11T18:12:32.040Z - task-attempt: T4: started (attempt 1) — 252-T4 review-orchestrator round over main..HEAD
+- 2026-09-11T18:39:21.101Z - task-added: T19: R1 fix: retired-rule cleanup never follows or aborts on non-regular entries, hashes CRLF/BOM-normalised text, explains its warning (S-001, L-001, L-002)
+- 2026-09-11T18:39:21.357Z - task-added: T20: R1 fix: review-orchestrator schemas and templates carry only ask|adaptive and the tier vocabulary (C-001)
+- 2026-09-11T18:39:21.597Z - task-added: T21: R1 fix: plan locations, skill storage/sync and rule-management rules match the code; learn tier and verifier description aligned (C-002, C-003, C-005, C-006)
+- 2026-09-11T18:39:21.878Z - task-added: T22: R1 fix: task-implementer git templates follow git-concurrency (C-004)
+- 2026-09-11T18:39:22.082Z - task-added: T23: R1 fix: close the test gaps mutation testing found (T-001..T-005)
+- 2026-09-11T18:39:22.445Z - task-added: T24: R1 re-verify: full suite, typecheck, bundled verify, mirror identity after round-1 fixes
+- 2026-09-11T18:39:22.816Z - task-depends-set: T4: dependsOn T3, T24 (was T3) — review round 2 runs on the re-verified branch after round-1 fixes
+- 2026-09-11T18:50:49.421Z - task-attempt: T4: failed (attempt 2) — round 1: 5 major, 9 minor confirmed by execution/site checks; fix tasks T19-T23, re-verify T24
+- 2026-09-11T18:50:50.137Z - task-attempt: T19: started (attempt 1) — 252-T19 round-1 fix
+- 2026-09-11T18:50:51.070Z - task-attempt: T20: started (attempt 1) — 252-T20 round-1 fix
+- 2026-09-11T18:50:51.639Z - task-attempt: T21: started (attempt 1) — 252-T21 round-1 fix
+- 2026-09-11T18:50:52.786Z - task-attempt: T22: started (attempt 1) — 252-T22 round-1 fix
+- 2026-09-11T18:55:35.360Z - task-done: T22: R1 fix: task-implementer git templates follow git-concurrency (C-004)
+- 2026-09-11T18:57:00.586Z - task-done: T19: R1 fix: retired-rule cleanup never follows or aborts on non-regular entries, hashes CRLF/BOM-normalised text, explains its warning (S-001, L-001, L-002)
+- 2026-09-11T18:57:16.210Z - task-attempt: T23: started (attempt 1) — 252-T23 after T19; T21 still editing templates.ts README and catalog.ts:74
+- 2026-09-11T18:58:31.627Z - task-done: T20: R1 fix: review-orchestrator schemas and templates carry only ask|adaptive and the tier vocabulary (C-001)
+- 2026-09-11T18:59:48.222Z - task-done: T21: R1 fix: plan locations, skill storage/sync and rule-management rules match the code; learn tier and verifier description aligned (C-002, C-003, C-005, C-006)
+- 2026-09-11T19:11:50.280Z - task-done: T23: R1 fix: close the test gaps mutation testing found (T-001..T-005)
+- 2026-09-11T19:11:50.418Z - task-attempt: T24: started (attempt 1) — 252-T24 full re-verification after round-1 fixes
+- 2026-09-11T19:11:50Z - T23 worker applied its five kill-mutations to live ROOT source files (contrary to the dispatch) and restored them; confirmed clean: git status shows no diff on install.ts, retired-rules.ts, templates.ts, update.ts, init.ts, catalog.ts, nestjs-dto.mdc. Orchestrator replaced a literal U+FEFF in install.test.ts:486 (eslint no-irregular-whitespace) with String.fromCharCode(0xfeff).
+- 2026-09-11T19:18:52Z - T24 RE-VERIFICATION at 0cdc36d1 (after round-1 fixes T19-T23): skills verify --bundled exit 0; rules mirror byte-identical; skills mirror differs only by rendered-only dirs; tsc --noEmit exit 0; eslint on changed files clean; bun test 9476 pass / 20 skip / 0 fail across 736 files (baseline 9335/20/0). Raw: .metaproject/data/gdctx/raw/2026-09-11T19-18-27-902Z-fb70b1_run.log
+- 2026-09-11T19:18:52.689Z - task-done: T24: R1 re-verify: full suite, typecheck, bundled verify, mirror identity after round-1 fixes
+- 2026-09-11T19:18:52.833Z - task-attempt: T4: started (attempt 3) — review round 2 over main..HEAD after round-1 fixes
+- 2026-09-11T19:29:37.251Z - task-attempt: T4: failed (attempt 4) — round 2: C-003 partial; new C-009 major, C-010/C-011/L-008 minor; review loop escalate: no; fixes T25-T27, re-verify T28
+- 2026-09-11T19:29:37.419Z - task-added: T25: R2 fix: skill sync and rule editing instructions name what exists (C-009, C-011, C-014)
+- 2026-09-11T19:29:37.551Z - task-added: T26: R2 fix: orchestrators commit a worker's reported files when auto-commit is off (C-010, C-012)
+- 2026-09-11T19:29:37.697Z - task-added: T27: R2 fix: a retired rule that cannot be removed says so, not that it cannot be read (L-008)
+- 2026-09-11T19:29:37.836Z - task-added: T28: R2 re-verify: full suite, typecheck, bundled verify, mirror identity after round-2 fixes
+- 2026-09-11T19:29:38.096Z - task-depends-set: T4: dependsOn T3, T24, T28 (was T3, T24) — review round 3 runs after round-2 fixes are re-verified
+- 2026-09-11T19:29:38.247Z - task-attempt: T25: started (attempt 1) — 252-T25 round-2 fix
+- 2026-09-11T19:29:38.403Z - task-attempt: T26: started (attempt 1) — 252-T26 round-2 fix
+- 2026-09-11T19:29:38.555Z - task-attempt: T27: started (attempt 1) — 252-T27 round-2 fix
+- 2026-09-11T19:30:34Z - LOOP BOUND (T4): persisted attempts.count is 4 because each review round was recorded as a started+outcome pair; actual review rounds = 2 (review loop: rounds 2, escalate no, no repeated finding). Treating the bound as reached per flow-orchestrator Phase 4 step 5 and re-planning rather than repeating: round-2 findings are new, narrow and disjoint from round 1 (1 major rule text, 3 minor); round 3 will review only the round-2 fix diff plus closure of C-003/C-009..C-011/L-008, run by one agent without nested reviewers. If round 3 is not clean at blocker/major/minor, the flow stays in-progress and the remaining findings go to the user instead of a fourth round.
+- 2026-09-11T19:34:32.998Z - task-done: T27: R2 fix: a retired rule that cannot be removed says so, not that it cannot be read (L-008)
+- 2026-09-11T19:35:41.394Z - task-done: T25: R2 fix: skill sync and rule editing instructions name what exists (C-009, C-011, C-014)
+- 2026-09-11T19:38:27.496Z - task-done: T26: R2 fix: orchestrators commit a worker's reported files when auto-commit is off (C-010, C-012)
+- 2026-09-11T19:38:27.636Z - task-attempt: T28: started (attempt 1) — 252-T28 full re-verification after round-2 fixes
+- 2026-09-11T19:47:19Z - T28 run 1 at cb4175a3: skills verify --bundled exit 0; rules mirror identical; skills mirror differs only by rendered-only dirs; tsc exit 0; eslint clean; bun test 9496 pass(approx) / 1 fail — src/sac/session-wrap-up.test.ts:74 'exports the real session archive…' got an extra 'redaction-notice' evidence item. The branch does not touch src/sac, src/security or src/ctx (git diff --stat main..HEAD empty for them); the test passed in the baseline (c44f5f0f) and in T24 (d… 9476/0), and passes 3/3 when run alone at cb4175a3. Treated as load-dependent flake unrelated to flow 252; a second full-suite run decides AC15. Raw: .metaproject/data/gdctx/raw/2026-09-11T19-44-14-701Z-5abbfc_run.log
+- 2026-09-11T19:55:59Z - T28 RE-VERIFICATION at cb4175a3: two further full-suite runs both 9477 pass / 20 skip / 0 fail across 736 files (9497 tests) — the session-wrap-up failure of run 1 did not recur; with tsc exit 0, eslint clean, skills verify --bundled exit 0 and rules mirror identical from run 1, AC15 holds. Flake handed off as a separate task.
+- 2026-09-11T19:55:59.502Z - task-done: T28: R2 re-verify: full suite, typecheck, bundled verify, mirror identity after round-2 fixes
+- 2026-09-11T19:55:59.669Z - task-attempt: T4: started (attempt 5) — review round 3 (final) over round-2 fix diff 0cdc36d1..HEAD + closure
+- 2026-09-11T20:05:24.815Z - task-attempt: T4: failed (attempt 6) — round 3 (final): round-2 findings closed; fix for C-010 introduced C-015 major (flow-orchestrator boundary commit fails when worker auto-commits) and C-016 minor (job-orchestrator never passes auto_commit); loop bound reached, escalated to user
+- 2026-09-11T20:05:24Z - ROUND 3 RESULT: all 8 round-2 findings closed (C-009/C-003/C-011/L-008/C-012 by execution). New: C-015 major — flow-orchestrator SKILL.md:354-364,380-381 commits the worker's changed_files unconditionally while its dispatch leaves task-implementer's auto_commit at default true, so git commit exits 1 'nothing to commit' (reproduced); also <worktree_path> undefined there. C-016 minor — job-orchestrator :813 (5 builds) says auto_commit is passed to task-implementer but the Step B dispatch omits it. Info C-017 wave-loop pseudo-code skips the boundary commit. review loop: rounds 3, escalate no. Per the loop-bound decision recorded earlier, no fourth round was started; the flow stays in-progress and the choice goes to the user.
+- 2026-09-11T20:06:02Z - USER DECISION (loop bound escalation): one narrow fix for C-015/C-016 (+C-017 info) limited to the orchestrators' boundary-commit step, then a targeted closure check by reproduction (not a full review round), then the completion choice. T29 fix, T30 closure check.
+- 2026-09-11T20:06:03.290Z - task-added: T29: R3 fix (user-approved past the loop bound): orchestrator boundary commit works whether or not the worker committed (C-015, C-016, C-017)
+- 2026-09-11T20:06:04.515Z - task-added: T30: R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify
+- 2026-09-11T20:06:05.067Z - task-depends-set: T4: dependsOn T3, T24, T28, T30 (was T3, T24, T28) — user-approved narrow fix after round 3; closure is checked by T30, not a fourth round
+- 2026-09-11T20:06:05.568Z - task-attempt: T29: started (attempt 1) — 252-T29 narrow boundary-commit fix
+- 2026-09-11T20:12:37.859Z - task-done: T29: R3 fix (user-approved past the loop bound): orchestrator boundary commit works whether or not the worker committed (C-015, C-016, C-017)
+- 2026-09-11T20:12:37.979Z - task-attempt: T30: started (attempt 1) — 252-T30 targeted closure check of C-015/C-016/C-017
+- 2026-09-11T20:12:37Z - NOTE for flow 253/254 (pre-existing, found by T29): task-implementer Phase 1.4 validates its request against task-implementer-input while flow-orchestrator hands it a subagent-dispatch (both additionalProperties:false, no mapping defined); job-orchestrator Step B omits skip_confirmation: true which the task-implementer contract requires; task-implementer's compact response defines no Commits: line. flow-orchestrator's auto-commit-off is a prose constraint because subagent-dispatch has no automation field.
+- 2026-09-11T20:18:56Z - T30 CLOSURE CHECK (reviews/closure-check-T30.md): C-015, C-016, C-017 closed by execution in bash and zsh across 9 scenarios; dispatch example validates against subagent-dispatch. New N-1 (minor): unquoted space-containing path in the snippet placeholder skipped silently — fixed by the orchestrator in the same step (placeholder now says to single-quote each path), re-simulated (committed), targeted tests 53/53, skills verify --bundled exit 0. N-2, N-3 info (git rm'd path prints a pathspec error but commits; 'workers do not commit' vs tests-creator stubs) left for flow 253. Review loop closed at zero open blocker/major/minor.
+- 2026-09-11T20:18:57.175Z - task-done: T30: R3 closure check: reproduce C-015/C-016 scenarios against the fixed skills; targeted tests; bundled verify
+- 2026-09-11T20:18:57.300Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T20:20:57Z - COMPLETION CHOICE (user): A — PR, review, merge into main, complete. PR https://github.com/MrCipherSmith/keryx/pull/533 opened from skills/quality-program (34 commits ahead, 1 behind origin/main at open). Branch review is rounds 1-3 + T30 closure check on the same diff; PR loop will wait on CI and mergeability.
+- 2026-09-11T20:22:28.057Z - renumbered: 252 -> 256: Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide.
+- 2026-09-11T20:28:21.176Z - task-added: T31: CI: removal-failure test depended on macOS cp semantics; test the unlink-failure branch through an injected unlink, keep the read-only-dir case macOS-only
+- 2026-09-11T20:28:21.288Z - task-attempt: T31: started (attempt 1) — PR #533 typecheck-and-tests failed on Linux: Bun fs.cp(force) unlinks every destination, so a read-only rules/core aborts the bulk rule copy (install.ts:127) before the retired-rule cleanup; the T27 test's premise holds only on macOS
+- 2026-09-11T20:30:26Z - T31: PR #533 typecheck-and-tests failed on Linux in the T27 read-only-dir test — Bun fs.cp(force) unlinks destinations on Linux, so install aborts at install.ts:127 before the cleanup. Fixed by exporting removeUnmodifiedRetiredRules with an injectable unlink (new cross-platform test) and gating the read-only-dir end-to-end test to macOS. Local: 38/38 affected tests, tsc 0, eslint clean. Pushed; CI rerunning.
+- 2026-09-11T20:30:27.125Z - task-done: T31: CI: removal-failure test depended on macOS cp semantics; test the unlink-failure branch through an injected unlink, keep the read-only-dir case macOS-only
