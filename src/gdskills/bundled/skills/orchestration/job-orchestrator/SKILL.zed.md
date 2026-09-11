@@ -698,6 +698,8 @@ fi
 
 > **IMPORTANT**: After creating the worktree, ALL subsequent operations (implementation, review, lint, test, git) MUST run in the **worktree directory**, NOT in the original project directory.
 
+> **Concurrency**: every subsequent git command MUST use `git -C <worktree_path>`, never a bare `git`, and MUST NOT `git stash` or `git add -A`/`--all`/`.` — see `rules/core/git-concurrency.mdc`. Pin each dispatch to `<worktree_path>` explicitly; a dispatched agent's first action is `cd <worktree_path> && pwd && git branch --show-current`, re-checked before its first write.
+
 **Record state:**
 ```
 BRANCH_STATE:

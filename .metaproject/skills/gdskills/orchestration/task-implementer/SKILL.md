@@ -398,6 +398,8 @@ said. Report the block instead, naming what repeated.
 
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
 
+**Same reasoning bans `git stash` and unscoped `git add`.** Never `git stash` — the stash stack is shared by every worktree, so even a scoped `push -- <file>` can be popped by another lane. Stage only the files this task changed (`git add <path> <path>`), never `-A`/`--all`/`.`. Every git command runs as `git -C <this worktree's absolute path>`. See `rules/core/git-concurrency.mdc`.
+
 **5.5 Re-commit fixes if any:**
 When auto-commit is enabled, use the template below. Include `refs #<issue_number>` only for a supplied positive real issue number; otherwise omit that entire line.
 ```bash

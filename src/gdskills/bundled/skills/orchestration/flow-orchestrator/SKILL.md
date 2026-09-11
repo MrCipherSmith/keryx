@@ -231,6 +231,7 @@ Required rules:
 - `.metaproject/rules/core/error-handling.mdc`
 - `.metaproject/rules/core/implementation-doc-mandate.mdc`
 - `.metaproject/rules/core/execution-metrics.md`
+- `.metaproject/rules/core/git-concurrency.mdc` — no `git stash`, no unscoped `git add`, pin every dispatch to its worktree
 
 Execution metrics (opt-in): when a USER runs this orchestrator directly, at the
 start ask "Collect execution statistics for this run? (yes/no)" per
@@ -340,7 +341,8 @@ Dispatch payload, bound to the flow (map `target_skill` from the routing table):
   "constraints": [
     "Never edit flow.json.",
     "Never edit frozen acceptance criteria.",
-    "Return a subagent-result; first line must be STATUS:."
+    "Return a subagent-result; first line must be STATUS:.",
+    "Follow rules/core/git-concurrency.mdc: never git stash; never git add -A."
   ],
   "allowed_actions": ["read", "write", "run-command", "git"],
   "output_contract": { "schema": "subagent-result", "artifact_path": ".metaproject/flows/<dir>/journal.md" },
