@@ -9,7 +9,63 @@ Branch: `arena/measurement`. Pushed to `origin`. Based on
 
 ---
 
-## 000. Where it stopped, 2026-09-11 ~15:00 — read this first
+## 0000. Where it stopped, 2026-09-12 ~13:10 — read this first
+
+**The first uncontaminated sweep is done, and it says the workspace does not decide
+these tasks.** 13 frozen T1 tasks, two legs (`keryx-shell` @ grok-4.6,
+`claude-sonnet`), both arms, `/tmp/arena-batch2`. Numbers and per-task rows:
+`arena/keryx-shell-defects.md` § "Results: the first uncontaminated sweep".
+
+- **keryx-shell: no difference.** 10 pairs, recall 8/23 in BOTH arms, tokens 1.16×.
+  The arena's verdict: `+0.0 points … within the ±20% tie band`.
+- **claude-sonnet: a weak positive.** 13 pairs, `+13.5 points`, above the +10
+  threshold — but in raw terms one gold file out of 28 (four task wins, three
+  losses), which is the size of the noise.
+- **Recall is a third of the gold files in every arm.** On this task type the limit
+  is the search, not the context.
+
+**What made the numbers trustworthy this time.** The prompt used to hand over the
+commit subject and PR number and ask which files "that change touched"; every agent
+read it as a history lookup and went hunting — GitHub, other arms, the operator's
+home — and claude arms that found no commit refused to answer at all. The task is now
+stated forward ("a developer is about to make this change… name the files that will
+have to change; it is not in the history"), with PR numbers, conventional-commit
+prefixes and squash bullets stripped (`asRequest`). **Zero escapes in 26 arms**,
+against 15 of 16 in batch1.
+
+**Do not trust the cost half of either verdict (K-018).** `contextTokens` is read
+from the final `result` event's `usage`, which is the main thread only; claude's
+control arms delegated 9.51M tokens to 16 sub-agents that the metric never saw. The
+printed 4.22× is an artefact — corrected, claude is 17.06M against ~13.55M (1.26×),
+and `total_cost_usd` says 1.11× ($7.58 vs $6.81). Fix the metric before quoting any
+cost conclusion.
+
+**keryx defects found by this sweep and already fixed** (PR #532, flow 253, merged;
+not yet released): K-013 an expired grok grant was sent instead of refreshed on the
+readline path, K-015 `shell_exec` handed every saved provider key to every command,
+K-016 a `memory_search` miss printed the journal's absolute path in ~700 characters.
+Still open: K-017 (a resumed sweep re-runs a half-finished task's arms), K-018 above,
+and three keryx control arms that hit the 900 s ceiling (`t1-8078d774`,
+`t1-57f92d67`, `t1-83c363d2`) and are unpaired.
+
+**Next, in order:**
+
+1. Fix K-018, then re-state both cost verdicts from the same run's data.
+2. Raise or measure the watchdog ceiling for keryx control arms — three of ten pairs
+   were lost to it, all in the same arm.
+3. T2 (implement, hidden tests fail→pass) is the honest test of whether the workspace
+   helps an agent *change* code rather than find files. T1 has answered what it can.
+4. A real sandbox (container: no home, no `/tmp`, network only to the model API) if
+   the sweep ever runs against a model that hunts; the transcript fence is a detector,
+   not a boundary.
+
+**Memory note:** the runner was killed by the OS for low memory five times during
+this sweep. It resumes cleanly (settled arms are skipped), but see K-017 for the
+half-finished-task case.
+
+---
+
+## 000. Where it stopped, 2026-09-11 ~15:00 — superseded by 0000 above
 
 **The comparison so far is contaminated, and the hole is closed.** The grok CLI's
 4/4 on `t1-53254e0e` was the answer read from the SOURCE clone: every arm checkout

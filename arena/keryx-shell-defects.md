@@ -418,6 +418,55 @@ login, used for the answer. No key material reached the transcript. claude-sonne
 metaproject's favour. The prompt itself is the leak: it carries the PR number and the
 commit title verbatim, which is a search key for the answer.
 
+## K-018 — `contextTokens` misses a delegating arm's sub-agent usage, so the cost verdict is wrong · open (arena)
+
+**Evidence:** `/tmp/arena-batch2`, claude-sonnet, 13 paired tasks. `parseStream`
+(`scripts/benchmark/retrieval-agent-claude.ts:185-190`) takes both numbers from the
+final `result` event: `contextTokens` from that event's `usage` — the main thread —
+and `costUsd` from `total_cost_usd`. Claude's control arms delegated: 16 sub-agents
+across the leg, 9.51M sub-agent tokens visible in their own transcripts, none in the
+context arms. The recorded totals were 17.06M with context against 4.04M without,
+a 4.22× ratio, and the arena printed "context cost ratio 4.38, above the tie band —
+the gain was not free".
+
+The dollar column proves which number lies. Per million recorded tokens the
+delegating arms cost $14.79, $15.47, $16.00, $7.19, $5.92; every arm that did its own
+reading sits at $0.35–$0.99. Sonnet is not a $16/Mtok model: `total_cost_usd` counts
+the sub-agents, `usage` does not.
+
+**Impact:** an arm that delegates looks ~4× cheaper than it is. The threshold's cost
+condition — the half that decides whether a recall gain was "free" — is therefore
+unreliable for any harness whose agent spawns sub-agents, which is every claude arm
+without `.metaproject/` in this run. Corrected, the same leg reads 17.06M against
+~13.55M (1.26×), and the cost ratio is 1.11× — a tie, not a 4× penalty.
+
+**Fix direction:** sum usage across every turn AND every sub-agent result in the
+stream instead of reading one final event, or derive the cost condition from
+`total_cost_usd` alone, which already accounts for the whole session. Re-state both
+legs' cost verdicts once the metric is fixed.
+
+## Results: the first uncontaminated sweep, 2026-09-12 (`/tmp/arena-batch2`)
+
+13 frozen T1 tasks, forward-framed prompts (no PR number, no commit subject), two
+legs, both arms. **Zero escapes:** every arm stayed inside its tree, against 15 of 16
+in batch1. Three keryx control arms hit the 900 s watchdog ceiling and are unpaired.
+
+| leg | pairs | recall with context | recall without | tokens (recorded) | tokens (corrected) | cost |
+|---|---|---|---|---|---|---|
+| keryx-shell @ grok-4.6 | 10 | 8/23 (0.35) | 8/23 (0.35) | 6.87M vs 5.94M | same (no sub-agents) | n/a (subscription) |
+| claude-sonnet | 13 | 10/28 (0.36) | 9/28 (0.32) | 17.06M vs 4.04M | 17.06M vs ~13.55M | $7.58 vs $6.81 |
+
+- **keryx-shell: no difference.** The arena's own verdict is `+0.0 points over 10
+  paired tasks`, cost ratio 1.15, inside the tie band. Identical recall, 16% more
+  tokens. Two tasks were much cheaper with the workspace (`t1-5dde4b04` 27 s against
+  279 s; `t1-feca1074` 270k against 543k) and three much dearer (`t1-6151fea2` 643k
+  against 193k).
+- **claude-sonnet: a weak positive.** `+13.5 points over 13 paired tasks`, above the
+  +10 threshold, but the raw difference is one gold file out of 28 — four task wins
+  against three losses, which is the same size as the noise.
+- **Recall is low for both, in both arms** — a third of the gold files. On these
+  tasks the limit is the search, not the workspace.
+
 ## K-017 — a resumed sweep re-runs the arms of a half-finished task · open (arena)
 
 **Evidence:** `/tmp/arena-batch2`, 2026-09-12. The runner was killed by the OS (low
@@ -502,7 +551,9 @@ the query. Same rule K-008 applied to `search_code`: tool output carries relativ
 | K-013 | open — expired grok grant sent instead of refreshed; root cause not yet pinned |
 | K-014 | fixed on this branch (transcript fence: operator home, arena files); residual risk recorded |
 | K-015 | open — `shell_exec` inherits every saved provider key; model-side redaction unchecked |
-| K-016 | open — `memory_search` miss prints the absolute journal path and a ~700-char disclaimer |
+| K-016 | fixed in PR #532 (flow 253): a `trail-absent` miss is one line, no path |
+| K-017 | open — a resumed sweep re-runs the arms of a half-finished task (duplicate rows) |
+| K-018 | open — `contextTokens` misses sub-agent usage, so the cost half of the verdict is wrong |
 | S-1 | fixed in 0.2.95 (#529) |
 | S-2 | improved — clip notes now say how much was dropped (K-008) |
 | S-3 | partly — the prompt's tool statements are now true of the roster |
