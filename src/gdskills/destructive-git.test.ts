@@ -48,6 +48,19 @@ const DESTRUCTIVE = [
     pattern: /git\s+restore\s+(?:--\w+\s+)*\.(?:\s|$)/,
     why: "`git restore .` reverts every tracked file in the tree",
   },
+  {
+    // Unlike the patterns above, every form is unsafe here, not only the
+    // unscoped one — see `rules/core/git-concurrency.mdc`. The stash stack is
+    // a SINGLE list shared by the main checkout and every worktree cut from
+    // it, so even `git stash push -- <one file>` resets that file now and
+    // queues the diff on a stack another lane's `git stash pop` can take.
+    pattern: /git\s+stash\b/,
+    why: "`git stash`, even scoped to one file, resets it now and joins a stack every worktree shares — another lane's `pop` can take your entry or hand you theirs",
+  },
+  {
+    pattern: /git\s+add\s+(?:-A\b|--all\b|\.(?![\w/]))/,
+    why: "`git add -A`/`--all`/`.` stages every changed file in the tree, including another lane's in-flight edits, into this commit",
+  },
 ];
 
 /**
@@ -99,4 +112,21 @@ test("the detector fires on the exact line that shipped, and not on its correcti
   expect(fires(correction)).toBe(false);
   // And the scoped form an agent legitimately needs stays legal.
   expect(fires("run `git checkout -- src/checkout/total.ts` to restore only your file")).toBe(false);
+});
+
+test("the stash and unscoped-add patterns fire on instructions and not on prohibitions", () => {
+  const fires = (line: string): boolean =>
+    DESTRUCTIVE.some(({ pattern }) => pattern.test(line)) && !DENIAL.test(line);
+
+  // git stash: EVERY form is an offender, including a scoped one — the stash
+  // stack is shared across worktrees, unlike reset/clean/checkout/restore.
+  expect(fires("run `git stash push -- src/foo.ts` to set it aside for a moment")).toBe(true);
+  expect(fires("never run `git stash`, in any form, in a shared tree")).toBe(false);
+
+  // git add -A / --all / . : unscoped forms only; a scoped add stays legal.
+  expect(fires("stage everything with `git add -A` and commit")).toBe(true);
+  expect(fires("run `git add --all` before committing")).toBe(true);
+  expect(fires("run `git add .` to pick up the new files")).toBe(true);
+  expect(fires("**NEVER** `git add -A`, `--all`, or `.` — stage explicit pathspecs instead")).toBe(false);
+  expect(fires("run `git add src/foo.ts src/foo.test.ts` to stage only your files")).toBe(false);
 });

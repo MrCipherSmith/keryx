@@ -48,7 +48,7 @@
  * routing table itself is prose in a skill body outside this module's reach.
  */
 
-export const STACK_TAGS = ["nestjs", "react", "mobx", "prisma"] as const;
+export const STACK_TAGS = ["nestjs", "react", "mobx", "prisma", "playwright", "sql", "http-server"] as const;
 export type StackTag = (typeof STACK_TAGS)[number];
 
 function isStackTag(value: string): value is StackTag {
@@ -71,6 +71,9 @@ const TAG_MARKERS: Record<Exclude<StackTag, "nestjs">, readonly string[]> = {
   react: ["react", "react-dom"],
   mobx: ["mobx", "mobx-react", "mobx-react-lite"],
   prisma: ["prisma", "@prisma/client"],
+  playwright: ["@playwright/test", "playwright"],
+  sql: ["prisma", "@prisma/client", "typeorm", "sequelize", "knex", "drizzle-orm", "pg", "mysql2", "better-sqlite3", "kysely"],
+  "http-server": ["express", "fastify", "koa", "hono", "@nestjs/core", "@hapi/hapi"],
 };
 
 const DEPENDENCY_FIELDS = ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies"] as const;

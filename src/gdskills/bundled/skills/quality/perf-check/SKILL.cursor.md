@@ -11,7 +11,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "performance"
+  category: "quality"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---

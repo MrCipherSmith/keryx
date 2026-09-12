@@ -182,5 +182,37 @@
     "toDir": "253-2026-09-11-keryx-shell-expired-grok-grant-sent-on-t",
     "at": "2026-09-11T20:16:15.378Z",
     "reason": "main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open"
+  },
+  {
+    "from": "252",
+    "to": "256",
+    "fromDir": "252-2026-09-11-skills-hygiene",
+    "toDir": "256-2026-09-11-skills-hygiene",
+    "at": "2026-09-11T20:22:28.057Z",
+    "reason": "Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide."
+  },
+  {
+    "from": "253",
+    "to": "257",
+    "fromDir": "253-2026-09-11-skill-quality-gate",
+    "toDir": "257-2026-09-11-skill-quality-gate",
+    "at": "2026-09-11T20:32:46.304Z",
+    "reason": "main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+  },
+  {
+    "from": "254",
+    "to": "258",
+    "fromDir": "254-2026-09-11-skill-gaps",
+    "toDir": "258-2026-09-11-skill-gaps",
+    "at": "2026-09-11T20:32:46.460Z",
+    "reason": "main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+  },
+  {
+    "from": "255",
+    "to": "259",
+    "fromDir": "255-2026-09-11-skill-behavior-evals",
+    "toDir": "259-2026-09-11-skill-behavior-evals",
+    "at": "2026-09-11T20:32:46.614Z",
+    "reason": "main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
   }
 ]

@@ -1,0 +1,132 @@
+[
+  {
+    "id": "C-009",
+    "reviewer": "review-architecture",
+    "severity": "major",
+    "problem": "The rule's route to a global destination (keryx update, then keryx skills sync --runtime <r> --global) fails. Global sync reads only .metaproject/runtime/skills/<runtime>/ (sync.ts:177), which only keryx skills export writes (export.ts:124), and export accepts project-skills only.",
+    "impact": "An agent following the rule runs a sync that exits 1. A shipped skill (the rule's first source-of-truth bullet) has no global route at all, and a project skill needs an export step the rule never names.",
+    "suggested_fix": "State that global sync applies to project-skills and needs `keryx skills export <skill> --runtime <r>` first. Remove the implication that shipped skills can be pushed globally, or add bundled-skill export support. Mirror the change.",
+    "evidence": "Execution in scratchpad/r2/proj-sync (keryx init, then keryx update --skip-runtime, with a fake HOME holding .cursor/): `skills sync --runtime cursor --global --dry-run` gives 'No exported runtime skills found for cursor. Run: keryx skills export <skill> --runtime cursor', exit 1. `skills export task-implementer --runtime cursor` gives 'Project skill not found for: task-implementer', exit 1.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+    "line": 122,
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc:78-81",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc:89",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc:118-127",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc:139-144",
+        ".metaproject/rules/core/skills-storage-workflow.mdc:78-81",
+        ".metaproject/rules/core/skills-storage-workflow.mdc:89",
+        ".metaproject/rules/core/skills-storage-workflow.mdc:118-127",
+        ".metaproject/rules/core/skills-storage-workflow.mdc:139-144"
+      ],
+      "enumeration_method": "keryx ctx rg -n \"skills sync|keryx update|global destination\" over the bundled rule, plus diff -rq showing the installed mirror is byte-identical (same line numbers). No other bundled rule or skill prescribes `skills sync --global`."
+    },
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-009"
+  },
+  {
+    "id": "C-010",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "The new text in git-concurrency and task-implementer says that with auto-commit disabled the orchestrator stages and commits the reported paths at the task boundary. job-orchestrator instead treats zero commits as retryable and re-dispatches with 'commit them', and flow-orchestrator never mentions commits.",
+    "impact": "With implementer_settings.auto_commit=false, the task-implementer does not commit, job-orchestrator's sanity check fails and it re-dispatches telling the worker to commit, and nobody performs the promised boundary commit.",
+    "suggested_fix": "Add the auto_commit=false commit step (git -C, explicit reported paths) and a sanity-check exemption to job-orchestrator, or state in git-concurrency.mdc and task-implementer that auto-commit off is unsupported under job-orchestrator.",
+    "evidence": "Site-check. git-concurrency.mdc:68 and task-implementer SKILL.md:327-331 and :419-420 (identical in the 4 builds) contain the claim. job-orchestrator SKILL.md:904 reads '| At least 1 commit exists | ≥1 commit | `retryable` — ... \"No commits were made. Implement the changes and commit them.\"'. keryx ctx rg -i commit on flow-orchestrator SKILL.md gives 0 matches. The input is real: job-orchestrator input-contract.schema.json:167 `auto_commit` (default true).",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/git-concurrency.mdc",
+    "line": 68,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-010"
+  },
+  {
+    "id": "C-011",
+    "reviewer": "review-architecture",
+    "severity": "minor",
+    "problem": "Source of Truth :15 says .metaproject/rules/ is regenerated every run ('edit the source, not the installed copy'), but :17 lists `.metaproject/rules/core/*.mdc` as the thematic source files and :27 says to create thematic rule files only under `rules/core`.",
+    "impact": "The rule tells an agent to edit a tree that the same rule says is overwritten on the next keryx update.",
+    "suggested_fix": "Point :17 and :27 at src/gdskills/bundled/rules/core/*.mdc (installed to .metaproject/rules/core/), and say where a project-owned rule goes. Mirror the change.",
+    "evidence": "Site-check of rule-management-workflow.mdc:15, :17 and :27 at HEAD. `git show main:` shows Source of Truth was `.metaproject/rules` on main. The change came in-branch (5362b1fc, 7ad7b290) and touched :15 only.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/rule-management-workflow.mdc",
+    "line": 17,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-011"
+  },
+  {
+    "id": "L-008",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "kept-error is shared by read failures and unlink failures, and the warning always says 'could not be read'. An unmodified retired copy that was read and hash-matched, but could not be removed, is reported as unreadable.",
+    "impact": "The operator gets a wrong diagnosis (a read problem) for a removal problem, for example a read-only rules/core.",
+    "suggested_fix": "Record the failing stage in the kept-error outcome (read or remove) and word the removal case separately, for example 'matches a shipped version but could not be removed (EACCES)'. Add a test.",
+    "evidence": "Execution with scratchpad/r2/closure.ts, case readonly-dir-unmodified (first install, then the unmodified fixture written, then chmod 555 on rules/core, then install): ok:true, file kept, warning '...kept because it could not be read (EACCES) — inspect it...'. The catch at install.ts:171-185 records only errorCode.",
+    "confidence": "high",
+    "file": "src/gdskills/install.ts",
+    "line": 234,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#L-008"
+  },
+  {
+    "id": "C-012",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The sentence says keryx review tier prints inherit: true when it 'cannot rank anything'. It prints inherit only when the session provider or model is empty (review.ts:839-843). An unrankable catalogue yields provider/model plus session-fallback.",
+    "impact": "The explanation is inaccurate. Rule 5 keys off inherit: true directly, so behaviour is unaffected.",
+    "suggested_fix": "Replace the parenthetical with 'when the session has no provider/model to name (it prints inherit: true)'.",
+    "evidence": "Execution: `bun ./src/cli.ts review tier --findings 1 --diff-lines 0 --json` printed provider rapid-mlx, a model, tier_resolution session-fallback, ranked [], fallback_reason 'provider \"rapid-mlx\" reported no models', and no inherit.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/SKILL.md",
+    "line": 1567,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-012"
+  },
+  {
+    "id": "C-013",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The model block describes inherit as 'never alongside' provider/model, but the schema requires neither form and does not forbid both.",
+    "impact": "A hand-composed block with neither form, or with both, validates.",
+    "suggested_fix": "Add oneOf [required provider+model, required inherit(const true)], or leave it as-is to match subagent-dispatch.schema.json.",
+    "evidence": "Site-check. reviewer-input.schema.json:39-91 has required [tier, tier_reasons, tier_resolution, model_discovery] and no oneOf or not. subagent-dispatch.schema.json:85-149 likewise has no constraint.",
+    "confidence": "medium",
+    "file": "src/gdskills/bundled/skills/review/review-orchestrator/reviewer-input.schema.json",
+    "line": 39,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-013"
+  },
+  {
+    "id": "S-004",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "There is a TOCTOU window between lstat (:144) and readFile (:163). readFile follows a symlink swapped in after the lstat.",
+    "impact": "Only a concurrent local writer racing the install could reintroduce an unbounded read.",
+    "suggested_fix": "Open with O_NOFOLLOW, fstat the handle for isFile and size, and read from the handle.",
+    "evidence": "Unverifiable (reasoning only; the race was not reproduced).",
+    "confidence": "low",
+    "file": "src/gdskills/install.ts",
+    "line": 163,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#S-004"
+  },
+  {
+    "id": "C-014",
+    "reviewer": "review-architecture",
+    "severity": "info",
+    "problem": "The rules README sentence names only the edited-copy case as kept with a warning. Non-regular, oversized and unreadable entries are also kept with a warning.",
+    "impact": "The README slightly understates when retired files are kept.",
+    "suggested_fix": "Say 'kept (with a warning) unless it is an unmodified regular file'.",
+    "evidence": "Site-check of templates.ts:1748-1750 against install.ts:150-186.",
+    "confidence": "medium",
+    "file": "src/lib/templates.ts",
+    "line": 1748,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#C-014"
+  },
+  {
+    "id": "T-008",
+    "reviewer": "review-testing-practices",
+    "severity": "info",
+    "problem": "normalizeRetiredRuleContentForTest duplicates the unexported installer normalisation.",
+    "impact": "The copy can drift. The CRLF and BOM behaviour tests still pin the behaviour, so this fails safe.",
+    "suggested_fix": "Export normalizeRetiredRuleContent (or move it to retired-rules.ts) and import it in the test.",
+    "evidence": "Site-check of install.test.ts:431-437 against install.ts:200-206.",
+    "confidence": "medium",
+    "file": "src/gdskills/install.test.ts",
+    "line": 431,
+    "global_id": "2026-09-11-ingest-skills-quality-program-r02#T-008"
+  }
+]

@@ -17,3 +17,11 @@
 - 2026-09-11T20:16:15.378Z - renumbered: 252 -> 253: main took 252 (flow 252-mcp-servers-p3b, PR #531) while this flow was open
 - 2026-09-11T20:19:48.912Z - task-added: T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)
 - 2026-09-11T20:19:49.128Z - task-done: T9: Review round 1: bounded, provider-scoped refresh + no-refresh warning (F-001, F-004/5); TUI-typed key recorded (F-002); readline detection sees saved keys (F-003)
+- 2026-09-11T20:23:34.968Z - ac-confirmed: AC1
+- 2026-09-11T20:23:35.103Z - ac-confirmed: AC2
+- 2026-09-11T20:23:35.236Z - ac-confirmed: AC3
+- 2026-09-11T20:26:14.544Z - ac-confirmed: AC4
+- 2026-09-11T20:26:14.684Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-11T20:26:17.870Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/532 (warning: PR is not a draft)
+- 2026-09-11T20:26:18.074Z - completing
+- 2026-09-11T20:26:26.210Z - done: all gates passed

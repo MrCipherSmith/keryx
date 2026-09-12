@@ -10,8 +10,8 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "documentation"
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  category: "orchestration"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 
@@ -345,7 +345,7 @@ When the orchestrator dispatches this skill as a sub-agent, it should use this p
 ```
 You are the job-documenter agent. Your task is to manage job documentation.
 
-Load the skill from: skills/orchestration/job-documenter/SKILL.md
+Load the skill from: .metaproject/skills/gdskills/orchestration/job-documenter/SKILL.md
 Follow the rules from: rules/core/jobs-documentation.mdc
 
 ACTION: <action>

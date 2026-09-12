@@ -610,19 +610,14 @@ CONTEXT_RESULT:
 into every subsequent dispatch prompt:
 
 ```
-CONTEXT_LOCATION: <JOBS_ROOT>/<job-name>/context_v<N>.md
+CONTEXT_LOCATION: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
-**Context versioning:** never overwrite an existing context file — write snapshots as
-`context_v1.md`, `context_v2.md`, and so on. Version 1 comes from the first collect in
-2.3; each update writes the next number.
-
-The current version is the highest-numbered file in the package, which is a fact on
-disk that any session can read:
-
-```bash
-ls .metaproject/jobs/<job-name>/context_v*.md
-```
+**Context versioning:** the file lives at this one fixed path and is overwritten in
+place on every update — never written to a new, version-numbered filename. Each
+collect/update instead increments the `Version` field in the document's own
+"Document Metadata" table and appends a line to its `Update Log` section (see
+context-collector SKILL.md §4.1, §4.3); that table on disk is the current version.
 
 `state.json` does not carry a context pointer and nothing writes one — do not tell a
 sub-agent to look for one. The orchestrator passes the path (Constructing Subagent
@@ -645,7 +640,7 @@ Task({
     JOB_NAME: <job-name>
     JOBS_ROOT: <JOBS_ROOT>
     PROJECT_DIR: <project_dir>
-    CONTEXT_VERSION: <current version + 1>  ← write to context_v<N+1>.md
+    CONTEXT_VERSION: <current version + 1>  ← written into ai/context.md's Version field; file overwritten in place
 
     DATA:
       TASK_DESCRIPTION: <original task description>
@@ -702,6 +697,8 @@ fi
 ```
 
 > **IMPORTANT**: After creating the worktree, ALL subsequent operations (implementation, review, lint, test, git) MUST run in the **worktree directory**, NOT in the original project directory.
+
+> **Concurrency**: every subsequent git command MUST use `git -C <worktree_path>`, never a bare `git`, and MUST NOT `git stash` or `git add -A`/`--all`/`.` — see `rules/core/git-concurrency.mdc`. Pin each dispatch to `<worktree_path>` explicitly; a dispatched agent's first action is `cd <worktree_path> && pwd && git branch --show-current`, re-checked before its first write.
 
 **Record state:**
 ```
@@ -770,9 +767,15 @@ FOR wave_index, wave_tasks in enumerate(WAVES):
   Wait for ALL of them.
 
   Read each result's STATUS line:
-    all DONE                  → continue to next wave
-    any DONE_WITH_CONCERNS    → record the concerns, continue
-    any BLOCKED               → STOP, read the result file, resolve or ask the user
+    DONE / DONE_WITH_CONCERNS → accept it (record every concern)
+    BLOCKED                   → do not accept it; read its result file
+
+  # Task boundary commit, for EVERY accepted result, before anything else,
+  # whatever auto_commit was (see "Task boundary commit" below):
+  FOR each accepted result: commit its still-changed reported paths, or skip
+
+  any BLOCKED → STOP, resolve or ask the user
+  otherwise   → continue to next wave
 ```
 
 #### tests-creator dispatch (Step A)
@@ -792,7 +795,7 @@ Task({
     - branch:           <branch name>
     - package_manager:  <pm>
     - run_command:      <runner>
-    - context_path:     <JOBS_ROOT>/<job-name>/context_v<N>.md
+    - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
 
     ## Required response
     Begin with STATUS: <STATUS>. Return the test_case_specs for this task and
@@ -820,18 +823,57 @@ Task({
     - run_command:      <runner>
     - issue_number:     <N>
     - job_name:         <job-name>
-    - context_path:     <JOBS_ROOT>/<job-name>/context_v<N>.md
+    - context_path:     <JOBS_ROOT>/<job-name>/ai/context.md
+
+    ## Automation (task-implementer input `automation`)
+    - auto_commit:      <implementer_settings.auto_commit>   # false: do not commit; report exact paths
 
     ## Required response format (compact — no inline JSON)
     STATUS: DONE
     Task: <task_id>
-    Commits: [abc1234 feat(x): ...]
+    Commits: [abc1234 feat(x): ...]    # auto_commit=false: Commits: none (auto_commit=false)
     Tests: <N passed, M failed>
     Result file: <JOBS_ROOT>/<job-name>/results/<task_id>.json
 
     Write full detail to the result file. Do NOT inline it.
 })
 ```
+
+**Who commits is set by the dispatch, never by a default.** Step B always passes
+`auto_commit` explicitly. The worker's own default is `true`, so a dispatch that
+leaves it out gets a worker that commits even when `implementer_settings.auto_commit`
+is `false`.
+
+**Task boundary commit, for every accepted result, whatever `auto_commit` was:**
+a task is not done until its diff is committed (`rules/core/git-concurrency.mdc`
+rule 4, "Reporting Back"). As soon as a result is accepted (`STATUS: DONE` or
+`DONE_WITH_CONCERNS`), take its reported `files_modified`/`files_created`/
+`files_deleted` from the result file and commit the ones git still shows as
+changed, never `-A`/`--all`/`.`:
+```bash
+set -- <each files_modified/files_created/files_deleted path, single-quoted: 'src/a.ts' 'docs/b c.md'>   # may be none; an unquoted path with a space splits and is skipped
+PENDING=()
+for p in "$@"; do
+  [ -n "$(git -C <worktree_path> status --porcelain -- "$p")" ] && PENDING+=("$p")
+done
+if [ ${#PENDING[@]} -eq 0 ]; then
+  echo "boundary commit: nothing left to commit, skipped"
+else
+  git -C <worktree_path> add -- "${PENDING[@]}"
+  git -C <worktree_path> commit -m "<type>(<scope>): <task description>
+
+task: <task_id>" -- "${PENDING[@]}"
+fi
+```
+With `auto_commit=false` this commits exactly the worker's paths. With
+`auto_commit=true` the worker already committed, so nothing is left and the step
+skips. That is the expected outcome, not an error. If paths remain after an
+`auto_commit=true` worker, it left part of its diff uncommitted: the step
+commits it, and you record that as a concern. Each path is checked on its own
+because `git status --porcelain --` with no path lists the whole tree, `git add`
+fails on a path that is neither on disk nor tracked, and `git commit` with
+nothing staged exits 1. The trailing `-- "${PENDING[@]}"` commits only these
+paths, so a file another lane staged is not swept into this commit.
 
 **Each wave runs in ONE worktree.** The worktree created in 2.4 is the whole job's
 workspace — waves are ordered, not isolated from each other, and a later wave sees
@@ -904,7 +946,7 @@ git log <merge_base>..HEAD --oneline
 
 | Check | Pass | Fail action |
 |-------|------|-------------|
-| At least 1 commit exists | ≥1 commit | `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." |
+| At least 1 commit exists | ≥1 commit | `implementer_settings.auto_commit=true`: `retryable` — re-dispatch the task-implementers for that wave with: "No commits were made. Implement the changes and commit them." `auto_commit=false`: the task-boundary commit (wave loop, after Step B) should already have committed each accepted result's files — if none exist, `retryable`: re-run that commit step for the wave's result files instead of re-dispatching workers. |
 | At least 1 file modified | ≥1 file changed | Same as above |
 | Claimed files actually modified | All files named in the result files appear in the diff | Log discrepancy as a concern, continue |
 
@@ -1095,7 +1137,7 @@ Task({
     flags:            <selected flags, e.g. --backend --security --testing-practices>
     commit_range:     <BASE_SHA>..HEAD
     issue_url:        <issue URL, when the job has one — enables the Stage 1 spec gate>
-    context_doc:      <JOBS_ROOT>/<job-name>/context_v<N>.md
+    context_doc:      <JOBS_ROOT>/<job-name>/ai/context.md
     verification_mode: annotate
     managed_review:   { mode: "review-flow", target: "branch", target_ref: "<feature-branch>" }
     is_fix_round:     <true on any round after the first>
@@ -1426,7 +1468,7 @@ IF no skill_drift and Skill Learning == none:
 ELSE for each flagged project-skill:
   1. Dispatch a subagent to build the learning proposal:
      - Model: COMPUTED, not chosen — run
-         keryx review tier --scope narrow --json
+         keryx review tier --findings 1 --diff-lines 0 --json
        and paste the `model` block into the dispatch. The command names no model:
        it ranks what the provider reports at runtime, and when it cannot rank
        anything it prints `inherit: true`, which means the dispatch runs on the
@@ -1514,7 +1556,7 @@ JOB_NAME: <job-name>
 BRANCH: <feature_branch>
 BASE: <base_branch>
 ISSUE_NUMBER: <issue_number if available>
-CONTEXT_PATH: <JOBS_ROOT>/<job-name>/context_v<N>.md
+CONTEXT_PATH: <JOBS_ROOT>/<job-name>/ai/context.md
 ```
 
 `pr-issue-documenter` will analyze the branch diff and produce a structured PR description (Summary + Changes by area + Key Files table). Use its output as the `body` for the PR.
@@ -1704,7 +1746,7 @@ the dispatch prompt, or it does not reach the sub-agent:
 ```
 branch:      { name, worktree_path, merge_base, package_manager, run_command }
 analysis:    { total_tasks, tasks, dependency_order }
-context_doc: the path to the highest-numbered context_v<N>.md in the package
+context_doc: the path to the job's ai/context.md
 review:      the current round's findings — the durable copy is the managed review
              package, not this
 ```

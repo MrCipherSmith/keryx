@@ -10,7 +10,7 @@ triggers:
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
-  category: "meta"
+  category: "planning"
   compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---

@@ -237,6 +237,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   if (summary.modules.sac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
   }
+  if (summary.gdskillsWarnings.length > 0) {
+    heading("Warnings");
+    for (const warning of summary.gdskillsWarnings) {
+      note(warning);
+    }
+  }
 
   const steps: string[] = [];
   if (options.hooks) {
@@ -262,6 +268,12 @@ type RefreshSummary = {
     sac: boolean;
   };
   gdskillsProfile: GdskillsProfile;
+  /**
+   * Human-readable notices from `installGdskills` (see `InstallGdskillsResult.warnings`
+   * in `src/gdskills/install.ts`), surfaced under the "Warnings" heading below.
+   * Empty when gdskills is disabled or nothing needed reporting.
+   */
+  gdskillsWarnings: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -461,8 +473,10 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     await writeTextIfChanged(path.join(metaprojectRoot, "skills", "sac", "SKILL.md"), renderSacSkillReadme());
   }
 
+  let gdskillsWarnings: string[] = [];
   if (enableGdskills) {
-    await installGdskills(metaprojectRoot, gdskillsProfile, { createDataDirs: false });
+    const gdskillsInstallResult = await installGdskills(metaprojectRoot, gdskillsProfile, { createDataDirs: false });
+    gdskillsWarnings = gdskillsInstallResult.warnings;
     if (manifest.modules?.gdskills?.hooks?.gitPostCommit) {
       await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
     }
@@ -597,6 +611,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
       sac: enableSac,
     },
     gdskillsProfile,
+    gdskillsWarnings,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };

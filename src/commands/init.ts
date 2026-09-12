@@ -619,8 +619,10 @@ export async function initCommand(args: string[]): Promise<void> {
     }
   }
 
+  let gdskillsWarnings: string[] = [];
   if (enableGdskills) {
-    await installGdskills(metaprojectRoot, gdskillsProfile);
+    const gdskillsInstallResult = await installGdskills(metaprojectRoot, gdskillsProfile);
+    gdskillsWarnings = gdskillsInstallResult.warnings;
     if (enableGdskillsHook) {
       await installGdskillsPostCommitHook(projectRoot);
     }
@@ -1083,6 +1085,12 @@ export async function initCommand(args: string[]): Promise<void> {
   }
   if (enableSac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
+  if (gdskillsWarnings.length > 0) {
+    heading("Warnings");
+    for (const warning of gdskillsWarnings) {
+      note(warning);
+    }
   }
 
   // `installManagedHook` no-ops when there is no git hooks root, so reporting

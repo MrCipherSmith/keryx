@@ -364,12 +364,8 @@
             "strategy": {
               "type": "string",
               "enum": [
-                "current",
                 "ask",
-                "adaptive",
-                "economy",
-                "per-group",
-                "current-session"
+                "adaptive"
               ]
             },
             "current_model": {

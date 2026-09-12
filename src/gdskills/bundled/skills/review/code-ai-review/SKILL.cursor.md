@@ -10,7 +10,7 @@ metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
   category: "review"
-  compatible_harnesses: "cursor,codex,zed,opencode"
+  compatible_harnesses: "cursor,codex,zed,opencode,claude"
 license: "MIT"
 ---
 
@@ -56,7 +56,7 @@ This skill does NOT duplicate:
 
 ## Scope Detection
 
-See shared script: `skills/shared/git-merge-base.md`
+See shared script: `.metaproject/skills/gdskills/shared/git-merge-base.md`
 
 Run the script from that file to determine MERGE_BASE and SCOPE before proceeding with the review.
 
