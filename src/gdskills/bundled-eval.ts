@@ -81,7 +81,7 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-import { normalizeRouteText, routeTokens } from "../commands/skills";
+import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
@@ -554,12 +554,16 @@ export const MAX_DESCRIPTION_LENGTH = 1024;
 //
 // MEASURE: Jaccard similarity — |intersection| / |union| — over
 // `routeTokens(normalizeRouteText(description))` for each of two skills' own
-// descriptions. Both functions are imported from `../commands/skills`
+// descriptions. Both functions are imported from `../lib/route-tokens`
 // (`routeTokens` exported for exactly this use; see its comment there) rather
 // than restated, so this check judges a description on the IDENTICAL
 // tokenisation the router itself scores it with — not a second guess at what
-// counts as a token. Unexpanded (`expand` left `false`): expansion adds
-// Russian-prefix synonyms to an INCOMING QUERY (see `expandQueryTokens`), and
+// counts as a token. `../commands/skills.ts` (the router) imports the same
+// two functions from that same module rather than defining its own, which is
+// what keeps the two sides on one tokenizer — see `route-tokens.ts`'s header
+// for why it moved out of `commands/skills.ts` (flow 257 T18, an
+// import-policy boundary fix). Unexpanded (`expand` left `false`): expansion
+// adds Russian-prefix synonyms to an INCOMING QUERY (see `expandQueryTokens`), and
 // a skill's own description is never a query — `scoreBundledSkillRoute`
 // builds its own haystack the same unexpanded way.
 //

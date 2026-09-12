@@ -3,6 +3,7 @@ import path from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists } from "../lib/fs";
 import { readJsonFile, readJsonFileOr } from "../lib/json";
+import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
 import {
   BUNDLED_GDSKILLS,
   getBundledSkillsForProfile,
@@ -616,73 +617,6 @@ function scoreProjectSkillRoute(
   return { entry, score, reasons: [...new Set(reasons)] };
 }
 
-// Short, high-frequency words carry no routing signal; excluding them stops
-// "для"/"the" from creating spurious matches. Kept small on purpose.
-const ROUTE_STOPWORDS = new Set([
-  "the", "and", "for", "with", "this", "that", "your", "are", "from", "into",
-  "out", "run", "use", "used", "make", "get", "can", "please", "help", "want",
-  "для", "при", "что", "как", "это", "под", "над", "или", "все", "мне", "нам",
-  "нужно", "надо", "мой", "моя", "мои", "чтобы", "его", "them",
-]);
-
-// Bundled skills carry mostly English metadata, so a Russian intent would never
-// reach them by token overlap. Map Russian intent stems to the English tokens
-// the catalog uses. Prefix match (not exact) absorbs Russian inflection
-// (задача/задачу/задачи → task). Applied to the QUERY only.
-const RU_SYNONYM_PREFIXES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ["ревью", ["review"]],
-  ["ревьюер", ["review", "reviewer"]],
-  ["проверк", ["verify", "check"]],
-  ["провер", ["verify", "check"]],
-  ["реализ", ["implement"]],
-  ["имплемент", ["implement"]],
-  ["внедр", ["implement"]],
-  ["задач", ["task", "tasks"]],
-  ["тикет", ["issue", "ticket"]],
-  ["тест", ["test", "tests", "testing"]],
-  ["верифи", ["verify", "verification"]],
-  ["качеств", ["quality"]],
-  ["документ", ["documentation", "docs", "document"]],
-  ["требован", ["requirements"]],
-  ["пакет", ["package"]],
-  ["спецификац", ["specification", "spec"]],
-  ["безопас", ["security"]],
-  ["секьюр", ["security"]],
-  ["утечк", ["security", "exfiltration", "leak"]],
-  ["уязвим", ["security", "vulnerability"]],
-  ["контекст", ["context"]],
-  ["план", ["plan", "planning"]],
-  ["роадмап", ["roadmap"]],
-  ["дорожн", ["roadmap"]],
-  ["рефактор", ["refactor"]],
-  ["миграц", ["migration", "migrate"]],
-  ["производитель", ["performance"]],
-  ["перформанс", ["performance"]],
-  ["здоров", ["health"]],
-  ["хотспот", ["hotspot"]],
-  ["мертв", ["dead"]],
-  ["мёртв", ["dead"]],
-  ["граф", ["graph"]],
-  ["вики", ["wiki"]],
-  ["память", ["memory"]],
-  ["скил", ["skill"]],
-  ["созда", ["create"]],
-  ["деплой", ["deploy"]],
-  ["разверт", ["deploy"]],
-  ["разверн", ["deploy"]],
-  ["зависим", ["dependency", "dependencies"]],
-  ["интервью", ["interview"]],
-  ["опрос", ["interview"]],
-  ["брейншторм", ["brainstorm"]],
-  ["идеи", ["brainstorm", "idea"]],
-  ["продукт", ["product", "prd"]],
-  ["фло", ["flow"]],
-  ["оркестр", ["orchestrator", "orchestrate"]],
-  ["анализ", ["analyze", "analysis"]],
-  ["проанализ", ["analyze", "analysis"]],
-  ["ревьюир", ["review"]],
-];
-
 /**
  * Exposed so the synonym table can be asserted as a CLOSED contract.
  *
@@ -696,50 +630,19 @@ export function expandQueryTokens(normalized: string): ReadonlySet<string> {
   return routeTokens(normalized, true);
 }
 
-/**
- * Exported for `bundled-eval.ts`'s `description:collision` check (flow 257
- * T11, AC6), which has to judge two descriptions on the IDENTICAL
- * tokenisation this router scores them with — a second implementation here
- * would let the check and the router disagree about what counts as a token,
- * the exact drift `expandQueryTokens` above already refuses for the synonym
- * table. `bundled-eval.ts` imports only this function and `normalizeRouteText`
- * (already exported); neither is called at module-load time in either file,
- * so the resulting import cycle (this module already imports
- * `evaluateBundledTree` from `bundled-eval.ts`) resolves the same way any
- * cycle of pure, lazily-invoked functions does — there is nothing in the
- * cycle for `bun test`/`tsc` to trip on, and both suites are green with it in
- * place.
- */
-export function routeTokens(normalized: string, expand = false): Set<string> {
-  const tokens = new Set(
-    normalized
-      .split(" ")
-      .filter((token) => token.length >= 3 && !ROUTE_STOPWORDS.has(token)),
-  );
-  if (expand) {
-    for (const token of [...tokens]) {
-      for (const [prefix, synonyms] of RU_SYNONYM_PREFIXES) {
-        if (token.startsWith(prefix)) {
-          for (const synonym of synonyms) {
-            tokens.add(synonym);
-          }
-        }
-      }
-    }
-  }
-  return tokens;
-}
-
-export function normalizeRouteText(value: string): string {
-  return value
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .toLowerCase()
-    // Keep any Unicode letter/number (Cyrillic included); collapse the rest to
-    // spaces. Stripping to [a-z0-9] used to erase non-Latin queries entirely,
-    // which then matched every entry via `.includes("")`.
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
-}
+// `normalizeRouteText` and `routeTokens` themselves live in
+// `../lib/route-tokens` (flow 257 T18), not here. They used to be defined in
+// this file and imported by `../gdskills/bundled-eval.ts`'s
+// `description:collision` check — a CORE owner importing an ADAPTER module,
+// which `import-policy.live.test.ts` enforces at zero tolerance with no
+// exception. Moving both to `src/lib/` (the "shared" zone: see
+// `../lib/import-zones.ts`) puts them on a target neither side's import is
+// flagged for, rather than growing that allowlist for an unrelated file.
+// Re-exported here — not restated — so this remains the ONE tokenizer
+// `routing-baseline.test.ts`'s "no second copy of the ranking exists" guard
+// protects, and every existing caller that imports these two names from
+// `./skills` keeps working unchanged.
+export { normalizeRouteText, routeTokens };
 
 async function syncSkillCommand(args: string[]): Promise<void> {
   const runtime = normalizeSkillRuntime(optionValue(args, "--runtime"));
