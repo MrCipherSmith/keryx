@@ -1696,6 +1696,11 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
    * markers stripped. It throws rather than returning an empty string if the
    * section or the quote moves: comparing a message against "" would pass for
    * any message, which is the failure mode this comparison exists to close.
+   *
+   * "The one" is enforced, not assumed (round-3 minor): a second blockquote
+   * added to the section would otherwise be concatenated onto the first and
+   * compared as though it were part of the quotation, failing with a diff that
+   * names neither cause. A named error says which shape changed.
    */
   function lengthCeilingsBlockquote(rule: string): string {
     const lines = rule.split("\n");
@@ -1704,8 +1709,20 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     const after = lines.slice(start + 1);
     const end = after.findIndex((line) => line.startsWith("## "));
     const section = end === -1 ? after : after.slice(0, end);
+    // A non-quoted line closes a blockquote, so a run of `>` lines is one quote
+    // and the count of such runs is the count of quotes in the section.
+    const blocks = section.reduce<number>(
+      (count, line, index) =>
+        line.startsWith(">") && !(section[index - 1] ?? "").startsWith(">") ? count + 1 : count,
+      0,
+    );
+    if (blocks === 0) throw new Error('"Length Ceilings" has no blockquote to compare the message against');
+    if (blocks > 1) {
+      throw new Error(
+        `"Length Ceilings" has ${blocks} blockquotes; this comparison is written for the one quoting the anatomy:length message`,
+      );
+    }
     const quoted = section.filter((line) => line.startsWith(">")).map((line) => line.replace(/^>\s?/, ""));
-    if (quoted.length === 0) throw new Error('"Length Ceilings" has no blockquote to compare the message against');
     return quoted.join("\n");
   }
 
@@ -2067,9 +2084,12 @@ describe("AC11: the rejected-change ledger exists, is usable, and is the file th
   // with evidence rather than an omission — see `CHECKED_PATH_ROOTS`' comment
   // in `bundled-eval.ts`. In short: of the seventeen concrete `docs/…` paths
   // the bundled tree cites, ten (the sections `autodoc-orchestrator` generates
-  // in a user's project) are missing here and seven exist only because this
-  // repository happens to keep the layout `documentation-management.mdc`
-  // prescribes — so the verdict would depend on whose tree the sweep runs in.
+  // in a user's project) are missing from this repository, and the other seven
+  // exist at its root only because it happens to keep the layout
+  // `documentation-management.mdc` prescribes. The check looks under the
+  // BUNDLED root, not the repository root, and the bundled tree ships no
+  // `docs/` — so all seventeen would be findings here as well, and the citation
+  // would break in every tree rather than resolve in any.
   // And `package.json`'s `files` does not publish `docs/skills/`, so the one
   // reference the root was meant to check would fail for every installed user
   // while passing in a checkout. This suite only ever runs in a checkout,

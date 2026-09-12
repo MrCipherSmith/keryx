@@ -1347,13 +1347,17 @@ export const KNOWN_EXTERNAL_SKILL_REFERENCES: ReadonlyMap<string, string> = new 
  *     `docs/data-models.md`, `docs/onboarding.md`, `docs/index.md`) — they
  *     exist only once that pipeline has run somewhere else, so each is a
  *     finding on every checkout. The remaining seven (`docs/analysis`,
- *     `docs/plans`, `docs/report`, `docs/requirements`, …) DO exist here, and
- *     that is the same defect seen from the other side: they exist only
- *     because this repository happens to keep the layout
- *     `documentation-management.mdc` prescribes, and nothing makes them exist
- *     in a user's project. The same citation would resolve or break depending
- *     on whose tree the sweep runs in, which is precisely what this evaluator
- *     cannot decide.
+ *     `docs/plans`, `docs/report`, `docs/requirements`, …) exist at this
+ *     REPOSITORY's root — but that is not where the check looks. Existence is
+ *     `existsSync(path.join(root, resolved))` with `root` the bundled tree
+ *     (`defaultBundledRoot()` — `src/gdskills/bundled`), which ships no `docs/`
+ *     at all: 7 of the 17 exist under the repository root, 0 under the bundled
+ *     root. So all seventeen would be findings HERE too, and the seven exist
+ *     only because this repository happens to keep the layout
+ *     `documentation-management.mdc` prescribes — nothing makes them exist in a
+ *     user's project either. The citation would break in every tree, resolving
+ *     in none, which is worse than a verdict that merely varies by tree: this
+ *     root cannot decide these paths from where the sweep stands.
  *   - THE INSTALL. `package.json`'s `files` ships `dist`, `src/gdgraph`,
  *     `src/gdskills/bundled`, `src/gdskills/contracts` and one schema
  *     directory. `docs/skills/` is NOT published, so the one reference this

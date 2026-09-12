@@ -83,6 +83,14 @@ export async function installGdskills(
     await mkdir(skillDir, { recursive: true });
     const bundledSkillPath = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
     if (existsSync(bundledSkillPath)) {
+      // Known, pre-existing, and NOT addressed here: if `skillDir` is a symlink
+      // (a relocated or shared skill directory), `fs.cp` on Linux refuses to
+      // overwrite a non-directory with a directory — `ERR_FS_CP_DIR_TO_NON_DIR`
+      // / `EISDIR` — and the rejection aborts the whole install, including the
+      // sweep and rule cleanup below. macOS's `cp` accepts the same call, so the
+      // difference only shows on Linux (it surfaced as a CI-only failure in flow
+      // 257 T24). Changing the copy strategy is out of that flow's scope; this
+      // note exists so the next person does not rediscover it from a CI log.
       await cp(bundledSkillPath, skillDir, { recursive: true, force: true });
     } else {
       await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");

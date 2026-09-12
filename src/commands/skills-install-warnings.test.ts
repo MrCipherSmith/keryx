@@ -112,3 +112,38 @@ test("keryx skills install: a modified retired rule is kept and prints a Warning
     await rm(root, { recursive: true, force: true });
   }
 });
+
+// Round-3 minor: the "Notices" print added beside "Warnings" was asserted at
+// the `keryx update` call site only, so deleting this command's whole Notices
+// block left every install/update/init test green. Same reason the Warnings
+// print is covered here: each of the three call sites has its own print code.
+test("keryx skills install: a removed stale runtime build prints under Notices, not Warnings", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-skills-install-warnings-"));
+  try {
+    // The shape an older install leaves behind: a per-runtime build sitting in
+    // an installed skill directory that the current bundle no longer ships.
+    const installedSkillDir = path.join(
+      root, ".metaproject", "skills", "gdskills", "orchestration", "job-orchestrator",
+    );
+    await mkdir(installedSkillDir, { recursive: true });
+    await writeFile(path.join(installedSkillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+
+    const { logs, restore } = captureConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await skillsCommand(["install"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(installedSkillDir, "SKILL.zed.md"))).toBe(false);
+    const noticesAt = logs.indexOf("Notices:");
+    expect(noticesAt).toBeGreaterThan(-1);
+    expect(logs.findIndex((line) => line.includes("SKILL.zed.md was removed")))
+      .toBeGreaterThan(noticesAt);
+    expect(logs.some((line) => line.includes("Warnings:"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

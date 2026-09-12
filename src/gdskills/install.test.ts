@@ -299,7 +299,8 @@ test("a skill directory reached through a symlink is not swept, and the target k
   try {
     const metaprojectRoot = path.join(root, ".metaproject");
     await installGdskills(metaprojectRoot, "recommended");
-    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const skillDir = path.join(skillsRoot, ...INSTALLED_JOB_ORCHESTRATOR.slice(2));
 
     // Relocate one installed skill behind a symlink — the shape a shared
     // checkout or a moved tree produces — and put a hand-written build in the
@@ -310,17 +311,34 @@ test("a skill directory reached through a symlink is not swept, and the target k
     await symlink(relocated, skillDir);
     await writeFile(path.join(relocated, "SKILL.zed.md"), "# hand-written, not keryx's\n", "utf8");
 
-    const result = await installGdskills(metaprojectRoot, "recommended");
+    // The sweep is driven directly, not through a second `installGdskills`.
+    // That second install would reach the `cp(bundledDir, skillDir, { force })`
+    // in `installGdskills` with `skillDir` now a symlink, and on Linux `fs.cp`
+    // refuses to overwrite a non-directory with a directory
+    // (ERR_FS_CP_DIR_TO_NON_DIR) and aborts the whole install BEFORE the sweep
+    // runs — so the test never reached its own subject there. macOS's `cp`
+    // happens to accept it, which is the only reason that form passed at all.
+    // The claim belongs to `removeStaleRuntimeBuilds`, so it is made of
+    // `removeStaleRuntimeBuilds`, on every platform. That an install carries
+    // these outcomes through to `warnings`/`notices` is the subject of the
+    // notice/warning-split test above, which needs no symlinked directory.
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
 
     expect(await readFile(path.join(relocated, "SKILL.zed.md"), "utf8")).toBe("# hand-written, not keryx's\n");
     expect((await lstat(skillDir)).isSymbolicLink()).toBe(true);
-    const warning = result.warnings.find((entry) => entry.includes("was not swept"));
+    // One outcome for the linked skill and nothing else: the rest of the freshly
+    // installed tree holds no build the bundle stopped shipping.
+    expect(outcomes).toEqual([
+      { path: skillDir, blockedAt: skillDir, action: "skipped-dir", reason: "symlink" },
+    ]);
+    const warning = staleRuntimeBuildMessage(outcomes[0]!, root);
+    expect(staleRuntimeBuildSeverity(outcomes[0]!)).toBe("warning");
     expect(warning).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator was not swept");
     expect(warning).toContain("it is a symlink, and keryx will not delete through one");
     // Refusing to sweep is not refusing to warn about the wrong thing: no
     // removal was claimed for a tree keryx did not touch.
-    expect(result.notices).toEqual([]);
-    expect(result.warnings.filter((entry) => entry.includes("was removed"))).toEqual([]);
+    expect(outcomes.filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")).toEqual([]);
+    expect(outcomes.filter((outcome) => outcome.action === "removed")).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
