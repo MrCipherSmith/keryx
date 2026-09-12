@@ -24,6 +24,7 @@ import { join } from "node:path";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
 import {
   buildOracleManifestsByGold,
+  formatOracleValue,
   GOLD_KIND_LABELS,
   type GoldKind,
   type MultiGoldScoreInput,
@@ -154,7 +155,8 @@ async function main(): Promise<void> {
       for (const run of manifest.runs) {
         const o = run.oracle;
         console.error(
-          `${run.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} f1=${o?.f1?.value}`,
+          `${run.task_id}: precision=${formatOracleValue(o?.precision)} ` +
+            `recall=${formatOracleValue(o?.recall)} f1=${formatOracleValue(o?.f1)}`,
         );
       }
       const result = validatePairedBenchmark(manifest);

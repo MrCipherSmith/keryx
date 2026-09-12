@@ -34,7 +34,7 @@
 // the deterministic scorer + this regen command.
 
 import { validatePairedBenchmark, type JudgeScore } from "../../src/metrics/benchmark";
-import { buildWikiAskManifest, type WikiScoreInput } from "../../src/metrics/oracle-runner";
+import { buildWikiAskManifest, formatOracleValue, type WikiScoreInput } from "../../src/metrics/oracle-runner";
 import { wikiAsk } from "../../src/wiki/ask";
 
 type GoldQuery = { target: string; affected: string[]; justification?: string };
@@ -114,7 +114,8 @@ async function main(): Promise<void> {
     const o = runRecord.oracle;
     const j = runRecord.judge;
     console.error(
-      `${runRecord.task_id}: nDCG@${k}=${o?.ndcg?.value} recall@${k}=${o?.recallAtK?.value} ` +
+      `${runRecord.task_id}: nDCG@${k}=${formatOracleValue(o?.ndcg)} ` +
+        `recall@${k}=${formatOracleValue(o?.recallAtK)} ` +
         `groundedness strict=${j?.strict} lenient=${j?.lenient} scores=[${j?.scores.join(",")}]`,
     );
   }

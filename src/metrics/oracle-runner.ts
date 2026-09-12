@@ -96,12 +96,72 @@ function measured(value: number): BenchmarkValue {
   return { value, reliability: ORACLE_RELIABILITY, source: METRIC_SOURCE };
 }
 
-function oracleMetrics(score: OracleTargetScore): OracleMetrics {
+// ---------------------------------------------------------------------------
+// DENOMINATOR GUARD — why an oracle metric can be absent.
+//
+// ./ir.ts returns 1 for an empty denominator by an explicit, documented convention
+// ("vacuously perfect" — see the edge-case notes on precision/recall/recallAtK/ndcg/
+// factPreservation there). That is the right answer for a pure set function, but a
+// FABRICATED one for a published report: emitted as a BenchmarkValue it reads as a
+// confident `exact` PERFECT SCORE for an absence of data, and it reaches the metastore
+// ladder's canonical `oracle.*` report field. So every emitter below OMITS the metric
+// instead when its denominator is 0. That matches OracleMetrics' contract in
+// ./benchmark.ts ("Each field is present ONLY when the corresponding measurement
+// exists; an absent field means 'not measured'"), mirrors the guard oracleRates already
+// applies to the rate/CI blocks, and is the only shape that validates —
+// validatePairedBenchmark accepts an absent oracle field and rejects a present-but-
+// unmeasured one (no null value, no `unknown` reliability, so there is no way to say
+// "present but not measured").
+//
+// Denominator per metric:
+//   precision        |system| (retrieved)
+//   recall           |gold|   (relevant)
+//   recallAtK        |gold|
+//   ndcg             |gold|   (IDCG@k is 0 for an empty gold set)
+//   factPreservation |rawFacts|
+//   f1               |system| + |gold| — F1 = 2tp / (2tp + fp + fn) is well defined
+//                    whenever EITHER set is non-empty, and ./ir.ts's harmonic mean
+//                    agrees with that count form in both half-empty cases (empty system
+//                    => p=1, r=0 => 0; empty gold => p=0, r=1 => 0). Only system AND
+//                    gold both empty leaves F1 with no denominator at all — that is the
+//                    single case where ./ir.ts's 1 is vacuous and the field is dropped.
+// ---------------------------------------------------------------------------
+
+/**
+ * precision/recall/f1 for one score, each present ONLY when its denominator is real (see
+ * the DENOMINATOR GUARD note above). `wrap` turns a raw number into the BenchmarkValue
+ * shape the calling oracle layer wants (its `source`/`notes` differ per layer).
+ */
+function irOracleMetrics(score: OracleTargetScore, wrap: (value: number) => BenchmarkValue): OracleMetrics {
   return {
-    precision: measured(score.precision),
-    recall: measured(score.recall),
-    f1: measured(score.f1),
+    ...(score.systemSize > 0 ? { precision: wrap(score.precision) } : {}),
+    ...(score.goldSize > 0 ? { recall: wrap(score.recall) } : {}),
+    ...(score.systemSize + score.goldSize > 0 ? { f1: wrap(score.f1) } : {}),
   };
+}
+
+/**
+ * Spread an oracle block onto a run only when at least one metric survived the
+ * denominator guard, so a fully unmeasurable target emits no `oracle` key at all rather
+ * than an empty object. Same convention `rates` already uses.
+ */
+function oracleField(oracle: OracleMetrics): { oracle?: OracleMetrics } {
+  return Object.keys(oracle).length > 0 ? { oracle } : {};
+}
+
+function oracleMetrics(score: OracleTargetScore): OracleMetrics {
+  return irOracleMetrics(score, measured);
+}
+
+/**
+ * Render one oracle metric for a human-readable console/report line. An absent metric is
+ * the denominator guard doing its job, so it prints as an explicit "unmeasured" marker
+ * rather than the bare `undefined` that optional chaining would otherwise emit — a reader
+ * should never have to guess whether a blank means zero, missing, or a bug.
+ */
+export function formatOracleValue(value: BenchmarkValue | undefined): string {
+  if (!value || value.value === null) return "unmeasured(no denominator)";
+  return String(value.value);
 }
 
 // Precision and recall are genuine binomial proportions (successes/n), so where a real
@@ -141,7 +201,7 @@ function oracleRun(score: OracleTargetScore, options: OracleManifestOptions): Pa
     // Deterministic case: exactly one run (spec §5.2, DETERMINISTIC_MIN_RUNS).
     seeds: [1],
     quality: "measured",
-    oracle: oracleMetrics(score),
+    ...oracleField(oracleMetrics(score)),
     ...(rates ? { rates } : {}),
     human_interventions: null,
   };
@@ -151,8 +211,10 @@ function oracleRun(score: OracleTargetScore, options: OracleManifestOptions): Pa
 /**
  * Assemble a `paired-3-5-v2` manifest for the metastore ladder from per-target scores.
  * Requires 3-5 targets (the protocol's task-count bound); the returned manifest is designed
- * to pass validatePairedBenchmark — every oracle metric is measured (never zero-filled with
- * `unknown`), each rate carries its Wilson CI, and no speed claim is made.
+ * to pass validatePairedBenchmark — every EMITTED oracle metric is measured (never zero-filled
+ * with `unknown`), a metric whose denominator is 0 is omitted rather than published as ir.ts's
+ * vacuous 1 (see DENOMINATOR GUARD above), each rate carries its Wilson CI, and no speed claim
+ * is made.
  */
 export function buildOracleManifest(
   inputs: readonly OracleScoreInput[],
@@ -252,11 +314,7 @@ function measuredValue(value: number, source: string, notes?: string): Benchmark
 }
 
 function oracleMetricsForGold(score: OracleTargetScore, source: string, notes: string): OracleMetrics {
-  return {
-    precision: measuredValue(score.precision, source, notes),
-    recall: measuredValue(score.recall, source, notes),
-    f1: measuredValue(score.f1, source, notes),
-  };
+  return irOracleMetrics(score, (value) => measuredValue(value, source, notes));
 }
 
 /** Score one target's system output against ONE named gold and build a labeled run. */
@@ -284,7 +342,7 @@ export function scoreGoldRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
-    oracle: oracleMetricsForGold(score, source, depthSemantics),
+    ...oracleField(oracleMetricsForGold(score, source, depthSemantics)),
     ...(rates ? { rates } : {}),
     human_interventions: null,
   };
@@ -390,11 +448,9 @@ export function scoreTestImpactRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
-    oracle: {
-      precision: measuredValue(score.precision, source),
-      recall: measuredValue(score.recall, source),
-      f1: measuredValue(score.f1, source),
-    },
+    // Same denominator guard as the gdgraph oracle: an empty system test-impact set has
+    // no precision denominator and an empty gold impacted-test set has no recall one.
+    ...oracleField(irOracleMetrics(score, (value) => measuredValue(value, source))),
     ...(rates ? { rates } : {}),
     human_interventions: null,
   };
@@ -403,8 +459,9 @@ export function scoreTestImpactRun(
 /**
  * Assemble a `paired-3-5-v2` manifest for the metastore ladder's testing/TIA layer from
  * per-changed-file scores. Requires 3-5 changed files (the protocol's task-count bound);
- * the returned manifest is designed to pass validatePairedBenchmark — every oracle metric
- * is measured (`exact`), each rate carries its Wilson CI, and no speed claim is made.
+ * the returned manifest is designed to pass validatePairedBenchmark — every emitted oracle
+ * metric is measured (`exact`) and one with no denominator is omitted (see DENOMINATOR GUARD
+ * above), each rate carries its Wilson CI, and no speed claim is made.
  */
 export function buildTestImpactManifest(
   inputs: readonly TestImpactScoreInput[],
@@ -489,11 +546,14 @@ export function scoreMemorySearchRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
-    oracle: {
-      precision: measuredValue(score.precision, source),
-      recall: measuredValue(score.recall, source),
-      recallAtK: measuredValue(atK, source),
-    },
+    // Denominator guard: recall AND recall@k both divide by |gold|, so a query with an
+    // empty curated gold set emits neither (./ir.ts would report both as a vacuous 1).
+    ...oracleField({
+      ...(score.systemSize > 0 ? { precision: measuredValue(score.precision, source) } : {}),
+      ...(score.goldSize > 0
+        ? { recall: measuredValue(score.recall, source), recallAtK: measuredValue(atK, source) }
+        : {}),
+    }),
     ...(rates ? { rates } : {}),
     human_interventions: null,
   };
@@ -502,8 +562,9 @@ export function scoreMemorySearchRun(
 /**
  * Assemble a `paired-3-5-v2` manifest for the metastore ladder's memory layer from
  * per-query scores. Requires 3-5 queries (the protocol's task-count bound); the returned
- * manifest is designed to pass validatePairedBenchmark — every oracle metric is measured
- * (`exact`), each rate carries its Wilson CI, and no speed claim is made.
+ * manifest is designed to pass validatePairedBenchmark — every emitted oracle metric is
+ * measured (`exact`) and one with no denominator is omitted (see DENOMINATOR GUARD above),
+ * each rate carries its Wilson CI, and no speed claim is made.
  */
 export function buildMemorySearchManifest(
   inputs: readonly MemoryScoreInput[],
@@ -644,9 +705,9 @@ export function scoreGdctxRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
-    oracle: {
-      factPreservation: measuredValue(rate, source),
-    },
+    // The metric obeys the same "no fabricated denominator" rule as its rate above: with
+    // no raw facts there is nothing to preserve or lose, so the vacuous 1 is not emitted.
+    ...oracleField(rawSet.size > 0 ? { factPreservation: measuredValue(rate, source) } : {}),
     ...(rates ? { rates } : {}),
     human_interventions: null,
   };
@@ -656,8 +717,8 @@ export function scoreGdctxRun(
  * Assemble a `paired-3-5-v2` manifest for the metastore ladder's gdctx layer from per-input
  * raw-vs-compact fact-set scores. Requires 3-5 inputs (the protocol's task-count bound); the
  * returned manifest is designed to pass validatePairedBenchmark — the fact-preservation
- * metric is measured (`exact`), its rate carries a Wilson CI when the denominator is real,
- * and no speed claim is made.
+ * metric and its Wilson-CI'd rate are BOTH emitted only when the denominator is real (a
+ * non-empty raw-facts set), and no speed claim is made.
  */
 export function buildGdctxManifest(
   inputs: readonly GdctxScoreInput[],
@@ -745,6 +806,10 @@ export function scoreWikiAskRun(
 ): PairedBenchmarkRunV2 {
   const nd = ndcg(input.system, input.gold, input.k);
   const atK = recallAtK(input.system, input.gold, input.k);
+  // Denominator guard: nDCG@k normalizes by IDCG@k and recall@k divides by |gold|, so an
+  // empty curated gold set leaves both without a denominator (./ir.ts returns a vacuous 1
+  // for each). Emit neither rather than a confident perfect retrieval score.
+  const goldSize = new Set(input.gold).size;
   const taskId = wikiAskTaskId(input.query);
   const source = `${GDWIKI_ASK_SOURCE} [layer=gdwiki: ${GDWIKI_ASK_LABEL}, k=${input.k}]`;
   // Groundedness: a HAND-LABELED 3-judge panel (strict = all three score 2, lenient = >= two).
@@ -765,10 +830,9 @@ export function scoreWikiAskRun(
     tokenCap: null,
     seeds: [1],
     quality: "measured",
-    oracle: {
-      ndcg: measuredValue(nd, source),
-      recallAtK: measuredValue(atK, source),
-    },
+    ...oracleField(
+      goldSize > 0 ? { ndcg: measuredValue(nd, source), recallAtK: measuredValue(atK, source) } : {},
+    ),
     judge: panel,
     human_interventions: null,
   };
@@ -777,9 +841,10 @@ export function scoreWikiAskRun(
 /**
  * Assemble a `paired-3-5-v2` manifest for the metastore ladder's gdwiki layer from per-query
  * scores. Requires 3-5 queries (the protocol's task-count bound); the returned manifest is
- * designed to pass validatePairedBenchmark — nDCG/recall@k are measured (`exact`), the
- * hand-labeled groundedness rides on each run's `judge` panel with strict/lenient derived,
- * and no speed claim is made.
+ * designed to pass validatePairedBenchmark — nDCG/recall@k are measured (`exact`) and both are
+ * omitted for a query with an empty gold set (see DENOMINATOR GUARD above), the hand-labeled
+ * groundedness rides on each run's `judge` panel with strict/lenient derived, and no speed
+ * claim is made.
  */
 export function buildWikiAskManifest(
   inputs: readonly WikiScoreInput[],
@@ -866,8 +931,14 @@ export function buildEvidenceBundle(
   const seed = 1;
   const timestamp = options.timestamp ?? DEFAULT_TIMESTAMP;
   const leakageAssertion = options.leakageAssertion ?? "not-applicable";
+  // The rationale mirrors the emitted metrics exactly: a metric the denominator guard
+  // dropped is spelled out as unmeasured here too, never restated as ./ir.ts's vacuous 1.
+  const shown = (value: number, hasDenominator: boolean): string =>
+    hasDenominator ? String(value) : "unmeasured(no denominator)";
   const rationale =
-    `precision=${score.precision} recall=${score.recall} f1=${score.f1} ` +
+    `precision=${shown(score.precision, score.systemSize > 0)} ` +
+    `recall=${shown(score.recall, score.goldSize > 0)} ` +
+    `f1=${shown(score.f1, score.systemSize + score.goldSize > 0)} ` +
     `(tp=${score.truePositives}, fp=${score.falsePositives}, fn=${score.falseNegatives}; ` +
     `system=${score.systemSize}, gold=${score.goldSize}). ` +
     `IR metrics computed by src/metrics/ir.ts against git-history gold (src/metrics/gold.ts).`;

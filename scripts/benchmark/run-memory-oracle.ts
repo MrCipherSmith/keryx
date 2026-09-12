@@ -28,7 +28,7 @@
 // `memory_result: pending` and keep the deterministic scorer + this regen command.
 
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
-import { buildMemorySearchManifest, type MemoryScoreInput } from "../../src/metrics/oracle-runner";
+import { buildMemorySearchManifest, formatOracleValue, type MemoryScoreInput } from "../../src/metrics/oracle-runner";
 
 type GoldQuery = { target: string; affected: string[]; justification?: string };
 type GoldFile = { k?: number; targets?: GoldQuery[] };
@@ -117,7 +117,8 @@ async function main(): Promise<void> {
   for (const runRecord of manifest.runs) {
     const o = runRecord.oracle;
     console.error(
-      `${runRecord.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} recallAtK=${o?.recallAtK?.value} (k=${k})`,
+      `${runRecord.task_id}: precision=${formatOracleValue(o?.precision)} ` +
+        `recall=${formatOracleValue(o?.recall)} recallAtK=${formatOracleValue(o?.recallAtK)} (k=${k})`,
     );
   }
   const result = validatePairedBenchmark(manifest);

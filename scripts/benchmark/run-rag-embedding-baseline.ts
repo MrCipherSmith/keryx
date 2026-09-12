@@ -38,6 +38,7 @@
 
 import { validatePairedBenchmark, type BenchmarkValue, type PairedBenchmarkManifestV2, type PairedBenchmarkRunV2 } from "../../src/metrics/benchmark";
 import { ndcg, recallAtK } from "../../src/metrics/ir";
+import { formatOracleValue } from "../../src/metrics/oracle-runner";
 import { collectPages } from "../../src/wiki/collect";
 import type { WikiPage } from "../../src/wiki/types";
 
@@ -152,6 +153,13 @@ async function main(): Promise<void> {
     const system = systemByQuery.get(query) ?? [];
     const nd = round(ndcg(system, goldIds, k));
     const atK = round(recallAtK(system, goldIds, k));
+    // Same denominator guard the gdwiki oracle applies (see DENOMINATOR GUARD in
+    // src/metrics/oracle-runner.ts): nDCG normalizes by IDCG@k and recall@k divides by
+    // |gold|, so a query with an empty curated gold set has no denominator for either and
+    // ir.ts returns a vacuous 1. Emitting that here would hand this baseline a confident
+    // `exact` perfect score for an unlabeled query — and this manifest is read side by side
+    // with the gdwiki oracle, which omits the metric in exactly that case.
+    const goldSize = new Set(goldIds).size;
     const taskId = `metastore:rag-embedding-baseline:${query}`;
     return {
       task_id: taskId,
@@ -165,10 +173,14 @@ async function main(): Promise<void> {
       tokenCap: null,
       seeds: [1],
       quality: "measured",
-      oracle: {
-        ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`),
-        recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`),
-      },
+      ...(goldSize > 0
+        ? {
+            oracle: {
+              ndcg: measured(nd, `${source} [layer=gdwiki-comparative: nDCG@${k}]`),
+              recallAtK: measured(atK, `${source} [layer=gdwiki-comparative: recall@${k}]`),
+            },
+          }
+        : {}),
       human_interventions: null,
     };
   });
@@ -186,7 +198,9 @@ async function main(): Promise<void> {
   console.error("# RAG-adapter baseline result — layer=rag-embedding-baseline");
   for (const run of manifest.runs) {
     const o = run.oracle;
-    console.error(`${run.task_id}: nDCG@${k}=${o?.ndcg?.value} recall@${k}=${o?.recallAtK?.value}`);
+    console.error(
+      `${run.task_id}: nDCG@${k}=${formatOracleValue(o?.ndcg)} recall@${k}=${formatOracleValue(o?.recallAtK)}`,
+    );
   }
   const result = validatePairedBenchmark(manifest);
   console.error(`# layer=rag-embedding-baseline manifest valid: ${result.valid ? "yes" : "no"}`);

@@ -30,7 +30,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
 import { goldTestImpact, type CoverageMap } from "../../src/metrics/gold";
-import { buildTestImpactManifest, type TestImpactScoreInput } from "../../src/metrics/oracle-runner";
+import { buildTestImpactManifest, formatOracleValue, type TestImpactScoreInput } from "../../src/metrics/oracle-runner";
 
 // Bounded, self-contained keryx dogfood slice: pure source files + the tests that exercise
 // them. Kept small (4 targets) so a live coverage run is fast and the manifest stays within
@@ -178,7 +178,8 @@ async function main(): Promise<void> {
   for (const runRecord of manifest.runs) {
     const o = runRecord.oracle;
     console.error(
-      `${runRecord.task_id}: precision=${o?.precision?.value} recall=${o?.recall?.value} f1=${o?.f1?.value}`,
+      `${runRecord.task_id}: precision=${formatOracleValue(o?.precision)} ` +
+        `recall=${formatOracleValue(o?.recall)} f1=${formatOracleValue(o?.f1)}`,
     );
   }
   const result = validatePairedBenchmark(manifest);

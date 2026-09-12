@@ -6,6 +6,14 @@
 // `reliability` level — this module never fabricates a reliability tag and never touches
 // I/O.
 //
+// Empty-denominator rule (see each function's own edge-case note): a metric with no
+// denominator returns 1, "vacuously perfect". That is the right answer for a pure set
+// function, but it is NOT a measurement, so it must never be published as one. Every
+// caller that turns these numbers into a reported `BenchmarkValue` is responsible for
+// dropping the metric when its denominator is 0 — see the DENOMINATOR GUARD block in
+// ./oracle-runner.ts, which is where that rule is implemented for all of the metastore
+// ladder's oracle layers.
+//
 // Duplicate-ID rule: everywhere an ID set is required (precision/recall/f1/
 // factPreservation), duplicate IDs are deduped via `Set` before comparison — an ID
 // either was retrieved/relevant/preserved or it wasn't; repetition does not change that.

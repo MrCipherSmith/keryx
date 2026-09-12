@@ -24,6 +24,7 @@ import {
   persistEvidenceBundle,
   runOracleAndPersist,
   scoreGdctxRun,
+  scoreGoldRun,
   scoreMemorySearchRun,
   scoreOracleTarget,
   scoreTestImpactRun,
@@ -162,6 +163,54 @@ describe("buildOracleManifest", () => {
     expect(validatePairedBenchmark(manifest).valid).toBe(true);
   });
 
+  // Denominator guard on the canonical `oracle.*` report field itself — ./ir.ts returns a
+  // vacuously-perfect 1 for an empty denominator, which must never be published as an
+  // `exact` measurement (that is a confident perfect score for an absence of data).
+  test("empty system set omits oracle.precision entirely (never a fabricated exact 1)", () => {
+    const manifest = buildOracleManifest([
+      { target: "empty-sys", system: [], gold: ["g"] },
+      PERFECT,
+      PARTIAL,
+    ]);
+    const empty = manifest.runs.find((run) => run.task_id === oracleTaskId("empty-sys"));
+    expect(empty?.oracle?.precision).toBeUndefined();
+    // recall has a real denominator (|gold| = 1) and nothing was found => a genuine 0.
+    expect(empty?.oracle?.recall?.value).toBe(0);
+    expect(empty?.oracle?.recall?.reliability).toBe("exact");
+    // f1 = 2tp/(2tp+fp+fn) is still defined while either set is non-empty => a genuine 0.
+    expect(empty?.oracle?.f1?.value).toBe(0);
+    expect(validatePairedBenchmark(manifest).valid).toBe(true);
+  });
+
+  test("empty gold set omits oracle.recall entirely (never a fabricated exact 1)", () => {
+    const manifest = buildOracleManifest([
+      { target: "empty-gold", system: ["a"], gold: [] },
+      PERFECT,
+      PARTIAL,
+    ]);
+    const empty = manifest.runs.find((run) => run.task_id === oracleTaskId("empty-gold"));
+    expect(empty?.oracle?.recall).toBeUndefined();
+    expect(empty?.rates?.recall).toBeUndefined();
+    // precision has a real denominator (|system| = 1) and "a" is not gold => a genuine 0.
+    expect(empty?.oracle?.precision?.value).toBe(0);
+    expect(empty?.rates?.precision?.n).toBe(1);
+    expect(empty?.oracle?.f1?.value).toBe(0);
+    expect(validatePairedBenchmark(manifest).valid).toBe(true);
+  });
+
+  test("both sets empty => no oracle block at all, and the manifest still validates", () => {
+    const manifest = buildOracleManifest([
+      { target: "empty-both", system: [], gold: [] },
+      PERFECT,
+      PARTIAL,
+    ]);
+    const empty = manifest.runs.find((run) => run.task_id === oracleTaskId("empty-both"));
+    // precision, recall AND f1 all lose their denominator here; ./ir.ts would report 1/1/1.
+    expect(empty?.oracle).toBeUndefined();
+    expect(empty?.rates).toBeUndefined();
+    expect(validatePairedBenchmark(manifest).valid).toBe(true);
+  });
+
   test("manifest is byte-for-byte reproducible", () => {
     const a = buildOracleManifest([PERFECT, PARTIAL, ZERO_OVERLAP]);
     const b = buildOracleManifest([PERFECT, PARTIAL, ZERO_OVERLAP]);
@@ -296,6 +345,27 @@ describe("buildOracleManifestsByGold (two-gold, decision (a)+(b))", () => {
     const b = buildOracleManifestsByGold(INPUTS);
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
+
+  test("a gold kind with an empty gold set for one target omits that target's recall", () => {
+    const run = scoreGoldRun(
+      { target: "t9", system: ["a.js"], golds: [] },
+      { kind: "dependency", gold: [] },
+    );
+    // No dependency gold for this target => no recall denominator; precision is still real.
+    expect(run.oracle?.recall).toBeUndefined();
+    expect(run.oracle?.precision?.value).toBe(0);
+    expect(run.oracle?.precision?.notes).toBe(DEFAULT_DEPTH_SEMANTICS.dependency);
+    expect(run.oracle?.f1?.value).toBe(0);
+  });
+
+  test("a target with neither a system set nor a gold emits no oracle block", () => {
+    const run = scoreGoldRun(
+      { target: "t9", system: [], golds: [] },
+      { kind: "co-change", gold: [] },
+    );
+    expect(run.oracle).toBeUndefined();
+    expect(run.rates).toBeUndefined();
+  });
 });
 
 describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", () => {
@@ -351,10 +421,26 @@ describe("testing / TIA oracle (system test-impact vs coverage-derived gold)", (
       system: ["src/metrics/wrong.test.ts"],
       gold: goldTestImpact(COVERAGE, ["src/metrics/orphan.ts"]), // no coverage => empty gold
     });
-    // Empty gold => recall vacuously 1 (ir.ts convention), but the spurious system id is a
-    // false positive so precision is 0.
-    expect(run.oracle?.recall?.value).toBe(1);
+    // Empty gold => recall has no denominator, so it is OMITTED rather than published as
+    // ir.ts's vacuous 1. The spurious system id is still a real false positive => precision 0.
+    expect(run.oracle?.recall).toBeUndefined();
     expect(run.oracle?.precision?.value).toBe(0);
+    expect(run.oracle?.f1?.value).toBe(0);
+  });
+
+  test("empty system test-impact set omits precision but keeps a measured recall", () => {
+    // A changed file the heuristic returns nothing for: no precision denominator, but the
+    // coverage gold is real, so recall is a genuine 0 (both gold tests were missed).
+    const run = scoreTestImpactRun({
+      changedFile: "src/metrics/ir.ts",
+      system: [],
+      gold: goldTestImpact(COVERAGE, ["src/metrics/ir.ts"]),
+    });
+    expect(run.oracle?.precision).toBeUndefined();
+    expect(run.rates?.precision).toBeUndefined();
+    expect(run.oracle?.recall?.value).toBe(0);
+    expect(run.oracle?.recall?.reliability).toBe("exact");
+    expect(run.oracle?.f1?.value).toBe(0);
   });
 
   test("task ids carry the test-impact namespace and metric source carries the layer label", () => {
@@ -453,6 +539,14 @@ describe("gdwiki oracle (ranked passages vs curated Q→passage gold, nDCG/recal
     expect(atK3.oracle?.recallAtK?.value).toBe(1);
   });
 
+  test("empty gold set omits nDCG and recall@k, but keeps the groundedness panel", () => {
+    // Both metrics divide by the gold set (nDCG via IDCG@k), so ir.ts reports a vacuous 1
+    // for each. Publishing that would claim perfect retrieval for a query with no labels.
+    const run = scoreWikiAskRun({ ...PERFECT_WIKI, gold: [] });
+    expect(run.oracle).toBeUndefined();
+    expect(run.judge?.strict).toBe(true);
+  });
+
   test("groundedness judge panel: strict = all three score 2, lenient = at least two", () => {
     const strict = scoreWikiAskRun({ ...PERFECT_WIKI, groundedness: { scores: [2, 2, 2] as const } });
     const lenient = scoreWikiAskRun({ ...PERFECT_WIKI, groundedness: { scores: [2, 2, 1] as const } });
@@ -524,6 +618,22 @@ describe("memory oracle (ranked system search vs curated gold, recall@k)", () =>
     expect(run.oracle?.recallAtK?.value).toBe(0);
     expect(run.oracle?.recall?.value).toBe(0);
     expect(run.oracle?.precision?.value).toBe(0);
+  });
+
+  test("empty gold set omits BOTH recall and recall@k (they share the |gold| denominator)", () => {
+    const run = scoreMemorySearchRun({ query: "no labels", system: ["a.md"], gold: [], k: 2 });
+    expect(run.oracle?.recall).toBeUndefined();
+    expect(run.oracle?.recallAtK).toBeUndefined();
+    expect(run.rates?.recall).toBeUndefined();
+    // precision keeps a real denominator (|system| = 1) and "a.md" is not gold => 0.
+    expect(run.oracle?.precision?.value).toBe(0);
+  });
+
+  test("empty system list omits precision but keeps a measured recall/recall@k", () => {
+    const run = scoreMemorySearchRun({ query: "no hits", system: [], gold: ["g.md"], k: 2 });
+    expect(run.oracle?.precision).toBeUndefined();
+    expect(run.oracle?.recall?.value).toBe(0);
+    expect(run.oracle?.recallAtK?.value).toBe(0);
   });
 
   test("k-boundary: same system/gold, only k differs, flips recall@k between 0 and 1", () => {
@@ -674,10 +784,18 @@ describe("gdctx fact-preservation oracle (compact form vs raw-output facts)", ()
     expect(run.rates?.factPreservation?.successes).toBe(0);
   });
 
-  test("empty raw-facts set => rate vacuously 1 and no fabricated rate n", () => {
+  test("empty raw-facts set omits the metric AND the rate (no fabricated denominator)", () => {
     const run = scoreGdctxRun({ input: "empty-raw", rawFacts: [], compactFacts: ["a.ts"] });
-    expect(run.oracle?.factPreservation?.value).toBe(1);
+    // ./ir.ts's factPreservation returns a vacuous 1 here; emitting it would publish a
+    // confident `exact` perfect preservation score for an input with nothing to preserve.
+    expect(run.oracle?.factPreservation).toBeUndefined();
+    expect(run.oracle).toBeUndefined();
     expect(run.rates?.factPreservation).toBeUndefined();
+    expect(validatePairedBenchmark(buildGdctxManifest([
+      { input: "empty-raw", rawFacts: [], compactFacts: ["a.ts"] },
+      PERFECT_GDCTX,
+      LOSSY_GDCTX,
+    ])).valid).toBe(true);
   });
 
   test("task id carries the gdctx-fact-preservation namespace and metric source carries the layer label", () => {
@@ -742,6 +860,23 @@ describe("buildEvidenceBundle", () => {
     expect(bundle.grading.metrics.f1?.value).toBe(0.5);
     expect(bundle.grading.raw.truePositives).toBe(1);
     expect(bundle.grading.raw.systemAffected).toEqual(["lib/response.js", "lib/spurious.js"]);
+    expect(bundle.grading.rationale).toContain("precision=0.5 recall=0.5 f1=0.5");
+  });
+
+  test("a metric with no denominator is omitted from grading.metrics AND from the rationale", () => {
+    const bundle = buildEvidenceBundle({ target: "empty-sys", system: [], gold: ["g"] });
+    expect(bundle.grading.metrics.precision).toBeUndefined();
+    expect(bundle.grading.metrics.recall?.value).toBe(0);
+    // The prose must not restate ir.ts's vacuous 1 that the metrics block just dropped.
+    expect(bundle.grading.rationale).toContain("precision=unmeasured(no denominator)");
+    expect(bundle.grading.rationale).toContain("recall=0");
+    expect(bundle.grading.rationale).not.toContain("precision=1");
+  });
+
+  test("a target with no system set and no gold grades no metric at all", () => {
+    const bundle = buildEvidenceBundle({ target: "empty-both", system: [], gold: [] });
+    expect(bundle.grading.metrics).toEqual({});
+    expect(bundle.grading.rationale).toContain("f1=unmeasured(no denominator)");
   });
 });
 

@@ -38,7 +38,13 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { validatePairedBenchmark } from "../../src/metrics/benchmark";
-import { buildGdctxManifest, extractFacts, GDCTX_FACT_PRESERVATION_LABEL, type GdctxScoreInput } from "../../src/metrics/oracle-runner";
+import {
+  buildGdctxManifest,
+  extractFacts,
+  formatOracleValue,
+  GDCTX_FACT_PRESERVATION_LABEL,
+  type GdctxScoreInput,
+} from "../../src/metrics/oracle-runner";
 
 // Each dogfood input: a shell command whose raw output is a deterministic, fact-bearing
 // file-path listing. `find`+`sort` keeps the listing's raw ORDER deterministic; the compactor's
@@ -163,7 +169,7 @@ async function main(): Promise<void> {
   console.error(`# oracle IR result — layer=gdctx (${GDCTX_FACT_PRESERVATION_LABEL})`);
   for (const runRecord of manifest.runs) {
     const o = runRecord.oracle;
-    console.error(`${runRecord.task_id}: factPreservation=${o?.factPreservation?.value}`);
+    console.error(`${runRecord.task_id}: factPreservation=${formatOracleValue(o?.factPreservation)}`);
   }
   const result = validatePairedBenchmark(manifest);
   console.error(`# layer=gdctx manifest valid: ${result.valid ? "yes" : "no"}`);
