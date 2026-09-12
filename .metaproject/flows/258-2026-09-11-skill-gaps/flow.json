@@ -7,9 +7,9 @@
   "id": "258",
   "slug": "skill-gaps",
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T12:49:08.394Z",
+  "updatedAt": "2026-09-12T12:50:49.265Z",
   "source": {
     "type": "description",
     "ref": null
@@ -70,7 +70,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/545"
   },
   "baseBranch": "main",
   "tasks": [
@@ -1076,6 +1076,48 @@
       "at": "2026-09-12T12:49:08.394Z",
       "event": "ac-confirmed",
       "detail": "AC13: Four rounds. The closing round ran against the PR head 27ee602f, was told an empty answer was expected, and returned one: nothing at or above minor. All 21 findings at or above minor carry an acted-on disposition naming the commit that closed it, each backed by a verifier claim from the following round — 20 refuted at the fix, and one confirmed because round 2 caught that the first attempt had not closed it. No reviewer verified its own finding. External comments collected at the head: none."
+    },
+    {
+      "at": "2026-09-12T12:49:18.952Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/545 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T12:49:19.076Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T12:49:24.824Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 10 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-origin-main#R1-M3 (major, round 2026-09-12-ingest-origin-main): marked fixed at b3fe5f4f but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M4 (major, round 2026-09-12-ingest-origin-main): marked fixed at b3fe5f4f but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m4 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m5 (minor, round 2026-09-12-ingest-origin-main): marked fixed at c601a6b0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m6 (minor, round 2026-09-12-ingest-origin-main): marked fixed at c601a6b0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m7 (minor, round 2026-09-12-ingest-origin-main): marked fixed at c601a6b0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m8 (minor, round 2026-09-12-ingest-origin-main): marked fixed at c601a6b0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m9 (minor, round 2026-09-12-ingest-origin-main): marked fixed at c601a6b0 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m10 (minor, round 2026-09-12-ingest-origin-main): marked fixed at b3fe5f4f but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m11 (minor, round 2026-09-12-ingest-origin-main): marked fixed at b3fe5f4f but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#545 was last collected against a808d75d2855f1add3ca282ba5e17bb482ae4198 (round 1), but the PR head is 27ee602fab79450382c1615aa095ad9811e8a780. Everything anyone said after a808d75d2855f1add3ca282ba5e17bb482ae4198 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 545 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T12:50:24.836Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/545 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T12:50:24.961Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T12:50:30.758Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — head-commit (violated): the latest round ran against 680368e3, but the PR head is 27ee602fab79450382c1615aa095ad9811e8a780. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#545 was last collected against a808d75d2855f1add3ca282ba5e17bb482ae4198 (round 1), but the PR head is 27ee602fab79450382c1615aa095ad9811e8a780. Everything anyone said after a808d75d2855f1add3ca282ba5e17bb482ae4198 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 545 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T12:50:42.652Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/545 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T12:50:42.777Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T12:50:49.265Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
