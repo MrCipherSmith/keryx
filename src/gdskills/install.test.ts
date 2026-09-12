@@ -8,6 +8,7 @@ import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
 import {
   checkInstallDestination,
+  checkInstallFile,
   installGdskills,
   normalizeRetiredRuleContent,
   removeStaleRuntimeBuilds,
@@ -1320,6 +1321,115 @@ test("checkInstallDestination allows a missing or directory destination and reje
     expect(danglingCheck.usable).toBe(false);
     expect(danglingCheck.usable === false && danglingCheck.warning).toContain("is a symlink");
     // Refusing it must not have created anything at the link's target.
+    expect(existsSync(path.join(root, "nothing-here"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// `installContracts` used a bare `copyFile`, which FOLLOWS a symlinked
+// destination and overwrites whatever it points at. That is the same hazard
+// `checkInstallDestination` closes for the directory copies, but with a much
+// quieter failure mode: no EISDIR, no error at all — just a file somewhere
+// outside `.metaproject` silently replaced with a bundled contract, on every
+// platform rather than only one.
+
+test("a symlinked contract is skipped with a warning and its target is left untouched", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-contract-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const contract = CONTRACTS[0];
+    if (contract === undefined) {
+      throw new Error("CONTRACTS is empty; this test needs at least one entry to exercise.");
+    }
+    const relativeContract = path.join("core", "gdskills", "contracts", contract.fileName);
+    const contractDestination = path.join(metaprojectRoot, relativeContract);
+
+    // Someone keeps this contract under version control elsewhere and links it in.
+    const elsewhere = path.join(root, "my-contract.json");
+    await writeFile(elsewhere, "{\"mine\":true}\n", "utf8");
+    await mkdir(path.dirname(contractDestination), { recursive: true });
+    await symlink(elsewhere, contractDestination);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // Still a link, and the file it points at is byte-for-byte what it was.
+    expect((await lstat(contractDestination)).isSymbolicLink()).toBe(true);
+    expect(await readFile(elsewhere, "utf8")).toBe("{\"mine\":true}\n");
+    expect(result.warnings).toContain(
+      `${relativeContract} was not written because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a regular file to let keryx manage it, or update whatever the `
+      + `link points at yourself`,
+    );
+
+    // The rest of the install still completed, including the OTHER contracts.
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+    for (const other of CONTRACTS.slice(1)) {
+      await access(path.join(metaprojectRoot, "core", "gdskills", "contracts", other.fileName));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked contracts directory is skipped whole, with one warning for the tree", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-contracts-dir-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeContracts = path.join("core", "gdskills", "contracts");
+    const contractsRoot = path.join(metaprojectRoot, relativeContracts);
+
+    const elsewhere = path.join(root, "elsewhere-contracts");
+    await mkdir(elsewhere, { recursive: true });
+    await mkdir(path.dirname(contractsRoot), { recursive: true });
+    await symlink(elsewhere, contractsRoot);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(contractsRoot)).isSymbolicLink()).toBe(true);
+    // Not one contract was written through the link.
+    expect(await readdir(elsewhere)).toEqual([]);
+    expect(result.warnings).toContain(
+      `${relativeContracts} was not updated because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+      + `the link points at yourself`,
+    );
+    await access(result.catalogPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("checkInstallFile accepts a missing path or a regular file and refuses everything else", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-file-check-"));
+  try {
+    expect(await checkInstallFile(path.join(root, "missing.json"), "missing.json")).toEqual({ usable: true });
+
+    // The steady state of a re-install: overwriting keryx's own earlier copy.
+    const regular = path.join(root, "regular.json");
+    await writeFile(regular, "{}", "utf8");
+    expect(await checkInstallFile(regular, "regular.json")).toEqual({ usable: true });
+
+    const dir = path.join(root, "a-dir");
+    await mkdir(dir);
+    const dirCheck = await checkInstallFile(dir, "a-dir");
+    expect(dirCheck.usable).toBe(false);
+    expect(dirCheck.usable === false && dirCheck.warning).toContain("not a regular file");
+
+    // A link to a file and a DANGLING link are both refused. The dangling one
+    // matters on its own: `existsSync`/`stat` call it missing, so a check that
+    // followed links would have created the contract at the link's target.
+    const fileLink = path.join(root, "file-link");
+    await symlink(regular, fileLink);
+    const linkCheck = await checkInstallFile(fileLink, "file-link");
+    expect(linkCheck.usable).toBe(false);
+    expect(linkCheck.usable === false && linkCheck.warning).toContain("is a symlink");
+
+    const dangling = path.join(root, "dangling");
+    await symlink(path.join(root, "nothing-here"), dangling);
+    const danglingCheck = await checkInstallFile(dangling, "dangling");
+    expect(danglingCheck.usable).toBe(false);
     expect(existsSync(path.join(root, "nothing-here"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });

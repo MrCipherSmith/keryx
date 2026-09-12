@@ -125,7 +125,7 @@ export async function installGdskills(
   const manifestPath = path.join(metaprojectRoot, "modules", "gdskills.md");
   await writeFile(manifestPath, renderGdskillsManifest(profile), "utf8");
 
-  await installContracts(contractsRoot);
+  skippedDestinationWarnings.push(...await installContracts(contractsRoot, metaprojectRoot));
 
   const projectRoot = path.dirname(metaprojectRoot);
   // Every stale-build outcome is reported, removals included — but a removal
@@ -746,16 +746,89 @@ async function preserveProjectSkillsSection(catalogPath: string, nextCatalog: st
  * A contract that declares `sourcePath` (its authoritative file lives with the
  * skill that owns it) is resolved through `contractPath`; the rest keep the
  * original `contracts/<fileName>` lookup.
+ *
+ * Returns one warning per contract that was NOT written. `copyFile` FOLLOWS a
+ * symlinked destination and overwrites whatever it points at, so a contract
+ * name someone has linked elsewhere would be a silent write outside
+ * `.metaproject` — the same hazard `checkInstallDestination` closes for the
+ * directory copies, with a quieter failure mode: no error, just a modified file
+ * the operator never named. `checkInstallFile` closes it here.
  */
-async function installContracts(contractsRoot: string): Promise<void> {
-  await Promise.all(
-    CONTRACTS.map((contract) =>
-      copyFile(
+async function installContracts(contractsRoot: string, metaprojectRoot: string): Promise<string[]> {
+  // The directory itself first: a symlinked `contracts/` would send every
+  // entry below through the link, and `mkdir(…, { recursive: true })` follows
+  // it without complaint.
+  const rootCheck = await checkInstallDestination(contractsRoot, path.relative(metaprojectRoot, contractsRoot));
+  if (!rootCheck.usable) {
+    return [rootCheck.warning];
+  }
+
+  const results = await Promise.all(
+    CONTRACTS.map(async (contract) => {
+      const destination = path.join(contractsRoot, contract.fileName);
+      const check = await checkInstallFile(destination, path.relative(metaprojectRoot, destination));
+      if (!check.usable) {
+        return check.warning;
+      }
+      await copyFile(
         contract.sourcePath ? contractPath(contract) : contractSourcePath(contract.fileName),
-        path.join(contractsRoot, contract.fileName),
-      ),
-    ),
+        destination,
+      );
+      return null;
+    }),
   );
+  return results.filter((warning): warning is string => warning !== null);
+}
+
+/**
+ * The single-file counterpart to `checkInstallDestination`: may keryx write
+ * this path as a plain file?
+ *
+ * Missing is the ordinary case, and an existing regular file is the steady
+ * state of a re-install — `copyFile` replacing it is exactly right. Everything
+ * else is refused for the same reason the directory check refuses: a symlink
+ * would be written THROUGH, silently landing the bundled contents somewhere
+ * the operator never pointed keryx at, and a directory (or FIFO, socket,
+ * device) at a file's name is not something to overwrite unasked.
+ */
+export async function checkInstallFile(
+  destination: string,
+  displayPath: string,
+): Promise<InstallDestinationCheck> {
+  let stats;
+  try {
+    stats = await lstat(destination);
+  } catch (error) {
+    if (isMissingPathError(error)) {
+      return { usable: true };
+    }
+    return {
+      usable: false,
+      warning: `${displayPath} was not written because it could not be inspected (${errorCodeOf(error)}) — `
+        + `check its permissions, then re-run the install`,
+    };
+  }
+
+  if (stats.isFile()) {
+    return { usable: true };
+  }
+
+  if (stats.isSymbolicLink()) {
+    const linkTarget = await readlink(destination).catch(() => null);
+    const where = linkTarget === null ? "" : ` (-> ${linkTarget})`;
+    return {
+      usable: false,
+      warning: `${displayPath} was not written because it is a symlink${where}; keryx will not write `
+        + `through it — replace it with a regular file to let keryx manage it, or update whatever the `
+        + `link points at yourself`,
+    };
+  }
+
+  return {
+    usable: false,
+    warning: `${displayPath} was not written because it is not a regular file (a directory, FIFO, or `
+      + `similar); keryx will not overwrite it — delete or rename it, then re-run the install`,
+  };
 }
 
 function contractSourcePath(fileName: string): string {
