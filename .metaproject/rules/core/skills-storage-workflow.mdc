@@ -39,6 +39,29 @@ for `keryx update`/`keryx init` (installed mirror) and for `keryx skills
 export`/`keryx skills sync` (global destinations) alike — not a degraded
 path.
 
+"Genuinely differs" covers two cases, and only two:
+
+1. **Different instructions.** The runtime needs prose `SKILL.md` does not
+   carry, or must not carry.
+2. **A different `metadata.compatible_harnesses`.** That field is the
+   machine-readable CSV of supported harnesses, so its correct value is
+   per-build by construction — a build cannot share a harness list that
+   excludes the harness reading it. This is the only field in the tree of
+   which that is true.
+
+Case 2 is why fourteen shipped builds differ from their `SKILL.md` by exactly
+one line: the seven `gproject-*` subagent skills under `planning/`
+(`project-discovery`, `problem-definer`, `patterns-researcher`, `planner`,
+`consistency-checker`, `spec-writer`, `stack-advisor`) each ship a
+`SKILL.codex.md` and a `SKILL.cursor.md` that add
+`compatible_harnesses: "cursor,codex,zed,opencode"`. Their `SKILL.md` declares
+no harness list, because it is the Claude build and cannot carry one that
+excludes Claude. These builds are NOT identical copies and must not be deleted
+as such; `src/gdskills/build-parity.test.ts` exempts this one hunk, by name,
+for these seven skills only, and its allow-list is where any widening has to be
+argued. Every other difference between a build and its `SKILL.md` is drift and
+gets reconciled.
+
 ## Frontmatter Fields (Agent Skills spec alignment)
 
 `SKILL.md` frontmatter follows the published Agent Skills specification
@@ -93,6 +116,19 @@ A ceiling **moves down**, never up:
   one edit this rule forbids: it converts a measured limit into a record of
   whatever the file grew to.
 
+`keryx skills verify --bundled` states the same remedy in the same words, and
+cites this section by name, so the finding and the rule cannot drift apart. The
+`anatomy:length` message reads, after the count:
+
+> Split the skill, or move reference material into a sibling document, and lower
+> the ceiling to the new count in the same change. A ceiling only ever moves
+> DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc
+> ("Length Ceilings") forbids, because it converts a measured limit into a record
+> of whatever the file grew to.
+
+Changing either text without the other is the drift this quotation exists to
+prevent; `src/gdskills/bundled-eval.ts` is where the message lives.
+
 A ceiling is not a statement that the skill's current size is right — several
 shipped skills are far past the default and were recorded as they stood. It
 bounds unnoticed growth, which is the part no other check can see.
@@ -124,7 +160,7 @@ those instead.
 
 ## Mandatory Behavior
 1. Always create/update `SKILL.md` as the canonical source.
-2. Create a `SKILL.<runtime>.md` only when that runtime's build genuinely differs from `SKILL.md` — never as an identical copy. Otherwise `SKILL.md` serves that runtime via fallback; that fallback is the normal case, not an exception.
+2. Create a `SKILL.<runtime>.md` only when that runtime's build genuinely differs from `SKILL.md` — either in its instructions or in its `metadata.compatible_harnesses`, the two cases named under Required Source Layout — never as an identical copy. Otherwise `SKILL.md` serves that runtime via fallback; that fallback is the normal case, not an exception.
 3. Keep all profiles aligned in structure and intent.
 4. Validate skills before sync.
 5. For a **project-local** skill only: export it per runtime first (`keryx skills export <skill-name> --runtime <runtime>`), then sync every global destination that applies (`cursor`, `codex`, `zed`, `opencode` — four in total) with `keryx skills sync --runtime <runtime> --global`, run once per runtime that needs it. A shipped skill cannot be exported and has no global-sync route — it reaches a runtime only via the project-local installed mirror (`keryx update`/`keryx init`).

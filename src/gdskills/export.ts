@@ -164,10 +164,22 @@ export async function exportProjectSkill(
     for (const safeDir of ["references", "templates", "assets", "scripts"]) {
       await copyDirectoryIfExists(path.join(resolved.packageRoot, safeDir), path.join(outputRoot, safeDir));
     }
+    // schemaVersion 2 (flow 257): v1 also carried `usedFallbackBuild`, a
+    // boolean that presented the shared `SKILL.md` as a degraded outcome. It is
+    // gone, not renamed — `sourceBuild` already names the file that was copied,
+    // and the question the boolean answered is decidable from it
+    // (`sourceBuild !== skillBuildFileName(runtime)` — true only when a
+    // non-Claude runtime received `SKILL.md`). Removing a field is a breaking
+    // change for anything parsing this file, so the version moves with it:
+    // a reader that still expects the boolean sees `schemaVersion: 2` and knows
+    // why it is absent instead of reading `undefined` as `false`.
+    //
+    // The plugin manifest (`export-plugin.ts`) is a different shape that never
+    // carried the field, and stays at its own `schemaVersion: 1`.
     await writeFile(
       path.join(outputRoot, "export-manifest.json"),
       `${JSON.stringify({
-        schemaVersion: 1,
+        schemaVersion: 2,
         runtime: options.runtime,
         module: moduleName,
         name: skillName,

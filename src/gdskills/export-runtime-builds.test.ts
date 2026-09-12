@@ -101,6 +101,11 @@ test("export copies the runtime's OWN build when the skill ships one", async () 
       ) as Record<string, unknown>;
       expect(manifest.sourceBuild).toBe(skillBuildFileName(runtime));
       expect("usedFallbackBuild" in manifest).toBe(false);
+      // Dropping a field is a breaking change for an external parser, and the
+      // version is the only signal it gets. Pinned here so the removal and the
+      // bump cannot be separated later: a v1 manifest without the boolean is
+      // indistinguishable from one where the exporter simply forgot it.
+      expect(manifest.schemaVersion).toBe(2);
     }
   } finally {
     await rm(root, { recursive: true, force: true });

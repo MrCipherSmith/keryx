@@ -1,6 +1,6 @@
 ---
 name: context-collector
-description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution. NOT for: deciding what to build from that context (use interviewer or job-orchestrator)."
+description: "Use when a job needs a unified context document — gathering docs, libraries, and references for sub-agents before execution. NOT for: deciding what to build from that context (use interview, or job-orchestrator for the whole pipeline)."
 triggers:
   - "collect context"
   - "gather context"
