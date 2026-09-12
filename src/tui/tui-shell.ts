@@ -74,7 +74,7 @@ import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
   buildConsumerModel,
   isMcpConsumerCommand,
-  renderConsumerLines,
+  openMcpConsumer,
 } from "./mcp-consumer";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
@@ -3741,22 +3741,33 @@ export async function launchTuiAgentShell(opts: {
      * anything, so it never creates the runtime.
      */
     const showMcpConsumer = (): void => {
-      const runtime = deps.mcpRuntime?.();
       const cwd = inspectorCwd();
-      const model =
-        runtime === undefined
-          ? undefined
-          : buildConsumerModel({
-              configured: runtime.configured(),
-              states: runtime.servers(),
-              problems: runtime.problems(),
-              userFile: userConfigFile(),
-              projectFile: projectConfigFile(cwd),
-            });
-      const lines = renderConsumerLines(model);
-      for (const line of lines) {
-        transcript.add(new otui.TextRenderable(r, { id: `mcp${uid++}`, content: otui.t`${otui.dim(line)}` }));
-      }
+      const snapshot = () => {
+        const live = deps.mcpRuntime?.();
+        if (live === undefined) return undefined;
+        return buildConsumerModel({
+          configured: live.configured(),
+          states: live.servers(),
+          problems: live.problems(),
+          userFile: userConfigFile(),
+          projectFile: projectConfigFile(cwd),
+        });
+      };
+      openMcpConsumer(otui, chrome, {
+        snapshot,
+        connect: async (name) => {
+          const live = deps.mcpRuntime?.();
+          if (live === undefined) return { ok: false, message: "No MCP session yet" };
+          return live.connectServer(name);
+        },
+        disconnect: async (name) => {
+          const live = deps.mcpRuntime?.();
+          if (live === undefined) return { ok: false, message: "No MCP session yet" };
+          return live.disconnectServer(name);
+        },
+        renderer: r,
+        ...inspectorKeys,
+      });
     };
 
     const showTools = (): void => {

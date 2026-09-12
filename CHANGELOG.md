@@ -3,6 +3,22 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.100] — 2026-09-13
+`/mcp` is a modal, not a dump of lines into the transcript: name, status, and
+connect/disconnect on the same surface the other agent CLIs already have.
+
+### Changed
+
+- **`/mcp` opens a modal with connect/disconnect per server.** It used to print
+  one dim line per configured server into the transcript, with no way to act on
+  it. The row now shows the name, source, transport and a status glyph
+  (`● connected` / `○ disabled` / `✗ failed` / `… connecting`); `c`/`d` then
+  `y` — or a second click on the same row — dials or closes that server. A
+  project server still held for `keryx mcp trust` names the command instead of
+  offering connect. The toggle writes the personal overlay, not the native
+  config file, the same way `keryx mcp enable`/`disable` already do.
+  `/integrations` remains the installer of keryx itself.
+
 ## [0.2.99] — 2026-09-12
 The PII detector stops mangling identifiers, without starting to miss phone
 numbers. Both halves were needed: the first attempt fixed the mangling by

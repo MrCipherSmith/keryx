@@ -21,6 +21,7 @@ import { loadMcpServers, type McpConfigProblem, type ResolvedMcpServer } from ".
 import { mergeCatalogs, type ServerCatalog } from "./catalog";
 import { closeServers, startServers, type ConnectFn, type ServerState } from "./manager";
 import { loadTrustStore, requiresApproval } from "./trust";
+import { setServerEnabled } from "./store";
 import { connectHttpMcpServer, connectStdioMcpServer } from "../mcp-client/client";
 import { describeHollow, remoteTargetProblem, resolveHttpHeaders } from "./http-headers";
 import { isExpired, readCredential, usesOAuth, type CredentialRecord } from "./credentials";
@@ -89,6 +90,8 @@ export type McpRuntimeOptions = {
  * its handshake two seconds after the shell painted its prompt must become
  * searchable without anything being rebuilt.
  */
+export type ServerActionResult = { readonly ok: true } | { readonly ok: false; readonly message: string };
+
 export type McpRuntime = {
   readonly catalog: () => ServerCatalog;
   readonly servers: () => readonly ServerState[];
@@ -108,6 +111,19 @@ export type McpRuntime = {
   readonly configured: () => readonly ResolvedMcpServer[];
   /** Resolves when every dial has settled. For tests and for `doctor`-like callers. */
   readonly ready: () => Promise<void>;
+  /**
+   * Dial one configured server now, and remember the choice on the personal
+   * overlay so the next session starts it too.
+   *
+   * Refuses a project server that still needs `keryx mcp trust`. A server
+   * already connected is success, not a second dial.
+   */
+  readonly connectServer: (name: string) => Promise<ServerActionResult>;
+  /**
+   * Close one server and disable it on the personal overlay. The native
+   * config file is not rewritten — same rule as `keryx mcp disable`.
+   */
+  readonly disconnectServer: (name: string) => Promise<ServerActionResult>;
   readonly close: () => Promise<void>;
 };
 
@@ -180,19 +196,6 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   // green on a machine where it did, having proved nothing about the code.
   const env = options.env ?? process.env;
   const connect = options.connect ?? ((server) => defaultConnect(server, env, dialling.signal, kills, options.configDir));
-  const settled = startServers(launchable, connect)
-    .then((result) => {
-      catalog = result.catalog;
-      // Held servers stay in the report. One that vanished would read as a
-      // server keryx never saw, which is the state the operator would then
-      // go looking for in the wrong file.
-      states = [...heldStates, ...result.servers].sort((a, b) => a.name.localeCompare(b.name));
-    })
-    .catch(() => {
-      // `startServers` is documented never to reject. If that ever stops
-      // being true, the shell still opens — with every server stuck on
-      // `connecting`, which is visible, rather than an unhandled rejection.
-    });
 
   /**
    * Close each connection at most once.
@@ -203,8 +206,47 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
    * SDK client and still wrong: a "closed" count that double-counts cannot
    * be used to prove anything about leaks, which is exactly what the tests
    * here do.
+   *
+   * Declared BEFORE `settled` so a `/mcp` disconnect during startup can
+   * mark the sweep's late connection as already closed and drop it,
+   * instead of the sweep putting it back.
    */
   const closedAlready = new WeakSet<object>();
+  /**
+   * Names the operator connected or disconnected AFTER the initial sweep
+   * started. The sweep's result must not clobber those.
+   */
+  const mutated = new Set<string>();
+  const settled = startServers(launchable, connect)
+    .then((result) => {
+      for (const incoming of result.servers) {
+        if (!mutated.has(incoming.name)) continue;
+        if (incoming.connection !== undefined && !closedAlready.has(incoming.connection)) {
+          closedAlready.add(incoming.connection);
+          void incoming.connection.close().catch(() => {});
+        }
+      }
+      const kept = states.filter((state) => mutated.has(state.name));
+      const incoming = result.servers.filter((state) => !mutated.has(state.name));
+      const heldStill = heldStates.filter((state) => !mutated.has(state.name));
+      states = uniqueByName([...heldStill, ...incoming, ...kept]).sort((a, b) => a.name.localeCompare(b.name));
+      catalog = mergeCatalogs([
+        {
+          entries: result.catalog.entries.filter((entry) => !mutated.has(entry.server)),
+          skipped: result.catalog.skipped.filter((skip) => !mutated.has(skip.server)),
+        },
+        {
+          entries: catalog.entries.filter((entry) => mutated.has(entry.server)),
+          skipped: catalog.skipped.filter((skip) => mutated.has(skip.server)),
+        },
+      ]);
+    })
+    .catch(() => {
+      // `startServers` is documented never to reject. If that ever stops
+      // being true, the shell still opens — with every server stuck on
+      // `connecting`, which is visible, rather than an unhandled rejection.
+    });
+
   const closeOnce = async (list: readonly ServerState[]): Promise<void> => {
     const fresh = list.filter(
       (state) => state.connection !== undefined && !closedAlready.has(state.connection),
@@ -220,6 +262,7 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
   // own `finally` and the command's outer one, which is what catches a start-up
   // refusal (K-012) — and the second must cost nothing.
   let closing: Promise<void> | undefined;
+  const inflight = new Map<string, Promise<ServerActionResult>>();
 
   return {
     catalog: () => catalog,
@@ -230,8 +273,98 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
     ready: async () => {
       await settled;
     },
+    connectServer: (name) => runExclusive(name, () => connectOne(name)),
+    disconnectServer: (name) => runExclusive(name, () => disconnectOne(name)),
     close: () => (closing ??= closeNow()),
   };
+
+  function runExclusive(name: string, work: () => Promise<ServerActionResult>): Promise<ServerActionResult> {
+    const existing = inflight.get(name);
+    if (existing !== undefined) return existing;
+    const pending = work().finally(() => {
+      inflight.delete(name);
+    });
+    inflight.set(name, pending);
+    return pending;
+  }
+
+  function replaceState(next: ServerState): void {
+    states = uniqueByName([...states.filter((state) => state.name !== next.name), next]).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+  }
+
+  function stripCatalog(name: string): void {
+    catalog = {
+      entries: catalog.entries.filter((entry) => entry.server !== name),
+      skipped: catalog.skipped.filter((skip) => skip.server !== name),
+    };
+  }
+
+  async function persistEnabled(server: ResolvedMcpServer, enabled: boolean): Promise<ServerActionResult | undefined> {
+    const written = setServerEnabled({
+      name: server.name,
+      enabled,
+      source: server.source,
+      ...(options.configDir === undefined ? {} : { configDir: options.configDir }),
+    });
+    return written.ok ? undefined : { ok: false, message: written.error };
+  }
+
+  async function connectOne(name: string): Promise<ServerActionResult> {
+    if (closing !== undefined) return { ok: false, message: "session is closing" };
+    const server = byName.get(name);
+    if (server === undefined) return { ok: false, message: `no server named "${name}"` };
+    if (requiresApproval(server, loadTrustStore(options.configDir))) {
+      return { ok: false, message: `project server not approved; run \`keryx mcp trust ${name}\`` };
+    }
+    const current = states.find((state) => state.name === name);
+    if (current?.status === "connected") return { ok: true };
+    if (current?.status === "connecting") {
+      return { ok: false, message: `server "${name}" is already connecting` };
+    }
+    const persist = await persistEnabled(server, true);
+    if (persist !== undefined) return persist;
+    mutated.add(name);
+    if (current?.connection !== undefined) {
+      if (!closedAlready.has(current.connection)) closedAlready.add(current.connection);
+      await closeServers([current]);
+    }
+    stripCatalog(name);
+    replaceState({ name, status: "connecting", toolCount: 0 });
+    const result = await startServers([{ ...server, enabled: true }], connect);
+    const next = result.servers[0];
+    if (next === undefined) {
+      replaceState({ name, status: "failed", error: "dial returned nothing", toolCount: 0 });
+      return { ok: false, message: "dial returned nothing" };
+    }
+    replaceState(next);
+    if (next.status === "connected") {
+      catalog = mergeCatalogs([catalog, result.catalog]);
+      return { ok: true };
+    }
+    return { ok: false, message: next.error ?? `server "${name}" did not connect` };
+  }
+
+  async function disconnectOne(name: string): Promise<ServerActionResult> {
+    if (closing !== undefined) return { ok: false, message: "session is closing" };
+    const server = byName.get(name);
+    if (server === undefined) return { ok: false, message: `no server named "${name}"` };
+    const current = states.find((state) => state.name === name);
+    if (current?.status === "connecting") {
+      return { ok: false, message: `server "${name}" is still connecting` };
+    }
+    const persist = await persistEnabled(server, false);
+    if (persist !== undefined) return persist;
+    mutated.add(name);
+    if (current?.connection !== undefined) {
+      if (!closedAlready.has(current.connection)) closedAlready.add(current.connection);
+      await closeServers([current]);
+    }
+    stripCatalog(name);
+    replaceState({ name, status: "disabled", toolCount: 0 });
+    return { ok: true };
+  }
 
   async function closeNow(): Promise<void> {
     {
@@ -270,6 +403,18 @@ export function createMcpRuntime(options: McpRuntimeOptions): McpRuntime {
  * one. Clamped to a day, which is longer than any real handshake and inside
  * the 32-bit range.
  */
+
+function uniqueByName(list: readonly ServerState[]): ServerState[] {
+  const seen = new Set<string>();
+  const out: ServerState[] = [];
+  for (const state of list) {
+    if (seen.has(state.name)) continue;
+    seen.add(state.name);
+    out.push(state);
+  }
+  return out;
+}
+
 export function handshakeBudgetMs(server: ResolvedMcpServer): number {
   const configured = server.startup_timeout_sec;
   if (configured === undefined || !Number.isFinite(configured) || configured <= 0) {

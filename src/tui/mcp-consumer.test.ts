@@ -10,9 +10,12 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildConsumerModel,
+  consumerActionFor,
+  formatConsumerModalRow,
   formatConsumerRow,
   isMcpConsumerCommand,
   MCP_CONSUMER_COMMAND,
+  presentMcpConsumer,
   renderConsumerLines,
 } from "./mcp-consumer";
 import { isMcpToolsCommand, MCP_TOOLS_COMMAND } from "./mcp-inspector";
@@ -483,5 +486,185 @@ describe("AC3 — the /mcp view never shows token material", () => {
     expect(rendered).not.toContain(REFRESH);
     expect(JSON.stringify(model)).not.toContain(ACCESS);
     expect(JSON.stringify(model)).not.toContain(REFRESH);
+  });
+});
+
+
+describe("the modal rows — name, status, connect/disconnect", () => {
+  test("a connected server offers disconnect", () => {
+    const row = model([configured({ url: "https://api.test/mcp" })], [
+      { name: "s", status: "connected", toolCount: 7 },
+    ]).rows[0]!;
+    expect(consumerActionFor(row.status)).toBe("disconnect");
+    const line = formatConsumerModalRow(row, true, { kind: "idle" });
+    expect(line.startsWith(">")).toBe(true);
+    expect(line).toContain("s");
+    expect(line).toContain("● connected");
+    expect(line).toContain("[d] disconnect");
+    expect(line).toContain("7 tool(s)");
+  });
+
+  test("a disabled server offers connect", () => {
+    const row = model([configured({ url: "https://x/mcp" }, { enabled: false })], [
+      { name: "s", status: "disabled", toolCount: 0 },
+    ]).rows[0]!;
+    expect(consumerActionFor(row.status)).toBe("connect");
+    expect(formatConsumerModalRow(row, false, { kind: "idle" })).toContain("[c] connect");
+  });
+
+  test("a failed server also offers connect — retry, not silence", () => {
+    const row = model([configured({ url: "https://api.test/mcp" })], [
+      { name: "s", status: "failed", toolCount: 0, error: "boom" },
+    ]).rows[0]!;
+    expect(consumerActionFor(row.status)).toBe("connect");
+  });
+
+  test("a held server names trust instead of offering connect", () => {
+    const row = model([configured({ command: "npx" }, { source: "project" })], [
+      { name: "s", status: "needs-approval", toolCount: 0 },
+    ]).rows[0]!;
+    expect(consumerActionFor(row.status)).toBeUndefined();
+    const line = formatConsumerModalRow(row, false, { kind: "idle" });
+    expect(line).toContain("keryx mcp trust s");
+    expect(line).not.toContain("[c] connect");
+  });
+
+  test("BOUNDARY — connecting is not actionable; the dial is already in flight", () => {
+    expect(consumerActionFor("connecting")).toBeUndefined();
+  });
+});
+
+type FakeRow = { id: string; content: string; onMouseDown: (() => void) | undefined };
+function fakeOtui(): { TextRenderable: new (r: unknown, opts: { id: string; content: string; onMouseDown?: () => void }) => FakeRow } {
+  return {
+    TextRenderable: class implements FakeRow {
+      id: string;
+      content: string;
+      onMouseDown: (() => void) | undefined;
+      constructor(_r: unknown, opts: { id: string; content: string; onMouseDown?: () => void }) {
+        this.id = opts.id;
+        this.content = opts.content;
+        this.onMouseDown = opts.onMouseDown;
+      }
+    },
+  };
+}
+function fakeBody(): { add: (c: unknown) => void; getChildren: () => readonly unknown[]; remove: (c: unknown) => void; rows: () => FakeRow[] } {
+  const children: unknown[] = [];
+  return {
+    add: (c) => children.push(c),
+    getChildren: () => children,
+    remove: (c) => {
+      const i = children.indexOf(c);
+      if (i >= 0) children.splice(i, 1);
+    },
+    rows: () => children as FakeRow[],
+  };
+}
+function findRow(rows: FakeRow[], id: string): FakeRow | undefined {
+  return rows.find((r) => r.id === id);
+}
+
+describe("presentMcpConsumer — clickable connect/disconnect", () => {
+  test("opens a Servers tab with the MCP footer", () => {
+    const calls: { title: string; tabs: readonly { id: string }[]; footer?: readonly { key: string }[] }[] = [];
+    presentMcpConsumer(
+      (_otui, _chrome, input) => {
+        calls.push(input);
+        return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "servers" };
+      },
+      {},
+      {},
+      { snapshot: () => model([configured({ url: "https://api.test/mcp" })]), connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+    );
+    expect(calls[0]?.title).toBe("MCP servers");
+    expect(calls[0]?.tabs.map((t) => t.id)).toEqual(["servers"]);
+    expect(calls[0]?.footer?.some((a) => a.key === "c/d")).toBe(true);
+  });
+
+  test("a connected row is clickable and offers disconnect", () => {
+    const body = fakeBody();
+    presentMcpConsumer(
+      (_otui, _chrome, input) => {
+        input.renderTab("servers", body);
+        return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "servers" };
+      },
+      fakeOtui(),
+      {},
+      {
+        snapshot: () => model([configured({ url: "https://api.test/mcp" })], [{ name: "s", status: "connected", toolCount: 2 }]),
+        visibleRows: 20,
+        connect: async () => ({ ok: true }),
+        disconnect: async () => ({ ok: true }),
+      },
+    );
+    const row = findRow(body.rows(), "mcp-consumer-row-s");
+    expect(row?.content).toContain("[d] disconnect");
+    expect(row?.onMouseDown).toBeTypeOf("function");
+  });
+
+  test("clicking a disabled row arms connect; clicking again confirms", async () => {
+    const body = fakeBody();
+    let connected: string | undefined;
+    presentMcpConsumer(
+      (_otui, _chrome, input) => {
+        input.renderTab("servers", body);
+        return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "servers" };
+      },
+      fakeOtui(),
+      {},
+      {
+        snapshot: () => model([configured({ url: "https://x/mcp" }, { enabled: false })], [{ name: "s", status: "disabled", toolCount: 0 }]),
+        visibleRows: 20,
+        connect: async (name) => {
+          connected = name;
+          return { ok: true };
+        },
+        disconnect: async () => ({ ok: true }),
+      },
+    );
+    findRow(body.rows(), "mcp-consumer-row-s")?.onMouseDown?.();
+    expect(findRow(body.rows(), "mcp-consumer-row-s")?.content).toContain("press y to connect");
+    expect(connected).toBeUndefined();
+    findRow(body.rows(), "mcp-consumer-row-s")?.onMouseDown?.();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(connected).toBe("s");
+    expect(findRow(body.rows(), "mcp-consumer-row-s")?.content).toContain("✓ done");
+  });
+
+  test("[c] then [y] connects; a non-y key cancels", async () => {
+    const body = fakeBody();
+    let connectCalls = 0;
+    presentMcpConsumer(
+      (_otui, _chrome, input) => {
+        input.renderTab("servers", body);
+        return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "servers" };
+      },
+      fakeOtui(),
+      {},
+      {
+        snapshot: () => model([configured({ url: "https://x/mcp" }, { enabled: false })], [{ name: "s", status: "disabled", toolCount: 0 }]),
+        visibleRows: 20,
+        connect: async () => {
+          connectCalls += 1;
+          return { ok: true };
+        },
+        disconnect: async () => ({ ok: true }),
+        onKeypress: (handler) => {
+          handler({ name: "c", sequence: "c" });
+          expect(findRow(body.rows(), "mcp-consumer-row-s")?.content).toContain("press y to connect");
+          handler({ name: "x", sequence: "x" });
+          expect(findRow(body.rows(), "mcp-consumer-row-s")?.content).toContain("[c] connect");
+          expect(connectCalls).toBe(0);
+          handler({ name: "c", sequence: "c" });
+          handler({ name: "y", sequence: "y" });
+          return () => {};
+        },
+      },
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(connectCalls).toBe(1);
   });
 });
