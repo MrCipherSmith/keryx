@@ -3,7 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.2.98] — 2026-09-12
+Credentials, and what keryx says about them. `shell_exec` stops handing saved
+provider keys to the commands it runs; `/provider` stops going mute when one is
+refused, and lets you replace it; a scripted shell refreshes an expired grant
+instead of sending it; and the test suite stops opening browser tabs on the
+machine running it.
 
 ### Changed
 
