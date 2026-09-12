@@ -37,7 +37,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "If the request asks to create, run, resume, track, or finish a managed flow and Task Manager is enabled, route implementation work to `gdskills/orchestration/flow-orchestrator/SKILL.md` before `job-orchestrator`.",
     "Prefer project-local skills and module manifests before broad raw file search.",
     "Route to the narrowest applicable skill and record unavailable modules explicitly.",
-  ], ["any repository task", "route context", "which skill should be used", "ordinary product-development request", "agent should decide tools"],
+  ], ["any repository task", "route context", "which skill should be used", "ordinary product-development request", "agent should decide tools", "pick the module"],
     "Use when a request's routing to a Metaproject module, skill, or project-skill is unclear and needs deciding before any work starts. NOT for: picking between gdgraph, gdctx, gdwiki, memory, and health once the module is already known (see context-router)."),
   renderedSkill("context-router", "core", ["minimal", "recommended", "full"], "Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before raw file reads.", [
     "Start from the user's goal, not from command names.",
@@ -466,7 +466,7 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Keep hooks lightweight and idempotent.",
     "Avoid network and destructive behavior inside hooks.",
   ], ["install hook", "git hook", "post-commit"],
-    "Use when a lightweight, explicitly-enabled git hook for graph, health, or skill verification needs installing or checking. NOT for: general hook design guidance not tied to these three (see hookify)."),
+    "Use when a lightweight, explicitly-enabled git hook that runs graph, health, or skill verification after a commit, a checkout, or a merge needs installing or checking. NOT for: general hook design guidance not tied to these three (see hookify)."),
   skill("hookify", "platform", ["full"], "Use hook guidance for safe hook design and installation.", [
     "Detect existing hooks and preserve user content.",
     "Install idempotent managed blocks.",

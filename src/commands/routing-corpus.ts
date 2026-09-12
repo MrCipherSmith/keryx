@@ -100,24 +100,29 @@ export interface RoutingGap {
 }
 
 export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
-  {
-    prompt: "what is the blast radius of this refactor",
-    skill: "review-regression",
-    collidesWith: "review-architecture",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "review-regression's own trigger is `blast radius review`, and the word `review` is exactly what a user asking about blast radius does not say. No trigger fires, so the skill lands in a three-way tie at 20 with review-architecture and review-core-boundaries and loses it alphabetically. A `blast radius` trigger without the trailing noun would settle it.",
-  },
-  {
-    prompt: "implement task 3 from the breakdown",
-    skill: "task-implementer",
-    collidesWith: "planner",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "planner's `task breakdown` trigger matches order-free, so a request to IMPLEMENT one item out of a breakdown fires the trigger of the skill that PRODUCES breakdowns. Both reach 75 and planner wins the tie alphabetically. planner's trigger wants the two words adjacent, or a stronger `implement task` signal.",
-  },
+  // The five gaps T10 recorded alongside these two were all metadata defects —
+  // a trigger written in jargon the user does not type, or a description that
+  // named the neighbour's vocabulary and not its own — and T12 fixed them in
+  // the skills' own frontmatter. What is left is the other kind: two prompts
+  // where the losing skill's CEILING is below the winner's FLOOR, so no wording
+  // of the loser can take rank 1 back. Both are written as arithmetic rather
+  // than as a complaint, because the arithmetic is what a later reader has to
+  // re-check before deciding the gap is gone.
+  //
+  // T10 named review-orchestrator's one-word `review` trigger as the shared root
+  // of two of the seven, and the obvious repair — narrow it to the phrases the
+  // skill already carries ("review my code", "full review", "review PR") — was
+  // measured and rejected. Dropping it costs three `ok` entries in
+  // ROUTING_BASELINE their top skill ("review" and "do a review" fall from
+  // review-orchestrator at 65 to code-ai-review at 10; "reviewing the diff now"
+  // falls to perf-check at 20) and takes review-orchestrator's own positive
+  // "reviewing the diff now, where are the problems" away from it. A skill whose
+  // contract is to take the review request that names no specialist has to fire
+  // on the bare word. The clean-code half was fixed from the other side instead:
+  // review-clean-code now carries the complaint a user actually types
+  // ("functions do too much" — order-free, so it fires on the prompt without
+  // being quoted by it) and wins that prompt 95 to 65, with the orchestrator's
+  // trigger untouched.
   {
     prompt: "add a description to the PR and open a linked issue",
     skill: "pr-issue-documenter",
@@ -125,16 +130,7 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
     kind: "positive",
     excluded: false,
     reason:
-      "`open PR` fires for a sentence whose verb `open` governs the ISSUE, not the PR, and `pr` then adds its skill-name bonus on top: 115 against 95. The user is describing an existing pull request, not asking for a new one.",
-  },
-  {
-    prompt: "set up a git hook that runs health after a commit",
-    skill: "hook-manager",
-    collidesWith: "commit",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "`commit` is a one-word trigger and a one-word skill name, so naming the moment a hook should run (`after a commit`) scores 105 for the commit skill against hook-manager's 95. Any hook phrased by its git event hits this.",
+      "Arithmetically out of reach, not merely unfixed. `pr` cannot score below 105 here: its `open PR` trigger fires order-free on a sentence whose `open` governs the ISSUE (55), the query says `pr` so the skill-name bonus is earned (30), and `open` plus `issue` are both in its haystack for good — `issue` because its NOT-for clause names `pr-issue-documenter`, which the anatomy rules require it to keep. pr-issue-documenter has no name hit available and the query offers five tokens in all, so its ceiling is 55 + 50 = 105 — a tie, which the alphabetical tie-break gives to `pr`. Closing it means changing the order-free trigger path, which is the scorer, not the metadata.",
   },
   {
     prompt: "make a reviewer out of this conventions doc so review-orchestrator can dispatch it",
@@ -143,25 +139,7 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
     kind: "positive",
     excluded: false,
     reason:
-      "Naming the orchestrator the new reviewer will plug into hands review-orchestrator an exact-name hit plus its one-word `review` trigger — 135 against 50. Asking to BUILD a reviewer is not asking to RUN one, and the scorer has no way to see the difference.",
-  },
-  {
-    prompt: "these functions are too long and do too much, review that",
-    skill: "review-clean-code",
-    collidesWith: "review-orchestrator",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "A textbook Single Responsibility complaint in a user's own words fires no review-clean-code trigger at all (`clean code review`, `solid review`, `maintainability`, `Uncle Bob review` are all jargon), so the bare word `review` sends it to the orchestrator at 65 against 20.",
-  },
-  {
-    prompt: "pick the metaproject module that owns this before we start work",
-    skill: "metaproject-router",
-    collidesWith: "context-router",
-    kind: "positive",
-    excluded: false,
-    reason:
-      "Deciding WHICH module owns a request is metaproject-router's whole contract, but its triggers all need a literal `skill`, `route context` or `repository task`, so the prompt scores pure token overlap: a 40-point three-way tie with context-router and flow-orchestrator, lost alphabetically.",
+      "Same shape, wider margin: 135 against 50. The user NAMES review-orchestrator, so the orchestrator collects its one-word `review` trigger (55), a verbatim skill-name hit (30) and five of the query's six tokens (50) — and it earns all three honestly, because the sentence really is about it. reviewer-skill-creator's ceiling is a trigger plus all six tokens, 115, so even a perfect trigger leaves it 20 short. Asking to BUILD a reviewer that plugs into the orchestrator is not asking to RUN one, and nothing in the scorer can see the difference between naming a skill and requesting it.",
   },
 ];
 
@@ -173,12 +151,15 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  * it can degrade a long way without any individual case failing, which is
  * exactly the drift a description edit causes.
  *
- * Measured at 232 of 239 positives, 0.9707. The seven that lose rank 1 are all
- * top-3 and all written down in KNOWN_ROUTING_GAPS with the skill that beats
- * them, so the shortfall is named rather than averaged away. Raise this number
- * when routing improves; never lower it without saying which cases regressed.
+ * Measured at 237 of 239 positives, 0.9916 — up from 232/239 (0.9707), which is
+ * where T10 left it with seven prompts losing rank 1. Five were metadata
+ * defects and were fixed in the skills' own frontmatter (T12); the two that
+ * remain are top-3 and written down in KNOWN_ROUTING_GAPS with the arithmetic
+ * that puts them out of reach, so the shortfall is named rather than averaged
+ * away. Raise this number when routing improves; never lower it without saying
+ * which cases regressed.
  */
-export const RANK1_BASELINE = 0.9707;
+export const RANK1_BASELINE = 0.9916;
 
 export const ROUTING_CORPUS: readonly RoutingCase[] = [
   // ---------------------------------------------------------------- core

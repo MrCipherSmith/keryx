@@ -1,7 +1,7 @@
 ---
 name: task-implementer
 model_tier: standard
-description: "Use when implementing a single decomposed task from issue-analyzer end-to-end, or executing autonomous code changes from a JSON task object. NOT for: splitting an issue into those tasks in the first place (use issue-analyzer)."
+description: "Use when implementing a single task out of an issue-analyzer breakdown end-to-end, or executing autonomous code changes from a JSON task object. NOT for: splitting an issue into that breakdown in the first place (use issue-analyzer)."
 triggers:
   - "implement task"
   - "execute task"

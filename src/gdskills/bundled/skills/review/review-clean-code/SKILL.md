@@ -11,6 +11,7 @@ description: |
   (review-style), logic correctness bugs (review-logic), or security (review-security-code).
 triggers:
   - "clean code review"
+  - "functions do too much"
   - "solid review"
   - "maintainability"
   - "check clean code"

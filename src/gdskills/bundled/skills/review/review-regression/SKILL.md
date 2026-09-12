@@ -10,7 +10,7 @@ description: |
 triggers:
   - "review regression"
   - "does this change break anything"
-  - "blast radius review"
+  - "blast radius"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
