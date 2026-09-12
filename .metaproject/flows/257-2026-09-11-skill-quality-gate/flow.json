@@ -9,7 +9,7 @@
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-12T00:41:37.989Z",
+  "updatedAt": "2026-09-12T08:20:53.715Z",
   "source": {
     "type": "description",
     "ref": null
@@ -60,7 +60,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -74,15 +74,33 @@
         "T14",
         "T15",
         "T16",
-        "T17"
+        "T17",
+        "T18"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-12T06:21:26.703Z",
+            "outcome": "started",
+            "detail": "257-T3 full verification"
+          },
+          {
+            "at": "2026-09-12T07:26:33.010Z",
+            "outcome": "failed",
+            "detail": "full suite 10042 pass / 3 fail at 2ab5cba4: NUL byte in routing-corpus.test.ts; bundled-eval -> commands/skills import crosses the core/client boundary (2 tests)"
+          },
+          {
+            "at": "2026-09-12T07:34:44.312Z",
+            "outcome": "started",
+            "detail": "257-T3 re-verification after T18"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -91,11 +109,25 @@
       "origin": "scaffold",
       "status": "todo",
       "dependsOn": [
-        "T3"
+        "T19",
+        "T20",
+        "T21",
+        "T22"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-12T07:43:22.387Z",
+            "outcome": "started",
+            "detail": "257-T4 review round 1: three reviewers dispatched by the orchestrator"
+          },
+          {
+            "at": "2026-09-12T07:55:27.740Z",
+            "outcome": "failed",
+            "detail": "round 1: 6 major, ~12 minor across code/tests/content reviewers"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -197,7 +229,7 @@
       "id": "T9",
       "title": "W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T13",
         "T14",
@@ -226,7 +258,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -410,6 +443,121 @@
             "at": "2026-09-11T21:03:34.547Z",
             "outcome": "started",
             "detail": "257-T17 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:26:33.367Z",
+            "outcome": "started",
+            "detail": "257-T18 boundary + NUL fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.388Z",
+            "outcome": "started",
+            "detail": "257-T19 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "R1 fix: install stale-build prune stays inside the tree and reports what it removed",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.500Z",
+            "outcome": "started",
+            "detail": "257-T20 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.611Z",
+            "outcome": "started",
+            "detail": "257-T21 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.718Z",
+            "outcome": "started",
+            "detail": "257-T22 round-1 fix"
           }
         ]
       },
@@ -667,6 +815,126 @@
       "at": "2026-09-12T00:41:37.989Z",
       "event": "task-attempt",
       "detail": "T9: started (attempt 3) — 257-T9 retry; measure line counts with wc, never read large skills whole"
+    },
+    {
+      "at": "2026-09-12T06:21:26.600Z",
+      "event": "task-done",
+      "detail": "T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)"
+    },
+    {
+      "at": "2026-09-12T06:21:26.703Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 257-T3 full verification"
+    },
+    {
+      "at": "2026-09-12T07:26:33.010Z",
+      "event": "task-attempt",
+      "detail": "T3: failed (attempt 2) — full suite 10042 pass / 3 fail at 2ab5cba4: NUL byte in routing-corpus.test.ts; bundled-eval -> commands/skills import crosses the core/client boundary (2 tests)"
+    },
+    {
+      "at": "2026-09-12T07:26:33.127Z",
+      "event": "task-added",
+      "detail": "T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test"
+    },
+    {
+      "at": "2026-09-12T07:26:33.243Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — re-verify after the boundary and NUL fixes"
+    },
+    {
+      "at": "2026-09-12T07:26:33.367Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 257-T18 boundary + NUL fixes"
+    },
+    {
+      "at": "2026-09-12T07:34:44.203Z",
+      "event": "task-done",
+      "detail": "T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test"
+    },
+    {
+      "at": "2026-09-12T07:34:44.312Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 3) — 257-T3 re-verification after T18"
+    },
+    {
+      "at": "2026-09-12T07:43:22.280Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-12T07:43:22.387Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 257-T4 review round 1: three reviewers dispatched by the orchestrator"
+    },
+    {
+      "at": "2026-09-12T07:55:27.740Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 6 major, ~12 minor across code/tests/content reviewers"
+    },
+    {
+      "at": "2026-09-12T07:55:27.853Z",
+      "event": "task-added",
+      "detail": "T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording"
+    },
+    {
+      "at": "2026-09-12T07:55:27.962Z",
+      "event": "task-added",
+      "detail": "T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed"
+    },
+    {
+      "at": "2026-09-12T07:55:28.071Z",
+      "event": "task-added",
+      "detail": "T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised"
+    },
+    {
+      "at": "2026-09-12T07:55:28.176Z",
+      "event": "task-added",
+      "detail": "T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion"
+    },
+    {
+      "at": "2026-09-12T07:55:28.278Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T19, T20, T21, T22 (was T3) — review round 2 after the round-1 fixes"
+    },
+    {
+      "at": "2026-09-12T07:55:28.388Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 257-T19 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.500Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 257-T20 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.611Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 257-T21 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.718Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 257-T22 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T08:08:06.502Z",
+      "event": "task-done",
+      "detail": "T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed"
+    },
+    {
+      "at": "2026-09-12T08:12:48.327Z",
+      "event": "task-done",
+      "detail": "T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion"
+    },
+    {
+      "at": "2026-09-12T08:14:44.165Z",
+      "event": "task-done",
+      "detail": "T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording"
+    },
+    {
+      "at": "2026-09-12T08:20:53.715Z",
+      "event": "task-done",
+      "detail": "T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised"
     }
   ]
 }

@@ -56,3 +56,28 @@
 - 2026-09-12T00:15:30.655Z - task-attempt: T9: started (attempt 1) — 257-T9 last implementation task
 - 2026-09-12T00:41:33.341Z - task-attempt: T9: failed (attempt 2) — worker stalled on a long read (watchdog, no source edits landed)
 - 2026-09-12T00:41:37.989Z - task-attempt: T9: started (attempt 3) — 257-T9 retry; measure line counts with wc, never read large skills whole
+- 2026-09-12T06:21:26.600Z - task-done: T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)
+- 2026-09-12T06:21:26.703Z - task-attempt: T3: started (attempt 1) — 257-T3 full verification
+- 2026-09-12T07:26:33.010Z - task-attempt: T3: failed (attempt 2) — full suite 10042 pass / 3 fail at 2ab5cba4: NUL byte in routing-corpus.test.ts; bundled-eval -> commands/skills import crosses the core/client boundary (2 tests)
+- 2026-09-12T07:26:33.127Z - task-added: T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test
+- 2026-09-12T07:26:33.243Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — re-verify after the boundary and NUL fixes
+- 2026-09-12T07:26:33.367Z - task-attempt: T18: started (attempt 1) — 257-T18 boundary + NUL fixes
+- 2026-09-12T07:34:44.203Z - task-done: T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test
+- 2026-09-12T07:34:44.312Z - task-attempt: T3: started (attempt 3) — 257-T3 re-verification after T18
+- 2026-09-12T07:43:22Z - T3 VERIFICATION at 50d2dd0c: skills verify --bundled exit 0; rules mirror byte-identical; skills mirror differs only by rendered-only dirs; tsc exit 0; eslint clean; bun test 10045 pass / 20 skip / 0 fail across 751 files in 254s (baseline 9772/0 fail). Run with a stubbed browser opener on PATH: src/commands/mcp-auth-decisions.test.ts really spawns `open` twice per suite run (defect from PR #531, flow 252 — reported to that session, not fixed here).
+- 2026-09-12T07:43:22.280Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-12T07:43:22.387Z - task-attempt: T4: started (attempt 1) — 257-T4 review round 1: three reviewers dispatched by the orchestrator
+- 2026-09-12T07:55:27.740Z - task-attempt: T4: failed (attempt 2) — round 1: 6 major, ~12 minor across code/tests/content reviewers
+- 2026-09-12T07:55:27.853Z - task-added: T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording
+- 2026-09-12T07:55:27.962Z - task-added: T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed
+- 2026-09-12T07:55:28.071Z - task-added: T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised
+- 2026-09-12T07:55:28.176Z - task-added: T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion
+- 2026-09-12T07:55:28.278Z - task-depends-set: T4: dependsOn T19, T20, T21, T22 (was T3) — review round 2 after the round-1 fixes
+- 2026-09-12T07:55:28.388Z - task-attempt: T19: started (attempt 1) — 257-T19 round-1 fix
+- 2026-09-12T07:55:28.500Z - task-attempt: T20: started (attempt 1) — 257-T20 round-1 fix
+- 2026-09-12T07:55:28.611Z - task-attempt: T21: started (attempt 1) — 257-T21 round-1 fix
+- 2026-09-12T07:55:28.718Z - task-attempt: T22: started (attempt 1) — 257-T22 round-1 fix
+- 2026-09-12T08:08:06.502Z - task-done: T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed
+- 2026-09-12T08:12:48.327Z - task-done: T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion
+- 2026-09-12T08:14:44.165Z - task-done: T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording
+- 2026-09-12T08:20:53.715Z - task-done: T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised
