@@ -281,7 +281,7 @@ function tokensOf(text: string): string[] {
 
 /** The line with every numeric literal erased — two lines match iff only numbers differ. */
 function numericSkeleton(text: string): string {
-  return text.replace(NUMBER, " ");
+  return text.replace(NUMBER, "\u0000");
 }
 
 function numbersOf(text: string): number[] {
