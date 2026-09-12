@@ -287,10 +287,104 @@ export const MODELS_FETCH_TIMEOUT_MS = 10_000;
 
 export type ModelsResolveSource = "live" | "fallback";
 
+/**
+ * Why a live `/models` probe produced nothing.
+ *
+ * The curated ids used to stand in for a failed probe, and stopping that was
+ * right — a documentary id is not a model you can call. But the replacement
+ * discarded the ANSWER as well as the ids: the picker showed
+ * "(no models found)" whether the provider had no models, rejected the
+ * credential, or was never reached. A rejected credential in particular is
+ * not a fact about the provider's catalogue, and the operator can act on it
+ * the moment they are told.
+ */
+export type ModelsFailure =
+  /** 401/403 — the credential was sent and refused. */
+  | { kind: "rejected"; status: number; detail?: string }
+  /** Any other non-2xx. */
+  | { kind: "http"; status: number; detail?: string }
+  /** Never got an answer: offline, DNS, TLS, timeout. */
+  | { kind: "unreachable"; detail?: string }
+  /** 2xx, well-formed, and genuinely empty. */
+  | { kind: "empty" };
+
 export interface ModelsResolveResult {
   models: string[];
   /** `live` when the provider's HTTP `/models` returned at least one id. */
   source: ModelsResolveSource;
+  /** Present exactly when `models` is empty and a live probe was attempted. */
+  failure?: ModelsFailure;
+}
+
+/** Longest error body read from a failed `/models` probe before giving up on it. */
+const MODELS_ERROR_BODY_LIMIT = 4_096;
+
+/**
+ * Pull a human sentence out of a provider's error body.
+ *
+ * Every gateway spells it differently — `{error:{message}}` (OpenAI shape),
+ * `{error:"…"}` (xAI), `{detail:"…"}` (Cerebras), `{message:"…"}` — and a
+ * few answer in HTML. Returns `undefined` rather than echoing markup at the
+ * operator.
+ */
+export function modelsErrorDetail(body: string): string | undefined {
+  const text = body.slice(0, MODELS_ERROR_BODY_LIMIT).trim();
+  if (text.length === 0) {
+    return undefined;
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    // Not JSON. A plain one-liner is still worth showing; markup is not.
+    parsed = undefined;
+  }
+  if (typeof parsed === "object" && parsed !== null) {
+    const record = parsed as Record<string, unknown>;
+    const error = record.error;
+    if (typeof error === "string" && error.length > 0) {
+      return error;
+    }
+    if (typeof error === "object" && error !== null) {
+      const message = (error as Record<string, unknown>).message;
+      if (typeof message === "string" && message.length > 0) {
+        return message;
+      }
+    }
+    for (const field of ["detail", "message"] as const) {
+      const value = record[field];
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+    // Parsed, but nothing here is a sentence. Echoing the raw JSON at the
+    // operator is noise, not an explanation — the status code says more.
+    return undefined;
+  }
+  if (text.startsWith("<") || text.includes("<html")) {
+    return undefined;
+  }
+  const firstLine = text.split("\n", 1)[0]?.trim();
+  return firstLine !== undefined && firstLine.length > 0 ? firstLine : undefined;
+}
+
+/**
+ * One line explaining an empty model list, for a picker or a toast.
+ *
+ * Pure and exported so the wording is asserted without a terminal.
+ */
+export function modelsFailureLine(providerLabel: string, failure: ModelsFailure): string {
+  const detail = "detail" in failure && failure.detail !== undefined ? ` — ${failure.detail}` : "";
+  switch (failure.kind) {
+    case "rejected":
+      return `${providerLabel} rejected the credential (HTTP ${failure.status})${detail}`;
+    case "http":
+      return `${providerLabel} could not list models (HTTP ${failure.status})${detail}`;
+    case "unreachable":
+      return `${providerLabel} could not be reached${detail}`;
+    case "empty":
+      return `${providerLabel} reports no models`;
+  }
 }
 
 /**
@@ -323,8 +417,10 @@ export async function fetchOpenAiCompatModelsDetailed(
   const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.modelsPath ?? DEFAULT_MODELS_PATH}`;
   const timeoutMs = opts?.timeoutMs ?? MODELS_FETCH_TIMEOUT_MS;
   // A failed discovery must never turn curated/documentary ids into selectable
-  // models: only the provider's live `/models` response is authoritative.
-  const fallback: ModelsResolveResult = { models: [], source: "fallback" };
+  // models: only the provider's live `/models` response is authoritative. The
+  // REASON, though, is carried out — an empty list with no explanation sent
+  // the operator looking for a broken picker instead of an expired token.
+  const fallback = (failure: ModelsFailure): ModelsResolveResult => ({ models: [], source: "fallback", failure });
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -334,7 +430,9 @@ export async function fetchOpenAiCompatModelsDetailed(
     }
     const res = await fetchFn(url, init);
     if (!res.ok) {
-      return fallback;
+      const detail = modelsErrorDetail(await res.text().catch(() => ""));
+      const kind = res.status === 401 || res.status === 403 ? "rejected" : "http";
+      return fallback({ kind, status: res.status, ...(detail === undefined ? {} : { detail }) });
     }
     const body = (await res.json()) as { data?: Array<{ id?: unknown; name?: unknown }> } | null;
     const ids = Array.isArray(body?.data)
@@ -352,11 +450,14 @@ export async function fetchOpenAiCompatModelsDetailed(
           .filter((id) => id.length > 0)
       : [];
     if (ids.length === 0) {
-      return fallback;
+      return fallback({ kind: "empty" });
     }
     return { models: Array.from(new Set(ids)).sort(), source: "live" };
-  } catch {
-    return fallback;
+  } catch (err) {
+    // An abort is the timeout above, not a network fault — say which.
+    const aborted = controller.signal.aborted;
+    const message = err instanceof Error ? err.message : String(err);
+    return fallback({ kind: "unreachable", detail: aborted ? `timed out after ${timeoutMs}ms` : message });
   } finally {
     clearTimeout(timer);
   }

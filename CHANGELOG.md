@@ -19,6 +19,17 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Fixed
 
+- **`/provider` says why the model list is empty, and lets you replace a refused
+  credential.** Picking a provider whose stored credential had expired asked for
+  nothing and opened an empty model picker: the live `GET /models` answered
+  `403 The OAuth2 access token could not be validated`, and every failure —
+  refused credential, wrong endpoint, offline, genuinely no models — collapsed
+  into the same mute "(no models found)" (regression from `d0d86c76`). The
+  picker now names the cause in the provider's own words, and a 401/403 re-opens
+  the credential step — which previously could never run, because the dead value
+  in the environment was itself the reason it was skipped. `/model` and chat's
+  provider picker show the same line.
+
 - **Running the test suite no longer opens browser tabs on the developer's
   machine.** `openAuthorisationUrl` took a platform and an environment for the
   decision and then opened the URL through the real `process.platform`,
