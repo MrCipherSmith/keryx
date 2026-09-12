@@ -6,6 +6,10 @@ Version: 0.29.7
 This roadmap tracks Metaproject requirements packages and their implementation
 state. Runtime claims must be backed by source, tests, or a verification report.
 
+Loose findings that have no package yet live in `backlog.md` beside this file —
+work found while doing something else and deliberately left undone, each entry
+carrying the measurement that found it and the reason it was not done then.
+
 <!-- retired-spellings-ok: section — a dated record of what each release stated at the time; renaming commands inside it would make the record claim a spelling that did not exist on that date -->
 > **Changelog**
 >
