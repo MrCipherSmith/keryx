@@ -22,6 +22,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { DEFAULT_SKILL_LENGTH_CEILING, SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 import {
   ANATOMY_RED_FLAGS_MIN_ROWS,
   BUNDLED_SKILL_CHECKS,
@@ -51,8 +52,36 @@ import {
   pendingReasonNamesBackfillTask,
   personaOffenders,
   renderBundledEvaluation,
+  skillLineCount,
 } from "./bundled-eval";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
+
+/**
+ * Each tree is evaluated once per run, and every test reads that same result.
+ *
+ * `evaluateBundledTree` walks and parses a whole tree; nearly every test here
+ * called it, so a file with ~50 tests walked the shipped tree and the fixture
+ * tree dozens of times. Bun's per-test timeout is 5s, and on a loaded machine
+ * those repeated walks were enough to trip it — which is what made three tests
+ * in this file fail intermittently while passing in isolation, with the run's
+ * test count drifting as timeouts cut registration short.
+ *
+ * Caching is safe because every fixture is written in `beforeAll`, before any
+ * test runs, and nothing here mutates a tree afterwards. A test that needs its
+ * own tree still calls `evaluateBundledTree(itsOwnRoot)` directly.
+ */
+let realEvaluation: ReturnType<typeof evaluateBundledTree> | undefined;
+let fixtureEvaluation: ReturnType<typeof evaluateBundledTree> | undefined;
+
+function realTree(): ReturnType<typeof evaluateBundledTree> {
+  realEvaluation ??= evaluateBundledTree();
+  return realEvaluation;
+}
+
+function fixtureTree(): ReturnType<typeof evaluateBundledTree> {
+  fixtureEvaluation ??= evaluateBundledTree(fixtureRoot);
+  return fixtureEvaluation;
+}
 
 // ---------------------------------------------------------------------------
 // AC7: the real tree
@@ -68,7 +97,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
     expect(files.length).toBe(67);
 
-    const evaluation = evaluateBundledTree();
+    const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);
     expect(evaluation.skillNames.length).toBe(files.length);
     // Every category the tree ships is represented, so a sweep that silently
@@ -101,7 +130,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // for the other would satisfy the line above and check less than before.
     for (const file of canonical) expect(documents).toContain(file);
 
-    const evaluation = evaluateBundledTree();
+    const evaluation = realTree();
     expect(evaluation.documents).toBe(documents.length + companions.length);
     expect(evaluation.skills).toBe(canonical.length);
 
@@ -144,7 +173,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // Read for cross-references, but never for frontmatter or anatomy: a
     // companion document has none, by definition, and must not be reported
     // as missing something it was never meant to have.
-    const evaluation = evaluateBundledTree();
+    const evaluation = realTree();
     const companionRelPaths = new Set(
       companions.map((file) => path.relative(skillsRoot, file).split(path.sep).join("/")),
     );
@@ -155,7 +184,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
   });
 
   test("every shipped skill passes structural validation", () => {
-    const evaluation = evaluateBundledTree();
+    const evaluation = realTree();
     // Rendered rather than counted: a failure has to name the file and the line,
     // because the only useful form of this failure is one somebody can act on.
     const report = evaluation.findings
@@ -169,7 +198,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // AC12: the prose this flow adds must be checkable. A report that lists
     // passing checks and stops reads as a quality verdict; these sentences are
     // the difference, and a rewrite that drops them fails here.
-    const rendered = renderBundledEvaluation(evaluateBundledTree());
+    const rendered = renderBundledEvaluation(realTree());
     expect(rendered).toContain("layer 1 of 3");
     expect(rendered).toContain("STRUCTURAL validation only");
     expect(rendered).toMatch(/judge across named dimensions \(layer 2\)/);
@@ -597,6 +626,51 @@ uncatalogued \`catalog:registered\` finding.
 `;
 
 /**
+ * A skill that is correct in every way except its length.
+ *
+ * Built rather than written out so the fixture can be longer than a ceiling
+ * without carrying hundreds of literal filler lines in this file. Every other
+ * check has to pass, or a length test could be satisfied by the wrong finding:
+ * the description carries a trigger and a NOT-for clause, the body has a Red
+ * Flags table with three rows and a Verification section, and the description
+ * differs per fixture so `description:collision` stays quiet.
+ */
+function oversizedSkill(name: string, description: string, bodyLines: number): string {
+  // Deliberately free of `:`, `.` and `/`: the cross-reference scan treats a
+  // token that looks like a path as one and tries to resolve it, so filler
+  // written as prose with punctuation turns a 500-line fixture into hundreds
+  // of resolutions per evaluation, and this file evaluates the fixture tree
+  // once per test.
+  const filler = Array.from(
+    { length: bodyLines },
+    (_, index) => `Filler line ${index + 1} - body text whose only job is to reach a ceiling`,
+  ).join("\n");
+  return `---
+name: ${name}
+description: ${description}
+metadata:
+  version: 1.0.0
+---
+
+# ${name}
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "One more section is cheap" | Every line is a line an agent reads before it can act |
+| "The ceiling is advisory" | \`anatomy:length\` is a finding, and the sweep exits non-zero |
+| "Raising the number is the fix" | The rule allows lowering a ceiling only |
+
+## Verification
+
+This fixture draws \`anatomy:length\` and no other content finding.
+
+${filler}
+`;
+}
+
+/**
  * A skill whose `SKILL.md` is clean and whose CODEX BUILD is not.
  *
  * This is AC5 in one fixture. Before the sweep read harness builds, this skill
@@ -813,6 +887,32 @@ beforeAll(() => {
     "SKILL.gemini.md",
     UNADDRESSED_BUILD,
   );
+  // Two length fixtures, one per branch of `anatomy:length`.
+  //
+  // `oversized-no-ceiling` has no entry in SKILL_LENGTH_CEILINGS, so the
+  // default bounds it; `commit` deliberately reuses a real skill key, which is
+  // the only way to exercise the RECORDED branch — a ceiling exists for that
+  // key and this fixture is longer than it.
+  writeSkill(
+    fixtureRoot,
+    "quality",
+    "oversized-no-ceiling",
+    oversizedSkill(
+      "oversized-no-ceiling",
+      "Use when a skill that nobody recorded a ceiling for grows past the default, so the fallback bound is what reports it. NOT for a skill whose ceiling is already recorded — see the commit fixture.",
+      520,
+    ),
+  );
+  writeSkill(
+    fixtureRoot,
+    "quality",
+    "commit",
+    oversizedSkill(
+      "commit",
+      "Use when a skill with a recorded ceiling grows past exactly that number, proving the recorded bound is read instead of the default. NOT for an unrecorded skill — see the oversized-no-ceiling fixture.",
+      120,
+    ),
+  );
   writeSkill(fixtureRoot, "quality", "source-tree-only-example", SOURCE_TREE_ONLY_SKILL);
   writeSkill(fixtureRoot, "quality", "path-trailing-period-example", PATH_TRAILING_PERIOD_SKILL);
   mkdirSync(path.join(fixtureRoot, "skills", "shared"), { recursive: true });
@@ -827,13 +927,13 @@ afterAll(() => {
 
 describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   function findingsFor(skill: string): { check: BundledSkillCheck; message: string }[] {
-    return evaluateBundledTree(fixtureRoot)
+    return fixtureTree()
       .findings.filter((finding) => finding.skill === skill)
       .map((finding) => ({ check: finding.check, message: finding.message }));
   }
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
-    const evaluation = evaluateBundledTree(fixtureRoot);
+    const evaluation = fixtureTree();
     // Twenty-five skills: the original fourteen, flow 257 T7's three
     // `description:*` fixtures, T11's colliding pair
     // (description-collision-a, description-collision-b), T8's four
@@ -841,10 +941,12 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // too-few-red-flags-rows-example, no-verification-example), and T16's
     // two carry-over fixtures (block-list `compatible_harnesses`, trailing
     // sentence period), each shipping one plain SKILL.md.
-    expect(evaluation.skills).toBe(25);
-    // Twenty-seven documents: twenty-five skills, plus `build-drift-example`
+    // Plus T9's two `anatomy:length` fixtures: one past the default because it
+    // has no recorded ceiling, one past a ceiling that is recorded.
+    expect(evaluation.skills).toBe(27);
+    // Twenty-nine documents: twenty-seven skills, plus `build-drift-example`
     // and `harness-field-only` each also shipping a Codex build.
-    expect(evaluation.documents).toBe(27);
+    expect(evaluation.documents).toBe(29);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -887,7 +989,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   test("a reference inside a rule file to a missing path is reported", () => {
     // Item 2: rule files under `rules/core/` are swept for cross-references
     // the same way skill documents are — nothing read them before this.
-    const evaluation = evaluateBundledTree(fixtureRoot);
+    const evaluation = fixtureTree();
     const broken = evaluation.findings.filter(
       (finding) => finding.check === "xref:path" && finding.file === "rules/core/broken-rule.mdc",
     );
@@ -980,7 +1082,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   // -------------------------------------------------------------------------
 
   test("two descriptions that collide draw exactly one finding naming the pair and the score", () => {
-    const evaluation = evaluateBundledTree(fixtureRoot);
+    const evaluation = fixtureTree();
     const collisions = evaluation.findings.filter((finding) => finding.check === "description:collision");
     // Exactly one finding for the whole fixture tree — proving both halves of
     // AC6 at once: the colliding pair fires, and every OTHER pair among the
@@ -1191,6 +1293,65 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     }
   });
 
+  test("a skill past its recorded ceiling is reported, naming that ceiling", () => {
+    // The fixture reuses the real `quality/commit` key precisely so the
+    // RECORDED branch is what fires: a ceiling exists for it, and the fixture
+    // is longer than that number.
+    const recorded = SKILL_LENGTH_CEILINGS.get("quality/commit");
+    expect(recorded).toBeGreaterThan(0);
+    const found = findingsFor("commit").filter((finding) => finding.check === "anatomy:length");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain(`recorded ceiling of ${recorded}`);
+  });
+
+  test("a skill with no recorded ceiling is bounded by the default", () => {
+    expect(SKILL_LENGTH_CEILINGS.has("quality/oversized-no-ceiling")).toBe(false);
+    const found = findingsFor("oversized-no-ceiling").filter(
+      (finding) => finding.check === "anatomy:length",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain(`default ${DEFAULT_SKILL_LENGTH_CEILING}`);
+  });
+
+  test("a skill within its ceiling draws no length finding", () => {
+    expect(findingsFor("control-example").filter((finding) => finding.check === "anatomy:length"))
+      .toEqual([]);
+  });
+
+  test("skillLineCount counts newlines, the way wc -l does", () => {
+    expect(skillLineCount("")).toBe(0);
+    expect(skillLineCount("one\ntwo\n")).toBe(2);
+    // No trailing newline: the last line is still content, and `wc -l` reports
+    // 1 here too — the ceiling must not move because a file lost its final
+    // newline.
+    expect(skillLineCount("one\ntwo")).toBe(1);
+  });
+
+  test("every shipped skill has a recorded ceiling, and it is not below what ships today", () => {
+    // Non-vacuity for the ceiling file itself: a skill missing from the map
+    // silently falls back to the default, which for the large orchestrators
+    // would be a permanent finding nobody chose. And a ceiling BELOW the
+    // current count would be a finding on the day it was written.
+    const shipped = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
+    expect(shipped.length).toBe(SKILL_LENGTH_CEILINGS.size);
+    const missing: string[] = [];
+    const under: string[] = [];
+    for (const file of shipped) {
+      if (path.basename(file) !== "SKILL.md") continue;
+      const parts = file.split(path.sep);
+      const key = `${parts[parts.length - 3]}/${parts[parts.length - 2]}`;
+      const ceiling = SKILL_LENGTH_CEILINGS.get(key);
+      if (ceiling === undefined) {
+        missing.push(key);
+        continue;
+      }
+      const lines = skillLineCount(readFileSync(file, "utf8"));
+      if (lines > ceiling) under.push(`${key}: ${lines} lines > ceiling ${ceiling}`);
+    }
+    expect(missing).toEqual([]);
+    expect(under).toEqual([]);
+  });
+
   test("a defect that exists ONLY in a harness build is found", () => {
     // The AC5 proof. `build-drift-example/SKILL.md` is clean; the defect lives in
     // `SKILL.codex.md` alone. A sweep that walks canonical files only reports
@@ -1200,7 +1361,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(xref).toHaveLength(1);
     expect(xref[0]?.message).toContain("only-in-the-codex-build");
 
-    const located = evaluateBundledTree(fixtureRoot).findings.find(
+    const located = fixtureTree().findings.find(
       (finding) => finding.check === "xref:skill" && finding.skill === "build-drift-example",
     );
     // Located in the BUILD, not in SKILL.md — otherwise the report sends the
@@ -1220,7 +1381,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
     // The control: a skill whose only build difference is a field the exporter
     // owns must NOT be flagged, or the check fails on arrival and gets deleted.
-    const clean = evaluateBundledTree(fixtureRoot).findings.filter(
+    const clean = fixtureTree().findings.filter(
       (finding) => finding.check === "document:build-parity" && finding.skill === "harness-field-only",
     );
     expect(clean).toEqual([]);
@@ -1268,7 +1429,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // purpose (`BUILD_DIVERGENCE_ALLOWED_FIELDS`) — a non-Claude build naming
     // the harnesses it actually serves is not lying about anything, so this
     // check must stay silent on it.
-    const buildFinding = evaluateBundledTree(fixtureRoot).findings.filter(
+    const buildFinding = fixtureTree().findings.filter(
       (finding) => finding.check === "frontmatter:harness-claude" && finding.skill === "harness-field-only",
     );
     expect(buildFinding).toEqual([]);
@@ -1338,7 +1499,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   });
 
   test("two skills declaring one name are rejected as ambiguous", () => {
-    const evaluation = evaluateBundledTree(fixtureRoot);
+    const evaluation = fixtureTree();
     const duplicates = evaluation.findings.filter((finding) => finding.check === "frontmatter:name-unique");
     expect(duplicates).toHaveLength(1);
     expect(duplicates[0]?.message).toContain("`name: collides` is already declared by");
@@ -1363,7 +1524,7 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   test("every declared check is exercised by this file", () => {
     // Otherwise a check can be added, never fire, and be reported as passing
     // forever — the vacuous-sweep defect one level up.
-    const exercised = new Set(evaluateBundledTree(fixtureRoot).findings.map((finding) => finding.check));
+    const exercised = new Set(fixtureTree().findings.map((finding) => finding.check));
     // Every declared check, with no exemption list. A check that cannot be made
     // to fire is a check that reports "pass" forever, which is the vacuous
     // sweep one level up.

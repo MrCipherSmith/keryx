@@ -75,6 +75,28 @@ back toward the spec:
   typed payloads to subagent workers instead, which the spec does not attempt
   to address.
 
+## Length Ceilings
+
+Every shipped skill has a line-count ceiling recorded in
+`src/gdskills/skill-length-ceilings.ts`, set to the skill's length on the day
+the file was introduced; a skill with no entry is bounded by the default (500
+lines, the point at which a skill should be split). `keryx skills verify
+--bundled` reports `anatomy:length` when a skill passes its ceiling.
+
+A ceiling **moves down**, never up:
+
+- trimming a skill — moving reference material into a sibling document, cutting
+  a section that no longer changes behaviour — lowers the ceiling to the new
+  count in the same change;
+- a skill that needs more room than its ceiling allows is split, or its
+  reference material moves out. Raising the number to clear the finding is the
+  one edit this rule forbids: it converts a measured limit into a record of
+  whatever the file grew to.
+
+A ceiling is not a statement that the skill's current size is right — several
+shipped skills are far past the default and were recorded as they stood. It
+bounds unnoticed growth, which is the part no other check can see.
+
 ## Global Sync Mapping
 Global sync only ever reaches a **project-local skill**
 (`.metaproject/project-skills/<skill-name>/`) that has first been exported for

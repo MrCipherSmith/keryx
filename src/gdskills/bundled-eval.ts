@@ -86,6 +86,7 @@ import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
+import { DEFAULT_SKILL_LENGTH_CEILING, SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 // ---------------------------------------------------------------------------
 // Findings
@@ -105,6 +106,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "description:length",
   "description:collision",
   "anatomy:sections",
+  "anatomy:length",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
   "frontmatter:category",
@@ -901,6 +903,23 @@ export function hasVerificationSection(text: string): boolean {
     }
   }
   return false;
+}
+
+/**
+ * The line count `anatomy:length` compares against a ceiling, counted the way
+ * `wc -l` counts: newline characters, so a file's trailing newline does not
+ * add a line and a file without one does not lose its last.
+ *
+ * The count is the whole document, frontmatter included. What a ceiling bounds
+ * is what an agent has to read before it can act, and the frontmatter is part
+ * of that read.
+ */
+export function skillLineCount(text: string): number {
+  let count = 0;
+  for (const character of text) {
+    if (character === "\n") count += 1;
+  }
+  return count;
 }
 
 /** What each `AnatomySection` reports as, when a finding names it. */
@@ -1702,6 +1721,37 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         if (permanent?.sections.includes(section) === true) continue;
         if (pending?.sections.includes(section) === true) continue;
         add("anatomy:sections", null, `missing ${ANATOMY_SECTION_LABELS[section]}.`);
+      }
+    }
+
+    // --- anatomy: length ----------------------------------------------------
+    //
+    // A ceiling is not a claim that the skill's current size is right — several
+    // shipped skills sit past 2000 lines. It is the one thing this sweep can
+    // decide that the others cannot: whether a skill grew past what it already
+    // was without anyone choosing that. `skill-length-ceilings.ts` records
+    // today's count per skill; a skill with no entry falls back to the 500
+    // lines the rules already name as the point to split at, so a NEW skill
+    // cannot arrive oversized without a decision recorded in that file.
+    //
+    // Canonical `SKILL.md` only: `document:build-parity` already forces every
+    // harness build to match it except for `compatible_harnesses`, so a build's
+    // length is the same fact, and measuring both would report one overage
+    // twice.
+    if (path.basename(file) === "SKILL.md") {
+      const ceilingKey = `${category}/${skill}`;
+      const recordedCeiling = SKILL_LENGTH_CEILINGS.get(ceilingKey);
+      const ceiling = recordedCeiling ?? DEFAULT_SKILL_LENGTH_CEILING;
+      const lines = skillLineCount(text);
+      if (lines > ceiling) {
+        const recorded = recordedCeiling === undefined
+          ? `no recorded ceiling, so the default ${DEFAULT_SKILL_LENGTH_CEILING} applies`
+          : `its recorded ceiling of ${ceiling}`;
+        add(
+          "anatomy:length",
+          null,
+          `${lines} lines exceeds ${recorded}. Split the skill or move reference material out; raise the ceiling only when the growth was decided, never to make this finding go away (see rules/core/skills-storage-workflow.mdc).`,
+        );
       }
     }
 
