@@ -3,7 +3,12 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.2.99] — 2026-09-12
+The PII detector stops mangling identifiers, without starting to miss phone
+numbers. Both halves were needed: the first attempt fixed the mangling by
+suppressing any match with a letter nearby, which quietly stopped redacting real
+numbers that merely sat next to a word — caught by this repository's own review
+round before it reached a release.
 
 ### Fixed
 
