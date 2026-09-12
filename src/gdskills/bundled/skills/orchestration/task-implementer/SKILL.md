@@ -378,7 +378,6 @@ attempts. The counter cannot tell "converging slowly" from "stuck", and three
 identical outputs cost the whole budget to learn what the second one already
 said. Report the block instead, naming what repeated.
 
-
 **ROLLBACK POLICY**: If implementation fatally fails (tests still failing after 3 attempts, or unresolvable compilation errors), restore ONLY the files this task changed — `git -C "<codebase_path>" checkout -- <your files>` for tracked ones, delete the untracked ones you created — then report the failure in Phase 6.
 
 **Never run `git reset --hard`, `git clean`, or any unscoped revert.** You do not own the worktree. `job-orchestrator` dispatches implementers in PARALLEL WAVES sharing a single worktree, so an unscoped reset destroys a wave-mate's uncommitted work — work that is not yours, cannot be recovered, and whose loss is invisible to you because the other agent's failure surfaces somewhere else entirely. If you cannot identify which files are yours, leave the tree exactly as it is and say so in the report: a dirty tree is recoverable, a destroyed one is not.
@@ -436,7 +435,8 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
 Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
 
 Three of those fields have a bar, and a field that collects noise trains the
-reader to skim all three. Omit one rather than pad it.
+reader to skim all three. Omit one rather than pad it. The trio is adapted (MIT)
+from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills) as contract fields rather than a free-text template; the bars below are ours.
 
 - `assumptions` — what you assumed where the task was silent AND acted on. If
   the assumption being wrong would not change a line you wrote, it is a hedge,

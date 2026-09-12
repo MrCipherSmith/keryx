@@ -223,8 +223,6 @@ old — say that instead of pretending there is a schedule. "This stopped
 applying, here is what is true now" is a fair thing to tell someone. "This will
 go away sometime" is not.
 
----
-
 ## Red Flags
 
 | Rationalization | Why it is wrong |
@@ -238,8 +236,6 @@ go away sometime" is not.
 | "Our own docs still use the old name, we'll clean them up as we go." | Eleven occurrences survived one rename in source alone, including the template that generates a module document and the message printed to every newly initialised project. The spelling still works, so nothing complains, and the tree quietly re-teaches the name you are retiring. |
 | "Removing the field from the JSON is fine — readers will just adapt." | A reader that still expects it cannot tell removal from a false value, and reads `undefined` as `false`. The version moves in the same commit as the removal, so absence is legible instead of being silently the wrong answer. |
 | "They can't migrate yet, so we'll hold the removal open indefinitely." | An indefinite hold is a permanent surface with a warning attached, and warnings nobody ever sees expire become decoration. Name the version. If the real reason is that the old behaviour is unsafe rather than merely old, stop the behaviour and say so — that is a different path, not a longer one. |
-
----
 
 ## Verification
 
@@ -266,3 +262,7 @@ Do not report the work as done until all of these hold:
 - The end is named as a version or a date, with the before-and-after a caller
   needs to migrate unaided — and any caller who cannot migrate yet is holding
   behaviour that has not changed under them.
+
+Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
+(MIT) is why this set carries a deprecation skill at all; the five stages and
+the notice rule were measured from keryx's own CLI, not taken from there.

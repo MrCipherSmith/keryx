@@ -151,8 +151,6 @@ checked and what you could not reach, and stop. Manufacturing a finding to
 justify the round is the single most expensive thing this skill can do: it
 spends the author's attention and it teaches them that this report is noise.
 
----
-
 ## Red Flags
 
 | Rationalization | Why it is wrong |
@@ -166,8 +164,6 @@ spends the author's attention and it teaches them that this report is noise.
 | "The contract was vague, so I reviewed against what it obviously meant." | Now there are two contracts and the author never saw yours. Every finding against an invented contract is arguable, so all of them get argued. Stop and get the real one written down. |
 | "I fixed the problem while I was in there." | Doubting and repairing in the same pass destroys the asymmetry: you now hold the reasoning for the repair and cannot doubt it. Report it; let it be changed by the person who owns it. |
 | "It is basically done, so this can wait until review." | In flight is when a finding costs an edit. After it is offered as finished, the same finding costs a defence, a negotiation and a rework — and the author has by then said out loud that it works. |
-
----
 
 ## Verification
 
@@ -188,3 +184,7 @@ A cycle is complete only when all of these hold:
   it, and what would unblock it — and claims no findings.
 - If the cycle found nothing, it says so plainly, with what was checked and what
   was left unreached. `STATUS: NO FINDINGS` is a pass, not an incomplete run.
+
+Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
+(MIT) is where the in-flight doubt pass comes from: a reader gets the artifact
+and the contract, never the author's reasoning. The bar and the bound are ours.

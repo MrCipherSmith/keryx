@@ -26,8 +26,17 @@ ahead, while the way our skills themselves are written and checked is behind:
 
 ## What we take, and what we do not
 
-Taken (re-expressed in our own words and mechanisms, with MIT attribution in
-`THIRD_PARTY_NOTICES.md` where a technique is adapted):
+Taken (re-expressed in our own words and mechanisms, with MIT attribution
+inline in the document that adapts the technique — this repo's convention, as
+`docs/skills/rejected-skill-changes.md` does it. A root `THIRD_PARTY_NOTICES.md`
+was considered and dropped: `package.json` `files` would not publish it, so it
+would reach nobody. Flow 258 T16 placed the credits: `quality/root-cause`,
+`quality/fresh-eyes`, `quality/api-truth`, `quality/deprecation-path`,
+`src/review/floor.ts`, and one line each at the adapted mechanic in
+`orchestration/task-implementer`, `planning/interviewer` and
+`quality/perf-check`. `rules/core/definition-of-done.mdc` and
+`rules/core/cli-interface-design.mdc` carry none: the comparison prompted the
+gap, but both rules are joins of documents and commands already in this repo):
 
 - deterministic routing evals: positive prompts, negatives that name the owning
   skill (pairwise, not vacuous), catalog-wide description-collision check,

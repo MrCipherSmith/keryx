@@ -185,8 +185,6 @@ reviewer can re-run. "I checked the docs" is not.
 
 Never mark a call verified on the strength of rank 5.
 
----
-
 ## Red Flags
 
 | Rationalization | Why it is wrong |
@@ -200,8 +198,6 @@ Never mark a call verified on the strength of rank 5.
 | "A blog post shows this exact pattern working." | It worked, at some version, on some day, for somebody whose lockfile you cannot see. That makes it a lead worth thirty seconds against the installed types — it does not make it evidence, and citing it does not turn a guess into a check. |
 | "Checking every call would take all day, so I checked none." | The list is not every call. It is the ones whose failure is silent — option bags, untyped surfaces, effects you cannot observe locally, changed defaults. Typed calls under a type-check are already verified; that is most of them. |
 | "I was not sure about two of these, but the rest are solid." | Then the two are invisible, because a diff shows no difference between them and the forty around them. Mark them at the call site with what would settle them, or the reviewer's only options are re-check everything or trust everything. |
-
----
 
 ## Verification
 
@@ -224,3 +220,7 @@ Do not report the work as done until all of these hold:
 - Any needed behaviour that exists only in a newer release is written up as an
   upgrade decision for the dependency's owner, and no version was bumped inside
   this change to obtain it.
+
+Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
+(MIT) is where the pairing comes from — check the dependency before calling it,
+and mark what went out unchecked. The ranks and the version rule are ours.

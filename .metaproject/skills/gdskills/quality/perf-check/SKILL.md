@@ -77,7 +77,7 @@ Flag heavy dependencies:
 ## Rules
 
 - Don't make changes — only analyze and report
-- An optimisation that measures neutral is reported as `revert`, not as harmless. The burden is on keeping it, never on dropping it: it leaves the code more complicated than it found it, and it survives review precisely because nothing is wrong with it
+- An optimisation that measures neutral is reported as `revert`, not as harmless. The burden is on keeping it, never on dropping it: it leaves the code more complicated than it found it, and it survives review precisely because nothing is wrong with it. This rule and the ledger two bullets down are adapted (MIT) from [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills); the noise definition and the groundwork exception are ours
 - Neutral is a delta that does not clear the noise. Take the before reading three times on one named workload and keep the spread; any after-delta inside that spread is neutral. Indistinguishable from zero is the same verdict as zero, not a smaller win — say which it was, and how many runs said so
 - Record the attempt in the flow journal (`.metaproject/flows/<flow>/journal.md`), in the same change as the revert: what was tried, the before and after with the command and the workload that produced them, and why it did not help *here*. "Tried caching, didn't help" is worse than no entry — it forecloses the idea for the next agent and leaves them nothing to overturn it with
 - Groundwork is the only exception: a neutral change survives when the change it is a prerequisite for is in the same branch and the two measure a win together. A payoff promised for later is not a measurement — revert, and record what the pair would have to show

@@ -168,8 +168,6 @@ speculative repair and closing the issue is not: if no experiment can tell your
 change from a no-op, nothing was fixed, and the next person's bisect now
 straddles a commit that did nothing.
 
----
-
 ## Red Flags
 
 | Rationalization | Why it is wrong |
@@ -183,8 +181,6 @@ straddles a commit that did nothing.
 | "It only breaks in CI, so it is an infrastructure problem." | "Only in CI" is an environment difference you have not named yet — ordering, concurrency, a clock, a locale, a missing file, a cold cache. Name the difference before assigning the defect to somebody else. |
 | "It is obviously a race condition." | "Race" is a category, not a cause. Which two operations, over which piece of state, in which interleaving? Without those three, the word ends the investigation instead of advancing it. |
 | "The reproduction takes too long to write down; I have it in my head." | The reproduction is the artifact the fix is verified against. Unwritten, it cannot be re-run after the change, and "it works now" becomes unfalsifiable. |
-
----
 
 ## Verification
 
@@ -202,3 +198,7 @@ Report the defect fixed only when all of these hold:
 - If it never reproduced, no fix is claimed: the report carries the attempts,
   the evidence and its class, the surviving hypotheses with their killing
   observations, and the instrumentation that would settle it.
+
+Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
+(MIT) is why this set carries a debugging skill at all; the step order, the
+evidence classes and the non-reproduction protocol were written here, not taken.
