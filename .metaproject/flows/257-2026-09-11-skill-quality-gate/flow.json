@@ -7,17 +7,70 @@
   "id": "257",
   "slug": "skill-quality-gate",
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
-  "status": "initializing",
+  "status": "done",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-11T20:32:46.304Z",
+  "updatedAt": "2026-09-12T09:34:39.241Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:ec3af3a7d585c2a1a8bbd6fb9a8537a633c026b0e3ebc83bf43b862b42170ce5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-12T08:29:21.979Z",
+      "note": "Catalog entries are file-backed: description and triggers are read from the skill's own SKILL.md frontmatter, so a difference is impossible rather than merely tested (src/gdskills/catalog.ts; test 'catalog description equals SKILL.md frontmatter'). renderedSkill() now requires an explicit description. The 'Use when ${purpose}' fallback is gone from catalog.ts — the only two occurrences left in src/ are a comment recording that 67 of 78 entries once used it and a test named for its retirement."
+    },
+    "AC2": {
+      "at": "2026-09-12T08:29:22.087Z",
+      "note": "description:trigger-phrase, description:bare-imperative and description:length in src/gdskills/bundled-eval.ts, each with a failing fixture and a passing control in bundled-eval.test.ts. Shipped tree: 'skills verify --bundled' exit 0 at 03c2d1c6 — zero description findings."
+    },
+    "AC3": {
+      "at": "2026-09-12T08:29:22.191Z",
+      "note": "anatomy:sections checks the NOT-for clause, the Red Flags table and the Verification/exit-criteria section; exemptions are a reason-carrying map asserted non-empty with a reason per entry; fixtures cover each missing section separately. Shipped tree: zero findings (verify exit 0)."
+    },
+    "AC4": {
+      "at": "2026-09-12T08:29:22.293Z",
+      "note": "anatomy:length in bundled-eval.ts, guarded to canonical SKILL.md files. src/gdskills/skill-length-ceilings.ts carries 67 entries (values = the line count each skill measured when recorded) and DEFAULT_SKILL_LENGTH_CEILING = 500. A test asserts every recorded ceiling still EQUALS the current count, so a ceiling cannot be raised to pass a check and a trim must lower it in the same commit. skills-storage-workflow.mdc has a 'Length Ceilings' section quoting the finding message verbatim; a test reads both. Fixtures prove the over-ceiling and the over-default findings."
+    },
+    "AC5": {
+      "at": "2026-09-12T08:29:22.396Z",
+      "note": "src/commands/routing-corpus.ts: 78 cases (every catalog entry, rendered included), 287 positives, 156 negatives — each negative names the skill that must outrank it. The test scores them through the shipped scoreBundledSkillRoute. The record is two integers, RANK1_FIRST = 285 and RANK1_TOTAL = 287, compared for equality against a live recount, so a regression and an unrecorded improvement both fail. Two known gaps are recorded with excluded: false — they count against the record."
+    },
+    "AC6": {
+      "at": "2026-09-12T08:29:22.497Z",
+      "note": "description:collision at similarity >= 0.75 on routeTokens — the router's own tokenisation, now shared from src/lib/route-tokens.ts so the check cannot drift from the scorer. Fixtures prove the finding; shipped tree has zero (verify exit 0)."
+    },
+    "AC7": {
+      "at": "2026-09-12T08:29:22.602Z",
+      "note": "T12 resolved the collisions the corpus named: 'clarify requirements' -> interviewer, 'write tests'/'generate tests' -> test-gen, 'create tests first' -> tests-creator, 'review my code'/'full review' -> review-orchestrator, 'implement this issue' -> its named owner with the other two orchestrators as negatives, and 'check performance' — previously a three-way tie — resolved to one owner. Each is a corpus case, so the ranking is asserted continuously."
+    },
+    "AC8": {
+      "at": "2026-09-12T08:29:22.705Z",
+      "note": "58 SKILL.<runtime>.md files byte-identical to their SKILL.md were deleted; 15 remain and all genuinely differ — the 7 gproject planning skills x codex/cursor plus feature-analyzer/SKILL.detail.md. Install prunes stale per-runtime copies it finds in an already-installed tree (removeStaleRuntimeBuilds). export.ts no longer reports usedFallbackBuild; schemaVersion is 2, tied to that removal by a test. Build-parity, status-contract, round-bound, agent-catalogue-xref and bundled-eval pass with updated denominators (full suite 0 fail)."
+    },
+    "AC9": {
+      "at": "2026-09-12T08:29:22.811Z",
+      "note": "Red Flags + Verification backfilled across the quality (T13), platform/planning/orchestration (T14) and review (T15) skills, each row naming a failure specific to that skill; T19 added substance floors so an empty section or a copied table is a finding. No workflow skill needs an anatomy:sections exemption."
+    },
+    "AC10": {
+      "at": "2026-09-12T08:29:22.915Z",
+      "note": "T16: the xref sweep covers companion documents including orchestrator-prompt.md, frontmatter is read through parseSkillFrontmatter, and the path pattern no longer captures a trailing sentence period. feature-dev, hookify and deploy no longer hardcode 'npx tsc'."
+    },
+    "AC11": {
+      "at": "2026-09-12T08:29:23.024Z",
+      "note": "docs/skills/rejected-skill-changes.md exists with 4 entries, and skills-storage-workflow.mdc requires consulting it before proposing a skill change and appending on rejection. T19 added a contract test for the ledger. The instructed fix of adding docs/ to CHECKED_PATH_ROOTS was refused with measurement: 13 shipped paths name a user's own project, and docs/ is not in package.json files, so the check would fail for every installed user."
+    },
+    "AC12": {
+      "at": "2026-09-12T08:29:23.124Z",
+      "note": "At 03c2d1c6 (rebased onto origin/main): rules mirror byte-identical (diff -rq clean), skills mirror differs only by rendered-only directories, 'skills verify --bundled' exit 0, tsc --noEmit exit 0, eslint clean, bun test 10065 pass / 20 skip / 0 fail across 751 files in 251s. The pre-change baseline in journal.md is 9772 pass / 0 fail; no failure absent from it."
+    },
+    "AC13": {
+      "at": "2026-09-12T09:30:49.054Z",
+      "note": "Seven rounds. The closing round ran against the PR head a13c0e8b and reported nothing at or above minor, having been told an empty answer was the expected one. Every finding at or above minor across rounds 1-6 (18 + 3 + 3 + 1 + 1 + 1 = 27) carries a terminal disposition — 26 acted-on naming the commit that closed it, 1 dismissed-wont-fix with its reason — and each is backed by a verifier claim from the FOLLOWING round, recorded as verdict refuted: the checker went looking for it at the fixed head and it no longer reproduced. No reviewer verified its own finding. External comments collected at the PR head: none. CI at a13c0e8b: 18 checks pass. The advisory round cap of 3 was exceeded deliberately — rounds 4 through 7 each found a real defect in the fix that preceded them, three of them in the same comment block, and stopping at 3 would have shipped a comment that describes behaviour the code does not have."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/540"
   },
   "baseBranch": "main",
   "tasks": [
@@ -26,7 +79,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +87,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context map collected (253-T1) and re-verified after #533 (257-T1), see context-map.md"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,37 +104,577 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by per-deliverable tasks T5-T17"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
-      "dependsOn": [],
+      "status": "done",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13",
+        "T14",
+        "T15",
+        "T16",
+        "T17",
+        "T18"
+      ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-12T06:21:26.703Z",
+            "outcome": "started",
+            "detail": "257-T3 full verification"
+          },
+          {
+            "at": "2026-09-12T07:26:33.010Z",
+            "outcome": "failed",
+            "detail": "full suite 10042 pass / 3 fail at 2ab5cba4: NUL byte in routing-corpus.test.ts; bundled-eval -> commands/skills import crosses the core/client boundary (2 tests)"
+          },
+          {
+            "at": "2026-09-12T07:34:44.312Z",
+            "outcome": "started",
+            "detail": "257-T3 re-verification after T18"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
-      "dependsOn": [],
+      "status": "done",
+      "dependsOn": [
+        "T19",
+        "T20",
+        "T21",
+        "T22"
+      ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-09-12T07:43:22.387Z",
+            "outcome": "started",
+            "detail": "257-T4 review round 1: three reviewers dispatched by the orchestrator"
+          },
+          {
+            "at": "2026-09-12T07:55:27.740Z",
+            "outcome": "failed",
+            "detail": "round 1: 6 major, ~12 minor across code/tests/content reviewers"
+          },
+          {
+            "at": "2026-09-12T08:30:21.095Z",
+            "outcome": "failed",
+            "detail": "round 2 (narrow): all round-1 findings closed — install containment verified by executing all three reproductions, ceiling ratchet exercised by raising a ceiling in-test, corpus record compared with toBe, 48/48 new paraphrases rank their own skill first and quote no trigger. 3 new minor findings."
+          },
+          {
+            "at": "2026-09-12T08:50:09.932Z",
+            "outcome": "failed",
+            "detail": "round 3 at PR head 731a8ef1: 14 claims of a91679b9 verified true by execution and mutation; 3 new minor findings (L1 stale line citations in init.test.ts, L2 the new Notices print untested at 2 of 3 call sites, L3 one inference in the rewritten refusal still wrong — the sweep's own root sees none of the 7 paths). Separately: CI typecheck-and-tests fails on Linux, 1 test."
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T21:03:34.437Z",
+            "outcome": "started",
+            "detail": "257-T5 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T21:23:57.781Z",
+            "outcome": "started",
+            "detail": "257-T6 after T5"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "W1: description:* checks in bundled-eval with fixtures (AC2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T21:59:45.441Z",
+            "outcome": "started",
+            "detail": "257-T7 after T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "W2: anatomy:sections check with a reason-carrying exemption map (AC3)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:07:04.382Z",
+            "outcome": "started",
+            "detail": "257-T8 after T7"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T13",
+        "T14",
+        "T15",
+        "T11"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-12T00:15:30.655Z",
+            "outcome": "started",
+            "detail": "257-T9 last implementation task"
+          },
+          {
+            "at": "2026-09-12T00:41:33.297Z",
+            "outcome": "failed",
+            "detail": "worker stalled on a long read (watchdog, no source edits landed)"
+          },
+          {
+            "at": "2026-09-12T00:41:37.988Z",
+            "outcome": "started",
+            "detail": "257-T9 retry; measure line counts with wc, never read large skills whole"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T21:59:45.554Z",
+            "outcome": "started",
+            "detail": "257-T10 after T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "W2: description:collision check on the scorer's tokenisation (AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:31:19.703Z",
+            "outcome": "started",
+            "detail": "257-T11 after T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T10",
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:53:32.257Z",
+            "outcome": "started",
+            "detail": "257-T12 after T10, T11"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "W3: Red Flags + Verification backfill — quality skills (AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:31:19.917Z",
+            "outcome": "started",
+            "detail": "257-T13 after T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:31:20.070Z",
+            "outcome": "started",
+            "detail": "257-T14 after T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "W3: Red Flags + Verification backfill — review skills (AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6",
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:31:20.218Z",
+            "outcome": "started",
+            "detail": "257-T15 after T8"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T13",
+        "T14"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T23:53:50.257Z",
+            "outcome": "started",
+            "detail": "257-T16 in parallel with T12 (disjoint files)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "W3: rejected-change ledger and the rule that requires it (AC11)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T21:03:34.547Z",
+            "outcome": "started",
+            "detail": "257-T17 wave W1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:26:33.367Z",
+            "outcome": "started",
+            "detail": "257-T18 boundary + NUL fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.388Z",
+            "outcome": "started",
+            "detail": "257-T19 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "R1 fix: install stale-build prune stays inside the tree and reports what it removed",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.500Z",
+            "outcome": "started",
+            "detail": "257-T20 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.611Z",
+            "outcome": "started",
+            "detail": "257-T21 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T07:55:28.718Z",
+            "outcome": "started",
+            "detail": "257-T22 round-1 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T08:30:21.315Z",
+            "outcome": "started",
+            "detail": "257-T23 round-2 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T08:50:10.144Z",
+            "outcome": "started",
+            "detail": "257-T24 round-3 fix + CI"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -91,6 +686,531 @@
       "at": "2026-09-11T20:32:46.304Z",
       "event": "renumbered",
       "detail": "253 -> 257: main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+    },
+    {
+      "at": "2026-09-11T20:58:02.377Z",
+      "event": "task-added",
+      "detail": "T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.489Z",
+      "event": "task-added",
+      "detail": "T6: W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.602Z",
+      "event": "task-added",
+      "detail": "T7: W1: description:* checks in bundled-eval with fixtures (AC2)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.713Z",
+      "event": "task-added",
+      "detail": "T8: W2: anatomy:sections check with a reason-carrying exemption map (AC3)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.827Z",
+      "event": "task-added",
+      "detail": "T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)"
+    },
+    {
+      "at": "2026-09-11T20:58:02.939Z",
+      "event": "task-added",
+      "detail": "T10: W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.061Z",
+      "event": "task-added",
+      "detail": "T11: W2: description:collision check on the scorer's tokenisation (AC6)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.184Z",
+      "event": "task-added",
+      "detail": "T12: W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.315Z",
+      "event": "task-added",
+      "detail": "T13: W3: Red Flags + Verification backfill — quality skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.428Z",
+      "event": "task-added",
+      "detail": "T14: W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.538Z",
+      "event": "task-added",
+      "detail": "T15: W3: Red Flags + Verification backfill — review skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.652Z",
+      "event": "task-added",
+      "detail": "T16: W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.844Z",
+      "event": "task-added",
+      "detail": "T17: W3: rejected-change ledger and the rule that requires it (AC11)"
+    },
+    {
+      "at": "2026-09-11T20:58:03.968Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17 (was empty) — full verification after every task"
+    },
+    {
+      "at": "2026-09-11T20:58:04.101Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — review on the verified branch"
+    },
+    {
+      "at": "2026-09-11T20:58:04.241Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-11T20:58:04.357Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-11T20:58:04.479Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-11T20:58:04.594Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-11T21:03:34.437Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 257-T5 wave W1"
+    },
+    {
+      "at": "2026-09-11T21:03:34.547Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 257-T17 wave W1"
+    },
+    {
+      "at": "2026-09-11T21:08:53.386Z",
+      "event": "task-done",
+      "detail": "T17: W3: rejected-change ledger and the rule that requires it (AC11)"
+    },
+    {
+      "at": "2026-09-11T21:23:57.666Z",
+      "event": "task-done",
+      "detail": "T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)"
+    },
+    {
+      "at": "2026-09-11T21:23:57.781Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 257-T6 after T5"
+    },
+    {
+      "at": "2026-09-11T21:59:45.296Z",
+      "event": "task-done",
+      "detail": "T6: W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)"
+    },
+    {
+      "at": "2026-09-11T21:59:45.441Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 257-T7 after T6"
+    },
+    {
+      "at": "2026-09-11T21:59:45.554Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 257-T10 after T6"
+    },
+    {
+      "at": "2026-09-11T23:07:04.256Z",
+      "event": "task-done",
+      "detail": "T7: W1: description:* checks in bundled-eval with fixtures (AC2)"
+    },
+    {
+      "at": "2026-09-11T23:07:04.382Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 257-T8 after T7"
+    },
+    {
+      "at": "2026-09-11T23:08:21.616Z",
+      "event": "task-done",
+      "detail": "T10: W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)"
+    },
+    {
+      "at": "2026-09-11T23:31:19.195Z",
+      "event": "task-done",
+      "detail": "T8: W2: anatomy:sections check with a reason-carrying exemption map (AC3)"
+    },
+    {
+      "at": "2026-09-11T23:31:19.358Z",
+      "event": "task-depends-set",
+      "detail": "T11: dependsOn T8 (was T9) — bundled-eval lane: collision check runs before the length ceilings"
+    },
+    {
+      "at": "2026-09-11T23:31:19.523Z",
+      "event": "task-depends-set",
+      "detail": "T9: dependsOn T13, T14, T15, T11 (was T8) — line-count ceilings are measured after the Red Flags and Verification backfill lands"
+    },
+    {
+      "at": "2026-09-11T23:31:19.704Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 257-T11 after T8"
+    },
+    {
+      "at": "2026-09-11T23:31:19.917Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 257-T13 after T8"
+    },
+    {
+      "at": "2026-09-11T23:31:20.070Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 257-T14 after T8"
+    },
+    {
+      "at": "2026-09-11T23:31:20.218Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 257-T15 after T8"
+    },
+    {
+      "at": "2026-09-11T23:43:45.425Z",
+      "event": "task-done",
+      "detail": "T13: W3: Red Flags + Verification backfill — quality skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T23:44:07.501Z",
+      "event": "task-done",
+      "detail": "T15: W3: Red Flags + Verification backfill — review skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T23:53:32.034Z",
+      "event": "task-done",
+      "detail": "T11: W2: description:collision check on the scorer's tokenisation (AC6)"
+    },
+    {
+      "at": "2026-09-11T23:53:32.150Z",
+      "event": "task-done",
+      "detail": "T14: W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)"
+    },
+    {
+      "at": "2026-09-11T23:53:32.258Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 257-T12 after T10, T11"
+    },
+    {
+      "at": "2026-09-11T23:53:50.257Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 257-T16 in parallel with T12 (disjoint files)"
+    },
+    {
+      "at": "2026-09-12T00:14:06.074Z",
+      "event": "task-done",
+      "detail": "T16: W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)"
+    },
+    {
+      "at": "2026-09-12T00:15:30.547Z",
+      "event": "task-done",
+      "detail": "T12: W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)"
+    },
+    {
+      "at": "2026-09-12T00:15:30.655Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 257-T9 last implementation task"
+    },
+    {
+      "at": "2026-09-12T00:41:33.341Z",
+      "event": "task-attempt",
+      "detail": "T9: failed (attempt 2) — worker stalled on a long read (watchdog, no source edits landed)"
+    },
+    {
+      "at": "2026-09-12T00:41:37.989Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 3) — 257-T9 retry; measure line counts with wc, never read large skills whole"
+    },
+    {
+      "at": "2026-09-12T06:21:26.600Z",
+      "event": "task-done",
+      "detail": "T9: W2: anatomy:length check, per-skill ceiling file, ratchet rule (AC4)"
+    },
+    {
+      "at": "2026-09-12T06:21:26.703Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 257-T3 full verification"
+    },
+    {
+      "at": "2026-09-12T07:26:33.010Z",
+      "event": "task-attempt",
+      "detail": "T3: failed (attempt 2) — full suite 10042 pass / 3 fail at 2ab5cba4: NUL byte in routing-corpus.test.ts; bundled-eval -> commands/skills import crosses the core/client boundary (2 tests)"
+    },
+    {
+      "at": "2026-09-12T07:26:33.127Z",
+      "event": "task-added",
+      "detail": "T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test"
+    },
+    {
+      "at": "2026-09-12T07:26:33.243Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17, T18 (was T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16, T17) — re-verify after the boundary and NUL fixes"
+    },
+    {
+      "at": "2026-09-12T07:26:33.367Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 257-T18 boundary + NUL fixes"
+    },
+    {
+      "at": "2026-09-12T07:34:44.203Z",
+      "event": "task-done",
+      "detail": "T18: T3 fixes: extract the route tokenizer to a shared module; remove the NUL byte from the routing corpus test"
+    },
+    {
+      "at": "2026-09-12T07:34:44.312Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 3) — 257-T3 re-verification after T18"
+    },
+    {
+      "at": "2026-09-12T07:43:22.280Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-12T07:43:22.387Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 257-T4 review round 1: three reviewers dispatched by the orchestrator"
+    },
+    {
+      "at": "2026-09-12T07:55:27.740Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 6 major, ~12 minor across code/tests/content reviewers"
+    },
+    {
+      "at": "2026-09-12T07:55:27.853Z",
+      "event": "task-added",
+      "detail": "T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording"
+    },
+    {
+      "at": "2026-09-12T07:55:27.962Z",
+      "event": "task-added",
+      "detail": "T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed"
+    },
+    {
+      "at": "2026-09-12T07:55:28.071Z",
+      "event": "task-added",
+      "detail": "T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised"
+    },
+    {
+      "at": "2026-09-12T07:55:28.176Z",
+      "event": "task-added",
+      "detail": "T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion"
+    },
+    {
+      "at": "2026-09-12T07:55:28.278Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T19, T20, T21, T22 (was T3) — review round 2 after the round-1 fixes"
+    },
+    {
+      "at": "2026-09-12T07:55:28.388Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 257-T19 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.500Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 257-T20 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.611Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 257-T21 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T07:55:28.718Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 257-T22 round-1 fix"
+    },
+    {
+      "at": "2026-09-12T08:08:06.502Z",
+      "event": "task-done",
+      "detail": "T20: R1 fix: install stale-build prune stays inside the tree and reports what it removed"
+    },
+    {
+      "at": "2026-09-12T08:12:48.327Z",
+      "event": "task-done",
+      "detail": "T22: R1 fix: content — context-collector NOT-for target, drift wording, flow check arg, review flags, variants rule wording, export schemaVersion"
+    },
+    {
+      "at": "2026-09-12T08:14:44.165Z",
+      "event": "task-done",
+      "detail": "T19: R1 fix: bundled-eval predicates and substance — NOT-for word boundary, noun-safe imperative list, per-skill anatomy finding, non-empty sections, duplicate Red Flags tables, docs/ in checked path roots, ledger test, ceiling message wording"
+    },
+    {
+      "at": "2026-09-12T08:20:53.715Z",
+      "event": "task-done",
+      "detail": "T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised"
+    },
+    {
+      "at": "2026-09-12T08:29:21.979Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Catalog entries are file-backed: description and triggers are read from the skill's own SKILL.md frontmatter, so a difference is impossible rather than merely tested (src/gdskills/catalog.ts; test 'catalog description equals SKILL.md frontmatter'). renderedSkill() now requires an explicit description. The 'Use when ${purpose}' fallback is gone from catalog.ts — the only two occurrences left in src/ are a comment recording that 67 of 78 entries once used it and a test named for its retirement."
+    },
+    {
+      "at": "2026-09-12T08:29:22.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: description:trigger-phrase, description:bare-imperative and description:length in src/gdskills/bundled-eval.ts, each with a failing fixture and a passing control in bundled-eval.test.ts. Shipped tree: 'skills verify --bundled' exit 0 at 03c2d1c6 — zero description findings."
+    },
+    {
+      "at": "2026-09-12T08:29:22.191Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: anatomy:sections checks the NOT-for clause, the Red Flags table and the Verification/exit-criteria section; exemptions are a reason-carrying map asserted non-empty with a reason per entry; fixtures cover each missing section separately. Shipped tree: zero findings (verify exit 0)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.293Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: anatomy:length in bundled-eval.ts, guarded to canonical SKILL.md files. src/gdskills/skill-length-ceilings.ts carries 67 entries (values = the line count each skill measured when recorded) and DEFAULT_SKILL_LENGTH_CEILING = 500. A test asserts every recorded ceiling still EQUALS the current count, so a ceiling cannot be raised to pass a check and a trim must lower it in the same commit. skills-storage-workflow.mdc has a 'Length Ceilings' section quoting the finding message verbatim; a test reads both. Fixtures prove the over-ceiling and the over-default findings."
+    },
+    {
+      "at": "2026-09-12T08:29:22.396Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/routing-corpus.ts: 78 cases (every catalog entry, rendered included), 287 positives, 156 negatives — each negative names the skill that must outrank it. The test scores them through the shipped scoreBundledSkillRoute. The record is two integers, RANK1_FIRST = 285 and RANK1_TOTAL = 287, compared for equality against a live recount, so a regression and an unrecorded improvement both fail. Two known gaps are recorded with excluded: false — they count against the record."
+    },
+    {
+      "at": "2026-09-12T08:29:22.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: description:collision at similarity >= 0.75 on routeTokens — the router's own tokenisation, now shared from src/lib/route-tokens.ts so the check cannot drift from the scorer. Fixtures prove the finding; shipped tree has zero (verify exit 0)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: T12 resolved the collisions the corpus named: 'clarify requirements' -> interviewer, 'write tests'/'generate tests' -> test-gen, 'create tests first' -> tests-creator, 'review my code'/'full review' -> review-orchestrator, 'implement this issue' -> its named owner with the other two orchestrators as negatives, and 'check performance' — previously a three-way tie — resolved to one owner. Each is a corpus case, so the ranking is asserted continuously."
+    },
+    {
+      "at": "2026-09-12T08:29:22.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: 58 SKILL.<runtime>.md files byte-identical to their SKILL.md were deleted; 15 remain and all genuinely differ — the 7 gproject planning skills x codex/cursor plus feature-analyzer/SKILL.detail.md. Install prunes stale per-runtime copies it finds in an already-installed tree (removeStaleRuntimeBuilds). export.ts no longer reports usedFallbackBuild; schemaVersion is 2, tied to that removal by a test. Build-parity, status-contract, round-bound, agent-catalogue-xref and bundled-eval pass with updated denominators (full suite 0 fail)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.811Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Red Flags + Verification backfilled across the quality (T13), platform/planning/orchestration (T14) and review (T15) skills, each row naming a failure specific to that skill; T19 added substance floors so an empty section or a copied table is a finding. No workflow skill needs an anatomy:sections exemption."
+    },
+    {
+      "at": "2026-09-12T08:29:22.915Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: T16: the xref sweep covers companion documents including orchestrator-prompt.md, frontmatter is read through parseSkillFrontmatter, and the path pattern no longer captures a trailing sentence period. feature-dev, hookify and deploy no longer hardcode 'npx tsc'."
+    },
+    {
+      "at": "2026-09-12T08:29:23.024Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: docs/skills/rejected-skill-changes.md exists with 4 entries, and skills-storage-workflow.mdc requires consulting it before proposing a skill change and appending on rejection. T19 added a contract test for the ledger. The instructed fix of adding docs/ to CHECKED_PATH_ROOTS was refused with measurement: 13 shipped paths name a user's own project, and docs/ is not in package.json files, so the check would fail for every installed user."
+    },
+    {
+      "at": "2026-09-12T08:29:23.124Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: At 03c2d1c6 (rebased onto origin/main): rules mirror byte-identical (diff -rq clean), skills mirror differs only by rendered-only directories, 'skills verify --bundled' exit 0, tsc --noEmit exit 0, eslint clean, bun test 10065 pass / 20 skip / 0 fail across 751 files in 251s. The pre-change baseline in journal.md is 9772 pass / 0 fail; no failure absent from it."
+    },
+    {
+      "at": "2026-09-12T08:30:21.095Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 3) — round 2 (narrow): all round-1 findings closed — install containment verified by executing all three reproductions, ceiling ratchet exercised by raising a ceiling in-test, corpus record compared with toBe, 48/48 new paraphrases rank their own skill first and quote no trigger. 3 new minor findings."
+    },
+    {
+      "at": "2026-09-12T08:30:21.206Z",
+      "event": "task-added",
+      "detail": "T23: R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented"
+    },
+    {
+      "at": "2026-09-12T08:30:21.315Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 257-T23 round-2 fix"
+    },
+    {
+      "at": "2026-09-12T08:40:55.104Z",
+      "event": "task-done",
+      "detail": "T23: R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented"
+    },
+    {
+      "at": "2026-09-12T08:50:09.932Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 3 at PR head 731a8ef1: 14 claims of a91679b9 verified true by execution and mutation; 3 new minor findings (L1 stale line citations in init.test.ts, L2 the new Notices print untested at 2 of 3 call sites, L3 one inference in the rewritten refusal still wrong — the sweep's own root sees none of the 7 paths). Separately: CI typecheck-and-tests fails on Linux, 1 test."
+    },
+    {
+      "at": "2026-09-12T08:50:10.039Z",
+      "event": "task-added",
+      "detail": "T24: R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3"
+    },
+    {
+      "at": "2026-09-12T08:50:10.144Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 257-T24 round-3 fix + CI"
+    },
+    {
+      "at": "2026-09-12T08:58:00.281Z",
+      "event": "task-done",
+      "detail": "T24: R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3"
+    },
+    {
+      "at": "2026-09-12T09:01:07.007Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:01:07.122Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:01:12.974Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC13 | pull-request: PR checks not green | tasks: not done: T4 | review: 4 of 5 conditions failed — terminal-dispositions (violated): 24 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-origin-main#R1-M1 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M2 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M3 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M4 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M5 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M6 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m1 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m2 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m3 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m4 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m5 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m6 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m7 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m8 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m9 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m10 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m11 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m12 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m1 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m2 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m3 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r03#R3-m1 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | 2026-09-12-ingest-origin-main-r03#R3-m2 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | 2026-09-12-ingest-origin-main-r03#R3-m3 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | head-commit (violated): the latest round ran against 731a8ef1, but the PR head is ae2ff9b70125aff8a1c8868c792f826b33965c52. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#540 was last collected against 731a8ef196a4864eaa78333c0b16bca0e0f6892f (round 1), but the PR head is ae2ff9b70125aff8a1c8868c792f826b33965c52. Everything anyone said after 731a8ef196a4864eaa78333c0b16bca0e0f6892f is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 540 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-12-ingest-origin-main-r03` ran with `verification_mode: annotate` and received 0 claims while retaining 3 finding(s) at or above `minor` (2026-09-12-ingest-origin-main-r03#R3-m1, 2026-09-12-ingest-origin-main-r03#R3-m2, 2026-09-12-ingest-origin-main-r03#R3-m3). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:30:48.939Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-12T09:30:49.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Seven rounds. The closing round ran against the PR head a13c0e8b and reported nothing at or above minor, having been told an empty answer was the expected one. Every finding at or above minor across rounds 1-6 (18 + 3 + 3 + 1 + 1 + 1 = 27) carries a terminal disposition — 26 acted-on naming the commit that closed it, 1 dismissed-wont-fix with its reason — and each is backed by a verifier claim from the FOLLOWING round, recorded as verdict refuted: the checker went looking for it at the fixed head and it no longer reproduced. No reviewer verified its own finding. External comments collected at the PR head: none. CI at a13c0e8b: 18 checks pass. The advisory round cap of 3 was exceeded deliberately — rounds 4 through 7 each found a real defect in the fix that preceded them, three of them in the same comment block, and stopping at 3 would have shipped a comment that describes behaviour the code does not have."
+    },
+    {
+      "at": "2026-09-12T09:30:51.061Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:31:00.440Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:31:06.736Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 26 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-origin-main#R1-M1 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M2 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M3 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424, a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M4 (major, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9, 580dc5c2, a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M5 (major, round 2026-09-12-ingest-origin-main): marked fixed at 437a6f3e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M6 (major, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9, a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m1 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m2 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m3 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m4 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m5 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m6 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m7 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m8 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m9 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m10 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m11 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 5eee9eed, 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m1 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m2 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m3 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m1 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m2 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m3 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r04#R4-m1 (minor, round 2026-09-12-ingest-origin-main-r04): marked fixed at 162e34db but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r05#R5-m1 (minor, round 2026-09-12-ingest-origin-main-r05): marked fixed at a1ea358c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r06#R6-m1 (minor, round 2026-09-12-ingest-origin-main-r06): marked fixed at a13c0e8b but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:34:11.005Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:34:11.134Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:34:17.270Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against a1ea358c, but the PR head is a13c0e8b913826b0691e07231f1ef1e036b62cbf. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:34:33.150Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:34:33.270Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:34:39.241Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

@@ -1,36 +1,16 @@
 ---
 name: review-orchestrator
-description: |
-  Use when: a code review is requested and the user does not explicitly name a specialized reviewer.
-  Handles "review", "code review", "review PR", "review --frontend", "review --backend",
-  "review --architecture", "review --security", "review --performance", "review --style",
-  "review --verify", "review --project-conventions", "review --legacy-profiles", "review --all". Routes to specialized reviewers in parallel and
-  consolidates findings into one unified report.
-  NOT for: running a single specialized reviewer — invoke it directly by name instead.
+description: 'Use when: a code review is requested and the user does not name a specialized reviewer — "review", "code review", "review this PR", "review --all". Dispatches the relevant specialized reviewers in parallel and consolidates their findings into one unified report, and owns the fan-out flags "--all", "--project-conventions" and "--legacy-profiles". NOT for: running a single specialized reviewer — invoke it directly by name instead, which is also how a flag that names one domain reaches its reviewer.'
 triggers:
   - "review"
-  - "code review"
+  - "ревью"
+  - "review code"
+  - "full review"
+  - "review changes"
   - "review PR"
-  - "review --frontend"
-  - "review --backend"
-  - "review --architecture"
-  - "review --security"
-  - "review --performance"
-  - "review --style"
-  - "review --verify"
   - "review --all"
-  - "review --clean-code"
-  - "review --highload"
   - "review --project-conventions"
-  - "review --frontend-conventions"
-  - "review --testing-practices"
-  - "review --core-boundaries"
-  - "review --flow-graph"
   - "review --legacy-profiles"
-  - "review --code-ai"
-  - "review --learned"
-  - "review --code-style"
-  - "review --mobx-store"
 metadata:
   author: "MrCipherSmith"
   version: "1.9.0"
@@ -1163,10 +1143,10 @@ Skipped reviewers:
 | `--verify` | `review-verifier`, AFTER all others; checks the consolidated findings by running something. Delete-only. |
 | (auto) | detected from diff file extensions — see Auto-detection table |
 
-Multiple flags may be combined. Example: `review --backend --security` dispatches
-`review-logic` + `review-backend` + `review-architecture` + `review-security-code`.
-Example: `review --frontend --frontend-conventions` dispatches the generic frontend set plus the
-local frontend conventions reviewer.
+Multiple flags may be combined: `review --backend --security` dispatches `review-logic` + `review-backend` + `review-architecture` + `review-security-code`; `review --frontend --frontend-conventions` dispatches the generic frontend set plus the local frontend conventions reviewer.
+
+This table applies once this skill is running; reaching it is a separate question. The router strips `--`, so `review --style` is the same phrase as `review-style`'s own `style review` trigger and goes straight there — the same destination this table names, and likewise for `--architecture`, `--security` and `--performance`. Only `--all`, `--project-conventions` and `--legacy-profiles` name this orchestrator, which is why they are its triggers.
+`--frontend` and `--backend` are the exception: this table fans each out to three reviewers, but a bare `review --frontend` reaches `review-frontend` alone, because `review frontend` and `frontend review` are one phrase to the router and that phrase is the specialist's — two skills may not share a trigger token set (`src/gdskills/catalog-single-source.test.ts`). Ask by name, or use `review --all`, when you want the three-reviewer fan-out; `docs/skills/rejected-skill-changes.md` records the alternatives that were measured and rejected.
 
 ---
 

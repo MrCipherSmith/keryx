@@ -1,15 +1,16 @@
 ---
 name: flow-orchestrator
-description: "Use when Task Manager is enabled and a non-trivial feature, issue, or story should be driven through keryx flow from initialization to a user-selected completion, verified handoff, or open state."
+description: "Use when Task Manager is enabled and a non-trivial feature, issue, or story should be driven through keryx flow from initialization to a user-selected completion, verified handoff, or open state. NOT for: the same pipeline without Task Manager state (use job-orchestrator)."
 triggers:
-  - "создай flow"
   - "создай фло"
+  - "create flow"
+  - "issue to flow"
+  - "managed implementation"
+  - "task manager orchestration"
+  - "создай flow"
   - "заведи стори"
   - "implement with flow"
-  - "issue to flow"
-  - "task manager orchestration"
   - "flow orchestration"
-  - "managed implementation"
 metadata:
   author: "MrCipherSmith"
   version: "1.4.0"
@@ -678,3 +679,18 @@ keryx skills contracts validate <file> --schema subagent-result
   completion.
 - Do not read broad source trees when gdgraph/gdctx/wiki/memory can first
   narrow context.
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The worker's reply reads like it finished, so the task is done." | The STATUS protocol says read the `STATUS:` line first and never infer the outcome from prose. A reply without one is `NEEDS_CONTEXT` — a confident-sounding summary is exactly what an unusable result looks like. |
+| "`DONE_WITH_CONCERNS` is still done, so I can move on." | Every concern goes into `journal.md` and gets an explicit continue-or-fix decision before `flow task done`. Concerns dropped at the task boundary are invisible by the completion report, which is where they would have mattered. |
+| "The acceptance criterion no longer matches what we built, so I'll reword it." | Frozen AC changes only through `keryx flow ac update <id> --reason "<why>"`. Rewriting a criterion to fit the implementation makes the flow pass a gate it actually failed, and leaves no record that it moved. |
+| "`flow.json` is just a file — editing one field is faster than the CLI." | `flow.json`, status transitions, task status and attempt counts are CLI-owned. A hand-written field desynchronises the durable state from the flow's own history, and the CLI's next gate check reads yours, not reality. |
+| "Tests pass and the review is clean, so I'll open the PR and complete the flow." | Phase 4 stops and asks the user how the flow should end; not every flow wants a PR. And completion requires a confirmed merge into the base branch captured at creation — not a green local run. |
+| "The worker returned BLOCKED twice — faster if I implement this task myself." | The implementer never self-accepts and the orchestrator never implements. Block the flow, escalate one concise question, then unblock and re-dispatch. Doing the work here erases the boundary the whole flow model rests on. |
+| "Verification is described in the plan, so it will happen." | A verification step in the plan is a task, not a sentence. If it is not a task with a status, nothing records whether it ran, and the flow reaches `implemented` with an unrun gate. |
+| "The review fan-out is cheap, so the budget check can wait." | `keryx review budget --spent … --outstanding …` gates the fan-out, and `review-orchestrator` nests under this skill where keryx cannot see the in-flight subagents. Skipping the check means the cap bounds nothing. |

@@ -11,10 +11,10 @@ import { updateCommand } from "./update";
 
 // Round-1 finding T-001: the retired-rule warning print was tested only at
 // the `keryx skills install` call site (skills-install-warnings.test.ts).
-// `installGdskills` is also called from `keryx update` (update.ts:478,
-// printed at update.ts:240) and `keryx init` (init.ts, see init.test.ts) —
-// a regression that silences either print stayed green under the old
-// coverage. These two tests drive `keryx update` directly.
+// `installGdskills` is also called from `keryx update` (printed by its
+// refresh summary) and `keryx init` (see init.test.ts) — a regression that
+// silences either print stayed green under the old coverage. These tests
+// drive `keryx update` directly.
 const retiredFixturesRootForUpdate = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -114,6 +114,53 @@ test("keryx update: an unmodified retired rule is removed with no Warnings print
     expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
     expect(logs.some((line) => line.includes("Warnings"))).toBe(false);
     expect(logs.some((line) => line.includes("is no longer shipped by keryx"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-2 minor: a stale per-runtime build the sweep REMOVES is work that
+// succeeded, and every one of them used to print under "Warnings" — ~88 lines
+// of it on a project's first update after the identical-copy builds were
+// retired, which buries the entries that do need a human. It prints under its
+// own heading now, and "Warnings" stays absent when nothing was left behind.
+test("keryx update: a removed stale runtime build prints under Notices, not Warnings", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-update-stale-builds-"));
+  try {
+    // The shape an older install leaves behind: a per-runtime build sitting in
+    // an installed skill directory that the current bundle no longer ships.
+    const installedSkillDir = path.join(
+      root, ".metaproject", "skills", "gdskills", "orchestration", "job-orchestrator",
+    );
+    await mkdir(installedSkillDir, { recursive: true });
+    await writeFile(path.join(installedSkillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+
+    await writeFile(path.join(root, "AGENTS.md"), "Use metaproject rules.\n", "utf8");
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: { gdskills: { enabled: true } },
+        agentEntrypoints: { root: ["AGENTS.md"] },
+      }),
+      "utf8",
+    );
+
+    const { logs, restore } = captureUpdateConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await updateCommand(["--skip-runtime", "--no-tasks"]);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(installedSkillDir, "SKILL.zed.md"))).toBe(false);
+    const noticesAt = logs.findIndex((line) => line.includes("Notices"));
+    expect(noticesAt).toBeGreaterThan(-1);
+    // Reported — under Notices, after that heading — and nowhere near Warnings.
+    expect(logs.findIndex((line) => line.includes("SKILL.zed.md was removed")))
+      .toBeGreaterThan(noticesAt);
+    expect(logs.some((line) => line.includes("Warnings"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

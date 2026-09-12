@@ -7,6 +7,10 @@ description: >
   points, and cross-cutting concerns.
   Use when: dispatched by autodoc-orchestrator Phase 3.
   NOT for: direct user invocation.
+triggers:
+  - "autodoc architect"
+  - "architecture docs"
+  - "reverse engineer architecture"
 metadata:
   version: 1.0.0
 ---
@@ -27,6 +31,18 @@ fit together — something no single module analyst can see alone.
 | 2 | Derive architecture from evidence in the analyses — no assumptions |
 | 3 | Map ALL cross-module interactions found in the analyses |
 | 4 | Identify the system's architectural style (what it IS, not what it should be) |
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "One analysis file is thin — the others are enough to see the shape." | Iron Law 1: every module analysis is read, none ignored. The thin one is usually the integration edge (infra, shared, a worker) whose absence turns a real topology into a tidy diagram of the parts you liked. |
+| "This looks like clean architecture, so the layers are the usual four." | Iron Law 4: describe what the system IS. A named style imported from outside the evidence makes the document describe a project the reader does not have, and every later doc inherits it. |
+| "The frontend obviously calls the backend — that interaction needs no evidence." | Iron Law 2 and 3: every cross-module interaction is derived from something an analysis actually reported. "Obviously" is where a message queue, a BFF, or a direct database read from the frontend disappears from the map. |
+| "The analyses contradict each other about this contract, so I'll pick the more plausible one." | A contradiction is a finding. Record it in `concerns` and return `DONE_WITH_CONCERNS`. Choosing silently buries the one thing the module analysts could not see and you can. |
+| "The architecture is clear to me, so the document can stay at a high level." | The writers in Phase 4 have only this file for anything spanning modules. A high-level summary without data flows and integration points means the architecture section is written from the same summary, twice. |
 
 ---
 

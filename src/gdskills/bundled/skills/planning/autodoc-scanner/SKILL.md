@@ -5,6 +5,10 @@ description: >
   detects stack, identifies module boundaries, entry points, and dependencies.
   Use when: dispatched by autodoc-orchestrator Phase 1.
   NOT for: direct user invocation.
+triggers:
+  - "autodoc scan"
+  - "scan codebase"
+  - "documentation targets"
 metadata:
   version: 1.0.0
 ---
@@ -24,6 +28,18 @@ and writers can rely on without re-scanning the codebase.
 | 2 | Detect module boundaries from directory structure and build config, not from code semantics |
 | 3 | Always list entry points (main files, index files, app bootstraps) |
 | 4 | Return module list in `next_phase_hints.modules[]` — orchestrator uses this to spawn analysts |
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "These two packages are small — I'll list them as one module." | Phase 2 spawns exactly one analyst per entry in `next_phase_hints.modules[]`. A merged entry gives one analyst two codebases and leaves a module nobody documents under its own name. |
+| "`package.json` is ambiguous about the framework, so I'll read the source to be sure." | Iron Law 1: directory listings and targeted config reads only. An unknown framework is reported as unknown — reading source here does Phase 2's job with a Phase 1 budget, and the analyst will read it properly anyway. |
+| "These directories are named like features, so they are modules." | Iron Law 2: boundaries come from directory structure AND build config. Names alone invent modules the build system does not have, and each invented one costs a full analyst dispatch. |
+| "There is no `openapi.yaml`, so `has_api` is false." | Step 5 lists five independent signals, any one of which is sufficient. A false from checking one of them tells Phase 4 not to write an API reference for a project that has an API. |
+| "The main app's entry point is obvious — one entry is enough." | Iron Law 3 asks for entry points per module. An analyst handed a module with no entry point starts from the directory listing and guesses at what bootstraps it. |
 
 ---
 

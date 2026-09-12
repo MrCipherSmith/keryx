@@ -1,10 +1,12 @@
 ---
 name: code-mobx-store-review
-description: "Targeted MobX store and state logic review. Checks store/actions/computed/reactions, async runInAction, state typing, View↔Store boundaries. Use when: reviewing MobX changes, state management validation."
+description: "Use when MobX store changes need a focused review — actions, computed values, reactions, async runInAction, state typing, and View↔Store boundaries. NOT for: a general frontend review (review-frontend) or a review request that names no domain (review-orchestrator)."
 triggers:
+  - "mobx review"
+  - "store review"
+  - "code-mobx-store-review"
   - "Review MobX store"
   - "Check store changes"
-  - "MobX review"
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"
@@ -257,3 +259,43 @@ If provided and the file exists, read the context document before starting the r
 - Avoid flagging intentional architectural decisions as issues
 
 If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
+
+---
+
+## Red Flags
+
+This profile is a thin legacy wrapper around `mobx-store-template.mdc`. It
+predates the shared finding contract, it does not use the review domain's
+severity vocabulary at all, and half of it is written in Russian — each of those
+is a way it misfires, and they are the rows below.
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "The checklist prints severities, so this report is a review result." | It is not. `Critical` / `Warnings` / `Suggestions` are section headings in a Markdown document, not a severity field: this profile predates `reviewer-finding.schema.json` and emits free prose with no machine-readable finding. Hand it to a person, never to `keryx review ingest`. |
+| "Half the instructions are in Russian, so the report should be." | The mixed language is an artefact of when this file was written. Write the report in the language the requester used. |
+| "The two stores sync both ways and I have not seen an infinite loop." | A bounce needs one ordering to appear, and reading the code is not running it. The checklist rates a bidirectional sync with no equality guard as **critical** for exactly that reason: the absence of the guard is the finding, not the absence of a reproduction. |
+| "`if (value && value !== other)` is the safer guard." | It is the guard that silently refuses to clear. `undefined`, `null`, `0` and `""` are legitimate values to propagate, and a truthy check strands the stale one instead. |
+| "The component's `useEffect` calls `store.init()` — that is ordinary React." | Not under this architecture. The parent store orchestrates its children's lifecycle, and moving that into a component is how `dispose()` stops being called and stale async writes start landing. |
+| "The method is only called by another store, so `@action.bound` is harmless." | The decorator publishes it. Inter-store callbacks and internal handlers are `private` here; the naming patterns the checklist lists are the tell, and the decision question is whether a React component calls it. |
+| "While I was in the store I also noticed naming and component problems." | The Scope Boundaries table routes those to `code-style-review` and `code-ai-review`. A finding filed under the wrong profile arrives without the checks that lane would have applied. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- The requester asked for this profile by name, or through
+  `review --legacy-profiles`. A general frontend or store review with no profile
+  named belongs to `review-orchestrator`.
+- The scope block carries the real branch, parent ref, merge-base and scope mode —
+  not the template placeholders.
+- Every entry carries Rule, Why, Where (path plus the lines from the diff) and
+  Fix, with a minimal unified diff where the fix is a line or two.
+- Every entry is anchored to a line the branch slice actually changed; legacy
+  store code outside that slice is not discussed.
+- Entries are sorted into this document's own Critical / Warnings / Suggestions
+  sections, and are not presented as a severity any other reviewer or tool
+  consumes.
+- The report is free prose by design, so it is delivered to a person and is not
+  fed into the managed-review pipeline.

@@ -49,12 +49,18 @@ export const ROUTING_BASELINE: readonly BaselineEntry[] = [
   { query: "commitment issues", top: "changelog", score: 10, verdict: "wrong", note: "token overlap at 10, far below any trigger — noise, not a recommendation" },
   { query: "pushback from the team", top: "reviewer-skill-creator", score: 10, verdict: "wrong", note: "same: bare token overlap" },
   { query: "preview the deck", top: null, score: 0, verdict: "ok" },
-  { query: "open the file", top: "code-verifier", score: 10, verdict: "wrong", note: "token overlap at 10" },
-  { query: "проверка почты", top: "docpack-review", score: 20, verdict: "wrong", note: "token overlap at 20; провер no longer implies review, so nothing confident answers" },
-  { query: "проверь почту", top: "docpack-review", score: 20, verdict: "wrong", note: "token overlap at 20 — noise, not a recommendation" },
-  { query: "what is 2+2", top: "changelog", score: 10, verdict: "wrong", note: "token overlap at 10" },
+  // Flow 257 moved descriptions to the skills' own SKILL.md, which changed the
+  // token overlap of several entries. Where that left a 10- or 20-point TIE,
+  // the winner is decided alphabetically, so the name here moved while the
+  // score did not: "open the file" ties 16 ways at 10 and "проверка почты"
+  // ties 6 ways at 20. Still noise far below any trigger — the verdict is
+  // unchanged and nothing acts on these.
+  { query: "open the file", top: "brainstorm", score: 10, verdict: "wrong", note: "token overlap at 10; a 16-way tie whose alphabetical winner moved with the descriptions" },
+  { query: "проверка почты", top: "code-verifier", score: 20, verdict: "wrong", note: "token overlap at 20; провер no longer implies review, so nothing confident answers. A 6-way tie at 20, docpack-review among them" },
+  { query: "проверь почту", top: "docpack-review", score: 30, verdict: "wrong", note: "token overlap at 30 — still noise, not a recommendation; docpack-review's SKILL.md carries `проверь документацию`, which adds the overlap token without firing the trigger (`документацию` is absent)" },
+  { query: "what is 2+2", top: "brainstorm", score: 10, verdict: "wrong", note: "token overlap at 10; a 7-way tie, alphabetical winner" },
   { query: "run the deployment", top: "deploy", score: 65, verdict: "ok" },
-  { query: "brainstorming ideas", top: "brainstorm", score: 85, verdict: "ok" },
+  { query: "brainstorming ideas", top: "brainstorm", score: 95, verdict: "ok" },
   { query: "interviewing me first", top: "interviewer", score: 55, verdict: "ok" },
   { query: "reviewing the diff now", top: "review-orchestrator", score: 55, verdict: "ok" },
   { query: "commits are failing", top: "commit", score: 40, verdict: "ok" },

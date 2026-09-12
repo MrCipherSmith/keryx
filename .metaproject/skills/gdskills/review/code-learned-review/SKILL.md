@@ -1,8 +1,9 @@
 ---
 name: code-learned-review
-description: "Reviews the current branch against conventions this project learned from its own pull-request comments, recorded in a local project skill. Ships with an empty checklist: the content comes from `keryx review learn`, never from the tool. Use when: a project has a learned review skill and wants its own accumulated conventions applied."
+description: "Use when a project has a learned review skill — built by `keryx review learn` from its own pull-request comments — and wants those accumulated conventions applied to the current branch. Ships with an empty checklist: the content comes from the project, never from the tool. NOT for: a project with no learned skill, or a review request that names no profile (review-orchestrator)."
 triggers:
   - "learned review"
+  - "code-learned-review"
   - "review with our conventions"
   - "review using what we learned"
 metadata:
@@ -241,3 +242,42 @@ review. Use it to:
 
 If the file does not exist or is not provided, proceed normally — context is
 optional and non-blocking.
+
+---
+
+## Red Flags
+
+This profile is a mechanism with an empty checklist, and it predates the finding
+contract the rest of the review domain now shares. Both facts produce their own
+failure modes, and they are the rows below.
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "This project has no learned skill, but I can review against sensible conventions." | An empty learned review is not a generic review. Say the project has no learned skill and stop; `review-orchestrator` is what a generic request wants. Inventing conventions here ships one model's taste as the team's agreed standard. |
+| "This lesson is about a slightly different case, but the spirit applies." | Do not generalise a lesson past its text. A lesson about one shape of function is about that shape; widening it into a rule about a layer or a language invents a convention the project never agreed to. |
+| "The lesson came from a named reviewer, so I will report it as what they would want." | Do not attribute. The record says a comment was left, nothing more. Reporting a finding as a person's preference turns the checklist back into the persona this skill exists to remove. |
+| "This pull-request comment is good even though the config does not name its author." | An author the config does not name contributes nothing — not to a proposal, not to a `SKILL.md`, and not to this review. Changing who counts is a config change, made deliberately, not a judgement call mid-review. |
+| "A lesson exists for this, so the finding stands." | A lesson is evidence, not authority. If the diff has a reason the original objection does not apply here, the reason wins and the finding is not raised. |
+| "The report has a Severity field, so it is a review result." | It is not. This profile predates `reviewer-finding.schema.json` and emits free prose with no machine-readable finding, so nothing downstream can screen, verify or deduplicate it. Hand it to a person, never to `keryx review ingest`. |
+| "The lessons I checked that matched nothing are not worth mentioning." | They are the only way anyone learns a lesson has gone stale. Record the count of lessons checked and the count that matched, either way. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- `.metaproject/review-learning.config.json` was read and the project skill it
+  names was opened. If that skill carries no lessons, the reply says so and stops
+  rather than reviewing generically.
+- The report states the project skill and version, the number of lessons checked
+  and the number that matched.
+- Every finding cites the line in the project skill it rests on. Findings with no
+  learned lesson behind them are listed in their own section and routed to the
+  reviewer that owns them.
+- No finding names a person, quotes a personal catchphrase, or reports a lesson as
+  somebody's preference.
+- The scope block carries the real branch, parent ref, merge-base and scope mode,
+  and every finding is anchored to a line the branch slice changed.
+- The report is free prose by design, so it is delivered to a person and is not
+  fed into the managed-review pipeline.

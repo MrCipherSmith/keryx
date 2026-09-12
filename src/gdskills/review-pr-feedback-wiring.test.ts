@@ -550,11 +550,19 @@ describe("the catalog describes the skill that shipped", () => {
     // second sliced from `indexOf('", [')`, which lands on `"review", ["full"]`,
     // so the modes array and the whole purpose string stayed inside: a required
     // phrase moved from a bullet into the purpose string still passed.
+    //
+    // Flow 257 moved this skill's triggers into its SKILL.md, so the workflow is
+    // now the entry's LAST argument and the old closing anchor (`], [`, the seam
+    // between workflow and triggers) no longer exists. The close is `]),` again
+    // — which is safe for the same reason it was unsafe before: with the trigger
+    // array gone, the first `]),` after the workflow opens IS the workflow's.
     expect(catalog).toContain('skill("review-pr-feedback"');
     const entry = catalog.slice(catalog.indexOf('skill("review-pr-feedback"'));
     const afterModes = entry.indexOf("],");
     expect(afterModes).toBeGreaterThan(0);
-    const bullets = entry.slice(entry.indexOf('", [', afterModes), entry.indexOf("], ["));
+    const bulletsStart = entry.indexOf('", [', afterModes);
+    expect(bulletsStart).toBeGreaterThan(0);
+    const bullets = entry.slice(bulletsStart, entry.indexOf("]),", bulletsStart));
     // Non-vacuity: the purpose string must be OUTSIDE the window now.
     expect(bullets).not.toContain("Analyze existing PR review comments");
     expect(bullets).not.toContain('["full"]');

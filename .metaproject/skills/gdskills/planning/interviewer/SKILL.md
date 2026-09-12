@@ -1,10 +1,12 @@
 ---
 name: interviewer
-description: "Use when a request is ambiguous and must be pinned down BEFORE any context is collected — the entry-point interview that turns a vague or expensive ask into a scoped brief. This is the `custom`-intent gate job-orchestrator runs at 0.1.5. For clarifying implementation specifics AFTER context is already collected, use `interview` instead."
+description: "Use when a request is ambiguous and must be pinned down BEFORE any context is collected — the entry-point interview that turns a vague or expensive ask into a scoped brief. This is the `custom`-intent gate job-orchestrator runs at 0.1.5. NOT for: clarifying implementation specifics AFTER context is already collected — use `interview` instead."
 triggers:
+  - "ask questions"
+  - "clarify requirements"
+  - "interview"
   - "Interview me"
   - "Ask me questions"
-  - "Clarify requirements"
   - "Gather requirements"
   - "What do you need to know"
 metadata:
@@ -103,3 +105,27 @@ blockers?: string[]       — unresolved critical unknowns
 - What does success look like in 6 months?
 - What are you most worried about?
 - Who else is affected by this decision?
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "These three questions are related, so I'll ask them in one message to save time." | One question at a time is the rule, and it is not politeness. A batch gets one answer to the easiest item and silence on the rest, which you then record as if it had been answered. |
+| "The answer was vague, but I understood the gist, so `ready_to_proceed: true`." | A gist is an assumption. Either ask the follow-up, or record the item in `blockers` with `confidence: "assumption"` and leave `ready_to_proceed` false. Proceeding on a gist is exactly the wasted work this gate exists to prevent. |
+| "I inferred the answer from the codebase, so I can mark it `certain`." | `certain` means the user said it. An inference is `assumption`, even a good one — the confidence field is the only signal downstream skills have about which parts of `derived_context` are load-bearing guesses. |
+| "I've hit the 8-question limit and still don't know, so I'll pick the likely answer." | The limit is a stop rule, not a licence to invent. Remaining unknowns go into `blockers`, `ready_to_proceed` goes false, and the caller decides. |
+| "Context-collector already ran, so anything still missing must not matter." | Collected context answers what the codebase knows, not what the user intends. Scope, priority and what must NOT change are never in the codebase, and those are the answers that change the approach. |
+| "I was dispatched as a subagent with a task, and the task is unclear, so I'll interview." | See the SUBAGENT-STOP block at the top: a dispatched subagent proceeds with its assigned task. Interviewing from inside a dispatch asks questions nobody is there to answer. |
+
+## Verification
+
+Before returning, all of these must hold:
+
+- Every entry in `answers` carries a question, an answer, and a `confidence` value from the enum — no blank or invented confidences.
+- No question was asked that the provided context already answered, and no two questions were sent in one message.
+- At most 8 questions were asked.
+- Every `assumption` or `unknown` was either resolved with a follow-up or is listed in `blockers`.
+- `ready_to_proceed` is `false` whenever `blockers` is non-empty, and `true` only after the user confirmed the summarized context.
+- `derived_context` reads as one coherent block a downstream skill can act on, and states which of its claims are assumptions.

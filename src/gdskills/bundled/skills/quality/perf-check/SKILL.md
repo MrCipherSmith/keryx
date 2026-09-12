@@ -1,10 +1,11 @@
 ---
 name: perf-check
-description: "Use when measuring bundle size, detecting performance regressions, auditing slow queries, or investigating why something is slow."
+description: "Use when measuring bundle size, detecting performance regressions, auditing slow queries, or investigating why something is slow. NOT for reviewing a diff's performance impact (use `review-performance`) — this skill measures a project and reports, it does not change code."
 triggers:
-  - "/perf-check"
+  - "perf audit"
+  - "bundle size"
+  - "complexity"
   - "Check performance"
-  - "Bundle size"
   - "Lighthouse"
   - "Why is it slow"
   - "Optimize performance"
@@ -81,3 +82,23 @@ Flag heavy dependencies:
 - Sort recommendations by estimated impact
 - Include specific numbers (KB saved, ms improved)
 - Suggest alternatives for every heavy dependency flagged
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|---|---|
+| "I found the slow thing — swapping it takes one line, I'll just fix it" | This skill reports. A fix slipped inside an audit is an unreviewed change nobody asked for, and it destroys the before/after measurement the audit exists to produce |
+| "There's no `dist/` yet, so bundle size is 0 / I'll skip it quietly" | A measurement not taken is `not measured`, never zero. A zero in a performance report reads as "nothing to worry about" — build first, or say the step did not run and why |
+| "No URL for Lighthouse, but I know roughly what this app would score" | Never print a number no command produced. An estimated score is indistinguishable from a measured one once it is in the report |
+| "This dependency is 200KB, so it's the bottleneck" | Bundle weight is not runtime cost, and neither is import size. Say which metric you measured; a heavy dependency that is loaded once and never runs in the hot path is not the answer to "why is it slow" |
+| "I'll list every anti-pattern I spotted so nothing is missed" | An unranked list of twenty findings gets acted on as zero. Sort by estimated impact and put the number next to each one |
+
+## Verification
+
+Do not report the audit as done until all of the following hold:
+
+- Every number in the report came from a command that actually ran; any phase that could not run says `NOT RUN — <reason>` instead of showing a zero
+- `git status` is unchanged from before the audit — no source, config, or lockfile was modified
+- Every heavy dependency flagged carries a named alternative and an estimated saving
+- Recommendations are ordered by estimated impact, largest first
+- The report states which scope was detected (frontend / backend / fullstack) and which phases it therefore ran

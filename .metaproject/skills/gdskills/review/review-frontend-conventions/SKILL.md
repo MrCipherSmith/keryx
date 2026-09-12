@@ -8,10 +8,14 @@ description: |
   styling tokens, Storybook expectations, and local tooling rules. Dispatched
   by review-orchestrator for --frontend-conventions, --project-conventions,
   --all, or frontend src/**/*.ts(x) changes when local convention docs exist.
+  NOT for: generic React and MobX correctness with no local rule behind it
+  (review-frontend), what the CSS actually renders (review-layout), or naming and
+  readability as a matter of taste (review-style).
 triggers:
+  - "frontend conventions"
+  - "local frontend rules"
+  - "CLAUDE frontend"
   - "review frontend conventions"
-  - "review --frontend-conventions"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
@@ -176,4 +180,34 @@ conditions land under that rubric.
 | A convention violation the linter or CI already fails on | `minor` | The machine catches it; a reviewer restating it is not a merge gate |
 | Naming, story coverage, file placement | `minor` | Correct today; the cost is to the next editor |
 | A convention preference with no named consequence | `info` | Shared laws 1 and 2 |
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "There is no project guide here, but I know what good React looks like." | Then you are running the neutral baseline, and you must say so in the report. A preference with no local rule and no named consequence is `info`, not a convention violation — this lane's authority comes from the project's own documents. |
+| "The guide says one thing but the newer files all do another, so that is the convention." | A pattern repeated in code is a candidate convention, not a decision. Cite the guide and name the divergence; let the team choose which one moves. |
+| "The linter already fails on this, so it is at least `major`." | The machine catches it before merge. A reviewer restating a lint error spends a merge gate on something no human can ship past, which is why the rubric above puts it at `minor`. |
+| "It is one direct `localStorage` call — the wrapper is overkill here." | The wrapper exists because the raw API throws on quota and is absent in some environments. One unguarded call is the class; enumerate the others before deciding it is small. |
+| "This component does not read observables, so it does not need the reactive wrapper." | Check what it reads through props and through the store getters it calls. Lost reactivity is silent, which is why it is rated the same here as in `review-frontend`. |
+| "The inline `style` is dynamic, so the token rule does not reach it." | Only the computed part is dynamic. Colours and spacing inside it still come from the local tokens, and mixing the two is how a theme change stops applying to one surface. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- The report names which local convention documents were found and read, or
+  states plainly that none exist and only the neutral baseline ran.
+- Every finding cites the local rule it rests on — the guide, the lint config, or
+  the baseline section above — and names `file:line`.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an
+  `enumeration_method` naming the search that produced them.
+- No finding invents a severity: each lands under **Severity (canonical)** in
+  `review-orchestrator/SKILL.md`.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or
+  `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
 

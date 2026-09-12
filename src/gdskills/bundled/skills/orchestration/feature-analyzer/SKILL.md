@@ -1,7 +1,10 @@
 ---
 name: feature-analyzer
-description: "Use when analyzing feature branch changes across repos, planning implementation, or understanding backend→frontend contracts. Requires the source repository, target repository, and branch as confirmed input; the skill's PRE-STEP validates them before any analysis."
+description: "Use when analyzing feature branch changes across repos, planning implementation, or understanding backend→frontend contracts. Requires the source repository, target repository, and branch as confirmed input; the skill's PRE-STEP validates them before any analysis. NOT for: breaking an issue into implementable tasks (use issue-analyzer)."
 triggers:
+  - "analyze feature"
+  - "study module"
+  - "investigate branch"
   - "Analyze branch"
   - "Analyze changes"
   - "Analyze commit"
@@ -409,15 +412,35 @@ Follow `documentation-management.mdc`: update `<DOCS_ROOT>/readme.md`, add entry
 
 ---
 
-## Success Criteria
+## Red Flags
 
-Analysis is successful when:
-- Business logic is fully understood and documented
-- API contracts are clearly specified
-- Breaking changes are identified
-- Implementation plan is actionable
-- User confirms understanding via intermediate review
-- All P0 files analyzed completely
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The user named a branch, so I have enough to start." | The PRE-STEP needs source repo, target repo and branch, each confirmed. A branch without its repo pair is how a cross-repo analysis quietly becomes source-only and reports no frontend impact because it never looked at the frontend. |
+| "`git diff` came back empty, so the branch changed nothing." | Step 12 names the three usual causes: the wrong BASE_SHA, changes that are staged or untracked, and the wrong branch checked out. Report "no changes" only after `--cached`, `git status` and the branching point all agree. |
+| "I read the diff hunks, so I understand the change." | A hunk shows the lines that moved, not the contract they belong to. The Deep Dive Protocol reads P0 files whole because the breaking part of a change is usually the caller the diff never touched. |
+| "The finding is clear from the code I just read — the line reference can wait." | Step 11 makes a `file:L123` citation mandatory for every claim. An uncited claim cannot be checked by the developer acting on it, and a report of uncited claims is indistinguishable from a plausible guess. |
+| "There are 6 P0 files but the picture is obvious, so I'll skip the intermediate review." | Rule 5 forbids skipping it above 3 P0 files. The intermediate review is the only point where the user can correct the scope before a full report is written against the wrong one. |
+| "An analysis for this feature already exists, so I'll write mine into a new folder." | Step 10 requires updating `report.md` and `implementation-plan.md` in place. Parallel copies mean the next reader picks one, and nothing marks which is current. |
+| "GitHub MCP is unavailable, so issue and PR context is out of reach." | Step 12's fallback is git history plus a notice to the user — not silence. An analysis that drops the issue context without saying so reads as if the issue held nothing relevant. |
+
+---
+
+## Exit Criteria
+
+Do not report the analysis as complete until all of these hold:
+
+- The PRE-STEP inputs (source repo + branch, target repo + branch, mode) were confirmed by the user, not inferred — and the report states them.
+- Mode A: `BASE_SHA` is recorded in the report. Mode B: the report says explicitly that it describes current state, not a diff.
+- Every P0 file was read in full and appears in the analysed-files list; the P0/P1/P2 counts in `## Analysis Metrics` match that list.
+- `report.md` contains at least 3 code examples, and every claim carries a `file:line` reference.
+- API contracts and breaking changes each have a section — a "none found" is written out with what was checked to reach it.
+- `implementation-plan.md` exists and every step names a file or module to touch; no step reads "investigate".
+- `## Analysis Metrics` includes the computed complexity score and its inputs.
+- The user answered the intermediate review prompt (mandatory whenever P0 files > 3), and any correction they made is reflected in the final report.
+- Step 15 post-analysis is done: `<DOCS_ROOT>/readme.md` and the analysis index name this analysis.
 
 ---
 

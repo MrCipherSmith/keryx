@@ -1,0 +1,42 @@
+[
+  {
+    "id": "R5-m1",
+    "reviewer": "round-5",
+    "severity": "minor",
+    "problem": "The replacement comment says a skipped-dir outcome cannot be reached through an install; it can, one level up. A link at a category or at the skills root leaves the copy destination a real directory that mkdir just created, so fs.cp never meets a non-directory destination and the install completes on any platform.",
+    "impact": "The comment tells the next reader that an end-to-end test of the carry-through is impossible, when it is available and cheap — and that carry-through is the one half the direct-sweep test cannot reach.",
+    "suggested_fix": "Say which shape the copy cannot survive (the link at the skill directory) and add the install-level test the counterexample shows is possible.",
+    "evidence": "Executed in the scratchpad: with a symlinked category, installGdskills(...).warnings contains \".metaproject/skills/gdskills/orchestration was not swept ... it is a symlink\"; with a symlinked skills root, likewise. skipped-dir is raised at install.ts:220-223 (root) and :236-238 (category), not only at a skill directory.",
+    "confidence": "high",
+    "file": "src/gdskills/install.test.ts",
+    "line": 326,
+    "global_id": "2026-09-12-ingest-origin-main-r05#R5-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a1ea358c, the commit that fixes this finding. The install-level test round 5 said was impossible now exists and works: installGdskills was driven twice against a symlinked category in scratch, the second call resolved and returned 1 warning and 0 notices, and the refusal names the category once although orchestration holds 8 skills. It is a regression detector, not decoration — replacing lstat with stat in resolveSweepableDir makes the new test fail at toHaveLength(1) with 8 received, and breaking only the categories memo makes this test the sole failure in the file. The hand-written file in the link target keeps its mtime and size across an install that wrote 8 sibling skill directories into the same place, so it was reached and left alone rather than merely unreachable.",
+      "verifier": "round-6"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a1ea358c — the install-level test the counterexample showed possible now exists: a symlinked category, the install completes, the refusal reaches result.warnings once for the category. Round 6 confirmed it is a regression detector by mutation."
+    }
+  },
+  {
+    "id": "R5-i1",
+    "reviewer": "round-5",
+    "severity": "info",
+    "problem": "\"as CI reported it\" attributes both ERR_FS_CP_DIR_TO_NON_DIR and EISDIR to the CI log, which records the first only.",
+    "impact": "A reader takes an inferred code for an observed one.",
+    "suggested_fix": "Name the pair the way install.ts does, without the attribution; also fix the orphan line the reflow left.",
+    "evidence": "journal.md:108 quotes the CI failure as ERR_FS_CP_DIR_TO_NON_DIR; install.ts:88-89 lists both codes without attributing them.",
+    "confidence": "high",
+    "file": "src/gdskills/install.test.ts",
+    "line": 318,
+    "global_id": "2026-09-12-ingest-origin-main-r05#R5-i1",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a1ea358c — the codes are named the way install.ts names them, with no CI attribution, and the orphan line from the reflow is gone."
+    }
+  }
+]

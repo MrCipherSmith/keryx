@@ -5,6 +5,10 @@ description: >
   architecture doc, and best practices. Does NOT invent new architectural decisions.
   Use when: dispatched by gproject-orchestrator Phase 4.
   NOT for: direct user invocation.
+triggers:
+  - "write spec"
+  - "technical specification"
+  - "implementation plan"
 metadata:
   version: 1.0.0
 ---

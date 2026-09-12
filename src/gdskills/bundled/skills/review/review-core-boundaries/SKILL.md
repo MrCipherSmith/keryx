@@ -6,10 +6,14 @@ description: |
   direction, feature-boundary leakage, abstraction stability, composition,
   and blast-radius risks. Dispatched by review-orchestrator for
   --core-boundaries, --project-conventions, --all, or src/core/** changes.
+  NOT for: logic correctness in code that happens to live in core (review-logic),
+  naming and readability (review-style), or SOLID and layering inside a feature
+  module (review-architecture).
 triggers:
+  - "core review"
+  - "shared boundary"
+  - "public surface"
   - "review core boundaries"
-  - "review --core-boundaries"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
@@ -126,4 +130,34 @@ conditions land under that rubric.
 | A blast-radius concern with no named consumer | `info` | Shared law 1 |
 
 "Broad blast radius" is not by itself a `blocker`. Name the consumer that breaks.
+
+---
+
+## Red Flags
+
+| Rationalization | Why it is wrong |
+|----------------|-----------------|
+| "It is generic enough to live in core." | Generic enough is not shared. Name the second consumer that needs it today; one feature's helper parked in core is exactly the leak this lane exists to catch, whatever the file is called. |
+| "Core has broad blast radius, so this is a `blocker`." | Blast radius is a property of the module, not of the change. Name the consumer that breaks and what breaks in it, or it is `info` under shared law 1. |
+| "It is only a type import, so core does not really depend on the feature." | The import is in the source and in the build graph. Delete the feature module and core stops compiling — direction is decided by what core names, not by what survives type erasure. |
+| "The new export has one consumer today, so the surface is still stable." | A public core export is a contract with every module that installs it. One consumer is the argument for keeping the helper internal, not for exporting it. |
+| "I cannot enumerate every consumer of a core symbol, so I will anchor the finding at the file the diff touched." | Consumers of a core export are precisely what a search enumerates. A `class_scope` with no `enumeration_method` is the one-site fix that leaves the siblings for the next round. |
+| "The move into core is temporary — it gets extracted properly later." | Nothing downstream records that intent, and a core import is load-bearing the moment it ships. Rate the code in the diff, not the plan described beside it. |
+
+---
+
+## Verification
+
+Report done only once all of these hold:
+
+- Every finding names `file:line` and the evidence that settles it — the import,
+  the export, or the consumer — quoted from the tree rather than described.
+- Every `blocker` and `major` carries `class_scope` with `sites` and an
+  `enumeration_method` naming the search that produced them.
+- No finding invents a severity: each lands under **Severity (canonical)** in
+  `review-orchestrator/SKILL.md`.
+- Every blast-radius claim names the consumer that breaks. Unnamed ones are
+  `info`, and say what would settle them.
+- The reply is the `REVIEW_RESULT` the Orchestrated Review Contract asks for, or
+  `NEEDS_CONTEXT` naming the context that was missing — never a guess in its place.
 

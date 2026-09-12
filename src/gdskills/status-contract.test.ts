@@ -114,10 +114,23 @@ describe("the STATUS reporting contract reaches every build", () => {
   });
 
   test("every build of every status-parsed skill carries the instruction", () => {
+    // Since flow 257 most skills ship SKILL.md alone (byte-identical harness
+    // builds were deleted; the runtime reads SKILL.md). So SKILL.md is always
+    // checked, and a harness build is checked whenever one exists — the count
+    // is derived from the filesystem independently and must match exactly, so
+    // a build that ships but is skipped fails here.
     const offenders: string[] = [];
     let buildsChecked = 0;
+    const scoped = statusEmittingSkills();
+    const expectedBuilds = scoped.reduce(
+      (sum, entry) => sum + BUILD_NAMES.filter((name) => existsSync(path.join(entry.dir, name))).length,
+      0,
+    );
+    // Every scoped skill contributes at least its SKILL.md.
+    expect(BUILD_NAMES).toContain("SKILL.md");
+    expect(expectedBuilds).toBeGreaterThanOrEqual(scoped.length);
 
-    for (const entry of statusEmittingSkills()) {
+    for (const entry of scoped) {
       const canonicalTokens = statusTokensIn(readFileSync(path.join(entry.dir, "SKILL.md"), "utf8"));
       for (const name of BUILD_NAMES) {
         const file = path.join(entry.dir, name);
@@ -139,6 +152,7 @@ describe("the STATUS reporting contract reaches every build", () => {
     }
 
     expect(buildsChecked).toBeGreaterThan(0);
+    expect(buildsChecked).toBe(expectedBuilds);
     expect(offenders).toEqual([]);
   });
 
@@ -162,16 +176,20 @@ describe("the STATUS reporting contract reaches every build", () => {
     expect(offenders).toEqual([]);
   });
 
-  test("task-implementer's reporting section is present in all five builds", () => {
+  test("task-implementer's reporting section is present in every build it ships", () => {
     // The specific regression, named. The generic assertions above would also
     // catch it, but this one fails with the sentence a reader needs: the section
     // that went missing, in the skill it went missing from.
+    //
+    // It used to pin all five builds. Flow 257 deleted the four harness builds
+    // (byte-identical to SKILL.md by then), so every runtime now reads SKILL.md;
+    // SKILL.md must be present and any build that ships again is checked too.
     const dirs = statusEmittingSkills().filter((entry) => entry.skill === "task-implementer");
     expect(dirs.length).toBe(SKILL_ROOTS.length);
 
     for (const entry of dirs) {
       const builds = BUILD_NAMES.filter((name) => existsSync(path.join(entry.dir, name)));
-      expect(builds).toEqual(BUILD_NAMES);
+      expect(builds).toContain("SKILL.md");
       for (const name of builds) {
         const text = readFileSync(path.join(entry.dir, name), "utf8");
         expect(text).toContain("## Reporting Results");

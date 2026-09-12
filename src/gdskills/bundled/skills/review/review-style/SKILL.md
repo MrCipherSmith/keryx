@@ -8,11 +8,11 @@ description: |
   NOT for: logic bugs, architectural violations, security vulnerabilities, performance
   anti-patterns, or any finding that could cause a functional regression.
 triggers:
-  - "review style"
   - "style review"
+  - "readability"
+  - "clean up"
   - "check naming"
   - "check readability"
-  - "review --style"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
