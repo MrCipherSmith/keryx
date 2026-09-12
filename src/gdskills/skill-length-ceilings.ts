@@ -139,6 +139,7 @@ const CEILINGS_BY_KEY = {
   "quality/db-migrate": 87,
   "quality/dependency-update": 102,
   "quality/deploy": 93,
+  "quality/deprecation-path": 268,
   "quality/fresh-eyes": 190,
   "quality/metaproject-security": 124,
   "quality/perf-check": 104,

@@ -190,18 +190,29 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
  *   immediately — there is no smaller number that passes on its own the way
  *   0.6 did.
  *
- * Measured at 285 of 287 positives — up from 237/239 (0.9916) after T21 added
- * a second non-quoting paraphrase to the 48 skills that had exactly one
- * (AC7/non-vacuity work below): all 48 new paraphrases rank their own skill
- * first, so both the numerator and the denominator rose by 48 and the two
- * pre-existing losses are unchanged. Those two are top-3 and written down in
- * KNOWN_ROUTING_GAPS with the arithmetic that puts them out of reach, so the
- * shortfall is named rather than averaged away. Raise `RANK1_FIRST` (and
- * `RANK1_TOTAL` if the corpus grew) when routing improves; never lower either
- * without saying which cases regressed.
+ * Measured at 305 of 307 positives. The chain from 285/287 is four skills, all
+ * flow 258, each contributing five positives that rank their own skill first,
+ * so numerator and denominator rose together every time: 285/287 + `root-cause`
+ * = 290/292, + `fresh-eyes` = 295/297, + `api-truth` = 300/302, +
+ * `deprecation-path` = 305/307. 285/287 itself was up from 237/239 (0.9916)
+ * after T21 added a second non-quoting paraphrase to the 48 skills that had
+ * exactly one (AC7/non-vacuity work below).
+ *
+ * The two losses have not moved through any of it: they are top-3 and written
+ * down in KNOWN_ROUTING_GAPS with the arithmetic that puts them out of reach,
+ * so the shortfall is named rather than averaged away. One movement that was
+ * NOT a new positive did appear while `deprecation-path` was being measured and
+ * was closed rather than recorded: a draft of its catalog text carried the
+ * words "about" and "over", which put it level with `review-highload` at 20 on
+ * *that* skill's own paraphrase and took it on the alphabetical tie-break. The
+ * two words were removed from the description and the workflow. A skill winning
+ * a query on `d` < `r` is not routing, and the pair must never absorb one.
+ *
+ * Raise `RANK1_FIRST` (and `RANK1_TOTAL` if the corpus grew) when routing
+ * improves; never lower either without saying which cases regressed.
  */
-export const RANK1_FIRST = 285;
-export const RANK1_TOTAL = 287;
+export const RANK1_FIRST = 305;
+export const RANK1_TOTAL = 307;
 
 /**
  * Human-readable form of the ratchet above, derived rather than pinned
@@ -816,6 +827,32 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       // settle a signature, which is the only thing this skill does.
       { prompt: "upgrade our packages to the latest versions", owner: "dependency-update" },
       { prompt: "which architecture patterns fit the stack we chose", owner: "patterns-researcher" },
+    ],
+  },
+  {
+    skill: "deprecation-path",
+    positives: [
+      "we are renaming a command our CLI publishes and other teams still have the old spelling in their scripts",
+      "what has to be true before we can delete the old option name",
+      "how do we sunset this option without breaking callers",
+      // The two hazard proofs for this skill's own NOT-for clause. It excludes
+      // its neighbours by DESCRIBING them — "moving a project onto newer
+      // releases of packages somebody else publishes", "reshaping data already
+      // stored in a database" — rather than by naming their owners, because a
+      // name in a description is a name in the query the user echoes back and
+      // the scorer pays +30 for it. So the exclusion has to cost this skill
+      // nothing: a user quoting the excluded wording back is still asking for
+      // this skill, and still gets it.
+      "we are not moving onto newer releases of anyone else's packages — this is a flag we publish that has to go away",
+      "nothing to do with reshaping data already stored in a database — this is a config key we ship that other teams still set",
+    ],
+    negatives: [
+      // The two neighbours, each asked for in a user's own words. The first
+      // consumes somebody else's change; the second changes the shape of stored
+      // data. Neither walks a spelling this project published out of its own
+      // surface, which is the only thing this skill does.
+      { prompt: "upgrade our packages to the latest versions", owner: "dependency-update" },
+      { prompt: "create and apply a database migration for the new column", owner: "db-migrate" },
     ],
   },
   {

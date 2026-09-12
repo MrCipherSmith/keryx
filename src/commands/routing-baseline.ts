@@ -58,7 +58,11 @@ export const ROUTING_BASELINE: readonly BaselineEntry[] = [
   { query: "open the file", top: "brainstorm", score: 10, verdict: "wrong", note: "token overlap at 10; a 16-way tie whose alphabetical winner moved with the descriptions" },
   { query: "проверка почты", top: "code-verifier", score: 20, verdict: "wrong", note: "token overlap at 20; провер no longer implies review, so nothing confident answers. A 6-way tie at 20, docpack-review among them" },
   { query: "проверь почту", top: "docpack-review", score: 30, verdict: "wrong", note: "token overlap at 30 — still noise, not a recommendation; docpack-review's SKILL.md carries `проверь документацию`, which adds the overlap token without firing the trigger (`документацию` is absent)" },
-  { query: "what is 2+2", top: "brainstorm", score: 10, verdict: "wrong", note: "token overlap at 10; a 7-way tie, alphabetical winner" },
+  // Flow 258 added four quality skills, and the tie here grew from 7 names to
+  // 16 — `api-truth` sorts ahead of `brainstorm`, so the recorded winner moved
+  // while the score did not. Same class as the two entries above: nothing about
+  // the scorer changed, and nothing acts on a 10-point sixteen-way tie.
+  { query: "what is 2+2", top: "api-truth", score: 10, verdict: "wrong", note: "token overlap at 10; a 16-way tie whose alphabetical winner moved when flow 258 added skills sorting ahead of brainstorm" },
   { query: "run the deployment", top: "deploy", score: 65, verdict: "ok" },
   { query: "brainstorming ideas", top: "brainstorm", score: 95, verdict: "ok" },
   { query: "interviewing me first", top: "interviewer", score: 55, verdict: "ok" },

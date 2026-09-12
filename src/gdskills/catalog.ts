@@ -319,6 +319,13 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "When documentation and the installed build disagree, follow the build, name both versions, and never branch the call site across the two.",
     "Mark every unchecked call at the site with what would settle it, and list them in the report — empty stated as empty.",
   ]),
+  skill("deprecation-path", "quality", ["recommended", "full"], "Retire a spelling this project publishes without breaking the callers nobody can enumerate.", [
+    "Ship the replacement first, then keep the old spelling reaching the same implementation rather than a second copy of the behaviour.",
+    "Emit one notice per invocation, on stderr, naming what replaced it, how to migrate, and when the old spelling stops.",
+    "Find the dependants you can — your own generated output, installer-written artefacts, pinned shapes — and write down the population you cannot see.",
+    "Stop your own tree emitting and teaching the old name before anyone argues a removal date.",
+    "Remove by refusing the name with the reason; move the schemaVersion when a payload field goes; identify a retired shipped file by content hash, not by name.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",
