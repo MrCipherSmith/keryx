@@ -119,7 +119,7 @@ import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
-import type { ModelsResolveResult } from "../commands/providers";
+import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
   MODELS_FETCH_TIMEOUT_MS,
   fetchOpenAiCompatModelsDetailed,
@@ -1498,12 +1498,28 @@ export async function searchProviderWizardInTui(
   }
 }
 
-/** Ask for a local provider endpoint, keeping its configured value editable. */
-function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
+/**
+ * Ask for a local provider endpoint, keeping its configured value editable.
+ *
+ * `notice` is set only on the retry, after a probe of this endpoint already
+ * failed: same shape as `promptApiKeyStep`'s, and for the same reason — the
+ * operator is being asked a second time and deserves the provider's own words
+ * for why.
+ */
+function promptBaseUrlStep(
+  otui: OpenTui,
+  r: Renderer,
+  label: string,
+  baseUrl: string,
+  notice?: string,
+): Promise<string | undefined> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "base-url-picker");
     r.root.add(box);
   box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    if (notice !== undefined) {
+      box.add(new otui.TextRenderable(r, { id: "bp-notice", content: otui.t`${otui.red("✗")} ${notice}`, marginTop: 1 }));
+    }
     box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
@@ -1674,6 +1690,32 @@ export async function modelsForPicker(
 }
 
 /**
+ * Is this empty model list plausibly the endpoint's fault, rather than the
+ * credential's or the provider's?
+ *
+ * A typo'd base URL reaches the picker as `unreachable` (DNS, TLS, timeout —
+ * nothing answered at all) or as `http` (something answered, but not a model
+ * list: a wrong host, or a path that is not this provider's). Both are worth
+ * re-opening the endpoint step for.
+ *
+ * The other two kinds deliberately are not. `rejected` is the credential's
+ * business — the endpoint was found and it spoke, it just refused the key — and
+ * the picker fixes that by asking for the key instead. `empty` means the
+ * endpoint was correct and answered honestly that it has no models; re-asking
+ * for a URL there sends the operator hunting a fault that is not theirs.
+ *
+ * Pure and exported so the decision is asserted without a terminal, the same
+ * way `modelsFailureLine` makes the wording testable.
+ *
+ * Declared as a type guard because a `true` answer necessarily means there IS
+ * a failure — the caller needs exactly that to hand it to `modelsFailureLine`
+ * for the notice.
+ */
+export function endpointMayBeAtFault(failure: ModelsFailure | undefined): failure is ModelsFailure {
+  return failure?.kind === "unreachable" || failure?.kind === "http";
+}
+
+/**
  * The line the model picker shows when the list is empty.
  *
  * `undefined` when there are models, or when the emptiness carries no
@@ -1807,7 +1849,7 @@ export function selectProviderModelInTui(
         }
 
         // `/connect` only switches: never edit the endpoint or collect a key.
-        const selectedBaseUrl =
+        let selectedBaseUrl =
           options.onlyConnected || prov.baseUrl === undefined
             ? prov.baseUrl
             : await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl);
@@ -1815,7 +1857,7 @@ export function selectProviderModelInTui(
           continue;
         }
         if (!options.onlyConnected && selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl, options.configDir);
-        const selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
+        let selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
 
         const envKey = prov.envKey;
         const label = prov.label ?? prov.name;
@@ -1887,6 +1929,30 @@ export function selectProviderModelInTui(
             continue;
           }
           models = await modelsForPicker(selectedProvider, modelDeps);
+        }
+        // The endpoint is the other failure fixable from right here — see
+        // `endpointMayBeAtFault` for which kinds re-open the URL step and why.
+        if (
+          !options.onlyConnected
+          && selectedProvider.baseUrl !== undefined
+          && endpointMayBeAtFault(models.failure)
+        ) {
+          const corrected = await promptBaseUrlStep(
+            otui,
+            r,
+            label,
+            selectedProvider.baseUrl,
+            modelsFailureLine(label, models.failure),
+          );
+          if (corrected === undefined) {
+            continue; // Esc at the endpoint step → re-pick the provider
+          }
+          if (corrected !== selectedProvider.baseUrl) {
+            saveProviderBaseUrl(prov.name, corrected, options.configDir);
+            selectedBaseUrl = corrected;
+            selectedProvider = { ...prov, baseUrl: corrected };
+            models = await modelsForPicker(selectedProvider, modelDeps);
+          }
         }
         const model = await pickModelInTui(otui, r, models.models, modelPickerNotice(label, models));
         if (model === undefined) {
