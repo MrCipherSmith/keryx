@@ -1,4 +1,4 @@
-import { cp, copyFile, lstat, mkdir, readFile, readdir, realpath, unlink, writeFile } from "node:fs/promises";
+import { cp, copyFile, lstat, mkdir, readFile, readdir, readlink, realpath, unlink, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -31,10 +31,12 @@ export type InstallGdskillsResult = {
    * Things the operator has to act on, same convention as `createProjectSkill`'s
    * result (`src/gdskills/project-skills.ts`): plain strings a caller prints
    * under a "Warnings:" heading. Every entry names a file keryx would have
-   * cleaned up and did NOT — a retired rule kept because it was modified,
-   * oversized or unreadable (see `retired-rules.ts`), a stale per-runtime build
-   * kept because it is a symlink or its `unlink` failed, a directory left
-   * unswept — so each one leaves something to do by hand.
+   * cleaned up or written and did NOT — a retired rule kept because it was
+   * modified, oversized or unreadable (see `retired-rules.ts`), a stale
+   * per-runtime build kept because it is a symlink or its `unlink` failed, a
+   * directory left unswept, an install destination skipped because it is not a
+   * plain directory (see `checkInstallDestination`) — so each one leaves
+   * something to do by hand.
    */
   warnings: string[];
   /**
@@ -78,8 +80,16 @@ export async function installGdskills(
     ]),
   ]);
 
+  const skippedDestinationWarnings: string[] = [];
+  let installedSkills = 0;
+
   for (const skillEntry of skills) {
     const skillDir = path.join(skillsRoot, skillEntry.category, skillEntry.name);
+    const destination = await checkInstallDestination(skillDir, path.relative(metaprojectRoot, skillDir));
+    if (!destination.usable) {
+      skippedDestinationWarnings.push(destination.warning);
+      continue;
+    }
     await mkdir(skillDir, { recursive: true });
     const bundledSkillPath = bundledSkillSourcePath(skillEntry.category, skillEntry.name);
     if (existsSync(bundledSkillPath)) {
@@ -95,11 +105,19 @@ export async function installGdskills(
     } else {
       await writeFile(path.join(skillDir, "SKILL.md"), renderBundledSkill(skillEntry), "utf8");
     }
+    installedSkills += 1;
   }
 
   const staleBuildOutcomes = await removeStaleRuntimeBuilds(skillsRoot);
-  await installBundledSharedSkills(skillsRoot);
-  const retiredRuleOutcomes = await installBundledRules(metaprojectRoot);
+  const sharedWarning = await installBundledSharedSkills(skillsRoot, metaprojectRoot);
+  if (sharedWarning !== null) {
+    skippedDestinationWarnings.push(sharedWarning);
+  }
+  const rulesInstall = await installBundledRules(metaprojectRoot);
+  if (rulesInstall.warning !== null) {
+    skippedDestinationWarnings.push(rulesInstall.warning);
+  }
+  const retiredRuleOutcomes = rulesInstall.outcomes;
 
   const catalogPath = path.join(metaprojectRoot, "skills", "catalog.md");
   await writeFile(catalogPath, await preserveProjectSkillsSection(catalogPath, renderGdskillsCatalog(profile)), "utf8");
@@ -113,7 +131,10 @@ export async function installGdskills(
   // Every stale-build outcome is reported, removals included — but a removal
   // is the sweep working, so it goes to `notices` and only the outcomes that
   // left a file behind go to `warnings` (see `staleRuntimeBuildSeverity`).
+  // Skipped install destinations lead: a skill that was never written is a
+  // bigger fact about this install than a leftover the sweep could not clear.
   const warnings = [
+    ...skippedDestinationWarnings,
     ...retiredRuleOutcomes.map(retiredRuleWarning).filter((warning): warning is string => warning !== null),
     ...staleBuildOutcomes
       .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "warning")
@@ -125,7 +146,7 @@ export async function installGdskills(
 
   return {
     profile,
-    installedSkills: skills.length,
+    installedSkills,
     skillsRoot,
     catalogPath,
     manifestPath,
@@ -433,12 +454,88 @@ function errorCodeOf(error: unknown): string {
   return isErrnoException(error) && error.code ? error.code : "UNKNOWN";
 }
 
-async function installBundledSharedSkills(skillsRoot: string): Promise<void> {
+async function installBundledSharedSkills(skillsRoot: string, metaprojectRoot: string): Promise<string | null> {
   const sharedSource = bundledSharedSourcePath();
   if (!existsSync(sharedSource)) {
-    return;
+    return null;
   }
-  await cp(sharedSource, path.join(skillsRoot, "shared"), { recursive: true, force: true });
+  const sharedTarget = path.join(skillsRoot, "shared");
+  const destination = await checkInstallDestination(sharedTarget, path.relative(metaprojectRoot, sharedTarget));
+  if (!destination.usable) {
+    return destination.warning;
+  }
+  await cp(sharedSource, sharedTarget, { recursive: true, force: true });
+  return null;
+}
+
+export type InstallDestinationCheck =
+  | { usable: true }
+  | { usable: false; warning: string };
+
+/**
+ * Decide whether an install target is a directory keryx may copy over, and
+ * describe it in the result's `warnings` when it is not.
+ *
+ * A symlink at an install target is a real shape — a shared checkout, a
+ * relocated tree, a skill kept under version control elsewhere — and the two
+ * platforms disagreed about it in opposite, equally wrong directions. On Linux
+ * `cp(dir, symlink, { recursive: true })` throws `ERR_FS_CP_DIR_TO_NON_DIR`
+ * (EISDIR) out of `installGdskills`, so not one rule, contract or skill is
+ * written: the whole install dies on one linked directory. On macOS the same
+ * call *succeeds* by following the link and writing the bundled tree into
+ * whatever directory it points at — silently overwriting files outside
+ * `.metaproject` entirely. That divergence is why this never surfaced locally.
+ *
+ * Both are fixed by one rule, the same posture `removeUnmodifiedRetiredRules`
+ * takes for a retired rule's name: `lstat`, never follow the link, and never
+ * write through something that is not what we expected to find. A destination
+ * that is not a plain directory is left exactly as it is, the operator is told
+ * which path was skipped and what it is, and the rest of the install proceeds.
+ *
+ * `ENOENT` is the ordinary case (a fresh install), not a problem: nothing is
+ * there, so the caller's `mkdir` will create it.
+ */
+export async function checkInstallDestination(
+  destination: string,
+  displayPath: string,
+): Promise<InstallDestinationCheck> {
+  let stats;
+  try {
+    stats = await lstat(destination);
+  } catch (error) {
+    if (isErrnoException(error) && error.code === "ENOENT") {
+      return { usable: true };
+    }
+    return {
+      usable: false,
+      warning: `${displayPath} was not updated because it could not be inspected `
+        + `(${isErrnoException(error) && error.code ? error.code : "UNKNOWN"}) — `
+        + `check its permissions, then re-run the install`,
+    };
+  }
+
+  if (stats.isDirectory()) {
+    return { usable: true };
+  }
+
+  if (stats.isSymbolicLink()) {
+    // `readlink` is only for the message. If it fails the skip still stands —
+    // the decision was already made by `lstat`, which never followed the link.
+    const linkTarget = await readlink(destination).catch(() => null);
+    const where = linkTarget === null ? "" : ` (-> ${linkTarget})`;
+    return {
+      usable: false,
+      warning: `${displayPath} was not updated because it is a symlink${where}; keryx will not write `
+        + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+        + `the link points at yourself`,
+    };
+  }
+
+  return {
+    usable: false,
+    warning: `${displayPath} was not updated because it is not a directory (a regular file, FIFO, or `
+      + `similar); keryx will not overwrite it — delete or rename it, then re-run the install`,
+  };
 }
 
 /**
@@ -451,15 +548,26 @@ async function installBundledSharedSkills(skillsRoot: string): Promise<void> {
  * is caught on the run that retires it, not the next one). A retired name
  * absent from the target directory produces no outcome; that is the steady
  * state once every installation has caught up.
+ *
+ * If `rules/core` itself is not a plain directory (`checkInstallDestination`),
+ * neither the copy nor the retired-rule cleanup runs: cleanup walks the same
+ * directory, and reading or unlinking through a link the operator put there is
+ * the same hazard as writing through it.
  */
-async function installBundledRules(metaprojectRoot: string): Promise<RetiredRuleOutcome[]> {
+async function installBundledRules(
+  metaprojectRoot: string,
+): Promise<{ outcomes: RetiredRuleOutcome[]; warning: string | null }> {
   const rulesSource = bundledRulesSourcePath();
   const rulesTarget = path.join(metaprojectRoot, "rules", "core");
   if (!existsSync(rulesSource)) {
-    return [];
+    return { outcomes: [], warning: null };
+  }
+  const destination = await checkInstallDestination(rulesTarget, path.relative(metaprojectRoot, rulesTarget));
+  if (!destination.usable) {
+    return { outcomes: [], warning: destination.warning };
   }
   await cp(rulesSource, rulesTarget, { recursive: true, force: true });
-  return removeUnmodifiedRetiredRules(rulesTarget);
+  return { outcomes: await removeUnmodifiedRetiredRules(rulesTarget), warning: null };
 }
 
 /**
