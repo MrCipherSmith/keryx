@@ -9,7 +9,7 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T11:18:08.928Z",
+  "updatedAt": "2026-09-12T11:57:43.878Z",
   "source": {
     "type": "description",
     "ref": null
@@ -105,8 +105,24 @@
         "T3"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-12T11:18:31.509Z",
+            "outcome": "started",
+            "detail": "258-T4 review round 1: three reviewers on disjoint slices"
+          },
+          {
+            "at": "2026-09-12T11:27:31.470Z",
+            "outcome": "failed",
+            "detail": "round 1: 4 major, 10 minor across three reviewers. Code: floor exits 1 for cannot-tell against its own branch's rule, and the capacity carve-out silences the module's own headline example. Rules: two dead citations and one false claim about versioning. Skills: revert used as a severity that does not exist."
+          },
+          {
+            "at": "2026-09-12T11:57:43.673Z",
+            "outcome": "failed",
+            "detail": "round 2: all six round-1 findings closed except the moved-suppression netting; 5 new minor, including a measurement in my own commit message and in the module docstring that does not reproduce"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -451,6 +467,97 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "R1 fix: floor exit 2 for cannot-tell, the capacity carve-out reads only the key that moved, and four detector gaps (AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T11:27:31.899Z",
+            "outcome": "started",
+            "detail": "258-T20 floor fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "R1 fix: skill content — revert is not a severity, deprecation-path stops restating the rule, api-truth stops assuming a tool (AC1, AC10)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T11:27:32.000Z",
+            "outcome": "started",
+            "detail": "258-T21 skill content fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "R1 fix: rule citations that moved, the false versioning claim, the DoD count, and flow 257's outstanding credits (AC4, AC11)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T11:27:32.103Z",
+            "outcome": "started",
+            "detail": "258-T22 rule citation fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "R2 fix: suppression netting counts, the narrowing stops losing typed thresholds, a dropped flag value is refused, and the stated measurement is corrected (AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T11:57:43.878Z",
+            "outcome": "started",
+            "detail": "258-T23 round-2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -721,6 +828,76 @@
       "at": "2026-09-12T11:18:08.928Z",
       "event": "task-done",
       "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-12T11:18:31.509Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 258-T4 review round 1: three reviewers on disjoint slices"
+    },
+    {
+      "at": "2026-09-12T11:27:31.470Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — round 1: 4 major, 10 minor across three reviewers. Code: floor exits 1 for cannot-tell against its own branch's rule, and the capacity carve-out silences the module's own headline example. Rules: two dead citations and one false claim about versioning. Skills: revert used as a severity that does not exist."
+    },
+    {
+      "at": "2026-09-12T11:27:31.581Z",
+      "event": "task-added",
+      "detail": "T20: R1 fix: floor exit 2 for cannot-tell, the capacity carve-out reads only the key that moved, and four detector gaps (AC5)"
+    },
+    {
+      "at": "2026-09-12T11:27:31.688Z",
+      "event": "task-added",
+      "detail": "T21: R1 fix: skill content — revert is not a severity, deprecation-path stops restating the rule, api-truth stops assuming a tool (AC1, AC10)"
+    },
+    {
+      "at": "2026-09-12T11:27:31.792Z",
+      "event": "task-added",
+      "detail": "T22: R1 fix: rule citations that moved, the false versioning claim, the DoD count, and flow 257's outstanding credits (AC4, AC11)"
+    },
+    {
+      "at": "2026-09-12T11:27:31.899Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — 258-T20 floor fixes"
+    },
+    {
+      "at": "2026-09-12T11:27:32.000Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 1) — 258-T21 skill content fixes"
+    },
+    {
+      "at": "2026-09-12T11:27:32.103Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 258-T22 rule citation fixes"
+    },
+    {
+      "at": "2026-09-12T11:35:12.882Z",
+      "event": "task-done",
+      "detail": "T22: R1 fix: rule citations that moved, the false versioning claim, the DoD count, and flow 257's outstanding credits (AC4, AC11)"
+    },
+    {
+      "at": "2026-09-12T11:35:34.678Z",
+      "event": "task-done",
+      "detail": "T21: R1 fix: skill content — revert is not a severity, deprecation-path stops restating the rule, api-truth stops assuming a tool (AC1, AC10)"
+    },
+    {
+      "at": "2026-09-12T11:42:17.891Z",
+      "event": "task-done",
+      "detail": "T20: R1 fix: floor exit 2 for cannot-tell, the capacity carve-out reads only the key that moved, and four detector gaps (AC5)"
+    },
+    {
+      "at": "2026-09-12T11:57:43.673Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 3) — round 2: all six round-1 findings closed except the moved-suppression netting; 5 new minor, including a measurement in my own commit message and in the module docstring that does not reproduce"
+    },
+    {
+      "at": "2026-09-12T11:57:43.776Z",
+      "event": "task-added",
+      "detail": "T23: R2 fix: suppression netting counts, the narrowing stops losing typed thresholds, a dropped flag value is refused, and the stated measurement is corrected (AC5)"
+    },
+    {
+      "at": "2026-09-12T11:57:43.878Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 258-T23 round-2 fixes"
     }
   ]
 }
