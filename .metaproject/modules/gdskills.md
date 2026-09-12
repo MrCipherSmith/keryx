@@ -67,6 +67,7 @@ Native bundled Metaproject working skills and orchestrators.
 
 ### quality
 
+- `api-truth`: Write dependency calls against the version installed here, and mark the ones that went out unchecked.
 - `changelog`: Generate changelog or release notes from commits, tags, or date ranges.
 - `commit`: Prepare conventional commits with scope, summary, and verification notes.
 - `db-migrate`: Guide database migration creation, apply, rollback, status, and verification flows.

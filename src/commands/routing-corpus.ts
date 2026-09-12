@@ -793,6 +793,32 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
+    skill: "api-truth",
+    positives: [
+      "is that still the API in the version we actually have installed",
+      "you wrote that method call from memory — go and read what our copy of the library actually exposes",
+      "before you write this client call, read the option names out of the package on disk instead of guessing them",
+      // The two hazard proofs for this skill's own NOT-for clause. It excludes
+      // its neighbours by DESCRIBING them — "moving a project onto newer
+      // releases", "picking which library or pattern to adopt" — rather than by
+      // naming their owners, because a name in a description is a name in the
+      // query the user echoes back and the scorer pays +30 for it. So the
+      // exclusion has to cost this skill nothing: a user quoting the excluded
+      // wording back is still asking for this skill, and still gets it, 90
+      // against 65 and 80 against 40.
+      "do not move us onto newer releases of anything — just confirm this call matches the version we already have",
+      "we already picked the library and installed it, so no pattern shopping — check my call against what got installed",
+    ],
+    negatives: [
+      // The two neighbours, each asked for in a user's own words. The first
+      // changes which versions the project is on; the second chooses patterns
+      // for a stack before any call exists. Neither reads the build on disk to
+      // settle a signature, which is the only thing this skill does.
+      { prompt: "upgrade our packages to the latest versions", owner: "dependency-update" },
+      { prompt: "which architecture patterns fit the stack we chose", owner: "patterns-researcher" },
+    ],
+  },
+  {
     skill: "test-gen",
     positives: [
       "write tests",

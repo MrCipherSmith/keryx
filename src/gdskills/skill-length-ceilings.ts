@@ -133,6 +133,7 @@ const CEILINGS_BY_KEY = {
   "platform/agent-entrypoint-distiller": 78,
   "platform/claude-md-management": 111,
   "platform/hookify": 125,
+  "quality/api-truth": 226,
   "quality/changelog": 104,
   "quality/commit": 87,
   "quality/db-migrate": 87,

@@ -66,6 +66,7 @@ Resolution order:
 | skill-catalog-manager | platform | Generate `.metaproject/skills/catalog.md` and machine-readable skill registry. | gdskills/platform/skill-catalog-manager/SKILL.md |
 | skill-runtime-exporter | platform | Export canonical skills to runtime-compatible Codex or Claude artifacts. | gdskills/platform/skill-runtime-exporter/SKILL.md |
 | skill-sync | platform | Sync exported runtime skills to configured local runtimes only when explicitly enabled. | gdskills/platform/skill-sync/SKILL.md |
+| api-truth | quality | Write dependency calls against the version installed here, and mark the ones that went out unchecked. | gdskills/quality/api-truth/SKILL.md |
 | changelog | quality | Generate changelog or release notes from commits, tags, or date ranges. | gdskills/quality/changelog/SKILL.md |
 | commit | quality | Prepare conventional commits with scope, summary, and verification notes. | gdskills/quality/commit/SKILL.md |
 | db-migrate | quality | Guide database migration creation, apply, rollback, status, and verification flows. | gdskills/quality/db-migrate/SKILL.md |

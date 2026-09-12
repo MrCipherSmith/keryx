@@ -312,6 +312,13 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Raise a doubt only when it names a concrete failure, is anchored to a line or step, is checkable, and survives one honest re-read.",
     "Bound the loop before round one; end at the first round with no new qualifying doubt, and report finding nothing as a completed cycle.",
   ]),
+  skill("api-truth", "quality", ["recommended", "full"], "Write dependency calls against the version installed here, and mark the ones that went out unchecked.", [
+    "Read the version on disk — the package's own installed metadata — not the manifest range, and report a lockfile that disagrees with it.",
+    "Spend the check where failure is silent: option bags, untyped surfaces, effects invisible locally, defaults changed in a minor; skip it where a type-check or a watched test already covers the call.",
+    "Rank the evidence: the installed artefact and its shipped types first, then documentation pinned to that version, then a changelog; a post or a recollection is a lead, never proof.",
+    "When documentation and the installed build disagree, follow the build, name both versions, and never branch the call site across the two.",
+    "Mark every unchecked call at the site with what would settle it, and list them in the report — empty stated as empty.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",
