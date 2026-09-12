@@ -225,16 +225,6 @@ Based on what you're implementing, load and follow the relevant project rules.
 Rules live at `.metaproject/rules/core/<rule>.mdc` on every harness — that is the
 one tree `keryx init` installs and the one every build of this skill reads.
 
-**Output of Phase 2:** Mental model of the implementation:
-```
-RESEARCH_SUMMARY:
-  target_files_status: [{path, exists: bool, line_count, key_exports}]
-  test_pattern: <describe structure, assertion style>
-  story_pattern: <Meta/StoryObj, args pattern>
-  module_conventions: <naming, imports, exports, TS patterns>
-  relevant_rules_loaded: [<rule names>]
-```
-
 ### Phase 3: PLAN
 
 Decide the implementation approach. Self-validate — no orchestrator approval needed.
@@ -288,13 +278,6 @@ Execute the change plan. Write production-quality code.
 5. Component/UI layer implementation (make component tests GREEN)
 6. Stories (if needed)
 
-**4.1 Implementation order (TDD Mode — test_case_specs provided):**
-1. Read all test stubs from `test_case_specs.test_files`
-2. Understand the expected API shape from test assertions
-3. Implement types/interfaces to satisfy test imports
-4. Implement code layer by layer until all tests are GREEN
-5. Stories (if needed)
-
 **4.2 Code standards (always follow):**
 - TypeScript strict mode — no `any`, no `as` casts unless justified
 - Use project path aliases for imports (`@components/...`, `@utils/...`)
@@ -304,16 +287,10 @@ Execute the change plan. Write production-quality code.
 - Follow existing module patterns discovered in Phase 2
 
 **4.3 Test standards:**
-- Unit tests: Vitest with `describe`/`it`, `@testing-library/react` for components
-- Use `data-testid` for test selectors
-- Follow AAA pattern (Arrange, Act, Assert)
-- Mock external dependencies, not internal module logic
+- Use the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack. Arrange/Act/Assert; mock external dependencies, not internal module logic.
 
 **4.4 Story standards:**
-- `Meta` + `StoryObj` pattern
-- `args`-based variants
-- `fn()` for action callbacks
-- Cover: default state, edge cases, error states
+- Use the story patterns Phase 2.3 found (`Meta` + `StoryObj`, `args`-based variants, `fn()` callbacks); cover default state, edge cases and error states.
 
 **4.5 Commit after implementation:**
 
@@ -449,11 +426,28 @@ Write full JSON to `<JOBS_ROOT>/<JOB_NAME>/results/<task_id>.json`:
   "story_result": "<pass|build error: details|not applicable>",
   "acceptance_criteria_met": "<all|partial: list of unmet criteria|none>",
   "skill_drift": "<none | stale: <module>/<skill> — <what diverged> | missing: <module> should have a project-skill>",
+  "noticed_not_touched": [{ "what": "<problem>", "where": "<path|symbol>" }],
+  "assumptions": ["<what you assumed where the task did not say>"],
+  "not_touched": [{ "path": "src/path/file.ts", "reason": "<why left alone>" }],
   "notes": "<any warnings, blockers, or additional context>"
 }
 ```
 
 Set `skill_drift` from Phase 2.0b: if the project-skill you used was not `fresh`, or the code you wrote diverged from what a skill documents, name the skill and the divergence. The orchestrator uses this to decide whether to trigger `skills learn` (do NOT run `learn` yourself — it is a mutating step the orchestrator dispatches; see `rules/core/skill-lifecycle.mdc`).
+
+Three of those fields have a bar, and a field that collects noise trains the
+reader to skim all three. Omit one rather than pad it.
+
+- `assumptions` — what you assumed where the task was silent AND acted on. If
+  the assumption being wrong would not change a line you wrote, it is a hedge,
+  not an assumption; leave it out.
+- `noticed_not_touched` — a problem in code you actually read, stated so a
+  follow-up task could be written from it alone, with `where` it lives. Not a
+  dumping ground for every smell seen in passing, and not style opinion.
+- `not_touched` — of the files this task was aimed at (`target_files`), the ones
+  absent from `files_modified`/`files_created`/`files_deleted`, each with why.
+  It answers that one question and no other: a reader subtracts those lists and
+  this one from `target_files`, and flags the remainder as an unexplained omission.
 
 Then check the shape and record the file — two commands, both of which refuse
 rather than warn:
@@ -498,8 +492,14 @@ Return a compact STATUS response following `rules/core/subagent-status-protocol.
 The inline response must contain only: STATUS line + Completed bullets + Files changed + Verification summary.
 
 **Status classification:**
-- `success` → `STATUS: DONE`
-- `partial` → `STATUS: DONE_WITH_CONCERNS`
+- `success` → `STATUS: DONE`, or `DONE_WITH_CONCERNS` when work that cleared the
+  bar still carries something the orchestrator must know.
+- `partial` → `STATUS: BLOCKED` — never `DONE_WITH_CONCERNS`. An unmet criterion,
+  a failed gate or a gate that did not run breaks `rules/core/definition-of-done.mdc`,
+  and `DONE_WITH_CONCERNS` reports on work that cleared that bar, never a lower
+  one. The harness already reads it this way: `shouldEscalate`
+  (`src/harness/child/escalation.ts`) escalates on any `acceptance[].status` of
+  `not_met` whatever token arrived with it.
 - `failed` → `STATUS: BLOCKED`
 
 ---
