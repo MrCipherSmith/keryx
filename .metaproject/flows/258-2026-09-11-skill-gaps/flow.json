@@ -9,7 +9,7 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T10:59:36.497Z",
+  "updatedAt": "2026-09-12T11:04:53.615Z",
   "source": {
     "type": "description",
     "ref": null
@@ -427,6 +427,28 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "review floor --ref must diff from the merge base, not the branch tip — the base's own additions were reported as our removals (AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T11:04:53.615Z",
+            "outcome": "started",
+            "detail": "258-T19 floor --ref resolves from the merge base"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -677,6 +699,16 @@
       "at": "2026-09-12T10:59:36.497Z",
       "event": "task-attempt",
       "detail": "T3: started (attempt 1) — 258-T3 full verification plus review floor on this branch's own diff"
+    },
+    {
+      "at": "2026-09-12T11:04:46.406Z",
+      "event": "task-added",
+      "detail": "T19: review floor --ref must diff from the merge base, not the branch tip — the base's own additions were reported as our removals (AC5)"
+    },
+    {
+      "at": "2026-09-12T11:04:53.615Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 258-T19 floor --ref resolves from the merge base"
     }
   ]
 }
