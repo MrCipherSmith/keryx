@@ -90,7 +90,7 @@ End-to-end feature development workflow from idea to merge-ready PR.
 1. Implement changes file by file, following the plan from Phase 2
 2. Goal: make the failing tests from Phase 4 GREEN
 3. Follow existing code patterns and loaded rules
-4. After each file group, run quick inline check: `npx tsc --noEmit` (type errors only)
+4. After each file group, run a quick inline check: `keryx health run --changed --source typescript` (type errors only, over the changed files — `src/health/sources/typescript.ts` resolves the real invocation, so this is never a hardcoded `npx tsc`; on a project with no keryx health config, fall back to its own configured type-check command)
 5. Commit with conventional message after each logical chunk
 
 ### Phase 6: VERIFY (code-verifier gate)

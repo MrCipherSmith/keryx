@@ -62,7 +62,7 @@ Fill in the template below and launch via Task tool.
 You are running the issue-analyzer skill in AUTONOMOUS MODE.
 DO NOT ask the user any questions. Execute the full workflow end-to-end.
 
-Load the skill: issue-analyzer (from skills/issue-analyzer/SKILL.md)
+Load the skill: issue-analyzer (from skills/gdskills/orchestration/issue-analyzer/SKILL.md)
 
 ═══════════════════════════════════════════════
   INPUT PARAMETERS

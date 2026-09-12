@@ -34,6 +34,7 @@ import {
   PERMANENT_ANATOMY_EXEMPTIONS,
   type BundledSkillCheck,
   bareImperativeOpening,
+  bundledSkillCompanionDocuments,
   bundledSkillDocuments,
   bundledSkillFiles,
   collisionPairKey,
@@ -89,6 +90,10 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     const skillsRoot = path.join(defaultBundledRoot(), "skills");
     const canonical = bundledSkillFiles(skillsRoot);
     const documents = bundledSkillDocuments(skillsRoot);
+    // T16: companions (`orchestrator-prompt.md`, `SKILL.detail.md`) join the
+    // walked-document count too, though they draw a different set of checks
+    // (see the dedicated companion-document tests below).
+    const companions = bundledSkillCompanionDocuments(skillsRoot);
 
     // Strictly more documents than skills, or the walker is still canonical-only.
     expect(documents.length).toBeGreaterThan(canonical.length);
@@ -97,7 +102,7 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     for (const file of canonical) expect(documents).toContain(file);
 
     const evaluation = evaluateBundledTree();
-    expect(evaluation.documents).toBe(documents.length);
+    expect(evaluation.documents).toBe(documents.length + companions.length);
     expect(evaluation.skills).toBe(canonical.length);
 
     // Named files, so a walker that finds builds "somewhere" cannot pass while
@@ -114,8 +119,39 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     expect(documents.length).toBe(canonical.length + shippedBuilds.length);
     // …and the denominator is printed, not just returned.
     expect(renderBundledEvaluation(evaluation)).toContain(
-      `documents_evaluated: ${documents.length}`,
+      `documents_evaluated: ${documents.length + companions.length}`,
     );
+  });
+
+  test("companion documents (orchestrator-prompt.md, SKILL.detail.md) are read for cross-references", () => {
+    // T16's carry-over: `orchestrator-prompt.md` — shipped by five
+    // orchestration skills — was invisible to every check in this sweep
+    // before, since it is neither `SKILL.md` nor a named harness build and
+    // `document:addressable`'s own walk only looks at `SKILL.*.md`-shaped
+    // names. `bundledSkillCompanionDocuments` is the walk that closes that
+    // gap; this asserts it actually finds the five shipped copies plus
+    // feature-analyzer's `SKILL.detail.md`.
+    const skillsRoot = path.join(defaultBundledRoot(), "skills");
+    const companions = bundledSkillCompanionDocuments(skillsRoot);
+    expect(companions.length).toBeGreaterThanOrEqual(6);
+    for (const skill of ["context-collector", "feature-analyzer", "issue-analyzer", "job-orchestrator", "task-implementer"]) {
+      expect(companions.some((file) => file.includes(`${path.sep}${skill}${path.sep}orchestrator-prompt.md`))).toBe(
+        true,
+      );
+    }
+    expect(companions.some((file) => file.endsWith(`${path.sep}SKILL.detail.md`))).toBe(true);
+
+    // Read for cross-references, but never for frontmatter or anatomy: a
+    // companion document has none, by definition, and must not be reported
+    // as missing something it was never meant to have.
+    const evaluation = evaluateBundledTree();
+    const companionRelPaths = new Set(
+      companions.map((file) => path.relative(skillsRoot, file).split(path.sep).join("/")),
+    );
+    const findingsOnCompanions = evaluation.findings.filter((finding) => companionRelPaths.has(finding.file));
+    for (const finding of findingsOnCompanions) {
+      expect(["xref:skill", "xref:path"]).toContain(finding.check);
+    }
   });
 
   test("every shipped skill passes structural validation", () => {
@@ -268,6 +304,32 @@ metadata:
 
 VIOLATION frontmatter:harness-claude — compatible_harnesses above never names
 claude, and this file IS the Claude build.
+`;
+
+/**
+ * The same violation, spelled as a YAML block list rather than the quoted
+ * comma-separated scalar every shipped skill uses. Flow 257 T16's carry-over:
+ * the check used to read `compatible_harnesses` with a single-line regex
+ * (`/^\s{2,}compatible_harnesses\s*:\s*(.+)$/m`) that requires text on the
+ * SAME line as the key — a block list's key line has nothing after the colon,
+ * so the regex found no match, `frontmatter:harness-claude` never fired, and
+ * this exact violation would have shipped silently. Proves the check now
+ * reads through `parseSkillFrontmatter`, which understands both shapes.
+ */
+const HARNESS_BLOCK_LIST_EXCLUDES_CLAUDE_SKILL = `---
+name: harness-block-list-excludes-claude
+description: Proves a nested YAML sequence under metadata parses the same way a flat scalar does.
+metadata:
+  version: 1.0.0
+  compatible_harnesses:
+    - cursor
+    - codex
+---
+
+# Harness Block List Excludes Claude
+
+VIOLATION frontmatter:harness-claude — compatible_harnesses above is a YAML
+block list, not the single-line scalar shape, and still never names claude.
 `;
 
 /**
@@ -632,6 +694,30 @@ The installed spelling of that same file draws nothing:
 `;
 
 /**
+ * Flow 257 T16 carry-over (L-006): `PATH_REFERENCE` swept a sentence-ending
+ * period into the captured path, because `.` is itself a valid path
+ * character (`.md`) and the regex has no way to tell "end of extension" from
+ * "end of sentence" while it is still matching. Two lines exercise the fix
+ * in both directions: the first names a real file in plain prose, sentence
+ * period and all, and must draw nothing once the period is dropped; the
+ * second names a path that has never existed, in the same shape, and must
+ * still be reported — WITHOUT the sentence period surviving into the message.
+ */
+const PATH_TRAILING_PERIOD_SKILL = `---
+name: path-trailing-period-example
+description: Use when confirming a path quoted at the end of a sentence still resolves without its period.
+metadata:
+  version: 1.0.0
+---
+
+# Path Trailing Period Example
+
+See .metaproject/skills/gdskills/quality/control-example/SKILL.md for the fully compliant shape.
+
+VIOLATION xref:path — this is nothing like .metaproject/skills/gdskills/quality/does-not-exist-either/SKILL.md, and the sentence period above must not survive into the reported path.
+`;
+
+/**
  * A rule file with one dead cross-reference and one live one — the control
  * proving rule sweeping is selective, not a blanket failure the moment a rule
  * mentions a path at all.
@@ -686,6 +772,12 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "collides-a", DUPLICATE_NAME_SKILL_A);
   writeSkill(fixtureRoot, "quality", "collides-b", DUPLICATE_NAME_SKILL_B);
   writeSkill(fixtureRoot, "quality", "harness-excludes-claude", HARNESS_EXCLUDES_CLAUDE_SKILL);
+  writeSkill(
+    fixtureRoot,
+    "quality",
+    "harness-block-list-excludes-claude",
+    HARNESS_BLOCK_LIST_EXCLUDES_CLAUDE_SKILL,
+  );
   writeSkill(fixtureRoot, "quality", "category-mismatch", CATEGORY_MISMATCH_SKILL);
   writeSkill(fixtureRoot, "quality", "no-trigger-phrase", NO_TRIGGER_PHRASE_SKILL);
   writeSkill(fixtureRoot, "quality", "bare-imperative-example", BARE_IMPERATIVE_SKILL);
@@ -722,6 +814,7 @@ beforeAll(() => {
     UNADDRESSED_BUILD,
   );
   writeSkill(fixtureRoot, "quality", "source-tree-only-example", SOURCE_TREE_ONLY_SKILL);
+  writeSkill(fixtureRoot, "quality", "path-trailing-period-example", PATH_TRAILING_PERIOD_SKILL);
   mkdirSync(path.join(fixtureRoot, "skills", "shared"), { recursive: true });
   writeFileSync(path.join(fixtureRoot, "skills", "shared", "example-script.md"), "# Example\n", "utf8");
   writeRule(fixtureRoot, "sibling-rule.mdc", SIBLING_RULE);
@@ -741,16 +834,17 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
 
   test("the fixture tree is non-empty, or the rejection below proves nothing", () => {
     const evaluation = evaluateBundledTree(fixtureRoot);
-    // Twenty-three skills: the original fourteen, flow 257 T7's three
+    // Twenty-five skills: the original fourteen, flow 257 T7's three
     // `description:*` fixtures, T11's colliding pair
-    // (description-collision-a, description-collision-b), and T8's four
+    // (description-collision-a, description-collision-b), T8's four
     // `anatomy:sections` fixtures (no-not-for-example, no-red-flags-example,
-    // too-few-red-flags-rows-example, no-verification-example), each shipping
-    // one plain SKILL.md.
-    expect(evaluation.skills).toBe(23);
-    // Twenty-five documents: twenty-three skills, plus `build-drift-example`
+    // too-few-red-flags-rows-example, no-verification-example), and T16's
+    // two carry-over fixtures (block-list `compatible_harnesses`, trailing
+    // sentence period), each shipping one plain SKILL.md.
+    expect(evaluation.skills).toBe(25);
+    // Twenty-seven documents: twenty-five skills, plus `build-drift-example`
     // and `harness-field-only` each also shipping a Codex build.
-    expect(evaluation.documents).toBe(25);
+    expect(evaluation.documents).toBe(27);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -766,6 +860,28 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(found[0]?.message).toContain("skills/shared/example-script.md");
     expect(found[0]?.message).toContain("SOURCE tree's own layout");
     expect(found[0]?.message).toContain(".metaproject/skills/gdskills/shared/example-script.md");
+  });
+
+  test("a path quoted at the end of a sentence resolves without its trailing period", () => {
+    // L-006: a real file cited in plain prose, sentence period and all, must
+    // not be reported — the period is not part of the path.
+    const clean = findingsFor("path-trailing-period-example").filter(
+      (finding) =>
+        finding.check === "xref:path" &&
+        finding.message.includes("skills/quality/control-example/SKILL.md"),
+    );
+    expect(clean).toEqual([]);
+
+    // A path that has never existed, cited the same way, must still be
+    // reported — and the message must name it WITHOUT the sentence period
+    // that follows it in the source, or the fix has only hidden the bug
+    // rather than fixed it.
+    const broken = findingsFor("path-trailing-period-example").filter(
+      (finding) => finding.check === "xref:path",
+    );
+    expect(broken).toHaveLength(1);
+    expect(broken[0]?.message).toContain("skills/quality/does-not-exist-either/SKILL.md");
+    expect(broken[0]?.message).not.toContain("SKILL.md.");
   });
 
   test("a reference inside a rule file to a missing path is reported", () => {
@@ -1158,6 +1274,19 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(buildFinding).toEqual([]);
   });
 
+  test("a compatible_harnesses YAML block list is read the same way as the scalar form", () => {
+    // Carry-over from flow 257 T16's dispatch: the old single-line regex read
+    // nothing after an empty `compatible_harnesses:` key line, so a block
+    // list silently drew zero findings regardless of what it declared. This
+    // fixture is the exact shape that used to slip through.
+    const found = findingsFor("harness-block-list-excludes-claude").filter(
+      (finding) => finding.check === "frontmatter:harness-claude",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("omits `claude`");
+    expect(found[0]?.message).toContain("IS the Claude build");
+  });
+
   test("a metadata.category that does not match the skill's directory is rejected; an absent category passes", () => {
     const found = findingsFor("category-mismatch").filter((finding) => finding.check === "frontmatter:category");
     expect(found).toHaveLength(1);
@@ -1273,13 +1402,21 @@ describe("every allowance states why it is one", () => {
   });
 
   test("an allowed companion document names why it is not a build", () => {
+    // Two shapes live in this one map since flow 257 T16: a `SKILL.*.md`-shaped
+    // name (what `document:addressable`'s own walk can mistake for a dead
+    // build) and a name outside that shape entirely (`orchestrator-prompt.md`,
+    // never at risk of that specific confusion, but still a companion
+    // `bundledSkillCompanionDocuments` sweeps for cross-references). Every
+    // entry, either shape, must still name a real reason and never a build.
     expect(KNOWN_SKILL_COMPANION_DOCUMENTS.size).toBeGreaterThan(0);
     for (const [name, why] of KNOWN_SKILL_COMPANION_DOCUMENTS) {
-      expect(name).toMatch(/^SKILL\..+\.md$/);
+      expect(name.length).toBeGreaterThan(0);
       // A build name would be silently shadowed by the allowance, so refuse one.
       expect(HARNESS_SKILL_RUNTIMES.map((runtime) => skillBuildFileName(runtime))).not.toContain(name);
       expect(why.trim().length).toBeGreaterThan(0);
     }
+    expect([...KNOWN_SKILL_COMPANION_DOCUMENTS.keys()]).toContain("SKILL.detail.md");
+    expect([...KNOWN_SKILL_COMPANION_DOCUMENTS.keys()]).toContain("orchestrator-prompt.md");
   });
 
   test("an allowed generated path names the command that produces it", () => {

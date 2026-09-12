@@ -90,7 +90,7 @@ After confirmation, merge into settings.
 
 - **Auto-lint**: PostToolUse(Edit) → `eslint --fix $FILE`
 - **Auto-format**: PostToolUse(Write) → `prettier --write $FILE`
-- **Type-check gate**: PreToolUse(Bash:git commit) → `npx tsc --noEmit`
+- **Type-check gate**: PreToolUse(Bash:git commit) → `keryx health run --changed --source typescript` (or the project's own configured type-check command when keryx health is not configured — never a hardcoded `npx tsc`)
 - **Notify on done**: Stop → notification command
 
 ## Rules

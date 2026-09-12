@@ -142,14 +142,17 @@ export interface BundledSkillEvaluation {
   /** How many `SKILL.md` files were found. Zero means the sweep proved nothing. */
   readonly skills: number;
   /**
-   * How many skill DOCUMENTS were read — `SKILL.md` plus every harness build.
+   * How many skill DOCUMENTS were read — `SKILL.md`, every harness build, and
+   * every companion document `KNOWN_SKILL_COMPANION_DOCUMENTS` names
+   * (`orchestrator-prompt.md`, `SKILL.detail.md` — swept for cross-references
+   * only, per flow 257 T16; see the loop that reads them for why).
    *
    * A second denominator, not a replacement: `skills` counts the skills, this
    * counts the files whose bytes were actually checked. They differ by the
    * harness builds that ship (111 when this was written; 14 once flow 257
-   * deleted the byte-identical ones), and reporting only the first is what let
-   * a build diverge from its own `SKILL.md` while the sweep reported everything
-   * clean.
+   * deleted the byte-identical ones) plus the handful of companions, and
+   * reporting only the first is what let a build diverge from its own
+   * `SKILL.md` while the sweep reported everything clean.
    */
   readonly documents: number;
   /** Every skill directory name found, sorted — the resolvable cross-reference set. */
@@ -1193,6 +1196,28 @@ export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string
 const PATH_REFERENCE = /(?:^|[\s"'`([])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@*-]*[\w.@*-])/g;
 
 /**
+ * Drop a sentence-ending period a path reference swept up mid-match.
+ *
+ * `.` is itself a valid path character (`.md`, `.json`), so `PATH_REFERENCE`
+ * cannot tell "the extension's period" from "the sentence's period" while it
+ * is still matching — a plain-prose reference such as "see
+ * skills/quality/foo/SKILL.md." captures the trailing full stop along with
+ * the file, and the path that resolves is `SKILL.md`, not `SKILL.md.`.
+ *
+ * Safe to strip unconditionally once matching is done, and never the
+ * extension's own period: an extension's period is always followed by
+ * extension letters (`.md`, never bare `.` at the end of a name), so a
+ * period sitting as the very LAST character of the match cannot be one —
+ * only a sentence's period lands there. Stripping it leaves a genuine
+ * `skills/x/SKILL.md` reference exactly as `skills/x/SKILL.md` (its own
+ * period is followed by `md`, not by the end of the match), and turns
+ * `skills/x/SKILL.md.` back into the `skills/x/SKILL.md` it was quoting.
+ */
+function stripTrailingSentencePeriod(raw: string): string {
+  return raw.endsWith(".") ? raw.slice(0, -1) : raw;
+}
+
+/**
  * Resolve a reference the way an INSTALLED project would have to: as the
  * address it names, not as whatever happens to sit at that string in THIS
  * checkout.
@@ -1272,7 +1297,7 @@ function scanCrossReferences(
       }
     }
     for (const match of line.matchAll(PATH_REFERENCE)) {
-      const raw = match[1] as string;
+      const raw = stripTrailingSentencePeriod(match[1] as string);
       if (raw.includes("<") || raw.includes("*") || raw.includes("$")) continue;
       const resolved = resolveInstalledReference(raw, known);
       if (resolved === undefined) continue;
@@ -1324,21 +1349,40 @@ const SKILL_DOCUMENT_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
- * `SKILL*.md` files that are deliberately NOT builds, each with its reason.
+ * `SKILL*.md` files that are deliberately NOT builds, each with its reason —
+ * and, more broadly since flow 257 T16, the full list of shipped companion
+ * documents this sweep knows about at all.
  *
- * The set exists so `document:addressable` can tell "a companion document" from
- * "a build no runtime can reach". The distinction is not academic: nine
- * `SKILL.claude.md` files shipped in 0.2.72 and were read by nothing —
- * `skillBuildFileName("claude")` is `SKILL.md`, so no `--runtime` export, no
- * install, and no sweep ever opened them. They were Claude Code slash-command
- * files left behind by the conversion to skills, and they were removed rather
- * than allowed, because an allowance without a reader is a backlog entry
- * wearing an exemption's clothes.
+ * The `SKILL.*.md`-shaped set exists so `document:addressable` can tell "a
+ * companion document" from "a build no runtime can reach". The distinction is
+ * not academic: nine `SKILL.claude.md` files shipped in 0.2.72 and were read
+ * by nothing — `skillBuildFileName("claude")` is `SKILL.md`, so no `--runtime`
+ * export, no install, and no sweep ever opened them. They were Claude Code
+ * slash-command files left behind by the conversion to skills, and they were
+ * removed rather than allowed, because an allowance without a reader is a
+ * backlog entry wearing an exemption's clothes.
+ *
+ * `orchestrator-prompt.md` — shipped by five orchestration skills
+ * (`context-collector`, `feature-analyzer`, `issue-analyzer`,
+ * `job-orchestrator`, `task-implementer`) — does not fit that pattern at all:
+ * it is not spelled `SKILL.*.md`, so `document:addressable` never had an
+ * opinion on it either way. It is listed here anyway, and this ONE map is
+ * reused rather than a second one, because the two file kinds share the same
+ * real property: both are prose a skill author wrote and ships, addressed by
+ * name from the skill's own `SKILL.md`, carrying no frontmatter of their own.
+ * `bundledSkillCompanionDocuments` below walks every name this map lists —
+ * this is now the SINGLE registry of "documents that exist, are not builds,
+ * and are still worth reading for a dead cross-reference", not merely a
+ * `document:addressable` exemption list.
  */
 export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new Map([
   [
     "SKILL.detail.md",
     "overflow reference for `orchestration/feature-analyzer`, linked from its SKILL.md; carries no frontmatter and is not addressed by any runtime",
+  ],
+  [
+    "orchestrator-prompt.md",
+    "the prompt template an orchestrator skill reads to build a subagent dispatch (context-collector, feature-analyzer, issue-analyzer, job-orchestrator, task-implementer); carries no frontmatter and is not addressed by any runtime — read by the skill's own instructions, not by a harness loader",
   ],
 ]);
 
@@ -1379,6 +1423,23 @@ export function bundledSkillFiles(root: string): string[] {
  */
 export function bundledSkillDocuments(root: string): string[] {
   return walkSkillDocuments(root, (name) => SKILL_DOCUMENT_NAMES.has(name));
+}
+
+/**
+ * Every companion document under `root` — a file `KNOWN_SKILL_COMPANION_DOCUMENTS`
+ * names, wherever it ships (flow 257 T16).
+ *
+ * Before this, `orchestrator-prompt.md` — the file five orchestrator skills
+ * read to build a subagent dispatch, and the exact file `docs/requirements/
+ * keryx-orchestrator-hardening/measurement-2026-08-31.md` names for citing a
+ * denied `wave-executor` in four places — was invisible to every check in this
+ * sweep: it is not `SKILL.md`, not a harness build `HARNESS_SKILL_RUNTIMES`
+ * knows about, and `document:addressable`'s own walk only ever looks at files
+ * spelled `SKILL.*.md`. A dead path or skill reference inside one was
+ * structurally undetectable, not merely unchecked.
+ */
+export function bundledSkillCompanionDocuments(root: string): string[] {
+  return walkSkillDocuments(root, (name) => KNOWN_SKILL_COMPANION_DOCUMENTS.has(name));
 }
 
 /**
@@ -1441,6 +1502,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
   const skillsRoot = path.join(root, "skills");
   const canonical = bundledSkillFiles(skillsRoot);
   const files = bundledSkillDocuments(skillsRoot);
+  const companionDocuments = bundledSkillCompanionDocuments(skillsRoot);
   const skillNames = [...new Set(canonical.map((file) => path.basename(path.dirname(file))))].sort();
   const known = new Set(skillNames);
   const findings: BundledSkillFinding[] = [];
@@ -1493,6 +1555,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       );
     } else {
       const keys = frontmatterKeys(block);
+      // The one parse every field below that must match what the RUNTIME sees
+      // reads through — `description` already did (see its comment below);
+      // `metadata.category` and `compatible_harnesses` join it here rather
+      // than staying on `frontmatterKeys`' single-line regexes, which read a
+      // YAML block list or flow list as absent rather than as a value to
+      // check (see `parseSkillFrontmatter`'s own comment on the field).
+      const parsed = parseSkillFrontmatter(text);
       for (const [field, check] of Object.entries(REQUIRED_FRONTMATTER_CHECKS)) {
         if (!keys.has(field)) {
           add(check, 1, `frontmatter is missing the required \`${field}\` field.`);
@@ -1521,7 +1590,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       // `skills_catalog` handed that indicator to an agent as the skill's whole
       // description. Both sides now read through `parseSkillFrontmatter`.
       if (keys.has("description")) {
-        const served = parseSkillFrontmatter(text).description ?? "";
+        const served = parsed.description ?? "";
         if (served.length === 0) {
           add(
             "frontmatter:description",
@@ -1584,16 +1653,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         // the directory the skill actually ships under — `catalog:registered`
         // above already ties that directory to `BUNDLED_GDSKILLS`, so a
         // skill that passes both checks has one category, not two.
-        const metadataCategory = /^\s{2,}category\s*:\s*(.+)$/m.exec(block);
-        if (metadataCategory !== null) {
-          const declaredCategory = (metadataCategory[1] ?? "").trim().replace(/^["']|["']$/g, "");
-          if (declaredCategory.length > 0 && declaredCategory !== category) {
-            add(
-              "frontmatter:category",
-              1,
-              `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
-            );
-          }
+        const declaredCategory = parsed.metadataCategory ?? "";
+        if (declaredCategory.length > 0 && declaredCategory !== category) {
+          add(
+            "frontmatter:category",
+            1,
+            `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
+          );
         }
       }
       // `compatible_harnesses` is per-build metadata (see
@@ -1604,21 +1670,14 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       // build lying about the harness that loads it. Checked by exact
       // filename, not by runtime lookup, so the check reads the same way in a
       // fixture tree that never calls `evaluateBundledTree` through the CLI.
-      if (path.basename(file) === "SKILL.md") {
-        const compatibleHarnesses = /^\s{2,}compatible_harnesses\s*:\s*(.+)$/m.exec(block);
-        if (compatibleHarnesses !== null) {
-          const declared = (compatibleHarnesses[1] ?? "").trim().replace(/^["']|["']$/g, "");
-          const harnesses = declared
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0);
-          if (!harnesses.includes("claude")) {
-            add(
-              "frontmatter:harness-claude",
-              1,
-              `frontmatter \`compatible_harnesses\` ("${declared}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
-            );
-          }
+      if (path.basename(file) === "SKILL.md" && parsed.compatibleHarnesses !== undefined) {
+        const harnesses = parsed.compatibleHarnesses;
+        if (!harnesses.includes("claude")) {
+          add(
+            "frontmatter:harness-claude",
+            1,
+            `frontmatter \`compatible_harnesses\` ("${harnesses.join(",")}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
+          );
         }
       }
     }
@@ -1726,6 +1785,35 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     scanCrossReferences(text, root, known, false, add);
   }
 
+  // --- companion documents: xref:skill + xref:path only, not frontmatter/anatomy (flow 257 T16) --
+  //
+  // `orchestrator-prompt.md` and `SKILL.detail.md` — `KNOWN_SKILL_COMPANION_
+  // DOCUMENTS`'s two entries — are skill-authored prose, addressed by name
+  // from the skill's own `SKILL.md`, exactly the shape a dead `skills/…` path
+  // or a named-but-unbundled skill could hide in. Unlike a rule file, this
+  // prose IS a skill talking about itself and other skills, the same voice
+  // `SKILL.md` uses — so `xref:skill` applies here (`checkSkillNames: true`),
+  // where it does not for a rule file's prose ABOUT skills in the abstract.
+  //
+  // What does NOT apply: frontmatter, anatomy, catalog registration, model
+  // declarations, persona markers. A companion document carries no
+  // frontmatter by definition — `frontmatterBlock` would return `undefined`
+  // for every one of them, and running the frontmatter/anatomy loop above
+  // would report `frontmatter:block` and all three `anatomy:sections` on a
+  // file that was never meant to open with `---` or restate its own skill's
+  // trigger and Red Flags. Only the two checks that judge WHAT THE FILE SAYS,
+  // not WHAT SHAPE THE FILE HAS, generalise to a document with no frontmatter.
+  for (const file of companionDocuments) {
+    const skillDir = path.dirname(file);
+    const skill = path.basename(skillDir);
+    const rel = path.relative(skillsRoot, file).split(path.sep).join("/");
+    const text = readFileSync(file, "utf8");
+    const add = (check: "xref:skill" | "xref:path", line: number, message: string): void => {
+      findings.push({ check, skill, file: rel, line, message });
+    };
+    scanCrossReferences(text, root, known, true, add);
+  }
+
   // --- every SKILL*.md in the tree is either read above or named a companion --
   //
   // The sweep now reads `SKILL.md` and every harness build that ships. That is only
@@ -1787,7 +1875,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     }
   }
 
-  return { root, skills: canonical.length, documents: files.length, skillNames, findings };
+  return {
+    root,
+    skills: canonical.length,
+    documents: files.length + companionDocuments.length,
+    skillNames,
+    findings,
+  };
 }
 
 /**
@@ -1816,7 +1910,7 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   // Both denominators, always. `skills_evaluated` alone read as full coverage
   // while 111 harness builds went unread (flow 209); printing the document count is what
   // makes the gap visible without anyone having to know it exists.
-  lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds)`);
+  lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds + companion documents)`);
   lines.push(`findings: ${evaluation.findings.length}`);
   lines.push("");
 

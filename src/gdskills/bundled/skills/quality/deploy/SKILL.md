@@ -44,7 +44,7 @@ Run in parallel where possible:
 2. **Branch check**: correct branch for target env (production → main/master)
 3. **Tests**: `npm test` / `pytest` / `go test ./...` (skip with `--skip-tests`)
 4. **Lint**: `npm run lint` if available
-5. **Type-check**: `npx tsc --noEmit` if TypeScript
+5. **Type-check**: `keryx health run --source typescript` if TypeScript (`src/health/sources/typescript.ts` resolves the real invocation, never a hardcoded `npx tsc`; on a project with no keryx health config, fall back to its own configured type-check command)
 6. **Build**: `npm run build` / `docker build`
 
 If any check fails → stop and report.
