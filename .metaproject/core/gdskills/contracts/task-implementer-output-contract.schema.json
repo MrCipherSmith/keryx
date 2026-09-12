@@ -47,9 +47,40 @@
       "type": "string",
       "description": "Set from SKILL.md Phase 2.0b: 'none' | 'stale: <module>/<skill> — <what diverged>' | 'missing: <module> should have a project-skill'. SKILL.md has required this field since project-skill verification was added; this object is `additionalProperties: false`, so until it was declared here a compliant result was REFUSED by its own contract."
     },
+    "noticed_not_touched": {
+      "type": "array",
+      "description": "Problems seen in passing and deliberately left alone because they were out of scope. Candidate follow-up work: the location is required because a note a reader has to go searching for is a note nobody acts on. Omit the field when nothing was noticed; `[]` says the same thing explicitly.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["what", "where"],
+        "properties": {
+          "what": { "type": "string", "minLength": 1, "description": "The problem, stated so a follow-up task could be written from it alone" },
+          "where": { "type": "string", "minLength": 1, "description": "Path, directory or symbol it lives at" }
+        }
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "description": "What was assumed where the task did not say. A wrong assumption is the usual cause of a rejected result, so these are the first thing a reviewer should check. Read only by a human — nothing in the result or the request can confirm an assumption, so this is deliberately an array of sentences rather than a structure that would imply a check nobody performs.",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "not_touched": {
+      "type": "array",
+      "description": "Files a reader would expect in `files_modified` and will not find there, each with the reason. `path` is a separate field because this is machine-checkable: a reader holding the request can subtract `files_modified`/`files_created`/`files_deleted` and this list from `task.target_files` and flag whatever is left as an unexplained omission.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "reason"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "reason": { "type": "string", "minLength": 1, "description": "Why it was left alone — 'already correct', 'out of scope', 'blocked by <x>'" }
+        }
+      }
+    },
     "notes": {
       "type": "string",
-      "description": "Warnings, blockers, or additional context"
+      "description": "Warnings, blockers, or additional context. The three fields above were carved out of this one: free text is where they went before they were declared, and anything that fits one of them belongs there instead."
     }
   }
 }

@@ -247,6 +247,64 @@ describe("AC5: the two contracts are loadable, so the refusals are the validator
     expect(await validateJson(badStatus, output)).not.toEqual([]);
   });
 
+  test("the three things an implementer knows and used to throw away are declarable", async () => {
+    // Same defect as `skill_drift`, one shape further out: an implementer knows
+    // what it noticed and left alone, what it assumed where the task was silent,
+    // and what it did not touch that a reader would expect it to have touched.
+    // None of it was declared, and the object is `additionalProperties: false`,
+    // so a result carrying any of it was refused by its own contract and the
+    // information went into free-text `notes` or nowhere.
+    const output = schema("task-implementer-output");
+    const full = validResult();
+    full.noticed_not_touched = [
+      { what: "StepForm duplicates the validation the store already does", where: "src/pipelines/components/StepForm.tsx" },
+    ];
+    full.assumptions = ["'Required fields' means the fields the store marks required, not every field on the form"];
+    full.not_touched = [
+      { path: "src/pipelines/stores/StepStore.ts", reason: "already validates on save; the gap was in the view" },
+    ];
+    expect(await validateJson(full, output)).toEqual([]);
+  });
+
+  test("an undeclared field is still refused, so the new declarations are permissions and not an opening", async () => {
+    // The other half of the case above. Declaring three fields is only safe
+    // while `additionalProperties: false` still bites — otherwise the schema
+    // stops being a contract and becomes a suggestion, and the next field
+    // arrives undeclared and unnoticed.
+    const output = schema("task-implementer-output");
+    const stray = validResult();
+    stray.noticed_but_not_fixed = ["the plausible misspelling of a field that now exists"];
+    expect(await validateJson(stray, output)).not.toEqual([]);
+  });
+
+  test("the structured fields refuse the shapes that would make them unreadable", async () => {
+    const output = schema("task-implementer-output");
+
+    // A bare string where an entry must carry its location. This is the shape
+    // the fields would have had if they were arrays of strings, and refusing it
+    // is what the object shape buys.
+    const looseNotice = validResult();
+    looseNotice.noticed_not_touched = ["StepForm duplicates the store's validation"];
+    expect(await validateJson(looseNotice, output)).not.toEqual([]);
+
+    // An entry with no reason: `not_touched` without one is just a list of
+    // files, which `files_modified` already fails to mention.
+    const reasonless = validResult();
+    reasonless.not_touched = [{ path: "src/pipelines/stores/StepStore.ts" }];
+    expect(await validateJson(reasonless, output)).not.toEqual([]);
+
+    // Empty strings are the way a required field gets satisfied without being
+    // answered, so `minLength` closes it.
+    const blank = validResult();
+    blank.assumptions = [""];
+    expect(await validateJson(blank, output)).not.toEqual([]);
+
+    // And an entry may not smuggle its own undeclared key either.
+    const smuggled = validResult();
+    smuggled.not_touched = [{ path: "src/a.ts", reason: "out of scope", severity: "high" }];
+    expect(await validateJson(smuggled, output)).not.toEqual([]);
+  });
+
   test("the result file is recorded by the command that refuses when it is missing", () => {
     for (const file of skillBuilds()) {
       const text = read(file);
