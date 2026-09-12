@@ -507,7 +507,11 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     json: false,
     read: false,
-    sideEffects: ["renames .metaproject/flows/**", "writes .metaproject/flows/id-map.json"],
+    sideEffects: [
+      "renames .metaproject/flows/**",
+      "writes .metaproject/flows/id-map.json",
+      "rewrites the flow's review package records (manifest.json, scope.md, findings.json) and review-note links",
+    ],
   },
   // ---- sandbox (OS containment visibility) ------------------------------
   {
