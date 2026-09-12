@@ -38,11 +38,49 @@ test("does NOT flag a fragment of any hex identifier, hyphenated or not", () => 
     "urn:uuid:730344f3-3668-4760-9056-bf7292686b67",
     "event-f53fd8cbab7a47fd-3668-4760-9056",
     "sha256:901131d838b17aac-3668-4760-9056-0f7885b81e03cbdc",
-    "workspace-a/proposal-3668-4760-9056-b",
   ];
   for (const input of cases) {
     expect(phones(input)).toEqual([]);
   }
+});
+
+// The direction this guard fails in, asserted so it cannot be reversed quietly.
+//
+// The first version of the guard suppressed the match whenever the enclosing
+// token carried ANY letter. That reasoning — "a dialling sequence never
+// contains a letter" — is true of the sequence and false of the token around
+// it, and it silently stopped redacting real phone numbers that merely sat
+// next to a word. Each of these was `MISSED` under that rule.
+//
+// A false positive corrupts an identifier; a false negative hands out a
+// person's phone number. The detector exists for the second one.
+test("REGRESSION — a real number next to a word is still redacted", () => {
+  const cases = [
+    "contact-415-555-0199-primary",
+    "a-415-555-0199",
+    "415-555-0199-z",
+    "call 415-555-0199-ext205 now",
+    "ticket TCK-415-555-0199-open",
+    '{"phone-415-555-0199-key":"value"}',
+  ];
+  for (const input of cases) {
+    expect(phones(input)).toEqual(["415-555-0199"]);
+  }
+});
+
+test("an ambiguous word-wrapped digit run is redacted, deliberately", () => {
+  // `proposal-3668-4760-9056-b` and `contact-415-555-0199-primary` are the same
+  // shape, and no local signal separates them. One is an id and one is a phone
+  // number; redacting both is the cost of never leaking the second.
+  expect(phones("workspace-a/proposal-3668-4760-9056-b")).toEqual(["3668-4760-9056"]);
+});
+
+test("a token too long to read whole is redacted rather than guessed at", () => {
+  // The outward scan is bounded (an unbounded one adds a second quadratic term
+  // on adversarial input). Past the bound the evidence is incomplete, and
+  // incomplete evidence must not buy suppression.
+  const huge = `${"f".repeat(200)}-3668-4760-9056-${"a".repeat(200)}`;
+  expect(phones(huge)).toEqual(["3668-4760-9056"]);
 });
 
 // Enumerated, not sampled. The empirical measurement that opened flow 260 was
@@ -120,10 +158,12 @@ test("CONTROL — that corpus really does contain the shape this guard rejects",
   }
 });
 
-// The bound the guard leans on: E.164 caps a subscriber number at 15 digits, so
-// a match that is a fragment of a token carrying more than that is a fragment of
-// an identifier, whatever it looks like on its own.
-test("does NOT flag a fragment of an all-digit identifier longer than any phone number", () => {
+// An all-digit identifier is rejected BEFORE the boundary guard, by the
+// pre-existing `digits < 9 || digits > 15` bound: the regex takes the whole run
+// greedily, and 34 digits is not a phone number. Asserted because the behaviour
+// matters, and labelled accurately because a round of this review found the
+// earlier comment here claiming coverage of a guard this input never reaches.
+test("does NOT flag an all-digit identifier longer than any phone number", () => {
   expect(phones("20260912-3668-4760-9056-00112233445566")).toEqual([]);
 });
 

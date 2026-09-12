@@ -65,6 +65,9 @@ describe("the one rule where the same shape is reachable, stated rather than glo
   // repaired — no identifier in this codebase produced one — but the weakness is
   // the same shape, so it is pinned here: if a future change makes this fire,
   // the sweep says so instead of the next intermittent CI failure.
+  //
+  // Tracked as flow 261. This assertion records the gap; it does not endorse it,
+  // and whoever closes 261 replaces it with whatever that flow decides.
   test("an SSN-shaped run inside a hyphenated identifier is detected today", () => {
     const found = detectPii("release-123-45-6789-hotfix").filter((m) => m.policyId === "pii.ssn");
     // Documented as-is. Changing this is a product decision about SSN recall,

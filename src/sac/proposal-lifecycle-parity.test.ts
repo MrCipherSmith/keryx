@@ -68,7 +68,14 @@ test("actual CLI and real stdio MCP SDK preserve terminal review and replay pari
 //
 // The draw is removed here: the id that DID fail is a literal, so the property
 // is asserted on every run rather than sampled.
-test("the MCP redaction seam returns a review event verbatim, phone-shaped correlationId and all", async () => {
+//
+// SCOPE, stated because the first version of this comment overstated it (found
+// in flow 260's own review round): this calls `redactToolOutput`, the
+// serialized-content wrapper, NOT `dispatchCallTool`. Both converge on the same
+// `validateOutputForTransport` floor — which is where the defect lived, so the
+// regression is genuinely pinned — but the live dispatch wiring is covered by
+// the SDK test above, not by this one.
+test("the serialized-output floor returns a review event verbatim, phone-shaped correlationId and all", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-parity-redact-"));
   const event = {
     event: {
