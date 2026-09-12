@@ -1633,7 +1633,8 @@ async function runFloor(args: string[]): Promise<void> {
   const contextLines = parseContextLines(optionValue(args, "--context"));
   const diffFile = optionValue(args, "--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
-  const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
+  const base = ref === undefined ? undefined : await mergeBaseWithHead(ref);
+  const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(base, contextLines);
   const report = detectFloorRegressions(buildReviewScope(diff, { contextLines }));
 
   if (args.includes("--json")) {
@@ -1831,6 +1832,68 @@ async function gitDiff(ref: string | undefined, contextLines: number): Promise<s
     throw new Error(`git diff failed (exit ${exitCode}): ${stderr.trim()}`);
   }
   return stdout;
+}
+
+/**
+ * The commit `floor` actually compares against: the MERGE BASE of `HEAD` and
+ * `ref`, not `ref` itself.
+ *
+ * `git diff <ref>` is a two-dot diff, so every commit `<ref>` gained while the
+ * branch was in flight appears INVERTED — the base's own additions read as this
+ * branch's removals. Measured, not theorised: on `skills/skill-gaps` two commits
+ * behind `origin/main`, `keryx review floor --ref origin/main` reported two
+ * `assertion-removed` findings, in `src/commands/review.test.ts` and
+ * `src/gdskills/install.test.ts`. No commit of the branch touches either file.
+ * Both are touched by #543 and #544, which ADDED those assertions on `main`.
+ *
+ * That is the worst failure mode a guard has. It does not merely cry wolf: this
+ * guard's whole demand is "say why in the diff", so a finding about work that is
+ * not in the diff cannot be answered honestly at all. The only ways out are to
+ * write a justification for someone else's change or to turn the guard off — and
+ * when it goes off, the three real detections go with it.
+ *
+ * Resolved explicitly rather than through git's `<ref>...` three-dot spelling,
+ * which would be shorter and is wrong here: the three-dot form ends at `HEAD`,
+ * so it drops the working tree, and a guard that cannot see uncommitted work
+ * cannot be run before the commit that needs it. `git diff <merge-base>` keeps
+ * both properties at once — the base's own commits are excluded AND uncommitted
+ * changes are still scanned.
+ *
+ * For an ancestor ref — `HEAD~3`, a tag already merged, a base nothing has moved
+ * — the merge base IS the ref, so this resolves to exactly what it resolved to
+ * before. It diverges only in the case that was broken.
+ *
+ * ## The divergence from `scope` and `blast-radius`, stated
+ *
+ * `runScope` and `runBlastRadius` still resolve `--ref` the two-dot way, through
+ * {@link gitDiff} and {@link gitChangedFiles} below, and so carry this same
+ * defect. They are not fixed here on purpose: both shipped (they are in
+ * `v0.2.98`, where `keryx review floor` is absent — floor is in no released tag
+ * at all), and `rules/core/cli-interface-design.mdc` puts a published command's
+ * stdout under the same contract as an API. Changing what `--ref` selects would
+ * change what `scope` prints for callers already parsing it, which is a change
+ * that ships with its consumers named, not as a side effect of a floor fix.
+ * Named here rather than left for the next person to rediscover.
+ */
+async function mergeBaseWithHead(ref: string): Promise<string> {
+  const proc = Bun.spawn(["git", "merge-base", "HEAD", ref], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  const base = stdout.trim();
+  if (exitCode !== 0 || base.length === 0) {
+    // Refused rather than silently falling back to `ref`: the fallback IS the
+    // bug this function exists to remove, and a guard that quietly returns to
+    // blaming the base would be worse than one that stops and says so.
+    throw new Error(
+      `Cannot resolve a merge base between HEAD and ${ref}${stderr.trim().length > 0 ? `: ${stderr.trim()}` : " (no common ancestor)"}. ` +
+        `\`floor\` compares against the merge base so that commits ${ref} gained since this branch forked are not reported as this branch's removals. ` +
+        `Pass a ref that shares history with HEAD, or pass the diff directly with --diff.`,
+    );
+  }
+  return base;
 }
 
 async function runStatus(args: string[]): Promise<void> {
@@ -2071,6 +2134,10 @@ Usage:
                      [--json | --scoped-diff] [--append <file>]
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
+                     --ref compares against the MERGE BASE of HEAD and <base>,
+                     so commits <base> gained since this branch forked are not
+                     reported as this branch's removals. Uncommitted work is
+                     still scanned.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]

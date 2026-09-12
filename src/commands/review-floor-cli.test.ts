@@ -134,3 +134,106 @@ test("the subcommand is listed in `keryx review --help`", async () => {
   expect(logs.join("\n")).toContain("keryx review floor");
   expect(process.exitCode).toBe(0);
 });
+
+// ---------------------------------------------------------------------------
+// `--ref` resolves through the merge base
+// ---------------------------------------------------------------------------
+//
+// These two are the only tests here that build a real repository, because the
+// thing under test IS the git resolution and a diff on disk cannot exercise it.
+//
+// The defect they pin was measured, not imagined: on `skills/skill-gaps`, two
+// commits behind `origin/main`, `floor --ref origin/main` reported two
+// `assertion-removed` findings in files no commit of the branch touches. `git
+// diff <ref>` is two-dot, so the base's own additions came back inverted as the
+// branch's removals — a guard demanding a justification, in the diff, for a
+// change that is not in the diff.
+//
+// They come as a pair on purpose. The first alone would pass against a `floor`
+// that had simply been broken into silence.
+
+async function git(...args: string[]): Promise<void> {
+  const proc = Bun.spawn(["git", ...args], { cwd: ROOT, stdout: "pipe", stderr: "pipe" });
+  const [stderr, exitCode] = await Promise.all([new Response(proc.stderr).text(), proc.exited]);
+  if (exitCode !== 0) {
+    throw new Error(`git ${args.join(" ")} failed: ${stderr}`);
+  }
+}
+
+const ONE_ASSERTION = 'test("a", () => {\n  expect(one()).toBe(1);\n});\n';
+const FOUR_ASSERTIONS =
+  'test("a", () => {\n  expect(one()).toBe(1);\n  expect(two()).toBe(2);\n  expect(three()).toBe(3);\n  expect(four()).toBe(4);\n});\n';
+
+/** A repo forked at `base`, where the two sides have since moved apart. */
+async function forkedRepo(options: { onBase: string; onBranch: string }): Promise<void> {
+  await git("init", "-q", "-b", "main", ".");
+  await git("config", "user.email", "floor@test.invalid");
+  await git("config", "user.name", "floor");
+  await writeFile(path.join(ROOT, "thing.test.ts"), ONE_ASSERTION, "utf8");
+  await git("add", "thing.test.ts");
+  await git("commit", "-qm", "base");
+
+  await git("checkout", "-q", "-b", "feature");
+  await writeFile(path.join(ROOT, "thing.test.ts"), options.onBranch, "utf8");
+  // Work of the branch's own, in a file neither side of this test looks at, so
+  // the branch has a real commit even when it leaves `thing.test.ts` alone.
+  await writeFile(path.join(ROOT, "note.ts"), "export const note = 1;\n", "utf8");
+  await git("add", "thing.test.ts", "note.ts");
+  await git("commit", "-qm", "feature work");
+
+  // The base moves on AFTER the fork — this is the condition the bug needed.
+  await git("checkout", "-q", "main");
+  await writeFile(path.join(ROOT, "thing.test.ts"), options.onBase, "utf8");
+  await git("add", "thing.test.ts");
+  await git("commit", "-qm", "main gains assertions");
+
+  await git("checkout", "-q", "feature");
+}
+
+test("assertions the BASE gained after the fork are not reported as this branch's removals", async () => {
+  // The branch leaves the file exactly as it forked it. Every difference
+  // between `main` and here belongs to `main`.
+  await forkedRepo({ onBase: FOUR_ASSERTIONS, onBranch: ONE_ASSERTION });
+
+  await reviewCommand(["floor", "--ref", "main", "--json"]);
+
+  const parsed = JSON.parse(logs.join("\n")) as FloorReport;
+  // Against the pre-fix two-dot resolution this is 1: `assertion-removed`,
+  // 3 assertions, in a file this branch never touched.
+  expect(parsed.counts.total).toBe(0);
+  expect(parsed.findings).toEqual([]);
+  expect(process.exitCode).toBe(0);
+});
+
+test("an assertion this branch removed is still reported", async () => {
+  // The converse, and the reason the fix is not just "report less". The base
+  // moves the same way, but the branch ALSO cut two assertions of its own.
+  await forkedRepo({
+    onBase: FOUR_ASSERTIONS,
+    onBranch: 'test("a", () => {\n});\n',
+  });
+
+  await reviewCommand(["floor", "--ref", "main", "--json"]);
+
+  const parsed = JSON.parse(logs.join("\n")) as FloorReport;
+  expect(parsed.counts.byKind["assertion-removed"]).toBe(1);
+  expect(parsed.findings[0]?.path).toBe("thing.test.ts");
+  // One removal, from the fork point — not four, which is what counting against
+  // `main`'s tip would have produced.
+  expect(parsed.findings[0]?.detail).toContain("removes 1 assertion-carrying line(s)");
+  expect(process.exitCode).toBe(1);
+});
+
+test("a ref that shares no history with HEAD is refused, not silently diffed", async () => {
+  await forkedRepo({ onBase: FOUR_ASSERTIONS, onBranch: ONE_ASSERTION });
+  await git("checkout", "-q", "--orphan", "unrelated");
+  await git("commit", "-qm", "unrelated root", "--allow-empty");
+  await git("checkout", "-q", "feature");
+
+  await reviewCommand(["floor", "--ref", "unrelated"]);
+
+  // Falling back to the raw ref here is exactly the bug, so it stops instead.
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("merge base");
+  expect(logs.join("\n")).not.toContain("Floor guard");
+});
