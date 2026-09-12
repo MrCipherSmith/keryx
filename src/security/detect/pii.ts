@@ -223,45 +223,105 @@ function containsCalendarDate(value: string): boolean {
 // the MCP surface's — fail on a dice roll.
 //
 // The fix is a boundary, not a weaker pattern: the characters a match is
-// EMBEDDED in decide it, and a real phone number is never embedded in an
-// alphanumeric token.
+// EMBEDDED in decide it.
+//
+// WHICH DIRECTION THE BOUNDARY FAILS IN IS THE WHOLE DESIGN, and the first
+// version got it backwards. It suppressed the match whenever the enclosing
+// token carried ANY letter, on the reasoning that a dialling sequence never
+// contains one. True of the sequence; false of the token around it. So
+// `contact-415-555-0199-primary`, `TCK-415-555-0199-open`,
+// `415-555-0199-ext205` and even `a-415-555-0199` stopped being redacted at
+// all — a real number, passed through verbatim, in the detector whose entire
+// job is to not do that. Two reviewers found it independently; the measurement
+// is `MISSED` on all four inputs against `caught` before the guard existed.
+//
+// A false positive corrupts an identifier. A false negative leaks a person's
+// phone number. Those are not symmetric, so the rule is now positive evidence:
+// suppress ONLY where the surroundings actually look like a hex identifier —
+// a UUID, a digest, a hash-prefixed id. Everything else is redacted, including
+// the genuinely ambiguous `word-NNNN-NNNN-NNNN-word`, which no local signal can
+// separate from a phone number in a slug.
 const IDENTIFIER_CHAR = /[0-9A-Za-z_-]/;
 
-/** The `[0-9A-Za-z_-]` run the match at `[start, end)` sits inside. */
-function enclosingToken(content: string, start: number, end: number): string {
+/**
+ * How far the scan walks out of the match, each way.
+ *
+ * `enclosingToken` runs once per surviving candidate, so an unbounded walk adds
+ * a second quadratic term on adversarial input — a long identifier-shaped run
+ * holding many phone-shaped candidates, each re-scanning to the same distant
+ * ends. Measured at ~1.6x the unguarded cost on a 272 KB blob. The evidence
+ * this function looks for is local (a UUID is 36 characters, a sha256 64), so a
+ * bound costs nothing real.
+ *
+ * A token that exceeds the window on either side is reported TRUNCATED, and a
+ * truncated token is never treated as an identifier: partial evidence must not
+ * buy suppression in a detector that fails toward redaction.
+ */
+const TOKEN_SCAN_LIMIT = 64;
+
+type EnclosingToken = { readonly text: string; readonly truncated: boolean };
+
+/** The `[0-9A-Za-z_-]` run the match at `[start, end)` sits inside, bounded. */
+function enclosingToken(content: string, start: number, end: number): EnclosingToken {
   let from = start;
-  while (from > 0 && IDENTIFIER_CHAR.test(content[from - 1] as string)) {
+  const floor = Math.max(0, start - TOKEN_SCAN_LIMIT);
+  while (from > floor && IDENTIFIER_CHAR.test(content[from - 1] as string)) {
     from -= 1;
   }
   let to = end;
-  while (to < content.length && IDENTIFIER_CHAR.test(content[to] as string)) {
+  const ceiling = Math.min(content.length, end + TOKEN_SCAN_LIMIT);
+  while (to < ceiling && IDENTIFIER_CHAR.test(content[to] as string)) {
     to += 1;
   }
-  return content.slice(from, to);
+  const truncated =
+    (from === floor && from > 0 && IDENTIFIER_CHAR.test(content[from - 1] as string)) ||
+    (to === ceiling && to < content.length && IDENTIFIER_CHAR.test(content[to] as string));
+  return { text: content.slice(from, to), truncated };
+}
+
+/** `8-4-4-4-12` hex — the one identifier shape that needs no heuristic at all. */
+const UUID_TOKEN = /^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$/;
+
+/**
+ * A hex run long enough, and letter-bearing enough, to be an identifier.
+ *
+ * The `[a-f]` requirement is what separates `f53fd8cbab7a47fd` from `20260912`:
+ * a run of eight digits is a date, an amount or a number, and treating it as
+ * evidence of a hash would suppress by coincidence. The length floor keeps a
+ * single stray letter — the `a` in `a-415-555-0199` — from qualifying.
+ */
+function isHexIdentifierRun(segment: string): boolean {
+  return segment.length >= 8 && /^[0-9A-Fa-f]+$/.test(segment) && /[A-Fa-f]/.test(segment);
 }
 
 /**
- * True when the candidate is only a FRAGMENT of a longer identifier.
+ * True when the candidate is a fragment of something that really is an identifier.
  *
- * Two ways to tell, and a phone number satisfies neither:
- *   - the enclosing token carries a letter or underscore — a dialling sequence
- *     never does, whatever punctuation surrounds it (`"415-555-0199"`,
- *     `[415-555-0199]`, `Tel:+14155550199` all keep their token letter-free,
- *     because `"`, `[` and `:` are not identifier characters);
- *   - the enclosing token carries more than 15 digits — E.164 caps a subscriber
- *     number at 15, which is the same bound the digit check above already
- *     applies to the match itself. An all-digit identifier long enough to
- *     contain a phone-shaped run is an identifier.
+ * Positive evidence only, in two shapes:
+ *   - the whole enclosing token is a UUID, or
+ *   - some part of it OUTSIDE the match is a hex run of 8+ characters carrying
+ *     at least one `a`-`f` — a digest, a short hash, a hash-prefixed id.
+ *
+ * Anything else keeps the finding. `contact-415-555-0199-primary` and
+ * `proposal-3668-4760-9056-b` are the same shape as each other and this
+ * function cannot tell them apart; the first is a phone number and redacting
+ * the second is the cost of saying so.
  */
 function isIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
-  const token = enclosingToken(content, matchStart, matchEnd);
+  const { text: token, truncated } = enclosingToken(content, matchStart, matchEnd);
+  if (truncated) {
+    return false; // Evidence incomplete → redact.
+  }
   if (token.length === matchEnd - matchStart) {
     return false; // Nothing around it — the match IS the token.
   }
-  if (/[A-Za-z_]/.test(token)) {
+  if (UUID_TOKEN.test(token)) {
     return true;
   }
-  return countDigits(token) > 15;
+  const match = content.slice(matchStart, matchEnd);
+  const before = token.slice(0, token.indexOf(match));
+  const after = token.slice(token.indexOf(match) + match.length);
+  return [...before.split(/[-_]/), ...after.split(/[-_]/)].some(isHexIdentifierRun);
 }
 
 function hasPhoneSeparatorShape(value: string): boolean {

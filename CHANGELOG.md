@@ -13,10 +13,12 @@ All notable changes to `keryx` are documented here. The format follows
   satisfied both of the phone pattern's boundary checks while also being a legal
   separator inside it. Any identifier crossing a redacting surface, MCP tool
   output included, was silently corrupted at that rate: 46 of 5 000 random v4
-  UUIDs, about one in a hundred. A match embedded in a longer alphanumeric
-  token, or in one carrying more digits than E.164 allows a phone number, is now
-  rejected; the phone corpus is unchanged, so every number the detector caught
-  before it still catches.
+  UUIDs, about one in a hundred. A candidate is now dropped only where the
+  surroundings are demonstrably a hex identifier — the whole token is a UUID, or
+  a hex run of 8+ characters carrying an `a`-`f` sits beside it. Where the shape
+  is genuinely ambiguous (`word-1234-5678-9012-word`) the number is redacted:
+  corrupting an identifier is a smaller harm than handing out a phone number,
+  and no local signal separates the two.
 
 ## [0.2.98] — 2026-09-12
 Credentials, and what keryx says about them. `shell_exec` stops handing saved
