@@ -17,7 +17,8 @@ import { BUNDLED_GDSKILLS } from "../gdskills/catalog";
 import {
   AC7_REQUIRED_QUERIES,
   KNOWN_ROUTING_GAPS,
-  RANK1_BASELINE,
+  RANK1_FIRST,
+  RANK1_TOTAL,
   ROUTING_CORPUS,
   type RoutingCase,
 } from "./routing-corpus";
@@ -25,6 +26,10 @@ import { normalizeRouteText, scoreBundledSkillRoute } from "./skills";
 
 const MIN_POSITIVES = 3;
 const MIN_NEGATIVES = 2;
+// A single non-quoting positive proves the router survives one rewrite. Two
+// prove the skill was not patched until exactly one lucky sentence got
+// through — the floor T21 found 48 skills sitting on exactly.
+const MIN_PARAPHRASES = 2;
 
 function ranking(query: string): { name: string; score: number }[] {
   return BUNDLED_GDSKILLS.map((entry) => scoreBundledSkillRoute(entry, query))
@@ -116,7 +121,7 @@ describe("the prompts are not copies of the trigger lists", () => {
   // A corpus assembled out of a skill's own triggers asserts that string
   // equality works. It passes on the day someone deletes the description, and it
   // passes on the day a trigger stops describing anything a user says.
-  test("every skill has at least one positive that quotes none of its triggers", () => {
+  test(`every skill has at least ${MIN_PARAPHRASES} positives that quote none of its triggers`, () => {
     for (const entry of ROUTING_CORPUS) {
       const skill = BUNDLED_GDSKILLS.find((candidate) => candidate.name === entry.skill);
       if (!skill) continue;
@@ -125,8 +130,9 @@ describe("the prompts are not copies of the trigger lists", () => {
       );
       expect(
         paraphrases.length,
-        `${entry.skill}: every positive quotes one of its own triggers word for word`,
-      ).toBeGreaterThan(0);
+        `${entry.skill}: only ${paraphrases.length} positive(s) avoid quoting its own triggers word for ` +
+          `word, need at least ${MIN_PARAPHRASES} — one paraphrase is a lucky sentence, not a floor`,
+      ).toBeGreaterThanOrEqual(MIN_PARAPHRASES);
     }
   });
 
@@ -195,8 +201,16 @@ describe("every negative is won by the skill that owns it", () => {
   }
 });
 
-describe("rank-1 accuracy is a ratchet", () => {
-  test(`at least ${RANK1_BASELINE} of positives rank first`, () => {
+describe("rank-1 accuracy is a ratchet, pinned as two integers", () => {
+  // `RANK1_FIRST`/`RANK1_TOTAL` replace a single float threshold
+  // (`accuracy >= RANK1_BASELINE`) that a reviewer could quietly relax by
+  // editing one number down to anything still under the live accuracy —
+  // exactly what happened when it was set to 0.6 and nothing failed. Equality
+  // against a live re-measurement closes that: no number smaller than the
+  // true measured count can pass on its own, or the mismatch fails the test
+  // both ways.
+
+  function measure(): { total: number; first: number; lost: string[] } {
     let total = 0;
     let first = 0;
     const lost: string[] = [];
@@ -212,17 +226,45 @@ describe("rank-1 accuracy is a ratchet", () => {
         }
       }
     }
-    const accuracy = first / total;
+    return { total, first, lost };
+  }
+
+  test("RANK1_TOTAL equals the corpus's own counted-positive count", () => {
+    // Pins the denominator to the corpus itself: adding, removing, or newly
+    // excluding a positive changes this count, and the recorded constant has
+    // to move with it in the same diff — it cannot go stale in either
+    // direction.
+    const { total } = measure();
     expect(
-      accuracy,
-      `rank-1 accuracy ${accuracy.toFixed(4)} (${first}/${total}) below the recorded ${RANK1_BASELINE}\n${lost.join("\n")}`,
-    ).toBeGreaterThanOrEqual(RANK1_BASELINE);
+      RANK1_TOTAL,
+      `RANK1_TOTAL (${RANK1_TOTAL}) does not match the corpus's counted positives (${total}) — ` +
+        "update RANK1_TOTAL (and RANK1_FIRST) in the same change that changed the corpus",
+    ).toBe(total);
   });
 
-  test("the baseline is a real measurement, not a placeholder", () => {
-    // 0 would pass forever; 1 would be a target nobody measured.
-    expect(RANK1_BASELINE).toBeGreaterThan(0.5);
-    expect(RANK1_BASELINE).toBeLessThanOrEqual(1);
+  test("RANK1_FIRST equals the measured first-place count exactly", () => {
+    // Not `>=`: a regression (measured below RANK1_FIRST) fails here, same as
+    // a floor would. An IMPROVEMENT (measured above RANK1_FIRST) fails here
+    // too, on purpose — the fix is to raise RANK1_FIRST to the new measured
+    // count in a reviewable diff, not to let the suite go on passing against
+    // a stale, too-low record.
+    const { first, lost } = measure();
+    expect(
+      first,
+      first < RANK1_FIRST
+        ? `rank-1 first-place count dropped to ${first}, below the recorded RANK1_FIRST (${RANK1_FIRST}) — ` +
+            `this is a regression\n${lost.join("\n")}`
+        : `rank-1 first-place count rose to ${first}, above the recorded RANK1_FIRST (${RANK1_FIRST}) — ` +
+            "routing improved; raise RANK1_FIRST (and RANK1_TOTAL if the corpus also grew) to record it",
+    ).toBe(RANK1_FIRST);
+  });
+
+  test("the recorded pair is a real measurement, not a placeholder", () => {
+    // 0/anything would pass forever; RANK1_FIRST > RANK1_TOTAL could never be
+    // measured at all.
+    expect(RANK1_TOTAL).toBeGreaterThan(0);
+    expect(RANK1_FIRST).toBeGreaterThan(0);
+    expect(RANK1_FIRST).toBeLessThanOrEqual(RANK1_TOTAL);
   });
 });
 

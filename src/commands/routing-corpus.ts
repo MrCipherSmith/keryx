@@ -23,13 +23,25 @@
  * The prompts are written in a user's words, not copied out of the trigger
  * lists, because a corpus made of trigger phrases only asserts that string
  * equality works. `routing-corpus.test.ts` enforces that directly: every skill
- * needs at least one positive that contains none of its own triggers verbatim,
- * and a positive that is EXACTLY a trigger phrase is refused unless it is one of
- * the queries AC7 names by hand (`AC7_REQUIRED_QUERIES` below).
+ * needs at least TWO positives that contain none of its own triggers verbatim
+ * — one paraphrase proves the router survives a single rewrite, two prove the
+ * skill was not just patched until one lucky sentence got through — and a
+ * positive that is EXACTLY a trigger phrase is refused unless it is one of the
+ * queries AC7 names by hand (`AC7_REQUIRED_QUERIES` below).
  *
- * Rank-1 accuracy over the positives is checked in against `RANK1_BASELINE`. It
- * is a ratchet, not a target: the test fails when accuracy drops below the
- * recorded number, and the number is raised by hand when routing improves.
+ * Rank-1 accuracy over the positives is a ratchet, but not a single float
+ * anyone can edit back down: `RANK1_FIRST` and `RANK1_TOTAL` are the two raw
+ * integers of the last measurement, and `routing-corpus.test.ts` re-measures
+ * both on every run and requires EQUALITY with what is recorded here — not
+ * "at least". A regression makes the measured `first` come in below
+ * `RANK1_FIRST` and the test fails, same as before. An IMPROVEMENT now also
+ * fails it, on purpose: measured `first` above the recorded number means the
+ * record is stale and has to be raised by hand, so "make it pass" and "make it
+ * honest" are the same edit. `RANK1_TOTAL` is pinned the same way against the
+ * corpus's own live positive count, so growing the corpus without updating the
+ * pair fails too — the numbers cannot drift out of sync with what they claim
+ * to measure. A human-readable accuracy is derived from the pair, never pinned
+ * on its own (see `RANK1_ACCURACY` below).
  */
 
 export interface RoutingNegative {
@@ -82,7 +94,7 @@ export const AC7_REQUIRED_QUERIES: readonly string[] = [
  * `excluded: false` is a case that PASSES its assertion — the skill is top-3 —
  * but loses rank 1 to a neighbour. It stays in the denominator and is the reason
  * accuracy is not 1.0. Nothing has to be done to this file when one is fixed;
- * accuracy simply rises and `RANK1_BASELINE` can be raised with it.
+ * accuracy simply rises and `RANK1_FIRST` can be raised with it.
  *
  * The routing-collision work in this flow consumes both lists. An empty list is
  * the goal, not a defect.
@@ -144,22 +156,59 @@ export const KNOWN_ROUTING_GAPS: readonly RoutingGap[] = [
 ];
 
 /**
- * Share of positives whose skill ranks FIRST, not merely top-3.
+ * Count of positives whose skill ranks FIRST, not merely top-3.
  *
  * Top-3 is what each case asserts, because an agent reading `keryx skills route`
  * sees a short list and picks from it. Rank-1 is the quality signal underneath:
  * it can degrade a long way without any individual case failing, which is
  * exactly the drift a description edit causes.
  *
- * Measured at 237 of 239 positives, 0.9916 — up from 232/239 (0.9707), which is
- * where T10 left it with seven prompts losing rank 1. Five were metadata
- * defects and were fixed in the skills' own frontmatter (T12); the two that
- * remain are top-3 and written down in KNOWN_ROUTING_GAPS with the arithmetic
- * that puts them out of reach, so the shortfall is named rather than averaged
- * away. Raise this number when routing improves; never lower it without saying
- * which cases regressed.
+ * This used to be a single float, `RANK1_BASELINE`, checked with
+ * `accuracy >= RANK1_BASELINE`. That shape has a hole: the constant is not
+ * derived from anything the test can check independently, so lowering it is
+ * indistinguishable from a real drop in the denominator or an honest
+ * improvement — a reviewer once set it to 0.6 by hand and nothing failed,
+ * because 237/239 still clears 0.6 by a wide margin. A ratchet that can be
+ * loosened by editing one number to any smaller number in range is not a
+ * ratchet.
+ *
+ * `RANK1_FIRST` and `RANK1_TOTAL` replace it with the two raw integers of the
+ * last measurement instead of their quotient. `routing-corpus.test.ts`
+ * re-measures both live and requires:
+ *
+ * - `RANK1_TOTAL` to equal the corpus's own current count of counted
+ *   positives (every positive, minus any `KNOWN_ROUTING_GAPS` exclusion) —
+ *   so the denominator cannot go stale relative to the corpus that produces
+ *   it, in either direction.
+ * - the measured first-place count to equal `RANK1_FIRST` exactly, not
+ *   `>=`. A regression (`measured < RANK1_FIRST`) fails it, same as the old
+ *   floor did. An IMPROVEMENT (`measured > RANK1_FIRST`) fails it too, on
+ *   purpose: the only way to make the suite pass again is to raise
+ *   `RANK1_FIRST` to the new measured count, in a diff that says so. Lowering
+ *   either integer without a matching real change to the corpus or the
+ *   scorer produces a mismatch against the live measurement and fails
+ *   immediately — there is no smaller number that passes on its own the way
+ *   0.6 did.
+ *
+ * Measured at 285 of 287 positives — up from 237/239 (0.9916) after T21 added
+ * a second non-quoting paraphrase to the 48 skills that had exactly one
+ * (AC7/non-vacuity work below): all 48 new paraphrases rank their own skill
+ * first, so both the numerator and the denominator rose by 48 and the two
+ * pre-existing losses are unchanged. Those two are top-3 and written down in
+ * KNOWN_ROUTING_GAPS with the arithmetic that puts them out of reach, so the
+ * shortfall is named rather than averaged away. Raise `RANK1_FIRST` (and
+ * `RANK1_TOTAL` if the corpus grew) when routing improves; never lower either
+ * without saying which cases regressed.
  */
-export const RANK1_BASELINE = 0.9916;
+export const RANK1_FIRST = 285;
+export const RANK1_TOTAL = 287;
+
+/**
+ * Human-readable form of the ratchet above, derived rather than pinned
+ * separately — there is exactly one place the two integers are allowed to
+ * live, and this is not it.
+ */
+export const RANK1_ACCURACY = RANK1_FIRST / RANK1_TOTAL;
 
 export const ROUTING_CORPUS: readonly RoutingCase[] = [
   // ---------------------------------------------------------------- core
@@ -169,6 +218,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "no idea which skill should be used for this, route it",
       "this is an ordinary product-development request, where does it go",
       "pick the metaproject module that owns this before we start work",
+      "just route this to whichever agent should decide on tools and context here",
     ],
     negatives: [
       { prompt: "what should I inspect first to understand this code", owner: "context-router" },
@@ -194,6 +244,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "is there already a skill describing this component pattern",
       "we keep module-specific work notes for this service, open them",
       "we already have a skill written for this component, load it instead of grepping",
+      "before we write new code, check if a skill already exists for this project or some past work specific to this module",
     ],
     negatives: [
       { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
@@ -206,6 +257,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create skill for src/core/flow",
       "создай скил для стора канбана",
       "there is no skill for this service yet, generate a project skill",
+      "there's no entity skill of any kind for this brand new module yet, can you generate one for it",
     ],
     negatives: [
       { prompt: "load the project skill for the kanban store before touching it", owner: "entity-skill-router" },
@@ -218,6 +270,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create a reviewer from our team's review profile",
       "создай ревьюера на основании этого mdc файла",
       "make a reviewer out of this conventions doc so review-orchestrator can dispatch it",
+      "we should create a profile so a reviewer for the review pipeline can be generated from this doc",
     ],
     negatives: [
       { prompt: "create skill for src/core/flow", owner: "entity-skill-creator" },
@@ -269,6 +322,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create flow for this feature and drive it to completion",
       "заведи стори и веди её через task manager",
       "implement this with the flow, from init to completion",
+      "let's get this ticket moving through task manager from start to finish, fully driven",
     ],
     negatives: [
       { prompt: "implement this issue", owner: "job-orchestrator" },
@@ -305,6 +359,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "implement task 3 from the breakdown",
       "execute this atomic task json",
       "code up this one decomposed task end to end",
+      "there's one task from this issue still left to implement, just that piece",
     ],
     negatives: [
       { prompt: "implement this issue", owner: "job-orchestrator" },
@@ -353,6 +408,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "build this feature from scratch up to a merge-ready PR",
       "develop the feature described in this issue end to end",
       "take me through the guided feature workflow for this idea",
+      "spin up something brand new for this idea and carry it all the way to a pr I can merge",
     ],
     negatives: [
       { prompt: "implement this issue", owner: "job-orchestrator" },
@@ -368,6 +424,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "full review",
       "сделай мне полное ревью перед мержем",
       "reviewing the diff now, where are the problems",
+      "give this whole diff a look and call out anything that needs reviewing before merge",
     ],
     negatives: [
       { prompt: "frontend review of these components", owner: "review-frontend" },
@@ -380,6 +437,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "are there any bugs in this function",
       "check this for correctness, the async handling looks off",
       "review the logic here, the retry path looks off",
+      "can you check whether this function actually has bugs, or if it's just fine for now",
     ],
     negatives: [
       { prompt: "security review of the auth changes", owner: "review-security-code" },
@@ -392,6 +450,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "architecture review of this module",
       "check the layering, the service reaches into the controller",
       "check that the layers and module boundaries still hold",
+      "can you check whether the architecture layers are being crossed here, the service seems to reach straight into the database code",
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
@@ -404,6 +463,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "security review of the auth changes",
       "проверь безопасность этого кода",
       "check this diff for vulnerabilities, injection or auth bypass",
+      "could someone find a way to break in, are there vulnerabilities we should check for in this auth flow",
     ],
     negatives: [
       { prompt: "audit our dependencies for known CVEs", owner: "security-audit" },
@@ -416,6 +476,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "performance review of this diff",
       "check for N+1 queries in the changed services",
       "perf review of the changed components, any needless re-renders",
+      "these queries seem to be getting slower every time we add more data, what's dragging it down",
     ],
     negatives: [
       { prompt: "check performance", owner: "perf-check" },
@@ -464,6 +525,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "highload review before we turn on traffic",
       "is there a race condition in this handler",
       "review this for concurrency, the connection pool worries me",
+      "we're about to get hammered with traffic, will this handler hold up or fall over",
     ],
     negatives: [
       { prompt: "performance review of this diff", owner: "review-performance" },
@@ -476,6 +538,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "does this change break anything else",
       "what is the blast radius of this refactor",
       "review the regression risk in the code this touches",
+      "will this change break anything else downstream, or does it stay completely contained",
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
@@ -488,6 +551,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "review core boundaries in src/core",
       "is the public surface of this shared module still stable",
       "review the core module boundaries, a feature is leaking into src/core",
+      "this feature is reaching into shared code it probably shouldn't touch, can you check the exposure",
     ],
     negatives: [
       { prompt: "architecture review of this module", owner: "review-architecture" },
@@ -500,6 +564,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "reactflow review of the new graph surface",
       "flow graph review of the layout lifecycle",
       "review the graph ui store subclassing",
+      "check whether the new store subclass breaks the generic graph abstraction we built",
     ],
     negatives: [
       { prompt: "check performance", owner: "perf-check" },
@@ -512,6 +577,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "layout review of this grid",
       "does this render correctly with longer German text",
       "review the layout, the flex container overflows on narrow screens",
+      "on tablets this thing does not render correctly at all, boxes overlap everywhere",
     ],
     negatives: [
       { prompt: "frontend review of these components", owner: "review-frontend" },
@@ -524,6 +590,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "style review, naming and readability only",
       "check the naming in this file",
       "check this for readability and nothing that changes behaviour",
+      "can you clean this up and make the naming easier to check at a glance",
     ],
     negatives: [
       { prompt: "clean code review of this class", owner: "review-clean-code" },
@@ -536,6 +603,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "review the tests I added against our testing practices",
       "check the quality of this test coverage",
       "review testing practices in these e2e specs, the waits look flaky",
+      "our testing setup has decent coverage but the practices around waits and quality feel inconsistent in these specs",
     ],
     negatives: [
       { prompt: "write tests", owner: "test-gen" },
@@ -548,6 +616,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "check these findings before they get reported",
       "run a verification pass over the consolidated findings",
       "verify the findings and drop the ones that cannot be reproduced",
+      "can we run a pass over these findings and verify none of them are wrong before we check in",
     ],
     negatives: [
       { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
@@ -560,6 +629,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "review frontend conventions against our CLAUDE.md",
       "check this against our local frontend rules",
       "do these components follow the conventions our frontend guide lays out",
+      "these widgets might be breaking some of our frontend team's own conventions, can you check them against what's written down",
     ],
     negatives: [
       { prompt: "frontend review of these components", owner: "review-frontend" },
@@ -572,6 +642,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "what did reviewers say on my PR",
       "go through the PR comments and explain each one",
       "address the review comments on my pull request",
+      "can you go through my pr and explain what these comments actually mean",
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
@@ -584,6 +655,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "run code-ai-review on this branch",
       "do a strict AI review with the ai assistant profile",
       "use the code review ai assistant profile on this branch",
+      "run a strict pass, ai baseline style, and go through this branch before any human review happens",
     ],
     negatives: [
       { prompt: "review my code", owner: "review-orchestrator" },
@@ -596,6 +668,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "review with our conventions learned from past PRs",
       "review using what we learned from our own PR comments",
       "review this branch with the conventions our PRs taught us",
+      "our own pull request history taught us some conventions, can you review this branch against everything we've learned from that",
     ],
     negatives: [
       { prompt: "run code-ai-review on this branch", owner: "code-ai-review" },
@@ -608,6 +681,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "run code-style-review on my branch",
       "check the architecture style with the code-style-patterns profile",
       "use the legacy style and architecture profile on this branch",
+      "run the older architecture and style checks we still keep around for legacy branches",
     ],
     negatives: [
       { prompt: "style review, naming and readability only", owner: "review-style" },
@@ -634,6 +708,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "do a security audit of this repo",
       "check for CVEs in our dependencies",
       "scan the repo for committed secrets",
+      "can you look for known cves in our dependencies and make sure this whole repo passes an audit",
     ],
     negatives: [
       { prompt: "security review of the auth changes", owner: "review-security-code" },
@@ -646,6 +721,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "run PII redaction over this wiki page before it is saved",
       "is there prompt injection risk in this external content",
       "look at this memory entry and check it for secrets",
+      "before this goes into memory, make sure nothing hidden in it could exfiltrate data or leave secrets we forgot to check for",
     ],
     negatives: [
       { prompt: "security audit", owner: "security-audit" },
@@ -658,6 +734,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "check performance",
       "why is it slow",
       "the page takes forever, why is it so slow",
+      "our js bundle keeps growing and this component feels way too complex, can you look at the size of it",
     ],
     negatives: [
       { prompt: "performance review of this diff", owner: "review-performance" },
@@ -671,6 +748,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "generate tests",
       "write tests for the parser module",
       "can you add a couple of tests for this helper",
+      "this helper has zero coverage right now, can we add a few tests to cover it properly",
     ],
     negatives: [
       { prompt: "create tests first", owner: "tests-creator" },
@@ -684,6 +762,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "write the tests before the implementation, TDD style",
       "we are doing TDD, give me failing test scenarios from the criteria",
       "write the failing tests before any implementation exists",
+      "before writing any code, convert the acceptance criteria into tests that are meant to fail at first",
     ],
     negatives: [
       { prompt: "write tests", owner: "test-gen" },
@@ -720,6 +799,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "deploy to staging",
       "run the deployment",
       "let's push this to production tonight",
+      "let's get this build out and live for everyone, deploying it to production tonight",
     ],
     negatives: [
       { prompt: "push branch to the remote with upstream tracking", owner: "push" },
@@ -732,6 +812,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "push branch to the remote with upstream tracking",
       "git push this branch",
       "push my changes to the remote branch",
+      "can you get my local commits onto the branch that lives on the remote, then push it up with git",
     ],
     negatives: [
       { prompt: "deploy to staging", owner: "deploy" },
@@ -744,6 +825,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "open a PR",
       "create pull request for this branch",
       "make a draft PR please",
+      "let's create a pull request from this branch so people can look at the diff, then open it when everything's ready",
     ],
     negatives: [
       { prompt: "push branch to the remote with upstream tracking", owner: "push" },
@@ -768,6 +850,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "generate the release notes for this version",
       "what changed since v1.2.0",
       "what has changed between these two tags",
+      "can you tell me what actually changed going from the old version to this new release",
     ],
     negatives: [
       { prompt: "deploy to staging", owner: "deploy" },
@@ -794,6 +877,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "clarify requirements",
       "ask me questions first, the request is vague",
       "gather the requirements from me before any context work",
+      "before interviewing me any further, gather what you actually need and pin down the requirements first",
     ],
     negatives: [
       { prompt: "clarify the implementation details now that we have the context", owner: "interview" },
@@ -818,6 +902,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create PRD for this feature",
       "write a product requirements document for the billing module",
       "formulate the requirements for this feature properly",
+      "we need to properly formulate a document that spells out this product's requirements for the new feature, right from the start",
     ],
     negatives: [
       { prompt: "clarify requirements", owner: "interviewer" },
@@ -830,6 +915,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "run project discovery for this new project",
       "do the initial analysis of what we know so far",
       "discover what this project is from the sources we have",
+      "let's take an initial look and figure out everything we can discover about this project from what's available, basically an analysis of where things stand",
     ],
     negatives: [
       { prompt: "define the problem and the non-goals", owner: "problem-definer" },
@@ -854,6 +940,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "help me choose the stack for an MVP",
       "I need stack advice for a production service",
       "which technology choice makes sense here, postgres or mongo",
+      "torn between two technology options for the stack here, what advice would help us choose",
     ],
     negatives: [
       { prompt: "research the architecture patterns for this stack", owner: "patterns-researcher" },
@@ -866,6 +953,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "research the architecture patterns for this stack",
       "what are the best practices for NestJS here",
       "look into the patterns we should research before the PRD",
+      "before we lock in an architecture, can you dig up common patterns and see what practices actually work best for other teams handling this kind of research",
     ],
     negatives: [
       { prompt: "help me choose the stack for an MVP", owner: "stack-advisor" },
@@ -878,6 +966,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "write the implementation plan from the PRD",
       "produce the technical specification for this module",
       "write the spec and the plan for implementation from the PRD",
+      "this needs a technical write-up, think specification level detail, plus a plan for how the implementation will actually proceed",
     ],
     negatives: [
       { prompt: "create PRD for this feature", owner: "prd-creator" },
@@ -902,6 +991,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create requirements package for the billing module",
       "оформи пакет документации по этому модулю",
       "we need a documentation package prepared for implementation",
+      "can you put together everything this module's requirements need, package, prd, spec, before implementation starts",
     ],
     negatives: [
       { prompt: "verify the requirements package for completeness", owner: "docpack-review" },
@@ -926,6 +1016,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "create the roadmap and the milestones from the PRD",
       "give me the task breakdown with dependencies",
       "plan out the milestones we need to create",
+      "can you create a plan, plus a breakdown of tasks, so we know what depends on what before we start",
     ],
     negatives: [
       { prompt: "break down issue 42 into atomic tasks", owner: "issue-analyzer" },
@@ -938,6 +1029,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "document this codebase for new joiners",
       "сгенерируй документацию проекта по коду",
       "reverse engineer the docs for this repo",
+      "this whole codebase has nothing written about it for new people, can you reverse engineer some documentation for it automatically",
     ],
     negatives: [
       { prompt: "create requirements package for the billing module", owner: "docpack-orchestrator" },
@@ -950,6 +1042,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "scan the codebase for module boundaries and entry points",
       "run the autodoc scan phase",
       "identify the documentation targets and detect the stack",
+      "before anything gets written automatically, figure out which targets in the repo actually need documentation, then scan them first",
     ],
     negatives: [
       { prompt: "document this codebase", owner: "autodoc-orchestrator" },
@@ -974,6 +1067,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "synthesize the module analyses into architecture docs",
       "reverse engineer the architecture from these analyses",
       "autodoc architect phase please",
+      "once every module has been analyzed separately, pull it all into one architecture picture, basically the docs a system architect would want",
     ],
     negatives: [
       { prompt: "reverse engineer this module's purpose and public API", owner: "autodoc-analyst" },
@@ -1012,6 +1106,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "refresh the managed block in AGENTS.md",
       "add the metaproject block to CLAUDE.md",
       "the entry point file for agents needs its managed block re-added",
+      "the shared md file that both agents and claude read from lost its managed block, can you put it back",
     ],
     negatives: [
       { prompt: "split our huge CLAUDE.md into rules and project skills", owner: "agent-entrypoint-distiller" },
@@ -1036,6 +1131,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "install the post-commit git hook for graph rebuilds",
       "install the hook that verifies skills",
       "set up a git hook that runs health after a commit",
+      "can you install a hook so git fires something automatically the moment work gets committed",
     ],
     negatives: [
       { prompt: "run lint after every edit, set that up as a hook", owner: "hookify" },
@@ -1084,6 +1180,7 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
       "export this skill for the codex runtime",
       "turn the canonical packages into runtime skill artifacts",
       "build the codex skill artifacts, stripped of management files",
+      "we need whatever codex uses at runtime, stripped down from the full skill package, ready to export",
     ],
     negatives: [
       { prompt: "sync the exported skills into my local runtimes", owner: "skill-sync" },
