@@ -315,13 +315,18 @@ test("a skill directory reached through a symlink is not swept, and the target k
     // That second install would reach the `cp(bundledDir, skillDir, { force })`
     // in `installGdskills` with `skillDir` now a symlink, and on Linux `fs.cp`
     // refuses to overwrite a non-directory with a directory
-    // (ERR_FS_CP_DIR_TO_NON_DIR) and aborts the whole install BEFORE the sweep
+    // (ERR_FS_CP_DIR_TO_NON_DIR / EISDIR, as CI reported it) and aborts the
+    // whole install BEFORE the sweep
     // runs — so the test never reached its own subject there. macOS's `cp`
     // happens to accept it, which is the only reason that form passed at all.
     // The claim belongs to `removeStaleRuntimeBuilds`, so it is made of
-    // `removeStaleRuntimeBuilds`, on every platform. That an install carries
-    // these outcomes through to `warnings`/`notices` is the subject of the
-    // notice/warning-split test above, which needs no symlinked directory.
+    // `removeStaleRuntimeBuilds`, on every platform. An install carries these
+    // outcomes into `warnings`/`notices` through one kind-agnostic severity
+    // filter, and both of that filter's branches are covered by the
+    // notice/warning-split test above, which needs no symlinked directory. No
+    // test drives a `skipped-dir` outcome through an install: reaching one
+    // needs the symlink this test plants, and planting it is what makes the
+    // install itself unrunnable on Linux.
     const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
 
     expect(await readFile(path.join(relocated, "SKILL.zed.md"), "utf8")).toBe("# hand-written, not keryx's\n");
