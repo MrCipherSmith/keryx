@@ -169,6 +169,18 @@ describe("an arm whose transcript reaches the operator's home or the arena's own
     expect(reach(`ls ${real}/arms/ 2>/dev/null | head`)?.where).toBe(`${real}/arms/`);
   });
 
+  test("the arm's own tree at the end of a sentence is still its own tree", () => {
+    // claude names the working directory in the prompt it gives its own sub-agent:
+    // "…repo at /private/tmp/<out>/arms/<cell>. A developer is about to…". The
+    // trailing period made that read as a longer, foreign path (2026-09-12).
+    const { out, ownTree, reach } = layout();
+    const real = realpathSync(out);
+    expect(reach(`I'm working in a repo at ${ownTree}. A developer is about to make a change`)).toBeUndefined();
+    expect(reach(`repo at ${real}/arms/t1-x-grok-build-context-on. A developer is about to`)).toBeUndefined();
+    // A real sibling is still caught, period or not.
+    expect(reach(`ls ${real}/arms/t1-x-other-context-off. done`)?.where).toBe(`${real}/arms/t1-x-other-context-off.`);
+  });
+
   test("a PATH entry's parent is not allowed, and a longer name that starts with the home is not a mention", () => {
     const { home, reach } = layout();
     const bin = path.join(home, ".local", "bin");

@@ -210,7 +210,12 @@ export function transcriptReachingOutside(
   }
   const endsAtBoundary = (text: string, end: number): boolean => {
     const next = text[end];
-    return next === undefined || !PATH_CHAR.test(next);
+    if (next === undefined || !PATH_CHAR.test(next)) return true;
+    // A path at the end of a sentence: `…/arms/<cell>. A developer is about to…`,
+    // which is how claude's sub-agent prompt names the arm's own tree. Without
+    // this the trailing period reads as part of a longer, foreign path and the
+    // arm is refused for naming itself (seen on t1-71916287, 2026-09-12).
+    return next === "." && !PATH_CHAR.test(text[end + 1] ?? "");
   };
   for (const file of [transcriptFile, `${transcriptFile}.stderr`]) {
     if (!existsSync(file)) continue;
