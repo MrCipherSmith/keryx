@@ -1882,7 +1882,11 @@ async function runComplete(args: string[]): Promise<void> {
     throw new Error("Usage: keryx review complete <review-id-or-path>");
   }
   const dispositions = parseDispositions(args);
-  const { manifest, reviewNotes } = await completeManagedReview(process.cwd(), ref, { dispositions });
+  const {
+    manifest,
+    reviewNotes,
+    dispositions: tally,
+  } = await completeManagedReview(process.cwd(), ref, { dispositions });
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
@@ -1895,12 +1899,18 @@ async function runComplete(args: string[]): Promise<void> {
   for (const skip of reviewNotes.skipped) {
     console.log(`review-note NOT written for ${skip.finding}: ${skip.reason}`);
   }
-  if (dispositions.length === 0) {
-    // Said out loud, because the silence is the failure mode. A round that
-    // closes with nothing recorded leaves 100% of its findings reading
-    // `unknown`, and a corpus of unknowns is what makes precision unmeasurable.
+  // Said out loud, because the silence is the failure mode: a corpus of unknowns
+  // is what makes precision unmeasurable. Counted off the package rather than
+  // asserted from the absence of flags — this line used to claim "every finding
+  // still reads `unknown`" whenever no --disposition was passed, which was false
+  // for every package dispositioned across more than one close, and a false
+  // report of an unrecorded outcome destroys the signal the field exists for.
+  console.log(
+    `findings: ${tally.total} — ${tally.recorded} with a recorded disposition, ${tally.unknown} still \`unknown\``,
+  );
+  if (tally.unknown > 0) {
     console.log(
-      "no --finding/--disposition given: every finding in this package still reads `unknown` — nobody recorded an outcome.",
+      `${tally.unknown} of ${tally.total} findings read \`unknown\` — nobody recorded an outcome for them.`,
     );
   }
 }
