@@ -19,6 +19,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Fixed
 
+- **Running the test suite no longer opens browser tabs on the developer's
+  machine.** `openAuthorisationUrl` took a platform and an environment for the
+  decision and then opened the URL through the real `process.platform`,
+  `process.env` and `spawn`. A test that named `darwin` or a Wayland session to
+  exercise the "a browser will open" branch therefore spawned a real browser —
+  `open https://auth.test/…` twice per run of the `keryx mcp auth` decision
+  tests, against a `.test` host RFC 6761 guarantees will never resolve, so the
+  tabs opened and hung. The opener is now a parameter and receives the same
+  platform and environment the decision used.
+
 - **A scripted `keryx shell` no longer sends an expired grok login.** The refresh
   of a stored grant ran only in the TUI's start-up, so `--no-tui` and `--print`
   sent an access token hours past its expiry and got `HTTP 403: The OAuth2 access
