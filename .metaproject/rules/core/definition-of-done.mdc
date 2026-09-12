@@ -8,7 +8,7 @@ alwaysApply: false
 ## Purpose
 State, once, the bar a change must clear before any agent calls it done — so
 that "done" means the same thing to the worker that reports it and the
-orchestrator that accepts it. Four rules and three skills each state a piece of
+orchestrator that accepts it. Six rules and two skills each state a piece of
 this bar today; this rule is the join, and it names which document owns which
 piece so the pieces cannot drift apart.
 

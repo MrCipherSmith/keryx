@@ -48,10 +48,11 @@ reason to exist:**
   justification at `:103-112`). "Nobody ran eslint" and "eslint found 40
   errors" are indistinguishable to a caller reading the code.
 - `keryx review` goes the other way and exits **0** on the same class of
-  answer: `reportCrossFamilyReviewProblems` (`src/commands/review.ts:1920`) and
-  `reportFilterStatsProblems` (`:1931`) filter `not-recorded` out before
-  failing, on the stated grounds that an absence is honest. It is honest — and
-  it is still not a pass.
+  answer: `reportCrossFamilyReviewProblems` and `reportFilterStatsProblems`
+  (both in `src/commands/review.ts`; cited by name because that file moves
+  under every review change, and a line number here has already gone stale
+  once) filter `not-recorded` out before failing, on the stated grounds that an
+  absence is honest. It is honest — and it is still not a pass.
 
 Three commands, one binary, three answers to "I could not tell". A new command
 uses 0/1/2 as defined above. An existing one moves toward it only with its
@@ -91,8 +92,10 @@ The discipline, applied:
 - **Where this is broken today:** an unrecognised command prints its one-line
   diagnostic to stderr and then dumps the full help to **stdout**
   (`src/cli.ts:147-149`, `printHelp` at `:152`). Measured: `keryx bogusverb`
-  writes 9,501 bytes of help to stdout; `keryx wiki check --bogus` writes
-  4,142. A caller piping stdout for JSON receives a help screen instead, and
+  writes 9,503 bytes of help to stdout; `keryx wiki check --bogus` writes
+  4,150. Both numbers are the help text's own size and move whenever a command
+  is added — a later reading that differs is growth, not a correction to this
+  paragraph. A caller piping stdout for JSON receives a help screen instead, and
   only the exit code says otherwise. **Help printed because of an error belongs
   on stderr. Help printed because `--help` was asked for belongs on stdout.**
 
@@ -111,7 +114,7 @@ versions are per-shape, not per-repo. A test pins the number
 `keryx modules status --json` carries the other half: a `schemaVersion`, a
 deterministic key order sorted independently of authoring order *"which is what
 makes it safe to diff and to consume from a harness"*
-(`src/commands/modules.ts:201-210`), and a test that pins the version
+(`src/commands/modules.ts:197-210`), and a test that pins the version
 (`src/commands/modules.test.ts:26`).
 
 So the standard for any new machine-readable payload is:
@@ -127,13 +130,24 @@ So the standard for any new machine-readable payload is:
 **Where this is inconsistent today:** `keryx skills` serialises internal
 TypeScript objects straight to stdout at eleven call sites
 (`src/commands/skills.ts:222`, `:288`, `:398`, `:693`, `:735`, `:785`, `:822`,
-`:883`, `:935`, `:989`, `:1101`). None carries a version. `verify --bundled
---json` emits an object (`root`, `skills`, `documents`, `skillNames`,
-`findings`) while `verify --all --json` emits a bare array — `[]` when the
-registry is empty (`:973`), a list of reports otherwise (`:989`). One test pins
-one field of one of them (`src/commands/skills.bundled-verify.test.ts:58`
-asserts `findings` is `[]`). A rename inside any of those internal types is a
-CLI breaking change that nothing in the repository would catch.
+`:883`, `:935`, `:989`, `:1101`). Three of the eleven print a type that
+declares one — `LearningProposal` (`src/gdskills/learn.ts:17`, set at `:100`)
+at `:785`, and `ProjectSkillVerificationReport` (`src/gdskills/verify.ts:25`,
+set at `:96`) at `:883` and `:989`. The other eight carry no version at all.
+
+**The gap is the envelope, and it is the worse half.** `verify --bundled
+--json` emits an unversioned object (`root`, `skills`, `documents`,
+`skillNames`, `findings`); `verify --all --json` emits a bare array — `[]` when
+the registry is empty (`:973`), a list of reports otherwise (`:989`). So
+`keryx skills verify --all --json` ships `[{ "schemaVersion": 1, … }]`: each
+element versioned, the payload a caller actually parses not. That is standard 1
+failing in the direction it warns about — an array cannot grow a field, so the
+envelope can never be versioned later without the breaking change the version
+existed to avoid, however carefully each element inside it is versioned. One
+test pins one field of one of them
+(`src/commands/skills.bundled-verify.test.ts:58` asserts `findings` is `[]`). A
+rename inside any of the eight unversioned types is a CLI breaking change that
+nothing in the repository would catch.
 
 ### 4. An unknown flag is refused, never ignored
 
@@ -217,7 +231,7 @@ refused by name with the reason.
 | "I'll print the warning to stdout, it's more visible there" | stdout is the pipe. A warning there corrupts every consumer that expected data — which is why `keryx mcp` routes its notice to stderr instead |
 | "The old flag is unused, I'll just delete it" | "Unused" means "no usage you can see". Alias it with a notice, or refuse it by name with the reason — both cost less than a silent breakage in someone's CI |
 | "An unrecognised flag is harmless, the command still does the right thing" | It does less than the operator asked and reports success. That is the failure `rejectUnknownFlags` was written for |
-| "It's just a help screen on stdout, who cares" | 9,501 bytes of it, where the caller expected JSON. Error output is error output regardless of how friendly it reads |
+| "It's just a help screen on stdout, who cares" | Nine kilobytes of it, where the caller expected JSON. Error output is error output regardless of how friendly it reads |
 | "I'll add the schemaVersion when the shape actually changes" | The first change is the one that needs it, and by then the unversioned readers already exist |
 
 **IRON LAW: ONCE A COMMAND IS PUBLISHED, ITS EXIT CODE, ITS STDOUT, AND ITS `--json` SHAPE ARE A CONTRACT — CHANGE THEM THE WAY YOU WOULD CHANGE AN API, OR NOT AT ALL.**

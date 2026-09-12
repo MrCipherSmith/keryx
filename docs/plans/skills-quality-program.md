@@ -1,6 +1,9 @@
 # Skills and rules quality program
 
-Status: in progress (flows 256-259), branch `skills/quality-program`, started 2026-09-11.
+Status: in progress (flows 256-259), started 2026-09-11. One branch per flow,
+not one for the program: 256 on `skills/quality-program` (merged, #533), 257 on
+`skills/quality-gate` (merged, #540), 258 on `skills/skill-gaps` (open, #545),
+259 not yet cut.
 
 ## Why
 
@@ -18,7 +21,7 @@ ahead, while the way our skills themselves are written and checked is behind:
 - no common skill anatomy: Red Flags / exit criteria are missing from
   `flow-orchestrator`, `code-verifier`, `tests-creator`, `brainstorm`,
   `interviewer`, the quality workflow skills; the largest skills run to
-  2190 (`job-orchestrator`) and 1922 (`review-orchestrator`) lines;
+  2246 (`job-orchestrator`) and 1907 (`review-orchestrator`) lines;
 - lifecycle gaps with no skill or rule: debugging, in-flight adversarial
   doubt, source verification of library docs, deprecation/migration of code and
   CLI surface, definition of done, CLI interface design;
@@ -36,7 +39,9 @@ would reach nobody. Flow 258 T16 placed the credits: `quality/root-cause`,
 `orchestration/task-implementer`, `planning/interviewer` and
 `quality/perf-check`. `rules/core/definition-of-done.mdc` and
 `rules/core/cli-interface-design.mdc` carry none: the comparison prompted the
-gap, but both rules are joins of documents and commands already in this repo):
+gap, but both rules are joins of documents and commands already in this repo.
+T16 covered flow 258's own adaptations only — **flow 257's are outstanding, and
+the list is below the bullets**):
 
 - deterministic routing evals: positive prompts, negatives that name the owning
   skill (pairwise, not vacuous), catalog-wide description-collision check,
@@ -55,6 +60,41 @@ gap, but both rules are joins of documents and commands already in this repo):
   "sounds good" is not approval, mandatory out-of-scope line;
 - "neutral is a revert" and a ledger of reverted attempts for performance work;
 - a ledger of rejected skill changes.
+
+### Outstanding: flow 257's credits
+
+Flow 257 (merged as #540) adapted four of the techniques listed above and
+shipped none of the attribution AC11 requires. Recorded here rather than fixed,
+because every file concerned is owned by another task in flight; the credits are
+owed where the technique is **implemented**, not where the subject matter
+overlaps:
+
+- `src/gdskills/bundled-eval.ts` — one credit covering three: the required
+  skill anatomy checked by lint (`anatomy:sections`), the length budget
+  (`anatomy:length`), and description discipline (`description:collision`, and
+  the trigger / "NOT for" shape `anatomy:sections` demands). All three are the
+  source's techniques made executable over our own tree; the thresholds, the
+  Jaccard collision test on the router's own tokenisation, and the
+  `anatomy:red-flags-collision` check are ours.
+- `src/commands/routing-corpus.ts` — one credit for the corpus shape: positive
+  prompts per skill plus negatives that name the `owner` which must outrank it.
+  The exhaustive per-skill coverage, the two-paraphrases-without-own-triggers
+  requirement and the equality-pinned `RANK1_FIRST`/`RANK1_TOTAL` ratchet are
+  ours.
+
+Two files in the same flow owe nothing, and saying so is part of the standard —
+over-crediting is its own dishonesty:
+
+- `src/commands/routing-baseline.ts` — its device (record what the scorer does
+  *including what it does wrong*, before touching it) is traced in its own
+  header to a local measured failure across three review rounds. The "ratcheted"
+  half of "ratcheted baseline" lives in `routing-corpus.ts` and is credited
+  there.
+- `src/gdskills/skill-length-ceilings.ts` — the data table for a check that
+  lives in `bundled-eval.ts`, and its governing policy (ceilings equal today's
+  count when introduced, and move down only) comes from our own
+  `rules/core/skills-storage-workflow.mdc`. Crediting it would credit a topic,
+  not an adaptation.
 
 Not taken: the "no orchestrators" doctrine (our flow state machine is the
 stronger design), the `simplify-ignore` hook (rewrites the working tree for a
@@ -77,7 +117,8 @@ acceptance criteria are written against the tree it will actually change.
 
 - Worktree: `/Users/Goodea/goodea/keryx/.claude/worktrees/skills-quality`.
   Each flow runs on its own branch cut from main after the previous one merged
-  (256: `skills/quality-program`, merged as #533; 257: `skills/quality-gate`).
+  (256: `skills/quality-program`, merged as #533; 257: `skills/quality-gate`,
+  merged as #540 at `ea569c92`; 258: `skills/skill-gaps`, open as #545).
   Use absolute paths and `git -C <root>`.
 - Source of truth for shipped skills and rules is `src/gdskills/bundled/**`;
   `.metaproject/skills/gdskills/**` and `.metaproject/rules/core/**` are
