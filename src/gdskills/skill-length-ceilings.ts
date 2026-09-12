@@ -8,11 +8,22 @@
 // that number is not this file endorsing it as a reasonable size for a
 // document an agent has to read whole. `bundled-eval.ts`'s `anatomy:length`
 // check (which reads this map) exists for one narrower reason: a skill that
-// grows past whatever it already was, without anyone deciding that growth was
-// worth it, is a defect this sweep can catch and every other check in that
-// file cannot. Whether 2246 lines is the right size for `job-orchestrator` is
-// a question for a human editing that skill, not for this file or the check
-// that reads it.
+// grows past what it already was is a defect this sweep can catch and every
+// other check in that file cannot. Whether 2246 lines is the right size for
+// `job-orchestrator` is a question for a human editing that skill, not for
+// this file or the check that reads it.
+//
+// NOR IS IT A BUDGET THAT CAN BE APPROVED. An earlier wording of this header
+// called the defect "growth nobody decided on", which reads as though growth
+// somebody DID decide on is answered by raising the number. It is not:
+// `skills-storage-workflow.mdc`'s "Length Ceilings" section allows a ceiling
+// to move down and never up, so a skill that needs more room than its ceiling
+// allows is split, or its reference material moves into a sibling document,
+// and the ceiling is lowered to what remains. Raising an entry below to clear
+// an `anatomy:length` finding is the one edit that is always wrong here,
+// however well-considered the growth was — it turns a measured limit into a
+// record of whatever the file grew to, which is the thing the limit existed
+// to prevent.
 //
 // WHAT A CEILING COVERS
 //
@@ -31,9 +42,9 @@
 // HOW THE NUMBERS BELOW WERE PRODUCED
 //
 // Each is the line count (`wc -l`, i.e. the number of newline characters —
-// see `bundledSkillLineCount` in `bundled-eval.ts` for the identical count
-// the check itself uses) of that skill's `SKILL.md` in the shipped tree, on
-// the day this file was introduced. "Ceilings equal today's line counts when
+// see `skillLineCount` in `bundled-eval.ts` for the identical count the check
+// itself uses) of that skill's `SKILL.md` in the shipped tree, on the day this
+// file was introduced. "Ceilings equal today's line counts when
 // introduced" is the rule `skills-storage-workflow.mdc` states (see its
 // "Length Ceilings" section) — not the smallest number that would pass today,
 // not a round number, not headroom for planned growth. A skill absent from
@@ -77,6 +88,17 @@ export const DEFAULT_SKILL_LENGTH_CEILING = 500;
  * Sorted by key. `skills-storage-workflow.mdc`'s "Length Ceilings" section
  * states the ratchet this map is bound by: a ceiling may be LOWERED when a
  * skill is genuinely trimmed, never raised to accommodate growth.
+ *
+ * THE RATCHET IS TESTED, NOT MERELY DESCRIBED (flow 257 T19). "Ceilings only
+ * move down" was prose in three files and an assertion in none: the check
+ * itself compares `lines > ceiling`, so raising any entry here silently
+ * cleared its own finding, and the one test over this map asked only that a
+ * ceiling not sit BELOW the file it bounds — a review raised
+ * `review/review-clean-code` from 545 to 1200 and the whole suite stayed
+ * green. `bundled-eval.test.ts`'s "every recorded ceiling equals the line
+ * count that ships today" pins the equality both directions instead, so the
+ * only edit that keeps the suite green is trimming the skill and recording
+ * what is left.
  */
 const CEILINGS_BY_KEY = {
   "core/reviewer-skill-creator": 280,

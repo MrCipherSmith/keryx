@@ -106,6 +106,7 @@ export const BUNDLED_SKILL_CHECKS = [
   "description:length",
   "description:collision",
   "anatomy:sections",
+  "anatomy:red-flags-collision",
   "anatomy:length",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
@@ -445,6 +446,20 @@ export function descriptionLacksTriggerPhrase(description: string): boolean {
  * the mistake this rule exists to catch: an author writing the clause as an
  * instruction to the skill out of habit, using the bare form of a verb that
  * unambiguously reads as an action when it opens a sentence.
+ *
+ * THIS SET IS THE UNAMBIGUOUS HALF, and it used to be both halves. Fourteen
+ * words — "review", "check", "commit", "update", "install", "document",
+ * "push", "run", "start", "debug", "fix", "split", "draft", "edit" — shipped
+ * here alongside "implement" and "decompose", and every one of them is an
+ * ordinary NOUN at least as often as it is a verb. "Use when review comments
+ * arrive", "Use when check results land", "Use when commit history needs
+ * rewriting", "Use when install fails" are all noun-phrase subjects — exactly
+ * the situational shape this check exists to encourage — and every one of
+ * them was reported as a bare imperative. That is the same defect the comment
+ * above already refuses for "test" and "plan", left in the set by oversight.
+ * They moved to `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` below rather than being
+ * deleted, because each really is imperative in the shape the check was
+ * written for; what changed is that the shape now has to be visible.
  */
 export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
   "implement",
@@ -452,21 +467,15 @@ export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
   "write",
   "add",
   "build",
-  "review",
-  "check",
   "analyze",
   "generate",
   "deploy",
   "measure",
-  "document",
-  "push",
-  "run",
   "save",
   "explore",
   "open",
   "take",
   "decompose",
-  "fix",
   "refactor",
   "migrate",
   "extract",
@@ -479,20 +488,12 @@ export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
   "audit",
   "execute",
   "distill",
-  "split",
   "customize",
   "configure",
   "launch",
-  "start",
-  "debug",
-  "update",
   "remove",
   "delete",
-  "install",
-  "commit",
   "scaffold",
-  "draft",
-  "edit",
   "replace",
   "rename",
   "investigate",
@@ -501,10 +502,69 @@ export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Match "Use when" (any casing, an optional colon/dash after it) followed
- * immediately by one bare word — the token this rule classifies.
+ * Verbs that are ALSO ordinary nouns, and so only count as a bare imperative
+ * when the token after them makes the imperative reading the only one
+ * available.
+ *
+ * "Use when review the diff" can only be a command: "review" heads a verb
+ * phrase whose object is introduced by a determiner. "Use when review
+ * comments arrive" is a noun phrase — "review comments" is the subject of
+ * "arrive" — and is precisely the situational description the check wants to
+ * see. The distinguishing token is the determiner, not the verb, so the verb
+ * alone cannot decide.
  */
-const USE_WHEN_OPENING = /\buse\s+when\s*[:\-—]?\s*([A-Za-z][\w'-]*)/gi;
+export const NOUN_AMBIGUOUS_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
+  "review",
+  "check",
+  "commit",
+  "update",
+  "install",
+  "document",
+  "push",
+  "run",
+  "start",
+  "debug",
+  "fix",
+  "split",
+  "draft",
+  "edit",
+]);
+
+/**
+ * Determiners and possessives that can only introduce the OBJECT of a verb
+ * phrase, never continue a noun-phrase subject headed by the preceding word.
+ *
+ * "review the diff" — "the" cannot attach to "review" as a compound noun, so
+ * "review" is the verb. "review comments" — "comments" can and does. The list
+ * is deliberately closed and small: every entry is a function word with no
+ * reading in which it modifies the word before it. Widen it only for another
+ * word with that same property.
+ */
+export const IMPERATIVE_OBJECT_DETERMINERS: ReadonlySet<string> = new Set([
+  "a",
+  "an",
+  "the",
+  "this",
+  "that",
+  "these",
+  "those",
+  "its",
+  "it",
+  "them",
+  "their",
+  "your",
+  "my",
+  "our",
+  "every",
+  "each",
+]);
+
+/**
+ * Match "Use when" (any casing, an optional colon/dash after it) followed by
+ * one bare word — the token this rule classifies — and, optionally, the word
+ * after it, which is what decides a `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` entry.
+ */
+const USE_WHEN_OPENING = /\buse\s+when\s*[:\-—]?\s*([A-Za-z][\w'-]*)(?:\s+([A-Za-z][\w'-]*))?/gi;
 
 /**
  * The offending verb, if `description` opens a "Use when" clause with a bare
@@ -518,6 +578,10 @@ const USE_WHEN_OPENING = /\buse\s+when\s*[:\-—]?\s*([A-Za-z][\w'-]*)/gi;
  * when a…", "Use when dispatched…") is left alone rather than guessed at,
  * because a false positive here breaks a description this sweep did not
  * write and cannot safely rewrite on its own.
+ *
+ * A `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` entry additionally needs the following
+ * token to be an `IMPERATIVE_OBJECT_DETERMINERS` word — see both sets for
+ * why the verb alone cannot decide those fourteen.
  */
 export function bareImperativeOpening(description: string): string | undefined {
   for (const match of description.matchAll(USE_WHEN_OPENING)) {
@@ -525,7 +589,14 @@ export function bareImperativeOpening(description: string): string | undefined {
     if (token.length === 0) continue;
     if (/^[A-Z]/.test(token)) continue;
     if (/ing$/i.test(token)) continue;
-    if (BARE_IMPERATIVE_VERBS.has(token.toLowerCase())) return token;
+    const verb = token.toLowerCase();
+    if (BARE_IMPERATIVE_VERBS.has(verb)) return token;
+    if (
+      NOUN_AMBIGUOUS_IMPERATIVE_VERBS.has(verb) &&
+      IMPERATIVE_OBJECT_DETERMINERS.has((match[2] ?? "").toLowerCase())
+    ) {
+      return token;
+    }
   }
   return undefined;
 }
@@ -753,8 +824,17 @@ export type AnatomySection = (typeof ANATOMY_SECTIONS)[number];
  * "Use when …") — `description:trigger-phrase` (above) already guarantees a
  * trigger exists somewhere in the description; this check only adds "and did
  * the document also say what it is not for", wherever that statement lives.
+ *
+ * BOUNDED ON BOTH SIDES, AND WHY THAT IS NOT PEDANTRY: the first spelling of
+ * this pattern was a bare `/not for/i`, with a word boundary at neither end.
+ * "This output is not formatted as JSON" contains the substring "not for" and
+ * satisfied it — a sentence about formatting, in any skill, silently supplied
+ * that skill's disambiguation. The same hole admits "not forced", "not
+ * fortunate", "not foreseeable", and every other "not for…" word. `\s+` rather
+ * than a literal space because prose wraps: "…, not\nfor anything else" is the
+ * same clause with a line break in the middle of it.
  */
-const NOT_FOR_CLAUSE_PATTERN = /not for/i;
+const NOT_FOR_CLAUSE_PATTERN = /\bnot\s+for\b/i;
 
 /** Whether `text` (the whole document: frontmatter + body) states a "NOT for" disambiguation. */
 export function hasNotForClause(text: string): boolean {
@@ -801,8 +881,36 @@ export function hasNotForClause(text: string): boolean {
  * is chosen so the bar reads as "a handful of ways this goes wrong", plural
  * in the ordinary sense, rather than the bare minimum that defeats a single
  * counterexample.
+ *
+ * AND WHAT MAKES A ROW A ROW (flow 257 T19): the row count above was the only
+ * thing standing between a rationalization table and a placeholder, so three
+ * lines reading `| a | b |` satisfied the whole check. The table is the one
+ * anatomy section whose value is entirely in its CONTENT — a named excuse and
+ * the rebuttal that answers it — so a row that names neither is not a row this
+ * check should count. Two conditions, both derived from the shipped tree
+ * rather than guessed:
+ *
+ *   - at least two non-empty cells, because the shape is a pair (the excuse
+ *     and the answer), and a one-column list of excuses is a list of things
+ *     nobody has answered;
+ *   - at least `ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS` characters of cell text
+ *     in the row, all cells taken together.
+ *
+ * WHY 24 CHARACTERS: the shortest data row in any shipped Red Flags table
+ * carries 72 characters of cell text (`review-security-code`'s "The team
+ * would never send that payload" / "Attackers are not on the team"), and the
+ * shortest non-empty single cell carries 11 (`spec-writer`'s "Scope creep").
+ * 24 sits at a third of the observed row floor — far enough below it that no
+ * shipped table is near the line and a genuinely terse future pair is not
+ * pushed into padding, far enough above `| a | b |` (2 characters) that a
+ * placeholder cannot pass. The same floor applies to the two-column bullet
+ * shape, since a bullet row and a table row are the same claim in different
+ * syntax.
  */
 export const ANATOMY_RED_FLAGS_MIN_ROWS = 3;
+
+/** Minimum characters of cell text one counted Red Flags row must carry. See the note above for the derivation. */
+export const ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS = 24;
 
 const RED_FLAGS_HEADING_PATTERN = /^(#{1,4})\s.*(red flag|rationali)/i;
 const MARKDOWN_HEADING_PATTERN = /^(#{1,4})\s/;
@@ -822,20 +930,61 @@ function sectionBody(lines: readonly string[], start: number, level: number): re
   return out;
 }
 
-/** Whether `text` carries a Red Flags / rationalization table, per the definition above. */
-export function hasRedFlagsSection(text: string): boolean {
+/** The non-empty cell texts of one `|…|…|` row, outer pipes dropped. */
+function tableRowCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+}
+
+/** Whether one data row carries enough to be a named excuse plus its answer. See `ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS`. */
+function isSubstantiveTableRow(line: string): boolean {
+  const cells = tableRowCells(line);
+  if (cells.length < 2) return false;
+  return cells.join("").length >= ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS;
+}
+
+/** The bullet-list spelling of the same claim, held to the same floor. */
+function isSubstantiveBulletRow(line: string): boolean {
+  if (!TWO_COLUMN_BULLET_PATTERN.test(line)) return false;
+  return line.replace(/^-\s+/, "").replace(/[\s—:-]/g, "").length >= ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS;
+}
+
+/**
+ * The data rows of `text`'s first qualifying Red Flags section, trimmed and
+ * joined — the table's CONTENT, independent of its heading spelling and its
+ * surrounding prose.
+ *
+ * `[]` when the document has no qualifying section. Exported because
+ * `anatomy:red-flags-collision` (below) compares these bodies across skills:
+ * a table pasted verbatim from another skill satisfies `hasRedFlagsSection`
+ * perfectly while naming that OTHER skill's rationalizations, which is the
+ * same "passes on borrowed substance" failure as a placeholder row, one step
+ * further along.
+ */
+export function redFlagsTableBody(text: string): readonly string[] {
   const lines = text.split("\n");
   for (let i = 0; i < lines.length; i++) {
     const heading = RED_FLAGS_HEADING_PATTERN.exec(lines[i] ?? "");
     if (heading === null) continue;
-    const level = (heading[1] ?? "").length;
-    const body = sectionBody(lines, i, level);
+    const body = sectionBody(lines, i, (heading[1] ?? "").length);
     const tableRows = body.filter((line) => TABLE_ROW_PATTERN.test(line) && !TABLE_SEPARATOR_PATTERN.test(line));
-    const dataRows = Math.max(0, tableRows.length - 1); // the first table row is the header.
-    const bulletRows = body.filter((line) => TWO_COLUMN_BULLET_PATTERN.test(line));
-    if (dataRows >= ANATOMY_RED_FLAGS_MIN_ROWS || bulletRows.length >= ANATOMY_RED_FLAGS_MIN_ROWS) return true;
+    // The first `|…|` row is the header, not a rationalization.
+    const dataRows = tableRows.slice(1).filter(isSubstantiveTableRow);
+    const bulletRows = body.filter(isSubstantiveBulletRow);
+    const rows = dataRows.length >= bulletRows.length ? dataRows : bulletRows;
+    if (rows.length >= ANATOMY_RED_FLAGS_MIN_ROWS) return rows.map((row) => row.trim());
   }
-  return false;
+  return [];
+}
+
+/** Whether `text` carries a Red Flags / rationalization table, per the definition above. */
+export function hasRedFlagsSection(text: string): boolean {
+  return redFlagsTableBody(text).length > 0;
 }
 
 /**
@@ -885,7 +1034,7 @@ export function hasRedFlagsSection(text: string): boolean {
  * of the three shapes above already covers, per the same "widen once the tree
  * needs it" rule the trigger-phrase set states above.
  */
-const VERIFICATION_HEADING_PATTERN = /^#{1,4}\s.*(verification|exit[\s-]criteria)/i;
+const VERIFICATION_HEADING_PATTERN = /^(#{1,4})\s.*(verification|exit[\s-]criteria)/i;
 const STATUS_CONTRACT_LINE_PATTERN = /^[\s*`]*STATUS:\s*[A-Z_]/;
 // Requires the FIRST alternative to be a quoted, all-caps token — the shape
 // `autodoc-analyst` and its siblings use for their own terminal states
@@ -895,16 +1044,29 @@ const STATUS_CONTRACT_LINE_PATTERN = /^[\s*`]*STATUS:\s*[A-Z_]/;
 // match, so the first alternative is anchored to `"UPPER_CASE"`.
 const STATUS_CONTRACT_ENUM_PATTERN = /^[\s*`]*status:\s*"[A-Z][A-Z0-9_]*"\s*\|/;
 
-/** Whether `text` carries a Verification / exit-criteria / STATUS section, per the definition above. */
+/**
+ * Whether `text` carries a Verification / exit-criteria / STATUS section, per
+ * the definition above.
+ *
+ * A HEADING IS NOT A SECTION (flow 257 T19). `## Verification` with nothing
+ * under it says no more about what "done" looks like than the absence of the
+ * heading does, and it passed this check for the same reason a `| a | b |`
+ * row passed the Red Flags one: presence was the whole bar. A heading now
+ * qualifies only when its own section — every line up to the next heading at
+ * the same level or shallower, the same span `hasRedFlagsSection` reads —
+ * holds at least one non-blank line. The other two shapes need no such guard:
+ * a `STATUS: DONE` line and a `status: "DONE" | …` enum ARE the content, not
+ * an announcement of content to follow.
+ */
 export function hasVerificationSection(text: string): boolean {
-  for (const line of text.split("\n")) {
-    if (
-      VERIFICATION_HEADING_PATTERN.test(line) ||
-      STATUS_CONTRACT_LINE_PATTERN.test(line) ||
-      STATUS_CONTRACT_ENUM_PATTERN.test(line)
-    ) {
-      return true;
-    }
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (STATUS_CONTRACT_LINE_PATTERN.test(line) || STATUS_CONTRACT_ENUM_PATTERN.test(line)) return true;
+    const heading = VERIFICATION_HEADING_PATTERN.exec(line);
+    if (heading === null) continue;
+    const body = sectionBody(lines, i, (heading[1] ?? "").length);
+    if (body.some((bodyLine) => bodyLine.trim().length > 0)) return true;
   }
   return false;
 }
@@ -1170,8 +1332,54 @@ export const KNOWN_EXTERNAL_SKILL_REFERENCES: ReadonlyMap<string, string> = new 
  * the USER's project or is produced at runtime, and this evaluator has no
  * standing to call any of it missing. Checking those would be the "judge that
  * flags everything" failure from the other direction.
+ *
+ * `docs` WAS PROPOSED AS A FOURTH ROOT, AND MEASURED (flow 257 T19). The
+ * prompt was `skills-storage-workflow.mdc`'s citation of
+ * `docs/skills/rejected-skill-changes.md` (AC11's ledger), which nothing
+ * checked. Adding `docs` here and to `PATH_REFERENCE` was tried and produces a
+ * check that is wrong twice over:
+ *
+ *   - THE TREE. Seventeen distinct concrete `docs/…` paths are cited across
+ *     the bundled tree, and thirteen of them name the USER's project — the
+ *     sections `autodoc-orchestrator` GENERATES (`docs/architecture.md`,
+ *     `docs/modules.md`, `docs/api-reference.md`, `docs/onboarding.md`,
+ *     `docs/index.md`), and `documentation-management.mdc`'s own layout
+ *     (`docs/analysis`, `docs/plans`, `docs/report`). None of them exists in
+ *     this repository and none of them should; every one becomes a finding.
+ *   - THE INSTALL. `package.json`'s `files` ships `dist`, `src/gdgraph`,
+ *     `src/gdskills/bundled`, `src/gdskills/contracts` and one schema
+ *     directory. `docs/skills/` is NOT published, so the one reference this
+ *     root was meant to check would resolve in a checkout and fail for every
+ *     installed user — exactly the flow-252 defect the header describes,
+ *     rebuilt facing the other way. Nothing distinguishes a checkout from an
+ *     install by layout, because the install mirrors the source layout
+ *     deliberately.
+ *
+ * The ledger is a CONTRIBUTOR-facing file, so it is checked where it is true:
+ * `REJECTED_CHANGES_LEDGER` below states the contract, and this module's own
+ * test suite — which only ever runs in a checkout — asserts the file exists,
+ * carries the documented header, and is the path the rule names. A check that
+ * can only be right in one of the two places this evaluator runs does not
+ * belong in the evaluator.
  */
 const CHECKED_PATH_ROOTS = ["skills", "rules", "scripts"] as const;
+
+/**
+ * AC11's rejected-change ledger, stated once so the file, the rule that cites
+ * it, and the test that pins both cannot drift apart.
+ *
+ * `path` is repository-relative (see `CHECKED_PATH_ROOTS` above for why it is
+ * not an `xref:path` root). `header` is the table's column row verbatim: the
+ * ledger's value is that a row records what was tried, why it was rejected,
+ * and the evidence that sank it — a file with the heading and no columns to
+ * fill would be an append-only record of nothing.
+ */
+export const REJECTED_CHANGES_LEDGER = {
+  path: "docs/skills/rejected-skill-changes.md",
+  header: "| date | skill | change tried | why rejected | evidence (before → after) | link |",
+  /** The rule that requires it, bundled-tree-relative. */
+  rule: "rules/core/skills-storage-workflow.mdc",
+} as const;
 
 /**
  * Prefixes that address the same artifacts through the INSTALLED layout.
@@ -1553,6 +1761,15 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
   const descriptionsByKey = new Map<string, string>();
   /** `${category}/${skill}` -> the relative canonical file path, for the finding location. */
   const descriptionFileByKey = new Map<string, string>();
+  /**
+   * `${category}/${skill}` -> its Red Flags table's data rows, canonical
+   * `SKILL.md` only — the input to `anatomy:red-flags-collision` below.
+   * Populated inside the anatomy block, where the section is already parsed,
+   * rather than by a second walk over the same text.
+   */
+  const redFlagsByKey = new Map<string, readonly string[]>();
+  /** `${category}/${skill}` -> the relative canonical file path, for the collision finding's location. */
+  const redFlagsFileByKey = new Map<string, string>();
 
   for (const file of files) {
     const skillDir = path.dirname(file);
@@ -1713,8 +1930,20 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     // the same key `catalogued` (above) and `BUNDLED_GDSKILLS` use, and
     // because a skill's category is exactly what routes it to a T13/T14/T15
     // pending entry.
-    {
+    //
+    // Canonical `SKILL.md` only, for the reason `anatomy:length` below already
+    // gives: `document:build-parity` forces every harness build to carry its
+    // `SKILL.md`'s body verbatim, so a build's anatomy is the SAME fact, not a
+    // second one. Ungated, a skill shipping four builds reported one missing
+    // section five times — five identical findings, one defect, and an
+    // operator counting findings would read a five-times-worse tree than the
+    // one they have. The build is not going unchecked: if it ever stops
+    // matching its `SKILL.md`, that is a `document:build-parity` finding,
+    // which is the accurate name for it.
+    if (path.basename(file) === "SKILL.md") {
       const exemptionKey = `${category}/${skill}`;
+      redFlagsByKey.set(exemptionKey, redFlagsTableBody(text));
+      redFlagsFileByKey.set(exemptionKey, rel);
       const permanent = PERMANENT_ANATOMY_EXEMPTIONS.get(exemptionKey);
       const pending = PENDING_ANATOMY_BACKFILL.get(exemptionKey);
       const missing: AnatomySection[] = [];
@@ -1754,7 +1983,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         add(
           "anatomy:length",
           null,
-          `${lines} lines exceeds ${recorded}. Split the skill or move reference material out; raise the ceiling only when the growth was decided, never to make this finding go away (see rules/core/skills-storage-workflow.mdc).`,
+          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
         );
       }
     }
@@ -1816,6 +2045,43 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       line: null,
       message: `description collides with \`${a}\` at Jaccard similarity ${similarity.toFixed(2)} (>= ${DESCRIPTION_COLLISION_THRESHOLD}) on the router's own tokenisation — an agent routing between \`${a}\` and \`${b}\` has near-identical text to choose between; narrow one or both descriptions, or record the pair in KNOWN_DESCRIPTION_COLLISIONS with a reason naming its owner.`,
     });
+  }
+
+  // --- one skill's Red Flags table, shipped by two skills (flow 257 T19) -----
+  //
+  // `anatomy:sections` asks whether a table EXISTS. A table copied verbatim
+  // from a sibling skill exists, has its rows, and names that other skill's
+  // rationalizations — so the check passes while the document supplies nothing
+  // about the ways THIS skill specifically gets talked out of its own rules,
+  // which is the entire reason AC3 asks for the section. It is the same defect
+  // as a `| a | b |` placeholder row, one step further along: substance that
+  // is present and not the skill's own.
+  //
+  // Grouped, not pairwise: unlike `description:collision` this is exact
+  // equality, so N skills sharing one table are one group rather than N*(N-1)/2
+  // pairs. The first key in sorted order is treated as the original and every
+  // later one draws the finding, the same "attribute to the later of the pair"
+  // convention `description:collision` and `frontmatter:name-unique` use.
+  {
+    const byBody = new Map<string, string[]>();
+    for (const [key, rows] of [...redFlagsByKey].sort(([a], [b]) => a.localeCompare(b))) {
+      if (rows.length === 0) continue;
+      const body = rows.join("\n");
+      byBody.set(body, [...(byBody.get(body) ?? []), key]);
+    }
+    for (const keys of byBody.values()) {
+      if (keys.length < 2) continue;
+      const original = keys[0] as string;
+      for (const key of keys.slice(1)) {
+        findings.push({
+          check: "anatomy:red-flags-collision",
+          skill: key.split("/").slice(1).join("/") || key,
+          file: redFlagsFileByKey.get(key) ?? `${key}/SKILL.md`,
+          line: null,
+          message: `its Red Flags table is byte-identical to \`${original}\`'s (${keys.length} skills ship this table: ${keys.join(", ")}). A rationalization table names the excuses an agent makes about THIS skill; a copied one documents another skill's failure modes and passes \`anatomy:sections\` while saying nothing about this one. Write the rows this skill's own rules get talked out of.`,
+        });
+      }
+    }
   }
 
   // --- rule files: xref:path only, not the SKILL.md checks -------------------

@@ -25,14 +25,19 @@ import path from "node:path";
 import { DEFAULT_SKILL_LENGTH_CEILING, SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 import {
   ANATOMY_RED_FLAGS_MIN_ROWS,
+  ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS,
+  BARE_IMPERATIVE_VERBS,
   BUNDLED_SKILL_CHECKS,
   DESCRIPTION_COLLISION_THRESHOLD,
   GENERATED_PATH_ROOTS,
+  IMPERATIVE_OBJECT_DETERMINERS,
   KNOWN_DESCRIPTION_COLLISIONS,
   KNOWN_EXTERNAL_SKILL_REFERENCES,
   KNOWN_SKILL_COMPANION_DOCUMENTS,
+  NOUN_AMBIGUOUS_IMPERATIVE_VERBS,
   PENDING_ANATOMY_BACKFILL,
   PERMANENT_ANATOMY_EXEMPTIONS,
+  REJECTED_CHANGES_LEDGER,
   type BundledSkillCheck,
   bareImperativeOpening,
   bundledSkillCompanionDocuments,
@@ -51,6 +56,7 @@ import {
   jaccardSimilarity,
   pendingReasonNamesBackfillTask,
   personaOffenders,
+  redFlagsTableBody,
   renderBundledEvaluation,
   skillLineCount,
 } from "./bundled-eval";
@@ -592,6 +598,184 @@ metadata:
 `;
 
 /**
+ * Flow 257 T19 — "not for" with no word boundary matched inside "not
+ * formatted", so ANY sentence about formatting supplied a skill's whole
+ * disambiguation. This document says "not formatted" and says nothing else
+ * about what it excludes, so it must still be rejected.
+ */
+const NOT_FORMATTED_SKILL = `---
+name: not-formatted-example
+description: Use when a fixture must prove the disambiguation clause is matched on word boundaries rather than as a bare substring.
+metadata:
+  version: 1.0.0
+---
+
+# Substring Disambiguation Fixture
+
+VIOLATION anatomy:sections (trigger-not-for) — the one occurrence of the
+clause's spelling in this document sits inside the word "formatted": the
+report below is not formatted as JSON, which says nothing whatever about what
+this skill excludes.
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "The substring is present, so the clause is present" | "not formatted" is a sentence about output shape, and excludes nothing |
+| "Nobody would really write it that way" | Eleven shipped skills discuss output formats; any of them could have satisfied this leg by accident |
+| "A boundary check is pedantry" | Without one, "not forced" and "not fortunate" also count as disambiguations |
+
+## Verification
+
+This fixture trips only the \`trigger-not-for\` leg of \`anatomy:sections\`.
+`;
+
+/**
+ * Flow 257 T19 — a `## Verification` heading with no body under it. The
+ * heading announces a completion contract and then supplies none, which is
+ * exactly as useful to a caller as no heading at all.
+ *
+ * The heading is the LAST line on purpose: `sectionBody` reads to the next
+ * heading at the same level or shallower, so an empty section at the end of a
+ * file is the shape with nothing at all to find.
+ */
+const EMPTY_VERIFICATION_SKILL = `---
+name: empty-verification-example
+description: Use when a fixture must prove an empty section body fails the same way a missing section does. NOT for a document whose Verification section states anything at all.
+metadata:
+  version: 1.0.0
+---
+
+# Empty Completion Contract Fixture
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "The heading is there, so the section is there" | A heading with nothing under it states no exit criteria |
+| "Somebody will fill it in later" | It shipped, and the check reported it as compliant meanwhile |
+| "An empty section is better than none" | It is strictly worse: it reads as a contract in every listing that counts headings |
+
+## Verification
+`;
+
+/**
+ * Flow 257 T19 — two skills shipping one Red Flags table, byte for byte.
+ *
+ * Both have distinct descriptions, so `description:collision` stays quiet and
+ * the only thing these two share is the table — which is the point: a table
+ * pasted from a sibling passes `anatomy:sections` while naming that sibling's
+ * rationalizations and none of this skill's own.
+ */
+const SHARED_RED_FLAGS_TABLE = `| Rationalization | Why it's wrong |
+|---|---|
+| "A table from a similar skill is close enough" | It names the other skill's excuses, which are the ones this skill does not make |
+| "Copying is faster than writing three rows" | Three rows nobody wrote for this skill is three rows nobody will act on |
+| "The check only asks whether a table exists" | It asked that once, and this fixture is why it no longer does |`;
+
+const RED_FLAGS_COLLISION_A_SKILL = `---
+name: red-flags-collision-a
+description: Use when a fixture must prove a rationalization table copied between skills is caught. NOT for a skill whose table is its own.
+metadata:
+  version: 1.0.0
+---
+
+# Red Flags Collision A
+
+## Red Flags
+
+${SHARED_RED_FLAGS_TABLE}
+
+## Verification
+
+This half of the pair is the original; the finding lands on the other half.
+`;
+
+/** The other half of the copied-table pair — see `RED_FLAGS_COLLISION_A_SKILL`. */
+const RED_FLAGS_COLLISION_B_SKILL = `---
+name: red-flags-collision-b
+description: Use when proving a verbatim rationalization table drawn from elsewhere draws its own finding, separate from the anatomy check it satisfies. NOT for original tables.
+metadata:
+  version: 1.0.0
+---
+
+# Red Flags Collision B
+
+## Red Flags
+
+${SHARED_RED_FLAGS_TABLE}
+
+## Verification
+
+This half draws \`anatomy:red-flags-collision\`, and still passes
+\`anatomy:sections\` — the two checks answer different questions.
+`;
+
+/**
+ * Flow 257 T19 — the noun-ambiguous half of `description:bare-imperative`.
+ *
+ * "review" opens a verb phrase here because "the" can only introduce its
+ * object, so this is the imperative the check was written for. Its false-
+ * positive twin is `NOUN_SUBJECT_SKILL` below, which uses the same verb as an
+ * ordinary noun and must stay silent.
+ */
+const NOUN_AMBIGUOUS_IMPERATIVE_SKILL = `---
+name: noun-ambiguous-imperative-example
+description: Use when review the diff for correctness before a merge. NOT for a description whose opening word heads a noun phrase.
+metadata:
+  version: 1.0.0
+---
+
+# Noun Ambiguous Imperative Fixture
+
+VIOLATION description:bare-imperative — "Use when review the diff" is a
+command; "the" cannot continue a noun phrase headed by "review".
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "review is a noun, so leave it alone" | It is a noun in "review comments", and a verb in "review the diff" |
+| "The verb list should just drop it" | Dropping it loses the imperative this fixture demonstrates |
+| "The following word cannot be trusted" | A determiner is a closed class; it introduces an object and nothing else |
+
+## Verification
+
+This fixture trips \`description:bare-imperative\` and nothing else.
+`;
+
+/**
+ * The false positive the fourteen noun-ambiguous verbs used to produce: a
+ * NOUN-PHRASE subject that happens to start with one of them. "Use when review
+ * comments arrive" is the situational description this check exists to
+ * encourage, and it was reported as a defect.
+ */
+const NOUN_SUBJECT_SKILL = `---
+name: noun-subject-example
+description: Use when review comments arrive on an open pull request and somebody has to act on them. NOT for a description that opens with a command.
+metadata:
+  version: 1.0.0
+---
+
+# Noun Subject Fixture
+
+"review comments" is the subject of "arrive" — a situation, not an
+instruction. This fixture must draw no description finding at all.
+
+## Red Flags
+
+| Rationalization | Why it's wrong |
+|---|---|
+| "It starts with a verb, so it is imperative" | "review comments arrive" has no imperative reading available |
+| "One false positive is an acceptable price" | It fires on the exact shape the check is trying to reward |
+| "Authors can reword around the check" | They reword away from the clearest description they had |
+
+## Verification
+
+This fixture draws only the catalogue finding every fixture here draws.
+`;
+
+/**
  * The control. Correct in every respect the evaluator checks, and sitting in the
  * SAME fixture tree as the broken ones — so "the evaluator rejected the fixture"
  * cannot be satisfied by an evaluator that rejects everything it is shown.
@@ -633,7 +817,10 @@ uncatalogued \`catalog:registered\` finding.
  * check has to pass, or a length test could be satisfied by the wrong finding:
  * the description carries a trigger and a NOT-for clause, the body has a Red
  * Flags table with three rows and a Verification section, and the description
- * differs per fixture so `description:collision` stays quiet.
+ * differs per fixture so `description:collision` stays quiet, and its first
+ * Red Flags row names the skill so `anatomy:red-flags-collision` stays quiet
+ * too — two fixtures built by one generator would otherwise ship one table
+ * twice, which is precisely what that check reports.
  */
 function oversizedSkill(name: string, description: string, bodyLines: number): string {
   // Deliberately free of `:`, `.` and `/`: the cross-reference scan treats a
@@ -658,7 +845,7 @@ metadata:
 
 | Rationalization | Why it's wrong |
 |---|---|
-| "One more section is cheap" | Every line is a line an agent reads before it can act |
+| "One more section is cheap for ${name}" | Every line is a line an agent reads before it can act |
 | "The ceiling is advisory" | \`anatomy:length\` is a finding, and the sweep exits non-zero |
 | "Raising the number is the fix" | The rule allows lowering a ceiling only |
 
@@ -862,6 +1049,22 @@ beforeAll(() => {
   writeSkill(fixtureRoot, "quality", "no-red-flags-example", NO_RED_FLAGS_SKILL);
   writeSkill(fixtureRoot, "quality", "too-few-red-flags-rows-example", TOO_FEW_RED_FLAGS_ROWS_SKILL);
   writeSkill(fixtureRoot, "quality", "no-verification-example", NO_VERIFICATION_SKILL);
+  // T19: one missing section, in a skill that also ships a harness build. The
+  // build carries the same body by construction (`document:build-parity`
+  // requires it), so an ungated anatomy sweep reports the one defect twice.
+  writeSkillFile(
+    fixtureRoot,
+    "quality",
+    "no-red-flags-example",
+    skillBuildFileName("codex"),
+    NO_RED_FLAGS_SKILL,
+  );
+  writeSkill(fixtureRoot, "quality", "not-formatted-example", NOT_FORMATTED_SKILL);
+  writeSkill(fixtureRoot, "quality", "empty-verification-example", EMPTY_VERIFICATION_SKILL);
+  writeSkill(fixtureRoot, "quality", "red-flags-collision-a", RED_FLAGS_COLLISION_A_SKILL);
+  writeSkill(fixtureRoot, "quality", "red-flags-collision-b", RED_FLAGS_COLLISION_B_SKILL);
+  writeSkill(fixtureRoot, "quality", "noun-ambiguous-imperative-example", NOUN_AMBIGUOUS_IMPERATIVE_SKILL);
+  writeSkill(fixtureRoot, "quality", "noun-subject-example", NOUN_SUBJECT_SKILL);
   writeSkill(fixtureRoot, "quality", "control-example", CONTROL_SKILL);
   writeSkill(fixtureRoot, "quality", "build-drift-example", BUILD_ONLY_DEFECT_CANONICAL);
   writeSkillFile(
@@ -925,6 +1128,44 @@ afterAll(() => {
   if (fixtureRoot.length > 0) rmSync(fixtureRoot, { recursive: true, force: true });
 });
 
+/**
+ * Every way the recorded ceilings disagree with the tree they bound, as lines
+ * a failure message can print.
+ *
+ * Takes the map as an argument so the ratchet's own rule can be exercised on a
+ * map that breaks it — a test that could only read `SKILL_LENGTH_CEILINGS`
+ * itself would assert the tree is currently fine and never that the comparison
+ * bites. `[]` means every shipped skill has an entry, every entry names a
+ * shipped skill, and each one equals that skill's line count exactly.
+ */
+function ceilingMismatches(ceilings: ReadonlyMap<string, number>): string[] {
+  const out: string[] = [];
+  const shipped = new Set<string>();
+  for (const file of bundledSkillFiles(path.join(defaultBundledRoot(), "skills"))) {
+    if (path.basename(file) !== "SKILL.md") continue;
+    const parts = file.split(path.sep);
+    const key = `${parts[parts.length - 3]}/${parts[parts.length - 2]}`;
+    shipped.add(key);
+    const ceiling = ceilings.get(key);
+    if (ceiling === undefined) {
+      out.push(`${key}: ships, but no ceiling is recorded`);
+      continue;
+    }
+    const lines = skillLineCount(readFileSync(file, "utf8"));
+    if (lines === ceiling) continue;
+    out.push(
+      `${key}: ships ${lines} lines, ceiling records ${ceiling} — ` +
+        (lines > ceiling
+          ? "the skill grew past its ceiling; split it or move reference material out, and never raise the number"
+          : "the ceiling sits above the file: either it was raised, which the ratchet forbids, or the skill was trimmed without lowering the ceiling in the same change"),
+    );
+  }
+  for (const key of ceilings.keys()) {
+    if (!shipped.has(key)) out.push(`${key}: recorded, but no such skill ships`);
+  }
+  return out.sort();
+}
+
 describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   function findingsFor(skill: string): { check: BundledSkillCheck; message: string }[] {
     return fixtureTree()
@@ -943,10 +1184,13 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     // sentence period), each shipping one plain SKILL.md.
     // Plus T9's two `anatomy:length` fixtures: one past the default because it
     // has no recorded ceiling, one past a ceiling that is recorded.
-    expect(evaluation.skills).toBe(27);
-    // Twenty-nine documents: twenty-seven skills, plus `build-drift-example`
-    // and `harness-field-only` each also shipping a Codex build.
-    expect(evaluation.documents).toBe(29);
+    // Plus T19's six: the "not formatted" substring, the empty Verification
+    // body, the copied-Red-Flags pair, and the noun-ambiguous imperative with
+    // its noun-phrase twin.
+    expect(evaluation.skills).toBe(33);
+    // Thirty-six documents: thirty-three skills, plus the Codex builds of
+    // `build-drift-example`, `harness-field-only` and (T19) `no-red-flags-example`.
+    expect(evaluation.documents).toBe(36);
     expect(evaluation.findings.length).toBeGreaterThan(0);
   });
 
@@ -1058,6 +1302,57 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(bareImperativeOpening("Use when a request is ambiguous.")).toBeUndefined();
     // The shape it MUST fire on.
     expect(bareImperativeOpening("Use when implement a feature.")).toBe("implement");
+  });
+
+  test("a noun-ambiguous verb fires only when a determiner follows it", () => {
+    // T19. Fourteen words in the verb set are ordinary nouns at least as often
+    // as they are verbs, and each one turned a perfectly good situational
+    // description into a finding. The tree fixture proves the imperative half
+    // still bites; the assertions below prove the noun half no longer does.
+    const fired = findingsFor("noun-ambiguous-imperative-example").filter(
+      (finding) => finding.check === "description:bare-imperative",
+    );
+    expect(fired).toHaveLength(1);
+    expect(fired[0]?.message).toContain('"Use when review');
+
+    // The twin: same verb, noun-phrase subject, no finding of any kind past
+    // the catalogue one every fixture here draws.
+    expect(new Set(findingsFor("noun-subject-example").map((finding) => finding.check))).toEqual(
+      new Set(["catalog:registered"]),
+    );
+
+    // Every one of the fourteen, in both readings — the false positive each
+    // used to produce, and the imperative each still catches. Listed rather
+    // than sampled: a word quietly moved back into `BARE_IMPERATIVE_VERBS`
+    // would otherwise reintroduce its own false positive unnoticed.
+    const nounPhrases: Record<string, string> = {
+      review: "review comments arrive on an open pull request",
+      check: "check results land in the pipeline summary",
+      commit: "commit history has to be rewritten before a merge",
+      update: "update notifications interrupt a running job",
+      install: "install output reports a missing peer dependency",
+      document: "document sections drift from the code they describe",
+      push: "push protection blocks a branch",
+      run: "run duration exceeds the budget",
+      start: "start time is later than the deadline",
+      debug: "debug output floods a log",
+      fix: "fix attempts keep reopening the same issue",
+      split: "split packages disagree on a shared version",
+      draft: "draft pull requests pile up unreviewed",
+      edit: "edit conflicts appear in a shared file",
+    };
+    for (const [verb, phrase] of Object.entries(nounPhrases)) {
+      expect(NOUN_AMBIGUOUS_IMPERATIVE_VERBS.has(verb)).toBe(true);
+      expect(BARE_IMPERATIVE_VERBS.has(verb)).toBe(false);
+      expect(bareImperativeOpening(`Use when ${phrase}.`)).toBeUndefined();
+      expect(bareImperativeOpening(`Use when ${verb} the diff.`)).toBe(verb);
+    }
+
+    // The determiner set is what carries the distinction, so it has to be
+    // non-empty and closed to the words that actually introduce an object.
+    expect(IMPERATIVE_OBJECT_DETERMINERS.size).toBeGreaterThan(0);
+    expect(bareImperativeOpening("Use when review your own diff.")).toBe("review");
+    expect(bareImperativeOpening("Use when review queues grow.")).toBeUndefined();
   });
 
   test("a description over the 1024-character cap is rejected; a shorter one is not", () => {
@@ -1192,10 +1487,83 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(control).toEqual([]);
   });
 
-  test("a document with no Red Flags table is rejected", () => {
+  test("a document with no Red Flags table is rejected ONCE, even when it also ships a harness build", () => {
+    // T19: `anatomy:sections` used to run per DOCUMENT, so a skill with four
+    // builds reported one missing section five times. `document:build-parity`
+    // already forces every build to carry its `SKILL.md`'s body, so the build
+    // is the same fact — the fixture ships a Codex build of this exact file to
+    // pin that. Before the guard this expectation read 2.
     const found = findingsFor("no-red-flags-example").filter((finding) => finding.check === "anatomy:sections");
     expect(found).toHaveLength(1);
     expect(found[0]?.message).toContain("Red Flags");
+
+    // Located in the canonical file, not in the build — the build is where the
+    // defect is copied, `SKILL.md` is where it is fixed.
+    const located = fixtureTree().findings.filter(
+      (finding) => finding.check === "anatomy:sections" && finding.skill === "no-red-flags-example",
+    );
+    expect(located.map((finding) => finding.file)).toEqual(["quality/no-red-flags-example/SKILL.md"]);
+    // …and the build really is there to be over-reported, or this proves nothing.
+    expect(existsSync(path.join(fixtureRoot, "skills", "quality", "no-red-flags-example", skillBuildFileName("codex"))))
+      .toBe(true);
+  });
+
+  test("a NOT-for clause is matched on word boundaries — \"not formatted\" is not a disambiguation", () => {
+    // T19: `/not for/i` had a boundary at neither end, so any sentence about
+    // formatting satisfied the clause for the whole document.
+    const found = findingsFor("not-formatted-example").filter((finding) => finding.check === "anatomy:sections");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("NOT for");
+  });
+
+  test("a Verification heading with an empty section body is rejected", () => {
+    // T19: presence was the whole bar, so `## Verification` with nothing under
+    // it announced a completion contract and supplied none.
+    const found = findingsFor("empty-verification-example").filter(
+      (finding) => finding.check === "anatomy:sections",
+    );
+    expect(found).toHaveLength(1);
+    expect(found[0]?.message).toContain("Verification");
+  });
+
+  test("two skills shipping one Red Flags table draw a collision finding naming both", () => {
+    // T19: a table pasted from a sibling satisfies `anatomy:sections` while
+    // naming that sibling's rationalizations. Attributed to the later key of
+    // the group, the same convention `description:collision` uses.
+    const found = fixtureTree().findings.filter((finding) => finding.check === "anatomy:red-flags-collision");
+    expect(found).toHaveLength(1);
+    expect(found[0]?.skill).toBe("red-flags-collision-b");
+    expect(found[0]?.file).toBe("quality/red-flags-collision-b/SKILL.md");
+    expect(found[0]?.message).toContain("quality/red-flags-collision-a");
+
+    // Both halves still PASS `anatomy:sections`: the table exists, which is
+    // the question that check asks. The two findings are not interchangeable.
+    for (const skill of ["red-flags-collision-a", "red-flags-collision-b"]) {
+      expect(findingsFor(skill).filter((finding) => finding.check === "anatomy:sections")).toEqual([]);
+    }
+    // And the original draws no collision finding of its own — one group, one
+    // finding, not one per member.
+    expect(findingsFor("red-flags-collision-a").filter((f) => f.check === "anatomy:red-flags-collision")).toEqual([]);
+  });
+
+  test("a Red Flags table of placeholder rows does not count as one", () => {
+    // T19: three rows reading `| a | b |` satisfied the row threshold, so the
+    // check passed on a table that names no rationalization and no rebuttal.
+    const placeholder = "## Red Flags\n\n| A | B |\n|---|---|\n| a | b |\n| c | d |\n| e | f |\n";
+    expect(hasRedFlagsSection(placeholder)).toBe(false);
+    expect(redFlagsTableBody(placeholder)).toEqual([]);
+
+    // A single-column list of excuses with no answers is not the pair shape.
+    const oneColumn =
+      "## Red Flags\n\n| Rationalization |\n|---|\n| \"It is probably fine to skip this step\" |\n" +
+      "| \"The previous run passed, so this one will\" |\n| \"Nobody reads this section anyway\" |\n";
+    expect(hasRedFlagsSection(oneColumn)).toBe(false);
+
+    // The real shape still passes, and the shipped floor is nowhere near the
+    // threshold: the shortest data row in any shipped table carries 72
+    // characters of cell text.
+    expect(ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS).toBe(24);
+    expect(ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS).toBeLessThan(72);
   });
 
   test("a Red Flags heading with fewer than the minimum rows still fails — the row count is enforced, not just the heading", () => {
@@ -1222,23 +1590,45 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(hasNotForClause("description: Use when doing X.\n\nUse this for Y, not for Z.")).toBe(true);
     expect(hasNotForClause("description: Use when doing X, NOT for Y.")).toBe(true);
     expect(hasNotForClause("description: Use when doing X.\n\nNo disambiguation here.")).toBe(false);
+
+    // T19 — bounded at both ends. Each of these contains the substring "not
+    // for" and none of them says what the skill excludes.
+    expect(hasNotForClause("The report is not formatted as JSON.")).toBe(false);
+    expect(hasNotForClause("A rewrite here is not forced.")).toBe(false);
+    expect(hasNotForClause("That outcome was not fortunate.")).toBe(false);
+    // A clause broken across a line still counts — prose wraps.
+    expect(hasNotForClause("Use when doing X, not\nfor anything else.")).toBe(true);
   });
 
   test("hasRedFlagsSection requires a heading AND a table or list of at least the minimum rows", () => {
     const headingOnly = "## Red Flags\n\nJust a paragraph, no table.\n";
     expect(hasRedFlagsSection(headingOnly)).toBe(false);
 
-    const oneRow = "## Red Flags\n| A | B |\n|---|---|\n| one | row |\n";
+    const oneRow =
+      "## Red Flags\n| A | B |\n|---|---|\n| \"One row is plenty here\" | It is a callout, not a table |\n";
     expect(hasRedFlagsSection(oneRow)).toBe(false);
 
+    // Three rows, each carrying a named excuse and the answer to it — the
+    // shape every shipped table has. T19 added the per-row substance floor,
+    // so the rows have to say something; `| one | row |` no longer counts.
     const threeRows =
-      "## Red Flags\n| A | B |\n|---|---|\n| one | row |\n| two | row |\n| three | row |\n";
+      "## Red Flags\n| A | B |\n|---|---|\n" +
+      "| \"Skipping this step is fine\" | It is the step the rest depends on |\n" +
+      "| \"The last run passed\" | The last run did not touch this path |\n" +
+      "| \"Nobody reads this section\" | The agent reading it is the audience |\n";
     expect(hasRedFlagsSection(threeRows)).toBe(true);
+    expect(redFlagsTableBody(threeRows)).toHaveLength(3);
 
     // The two-column bullet-list alternative AC3 names, with no shipped
-    // example today: still accepted once it reaches the row threshold.
-    const bulletList = "## Red Flags\n- \"one\" — why\n- \"two\" — why\n- \"three\" — why\n";
+    // example today: still accepted once it reaches the row threshold, and
+    // held to the same substance floor as a table row.
+    const bulletList =
+      "## Red Flags\n" +
+      "- \"Skipping this step is fine\" — it is the step the rest depends on\n" +
+      "- \"The last run passed\" — the last run did not touch this path\n" +
+      "- \"Nobody reads this section\" — the agent reading it is the audience\n";
     expect(hasRedFlagsSection(bulletList)).toBe(true);
+    expect(hasRedFlagsSection("## Red Flags\n- \"a\" — b\n- \"c\" — d\n- \"e\" — f\n")).toBe(false);
 
     // job-orchestrator's actual shape: an isolated single-row callout under
     // its own heading, nowhere near the threshold — must not pass.
@@ -1247,10 +1637,18 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
   });
 
   test("hasVerificationSection accepts a heading, a STATUS contract line, or an explicit exit-criteria enum", () => {
-    expect(hasVerificationSection("## Verification\n")).toBe(true);
-    expect(hasVerificationSection("## Phase 3: Verification And Review\n")).toBe(true);
-    expect(hasVerificationSection("## Exit Criteria\n")).toBe(true);
+    expect(hasVerificationSection("## Verification\n\nEvery task reports PASS or FAIL.\n")).toBe(true);
+    expect(hasVerificationSection("## Phase 3: Verification And Review\n\nRe-run the suite.\n")).toBe(true);
+    expect(hasVerificationSection("## Exit Criteria\n\n- the build is green\n")).toBe(true);
     expect(hasVerificationSection("STATUS: DONE\n")).toBe(true);
+
+    // T19 — a heading is not a section. Both of these announce a completion
+    // contract and state none: the first has nothing under it at all, the
+    // second only a blank line before the next heading.
+    expect(hasVerificationSection("## Verification\n")).toBe(false);
+    expect(hasVerificationSection("## Verification\n\n\n## Something Else\n\nUnrelated.\n")).toBe(false);
+    // A deeper heading INSIDE the section is content, not a terminator.
+    expect(hasVerificationSection("## Verification\n\n### Exit states\n\nDONE or BLOCKED.\n")).toBe(true);
     expect(hasVerificationSection('status: "DONE" | "DONE_WITH_CONCERNS" | "NEEDS_CONTEXT"\n')).toBe(true);
     // A bare mention of "status" as a formatting note, not a contract, must
     // not satisfy this — it says where a line goes, not what "done" means.
@@ -1302,6 +1700,22 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     const found = findingsFor("commit").filter((finding) => finding.check === "anatomy:length");
     expect(found).toHaveLength(1);
     expect(found[0]?.message).toContain(`recorded ceiling of ${recorded}`);
+
+    // T19: the finding used to end "raise the ceiling only when the growth was
+    // decided", which told an operator to do the one thing the rule it cites
+    // forbids. The remedy it names now has to be the rule's remedy — and the
+    // rule is read here rather than paraphrased, because a message and a rule
+    // agreeing in this file's opinion is what went wrong the first time.
+    const message = found[0]?.message ?? "";
+    expect(message).toContain("Split the skill");
+    expect(message).toMatch(/only ever moves DOWN/);
+    expect(message).not.toMatch(/raise the ceiling only/i);
+
+    const rule = readFileSync(
+      path.join(defaultBundledRoot(), "rules", "core", "skills-storage-workflow.mdc"),
+      "utf8",
+    );
+    expect(rule).toContain("A ceiling **moves down**, never up");
   });
 
   test("a skill with no recorded ceiling is bounded by the default", () => {
@@ -1327,29 +1741,54 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     expect(skillLineCount("one\ntwo")).toBe(1);
   });
 
-  test("every shipped skill has a recorded ceiling, and it is not below what ships today", () => {
-    // Non-vacuity for the ceiling file itself: a skill missing from the map
-    // silently falls back to the default, which for the large orchestrators
-    // would be a permanent finding nobody chose. And a ceiling BELOW the
-    // current count would be a finding on the day it was written.
-    const shipped = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(shipped.length).toBe(SKILL_LENGTH_CEILINGS.size);
-    const missing: string[] = [];
-    const under: string[] = [];
-    for (const file of shipped) {
-      if (path.basename(file) !== "SKILL.md") continue;
-      const parts = file.split(path.sep);
-      const key = `${parts[parts.length - 3]}/${parts[parts.length - 2]}`;
-      const ceiling = SKILL_LENGTH_CEILINGS.get(key);
-      if (ceiling === undefined) {
-        missing.push(key);
-        continue;
-      }
-      const lines = skillLineCount(readFileSync(file, "utf8"));
-      if (lines > ceiling) under.push(`${key}: ${lines} lines > ceiling ${ceiling}`);
-    }
-    expect(missing).toEqual([]);
-    expect(under).toEqual([]);
+  test("every recorded ceiling equals the line count that ships today — the ratchet only moves down", () => {
+    // T19. This assertion used to be one-sided (`lines > ceiling` fails), and
+    // one-sided is the same as absent for the edit it needs to stop: a review
+    // raised `review/review-clean-code` from 545 to 1200 to clear a finding
+    // and NOTHING in the suite went red. "Ceilings only move down" was prose
+    // in three files and an assertion in none.
+    //
+    // Equality is the rule the AC itself states — a ceiling is the skill's
+    // line count on the day it was recorded — and it is what makes the
+    // ratchet executable: raising an entry fails here, and so does lowering
+    // one without actually trimming the skill. The only edit that keeps this
+    // green is trimming the file and recording what is left, in the same
+    // change, which is exactly what `skills-storage-workflow.mdc` requires.
+    //
+    // NO EXCEPTION LIST, because the tree needs none: all 67 shipped skills
+    // sit at exactly their recorded ceiling today. If a future trim genuinely
+    // has to land before its ceiling can be lowered, the exception belongs
+    // HERE, named, with the reason and the task that closes it — never as a
+    // relaxation of the comparison, which would restore the hole this test
+    // exists to close.
+    expect(bundledSkillFiles(path.join(defaultBundledRoot(), "skills")).length).toBe(SKILL_LENGTH_CEILINGS.size);
+    expect(ceilingMismatches(SKILL_LENGTH_CEILINGS)).toEqual([]);
+  });
+
+  test("raising a ceiling above what the skill ships is what this now fails on", () => {
+    // Non-vacuity for the assertion above, run through the SAME comparison
+    // rather than restated: `review/review-clean-code` is the entry a review
+    // actually raised (545 -> 1200) while every test stayed green, so that
+    // exact edit is the one this proves is now caught.
+    expect(SKILL_LENGTH_CEILINGS.get("review/review-clean-code")).toBe(545);
+    const raised = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("review/review-clean-code", 1200));
+    expect(raised).toHaveLength(1);
+    expect(raised[0]).toContain("review/review-clean-code: ships 545 lines, ceiling records 1200");
+    expect(raised[0]).toContain("the ratchet forbids");
+
+    // …and a skill that grows past a ceiling nobody touched is the other
+    // direction of the same equality, reported in the words that say what to
+    // do about it.
+    const grown = ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/push", 10));
+    expect(grown).toHaveLength(1);
+    expect(grown[0]).toContain("quality/push");
+    expect(grown[0]).toContain("never raise the number");
+
+    // An entry for a skill that no longer ships is a ceiling nothing is
+    // measured against, and reads as coverage in the size comparison above.
+    expect(ceilingMismatches(new Map(SKILL_LENGTH_CEILINGS).set("quality/deleted-skill", 1))).toEqual([
+      "quality/deleted-skill: recorded, but no such skill ships",
+    ]);
   });
 
   test("a defect that exists ONLY in a harness build is found", () => {
@@ -1586,6 +2025,54 @@ describe("every allowance states why it is one", () => {
       expect(entry.prefix.endsWith("/")).toBe(true);
       expect(entry.producedBy).toMatch(/^keryx /);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// AC11: the rejected-change ledger
+// ---------------------------------------------------------------------------
+
+describe("AC11: the rejected-change ledger exists, is usable, and is the file the rule names", () => {
+  // The ledger is checked HERE and not by `xref:path`, and that is a decision
+  // with evidence rather than an omission — see `CHECKED_PATH_ROOTS`' comment
+  // in `bundled-eval.ts`. In short: `docs/` as a checked xref root reports
+  // thirteen concrete paths that name the USER's project (the sections
+  // `autodoc-orchestrator` generates, `documentation-management.mdc`'s own
+  // layout) as missing, and `package.json`'s `files` does not publish
+  // `docs/skills/`, so the one reference it was meant to check would fail for
+  // every installed user while passing in a checkout. This suite only ever
+  // runs in a checkout, which is exactly where the ledger is true.
+  const repoRoot = path.join(import.meta.dir, "..", "..");
+
+  test("the ledger file exists at the path the constant names", () => {
+    const ledger = path.join(repoRoot, REJECTED_CHANGES_LEDGER.path);
+    expect(existsSync(ledger)).toBe(true);
+  });
+
+  test("the ledger carries the documented table header, so a row has somewhere to go", () => {
+    const text = readFileSync(path.join(repoRoot, REJECTED_CHANGES_LEDGER.path), "utf8");
+    expect(text).toContain(REJECTED_CHANGES_LEDGER.header);
+    // A header row with no separator under it is not a table any renderer
+    // shows, and the columns are the whole point: what was tried, why it was
+    // rejected, and the evidence that sank it.
+    const lines = text.split("\n");
+    const header = lines.findIndex((line) => line.trim() === REJECTED_CHANGES_LEDGER.header);
+    expect(header).toBeGreaterThan(-1);
+    expect(lines[header + 1] ?? "").toMatch(/^\|(\s*:?-+:?\s*\|)+$/);
+    // The append-only rule is the ledger's only real mechanism; a file that
+    // dropped it would be a list somebody edits.
+    expect(text.toLowerCase()).toContain("append-only");
+  });
+
+  test("the rule that requires the ledger names its path", () => {
+    // The citation and the file are two halves of one contract: a rule
+    // pointing somewhere else, or a ledger nothing points at, is the same
+    // failure as the ledger not existing.
+    const rule = readFileSync(
+      path.join(defaultBundledRoot(), ...REJECTED_CHANGES_LEDGER.rule.split("/")),
+      "utf8",
+    );
+    expect(rule).toContain(REJECTED_CHANGES_LEDGER.path);
   });
 });
 
