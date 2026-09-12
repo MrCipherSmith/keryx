@@ -22,3 +22,37 @@
 - 2026-09-11T20:58:04.479Z - task-done: T1: Collect remaining context
 - 2026-09-11T20:58:04.594Z - task-done: T2: Implement per plan
 - 2026-09-11T20:58:39Z - Context: collected in 253-T1 (before flow 256's fixes) and re-verified in 257-T1 after #533; corrections are in context-map.md 'Re-verification 2026-09-12'. Branch skills/quality-gate cut from main 56934fe2 with flow 256's closure commit (75d63f8e) on top. Baseline (AC12) running at 61ab55d8 before any worker starts.
+- 2026-09-11T21:03:34Z - BASELINE (AC12) at 61ab55d8: tsc --noEmit exit 0; skills verify --bundled exit 0; bun test 9772 tests across 749 files, 0 fail. Raw: .metaproject/data/gdctx/raw/2026-09-11T21-03-00-739Z-50ba94_run.log
+- 2026-09-11T21:03:34.437Z - task-attempt: T5: started (attempt 1) — 257-T5 wave W1
+- 2026-09-11T21:03:34.547Z - task-attempt: T17: started (attempt 1) — 257-T17 wave W1
+- 2026-09-11T21:08:53.386Z - task-done: T17: W3: rejected-change ledger and the rule that requires it (AC11)
+- 2026-09-11T21:08:53Z - NOTE for flow 258: THIRD_PARTY_NOTICES.md does not exist yet; the program plan says MIT attribution for techniques adapted from addyosmani/agent-skills goes there — create it with the first adapted skill. T17 noted the MIT source inline in the ledger header.
+- 2026-09-11T21:23:57.666Z - task-done: T5: W1: delete SKILL.<runtime>.md copies identical to SKILL.md; export/install/tests treat the SKILL.md fallback as normal (AC8)
+- 2026-09-11T21:23:57.781Z - task-attempt: T6: started (attempt 1) — 257-T6 after T5
+- 2026-09-11T21:25:03Z - T5 committed (88 identical runtime copies removed per tree; install prunes stale builds; export manifest drops usedFallbackBuild — PR must call this out). NOTE for T16: src/commands/skills.ts ~l.1475 help text still says 'the 65 SKILL.md files' (67 now); docs/docs/cli-reference.md:812,832, modules.md:368, complete-setup-and-agent-workflows.md:552 list --runtime codex|claude|plugin without cursor/zed/opencode.
+- 2026-09-11T21:59:45.296Z - task-done: T6: W1: one description and one trigger list per skill; catalog equals SKILL.md frontmatter; no purpose fallback (AC1)
+- 2026-09-11T21:59:45.441Z - task-attempt: T7: started (attempt 1) — 257-T7 after T6
+- 2026-09-11T21:59:45.554Z - task-attempt: T10: started (attempt 1) — 257-T10 after T6
+- 2026-09-11T23:07:04.256Z - task-done: T7: W1: description:* checks in bundled-eval with fixtures (AC2)
+- 2026-09-11T23:07:04.382Z - task-attempt: T8: started (attempt 1) — 257-T8 after T7
+- 2026-09-11T23:08:21.616Z - task-done: T10: W2: routing corpus for every skill, pairwise negatives, rank-1 baseline (AC5)
+- 2026-09-11T23:08:21Z - T10: RANK1_BASELINE=0.9707 (232/239) with 7 named gaps for T12 (review-regression vs review-architecture; task-implementer vs planner; pr-issue-documenter vs pr; hook-manager vs commit; reviewer-skill-creator and review-clean-code both losing to review-orchestrator's one-word 'review' trigger; metaproject-router vs context-router). Any later trigger/description edit must re-run routing-corpus.test.ts and may only raise the baseline.
+- 2026-09-11T23:31:19.195Z - task-done: T8: W2: anatomy:sections check with a reason-carrying exemption map (AC3)
+- 2026-09-11T23:31:19.358Z - task-depends-set: T11: dependsOn T8 (was T9) — bundled-eval lane: collision check runs before the length ceilings
+- 2026-09-11T23:31:19.523Z - task-depends-set: T9: dependsOn T13, T14, T15, T11 (was T8) — line-count ceilings are measured after the Red Flags and Verification backfill lands
+- 2026-09-11T23:31:19.704Z - task-attempt: T11: started (attempt 1) — 257-T11 after T8
+- 2026-09-11T23:31:19.917Z - task-attempt: T13: started (attempt 1) — 257-T13 after T8
+- 2026-09-11T23:31:20.070Z - task-attempt: T14: started (attempt 1) — 257-T14 after T8
+- 2026-09-11T23:31:20.218Z - task-attempt: T15: started (attempt 1) — 257-T15 after T8
+- 2026-09-11T23:43:45.425Z - task-done: T13: W3: Red Flags + Verification backfill — quality skills (AC9)
+- 2026-09-11T23:43:45Z - T13 landed 13 quality skills; its PENDING_ANATOMY_BACKFILL deletions stay uncommitted until T11 finishes editing bundled-eval.ts and both go in together. T13 reports T14's platform/agent-entrypoint-distiller frontmatter is not valid YAML mid-edit (catalog-single-source YAML-parity test) and task-implementer's mirror was briefly out of sync.
+- 2026-09-11T23:44:07.501Z - task-done: T15: W3: Red Flags + Verification backfill — review skills (AC9)
+- 2026-09-11T23:53:32.034Z - task-done: T11: W2: description:collision check on the scorer's tokenisation (AC6)
+- 2026-09-11T23:53:32.150Z - task-done: T14: W3: Red Flags + Verification backfill — platform, planning, orchestration skills (AC9)
+- 2026-09-11T23:53:32.258Z - task-attempt: T12: started (attempt 1) — 257-T12 after T10, T11
+- 2026-09-11T23:53:50.257Z - task-attempt: T16: started (attempt 1) — 257-T16 in parallel with T12 (disjoint files)
+- 2026-09-12T00:14:06.074Z - task-done: T16: W3: carry-overs — xref sweeps orchestrator-prompt.md, frontmatter via parseSkillFrontmatter, no trailing-period capture, no hardcoded npx tsc (AC10)
+- 2026-09-12T00:15:30.547Z - task-done: T12: W3: resolve routing collisions the corpus names, incl. check performance and implement/issue (AC7)
+- 2026-09-12T00:15:30.655Z - task-attempt: T9: started (attempt 1) — 257-T9 last implementation task
+- 2026-09-12T00:41:33.341Z - task-attempt: T9: failed (attempt 2) — worker stalled on a long read (watchdog, no source edits landed)
+- 2026-09-12T00:41:37.989Z - task-attempt: T9: started (attempt 3) — 257-T9 retry; measure line counts with wc, never read large skills whole
