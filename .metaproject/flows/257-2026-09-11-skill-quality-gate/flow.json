@@ -9,13 +9,62 @@
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-12T08:20:53.715Z",
+  "updatedAt": "2026-09-12T08:40:55.104Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ec3af3a7d585c2a1a8bbd6fb9a8537a633c026b0e3ebc83bf43b862b42170ce5",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-12T08:29:21.979Z",
+      "note": "Catalog entries are file-backed: description and triggers are read from the skill's own SKILL.md frontmatter, so a difference is impossible rather than merely tested (src/gdskills/catalog.ts; test 'catalog description equals SKILL.md frontmatter'). renderedSkill() now requires an explicit description. The 'Use when ${purpose}' fallback is gone from catalog.ts — the only two occurrences left in src/ are a comment recording that 67 of 78 entries once used it and a test named for its retirement."
+    },
+    "AC2": {
+      "at": "2026-09-12T08:29:22.087Z",
+      "note": "description:trigger-phrase, description:bare-imperative and description:length in src/gdskills/bundled-eval.ts, each with a failing fixture and a passing control in bundled-eval.test.ts. Shipped tree: 'skills verify --bundled' exit 0 at 03c2d1c6 — zero description findings."
+    },
+    "AC3": {
+      "at": "2026-09-12T08:29:22.191Z",
+      "note": "anatomy:sections checks the NOT-for clause, the Red Flags table and the Verification/exit-criteria section; exemptions are a reason-carrying map asserted non-empty with a reason per entry; fixtures cover each missing section separately. Shipped tree: zero findings (verify exit 0)."
+    },
+    "AC4": {
+      "at": "2026-09-12T08:29:22.293Z",
+      "note": "anatomy:length in bundled-eval.ts, guarded to canonical SKILL.md files. src/gdskills/skill-length-ceilings.ts carries 67 entries (values = the line count each skill measured when recorded) and DEFAULT_SKILL_LENGTH_CEILING = 500. A test asserts every recorded ceiling still EQUALS the current count, so a ceiling cannot be raised to pass a check and a trim must lower it in the same commit. skills-storage-workflow.mdc has a 'Length Ceilings' section quoting the finding message verbatim; a test reads both. Fixtures prove the over-ceiling and the over-default findings."
+    },
+    "AC5": {
+      "at": "2026-09-12T08:29:22.396Z",
+      "note": "src/commands/routing-corpus.ts: 78 cases (every catalog entry, rendered included), 287 positives, 156 negatives — each negative names the skill that must outrank it. The test scores them through the shipped scoreBundledSkillRoute. The record is two integers, RANK1_FIRST = 285 and RANK1_TOTAL = 287, compared for equality against a live recount, so a regression and an unrecorded improvement both fail. Two known gaps are recorded with excluded: false — they count against the record."
+    },
+    "AC6": {
+      "at": "2026-09-12T08:29:22.497Z",
+      "note": "description:collision at similarity >= 0.75 on routeTokens — the router's own tokenisation, now shared from src/lib/route-tokens.ts so the check cannot drift from the scorer. Fixtures prove the finding; shipped tree has zero (verify exit 0)."
+    },
+    "AC7": {
+      "at": "2026-09-12T08:29:22.602Z",
+      "note": "T12 resolved the collisions the corpus named: 'clarify requirements' -> interviewer, 'write tests'/'generate tests' -> test-gen, 'create tests first' -> tests-creator, 'review my code'/'full review' -> review-orchestrator, 'implement this issue' -> its named owner with the other two orchestrators as negatives, and 'check performance' — previously a three-way tie — resolved to one owner. Each is a corpus case, so the ranking is asserted continuously."
+    },
+    "AC8": {
+      "at": "2026-09-12T08:29:22.705Z",
+      "note": "58 SKILL.<runtime>.md files byte-identical to their SKILL.md were deleted; 15 remain and all genuinely differ — the 7 gproject planning skills x codex/cursor plus feature-analyzer/SKILL.detail.md. Install prunes stale per-runtime copies it finds in an already-installed tree (removeStaleRuntimeBuilds). export.ts no longer reports usedFallbackBuild; schemaVersion is 2, tied to that removal by a test. Build-parity, status-contract, round-bound, agent-catalogue-xref and bundled-eval pass with updated denominators (full suite 0 fail)."
+    },
+    "AC9": {
+      "at": "2026-09-12T08:29:22.811Z",
+      "note": "Red Flags + Verification backfilled across the quality (T13), platform/planning/orchestration (T14) and review (T15) skills, each row naming a failure specific to that skill; T19 added substance floors so an empty section or a copied table is a finding. No workflow skill needs an anatomy:sections exemption."
+    },
+    "AC10": {
+      "at": "2026-09-12T08:29:22.915Z",
+      "note": "T16: the xref sweep covers companion documents including orchestrator-prompt.md, frontmatter is read through parseSkillFrontmatter, and the path pattern no longer captures a trailing sentence period. feature-dev, hookify and deploy no longer hardcode 'npx tsc'."
+    },
+    "AC11": {
+      "at": "2026-09-12T08:29:23.024Z",
+      "note": "docs/skills/rejected-skill-changes.md exists with 4 entries, and skills-storage-workflow.mdc requires consulting it before proposing a skill change and appending on rejection. T19 added a contract test for the ledger. The instructed fix of adding docs/ to CHECKED_PATH_ROOTS was refused with measurement: 13 shipped paths name a user's own project, and docs/ is not in package.json files, so the check would fail for every installed user."
+    },
+    "AC12": {
+      "at": "2026-09-12T08:29:23.124Z",
+      "note": "At 03c2d1c6 (rebased onto origin/main): rules mirror byte-identical (diff -rq clean), skills mirror differs only by rendered-only directories, 'skills verify --bundled' exit 0, tsc --noEmit exit 0, eslint clean, bun test 10065 pass / 20 skip / 0 fail across 751 files in 251s. The pre-change baseline in journal.md is 9772 pass / 0 fail; no failure absent from it."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -115,7 +164,7 @@
         "T22"
       ],
       "attempts": {
-        "count": 2,
+        "count": 3,
         "log": [
           {
             "at": "2026-09-12T07:43:22.387Z",
@@ -126,6 +175,11 @@
             "at": "2026-09-12T07:55:27.740Z",
             "outcome": "failed",
             "detail": "round 1: 6 major, ~12 minor across code/tests/content reviewers"
+          },
+          {
+            "at": "2026-09-12T08:30:21.095Z",
+            "outcome": "failed",
+            "detail": "round 2 (narrow): all round-1 findings closed — install containment verified by executing all three reproductions, ceiling ratchet exercised by raising a ceiling in-test, corpus record compared with toBe, 48/48 new paraphrases rank their own skill first and quote no trigger. 3 new minor findings."
           }
         ]
       },
@@ -565,6 +619,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T08:30:21.315Z",
+            "outcome": "started",
+            "detail": "257-T23 round-2 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -935,6 +1012,86 @@
       "at": "2026-09-12T08:20:53.715Z",
       "event": "task-done",
       "detail": "T21: R1 fix: routing corpus baseline is a real ratchet; paraphrase floor raised"
+    },
+    {
+      "at": "2026-09-12T08:29:21.979Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Catalog entries are file-backed: description and triggers are read from the skill's own SKILL.md frontmatter, so a difference is impossible rather than merely tested (src/gdskills/catalog.ts; test 'catalog description equals SKILL.md frontmatter'). renderedSkill() now requires an explicit description. The 'Use when ${purpose}' fallback is gone from catalog.ts — the only two occurrences left in src/ are a comment recording that 67 of 78 entries once used it and a test named for its retirement."
+    },
+    {
+      "at": "2026-09-12T08:29:22.087Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: description:trigger-phrase, description:bare-imperative and description:length in src/gdskills/bundled-eval.ts, each with a failing fixture and a passing control in bundled-eval.test.ts. Shipped tree: 'skills verify --bundled' exit 0 at 03c2d1c6 — zero description findings."
+    },
+    {
+      "at": "2026-09-12T08:29:22.191Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: anatomy:sections checks the NOT-for clause, the Red Flags table and the Verification/exit-criteria section; exemptions are a reason-carrying map asserted non-empty with a reason per entry; fixtures cover each missing section separately. Shipped tree: zero findings (verify exit 0)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.293Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: anatomy:length in bundled-eval.ts, guarded to canonical SKILL.md files. src/gdskills/skill-length-ceilings.ts carries 67 entries (values = the line count each skill measured when recorded) and DEFAULT_SKILL_LENGTH_CEILING = 500. A test asserts every recorded ceiling still EQUALS the current count, so a ceiling cannot be raised to pass a check and a trim must lower it in the same commit. skills-storage-workflow.mdc has a 'Length Ceilings' section quoting the finding message verbatim; a test reads both. Fixtures prove the over-ceiling and the over-default findings."
+    },
+    {
+      "at": "2026-09-12T08:29:22.396Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/commands/routing-corpus.ts: 78 cases (every catalog entry, rendered included), 287 positives, 156 negatives — each negative names the skill that must outrank it. The test scores them through the shipped scoreBundledSkillRoute. The record is two integers, RANK1_FIRST = 285 and RANK1_TOTAL = 287, compared for equality against a live recount, so a regression and an unrecorded improvement both fail. Two known gaps are recorded with excluded: false — they count against the record."
+    },
+    {
+      "at": "2026-09-12T08:29:22.498Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: description:collision at similarity >= 0.75 on routeTokens — the router's own tokenisation, now shared from src/lib/route-tokens.ts so the check cannot drift from the scorer. Fixtures prove the finding; shipped tree has zero (verify exit 0)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.602Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: T12 resolved the collisions the corpus named: 'clarify requirements' -> interviewer, 'write tests'/'generate tests' -> test-gen, 'create tests first' -> tests-creator, 'review my code'/'full review' -> review-orchestrator, 'implement this issue' -> its named owner with the other two orchestrators as negatives, and 'check performance' — previously a three-way tie — resolved to one owner. Each is a corpus case, so the ranking is asserted continuously."
+    },
+    {
+      "at": "2026-09-12T08:29:22.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: 58 SKILL.<runtime>.md files byte-identical to their SKILL.md were deleted; 15 remain and all genuinely differ — the 7 gproject planning skills x codex/cursor plus feature-analyzer/SKILL.detail.md. Install prunes stale per-runtime copies it finds in an already-installed tree (removeStaleRuntimeBuilds). export.ts no longer reports usedFallbackBuild; schemaVersion is 2, tied to that removal by a test. Build-parity, status-contract, round-bound, agent-catalogue-xref and bundled-eval pass with updated denominators (full suite 0 fail)."
+    },
+    {
+      "at": "2026-09-12T08:29:22.811Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: Red Flags + Verification backfilled across the quality (T13), platform/planning/orchestration (T14) and review (T15) skills, each row naming a failure specific to that skill; T19 added substance floors so an empty section or a copied table is a finding. No workflow skill needs an anatomy:sections exemption."
+    },
+    {
+      "at": "2026-09-12T08:29:22.915Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: T16: the xref sweep covers companion documents including orchestrator-prompt.md, frontmatter is read through parseSkillFrontmatter, and the path pattern no longer captures a trailing sentence period. feature-dev, hookify and deploy no longer hardcode 'npx tsc'."
+    },
+    {
+      "at": "2026-09-12T08:29:23.024Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: docs/skills/rejected-skill-changes.md exists with 4 entries, and skills-storage-workflow.mdc requires consulting it before proposing a skill change and appending on rejection. T19 added a contract test for the ledger. The instructed fix of adding docs/ to CHECKED_PATH_ROOTS was refused with measurement: 13 shipped paths name a user's own project, and docs/ is not in package.json files, so the check would fail for every installed user."
+    },
+    {
+      "at": "2026-09-12T08:29:23.124Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: At 03c2d1c6 (rebased onto origin/main): rules mirror byte-identical (diff -rq clean), skills mirror differs only by rendered-only directories, 'skills verify --bundled' exit 0, tsc --noEmit exit 0, eslint clean, bun test 10065 pass / 20 skip / 0 fail across 751 files in 251s. The pre-change baseline in journal.md is 9772 pass / 0 fail; no failure absent from it."
+    },
+    {
+      "at": "2026-09-12T08:30:21.095Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 3) — round 2 (narrow): all round-1 findings closed — install containment verified by executing all three reproductions, ceiling ratchet exercised by raising a ceiling in-test, corpus record compared with toBe, 48/48 new paraphrases rank their own skill first and quote no trigger. 3 new minor findings."
+    },
+    {
+      "at": "2026-09-12T08:30:21.206Z",
+      "event": "task-added",
+      "detail": "T23: R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented"
+    },
+    {
+      "at": "2026-09-12T08:30:21.315Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 257-T23 round-2 fix"
+    },
+    {
+      "at": "2026-09-12T08:40:55.104Z",
+      "event": "task-done",
+      "detail": "T23: R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented"
     }
   ]
 }
