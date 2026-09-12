@@ -41,6 +41,7 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
+import { detectFloorRegressions, renderFloorMarkdown, FLOOR_FINDING_KINDS } from "../review/floor";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -229,6 +230,16 @@ const SCOPE_FLAGS = [
   "--append",
 ] as const;
 
+/**
+ * No `--append` and no `--out`.
+ *
+ * The floor guard answers a question about the diff in front of you, and the
+ * answer is only true of that diff. `scope` and `blast-radius` write into a
+ * review package because a reviewer reads them later; a floor finding that
+ * outlived its diff would be read as a standing accusation about a file.
+ */
+const FLOOR_FLAGS = ["--ref", "--base", "--diff", "--context", "--json", "--report-only"] as const;
+
 const BLAST_RADIUS_FLAGS = [
   "--ref",
   "--base",
@@ -328,6 +339,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "scope") {
       await runScope(args.slice(1));
+      return;
+    }
+    if (command === "floor") {
+      await runFloor(args.slice(1));
       return;
     }
     if (command === "blast-radius") {
@@ -1595,6 +1610,55 @@ async function runScope(args: string[]): Promise<void> {
 }
 
 /**
+ * `keryx review floor` — the guard against a diff that quietly lowers the bar
+ * (flow 258, T11).
+ *
+ * A sibling of `scope` in every way that matters: same diff sources, same
+ * `buildReviewScope` input, no model call, and everything it decides is decided
+ * in `review/floor.ts`, which is pure. The difference is the exit code.
+ *
+ * `scope` reports and always exits 0 because a scope is a description. This
+ * exits 1 when it finds something, because a finding here is a QUESTION the
+ * diff has not answered — why is that threshold lower, why is that test off —
+ * and a guard that asks its question with exit 0 is a guard that gets scrolled
+ * past. It is the same choice `budget` and `loop` already make.
+ *
+ * `--report-only` is the adoption path, and it mirrors `--verification-mode
+ * annotate`: print the findings, exit 0, let a project measure its own rate
+ * before the guard starts refusing. Nothing is hidden either way — the report
+ * is identical, only the exit code moves.
+ */
+async function runFloor(args: string[]): Promise<void> {
+  rejectUnknownFlags(args, FLOOR_FLAGS, "floor");
+  const contextLines = parseContextLines(optionValue(args, "--context"));
+  const diffFile = optionValue(args, "--diff");
+  const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+  const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(ref, contextLines);
+  const report = detectFloorRegressions(buildReviewScope(diff, { contextLines }));
+
+  if (args.includes("--json")) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(renderFloorMarkdown(report));
+  }
+
+  if (report.counts.total === 0) {
+    return;
+  }
+  const summary = FLOOR_FINDING_KINDS.filter((kind) => report.counts.byKind[kind] > 0)
+    .map((kind) => `${kind}=${report.counts.byKind[kind]}`)
+    .join(", ");
+  if (args.includes("--report-only")) {
+    console.error(`floor: ${report.counts.total} finding(s) (${summary}); reported only, --report-only was given.`);
+    return;
+  }
+  console.error(
+    `floor: ${report.counts.total} finding(s) (${summary}). Each may be correct; none is self-evident. Say why in the diff, or re-run with --report-only to record them without failing.`,
+  );
+  process.exitCode = 1;
+}
+
+/**
  * `keryx review blast-radius` — scope B, computed (flow 204, AC1–AC4).
  *
  * Scope A asks whether the change is correct. This asks whether it broke
@@ -2005,6 +2069,8 @@ Usage:
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--json] [--report-only]
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
@@ -2054,6 +2120,21 @@ scope:
   Prints the retained scope AND every drop with its reason; --append writes the
   same record into the review package's scope.md, REPLACING a
   \`## Pre-filter scope\` block already there rather than adding a second.
+
+floor:
+  The guard against a diff that quietly lowers the bar. Deterministic, no model
+  call, over the same scoped regions \`review scope\` builds. Reports four edits:
+  a floor named on the line moving DOWN or a ceiling named on the line moving UP
+  (the rest of the line unchanged), a test disabled with .skip/.only/xit, a test
+  region that ends up with FEWER assertion-carrying lines, and a new suppression
+  comment (eslint-disable, @ts-expect-error, ts-ignore, type: ignore, noqa).
+  Each is individually defensible; the guard does not claim any is wrong, only
+  that the diff should say why. EXITS 1 when it finds anything — a question
+  asked with exit 0 is a question nobody answers — and 0 when it finds nothing.
+  \`--report-only\` prints the same report and exits 0, which is how a project
+  measures its own rate before the guard starts refusing.
+  It sees only what the pre-filter retained: a threshold lowered inside a
+  vendored or generated path is invisible, by construction.
 
 blast-radius:
   Scope B: what the change can BREAK, as opposed to whether the change is

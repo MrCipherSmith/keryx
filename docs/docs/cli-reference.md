@@ -1472,6 +1472,7 @@ keryx review lightweight
 keryx review reviewers [--json]
 keryx review import --from <dir> [--dry-run] [--force] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
                           [--json|--brief] [--out <file>]
@@ -1498,6 +1499,7 @@ left off and the gate reports it as unobserved.
 | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
+| `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
@@ -1771,6 +1773,62 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### `review floor`
+
+A review asks whether the change is correct. It does not ask whether the change
+made the *checks* weaker, and that is a different question: a coverage minimum
+moved from 80 to 70, an `it.skip` added to a flaky test, an assertion deleted
+from a test that still passes, a `// @ts-expect-error` above the line that would
+not compile. Each is individually defensible, each is invisible in a green
+suite, and together they are how a suite rots.
+
+This makes those four edits visible **in the diff that introduces them**. Pure,
+no model call, over the same scoped regions `review scope` builds.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` | Diff against this base instead of the working tree. |
+| `--diff <file\|->` | Read a unified diff from a file or stdin instead of running git. |
+| `--context <n>` | Context lines around each change, as for `review scope`. Default **20**. |
+| `--json` | Machine-readable report: `findings`, `counts.byKind`, and `scanned`. |
+| `--report-only` | Print the same report and exit **0**. The adoption path: measure the rate before the guard starts refusing. |
+
+**Exit 1 on any finding**, 0 on none — the same choice `review budget` and
+`review loop` make. A finding is a *question the diff has not answered*, and a
+question asked with exit 0 is a question nobody answers. The command does not
+claim any finding is wrong; it claims the diff should say why.
+
+What each detection requires, because a guard that fires on the repair as well
+as the damage gets switched off:
+
+- **Threshold lowered.** The removed and added lines must be identical once
+  every number is erased, and the line must *name* a floor (`coverage`,
+  `minimum`, `threshold`, `precision`, …) that moved **down**, or a ceiling
+  (`max`, `limit`, `timeout`, `retries`, `tolerance`, …) that moved **up**. A
+  coverage minimum raised is silent, a timeout shortened is silent, and a bare
+  `rows: 50` → `rows: 10` is silent in both directions: nothing on the line says
+  which way is worse. Residual noise, accepted: `limit` and `max` are ordinary
+  words, so a pagination `limit` raised does fire.
+- **Test disabled.** `.skip`, `.only`, `xit`/`xdescribe`, `@pytest.mark.skip`,
+  `t.Skip(` and friends, on an **added** line, in statement position. `.only`
+  counts: it disables every other test in the file. A `.skip` being *removed*
+  never fires, and neither does a marker inside a string or mid-expression.
+- **Assertion removed.** A count, not a parse: a region of a **test file** that
+  ends with fewer assertion-carrying lines than it started with. An assertion
+  moved a few lines nets to zero; an assertion *weakened in place*
+  (`toBe(3)` → `toBeDefined()`) is invisible, and is stated as invisible rather
+  than implied to be covered.
+- **Suppression added.** `eslint-disable`, `@ts-expect-error`, `@ts-ignore`,
+  `# type: ignore`, `# noqa`, `//nolint`, `@SuppressWarnings`, `#[allow(` and
+  the rest — on an added line, after a comment opener, with no quote before it.
+  A marker listed in a string array is not a suppression, and a suppression
+  being *deleted* is not a finding.
+
+It sees only what the pre-filter retained, so a threshold lowered inside a
+vendored or generated path is invisible by construction — and it depends on
+`review scope` never dropping a comment that carries a tool directive, which is
+why that carve-out exists.
 
 ### `review blast-radius`
 
