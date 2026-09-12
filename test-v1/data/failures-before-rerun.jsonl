@@ -1,0 +1,4 @@
+{"taskId":"t1-8078d774","arm":"context-off","harness":"keryx-shell","reason":"watchdog killed the arm: ceiling — 900s over a ceiling of 900s","killReason":"ceiling","at":"2026-09-11T22:33:16.836Z"}
+{"taskId":"t1-57f92d67","arm":"context-off","harness":"keryx-shell","reason":"watchdog killed the arm: ceiling — 900s over a ceiling of 900s","killReason":"ceiling","at":"2026-09-12T00:05:15.730Z"}
+{"taskId":"t1-83c363d2","arm":"context-off","harness":"keryx-shell","reason":"watchdog killed the arm: ceiling — 900s over a ceiling of 900s","killReason":"ceiling","at":"2026-09-12T00:39:12.266Z"}
+{"taskId":"t1-71916287","arm":"context-off","harness":"claude-sonnet","reason":"the arm reached /private/tmp/arena-batch2/arms/t1-71916287-claude-sonnet-context-off. outside its tree (named in t1-71916287-claude-sonnet-context-off.jsonl) — its answer cannot be scored","at":"2026-09-12T07:51:40.144Z"}

@@ -1,0 +1,95 @@
+=== keryx-shell @ grok-4.6 — keryx's own shell on grok-4.6, built from this checkout — the release has no --events-file ===
+  keryx-shell t1-1405959d context-on: recorded
+  keryx-shell t1-1405959d context-off: recorded
+  keryx-shell t1-5dde4b04 context-off: recorded
+  keryx-shell t1-5dde4b04 context-on: recorded
+  keryx-shell t1-7ede9520 context-on: recorded
+  keryx-shell t1-7ede9520 context-off: recorded
+  keryx-shell t1-6151fea2 context-on: recorded
+  keryx-shell t1-6151fea2 context-off: recorded
+  keryx-shell t1-71916287 context-on: recorded
+=== keryx-shell @ grok-4.6 — keryx's own shell on grok-4.6, built from this checkout — the release has no --events-file ===
+  keryx-shell t1-1405959d: settled, skipping
+  keryx-shell t1-5dde4b04: settled, skipping
+  keryx-shell t1-7ede9520: settled, skipping
+  keryx-shell t1-6151fea2: settled, skipping
+  keryx-shell t1-71916287 context-on: recorded
+  keryx-shell t1-71916287 context-off: recorded
+  keryx-shell t1-acade8ab context-on: recorded
+  keryx-shell t1-acade8ab context-off: recorded
+  keryx-shell t1-8078d774 context-on: recorded
+  keryx-shell t1-8078d774 context-off: FAILED — watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+=== keryx-shell @ grok-4.6 — keryx's own shell on grok-4.6, built from this checkout — the release has no --events-file ===
+  keryx-shell t1-e57e110f context-off: recorded
+  keryx-shell t1-e57e110f context-on: recorded
+  keryx-shell t1-89f8dc02 context-off: recorded
+  keryx-shell t1-89f8dc02 context-on: recorded
+  keryx-shell t1-57f92d67 context-off: FAILED — watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-57f92d67 context-on: recorded
+  keryx-shell t1-feca1074 context-on: recorded
+  keryx-shell t1-feca1074 context-off: recorded
+  keryx-shell t1-83c363d2 context-off: FAILED — watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-83c363d2 context-on: recorded
+  keryx-shell t1-53254e0e context-off: recorded
+  keryx-shell t1-53254e0e context-on: recorded
+  ran 6, skipped 0, failed 3
+
+=== verdicts ===
+keryx-shell: +0.0 points over 10 paired tasks, below the +10 threshold — no difference, not a trend; context cost ratio 1.15, within the ±20% tie band
+
+=== 3 failed arm(s), never silently dropped ===
+  keryx-shell t1-8078d774 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-57f92d67 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-83c363d2 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+=== claude-sonnet @ claude-sonnet-5 — a second vendor, so the result is not a claim about one model family ===
+  claude-sonnet t1-1405959d context-on: recorded
+  claude-sonnet t1-1405959d context-off: recorded
+  claude-sonnet t1-5dde4b04 context-off: recorded
+  claude-sonnet t1-5dde4b04 context-on: recorded
+  claude-sonnet t1-7ede9520 context-off: recorded
+  claude-sonnet t1-7ede9520 context-on: recorded
+=== claude-sonnet @ claude-sonnet-5 — a second vendor, so the result is not a claim about one model family ===
+  claude-sonnet t1-6151fea2 context-on: recorded
+  claude-sonnet t1-6151fea2 context-off: recorded
+  claude-sonnet t1-71916287 context-on: recorded
+  claude-sonnet t1-71916287 context-off: FAILED — the arm reached /private/tmp/arena-batch2/arms/t1-71916287-claude-sonnet-context-off. outside its tree (named in t1-71916287-claude-sonnet-context-off.jsonl) — its answer cannot be scored
+  claude-sonnet t1-acade8ab context-off: recorded
+  claude-sonnet t1-acade8ab context-on: recorded
+  claude-sonnet t1-8078d774 context-off: recorded
+  claude-sonnet t1-8078d774 context-on: recorded
+=== claude-sonnet @ claude-sonnet-5 — a second vendor, so the result is not a claim about one model family ===
+  claude-sonnet t1-e57e110f context-on: recorded
+  claude-sonnet t1-e57e110f context-off: recorded
+  claude-sonnet t1-89f8dc02 context-off: recorded
+  claude-sonnet t1-89f8dc02 context-on: recorded
+  claude-sonnet t1-57f92d67 context-off: recorded
+  claude-sonnet t1-57f92d67 context-on: recorded
+=== claude-sonnet @ claude-sonnet-5 — a second vendor, so the result is not a claim about one model family ===
+  claude-sonnet t1-feca1074 context-off: recorded
+  claude-sonnet t1-feca1074 context-on: recorded
+  claude-sonnet t1-83c363d2 context-on: recorded
+  claude-sonnet t1-83c363d2 context-off: recorded
+  claude-sonnet t1-53254e0e context-on: recorded
+  claude-sonnet t1-53254e0e context-off: recorded
+  ran 3, skipped 0, failed 4
+
+=== verdicts ===
+claude-sonnet: +14.6 points over 12 paired tasks, at or above the +10 threshold; context cost ratio 4.14, above the tie band — the gain was not free
+
+=== 4 failed arm(s), never silently dropped ===
+  keryx-shell t1-8078d774 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-57f92d67 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-83c363d2 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  claude-sonnet t1-71916287 context-off: the arm reached /private/tmp/arena-batch2/arms/t1-71916287-claude-sonnet-context-off. outside its tree (named in t1-71916287-claude-sonnet-context-off.jsonl) — its answer cannot be scored
+=== claude-sonnet @ claude-sonnet-5 — a second vendor, so the result is not a claim about one model family ===
+  claude-sonnet t1-71916287 context-on: recorded
+  claude-sonnet t1-71916287 context-off: recorded
+  ran 1, skipped 0, failed 3
+
+=== verdicts ===
+claude-sonnet: +13.5 points over 13 paired tasks, at or above the +10 threshold; context cost ratio 4.38, above the tie band — the gain was not free
+
+=== 3 failed arm(s), never silently dropped ===
+  keryx-shell t1-8078d774 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-57f92d67 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  keryx-shell t1-83c363d2 context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s

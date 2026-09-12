@@ -1,0 +1,44 @@
+
+=== keryx-shell ===
+t1-1405959d    on: 0/1 657k 64c 484s          off: 0/1 373k 48c 404s
+t1-5dde4b04    on: 1/1 90k 16c 27s            off: 1/1 120k 30c 279s
+t1-7ede9520    on: 0/1 837k 86c 553s          off: 0/1 499k 67c 354s
+t1-6151fea2    on: 2/2 643k 51c 260s          off: 2/2 193k 27c 85s
+t1-71916287    on: 1/3 1012k 80c 566s         off: 1/3 896k 100c 592s
+t1-acade8ab    on: 1/4 249k 42c 154s          off: 1/4 307k 49c 227s
+t1-8078d774    on: 0/1 696k 72c 532s          off: —
+t1-e57e110f    on: 1/3 1339k 94c 692s         off: 1/3 1543k 129c 536s
+t1-89f8dc02    on: 0/1 1281k 146c 696s        off: 0/1 1153k 110c 447s
+t1-57f92d67    on: 1/1 1406k 128c 662s        off: —
+t1-feca1074    on: 1/3 270k 37c 114s          off: 1/3 543k 60c 226s
+t1-83c363d2    on: 0/3 2176k 204c 590s        off: —
+t1-53254e0e    on: 1/4 492k 66c 174s          off: 1/4 312k 49c 227s
+paired tasks: 10
+recall   with context 8/23 (0.35)   without 8/23 (0.35)
+tokens   with context 6.87M   without 5.94M   ratio 1.16
+calls    with context 682   without 669
+
+=== claude-sonnet ===
+t1-1405959d    on: 0/1 535k 9c 78s            off: 0/1 349k 6c 75s
+t1-5dde4b04    on: 1/1 423k 8c 40s            off: 0/1 178k 4c 47s
+t1-7ede9520    on: 1/1 811k 15c 122s          off: 0/1 86k 30c 204s
+t1-6151fea2    on: 2/2 1427k 22c 144s         off: 2/2 133k 47c 248s
+t1-71916287    on: 1/3 2568k 35c 248s         off: 1/3 545k 31c 254s
+t1-acade8ab    on: 1/4 526k 9c 57s            off: 1/4 389k 8c 64s
+t1-8078d774    on: 0/1 1052k 18c 106s         off: 1/1 46k 28c 216s
+t1-e57e110f    on: 0/3 1460k 21c 173s         off: 1/3 980k 28c 282s
+t1-89f8dc02    on: 0/1 1285k 19c 154s         off: 0/1 662k 22c 183s
+t1-57f92d67    on: 1/1 1694k 27c 217s         off: 0/1 39k 39c 208s
+t1-feca1074    on: 1/3 588k 12c 95s           off: 1/3 382k 9c 105s
+t1-83c363d2    on: 1/3 1666k 28c 191s         off: 0/3 216k 6c 82s
+t1-53254e0e    on: 1/4 3028k 44c 266s         off: 2/4 38k 25c 195s
+paired tasks: 13
+recall   with context 10/28 (0.36)   without 9/28 (0.32)
+tokens   with context 17.06M   without 4.04M   ratio 4.22
+calls    with context 267   without 283
+cost     with context $7.58   without $6.81
+
+refused/failed arms: 3
+  t1-8078d774 keryx-shell context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  t1-57f92d67 keryx-shell context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
+  t1-83c363d2 keryx-shell context-off: watchdog killed the arm: ceiling — 900s over a ceiling of 900s
