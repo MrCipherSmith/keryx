@@ -28,15 +28,25 @@ export type InstallGdskillsResult = {
   catalogPath: string;
   manifestPath: string;
   /**
-   * Human-readable notices surfaced from the install, same convention as
-   * `createProjectSkill`'s result (`src/gdskills/project-skills.ts`): plain
-   * strings a caller can print under a "Warnings:" heading. Populated by
-   * retired-rule cleanup (see `retired-rules.ts`) and by stale per-runtime
-   * build cleanup (see `removeStaleRuntimeBuilds`) — which reports what it
-   * *removed* as well as what it kept, so no file leaves a project's tree
-   * without the operator being told.
+   * Things the operator has to act on, same convention as `createProjectSkill`'s
+   * result (`src/gdskills/project-skills.ts`): plain strings a caller prints
+   * under a "Warnings:" heading. Every entry names a file keryx would have
+   * cleaned up and did NOT — a retired rule kept because it was modified,
+   * oversized or unreadable (see `retired-rules.ts`), a stale per-runtime build
+   * kept because it is a symlink or its `unlink` failed, a directory left
+   * unswept — so each one leaves something to do by hand.
    */
   warnings: string[];
+  /**
+   * Informational outcomes: work that succeeded exactly as designed, chiefly
+   * the per-runtime builds `removeStaleRuntimeBuilds` deleted. Reported so no
+   * file leaves a project's tree without the operator being told, but kept out
+   * of `warnings` because nothing is wrong and nothing is owed: the release
+   * that retired the identical-copy builds removes ~88 of them on a project's
+   * first `keryx update`, and 88 lines under "Warnings" for a clean sweep
+   * teaches an operator to skip the heading that matters.
+   */
+  notices: string[];
 };
 
 export type InstallGdskillsOptions = {
@@ -92,11 +102,18 @@ export async function installGdskills(
   await installContracts(contractsRoot);
 
   const projectRoot = path.dirname(metaprojectRoot);
+  // Every stale-build outcome is reported, removals included — but a removal
+  // is the sweep working, so it goes to `notices` and only the outcomes that
+  // left a file behind go to `warnings` (see `staleRuntimeBuildSeverity`).
   const warnings = [
     ...retiredRuleOutcomes.map(retiredRuleWarning).filter((warning): warning is string => warning !== null),
-    // Every stale-build outcome is reported, removals included.
-    ...staleBuildOutcomes.map((outcome) => staleRuntimeBuildWarning(outcome, projectRoot)),
+    ...staleBuildOutcomes
+      .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "warning")
+      .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot)),
   ];
+  const notices = staleBuildOutcomes
+    .filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")
+    .map((outcome) => staleRuntimeBuildMessage(outcome, projectRoot));
 
   return {
     profile,
@@ -105,6 +122,7 @@ export async function installGdskills(
     catalogPath,
     manifestPath,
     warnings,
+    notices,
   };
 }
 
@@ -171,13 +189,14 @@ export type StaleRuntimeBuildOutcome =
  * been overwritten with the current bundle's bytes, which a stale build by
  * definition does not match, so gating on that would keep every genuine stale
  * build forever and do nothing. Because nothing is content-gated, every
- * removal is reported (see `staleRuntimeBuildWarning`) rather than silent: a
- * file does not leave a project's tree without the operator being told.
+ * removal is reported (see `staleRuntimeBuildMessage`) rather than silent: a
+ * file does not leave a project's tree without the operator being told — as a
+ * notice, not a warning, because it succeeded (`staleRuntimeBuildSeverity`).
  *
  * Each candidate is `lstat`ed before the `unlink` (a symlink or other
  * non-regular file is kept, never followed or read), and no single entry's or
  * directory's failure escapes the loop — it becomes an outcome that
- * `staleRuntimeBuildWarning` turns into a notice.
+ * `staleRuntimeBuildMessage` turns into a warning.
  */
 export async function removeStaleRuntimeBuilds(
   skillsRoot: string,
@@ -320,13 +339,30 @@ async function resolveSweepableDir(dir: string): Promise<SweepableDir> {
 }
 
 /**
- * Notice for one stale-build outcome — including removals, which used to be
+ * Where one stale-build outcome belongs in the install result.
+ *
+ * `removed` is the sweep doing its job: the file is a per-runtime build the
+ * bundle stopped shipping, and deleting it is what makes every later runtime
+ * export read the current `SKILL.md`. It is still reported — nothing here is
+ * content-gated, so no file leaves a tree silently — but it asks nothing of the
+ * operator. Every other outcome is a file keryx REFUSED to touch (a symlink, a
+ * non-regular file, a directory it could not enter, an `unlink` that failed),
+ * and each of those leaves a stale build in place for someone to remove by
+ * hand. Only the second kind is a warning.
+ */
+export function staleRuntimeBuildSeverity(outcome: StaleRuntimeBuildOutcome): "notice" | "warning" {
+  return outcome.action === "removed" ? "notice" : "warning";
+}
+
+/**
+ * Message for one stale-build outcome — including removals, which used to be
  * silent. `keryx update` deleting a file from a project's tree with no content
  * check behind it (see `removeStaleRuntimeBuilds`) is exactly the kind of thing
  * an operator should be able to see afterwards. `projectRoot` only shortens the
- * paths in the message.
+ * paths in the message. `staleRuntimeBuildSeverity` decides which heading the
+ * message is printed under; this function only renders the words.
  */
-export function staleRuntimeBuildWarning(outcome: StaleRuntimeBuildOutcome, projectRoot: string): string {
+export function staleRuntimeBuildMessage(outcome: StaleRuntimeBuildOutcome, projectRoot: string): string {
   const shown = displayPath(outcome.path, projectRoot);
   switch (outcome.action) {
     case "removed":

@@ -119,6 +119,15 @@ export async function skillsCommand(args: string[]): Promise<void> {
     note(`skills   ${relativeToCwd(result.skillsRoot)}`);
     note(`catalog  ${relativeToCwd(result.catalogPath)}`);
     note(`manifest ${relativeToCwd(result.manifestPath)}`);
+    // Notices first and under their own heading: they are work that succeeded
+    // (files the sweep removed), and mixing them into "Warnings" buries the
+    // entries that actually need the operator.
+    if (result.notices.length > 0) {
+      console.log("Notices:");
+      for (const notice of result.notices) {
+        console.log(`- ${notice}`);
+      }
+    }
     if (result.warnings.length > 0) {
       console.log("Warnings:");
       for (const warning of result.warnings) {

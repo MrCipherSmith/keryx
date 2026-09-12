@@ -7,8 +7,8 @@
 // directly — it only needs an existing `.metaproject/` directory, not a full
 // `keryx init` scaffold. Round-1 finding T-001: this file does NOT stand in
 // for the other two call sites — each prints through its own code path
-// (`heading`/`note` in update.ts:240 and init.ts:1089, vs the literal
-// `console.log("Warnings:")` + `- ${warning}` lines here in skills.ts:122),
+// (`heading`/`note` in update.ts and init.ts, vs the literal
+// `console.log("Warnings:")` + `- ${warning}` lines here in skills.ts),
 // so a regression in either print survives a green run of only this file.
 // See src/commands/update.test.ts and src/commands/init.test.ts for the
 // other two call sites, each exercised directly.

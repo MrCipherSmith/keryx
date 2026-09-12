@@ -1691,6 +1691,24 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
     }
   });
 
+  /**
+   * The one blockquote inside the rule's "Length Ceilings" section, `> `
+   * markers stripped. It throws rather than returning an empty string if the
+   * section or the quote moves: comparing a message against "" would pass for
+   * any message, which is the failure mode this comparison exists to close.
+   */
+  function lengthCeilingsBlockquote(rule: string): string {
+    const lines = rule.split("\n");
+    const start = lines.findIndex((line) => line.trim() === "## Length Ceilings");
+    if (start === -1) throw new Error('skills-storage-workflow.mdc has no "## Length Ceilings" section');
+    const after = lines.slice(start + 1);
+    const end = after.findIndex((line) => line.startsWith("## "));
+    const section = end === -1 ? after : after.slice(0, end);
+    const quoted = section.filter((line) => line.startsWith(">")).map((line) => line.replace(/^>\s?/, ""));
+    if (quoted.length === 0) throw new Error('"Length Ceilings" has no blockquote to compare the message against');
+    return quoted.join("\n");
+  }
+
   test("a skill past its recorded ceiling is reported, naming that ceiling", () => {
     // The fixture reuses the real `quality/commit` key precisely so the
     // RECORDED branch is what fires: a ceiling exists for it, and the fixture
@@ -1716,6 +1734,18 @@ describe("AC8: the evaluator fails a skill that deserves to fail", () => {
       "utf8",
     );
     expect(rule).toContain("A ceiling **moves down**, never up");
+
+    // T23: the three fragments above left every other word free to drift —
+    // the rule could say the opposite in the sentence between them and stay
+    // green. The rule's blockquote and the remedy the code actually produces
+    // are compared in FULL here: alter one word of either and this fails.
+    const remedyStart = message.indexOf("Split the skill");
+    expect(remedyStart).toBeGreaterThan(-1);
+    // Whitespace only. The rule wraps the quote over five lines and the
+    // message is one line, so line breaks cannot be part of the comparison;
+    // no word and no punctuation is normalised away.
+    const collapse = (text: string) => text.replace(/\s+/g, " ").trim();
+    expect(collapse(lengthCeilingsBlockquote(rule))).toBe(collapse(message.slice(remedyStart)));
   });
 
   test("a skill with no recorded ceiling is bounded by the default", () => {
@@ -2035,13 +2065,15 @@ describe("every allowance states why it is one", () => {
 describe("AC11: the rejected-change ledger exists, is usable, and is the file the rule names", () => {
   // The ledger is checked HERE and not by `xref:path`, and that is a decision
   // with evidence rather than an omission — see `CHECKED_PATH_ROOTS`' comment
-  // in `bundled-eval.ts`. In short: `docs/` as a checked xref root reports
-  // thirteen concrete paths that name the USER's project (the sections
-  // `autodoc-orchestrator` generates, `documentation-management.mdc`'s own
-  // layout) as missing, and `package.json`'s `files` does not publish
-  // `docs/skills/`, so the one reference it was meant to check would fail for
-  // every installed user while passing in a checkout. This suite only ever
-  // runs in a checkout, which is exactly where the ledger is true.
+  // in `bundled-eval.ts`. In short: of the seventeen concrete `docs/…` paths
+  // the bundled tree cites, ten (the sections `autodoc-orchestrator` generates
+  // in a user's project) are missing here and seven exist only because this
+  // repository happens to keep the layout `documentation-management.mdc`
+  // prescribes — so the verdict would depend on whose tree the sweep runs in.
+  // And `package.json`'s `files` does not publish `docs/skills/`, so the one
+  // reference the root was meant to check would fail for every installed user
+  // while passing in a checkout. This suite only ever runs in a checkout,
+  // which is exactly where the ledger is true.
   const repoRoot = path.join(import.meta.dir, "..", "..");
 
   test("the ledger file exists at the path the constant names", () => {

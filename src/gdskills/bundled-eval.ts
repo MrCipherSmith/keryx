@@ -1340,12 +1340,20 @@ export const KNOWN_EXTERNAL_SKILL_REFERENCES: ReadonlyMap<string, string> = new 
  * check that is wrong twice over:
  *
  *   - THE TREE. Seventeen distinct concrete `docs/…` paths are cited across
- *     the bundled tree, and thirteen of them name the USER's project — the
- *     sections `autodoc-orchestrator` GENERATES (`docs/architecture.md`,
- *     `docs/modules.md`, `docs/api-reference.md`, `docs/onboarding.md`,
- *     `docs/index.md`), and `documentation-management.mdc`'s own layout
- *     (`docs/analysis`, `docs/plans`, `docs/report`). None of them exists in
- *     this repository and none of them should; every one becomes a finding.
+ *     the bundled tree (counted as `PATH_REFERENCE` extracts them), and ten
+ *     resolve to nothing in this repository. Six of those ten are the sections
+ *     `autodoc-orchestrator` GENERATES in the USER's project
+ *     (`docs/architecture.md`, `docs/modules.md`, `docs/api-reference.md`,
+ *     `docs/data-models.md`, `docs/onboarding.md`, `docs/index.md`) — they
+ *     exist only once that pipeline has run somewhere else, so each is a
+ *     finding on every checkout. The remaining seven (`docs/analysis`,
+ *     `docs/plans`, `docs/report`, `docs/requirements`, …) DO exist here, and
+ *     that is the same defect seen from the other side: they exist only
+ *     because this repository happens to keep the layout
+ *     `documentation-management.mdc` prescribes, and nothing makes them exist
+ *     in a user's project. The same citation would resolve or break depending
+ *     on whose tree the sweep runs in, which is precisely what this evaluator
+ *     cannot decide.
  *   - THE INSTALL. `package.json`'s `files` ships `dist`, `src/gdgraph`,
  *     `src/gdskills/bundled`, `src/gdskills/contracts` and one schema
  *     directory. `docs/skills/` is NOT published, so the one reference this

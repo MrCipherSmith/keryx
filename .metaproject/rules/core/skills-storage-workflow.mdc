@@ -133,6 +133,15 @@ A ceiling is not a statement that the skill's current size is right — several
 shipped skills are far past the default and were recorded as they stood. It
 bounds unnoticed growth, which is the part no other check can see.
 
+Editing a skill is therefore a two-file change. Every recorded ceiling equals
+that skill's current count today, so adding a sentence needs a compensating
+deletion or a split: recount the file (`wc -l SKILL.md`) and write that number
+to the skill's key in `src/gdskills/skill-length-ceilings.ts` in the SAME
+commit. A new skill needs a new entry; a deleted skill needs its entry removed.
+`keryx skills verify --bundled` only reports `lines > ceiling`, so a TRIM that
+leaves the old, higher number behind passes locally and fails the
+ceiling-equals-count check in CI.
+
 ## Global Sync Mapping
 Global sync only ever reaches a **project-local skill**
 (`.metaproject/project-skills/<skill-name>/`) that has first been exported for

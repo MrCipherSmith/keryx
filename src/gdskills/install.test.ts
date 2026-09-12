@@ -12,7 +12,8 @@ import {
   removeStaleRuntimeBuilds,
   removeUnmodifiedRetiredRules,
   retiredRuleWarning,
-  staleRuntimeBuildWarning,
+  staleRuntimeBuildMessage,
+  staleRuntimeBuildSeverity,
 } from "./install";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
@@ -113,7 +114,7 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
       .toBe(await readFile(path.join(bundledDir, "SKILL.md"), "utf8"));
     // Nothing is content-gated here, so a removal must never be silent: the
     // operator gets one notice per file that left their tree, and no others.
-    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
     expect(removals.sort()).toEqual([
       "SKILL.codex.md",
       "SKILL.cursor.md",
@@ -121,6 +122,8 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
       "SKILL.zed.md",
     ].map((stale) => `.metaproject/skills/gdskills/orchestration/job-orchestrator/${stale} was removed: a per-runtime build keryx no longer ships (that runtime now reads SKILL.md), which every later runtime export would otherwise have kept preferring over the current SKILL.md`));
     expect(result.warnings.filter((warning) => warning.includes("kept because"))).toEqual([]);
+    // A clean sweep asks nothing of the operator, so it warns about nothing.
+    expect(result.warnings).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -150,10 +153,11 @@ test("a per-runtime build the bundle still ships is replaced, not removed", asyn
       .toBe(await readFile(path.join(bundledDir, "SKILL.cursor.md"), "utf8"));
     // Not shipped for this skill: removed, in the same run, and reported.
     expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
-    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
     expect(removals).toHaveLength(1);
     expect(removals[0]).toContain(".metaproject/skills/gdskills/planning/planner/SKILL.zed.md was removed");
     // The refreshed codex/cursor builds are not reported as anything.
+    expect(result.notices.filter((notice) => notice.includes("SKILL.codex.md"))).toEqual([]);
     expect(result.warnings.filter((warning) => warning.includes("SKILL.codex.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -207,6 +211,43 @@ test("a symlink at a stale build name is kept, not followed, and warned about", 
   }
 });
 
+// Round-2 minor: every stale-build outcome used to land in `warnings`, so the
+// first `keryx update` after this release printed ~88 lines under "Warnings"
+// for a sweep that did exactly what it was built to do — and buried the one
+// line that needed a human. The two kinds are separated at the result, not at
+// the print, so all three call sites (skills.ts / update.ts / init.ts) inherit
+// the split.
+test("a successful removal is a notice, and a build kept behind a symlink is a warning", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    // One genuine stale build, which the sweep removes…
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+    // …and one the sweep must refuse to touch, which leaves work behind.
+    const target = path.join(root, "outside-target.md");
+    await writeFile(target, "outside\n", "utf8");
+    await symlink(target, path.join(skillDir, "SKILL.codex.md"));
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const removal = `.metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md`;
+    expect(result.notices.filter((notice) => notice.includes(removal))).toHaveLength(1);
+    // The load-bearing half: the successful removal is NOWHERE in `warnings`.
+    expect(result.warnings.filter((warning) => warning.includes("SKILL.zed.md"))).toEqual([]);
+    expect(result.warnings.filter((warning) => warning.includes("was removed"))).toEqual([]);
+
+    const kept = result.warnings.filter((warning) => warning.includes("SKILL.codex.md"));
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toContain("not a regular file");
+    // …and the kept one is not quietly duplicated into the notices either.
+    expect(result.notices.filter((notice) => notice.includes("SKILL.codex.md"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("a stale build whose removal fails is kept and becomes a warning, without aborting", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
   try {
@@ -232,14 +273,16 @@ test("a stale build whose removal fails is kept and becomes a warning, without a
     expect(outcomes.map((outcome) => `${path.basename(outcome.path)}:${outcome.action}`).sort())
       .toEqual(["SKILL.codex.md:kept-error", "SKILL.zed.md:removed"]);
 
-    const warnings = outcomes.map((outcome) => staleRuntimeBuildWarning(outcome, root));
+    const messages = outcomes.map((outcome) => staleRuntimeBuildMessage(outcome, root));
     // Both halves are reported: the failure to act, and the file that went.
-    expect(warnings).toHaveLength(2);
-    const kept = warnings.find((warning) => warning.includes("SKILL.codex.md"));
+    expect(messages).toHaveLength(2);
+    const kept = messages.find((message) => message.includes("SKILL.codex.md"));
     expect(kept).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
     expect(kept).toContain("could not be removed (EPERM)");
-    expect(warnings.find((warning) => warning.includes("SKILL.zed.md")))
+    expect(messages.find((message) => message.includes("SKILL.zed.md")))
       .toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md was removed");
+    // …under different headings: the unlink that failed left a file behind.
+    expect(outcomes.map(staleRuntimeBuildSeverity).sort()).toEqual(["notice", "warning"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -276,6 +319,7 @@ test("a skill directory reached through a symlink is not swept, and the target k
     expect(warning).toContain("it is a symlink, and keryx will not delete through one");
     // Refusing to sweep is not refusing to warn about the wrong thing: no
     // removal was claimed for a tree keryx did not touch.
+    expect(result.notices).toEqual([]);
     expect(result.warnings.filter((entry) => entry.includes("was removed"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -304,7 +348,8 @@ test("a symlinked skills root is skipped whole, with one notice for the tree", a
     expect(outcomes).toEqual([
       { path: skillsRoot, blockedAt: skillsRoot, action: "skipped-dir", reason: "symlink" },
     ]);
-    const warning = staleRuntimeBuildWarning(outcomes[0]!, root);
+    const warning = staleRuntimeBuildMessage(outcomes[0]!, root);
+    expect(staleRuntimeBuildSeverity(outcomes[0]!)).toBe("warning");
     expect(warning).toContain(".metaproject/skills/gdskills was not swept");
     expect(warning).toContain("it is a symlink, and keryx will not delete through one");
   } finally {
@@ -333,9 +378,10 @@ test("only an exactly-matching directory entry is removed, so a differently-case
     expect(survivors).toContain("skill.codex.md");
     expect(await readFile(path.join(skillDir, "skill.codex.md"), "utf8")).toBe("# my own notes\n");
     expect(survivors).not.toContain("SKILL.zed.md");
-    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
     expect(removals).toHaveLength(1);
     expect(removals[0]).toContain("SKILL.zed.md was removed");
+    expect(result.notices.filter((notice) => notice.toLowerCase().includes("skill.codex.md"))).toEqual([]);
     expect(result.warnings.filter((warning) => warning.toLowerCase().includes("skill.codex.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
