@@ -2,3 +2,24 @@
 
 - 2026-09-11T16:54:13.725Z - flow created
 - 2026-09-11T20:32:46.460Z - renumbered: 254 -> 258: main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next
+- 2026-09-12T09:39:09.243Z - task-attempt: T1: started (attempt 1) — 258-T1 context re-verification against main after #540 merged the 257 gate
+- 2026-09-12T09:48:11.284Z - task-added: T5: W1: the debugging / root-cause skill (AC1, AC2, AC3)
+- 2026-09-12T09:48:11.402Z - task-added: T6: W1: the in-flight adversarial doubt skill (AC1, AC2, AC3)
+- 2026-09-12T09:48:11.514Z - task-added: T7: W1: the source-driven development skill (AC1, AC2, AC3)
+- 2026-09-12T09:48:11.623Z - task-added: T8: W1: the deprecation and migration skill, and the rank-1 record re-measured for all four (AC1, AC2, AC3)
+- 2026-09-12T09:48:11.731Z - task-added: T9: W2: the definition-of-done rule, citing every rule whose bar it reconciles (AC4)
+- 2026-09-12T09:48:11.843Z - task-added: T10: W2: the CLI interface design rule (AC4)
+- 2026-09-12T09:48:11.953Z - task-added: T11: W3: keryx review floor — the diff-scoped guard and its four detections (AC5)
+- 2026-09-12T09:48:12.079Z - task-added: T12: W4: the task-implementer output contract gains the three structured fields (AC7)
+- 2026-09-12T09:48:12.189Z - task-added: T13: W4: task-implementer's SKILL.md fills them, paid for inside its ceiling (AC8)
+- 2026-09-12T09:48:12.301Z - task-added: T14: W4: interviewer — a hedged answer is not approval, confidence per question (AC9)
+- 2026-09-12T09:48:12.409Z - task-added: T15: W4: perf-check states neutral is a revert and attempts are recorded; review-performance cites it (AC10)
+- 2026-09-12T09:48:12.518Z - task-added: T16: Attribution: an MIT credit in each adapting document, by the existing convention (AC11)
+- 2026-09-12T09:48:12.624Z - task-depends-set: T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16 (was empty) — full verification after every task, plus review floor on this branch's own diff
+- 2026-09-12T09:48:12.734Z - task-depends-set: T4: dependsOn T3 (was empty) — review on the verified branch
+- 2026-09-12T09:48:12.839Z - task-done: T1: Collect remaining context
+- 2026-09-12T09:48:12.943Z - task-done: T2: Implement per plan
+- 2026-09-12T09:48:13.047Z - frozen: 13 criteria; checksum recorded
+- 2026-09-12T09:48:13.153Z - started
+- 2026-09-12T11:00:00Z - Context re-verified against ea569c92 (the squash merge of 257). Three claims in description.md are stale and recorded as corrections in context-map.md: interviewer already states confidence per answer and already rejects 'the gist' (flow 257 wrote those), so only the narrower gap survives; THIRD_PARTY_NOTICES.md does not exist and a root file would not ship, because package.json files publishes only dist, the shared-agent-context schemas, gdgraph, bundled and contracts — the repo's convention is an inline MIT credit in the adapting document; and 'definition of done spread across three rules' names no rule and must be measured before one is written. The collision field is empty: highest incumbent score for any of the six proposed additions is 30, and six draft descriptions produce no pair at or above 0.40 against a shipped maximum of 0.581.
+- 2026-09-12T11:01:00Z - Two measured constraints shape the waves. The ratchet we shipped in 257 now binds us: task-implementer 670/670, interviewer 131/131, perf-check 104/104 and review-performance 374/374 all sit exactly at their ceilings, so every addition to them is paid for by a trim of the same size in the same commit. And RANK1_FIRST/RANK1_TOTAL is one pair of integers that fails on an unrecorded improvement as well as a regression, so the four new skills go in ONE serialized lane with the record re-measured once at its end.

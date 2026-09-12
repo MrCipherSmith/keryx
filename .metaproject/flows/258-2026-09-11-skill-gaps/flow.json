@@ -7,14 +7,14 @@
   "id": "258",
   "slug": "skill-gaps",
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-11T20:32:46.460Z",
+  "updatedAt": "2026-09-12T09:48:13.153Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
+  "acChecksum": "sha256:a07be52424d0cff5ad1119846c1fa4e2fd8b705f2e4569eb2e2efe24a4f072d7",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -26,22 +26,29 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:39:09.242Z",
+            "outcome": "started",
+            "detail": "258-T1 context re-verification against main after #540 merged the 257 gate"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,7 +56,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "scaffold row superseded by T5-T16"
     },
     {
       "id": "T3",
@@ -57,7 +66,20 @@
       "kind": "test",
       "origin": "scaffold",
       "status": "todo",
-      "dependsOn": [],
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10",
+        "T11",
+        "T12",
+        "T13",
+        "T14",
+        "T15",
+        "T16"
+      ],
       "attempts": {
         "count": 0,
         "log": []
@@ -72,7 +94,207 @@
       "kind": "review",
       "origin": "scaffold",
       "status": "todo",
-      "dependsOn": [],
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "W1: the debugging / root-cause skill (AC1, AC2, AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "W1: the in-flight adversarial doubt skill (AC1, AC2, AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "W1: the source-driven development skill (AC1, AC2, AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "W1: the deprecation and migration skill, and the rank-1 record re-measured for all four (AC1, AC2, AC3)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "W2: the definition-of-done rule, citing every rule whose bar it reconciles (AC4)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "W2: the CLI interface design rule (AC4)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "W3: keryx review floor — the diff-scoped guard and its four detections (AC5)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "W4: the task-implementer output contract gains the three structured fields (AC7)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "W4: task-implementer's SKILL.md fills them, paid for inside its ceiling (AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "W4: interviewer — a hedged answer is not approval, confidence per question (AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "W4: perf-check states neutral is a revert and attempts are recorded; review-performance cites it (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "Attribution: an MIT credit in each adapting document, by the existing convention (AC11)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9",
+        "T10"
+      ],
       "attempts": {
         "count": 0,
         "log": []
@@ -91,6 +313,100 @@
       "at": "2026-09-11T20:32:46.460Z",
       "event": "renumbered",
       "detail": "254 -> 258: main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+    },
+    {
+      "at": "2026-09-12T09:39:09.243Z",
+      "event": "task-attempt",
+      "detail": "T1: started (attempt 1) — 258-T1 context re-verification against main after #540 merged the 257 gate"
+    },
+    {
+      "at": "2026-09-12T09:48:11.284Z",
+      "event": "task-added",
+      "detail": "T5: W1: the debugging / root-cause skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.402Z",
+      "event": "task-added",
+      "detail": "T6: W1: the in-flight adversarial doubt skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.514Z",
+      "event": "task-added",
+      "detail": "T7: W1: the source-driven development skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.623Z",
+      "event": "task-added",
+      "detail": "T8: W1: the deprecation and migration skill, and the rank-1 record re-measured for all four (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.731Z",
+      "event": "task-added",
+      "detail": "T9: W2: the definition-of-done rule, citing every rule whose bar it reconciles (AC4)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.843Z",
+      "event": "task-added",
+      "detail": "T10: W2: the CLI interface design rule (AC4)"
+    },
+    {
+      "at": "2026-09-12T09:48:11.953Z",
+      "event": "task-added",
+      "detail": "T11: W3: keryx review floor — the diff-scoped guard and its four detections (AC5)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.079Z",
+      "event": "task-added",
+      "detail": "T12: W4: the task-implementer output contract gains the three structured fields (AC7)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.189Z",
+      "event": "task-added",
+      "detail": "T13: W4: task-implementer's SKILL.md fills them, paid for inside its ceiling (AC8)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.301Z",
+      "event": "task-added",
+      "detail": "T14: W4: interviewer — a hedged answer is not approval, confidence per question (AC9)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.409Z",
+      "event": "task-added",
+      "detail": "T15: W4: perf-check states neutral is a revert and attempts are recorded; review-performance cites it (AC10)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.518Z",
+      "event": "task-added",
+      "detail": "T16: Attribution: an MIT credit in each adapting document, by the existing convention (AC11)"
+    },
+    {
+      "at": "2026-09-12T09:48:12.624Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16 (was empty) — full verification after every task, plus review floor on this branch's own diff"
+    },
+    {
+      "at": "2026-09-12T09:48:12.734Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T3 (was empty) — review on the verified branch"
+    },
+    {
+      "at": "2026-09-12T09:48:12.839Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-12T09:48:12.943Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-12T09:48:13.047Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-12T09:48:13.153Z",
+      "event": "started"
     }
   ]
 }
