@@ -19,7 +19,16 @@ All notable changes to `keryx` are documented here. The format follows
 
 ### Fixed
 
-- **A scripted `keryx shell` no longer sends an expired grok login.** The refresh
+- **`/provider` says why the model list is empty, and lets you replace a refused
+  credential.** Picking a provider whose stored credential had expired asked for
+  nothing and opened an empty model picker: the live `GET /models` answered
+  `403 The OAuth2 access token could not be validated`, and every failure —
+  refused credential, wrong endpoint, offline, genuinely no models — collapsed
+  into the same mute "(no models found)" (regression from `d0d86c76`). The
+  picker now names the cause in the provider's own words, and a 401/403 re-opens
+  the credential step — which previously could never run, because the dead value
+  in the environment was itself the reason it was skipped. `/model` and chat's
+  provider picker show the same line. The refresh
   of a stored grant ran only in the TUI's start-up, so `--no-tui` and `--print`
   sent an access token hours past its expiry and got `HTTP 403: The OAuth2 access
   token could not be validated` — which reads as a revoked login, not an expired
