@@ -237,10 +237,10 @@ boundary is the trigger-and-outcome test.
    issues outside the diff are `info` at most, with a note to track separately.
 3. **An optimisation with no before/after is an unmeasured claim, and a neutral
    one is a finding.** Ask what was measured and on what workload. No pair at all
-   is `minor` — unjustified, not wrong. A neutral pair is `revert`: what counts as
-   neutral under noise, and what the attempt owes the journal, are `perf-check`'s
-   Rules, not restated here. Writing that entry is the author's job, not yours; a
-   revert that lands with no entry behind it is its own `minor` finding.
+   is `minor` — unjustified, not wrong. A neutral pair is `major`, and the fix it
+   suggests is a revert: what counts as neutral under noise, and what the attempt
+   owes the journal, are `perf-check`'s Rules, not restated here. Writing that
+   entry is the author's job, not yours; a revert with no entry is its own `minor`.
 
 ---
 

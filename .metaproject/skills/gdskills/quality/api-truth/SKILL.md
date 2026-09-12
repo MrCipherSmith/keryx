@@ -110,20 +110,20 @@ failure teach you. Silent — check first.
    `node_modules` source, `inspect.signature`, the binary's `--help`. It cannot
    be at the wrong version, because it *is* the version. Highest rank, and
    usually the fastest to reach.
-2. **The package's own documentation, pinned to the installed version** — a
-   versioned docs URL, the tag of its repository, or the tooling this repo
-   already gives agents:
+2. **The package's own documentation, pinned to the installed version** — the
+   docs for the exact version installed, reached by whichever of these the
+   environment actually has. None of them ships with this skill or is installed
+   for you; check what is there before you reach for one:
 
-   ```bash
-   npx ctx7@latest library "Library Name" "<the actual question>"
-   # pick the /org/project match, then the /org/project/<version> id
-   npx ctx7@latest docs /org/project/<installed-version> "<the actual question>"
-   ```
-
-   Use the official spelling ("Next.js", not "nextjs"). Pass the real question,
-   not one word. Three commands is the budget; no credentials in the query
-   string. The same source may instead be a connected `ctx7` MCP server — either
-   surface, same rank.
+   - A versioned docs URL, or the repository at the tag matching that version.
+   - A docs-retrieval tool, where one is configured — a `ctx7`-style MCP server,
+     or `npx ctx7@latest library "Library Name" "<the actual question>"` then
+     `npx ctx7@latest docs /org/project/<installed-version> "<the question>"` if
+     that CLI is reachable. Official spelling ("Next.js", not "nextjs"), the real
+     question rather than one word, three commands of budget, no credentials.
+   - With neither, the docs shipped *inside* the installed artefact — its README,
+     its `docs/`, the binary's long help — pinned by construction. If that is
+     empty too, rank 2 is unavailable here: say so and rely on rank 1.
 3. **The package's own documentation, unpinned** — acceptable only after you
    state the gap between it and the installed version, and treat everything it
    says as provisional across that gap.

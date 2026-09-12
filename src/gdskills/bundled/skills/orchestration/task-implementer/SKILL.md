@@ -185,7 +185,7 @@ This step is read-only and inline; do not spawn a subagent for it.
   (`input-contract.schema.json`). Empty means none; the string `"none"` is not a
   legal value and a request carrying it is refused by 1.4
 - Read each file listed in either array
-- Understand existing test patterns (describe/it structure, mocks, fixtures)
+- Understand existing test patterns (describe/it structure, mocks, fixtures) and, for every file in `existing_stories`, the story patterns it uses (`Meta`/`StoryObj` shape, how variants are declared, how callbacks are stubbed) — 4.4 builds on what you record here
 
 **2.3 Read module neighbors:**
 - List sibling files in the same directory as each target file
@@ -290,7 +290,7 @@ Execute the change plan. Write production-quality code.
 - Use the runner, selectors and structure Phase 2.2 found in this project's own tests — not a remembered stack. Arrange/Act/Assert; mock external dependencies, not internal module logic.
 
 **4.4 Story standards:**
-- Use the story patterns Phase 2.3 found (`Meta` + `StoryObj`, `args`-based variants, `fn()` callbacks); cover default state, edge cases and error states.
+- Use the story patterns Phase 2.2 found (`Meta` + `StoryObj`, `args`-based variants, `fn()` callbacks); cover default state, edge cases and error states.
 
 **4.5 Commit after implementation:**
 

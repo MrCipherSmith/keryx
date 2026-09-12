@@ -59,11 +59,7 @@ common failure is running stage 5 in the release that first shipped stage 1.
    that is not released. Until a published version carries both spellings, no
    notice is actionable and no clock has started.
 2. **The old spelling keeps working, through the same implementation.** Not a
-   copy. `src/commands/mcp.ts` is the whole retired surface of the publisher
-   rename: it translates the old argument shape and calls the new command, so
-   there is *"one implementation and nothing to drift"* (`:1-14`). An alias
-   carrying its own behaviour is two code paths, and the one nobody runs is the
-   one that rots.
+   copy — the alias shape, and the shipped example of it, are §5 of the rule.
 3. **One notice, naming the replacement.** See §3. It goes on stderr, and it
    fires once per invocation.
 4. **Your own tree stops emitting and teaching the old name.** See §4. This is
@@ -100,8 +96,18 @@ Then accept the part you cannot see. Scripts, CI jobs, and other people's
 tooling leave no trace in your repository, and *"unused" means "no usage you
 can see"*. When you cannot tell, the answer is not to guess a number — it is to
 pick the path that is safe under the worst case: alias with a notice, and let
-the notice itself be the measurement. If nobody can be observed migrating, that
-is information about stage 4, not permission to skip to stage 5.
+the notice itself be the measurement.
+
+That phrase is only a mechanism if you say what it measures, and the honest
+answer is: one direction, weakly. A stderr line reaches whoever is watching a
+terminal. The callers you are actually worried about — a nightly job, a build
+step, somebody's wrapper script — are the ones nobody is watching, and they
+will run your deprecated spelling, print your notice into a log nobody reads,
+and succeed. A complaint arriving is evidence the surface has live callers; no
+complaint arriving is evidence of nothing, and reading it as "nobody uses
+this" is the same mistake as reading an empty grep that way. What ends the
+wait is stage 4 being true in your own tree, plus the named end §6 owes the
+caller. An absence of complaints is never permission to skip to stage 5.
 
 One thing you must decide explicitly: **is continuing to honour the old
 spelling acceptable at all?** Usually yes. Sometimes the old behaviour is the
@@ -120,33 +126,26 @@ things make it actionable, and all three fit in one sentence:
 - **What replaced it**, spelled exactly as it must be typed.
 - **How to migrate** — for a like-for-like rename that is the new spelling
   itself; for anything else, the shape the caller now writes.
-- **When the old spelling stops working**, or, if it has already stopped,
-  what is true now. The memory config line does all of it: *"is deprecated and
-  ignored; ingest and reflection remain draft-only. Remove it from
-  memory.config.json."*
+- **When the old spelling stops working.** Three answers are legal, and picking
+  between them is the decision — not filling the slot. A named version or date.
+  What is true *now*, where the old behaviour has already stopped: the memory
+  config line does all of it — *"is deprecated and ignored; ingest and
+  reflection remain draft-only. Remove it from memory.config.json."* Or, in
+  those words, that **no removal is scheduled**. That third answer is the
+  shipped one here: `announceRename` prints *"<retired> is deprecated — use
+  <replacement> instead."* and stops (`src/commands/mcp.ts:90-92`), and those
+  retired verbs still work today. An end date is what §6 owes a caller who
+  cannot move yet; it is not what makes a notice actionable. What is never legal
+  is leaving the reader unable to tell "not scheduled" from "nobody said" —
+  and inventing a version to avoid that is worse than admitting there is none.
 
-Two mechanics settle where and how often:
+Where the notice goes, how often it fires, and the contract test that pins both
+are §5 of the rule, with its worked example and the reasoning behind each. Read
+it there rather than re-deriving it here.
 
-- **stderr, never stdout.** Stdout is the answer channel. The publisher rename
-  routes its notice to stderr because a bare invocation of that command *is*
-  the stdio MCP server, and *"a notice written to it corrupts every client
-  session rather than informing anyone"* (`src/commands/mcp.ts:78-92`).
-- **Once per invocation.** The same comment explains why it is printed beside
-  the routing decision and never inside the per-editor loop: a `--runtime all`
-  run performs three writes, and *"a line a reader sees three times in one
-  command is a line they learn to skip, which is how deprecation notices stop
-  working at all"*.
-
-And the notice is tested, not hoped for. `src/commands/mcp-naming.test.ts`
-asserts that the retired spellings still work, still write the same files, and
-name the replacement exactly **once** (`:453`, `:470`, `:490`).
-
-The counter-example is in the same binary: `keryx review` accepts `--ref` and
-`--target-ref` for the same value, with no notice and no entry in its own help
-(`src/commands/review.ts:147`, `:409`). Nothing tells a caller to migrate, so
-nothing will ever justify retiring it. **A silent alias is a permanent
-surface** — it has all the maintenance cost of a deprecation and none of the
-progress.
+The counter-example is the rule's too: an alias nobody is told about is a
+permanent surface — all the maintenance cost of a deprecation, none of the
+progress, and nothing that will ever justify retiring it.
 
 ## 4. Stop teaching the old name
 
@@ -174,11 +173,9 @@ migrate first.
 Removal is not deletion. The spelling stays in the code, doing one job: saying
 it is gone and why.
 
-- **Refuse by name.** `keryx workspace handoff --from` throws a message naming
-  the flag and stating that `from` is the subject the authorization server
-  resolved, not a value a caller can state — refused this way rather than as a
-  generic unknown option *"so anyone who scripted it learns why it is gone
-  instead of reading it as a typo"* (`src/commands/workspace.ts:221-231`).
+- **Refuse by name, with the reason** — never as a generic unknown option, so
+  anyone who scripted it learns why it is gone instead of reading it as a typo.
+  The pattern and its shipped example are §5 of the rule.
 - **A removed field moves the version.** Dropping one boolean from the skills
   export manifest moved `schemaVersion`, because *"a reader that still expects
   the boolean sees `schemaVersion: 2` and knows why it is absent instead of
@@ -227,7 +224,7 @@ go away sometime" is not.
 
 | Rationalization | Why it is wrong |
 |---|---|
-| "Nothing in the repo calls it any more, so removing it is safe." | You searched the tree you can see. A published surface's callers are scripts, CI jobs and other people's tooling that leave no reference anywhere you can grep. "Unused" means "no usage you can see", and the cost of being wrong is a silent failure in somebody else's pipeline. |
+| "Nothing in the repo calls it any more, so removing it is safe." | You searched the tree you can see, which is where §2 starts, not where it ends. The cost of being wrong is a silent failure in somebody else's pipeline — which is why the rule's own non-negotiable is that a published spelling is never deleted, only aliased or refused by name. |
 | "The replacement is in, so I'll drop the old spelling in the same release." | Then the release that teaches the new name is the release that breaks the caller, and they learn both facts from the same incident. A caller cannot migrate to something not yet published — the clock starts only once a shipped version carries both. |
 | "I'll keep the old flag working and skip the notice — nobody gets hurt." | `keryx review` has accepted `--target-ref` silently, with no notice and no help entry, for exactly that reason. Nothing ever tells a caller to migrate, so nothing will ever justify retiring it. A silent alias is permanent maintenance bought with zero progress. |
 | "The alias can re-implement the old behaviour, it's only a few lines." | That is two implementations free to drift, and the one nobody runs is the one that rots. The retired publisher verbs translate the argument shape and call the new command — one implementation, nothing to drift — which is why a contract test can assert the old path still writes the same files. |
@@ -247,8 +244,11 @@ Do not report the work as done until all of these hold:
 - A test asserts the old spelling still works, still produces the same effect,
   and names the replacement exactly once.
 - The notice is on stderr, fires once per invocation, and states the
-  replacement, the migration, and when the old spelling stops — or, where the
-  old behaviour is not being honoured at all, states what is true now instead.
+  replacement, the migration, and one of §3's three answers to *when*: a named
+  version or date, "no removal is scheduled" in those words, or — where the old
+  behaviour is not being honoured at all — what is true now instead. A version
+  nobody has committed to does not satisfy this; a caller plans against it, so
+  an invented date is a worse answer than none.
 - Every occurrence of the old spelling in your own tree is gone or declared:
   generated output, installer messages, templates, documentation, config files.
   Nothing you emit for somebody else teaches the name you are retiring.
@@ -259,9 +259,9 @@ Do not report the work as done until all of these hold:
   renamed field in a machine-readable payload moves its `schemaVersion` in the
   same change; a retired shipped file is identified by content hash, across
   every version ever shipped, not by its name alone.
-- The end is named as a version or a date, with the before-and-after a caller
-  needs to migrate unaided — and any caller who cannot migrate yet is holding
-  behaviour that has not changed under them.
+- The end is either named as a version or a date, or declared not yet scheduled
+  — a guess dressed as a schedule is neither — and the caller has the
+  before-and-after to migrate unaided, under behaviour unchanged under them.
 
 Credit: [addyosmani/agent-skills](https://github.com/addyosmani/agent-skills)
 (MIT) is why this set carries a deprecation skill at all; the five stages and
