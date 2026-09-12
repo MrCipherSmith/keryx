@@ -9,7 +9,7 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T11:04:53.615Z",
+  "updatedAt": "2026-09-12T11:18:08.928Z",
   "source": {
     "type": "description",
     "ref": null
@@ -65,7 +65,7 @@
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -92,7 +92,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T4",
@@ -432,7 +433,7 @@
       "id": "T19",
       "title": "review floor --ref must diff from the merge base, not the branch tip — the base's own additions were reported as our removals (AC5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T11"
       ],
@@ -448,7 +449,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -709,6 +711,16 @@
       "at": "2026-09-12T11:04:53.615Z",
       "event": "task-attempt",
       "detail": "T19: started (attempt 1) — 258-T19 floor --ref resolves from the merge base"
+    },
+    {
+      "at": "2026-09-12T11:12:51.426Z",
+      "event": "task-done",
+      "detail": "T19: review floor --ref must diff from the merge base, not the branch tip — the base's own additions were reported as our removals (AC5)"
+    },
+    {
+      "at": "2026-09-12T11:18:08.928Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
     }
   ]
 }
