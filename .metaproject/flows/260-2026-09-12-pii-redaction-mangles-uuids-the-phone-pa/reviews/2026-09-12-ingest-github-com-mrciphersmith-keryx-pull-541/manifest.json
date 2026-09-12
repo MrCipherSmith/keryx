@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "https://github.com/MrCipherSmith/keryx/pull/541",
@@ -46,7 +46,7 @@
     ]
   },
   "createdAt": "2026-09-12T13:21:40.887Z",
-  "updatedAt": "2026-09-12T13:21:40.887Z",
+  "updatedAt": "2026-09-12T13:25:44.048Z",
   "flow": {
     "id": "260",
     "path": ".metaproject/flows/260-2026-09-12-pii-redaction-mangles-uuids-the-phone-pa"

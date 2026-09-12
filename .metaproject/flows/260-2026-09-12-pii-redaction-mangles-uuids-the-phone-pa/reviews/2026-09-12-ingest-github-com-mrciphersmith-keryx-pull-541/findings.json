@@ -17,7 +17,11 @@
       ],
       "enumeration_method": "keryx ctx rg \"isIdentifierFragment\" src returned exactly two matches: the definition and one call site, gating pii.phone only. That is the complete reachable set."
     },
-    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-001"
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — guard rewritten to positive hex evidence; 6 regression cases in pii-phone-identifier.test.ts"
+    }
   },
   {
     "id": "F-002",
@@ -37,7 +41,11 @@
       ],
       "enumeration_method": "enclosingToken is a private helper with one caller, isIdentifierFragment, which itself has one call site (verified by reading the whole file and by keryx ctx rg). No other rule reaches this scan."
     },
-    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-002"
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — scan bounded to 64 chars each way; overhead re-measured at ~9% vs the unguarded baseline"
+    }
   },
   {
     "id": "F-003",
@@ -50,7 +58,11 @@
     "confidence": "high",
     "file": "src/security/detect/pii.ts",
     "line": 264,
-    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-003"
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — unreachable branch deleted; the test comment now names the gate that rejects that input"
+    }
   },
   {
     "id": "F-004",
@@ -63,7 +75,11 @@
     "confidence": "high",
     "file": "src/sac/proposal-lifecycle-parity.test.ts",
     "line": 93,
-    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-004"
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — proposal-lifecycle-parity.test.ts renamed and its scope stated in the comment"
+    }
   },
   {
     "id": "F-005",
@@ -76,6 +92,10 @@
     "confidence": "medium",
     "file": "src/security/detect/pii-identifier-sweep.test.ts",
     "line": 68,
-    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-005"
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — flow 261 opened; pii-identifier-sweep.test.ts now references it"
+    }
   }
 ]
