@@ -1472,6 +1472,7 @@ keryx review lightweight
 keryx review reviewers [--json]
 keryx review import --from <dir> [--dry-run] [--force] [--json]
 keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>] [--json|--scoped-diff] [--append <file>]
+keryx review floor [--ref <base>] [--diff <file|->] [--context <n>] [--json] [--report-only]
 keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                           [--no-related-tests] [--final] [--previous <blast-radius.json>]
                           [--json|--brief] [--out <file>]
@@ -1498,6 +1499,7 @@ left off and the gate reports it as unobserved.
 | `complete` | Validate the package, record what became of its findings, write the learning note for anything dismissed as incorrect, and mark it complete only when required artifacts exist. See below. |
 | `lightweight` | Confirm report-only mode; creates no managed artifacts. |
 | `scope` | Build the bounded review scope deterministically. See below. |
+| `floor` | Report the edits in a diff that lower the bar: a threshold moved the weakening way, a disabled test, a test region that checks fewer things, a new suppression. Exits 1 when it finds any. See below. |
 | `blast-radius` | Compute what the change can **break**, as opposed to whether it is correct. See below. |
 | `budget` | The spend and concurrency gate, run **before** dispatch. Exits 1 when the spend ceiling is reached. See below. |
 | `tier` | The `model` block a dispatch document carries, computed from signals the orchestrator already holds. See below. |
@@ -1771,6 +1773,110 @@ entirely for hunks containing a template literal, triple-quoted string or
 heredoc, and a comment carrying a tool directive (`@ts-expect-error`,
 `eslint-disable`, `go:build`, `noqa`) is never treated as comment-only, because
 it changes behaviour.
+
+### `review floor`
+
+A review asks whether the change is correct. It does not ask whether the change
+made the *checks* weaker, and that is a different question: a coverage minimum
+moved from 80 to 70, an `it.skip` added to a flaky test, an assertion deleted
+from a test that still passes, a `// @ts-expect-error` above the line that would
+not compile. Each is individually defensible, each is invisible in a green
+suite, and together they are how a suite rots.
+
+This makes those four edits visible **in the diff that introduces them**. Pure,
+no model call, over the same scoped regions `review scope` builds.
+
+| Flag | Description |
+|---|---|
+| `--ref <base>` | Widen the diff to the **merge base** of `HEAD` and this ref. Uncommitted work is still scanned — this adds committed history to the window, it does not replace the working tree with it. Without it, only uncommitted changes are scanned. |
+| `--diff <file\|->` | Read a unified diff from a file or stdin instead of running git. |
+| `--context <n>` | Context lines around each change, as for `review scope`. Default **20**. |
+| `--json` | Machine-readable report: `outcome`, `findings`, `counts.byKind`, and `scanned`. |
+| `--report-only` | Print the same report and exit **0**. The adoption path: measure the rate before the guard starts refusing. |
+
+Exit codes, per `rules/core/cli-interface-design.mdc`: **0** clean, **1** a
+finding, **2** the guard could not look. A finding is a *question the diff has
+not answered*, and a question asked with exit 0 is a question nobody answers —
+the same choice `review budget` and `review loop` make. The command does not
+claim any finding is wrong; it claims the diff should say why.
+
+**2** is the one a script must not fold into 1. A ref that will not resolve, a
+`--diff` file that will not open and a shallow clone with no merge base all mean
+the guard never ran, which is not a pass and not a finding. Under `--json` that
+answer is *data on stdout*, not prose on stderr:
+
+```json
+{ "schemaVersion": 1, "outcome": "cannot-scan", "error": "…" }
+```
+
+A clean or finding-bearing run carries `"outcome": "scanned"` alongside its
+`scanned` counts, so a reader tells the two apart by a field rather than by
+parsing English. Getting the *invocation* wrong — an unknown flag, a `--context`
+that is not a number — stays **1**; that is a validation error, not an inability
+to tell.
+
+`--ref`, `--base`, `--diff` and `--context` are also refused when their value is
+**missing or empty**: `keryx review floor --diff --json`, which is what an
+unquoted empty variable expands to in CI, used to read as "no `--diff`", scan the
+working tree instead and report `"outcome": "scanned"` with exit **0**. That is
+the one answer this command must never give by accident, so a value-taking flag
+whose next token is another flag, absent, or empty exits **1** and scans nothing.
+
+In a `--depth 1` clone (which is what `actions/checkout` gives you by default)
+`--ref` has no merge base to resolve against. The command says so and names the
+fix: `git fetch --unshallow`, or `fetch-depth: 0` on the checkout step.
+
+What each detection requires, because a guard that fires on the repair as well
+as the damage gets switched off:
+
+- **Threshold lowered.** The removed and added lines must be identical once
+  every number is erased (a trailing **comment** is ignored on both sides, so
+  "lower it and explain on the same line" is not an escape), and the identifier
+  *directly in front of each moved number* must name a floor (`coverage`,
+  `minimum`, `threshold`, `precision`, …) that moved **down**, or a ceiling
+  (`max`, `limit`, `timeout`, `retries`, `tolerance`, …) that moved **up**. Only
+  that identifier is read, not the whole line: `5.` → `6.` in a renumbered
+  markdown list is silent even though the sentence contains the word `allowed`.
+  Finding it is a short walk left from the number rather than one token, so a
+  type annotation (`const minCoverage: number = 80`), an enclosing key
+  (`thresholds: { global: 80 }`) and a constant index (`minScores[0] = 80`) all
+  still name their number — but a comma is not an opener, so `f(scores, 80)`
+  borrows nothing from `f`. A coverage minimum raised is silent, a timeout
+  shortened is silent, and a bare `rows: 50` → `rows: 10` is silent in both
+  directions: nothing names it. An unnamed number beside a named one no longer
+  silences it, but must move the same way. A
+  *ceiling* in resource units (`maxOutputTokens`, `maxRows`) is a budget and is
+  silent; a *floor* in the same units (`minItems: 3` → `0`) is a demand removed
+  and does fire. Residual noise, accepted: `limit` and `max` are ordinary words,
+  so a pagination `limit` raised does fire.
+- **Test disabled.** `.skip`, `.only`, `.todo`, `.failing`, vitest's `.skipIf` /
+  `.runIf`, `xit`/`xdescribe`, `@pytest.mark.skip`, `t.Skip(` and friends, on an
+  **added** line, in statement position, **called**. Chained modifiers are
+  allowed on either side of the keyword and may carry a paren-free argument list,
+  so `test.concurrent.skip(…)`, `describe.skip.each(table)(…)` and
+  `describe.each(cases).skip(…)` all fire; a computed table,
+  `describe.each(build(x)).skip(`, does not. `.only` counts: it disables every
+  other test in the file. A `.skip` being *removed* never fires, and neither does
+  a marker inside a string, mid-expression, or in a sentence that merely mentions
+  it — the required `(` is what keeps prose about skipped tests out.
+- **Assertion removed.** A count, not a parse: a region of a **test file** that
+  ends with fewer assertion-carrying lines than it started with. An assertion
+  moved a few lines nets to zero; an assertion *weakened in place*
+  (`toBe(3)` → `toBeDefined()`) is invisible, and is stated as invisible rather
+  than implied to be covered.
+- **Suppression added.** `eslint-disable`, `@ts-expect-error`, `@ts-ignore`,
+  `# type: ignore`, `# noqa`, `//nolint`, `@SuppressWarnings`, `#[allow(` and
+  the rest — on an added line, after a comment opener, with no quote before it.
+  A marker listed in a string array is not a suppression, a suppression being
+  *deleted* is not a finding, and a suppression that merely **moved** — removed
+  and re-added byte-identical inside the same region — is not "added". That
+  forgiveness is counted: each removal pays for exactly one identical addition,
+  so a region that deletes one marker and adds three reports two.
+
+It sees only what the pre-filter retained, so a threshold lowered inside a
+vendored or generated path is invisible by construction — and it depends on
+`review scope` never dropping a comment that carries a tool directive, which is
+why that carve-out exists.
 
 ### `review blast-radius`
 

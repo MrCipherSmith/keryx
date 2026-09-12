@@ -1,0 +1,8 @@
+{
+  "status": "DONE",
+  "verifier": "round-4",
+  "summary": "1 round-3 finding re-checked AT THE FIX (27ee602f) by the round-4 reviewer, which raised nothing at or above minor: 1 execution, 1 refuted, 0 confirmed. `refuted` is the post-fix reading — the checker looked for it at the fixed head and it no longer reproduces.",
+  "verifications": [
+    {"finding": "R3-m1", "verdict": "refuted", "method": "execution", "verifier": "round-4", "evidence": "Checked at 27ee602f, the commit that fixes this finding. All five recovered shapes fire with the right movement and all five per-shape controls stay silent, so what fires is the direction rather than the nesting. The noise the narrowing removed stays removed: markdown renumber, step heading, and maxOutputTokens 16->256 both flat and nested in a budget key. The rejected alternative was built in a scratch copy and is genuinely worse — under nearest-decided, budget: { maxOutputTokens: 16 -> 256 } and limits: { maxRows: 100 -> 5000 } fire and coverage: { minTimeout: 500 -> 100 } fires, while it recovers nothing the shipped version misses. The fix's own stated cost is verified: tokens: { max: 16 -> 256 } now fires. The 200-commit re-measurement reproduces byte for byte, 37/17/11/2 with the same digest on both sides."}
+  ]
+}

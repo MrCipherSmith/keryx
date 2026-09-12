@@ -300,6 +300,32 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run low-risk checks and summarize regressions.",
     "Link issues to files, modules, and affected skills when possible.",
   ]),
+  skill("root-cause", "quality", ["recommended", "full"], "Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair.", [
+    "Reproduce first and write the reproduction down as commands, input, expected and observed, with a rate for anything intermittent.",
+    "Localize by halving the search space — history, call path, input, environment — changing one thing at a time.",
+    "Reduce to the smallest failing case, then state the cause as a mechanism before changing anything.",
+    "Leave a guard that was watched failing against the unfixed code; when nothing reproduces, report attempts, evidence and surviving hypotheses instead of a fix.",
+  ]),
+  skill("fresh-eyes", "quality", ["recommended", "full"], "Doubt work still in flight from a reader who was never told why it works.", [
+    "Take the artifact and the contract it must satisfy; refuse the author's walkthrough, rationale, and \"I already checked that\".",
+    "Ask only procedural questions — how to run it, which branch is live — and never why it is right.",
+    "Raise a doubt only when it names a concrete failure, is anchored to a line or step, is checkable, and survives one honest re-read.",
+    "Bound the loop before round one; end at the first round with no new qualifying doubt, and report finding nothing as a completed cycle.",
+  ]),
+  skill("api-truth", "quality", ["recommended", "full"], "Write dependency calls against the version installed here, and mark the ones that went out unchecked.", [
+    "Read the version on disk — the package's own installed metadata — not the manifest range, and report a lockfile that disagrees with it.",
+    "Spend the check where failure is silent: option bags, untyped surfaces, effects invisible locally, defaults changed in a minor; skip it where a type-check or a watched test already covers the call.",
+    "Rank the evidence: the installed artefact and its shipped types first, then documentation pinned to that version, then a changelog; a post or a recollection is a lead, never proof.",
+    "When documentation and the installed build disagree, follow the build, name both versions, and never branch the call site across the two.",
+    "Mark every unchecked call at the site with what would settle it, and list them in the report — empty stated as empty.",
+  ]),
+  skill("deprecation-path", "quality", ["recommended", "full"], "Retire a spelling this project publishes without breaking the callers nobody can enumerate.", [
+    "Ship the replacement first, then keep the old spelling reaching the same implementation rather than a second copy of the behaviour.",
+    "Emit one notice per invocation, on stderr, naming what replaced it, how to migrate, and when the old spelling stops.",
+    "Find the dependants you can — your own generated output, installer-written artefacts, pinned shapes — and write down the population you cannot see.",
+    "Stop your own tree emitting and teaching the old name before anyone argues a removal date.",
+    "Remove by refusing the name with the reason; move the schemaVersion when a payload field goes; identify a retired shipped file by content hash, not by name.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",

@@ -99,9 +99,15 @@ describe("AC7: the bundled skill tree is evaluated, over a real denominator", ()
     // below would pass vacuously over a renamed directory. The count is the
     // guard on the guard: 65 from the roadmap, plus `review-layout` and
     // `reviewer-skill-creator`, both added after a review round measured what
-    // the shipped set could not reach.
+    // the shipped set could not reach, plus `root-cause`, `fresh-eyes` and
+    // `api-truth` and `deprecation-path` (flow 258) — the debugging stage the
+    // tree had no owner for, the in-flight doubt pass that reads an artifact
+    // without its author's account, the one that settles a dependency call
+    // against the build installed here rather than against recollection, and
+    // the one that walks a published spelling out of the surface without
+    // handing its callers a successful-looking run that does nothing.
     const files = bundledSkillFiles(path.join(defaultBundledRoot(), "skills"));
-    expect(files.length).toBe(67);
+    expect(files.length).toBe(71);
 
     const evaluation = realTree();
     expect(evaluation.skills).toBe(files.length);

@@ -41,6 +41,7 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
+import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -229,6 +230,47 @@ const SCOPE_FLAGS = [
   "--append",
 ] as const;
 
+/**
+ * No `--append` and no `--out`.
+ *
+ * The floor guard answers a question about the diff in front of you, and the
+ * answer is only true of that diff. `scope` and `blast-radius` write into a
+ * review package because a reviewer reads them later; a floor finding that
+ * outlived its diff would be read as a standing accusation about a file.
+ */
+const FLOOR_FLAGS = ["--ref", "--base", "--diff", "--context", "--json", "--report-only"] as const;
+
+/**
+ * The `floor` flags that are meaningless without a value.
+ *
+ * `keryx review floor --diff --json` — which is what an unquoted empty variable
+ * in CI expands to — read `--diff` as absent, diffed the working tree instead,
+ * and answered `outcome: "scanned"`, `scanned: { files: 12, … }`, exit 0. A
+ * confident scan of the wrong thing, from a command whose entire contract is
+ * that its exit code can be trusted. Refused rather than guessed, and refused as
+ * a VALIDATION error (exit 1) rather than `cannot-scan` (exit 2): the guard was
+ * never asked a question it could answer.
+ *
+ * Floor only. `scope` reads the same flags through the same {@link optionValue}
+ * and has the same hole, but it is published and always exits 0; changing it is
+ * a separate task.
+ */
+const FLOOR_VALUE_FLAGS = ["--ref", "--base", "--diff", "--context"] as const;
+
+function rejectValuelessOptions(args: readonly string[], valueFlags: readonly string[], usage: string): void {
+  const empty = flagTokens(args)
+    .filter((token) => valueFlags.includes(token.name))
+    .filter((token) => token.value === undefined || token.value.trim().length === 0)
+    .map((token) => token.name);
+  if (empty.length > 0) {
+    throw new Error(
+      `Option${empty.length > 1 ? "s" : ""} without a value for \`keryx review ${usage}\`: ${[...new Set(empty)].join(", ")}. ` +
+        "Each of these takes a value, and the next token is another flag, absent or empty — usually an unquoted shell variable that " +
+        "expanded to nothing. Refused rather than treated as omitted: the fallback would scan something else and report success.",
+    );
+  }
+}
+
 const BLAST_RADIUS_FLAGS = [
   "--ref",
   "--base",
@@ -328,6 +370,10 @@ export async function reviewCommand(args: string[]): Promise<void> {
     }
     if (command === "scope") {
       await runScope(args.slice(1));
+      return;
+    }
+    if (command === "floor") {
+      await runFloor(args.slice(1));
       return;
     }
     if (command === "blast-radius") {
@@ -1595,6 +1641,98 @@ async function runScope(args: string[]): Promise<void> {
 }
 
 /**
+ * `keryx review floor` — the guard against a diff that quietly lowers the bar
+ * (flow 258, T11).
+ *
+ * A sibling of `scope` in every way that matters: same diff sources, same
+ * `buildReviewScope` input, no model call, and everything it decides is decided
+ * in `review/floor.ts`, which is pure. The difference is the exit code.
+ *
+ * `scope` reports and always exits 0 because a scope is a description. This
+ * exits 1 when it finds something, because a finding here is a QUESTION the
+ * diff has not answered — why is that threshold lower, why is that test off —
+ * and a guard that asks its question with exit 0 is a guard that gets scrolled
+ * past. It is the same choice `budget` and `loop` already make.
+ *
+ * `--report-only` is the adoption path, and it mirrors `--verification-mode
+ * annotate`: print the findings, exit 0, let a project measure its own rate
+ * before the guard starts refusing. Nothing is hidden either way — the report
+ * is identical, only the exit code moves.
+ *
+ * ## Three exit codes, because the branch that added this rule demands three
+ *
+ * `rules/core/cli-interface-design.mdc` — added on this same branch — reserves
+ * **2** for "could not tell" and says a NEW command uses 0/1/2 as defined. This
+ * command went out with the shared `catch` at the top of {@link reviewCommand}
+ * collapsing every failure to **1**, which made a typo'd `--ref` indistinguish-
+ * able from a lowered bar: both exit 1, and under `--json` both wrote zero bytes
+ * to stdout. That is the failure the rule exists to name, in the command that
+ * shipped alongside it.
+ *
+ * So the diff-acquisition step is caught HERE:
+ *
+ * - a ref that will not resolve, a diff file that will not open, a `git diff`
+ *   that fails — the guard could not look — is **2**, with
+ *   `{ outcome: "cannot-scan", error }` on stdout under `--json`, mirroring
+ *   `keryx memory search`'s `store-unreadable` (`src/commands/memory.ts:188-196`);
+ * - a bad flag, a bad `--context` value, or a value-taking flag whose value the
+ *   shell dropped ({@link FLOOR_VALUE_FLAGS}) is a VALIDATION error and stays
+ *   **1**, which is the same split `memory search` draws;
+ * - a finding is **1**; a clean scan is **0**.
+ *
+ * Free to do today and breaking tomorrow: `keryx review floor` is in no released
+ * tag and nothing in this repository or its CI gates on it yet.
+ */
+async function runFloor(args: string[]): Promise<void> {
+  // Outside the try on purpose: an unknown flag, a flag whose value was dropped
+  // and an unparseable --context are the caller getting the invocation wrong,
+  // not the guard being unable to look.
+  rejectUnknownFlags(args, FLOOR_FLAGS, "floor");
+  rejectValuelessOptions(args, FLOOR_VALUE_FLAGS, "floor");
+  const contextLines = parseContextLines(optionValue(args, "--context"));
+  const asJson = args.includes("--json");
+  const diffFile = optionValue(args, "--diff");
+  const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
+
+  let diff: string;
+  try {
+    const base = ref === undefined ? undefined : await mergeBaseWithHead(ref);
+    diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(base, contextLines);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (asJson) {
+      console.log(JSON.stringify(floorCannotScan(message), null, 2));
+    } else {
+      console.error(`cannot-scan: ${message}`);
+    }
+    process.exitCode = 2;
+    return;
+  }
+  const report = detectFloorRegressions(buildReviewScope(diff, { contextLines }));
+
+  if (asJson) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(renderFloorMarkdown(report));
+  }
+
+  if (report.counts.total === 0) {
+    return;
+  }
+  const summary = FLOOR_FINDING_KINDS.filter((kind) => report.counts.byKind[kind] > 0)
+    .map((kind) => `${kind}=${report.counts.byKind[kind]}`)
+    .join(", ");
+  if (args.includes("--report-only")) {
+    console.error(`floor: ${report.counts.total} finding(s) (${summary}); reported only, --report-only was given.`);
+    return;
+  }
+  console.error(
+    `floor: ${report.counts.total} finding(s) (${summary}). Each may be correct; none is self-evident. Say why in the diff, or re-run with --report-only to record them without failing.`,
+  );
+  process.exitCode = 1;
+}
+
+/**
  * `keryx review blast-radius` — scope B, computed (flow 204, AC1–AC4).
  *
  * Scope A asks whether the change is correct. This asks whether it broke
@@ -1767,6 +1905,99 @@ async function gitDiff(ref: string | undefined, contextLines: number): Promise<s
     throw new Error(`git diff failed (exit ${exitCode}): ${stderr.trim()}`);
   }
   return stdout;
+}
+
+/**
+ * The commit `floor` actually compares against: the MERGE BASE of `HEAD` and
+ * `ref`, not `ref` itself.
+ *
+ * `git diff <ref>` is a two-dot diff, so every commit `<ref>` gained while the
+ * branch was in flight appears INVERTED — the base's own additions read as this
+ * branch's removals. Measured, not theorised: on `skills/skill-gaps` two commits
+ * behind `origin/main`, `keryx review floor --ref origin/main` reported two
+ * `assertion-removed` findings, in `src/commands/review.test.ts` and
+ * `src/gdskills/install.test.ts`. No commit of the branch touches either file.
+ * Both are touched by #543 and #544, which ADDED those assertions on `main`.
+ *
+ * That is the worst failure mode a guard has. It does not merely cry wolf: this
+ * guard's whole demand is "say why in the diff", so a finding about work that is
+ * not in the diff cannot be answered honestly at all. The only ways out are to
+ * write a justification for someone else's change or to turn the guard off — and
+ * when it goes off, the three real detections go with it.
+ *
+ * Resolved explicitly rather than through git's `<ref>...` three-dot spelling,
+ * which would be shorter and is wrong here: the three-dot form ends at `HEAD`,
+ * so it drops the working tree, and a guard that cannot see uncommitted work
+ * cannot be run before the commit that needs it. `git diff <merge-base>` keeps
+ * both properties at once — the base's own commits are excluded AND uncommitted
+ * changes are still scanned.
+ *
+ * For an ancestor ref — `HEAD~3`, a tag already merged, a base nothing has moved
+ * — the merge base IS the ref, so this resolves to exactly what it resolved to
+ * before. It diverges only in the case that was broken.
+ *
+ * ## The divergence from `scope` and `blast-radius`, stated
+ *
+ * `runScope` and `runBlastRadius` still resolve `--ref` the two-dot way, through
+ * {@link gitDiff} and {@link gitChangedFiles} below, and so carry this same
+ * defect. They are not fixed here on purpose: both shipped (they are in
+ * `v0.2.98`, where `keryx review floor` is absent — floor is in no released tag
+ * at all), and `rules/core/cli-interface-design.mdc` puts a published command's
+ * stdout under the same contract as an API. Changing what `--ref` selects would
+ * change what `scope` prints for callers already parsing it, which is a change
+ * that ships with its consumers named, not as a side effect of a floor fix.
+ * Named here rather than left for the next person to rediscover.
+ */
+async function gitOutput(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(["git", ...args], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+  const [stdout, stderr, exitCode] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+    proc.exited,
+  ]);
+  return { stdout, stderr, exitCode };
+}
+
+/**
+ * True when this checkout does not hold enough history to HAVE a merge base.
+ *
+ * Asked only on the failure path, because it is a second `git` call and the
+ * answer is only ever needed to choose the wording of a refusal.
+ */
+async function isShallowClone(): Promise<boolean> {
+  const { stdout, exitCode } = await gitOutput(["rev-parse", "--is-shallow-repository"]);
+  return exitCode === 0 && stdout.trim() === "true";
+}
+
+async function mergeBaseWithHead(ref: string): Promise<string> {
+  const { stdout, stderr, exitCode } = await gitOutput(["merge-base", "HEAD", ref]);
+  const base = stdout.trim();
+  if (exitCode !== 0 || base.length === 0) {
+    // Refused rather than silently falling back to `ref`: the fallback IS the
+    // bug this function exists to remove, and a guard that quietly returns to
+    // blaming the base would be worse than one that stops and says so.
+    //
+    // The shallow case is separated out because the generic advice is actively
+    // WRONG there and sends the reader looking for a problem they do not have.
+    // `git merge-base` exits 1 with no output in a `--depth 1` clone, which is
+    // indistinguishable from unrelated histories from the exit code alone — and
+    // `actions/checkout` defaults to `fetch-depth: 1`, so a CI job is the most
+    // likely place this guard is ever run. HEAD and the base do share history;
+    // the clone simply does not have it.
+    if (await isShallowClone()) {
+      throw new Error(
+        `Cannot resolve a merge base between HEAD and ${ref}: this is a SHALLOW clone, so the commit where the branch forked is not present. ` +
+          `HEAD and ${ref} do share history — this checkout does not have it. ` +
+          `Run \`git fetch --unshallow\` (or \`git fetch --deepen=<n>\`), or set \`fetch-depth: 0\` on actions/checkout, then re-run.`,
+      );
+    }
+    throw new Error(
+      `Cannot resolve a merge base between HEAD and ${ref}${stderr.trim().length > 0 ? `: ${stderr.trim()}` : " (no common ancestor)"}. ` +
+        `\`floor\` compares against the merge base so that commits ${ref} gained since this branch forked are not reported as this branch's removals. ` +
+        `Pass a ref that shares history with HEAD, or pass the diff directly with --diff.`,
+    );
+  }
+  return base;
 }
 
 async function runStatus(args: string[]): Promise<void> {
@@ -2005,6 +2236,12 @@ Usage:
                       [--parallel <n>] [--outstanding <n>]
   keryx review scope [--ref <base>] [--diff <file|->] [--path a,b] [--context <n>]
                      [--json | --scoped-diff] [--append <file>]
+  keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
+                     [--json] [--report-only]
+                     --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
+                     so commits <base> gained since this branch forked are not
+                     reported as this branch's removals. Uncommitted work is
+                     still scanned, with or without --ref.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
@@ -2054,6 +2291,26 @@ scope:
   Prints the retained scope AND every drop with its reason; --append writes the
   same record into the review package's scope.md, REPLACING a
   \`## Pre-filter scope\` block already there rather than adding a second.
+
+floor:
+  The guard against a diff that quietly lowers the bar. Deterministic, no model
+  call, over the same scoped regions \`review scope\` builds. Reports four edits:
+  a floor named on the line moving DOWN or a ceiling named on the line moving UP
+  (the rest of the line unchanged), a test disabled with .skip/.only/xit, a test
+  region that ends up with FEWER assertion-carrying lines, and a new suppression
+  comment (eslint-disable, @ts-expect-error, ts-ignore, type: ignore, noqa).
+  Each is individually defensible; the guard does not claim any is wrong, only
+  that the diff should say why. EXITS 1 when it finds anything — a question
+  asked with exit 0 is a question nobody answers — and 0 when it finds nothing.
+  EXITS 2 when it could not look at all: a ref that will not resolve, a --diff
+  that will not open, a shallow clone with no merge base. Under --json that is
+  \`{"schemaVersion":1,"outcome":"cannot-scan","error":...}\` on STDOUT, so a
+  script tells "nothing weakened" from "nothing was read" by a field and not by
+  an exit code alone. A bad flag or a bad flag VALUE stays 1.
+  \`--report-only\` prints the same report and exits 0, which is how a project
+  measures its own rate before the guard starts refusing.
+  It sees only what the pre-filter retained: a threshold lowered inside a
+  vendored or generated path is invisible, by construction.
 
 blast-radius:
   Scope B: what the change can BREAK, as opposed to whether the change is

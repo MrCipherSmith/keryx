@@ -66,16 +66,20 @@ Resolution order:
 | skill-catalog-manager | platform | Generate `.metaproject/skills/catalog.md` and machine-readable skill registry. | gdskills/platform/skill-catalog-manager/SKILL.md |
 | skill-runtime-exporter | platform | Export canonical skills to runtime-compatible Codex or Claude artifacts. | gdskills/platform/skill-runtime-exporter/SKILL.md |
 | skill-sync | platform | Sync exported runtime skills to configured local runtimes only when explicitly enabled. | gdskills/platform/skill-sync/SKILL.md |
+| api-truth | quality | Write dependency calls against the version installed here, and mark the ones that went out unchecked. | gdskills/quality/api-truth/SKILL.md |
 | changelog | quality | Generate changelog or release notes from commits, tags, or date ranges. | gdskills/quality/changelog/SKILL.md |
 | commit | quality | Prepare conventional commits with scope, summary, and verification notes. | gdskills/quality/commit/SKILL.md |
 | db-migrate | quality | Guide database migration creation, apply, rollback, status, and verification flows. | gdskills/quality/db-migrate/SKILL.md |
 | dependency-update | quality | Plan and verify dependency upgrades. | gdskills/quality/dependency-update/SKILL.md |
 | deploy | quality | Run deployment pre-flight checks and deployment workflow summaries. | gdskills/quality/deploy/SKILL.md |
+| deprecation-path | quality | Retire a spelling this project publishes without breaking the callers nobody can enumerate. | gdskills/quality/deprecation-path/SKILL.md |
+| fresh-eyes | quality | Doubt work still in flight from a reader who was never told why it works. | gdskills/quality/fresh-eyes/SKILL.md |
 | metaproject-security | quality | Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration. | gdskills/quality/metaproject-security/SKILL.md |
 | perf-check | quality | Run or summarize performance, bundle, and complexity checks. | gdskills/quality/perf-check/SKILL.md |
 | pr | quality | Prepare pull request creation or update context from local changes. | gdskills/quality/pr/SKILL.md |
 | pr-issue-documenter | quality | Create PR descriptions and linked issue documentation from branch changes. | gdskills/quality/pr-issue-documenter/SKILL.md |
 | push | quality | Push branches with safety checks, upstream handling, and concise result summary. | gdskills/quality/push/SKILL.md |
+| root-cause | quality | Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair. | gdskills/quality/root-cause/SKILL.md |
 | security-audit | quality | Run dependency and secret/security checks and normalize findings. | gdskills/quality/security-audit/SKILL.md |
 | test-gen | quality | Generate tests for a file or module using local patterns and existing test stack. | gdskills/quality/test-gen/SKILL.md |
 | tests-creator | quality | Create test scenarios before implementation from acceptance criteria and project patterns. | gdskills/quality/tests-creator/SKILL.md |
