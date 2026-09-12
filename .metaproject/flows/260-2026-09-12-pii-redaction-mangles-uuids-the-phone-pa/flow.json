@@ -7,9 +7,9 @@
   "id": "260",
   "slug": "pii-redaction-mangles-uuids-the-phone-pa",
   "title": "PII redaction mangles UUIDs: the phone pattern eats a correlationId in MCP output",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-12T08:33:33.069Z",
-  "updatedAt": "2026-09-12T12:54:55.003Z",
+  "updatedAt": "2026-09-12T13:42:05.179Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": "https://github.com/MrCipherSmith/keryx/pull/541"
+    "url": "https://github.com/MrCipherSmith/keryx/pull/549"
   },
   "tasks": [
     {
@@ -210,7 +210,46 @@
       "at": "2026-09-12T12:54:55.003Z",
       "event": "completion-failed",
       "detail": "review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/260-2026-09-12-pii-redaction-mangles-uuids-the-phone-pa/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-12T13:30:06.312Z",
+      "event": "completing",
+      "detail": "merged commit: 52e7cbcc569a46ae5c0ca61a6d02afa71fb281d6"
+    },
+    {
+      "at": "2026-09-12T13:30:10.031Z",
+      "event": "completion-failed",
+      "detail": "review: 3 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-001 (blocker, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-002 (major, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-003 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-004 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-005 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | head-commit (violated): the latest round ran against dd7f3df0772bf548c34966f0392dd8c72456377c, but the PR head is 52697b3e807a20ad0011ce52d43f7c1ac9bced8e. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | verifier-stats (violated): round `2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541` ran with `verification_mode: annotate` and received 0 claims while retaining 5 finding(s) at or above `minor` (2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-001, 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-002, 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-003, 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-004, 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-005). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`."
+    },
+    {
+      "at": "2026-09-12T13:30:28.834Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/549 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T13:41:06.173Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T13:41:09.710Z",
+      "event": "completion-failed",
+      "detail": "review: 2 of 5 conditions failed — terminal-dispositions (violated): 5 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549#F-001 (blocker, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549): marked fixed at 52e7cbcc but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549#F-002 (major, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549): marked fixed at 52e7cbcc but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549#F-003 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549): marked fixed at 52e7cbcc but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549#F-004 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549): marked fixed at 52e7cbcc but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549#F-005 (minor, round 2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-549): marked fixed at 52e7cbcc but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#549 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__549.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 549 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T13:42:01.163Z",
+      "event": "completing",
+      "detail": "merged commit: 52e7cbcc569a46ae5c0ca61a6d02afa71fb281d6"
+    },
+    {
+      "at": "2026-09-12T13:42:05.179Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ],
-  "baseBranch": "main"
+  "baseBranch": "main",
+  "merged": {
+    "commit": "52e7cbcc569a46ae5c0ca61a6d02afa71fb281d6",
+    "ref": "origin/main",
+    "at": "2026-09-12T13:42:05.179Z"
+  }
 }
