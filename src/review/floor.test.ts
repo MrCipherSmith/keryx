@@ -125,9 +125,66 @@ test("a trailing comment added in the same edit does not break the pairing", () 
   expect(findings[0]?.added).toBe("minCoverage: 70, // keeps the page size sane");
 });
 
+test("the ordinary TypeScript spelling of a threshold constant is not silenced by its type", () => {
+  // T23/2. The adjacent identifier is `number` — the type annotation — so the
+  // plainest way to write a coverage floor in this repository's own language was
+  // silent. The walk steps over a type keyword instead of reading it as a name.
+  const annotated = diffOf("src/gate.ts", 4, ["-  const minCoverage: number = 80;", "+  const minCoverage: number = 70;"].join("\n"));
+  const findings = report(annotated).findings;
+  expect(findings.map((finding) => finding.kind)).toEqual(["threshold-lowered"]);
+  expect(findings[0]?.detail).toContain("80 -> 70");
+
+  // And stepping over the type does not switch the carve-outs off on the way:
+  // the name behind it is still read, capacity words included.
+  const budget = diffOf("src/gate.ts", 4, ["-  const maxSize: number = 10;", "+  const maxSize: number = 100;"].join("\n"));
+  expect(kinds(budget)).toEqual([]);
+});
+
+test("a threshold named by the key one container out is reported", () => {
+  // T23/2. `global` names nothing; `thresholds` does, and it is the enclosing
+  // key. The walk continues only through an opener, so an argument after a comma
+  // still borrows nothing from the identifier before it.
+  const nested = diffOf("jest.config.js", 4, ["-  thresholds: { global: 80 },", "+  thresholds: { global: 70 },"].join("\n"));
+  expect(kinds(nested)).toEqual(["threshold-lowered"]);
+
+  const argument = diffOf("src/gate.ts", 4, ["-  computeThreshold(scores, 80);", "+  computeThreshold(scores, 70);"].join("\n"));
+  expect(kinds(argument)).toEqual([]);
+});
+
+test("a threshold written through a constant index is reported", () => {
+  // T23/2. `minScores[0] = 80` ends in `]`, which matched no identifier at all.
+  const indexed = diffOf("src/gate.ts", 4, ["-  minScores[0] = 80;", "+  minScores[0] = 70;"].join("\n"));
+  expect(kinds(indexed)).toEqual(["threshold-lowered"]);
+});
+
+test("an unnamed number on the line is carried by the named one, not allowed to void it", () => {
+  // T23/2. Unanimity was demanded of every moved number, so `count` — which
+  // names nothing — switched off the coverage floor sitting beside it.
+  const together = diffOf(
+    "jest.config.js",
+    4,
+    ["-  const gate = { minCoverage: 80, count: 7 };", "+  const gate = { minCoverage: 70, count: 4 };"].join("\n"),
+  );
+  const findings = report(together).findings;
+  expect(findings.map((finding) => finding.kind)).toEqual(["threshold-lowered"]);
+  expect(findings[0]?.detail).toContain("80 -> 70, 7 -> 4");
+
+  // The unmixed-move rule still binds the unnamed number: if it went the other
+  // way the line is doing two things and nothing fires.
+  const opposed = diffOf(
+    "jest.config.js",
+    4,
+    ["-  const gate = { minCoverage: 80, count: 7 };", "+  const gate = { minCoverage: 70, count: 9 };"].join("\n"),
+  );
+  expect(kinds(opposed)).toEqual([]);
+});
+
 test("a number with no identifier in front of it is never a threshold", () => {
-  // Measured over the last 200 commits of `main`: whole-line reading produced
-  // 25 threshold findings and 24 were markdown ordered lists being renumbered.
+  // Measured over the 200 commits ending at `main` = 5d5e1acc, each read as
+  // `git diff <sha>^ <sha> -U3` at contextLines 3: whole-line reading produced
+  // 25 threshold findings, 22 of them a renumbered ordered list (14) or step
+  // heading (8). Reading the identifier the number belongs to leaves 2, both the
+  // same real ceiling in two copies of one JSON schema.
   const renumbered = diffOf(
     "SKILL.md",
     12,
@@ -233,6 +290,26 @@ test("a chained modifier and vitest's conditional forms are reported", () => {
 
   expect(kinds(concurrent)).toEqual(["test-disabled"]);
   expect(kinds(conditional)).toEqual(["test-disabled"]);
+});
+
+test("the table-driven spellings the pattern claimed to cover are reported", () => {
+  // T23/5. The docstring cited `describe.each(cases).skip` as the reason one
+  // chained segment is allowed, but the pattern admitted no CALL between
+  // segments, so that exact shape — and the one jest and vitest document,
+  // `describe.skip.each(table)(…)` — matched nothing. Each of these turns off a
+  // whole table of tests on one added line.
+  const eachThenSkip = diffOf("src/pay/pay.test.ts", 12, ['+  describe.each(cases).skip("refunds", (c) => {', "   });"].join("\n"));
+  const skipThenEach = diffOf("src/pay/pay.test.ts", 12, ['+  describe.skip.each(table)("refunds %s", (c) => {', "   });"].join("\n"));
+  const twoModifiers = diffOf("src/pay/pay.test.ts", 12, ['+  test.concurrent.failing.skip("refunds", async () => {', "   });"].join("\n"));
+
+  expect(kinds(eachThenSkip)).toEqual(["test-disabled"]);
+  expect(kinds(skipThenEach)).toEqual(["test-disabled"]);
+  expect(kinds(twoModifiers)).toEqual(["test-disabled"]);
+
+  // The stated boundary, pinned so it is a decision and not a surprise: the
+  // argument list is paren-free, because this is a regex and not a parser.
+  const computed = diffOf("src/pay/pay.test.ts", 12, ['+  describe.each(buildCases(x)).skip("refunds", (c) => {', "   });"].join("\n"));
+  expect(kinds(computed)).toEqual([]);
 });
 
 test("a marker that merely appears inside a string or mid-expression is not reported", () => {
@@ -371,6 +448,40 @@ test("a suppression that merely MOVED within the region is not reported", () => 
     ].join("\n"),
   );
   expect(kinds(widened)).toEqual(["suppression-added"]);
+});
+
+test("one removed marker forgives one identical addition, not every addition", () => {
+  // T23/1. The netting was set membership, so a region that removed ONE stale
+  // marker and added THREE identical ones reported nothing at all: deleting one
+  // marker bought unlimited new ones inside the window. The same three with
+  // nothing removed reported three, which is the contradiction that named it.
+  // Written as a concatenation so this file's own diff does not carry the
+  // marker, the way the fixtures above keep it behind a quote.
+  const IGNORE = "  // @ts-" + "ignore the ledger types are wrong here";
+  const oneForThree = diffOf(
+    "src/pay/refund.ts",
+    8,
+    [`-${IGNORE}`, "   const total = sum(order.lines);", `+${IGNORE}`, `+${IGNORE}`, `+${IGNORE}`, "   ledger.post(total);"].join("\n"),
+  );
+  // Three added, one forgiven by the removal: two are new suppressions.
+  expect(kinds(oneForThree)).toEqual(["suppression-added", "suppression-added"]);
+
+  // The control the old spelling passed for the wrong reason: with nothing
+  // removed, all three are additions.
+  const threeAdded = diffOf(
+    "src/pay/refund.ts",
+    8,
+    ["   const total = sum(order.lines);", `+${IGNORE}`, `+${IGNORE}`, `+${IGNORE}`, "   ledger.post(total);"].join("\n"),
+  );
+  expect(kinds(threeAdded)).toEqual(["suppression-added", "suppression-added", "suppression-added"]);
+
+  // And the reindent this netting exists for is still forgiven: one out, one in.
+  const oneForOne = diffOf(
+    "src/pay/refund.ts",
+    8,
+    [`-${IGNORE}`, "   const total = sum(order.lines);", `+${IGNORE}`, "   ledger.post(total);"].join("\n"),
+  );
+  expect(kinds(oneForOne)).toEqual([]);
 });
 
 test("a suppression marker inside a string literal is not reported", () => {

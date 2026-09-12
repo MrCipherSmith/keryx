@@ -280,6 +280,39 @@ test("a diff file that cannot be read exits 2, distinct from a finding's 1", asy
   expect(process.exitCode).toBe(1);
 });
 
+test("a --diff whose value the shell dropped is refused, not answered as a scan", async () => {
+  // T23/4. `keryx review floor --diff --json` is what an unquoted empty variable
+  // expands to in CI. `optionValue` reads the flag as absent, so the command
+  // fell back to the working tree. Run in this repository against the unfixed
+  // command it answered `{"outcome":"scanned","scanned":{"files":8,…}}` and exit
+  // 0 — a confident scan of something nobody asked about, from the command whose
+  // whole contract is that its exit code can be trusted. Here, with no
+  // repository to fall back to, the same invocation answered `cannot-scan` and
+  // exit 2. Neither is a refusal, and only a refusal is true.
+  await reviewCommand(["floor", "--diff", "--json"]);
+
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--diff");
+  // 1 and not 2: the guard was never asked a question it could answer, so this
+  // is a validation error, not "could not tell".
+  expect(logs.join("\n")).not.toContain("scanned");
+  expect(logs.join("\n")).not.toContain("Floor guard");
+});
+
+test("a --ref with nothing after it, or an empty one, is refused the same way", async () => {
+  await reviewCommand(["floor", "--ref"]);
+  expect(process.exitCode).toBe(1);
+  expect(errors.join("\n")).toContain("--ref");
+
+  process.exitCode = 0;
+  errors = [];
+  logs = [];
+  // The quoted spelling of the same CI accident: the token survives, empty.
+  await reviewCommand(["floor", "--ref", "", "--json"]);
+  expect(process.exitCode).toBe(1);
+  expect(logs.join("\n")).toBe("");
+});
+
 test("a bad flag value stays 1: getting the invocation wrong is not 'cannot tell'", async () => {
   const file = await diffFile("weakened.diff", WEAKENED);
   await reviewCommand(["floor", "--diff", file, "--context", "not-a-number"]);

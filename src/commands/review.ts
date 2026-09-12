@@ -240,6 +240,37 @@ const SCOPE_FLAGS = [
  */
 const FLOOR_FLAGS = ["--ref", "--base", "--diff", "--context", "--json", "--report-only"] as const;
 
+/**
+ * The `floor` flags that are meaningless without a value.
+ *
+ * `keryx review floor --diff --json` — which is what an unquoted empty variable
+ * in CI expands to — read `--diff` as absent, diffed the working tree instead,
+ * and answered `outcome: "scanned"`, `scanned: { files: 12, … }`, exit 0. A
+ * confident scan of the wrong thing, from a command whose entire contract is
+ * that its exit code can be trusted. Refused rather than guessed, and refused as
+ * a VALIDATION error (exit 1) rather than `cannot-scan` (exit 2): the guard was
+ * never asked a question it could answer.
+ *
+ * Floor only. `scope` reads the same flags through the same {@link optionValue}
+ * and has the same hole, but it is published and always exits 0; changing it is
+ * a separate task.
+ */
+const FLOOR_VALUE_FLAGS = ["--ref", "--base", "--diff", "--context"] as const;
+
+function rejectValuelessOptions(args: readonly string[], valueFlags: readonly string[], usage: string): void {
+  const empty = flagTokens(args)
+    .filter((token) => valueFlags.includes(token.name))
+    .filter((token) => token.value === undefined || token.value.trim().length === 0)
+    .map((token) => token.name);
+  if (empty.length > 0) {
+    throw new Error(
+      `Option${empty.length > 1 ? "s" : ""} without a value for \`keryx review ${usage}\`: ${[...new Set(empty)].join(", ")}. ` +
+        "Each of these takes a value, and the next token is another flag, absent or empty — usually an unquoted shell variable that " +
+        "expanded to nothing. Refused rather than treated as omitted: the fallback would scan something else and report success.",
+    );
+  }
+}
+
 const BLAST_RADIUS_FLAGS = [
   "--ref",
   "--base",
@@ -1644,17 +1675,20 @@ async function runScope(args: string[]): Promise<void> {
  *   that fails — the guard could not look — is **2**, with
  *   `{ outcome: "cannot-scan", error }` on stdout under `--json`, mirroring
  *   `keryx memory search`'s `store-unreadable` (`src/commands/memory.ts:188-196`);
- * - a bad flag or a bad `--context` value is a VALIDATION error and stays **1**,
- *   which is the same split `memory search` draws;
+ * - a bad flag, a bad `--context` value, or a value-taking flag whose value the
+ *   shell dropped ({@link FLOOR_VALUE_FLAGS}) is a VALIDATION error and stays
+ *   **1**, which is the same split `memory search` draws;
  * - a finding is **1**; a clean scan is **0**.
  *
  * Free to do today and breaking tomorrow: `keryx review floor` is in no released
  * tag and nothing in this repository or its CI gates on it yet.
  */
 async function runFloor(args: string[]): Promise<void> {
-  // Outside the try on purpose: an unknown flag and an unparseable --context are
-  // the caller getting the invocation wrong, not the guard being unable to look.
+  // Outside the try on purpose: an unknown flag, a flag whose value was dropped
+  // and an unparseable --context are the caller getting the invocation wrong,
+  // not the guard being unable to look.
   rejectUnknownFlags(args, FLOOR_FLAGS, "floor");
+  rejectValuelessOptions(args, FLOOR_VALUE_FLAGS, "floor");
   const contextLines = parseContextLines(optionValue(args, "--context"));
   const asJson = args.includes("--json");
   const diffFile = optionValue(args, "--diff");

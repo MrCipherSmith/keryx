@@ -61,6 +61,18 @@
  *   at all, and neither does a number with no name in front of it at all — a
  *   renumbered markdown list, an argument after a comma. A bare number moving
  *   is not evidence, and this module refuses to pretend it is.
+ * - **A bar named only by the ASSERTION around it.** `expect(score.recall)
+ *   .toBe(1)` becoming `.toBe(0)` is silent: the identifier adjacent to the
+ *   number is `toBe`, and `recall` is a property of the subject, not the name of
+ *   the literal. Measured, not supposed — it is one of the three non-list
+ *   findings whole-line reading produced over the window in
+ *   {@link detectLoweredThresholds}, and the only one of the three the narrowing
+ *   gave up. Reading back through a matcher to its subject is a matcher taxonomy,
+ *   which is the same larger claim this module declines above.
+ * - **A test table built by a call.** {@link DISABLED_CALL} allows an argument
+ *   list on a chained modifier, but a paren-free one: `describe.each(cases).skip(`
+ *   fires and `describe.each(build(x)).skip(` does not. Balanced parentheses are
+ *   a parser's job.
  * - **A resource CEILING that is also a real bar.** `maxFailedRows: 0 -> 50`
  *   is silent, because `rows` is a capacity word and `max` is a ceiling; see
  *   {@link thresholdDirection} for why that asymmetry is deliberate and why the
@@ -397,6 +409,47 @@ function numbersOf(text: string): NumberHit[] {
  */
 const KEY_SEPARATORS = /[\s:=(["'`{<]*$/;
 const TRAILING_IDENTIFIER = /[A-Za-z0-9_$.-]+$/;
+/** A constant index between the key and its value: `minScores[0] = 80`. */
+const TRAILING_INDEX = /\[\s*[0-9]*\s*\]$/;
+/** A separator through which the identifier further left ENCLOSES this one. */
+const OPENS_CONTAINER = /[{([<]/;
+
+/**
+ * Words that state a number's TYPE rather than what it measures.
+ *
+ * `const minCoverage: number = 80` is how a threshold constant is ordinarily
+ * written in the language this repository is itself written in, and the
+ * identifier adjacent to the `80` is `number` — so reading only the adjacent
+ * token made the plainest TypeScript spelling of a coverage floor silent. These
+ * are skipped and the walk continues left rather than being read as a name:
+ * a type annotation never says whether higher is stricter.
+ */
+const TYPE_KEYWORDS = new Set([
+  "number",
+  "int",
+  "integer",
+  "float",
+  "double",
+  "long",
+  "short",
+  "decimal",
+  "bigint",
+  "boolean",
+  "bool",
+  "string",
+  "i8",
+  "i16",
+  "i32",
+  "i64",
+  "u8",
+  "u16",
+  "u32",
+  "u64",
+  "f32",
+  "f64",
+  "usize",
+  "isize",
+]);
 
 /**
  * The identifier or key the number at `index` belongs to — and nothing else on
@@ -409,18 +462,50 @@ const TRAILING_IDENTIFIER = /[A-Za-z0-9_$.-]+$/;
  *   `50` — this module's own headline example, see {@link CEILING_WORDS} — went
  *   silent, because `--max-size` elsewhere on the same line put `size` in
  *   {@link CAPACITY_WORDS}.
- * - Over the last 200 commits of `main`, whole-line reading produced 25
- *   `threshold-lowered` findings of which 24 were markdown ordered lists being
- *   renumbered: `5. Explicitly allowed global fallback skills` becoming `6.`
- *   fired on the word `allowed`, sitting four words away from the number.
+ * - Whole-line reading over the 200 commits ending at `main` (see
+ *   {@link detectLoweredThresholds} for the command and the counts) produced 25
+ *   `threshold-lowered` findings, 22 of them a renumbered list or step heading:
+ *   `5. Explicitly allowed global fallback skills` becoming `6.` fired on the
+ *   word `allowed`, sitting four words away from the number.
+ *
+ * The walk goes left from the number, and it takes up to four steps rather than
+ * one because one step lost real threshold shapes — every one of these was
+ * silent and each is an ordinary way to write a bar:
+ *
+ * - `const minCoverage: number = 80` — the adjacent identifier is the TYPE.
+ *   {@link TYPE_KEYWORDS} are stepped over, not read.
+ * - `thresholds: { global: 80 }` — the adjacent key is `global`, and the word
+ *   that says what the number is sits one container out. The walk continues to
+ *   an enclosing key only through an opener ({@link OPENS_CONTAINER}), so
+ *   `foo(bar, 5)` still attributes `5` to nothing: a comma is not an opener.
+ * - `minScores[0] = 80` — a constant index between the key and its value
+ *   ({@link TRAILING_INDEX}).
  *
  * A number with no identifier in front of it — a list marker, a bare argument
- * after a comma — yields no tokens and therefore no direction, which is the
- * honest answer rather than a guess.
+ * after a comma — still yields no tokens and therefore no direction, which is
+ * the honest answer rather than a guess.
  */
 function adjacentTokens(code: string, index: number): string[] {
-  const before = code.slice(0, index).replace(KEY_SEPARATORS, "");
-  return tokensOf(TRAILING_IDENTIFIER.exec(before)?.[0] ?? "");
+  const tokens: string[] = [];
+  let before = code.slice(0, index);
+  for (let step = 0; step < 4; step += 1) {
+    const separator = KEY_SEPARATORS.exec(before)?.[0] ?? "";
+    before = before.slice(0, before.length - separator.length).replace(TRAILING_INDEX, "");
+    const identifier = TRAILING_IDENTIFIER.exec(before)?.[0];
+    if (identifier === undefined) {
+      break;
+    }
+    before = before.slice(0, before.length - identifier.length);
+    const here = tokensOf(identifier);
+    if (here.length > 0 && here.every((token) => TYPE_KEYWORDS.has(token))) {
+      continue; // a type annotation names nothing about the bar
+    }
+    tokens.push(...here);
+    if (!OPENS_CONTAINER.test(KEY_SEPARATORS.exec(before)?.[0] ?? "")) {
+      break; // nothing encloses this key: it is the whole name
+    }
+  }
+  return tokens;
 }
 
 type ThresholdDirection = { weakenedBy: "decrease" | "increase"; word: string } | undefined;
@@ -457,18 +542,29 @@ function thresholdDirection(tokens: readonly string[]): ThresholdDirection {
 }
 
 /**
- * The one direction every moved number on the line agrees on.
+ * The one direction every NAMED moved number on the line agrees on.
  *
- * Unanimity, not a majority: if one moved number is named by a ceiling and
- * another by nothing at all, the line is doing two things at once and this
- * module cannot say which of them the reader should be asked about.
+ * Unanimity among the names, not a majority: two moved numbers whose names
+ * disagree about which way is worse are a line doing two things at once, and
+ * this module cannot say which of them the reader should be asked about.
+ *
+ * A moved number this cannot give a direction — nothing named in front of it, a
+ * name pulling both ways, a ceiling in resource units — is carried rather than
+ * voiding the line, and contributes nothing of its own. Demanding a
+ * direction from every moved number is what made `{ minCoverage: 80, count: 7 }`
+ * becoming `{ 70, 4 }` silent: `count` names nothing, so the coverage floor next
+ * to it was voided by its neighbour. Nothing is guessed about the unnamed
+ * number — its movement still has to agree in SIGN with the named one, because
+ * {@link detectLoweredThresholds} requires every moved number on the line to
+ * move the same way before anything fires. A line with no named number at all
+ * still returns `undefined`, so a renumbered markdown list stays silent.
  */
 function agreedDirection(code: string, moved: readonly { index: number }[]): ThresholdDirection {
   let decided: ThresholdDirection;
   for (const pair of moved) {
     const here = thresholdDirection(adjacentTokens(code, pair.index));
     if (here === undefined) {
-      return undefined;
+      continue;
     }
     if (decided === undefined) {
       decided = here;
@@ -495,24 +591,50 @@ const COMMENTED_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
  *    positional and total. Compared on CODE ({@link codeOf}), not on the raw
  *    line: a trailing comment added in the same edit must not break the pair,
  *    or the evasion is "lower the number and explain yourself on the same line".
- * 2. **A named direction.** The identifier ADJACENT to each moved number must
- *    name a floor or a ceiling ({@link FLOOR_WORDS}, {@link CEILING_WORDS}), and
- *    only the direction that weakens THAT kind of number fires. A coverage
- *    minimum moving up is silent; a timeout moving down is silent. A bare
- *    `count: 5` -> `count: 3` is silent in both directions, because its name
- *    does not say which way is worse — and so is `5.` -> `6.` in a renumbered
- *    markdown list, which has no name in front of it at all.
+ * 2. **A named direction.** The identifier the moved number BELONGS to — found
+ *    by walking left from it, see {@link adjacentTokens} — must name a floor or
+ *    a ceiling ({@link FLOOR_WORDS}, {@link CEILING_WORDS}), and only the
+ *    direction that weakens THAT kind of number fires. A coverage minimum moving
+ *    up is silent; a timeout moving down is silent. A line whose every moved
+ *    number is unnamed is silent in both directions — `count: 5` -> `count: 3`,
+ *    and `5.` -> `6.` in a renumbered markdown list, which has no name in front
+ *    of it at all.
  * 3. **An unmixed move.** If some numbers on the line went up and others went
  *    down, nothing fires: `retry(3, 100)` -> `retry(5, 50)` is a redesign, and
  *    reporting half of it as a weakening would be a claim this module cannot
  *    support. {@link agreedDirection} adds the same demand to the naming: two
- *    moved numbers whose names disagree about which way is worse fire nothing.
+ *    moved numbers whose NAMES disagree about which way is worse fire nothing.
+ *    An unnamed number no longer voids its named neighbour — it is still bound
+ *    by this rule, so `{ minCoverage: 80, count: 7 }` -> `{ 70, 4 }` fires and
+ *    `{ 70, 9 }` does not.
  *
  * Residual false positives, measured and accepted: `limit` and `max` are
  * ordinary words, so `limit: 10` -> `limit: 100` in a pagination query fires.
  * That is the shape of noise this design chooses, because the alternative — a
  * whitelist of known config keys — is silent on every threshold a project
  * invents for itself.
+ *
+ * ## The window, and how to re-derive it
+ *
+ * The 200 commits ending at `main` = `5d5e1acc`, each read as
+ * `git diff <sha>^ <sha> -U3` and scoped with
+ * `buildReviewScope(diff, { contextLines: 3 })`; the merge commits among them
+ * contribute their first-parent diff, which is what that command gives:
+ *
+ * | reading | `threshold-lowered` |
+ * |---|---|
+ * | whole line | **25** — 22 a renumbered ordered list (14, `5.` -> `6.`) or step heading (8, `Step 9:` -> `Step 7:`); 3 not a list |
+ * | adjacent identifier only | **2** |
+ * | the walk in {@link adjacentTokens}, as it stands now | **2** |
+ *
+ * Both survivors are the same edit in two copies of one file,
+ * `"maximum": 2` -> `3` in a JSON schema — a real ceiling, correctly reported.
+ * Of the three non-list findings whole-line reading produced, the narrowing kept
+ * those two and gave up `expect(score.recall).toBe(1)` -> `toBe(0)`, which is
+ * named in NOT DETECTED above rather than left unsaid. The widenings in this
+ * round add nothing over the window: all four kinds produce a byte-identical
+ * finding list before and after them (37 `suppression-added`, 17
+ * `assertion-removed`, 11 `test-disabled`, 2 `threshold-lowered`).
  */
 function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLine[]): FloorFinding[] {
   const findings: FloorFinding[] = [];
@@ -591,14 +713,31 @@ function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLin
  *   worse }` both fired, and this branch ships thousands of lines of prose about
  *   skipped tests. A sentence does not call anything.
  *
- * One chained modifier segment is allowed before the terminal keyword, because
- * `test.concurrent.skip(…)` and `describe.each(cases).skip` are jest/vitest API
- * and the first spelling is common enough that missing it would be a hole a
- * reader could drive a suite through. `skipIf`/`runIf` are vitest's conditional
- * forms, which take their predicate first and the test body in a second call.
+ * Modifier segments are allowed on BOTH sides of the disabling keyword, and a
+ * segment may carry an argument list. One bare segment before the keyword was
+ * the first rule, and it did not match the shapes its own comment cited: the
+ * pattern admitted no call between segments, so the table-driven spellings
+ * (`describe.each(cases).skip(…)`, and the one jest and vitest actually
+ * document, `describe.skip.each(table)(…)`) were quiet, and so was a second
+ * chained modifier (`test.concurrent.failing.skip(…)`). Each is a whole table of
+ * tests turned off by one added line, which is the largest thing this detector
+ * can be asked to see, so the pattern was widened to the claim rather than the
+ * claim narrowed to the pattern. The narrowings that matter — statement
+ * position, and a terminal `(` — are untouched, and the argument list is
+ * paren-free by design, because this is a regex and not a parser: a computed
+ * table, `describe.each(build(x)).skip(`, is in NOT DETECTED.
+ *
+ * `skipIf`/`runIf` are vitest's conditional forms, which take their predicate
+ * first and the test body in a second call.
  */
-const DISABLED_CALL =
-  /(?:^|[{;}]|=>)\s*((?:x(?:it|test|describe|context|specify))\s*\(|(?:it|test|describe|context|suite|scenario|specify)\s*(?:\.\s*[A-Za-z_$][A-Za-z0-9_$]*)?\s*\.\s*(?:skip|only|todo|failing|skipIf|runIf)\s*\()/;
+const MODIFIER_SEGMENT = /(?:\s*\.\s*[A-Za-z_$][A-Za-z0-9_$]*(?:\s*\([^()]*\))?)/.source;
+const DISABLED_CALL = new RegExp(
+  `(?:^|[{;}]|=>)\\s*((?:x(?:it|test|describe|context|specify))\\s*\\(|` +
+    `(?:it|test|describe|context|suite|scenario|specify)` +
+    `${MODIFIER_SEGMENT}{0,2}` +
+    `\\s*\\.\\s*(?:skip|only|todo|failing|skipIf|runIf)` +
+    `${MODIFIER_SEGMENT}{0,2}\\s*\\()`,
+);
 
 /** Annotation and attribute forms, which are always their own line. */
 const DISABLED_ANNOTATION =
@@ -774,12 +913,21 @@ const ANNOTATION_MARKERS = new Set(["@suppresswarnings", "@suppress", "#[allow("
  *   never reaches a comment opener.
  *
  * A marker that merely MOVED is not added. {@link detectRemovedAssertions} nets
- * per region on purpose and this now does the same, for the same reason: a
- * region that deletes an `eslint-disable-next-line` and re-adds the identical
- * line two lines down has changed nothing a reader needs to be asked about, and
- * a guard that demands a justification for a reindent is a guard that gets
- * switched off. Matched on the trimmed text, so only a byte-identical
- * suppression is forgiven — a marker whose rule list grew is still a finding.
+ * per region on purpose and this does the same, for the same reason: a region
+ * that deletes an `eslint-disable-next-line` and re-adds the identical line two
+ * lines down has changed nothing a reader needs to be asked about, and a guard
+ * that demands a justification for a reindent is a guard that gets switched off.
+ * Matched on the trimmed text, so only a byte-identical suppression is forgiven
+ * — a marker whose rule list grew is still a finding.
+ *
+ * It nets by COUNT, which is what "the same way as {@link detectRemovedAssertions}"
+ * has to mean. Set membership was the first spelling and it was not netting at
+ * all: one removed marker forgave every identical marker the region added, so a
+ * region deleting one stale `@ts-ignore` and adding three reported nothing while
+ * the same three with nothing removed reported three. Deleting one stale marker
+ * bought unlimited new ones inside the window — the exact evasion this module is
+ * supposed to be hard to slip past. Each removal now forgives exactly one
+ * addition, and the fourth identical marker is a finding.
  *
  * What that misses: a suppression written inside a string that is later
  * evaluated, and a marker in a language whose comments this does not recognise.
@@ -788,9 +936,17 @@ const ANNOTATION_MARKERS = new Set(["@suppresswarnings", "@suppress", "#[allow("
  */
 function detectAddedSuppressions(region: ScopedRegion, lines: readonly RegionLine[]): FloorFinding[] {
   const findings: FloorFinding[] = [];
-  const removedHere = new Set(lines.filter((line) => line.kind === "del").map((line) => line.text.trim()));
+  const removedHere = new Map<string, number>();
   for (const line of lines) {
-    if (line.kind !== "add" || removedHere.has(line.text.trim())) {
+    if (line.kind !== "del") {
+      continue;
+    }
+    const key = line.text.trim();
+    removedHere.set(key, (removedHere.get(key) ?? 0) + 1);
+  }
+
+  for (const line of lines) {
+    if (line.kind !== "add") {
       continue;
     }
     const lowered = line.text.toLowerCase();
@@ -804,6 +960,14 @@ function detectAddedSuppressions(region: ScopedRegion, lines: readonly RegionLin
       const positioned = annotation ? prefix.trim().length === 0 : COMMENT_OPENER.test(prefix) && !/["'`]/.test(prefix);
       if (!positioned) {
         continue;
+      }
+      // Spend one removal of the identical line, if the region still has one.
+      // Checked here rather than before the marker scan so that an ordinary line
+      // which happens to repeat does not consume a suppression's allowance.
+      const outstanding = removedHere.get(line.text.trim()) ?? 0;
+      if (outstanding > 0) {
+        removedHere.set(line.text.trim(), outstanding - 1);
+        break;
       }
       findings.push({
         kind: "suppression-added",

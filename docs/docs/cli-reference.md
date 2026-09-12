@@ -1815,6 +1815,13 @@ parsing English. Getting the *invocation* wrong — an unknown flag, a `--contex
 that is not a number — stays **1**; that is a validation error, not an inability
 to tell.
 
+`--ref`, `--base`, `--diff` and `--context` are also refused when their value is
+**missing or empty**: `keryx review floor --diff --json`, which is what an
+unquoted empty variable expands to in CI, used to read as "no `--diff`", scan the
+working tree instead and report `"outcome": "scanned"` with exit **0**. That is
+the one answer this command must never give by accident, so a value-taking flag
+whose next token is another flag, absent, or empty exits **1** and scans nothing.
+
 In a `--depth 1` clone (which is what `actions/checkout` gives you by default)
 `--ref` has no merge base to resolve against. The command says so and names the
 fix: `git fetch --unshallow`, or `fetch-depth: 0` on the checkout step.
@@ -1830,16 +1837,25 @@ as the damage gets switched off:
   (`max`, `limit`, `timeout`, `retries`, `tolerance`, …) that moved **up**. Only
   that identifier is read, not the whole line: `5.` → `6.` in a renumbered
   markdown list is silent even though the sentence contains the word `allowed`.
-  A coverage minimum raised is silent, a timeout shortened is silent, and a bare
-  `rows: 50` → `rows: 10` is silent in both directions: nothing names it. A
+  Finding it is a short walk left from the number rather than one token, so a
+  type annotation (`const minCoverage: number = 80`), an enclosing key
+  (`thresholds: { global: 80 }`) and a constant index (`minScores[0] = 80`) all
+  still name their number — but a comma is not an opener, so `f(scores, 80)`
+  borrows nothing from `f`. A coverage minimum raised is silent, a timeout
+  shortened is silent, and a bare `rows: 50` → `rows: 10` is silent in both
+  directions: nothing names it. An unnamed number beside a named one no longer
+  silences it, but must move the same way. A
   *ceiling* in resource units (`maxOutputTokens`, `maxRows`) is a budget and is
   silent; a *floor* in the same units (`minItems: 3` → `0`) is a demand removed
   and does fire. Residual noise, accepted: `limit` and `max` are ordinary words,
   so a pagination `limit` raised does fire.
 - **Test disabled.** `.skip`, `.only`, `.todo`, `.failing`, vitest's `.skipIf` /
   `.runIf`, `xit`/`xdescribe`, `@pytest.mark.skip`, `t.Skip(` and friends, on an
-  **added** line, in statement position, **called**. One chained modifier is
-  allowed, so `test.concurrent.skip(…)` fires. `.only` counts: it disables every
+  **added** line, in statement position, **called**. Chained modifiers are
+  allowed on either side of the keyword and may carry a paren-free argument list,
+  so `test.concurrent.skip(…)`, `describe.skip.each(table)(…)` and
+  `describe.each(cases).skip(…)` all fire; a computed table,
+  `describe.each(build(x)).skip(`, does not. `.only` counts: it disables every
   other test in the file. A `.skip` being *removed* never fires, and neither does
   a marker inside a string, mid-expression, or in a sentence that merely mentions
   it — the required `(` is what keeps prose about skipped tests out.
@@ -1853,7 +1869,9 @@ as the damage gets switched off:
   the rest — on an added line, after a comment opener, with no quote before it.
   A marker listed in a string array is not a suppression, a suppression being
   *deleted* is not a finding, and a suppression that merely **moved** — removed
-  and re-added byte-identical inside the same region — is not "added".
+  and re-added byte-identical inside the same region — is not "added". That
+  forgiveness is counted: each removal pays for exactly one identical addition,
+  so a region that deletes one marker and adds three reports two.
 
 It sees only what the pre-filter retained, so a threshold lowered inside a
 vendored or generated path is invisible by construction — and it depends on
