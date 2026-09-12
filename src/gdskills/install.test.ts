@@ -349,12 +349,15 @@ test("a skill directory reached through a symlink is not swept, and the target k
 
 // Round-5 minor: the comment above used to say a `skipped-dir` outcome could
 // not be observed through an install at all. It can — one level up. A link at a
-// CATEGORY leaves `<skillsRoot>/<category>/<name>` a real directory that
-// `mkdir(..., { recursive: true })` just created, so the copy never meets a
-// non-directory destination and the install runs to completion on every
-// platform. That makes the carry-through from outcome to `warnings` testable
-// end to end, which is the half the direct-sweep test cannot reach.
-test("a symlinked category is refused by a real install, and the refusal reaches warnings", async () => {
+// CATEGORY leaves `<skillsRoot>/<category>/<name>` a real directory, because
+// `mkdir(..., { recursive: true })` follows the link and creates it INSIDE the
+// target. So the copy never meets a non-directory destination: it writes
+// through the link, into someone else's tree, and the install runs to
+// completion on every platform. Only the sweep refuses — deleting through a
+// link is the operation keryx will not perform. That asymmetry is the point of
+// this test, and it makes the carry-through from outcome to `warnings`
+// testable end to end, which is the half the direct-sweep test cannot reach.
+test("a symlinked category: the copy follows the link, the sweep refuses to, and the refusal reaches warnings", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
   try {
     const metaprojectRoot = path.join(root, ".metaproject");
@@ -378,7 +381,11 @@ test("a symlinked category is refused by a real install, and the refusal reaches
 
     const result = await installGdskills(metaprojectRoot, "recommended");
 
-    // The install completed — this is the shape `fs.cp` survives.
+    // The install completed — this is the shape `fs.cp` survives — and it
+    // COPIED THROUGH the link: the canonical build now sits in the target, not
+    // in `.metaproject`. Writing through a link is not what keryx refuses;
+    // deleting through one is.
+    expect(existsSync(path.join(relocated, "job-orchestrator", "SKILL.md"))).toBe(true);
     expect(await readFile(path.join(relocated, "job-orchestrator", "SKILL.zed.md"), "utf8")).toBe(
       "# hand-written, not keryx's\n",
     );
