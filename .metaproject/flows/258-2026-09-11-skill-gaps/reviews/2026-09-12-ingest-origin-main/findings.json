@@ -1,0 +1,373 @@
+[
+  {
+    "id": "R1-M1",
+    "reviewer": "round-1-code",
+    "severity": "major",
+    "problem": "review floor exits 1 for every cannot-tell case, so a caller cannot distinguish an unresolvable ref from a lowered bar, and under --json the failure puts nothing on stdout.",
+    "impact": "A gate consuming this command reads an infrastructure failure as a finding, and `scanned` — the field that separates zero findings from zero input — is absent exactly on the paths where it matters.",
+    "suggested_fix": "Exit 2 for cannot-tell with a cannot-scan payload on stdout; keep 1 for a malformed invocation.",
+    "evidence": "Measured: --ref does-not-exist-ref --json exits 1 with 0 bytes on stdout; --diff /nope/missing.diff --json the same; a real finding also exits 1. cli-interface-design.mdc:25-58, added on this branch, reserves 2 for cannot-tell.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 400,
+    "class_scope": {
+      "sites": [
+        "src/commands/review.ts runFloor",
+        "src/commands/review.ts shared catch"
+      ],
+      "enumeration_method": "The floor command is the only new exit-code surface on this branch; its two exit paths were read and executed."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1, the commit that fixes this finding. Measured the whole exit matrix: an unresolvable ref, a missing --diff, a directory passed as --diff, an unreadable file, git absent from PATH and running outside a repository all exit 2 with {\"schemaVersion\":1,\"outcome\":\"cannot-scan\"} on stdout and stderr empty; an unknown flag and a malformed --context still exit 1. The outcome discriminant is present on both arms, so scanned is never simply absent.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9c9583d1 — a cannot-tell exits 2 with a cannot-scan payload on stdout; a malformed invocation still exits 1."
+    }
+  },
+  {
+    "id": "R1-M2",
+    "reviewer": "round-1-code",
+    "severity": "major",
+    "problem": "The capacity carve-out tokenises the whole line, so an unrelated word or a trailing comment suppresses a real weakening.",
+    "impact": "The module's own headline example is silent, and the guard can be evaded by appending a comment — a guard whose whole purpose is to be hard to slip past.",
+    "suggested_fix": "Read only the identifier adjacent to the number that moved, and strip trailing comments before tokenising.",
+    "evidence": "Three fixtures returning nothing: --max-warnings 0->50 beside --max-size; minCoverage 80->70 with a trailing comment; minItems 3->0.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 303,
+    "class_scope": {
+      "sites": [
+        "src/review/floor.ts thresholdDirection",
+        "src/review/floor.ts CAPACITY_WORDS"
+      ],
+      "enumeration_method": "The carve-out has one call site; both it and the tokeniser it feeds were executed against fixtures."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. All three silenced fixtures now fire, and the re-measurement over 200 commits of main reproduces: 25 threshold findings on the whole line against 2 for the narrowed reader, with 22 of the 25 being renumbered lists or step headings. maxOutputTokens 16->256, the false positive the carve-out exists for, stays silent. --max-warnings 0->50 fires under the narrow reader and is lost under the wide one.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9c9583d1 — only the identifier adjacent to the moved number is read, trailing comments are stripped, and the carve-out suppresses a raised ceiling but never a relaxed floor; re-measured over 200 commits of main."
+    }
+  },
+  {
+    "id": "R1-M3",
+    "reviewer": "round-1-rules",
+    "severity": "major",
+    "problem": "Both keryx review citations point at prose and a mid-comment; the functions moved about 63 lines when the floor work landed.",
+    "impact": "A reader following a citation to the wrong line stops trusting the rest, and this rule is entirely built on citations.",
+    "suggested_fix": "Cite the symbols, which are unique in the file and do not move.",
+    "evidence": "reportCrossFamilyReviewProblems is at review.ts:1983 and reportFilterStatsProblems at :1994; the rule says :1920 and :1931.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
+    "line": 51,
+    "class_scope": {
+      "sites": [
+        "cli-interface-design.mdc:51-53"
+      ],
+      "enumeration_method": "Every citation in both new rules was opened and compared; these two were the only dead ones."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. Both symbols exist and each is defined exactly once, at review.ts:2053 and :2064; the rule now names them instead of line numbers.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b3fe5f4f — both citations name the symbols, which are unique in review.ts and do not move with the file."
+    }
+  },
+  {
+    "id": "R1-M4",
+    "reviewer": "round-1-rules",
+    "severity": "major",
+    "problem": "The rule states that none of the eleven JSON.stringify sites carries a version; three print a versioned type.",
+    "impact": "The rule's headline example of getting versioning wrong overstates, which costs it the authority it is lending.",
+    "suggested_fix": "State the eleven/three/eight split and make the sharper point: the envelopes are unversioned and verify --all is a bare array.",
+    "evidence": "skills verify --all --json emits [{\"schemaVersion\":1,…}]; LearningProposal and ProjectSkillVerificationReport declare their versions.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/cli-interface-design.mdc",
+    "line": 127,
+    "class_scope": {
+      "sites": [
+        "cli-interface-design.mdc:127-136"
+      ],
+      "enumeration_method": "All eleven serialisation sites were opened and their printed types traced to their declarations."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. Counted independently: eleven JSON.stringify sites in skills.ts, three printing versioned types (LearningProposal at :785, ProjectSkillVerificationReport at :883 and :989), eight unversioned. The rule now states that split and makes the envelope point; the export.ts and sync.ts versions are on manifest files rather than printed results, so they are correctly not cited as counter-examples.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b3fe5f4f — the rule states the eleven/three/eight split and makes the envelope point instead of the false blanket claim."
+    }
+  },
+  {
+    "id": "R1-m1",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "The disabled-test detector fires on prose about skipped tests, and its docstring claims it does not.",
+    "impact": "This branch ships thousands of lines of prose about skipped tests; the guard would fire on documentation.",
+    "suggested_fix": "Require a call after the token and delete the overstated sentence.",
+    "evidence": "'We ban this; it.skip is the usual culprit.' in a .md path fires.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 415,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. Both prose repros are silent while it.skip( in the same .md path still fires, so the change is a narrowing rather than an off switch; the overstated sentence is gone.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9c9583d1 — the detector requires a call after the token; prose about skipped tests is silent and the overstated sentence is gone."
+    }
+  },
+  {
+    "id": "R1-m2",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "Mainstream disable forms are missed and undeclared: test.concurrent.skip and describe.skipIf.",
+    "impact": "A disabled test in the common spelling passes the guard.",
+    "suggested_fix": "Permit a chained modifier segment and add skipIf/runIf.",
+    "evidence": "Both forms return nothing; both are jest/vitest API.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 421,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. test.concurrent.skip( and it.skipIf( fire. Adding the forms also caught a real disabled test in main's own history, taking test-disabled from 8 to 11 over 200 commits with no prose losses.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9c9583d1 — chained modifiers and skipIf/runIf are permitted; adding them caught a real disabled test in main's own history."
+    }
+  },
+  {
+    "id": "R1-m3",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "A shallow clone is refused with advice that does not apply — the histories do share, the clone is truncated.",
+    "impact": "actions/checkout defaults to depth 1, which is exactly where this gate runs, and the message sends the operator the wrong way.",
+    "suggested_fix": "Detect a shallow repository and prescribe fetch --unshallow or fetch-depth: 0.",
+    "evidence": "A --depth 1 clone makes merge-base return rc=1 and the command prints the generic no-common-ancestor advice.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 1878,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. A real --depth 1 clone now produces a message naming the clone as shallow, stating that the histories do share, and prescribing fetch --unshallow or fetch-depth: 0; the old generic advice is absent.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9c9583d1 — a shallow clone is detected and told to fetch --unshallow or set fetch-depth: 0."
+    }
+  },
+  {
+    "id": "R1-m4",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "A suppression that merely moved within a region is reported as added.",
+    "impact": "A reindent produces a finding the diff cannot answer, which trains the reader to ignore the kind.",
+    "suggested_fix": "Skip an added marker whose trimmed text matches a removed line in the same region.",
+    "evidence": "Removing an eslint-disable-next-line and re-adding it two lines down yields suppression-added.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 602,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m4",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1 and NOT closed there: the netting matched by set membership rather than by count, so a region removing one marker and adding three identical ones reported nothing while the same three alone reported three. Deleting one stale marker bought the rest. Closed in 9da95727, which spends one removal per identical addition.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — the netting spends one removal per identical addition; the first attempt matched by set membership and round 2 caught that it had not closed."
+    }
+  },
+  {
+    "id": "R1-m5",
+    "reviewer": "round-1-skills",
+    "severity": "minor",
+    "problem": "`revert` is written in backticks beside `minor`, so it reads as a severity; the enum is blocker|major|minor|info.",
+    "impact": "A reviewer taking it literally emits a payload that fails schema validation; one that notices has no severity for the finding the law exists to create.",
+    "suggested_fix": "Name a real severity and make the revert the suggested fix.",
+    "evidence": "reviewer-finding.schema.json:57-60 enumerates four values and revert is not among them.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/review/review-performance/SKILL.md",
+    "line": 240,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9c9583d1. The law now reads 'A neutral pair is major, and the fix it suggests is a revert'; major requires class_scope and the skill explicitly allows a single-entry sites list, so it is satisfiable. A sweep of both skill trees for backticked severity-shaped words found one remaining hit, which is a security scale rather than this enum.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c601a6b0 — a neutral pair is a major whose suggested fix is a revert; both skill trees swept for other severity-shaped words."
+    }
+  },
+  {
+    "id": "R1-m6",
+    "reviewer": "round-1-skills",
+    "severity": "minor",
+    "problem": "Six passages restate the clause cli-interface-design.mdc owns, including the same quotes and the same file:line pins.",
+    "impact": "Two copies of the same line numbers drift apart on the next refactor, and three citations on this branch already went stale.",
+    "suggested_fix": "Keep the skill's own material and replace the restatements with a pointer.",
+    "evidence": "The skill names the rule as owner at :47-49 and then repeats rule :165-197 verbatim.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/quality/deprecation-path/SKILL.md",
+    "line": 60,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. The pointers land: rule section 5 carries the alias shape, the shipped example, refuse-by-name and the unannounced-alias counter-example. Nothing load-bearing was dropped with the restatements.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c601a6b0 — the restated passages are pointers now, and the freed lines went back into the skill's own material."
+    }
+  },
+  {
+    "id": "R1-m7",
+    "reviewer": "round-1-skills",
+    "severity": "minor",
+    "problem": "The skill claims the repo already provides the tooling and then prescribes a CLI that appears here only as a fixture string.",
+    "impact": "The file ships into every project; an agent without that tool is told rank 2 exists and given no way to reach it.",
+    "suggested_fix": "Make rank 2 a checked list ending in the documentation shipped inside the installed artefact, and say when rank 2 is unavailable.",
+    "evidence": "ctx7 appears only in src/mcp-servers/compat.table.test.ts; it is not a dependency and keryx init does not install it.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/quality/api-truth/SKILL.md",
+    "line": 115,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. Rank 2 is now a checked list ending 'If that is empty too, rank 2 is unavailable here: say so and rely on rank 1', so it is usable by an agent with none of the three sources.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c601a6b0 — rank 2 is a checked list ending in the documentation shipped inside the installed artefact, and says when rank 2 is unavailable."
+    }
+  },
+  {
+    "id": "R1-m8",
+    "reviewer": "round-1-skills",
+    "severity": "minor",
+    "problem": "Cites Phase 2.3 for story patterns; 2.3 reads module neighbours and stories are read in 2.2, which after an earlier cut no longer says to extract them.",
+    "impact": "A later phase cites something that no longer exists.",
+    "suggested_fix": "Point at 2.2 and restore the extraction instruction there.",
+    "evidence": "The sibling line at :290 says 2.2; 2.2's bullets mention only test patterns.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/orchestration/task-implementer/SKILL.md",
+    "line": 293,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. The citation points at 2.2, and 2.2's bullet was extended in place to say story patterns are extracted there, so the phase 4.4 cites now instructs what 4.4 expects.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c601a6b0 — the citation points at 2.2, and 2.2 now says story patterns are extracted there."
+    }
+  },
+  {
+    "id": "R1-m9",
+    "reviewer": "round-1-skills",
+    "severity": "minor",
+    "problem": "Verification requires the notice to state when the old spelling stops, while the shipped example it cites prints no end date.",
+    "impact": "The first agent applying the skill invents a version to satisfy it.",
+    "suggested_fix": "Allow 'no removal is scheduled' as an explicit answer.",
+    "evidence": "announceRename at src/commands/mcp.ts:92 prints deprecation without a date.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/quality/deprecation-path/SKILL.md",
+    "line": 249,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. Three legal answers are named, including 'no removal is scheduled' in those words, with announceRename cited as the shipped example of the third.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c601a6b0 — three legal answers, including 'no removal is scheduled' in those words, with the shipped example cited."
+    }
+  },
+  {
+    "id": "R1-m10",
+    "reviewer": "round-1-rules",
+    "severity": "minor",
+    "problem": "The prose says four rules and three skills; the table below lists six rules and two skills.",
+    "impact": "A rule that miscounts its own table invites doubt about the rest.",
+    "suggested_fix": "Count the table.",
+    "evidence": "Eight rows: six rules, two skills.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/definition-of-done.mdc",
+    "line": 11,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. The table holds six rules and two skills and the prose now says so.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b3fe5f4f — counted: six rules and two skills."
+    }
+  },
+  {
+    "id": "R1-m11",
+    "reviewer": "round-1-rules",
+    "severity": "minor",
+    "problem": "Flow 257's adapted techniques carry no credit anywhere, and the plan reads as though attribution is complete.",
+    "impact": "AC11's standard is applied to this flow and silently not to the previous one.",
+    "suggested_fix": "Record which of 257's files are owed a credit and which took nothing.",
+    "evidence": "addyosmani appears in no file that flow 257 touched.",
+    "confidence": "high",
+    "file": "docs/plans/skills-quality-program.md",
+    "line": 33,
+    "global_id": "2026-09-12-ingest-origin-main#R1-m11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 9c9583d1. The plan records which two of flow 257's files are owed a credit and which two took nothing, with the reason for each — bundled-eval.ts and routing-corpus.ts owed, routing-baseline.ts and skill-length-ceilings.ts not.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "b3fe5f4f — the plan records which two of flow 257's files are owed a credit and which two took nothing, with the reason for each."
+    }
+  }
+]

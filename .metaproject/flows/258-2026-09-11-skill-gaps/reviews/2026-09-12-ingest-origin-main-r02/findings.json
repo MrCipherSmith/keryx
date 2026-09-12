@@ -1,0 +1,117 @@
+[
+  {
+    "id": "R2-m1",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The suppression netting matches by set membership rather than by count, so one removed marker forgives unboundedly many added ones — and the docstring claims it nets for the same reason as the assertion detector, which nets by count.",
+    "impact": "Deleting one stale suppression buys the rest inside the same window, which is precisely the trade the guard exists to make visible.",
+    "suggested_fix": "Build a multiset of removed trimmed texts and decrement on each match.",
+    "evidence": "A region removing one @ts-ignore and adding three identical ones reports 0 findings; the same three with nothing removed reports 3.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 791,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9da95727, the commit that fixes this finding. Attacked the counting netting: removed-twice with added-once is forgiven with one spend left; removed-twice with added-three reports 1; an addition before a removal is forgiven; a leading-whitespace-only difference is forgiven as documented while an internal one is reported; removed in one region and added in a far region is reported. An ordinary repeated non-marker line cannot eat the allowance, because the spend sits after the marker match.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — a multiset of removed texts, one spend per identical addition."
+    }
+  },
+  {
+    "id": "R2-m2",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The adjacency narrowing lost threshold shapes the wide reader caught, including the ordinary TypeScript spelling of a threshold constant.",
+    "impact": "A real weakening in the language this repo is written in goes unreported, and the loss is not in the NOT DETECTED list.",
+    "suggested_fix": "Skip type-keyword tokens, let a named number carry an unnamed one, or name the losses.",
+    "evidence": "All silent at 80->70: const minCoverage: number = 80; thresholds: { global: 80 }; minScores[0] = 80; and { minCoverage: 80, count: 7 } -> { 70, 4 }.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 421,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9da95727. The four lost shapes are back: the type-annotated constant, the enclosing key, the constant index, and the pair with an unnamed neighbour. Each has a control proving the widening did not reopen the noise — a comma is still not an opener, and the markdown renumber and step heading stay silent.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — the walk steps over type keywords, strips a constant index and reaches an enclosing key; a number it cannot name no longer voids one it can."
+    }
+  },
+  {
+    "id": "R2-m3",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The stated measurement does not reproduce: the docstring says 24 of 25 were markdown ordered lists and 3 for the narrowed reader; re-measurement gives 22 renumbered lists or steps, of which 14 carry an N. marker, and 2.",
+    "impact": "A number in a comment that nobody can re-derive is the defect this whole program exists to remove, and the same wrong figure is in the commit message that shipped it.",
+    "suggested_fix": "Re-measure, write what you measured, and state the method precisely enough that the next person gets the same number.",
+    "evidence": "git log -n 200, per-commit git diff sha^ sha, contextLines 3: 25 whole-line, 2 narrowed.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 414,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9da95727. Re-derived every number by the method the docstring now states: main is 5d5e1acc, the window is unambiguous under three orderings, 25 whole-line findings of which 14 carry an N. marker and 22 are renumbered lists or step headings, 2 for the narrowed reader, and 37/17/11/2 across the four kinds. The load-bearing claim — that the finding list is byte-identical across the widening — holds under cmp.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — re-measured and rewritten with the window, the command and the context width beside the table."
+    }
+  },
+  {
+    "id": "R2-m4",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "A value-taking flag whose value was dropped — an unquoted empty variable in CI — is answered as a confident scan of the working tree with exit 0.",
+    "impact": "From the one command whose whole contract is exit-code honesty, a misconfigured CI step reports a clean bar.",
+    "suggested_fix": "Reject a --diff/--ref whose next token is another flag or absent as a validation error.",
+    "evidence": "keryx review floor --diff --json returns outcome:\"scanned\", scanned:{files:12,…}, exit 0.",
+    "confidence": "high",
+    "file": "src/commands/review.ts",
+    "line": 1660,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9da95727. --diff= exits 1, --context \"\" exits 1, --context -3 exits 1 naming the expectation, while --ref=HEAD --json still scans and exits 0 and a ref legitimately starting with a dash survives.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — a value-taking flag followed by another flag or by nothing is a validation error, exit 1, having scanned nothing."
+    }
+  },
+  {
+    "id": "R2-m5",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The docstring cites describe.each(cases).skip as the motivation for allowing chained segments, but the pattern admits no call between segments, so that exact shape is quiet.",
+    "impact": "The stated justification for a rule is a case the rule does not cover.",
+    "suggested_fix": "Allow an argument list after a modifier segment, or move the claim to NOT DETECTED.",
+    "evidence": "describe.each(cases).skip('x',…) and test.concurrent.failing.skip( are both silent.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 596,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 9da95727. describe.each(cases).skip(, describe.skip.each(table)( and test.concurrent.failing.skip( all fire, while results.skip(3), pagination.only(x), a lodash chain and prose stay silent.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9da95727 — modifier segments allowed on both sides with a paren-free argument list; two shapes that remain uncaught were added to NOT DETECTED."
+    }
+  }
+]

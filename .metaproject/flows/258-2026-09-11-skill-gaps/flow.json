@@ -9,13 +9,66 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T12:34:34.184Z",
+  "updatedAt": "2026-09-12T12:49:08.394Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:a07be52424d0cff5ad1119846c1fa4e2fd8b705f2e4569eb2e2efe24a4f072d7",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-12T12:49:07.158Z",
+      "note": "Four new bundled skills pass the gate with no exemption and no new entry in KNOWN_ROUTING_GAPS or KNOWN_DESCRIPTION_COLLISIONS: quality/root-cause, quality/fresh-eyes, quality/api-truth, quality/deprecation-path. Each carries a literal not-for clause, a Red Flags table of substantive rows unique to it, a Verification section, a ceiling entry equal to its line count, and a catalog registration whose trigger token set collides with no other skill. skills verify --bundled exit 0 over 71 skills."
+    },
+    "AC2": {
+      "at": "2026-09-12T12:49:07.275Z",
+      "note": "Each of the four has a ROUTING_CORPUS entry meeting the corpus's floors, and the record moved once, at the end of the lane: 285/287 to 305/307, with the arithmetic recorded in the comment — five rank-1 positives per skill across four skills. routing-corpus.test.ts fully green."
+    },
+    "AC3": {
+      "at": "2026-09-12T12:49:07.378Z",
+      "note": "No new skill names another skill in its description or not-for clause, so none hands away the scorer's +30 name bonus. Each of the four carries a corpus positive that quotes its own exclusion wording back and still ranks it first: root-cause 50 against 20, fresh-eyes two such cases, api-truth 90 against 80 and 80 against 40, deprecation-path 100 against 80 and 110 against 75."
+    },
+    "AC4": {
+      "at": "2026-09-12T12:49:07.480Z",
+      "note": "definition-of-done.mdc and cli-interface-design.mdc ship in rules/core, byte-identical in the mirror. The done rule names each of the eight documents that already state part of the bar and the clause each owns — six rules and two skills, counted — and every citation was opened and verified in review. The CLI rule covers exit codes, stdout versus stderr, --json stability and flag deprecation, deriving each clause from keryx's own precedent and its own contradiction. subagent-status-protocol.md was brought into agreement rather than left contradicting."
+    },
+    "AC5": {
+      "at": "2026-09-12T12:49:07.582Z",
+      "note": "keryx review floor exists, built on buildReviewScope, with four detections each carrying a firing fixture and a control. It reports nothing on a diff that only adds ordinary code. Exit 0 clean, 1 on a finding, 2 for cannot-tell with a cannot-scan payload on stdout. Measured rather than trusted: over 200 commits of main the narrowing takes threshold findings from 25 to 2, 22 of the 25 being renumbered lists or step headings, with the four per-kind counts and the finding digest reproduced independently by two reviewers."
+    },
+    "AC6": {
+      "at": "2026-09-12T12:49:07.681Z",
+      "note": "Run on this branch's own diff at every head. At 27ee602f: exit 0, no findings. Earlier it reported CENSUS_FLOOR 37 to 7, a true positive the diff already answered, and it found a defect in itself — --ref resolved as a two-dot diff, so two commits main gained while the flow ran were reported as this branch's removals. That is recorded in the journal and fixed."
+    },
+    "AC7": {
+      "at": "2026-09-12T12:49:07.782Z",
+      "note": "noticed_not_touched, assumptions and not_touched are declared in output-contract.schema.json, so a result carrying them is no longer refused by additionalProperties: false. The three shapes differ because their readers differ. task-implementer-contract, contract-enforcement and contract-keywords pass; a result carrying all three validates and one carrying an undeclared field does not; removing a declaration turns the validating case red."
+    },
+    "AC8": {
+      "at": "2026-09-12T12:49:07.883Z",
+      "note": "task-implementer's SKILL.md says what belongs in each field and, more usefully, what does not. Paid for inside the 670-line ceiling: 23 lines added, 23 cut — a pseudo-schema nothing consumes, a duplicate section sharing its number with another, and stack-specific standards that contradicted the skill's own instruction to follow the patterns found in this project."
+    },
+    "AC9": {
+      "at": "2026-09-12T12:49:07.983Z",
+      "note": "interviewer closes the gap that survived flow 257: a hedge is named back and forced to a yes or a no rather than licensing ready_to_proceed, and summary_confidence is an output field defined as the weakest answer the summary rests on. Paid for inside the 131-line ceiling. A per-question guess was considered and rejected with a reason: the A/B/C/D options the skill already mandates externalise the whole guess-space rather than anchoring on one."
+    },
+    "AC10": {
+      "at": "2026-09-12T12:49:08.084Z",
+      "note": "perf-check owns the bar because it owns the number that decides it: a neutral change is reverted, neutral is defined against measured noise rather than felt, groundwork is the only exception and is paid in advance, and the attempt is recorded in the flow journal with what was tried, the before and after, the workload, and why it did not help. review-performance cites it and does not restate it. Both files stay at their ceilings."
+    },
+    "AC11": {
+      "at": "2026-09-12T12:49:08.187Z",
+      "note": "Techniques adapted from addyosmani/agent-skills carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
+    },
+    "AC12": {
+      "at": "2026-09-12T12:49:08.292Z",
+      "note": "At 27ee602f: skills verify --bundled exit 0, rules mirror byte-identical, tsc --noEmit exit 0, eslint clean, bun test 10183 pass / 0 fail across 755 files. The baseline for this flow is the tree at ea569c92; no failure is absent from it."
+    },
+    "AC13": {
+      "at": "2026-09-12T12:49:08.394Z",
+      "note": "Four rounds. The closing round ran against the PR head 27ee602f, was told an empty answer was expected, and returned one: nothing at or above minor. All 21 findings at or above minor carry an acted-on disposition naming the commit that closed it, each backed by a verifier claim from the following round — 20 refuted at the fix, and one confirmed because round 2 caught that the first attempt had not closed it. No reviewer verified its own finding. External comments collected at the head: none."
+    }
+  },
   "pr": {
     "url": null
   },
@@ -100,7 +153,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T3"
       ],
@@ -131,7 +184,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -952,6 +1006,76 @@
       "at": "2026-09-12T12:34:34.184Z",
       "event": "task-done",
       "detail": "T24: R3 fix: the innermost named step decides direction, so an outer key stops vetoing an inner bar (AC5)"
+    },
+    {
+      "at": "2026-09-12T12:49:07.048Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-12T12:49:07.159Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: Four new bundled skills pass the gate with no exemption and no new entry in KNOWN_ROUTING_GAPS or KNOWN_DESCRIPTION_COLLISIONS: quality/root-cause, quality/fresh-eyes, quality/api-truth, quality/deprecation-path. Each carries a literal not-for clause, a Red Flags table of substantive rows unique to it, a Verification section, a ceiling entry equal to its line count, and a catalog registration whose trigger token set collides with no other skill. skills verify --bundled exit 0 over 71 skills."
+    },
+    {
+      "at": "2026-09-12T12:49:07.275Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Each of the four has a ROUTING_CORPUS entry meeting the corpus's floors, and the record moved once, at the end of the lane: 285/287 to 305/307, with the arithmetic recorded in the comment — five rank-1 positives per skill across four skills. routing-corpus.test.ts fully green."
+    },
+    {
+      "at": "2026-09-12T12:49:07.378Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: No new skill names another skill in its description or not-for clause, so none hands away the scorer's +30 name bonus. Each of the four carries a corpus positive that quotes its own exclusion wording back and still ranks it first: root-cause 50 against 20, fresh-eyes two such cases, api-truth 90 against 80 and 80 against 40, deprecation-path 100 against 80 and 110 against 75."
+    },
+    {
+      "at": "2026-09-12T12:49:07.480Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: definition-of-done.mdc and cli-interface-design.mdc ship in rules/core, byte-identical in the mirror. The done rule names each of the eight documents that already state part of the bar and the clause each owns — six rules and two skills, counted — and every citation was opened and verified in review. The CLI rule covers exit codes, stdout versus stderr, --json stability and flag deprecation, deriving each clause from keryx's own precedent and its own contradiction. subagent-status-protocol.md was brought into agreement rather than left contradicting."
+    },
+    {
+      "at": "2026-09-12T12:49:07.582Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: keryx review floor exists, built on buildReviewScope, with four detections each carrying a firing fixture and a control. It reports nothing on a diff that only adds ordinary code. Exit 0 clean, 1 on a finding, 2 for cannot-tell with a cannot-scan payload on stdout. Measured rather than trusted: over 200 commits of main the narrowing takes threshold findings from 25 to 2, 22 of the 25 being renumbered lists or step headings, with the four per-kind counts and the finding digest reproduced independently by two reviewers."
+    },
+    {
+      "at": "2026-09-12T12:49:07.681Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Run on this branch's own diff at every head. At 27ee602f: exit 0, no findings. Earlier it reported CENSUS_FLOOR 37 to 7, a true positive the diff already answered, and it found a defect in itself — --ref resolved as a two-dot diff, so two commits main gained while the flow ran were reported as this branch's removals. That is recorded in the journal and fixed."
+    },
+    {
+      "at": "2026-09-12T12:49:07.782Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: noticed_not_touched, assumptions and not_touched are declared in output-contract.schema.json, so a result carrying them is no longer refused by additionalProperties: false. The three shapes differ because their readers differ. task-implementer-contract, contract-enforcement and contract-keywords pass; a result carrying all three validates and one carrying an undeclared field does not; removing a declaration turns the validating case red."
+    },
+    {
+      "at": "2026-09-12T12:49:07.883Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: task-implementer's SKILL.md says what belongs in each field and, more usefully, what does not. Paid for inside the 670-line ceiling: 23 lines added, 23 cut — a pseudo-schema nothing consumes, a duplicate section sharing its number with another, and stack-specific standards that contradicted the skill's own instruction to follow the patterns found in this project."
+    },
+    {
+      "at": "2026-09-12T12:49:07.983Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: interviewer closes the gap that survived flow 257: a hedge is named back and forced to a yes or a no rather than licensing ready_to_proceed, and summary_confidence is an output field defined as the weakest answer the summary rests on. Paid for inside the 131-line ceiling. A per-question guess was considered and rejected with a reason: the A/B/C/D options the skill already mandates externalise the whole guess-space rather than anchoring on one."
+    },
+    {
+      "at": "2026-09-12T12:49:08.084Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: perf-check owns the bar because it owns the number that decides it: a neutral change is reverted, neutral is defined against measured noise rather than felt, groundwork is the only exception and is paid in advance, and the attempt is recorded in the flow journal with what was tried, the before and after, the workload, and why it did not help. review-performance cites it and does not restate it. Both files stay at their ceilings."
+    },
+    {
+      "at": "2026-09-12T12:49:08.187Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Techniques adapted from addyosmani/agent-skills carry an inline MIT credit in the document that adapts them, by the convention docs/skills/rejected-skill-changes.md established. No THIRD_PARTY_NOTICES.md was created and package.json files is unchanged, because a root file would reach no installed user. Two candidates were refused with reasons — both new rules are joins of this repo's own measurements — and flow 257's outstanding credits are recorded in the plan, two owed and two not."
+    },
+    {
+      "at": "2026-09-12T12:49:08.293Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: At 27ee602f: skills verify --bundled exit 0, rules mirror byte-identical, tsc --noEmit exit 0, eslint clean, bun test 10183 pass / 0 fail across 755 files. The baseline for this flow is the tree at ea569c92; no failure is absent from it."
+    },
+    {
+      "at": "2026-09-12T12:49:08.394Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Four rounds. The closing round ran against the PR head 27ee602f, was told an empty answer was expected, and returned one: nothing at or above minor. All 21 findings at or above minor carry an acted-on disposition naming the commit that closed it, each backed by a verifier claim from the following round — 20 refuted at the fix, and one confirmed because round 2 caught that the first attempt had not closed it. No reviewer verified its own finding. External comments collected at the head: none."
     }
   ]
 }
