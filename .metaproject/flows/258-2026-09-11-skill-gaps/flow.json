@@ -9,7 +9,7 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T11:57:43.878Z",
+  "updatedAt": "2026-09-12T12:34:34.184Z",
   "source": {
     "type": "description",
     "ref": null
@@ -105,7 +105,7 @@
         "T3"
       ],
       "attempts": {
-        "count": 3,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-12T11:18:31.509Z",
@@ -121,6 +121,11 @@
             "at": "2026-09-12T11:57:43.673Z",
             "outcome": "failed",
             "detail": "round 2: all six round-1 findings closed except the moved-suppression netting; 5 new minor, including a measurement in my own commit message and in the module docstring that does not reproduce"
+          },
+          {
+            "at": "2026-09-12T12:25:08.247Z",
+            "outcome": "failed",
+            "detail": "round 3: every stated number reproduces by the stated method, including the byte-identical claim. 1 new minor — the widened walk flattens all steps into one token bag, so an enclosing capacity key now vetoes an inner floor; the commit was framed as pure widening and also removes findings."
           }
         ]
       },
@@ -541,7 +546,7 @@
       "id": "T23",
       "title": "R2 fix: suppression netting counts, the narrowing stops losing typed thresholds, a dropped flag value is refused, and the stated measurement is corrected (AC5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T20"
       ],
@@ -557,7 +562,31 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "R3 fix: the innermost named step decides direction, so an outer key stops vetoing an inner bar (AC5)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T12:25:08.458Z",
+            "outcome": "started",
+            "detail": "258-T24 round-3 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -898,6 +927,31 @@
       "at": "2026-09-12T11:57:43.878Z",
       "event": "task-attempt",
       "detail": "T23: started (attempt 1) — 258-T23 round-2 fixes"
+    },
+    {
+      "at": "2026-09-12T12:11:11.403Z",
+      "event": "task-done",
+      "detail": "T23: R2 fix: suppression netting counts, the narrowing stops losing typed thresholds, a dropped flag value is refused, and the stated measurement is corrected (AC5)"
+    },
+    {
+      "at": "2026-09-12T12:25:08.247Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 3: every stated number reproduces by the stated method, including the byte-identical claim. 1 new minor — the widened walk flattens all steps into one token bag, so an enclosing capacity key now vetoes an inner floor; the commit was framed as pure widening and also removes findings."
+    },
+    {
+      "at": "2026-09-12T12:25:08.352Z",
+      "event": "task-added",
+      "detail": "T24: R3 fix: the innermost named step decides direction, so an outer key stops vetoing an inner bar (AC5)"
+    },
+    {
+      "at": "2026-09-12T12:25:08.458Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 258-T24 round-3 fix"
+    },
+    {
+      "at": "2026-09-12T12:34:34.184Z",
+      "event": "task-done",
+      "detail": "T24: R3 fix: the innermost named step decides direction, so an outer key stops vetoing an inner bar (AC5)"
     }
   ]
 }
