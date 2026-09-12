@@ -143,6 +143,7 @@ const CEILINGS_BY_KEY = {
   "quality/pr": 95,
   "quality/pr-issue-documenter": 401,
   "quality/push": 73,
+  "quality/root-cause": 204,
   "quality/security-audit": 129,
   "quality/test-gen": 101,
   "quality/tests-creator": 360,

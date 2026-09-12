@@ -38,6 +38,16 @@ test that fails if it is skipped:
    today) re-measured in the same diff — equality, so an improvement fails too.
 7. `keryx skills verify --bundled` clean (`skills.bundled-verify.test.ts:38`).
 
+Two more, found by T5 while adding the first one — this list was seven and is
+nine:
+
+8. `bundled-eval.test.ts:104` pins the number of shipped skills. It was 67,
+   T5 made it 68, and every later task in this lane bumps it again.
+9. `installed-registry-integrity.test.ts` requires the skill in the two
+   generated install indexes, `.metaproject/skills/catalog.md` and
+   `.metaproject/modules/gdskills.md`. They are written by hand in the
+   generated format, because `keryx update` must never run in this repo.
+
 `anatomy:sections` demands all three of: a literal `not for` clause; a Red
 Flags / rationalization heading whose section holds a table of at least 3 data
 rows, each row at least 2 non-empty cells and at least 24 characters of cell

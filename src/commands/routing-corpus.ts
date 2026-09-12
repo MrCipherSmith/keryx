@@ -742,6 +742,28 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
+    skill: "root-cause",
+    positives: [
+      "find the root cause of the login redirect loop",
+      // The hazard proof for this skill's own NOT-for clause. The clause
+      // excludes "a defect already pinned to a line and a mechanism" without
+      // naming a neighbour, so the exclusion costs it no queries: a user
+      // repeating that wording back — the trace pinned a line and the line is
+      // innocent — is still asking for exactly this skill, and still gets it.
+      "the stack trace pins it to a line but that line looks fine, where does this actually go wrong",
+      "this test fails on CI but passes on my machine and I cannot figure out why",
+      "I cannot reproduce the bug the customer reported, what now",
+      "the app crashes when a user saves and nobody knows what produces it",
+    ],
+    negatives: [
+      // Nothing is broken in any of the three: the first measures, the second
+      // judges a change against code it might break, the third runs the gates.
+      { prompt: "why is it slow", owner: "perf-check" },
+      { prompt: "does this change break anything", owner: "review-regression" },
+      { prompt: "run lint and the tests and the type-check before I call this done", owner: "code-verifier" },
+    ],
+  },
+  {
     skill: "test-gen",
     positives: [
       "write tests",

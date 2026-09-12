@@ -300,6 +300,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Run low-risk checks and summarize regressions.",
     "Link issues to files, modules, and affected skills when possible.",
   ]),
+  skill("root-cause", "quality", ["recommended", "full"], "Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair.", [
+    "Reproduce first and write the reproduction down as commands, input, expected and observed, with a rate for anything intermittent.",
+    "Localize by halving the search space — history, call path, input, environment — changing one thing at a time.",
+    "Reduce to the smallest failing case, then state the cause as a mechanism before changing anything.",
+    "Leave a guard that was watched failing against the unfixed code; when nothing reproduces, report attempts, evidence and surviving hypotheses instead of a fix.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",

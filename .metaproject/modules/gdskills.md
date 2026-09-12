@@ -77,6 +77,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `pr`: Prepare pull request creation or update context from local changes.
 - `pr-issue-documenter`: Create PR descriptions and linked issue documentation from branch changes.
 - `push`: Push branches with safety checks, upstream handling, and concise result summary.
+- `root-cause`: Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair.
 - `security-audit`: Run dependency and secret/security checks and normalize findings.
 - `test-gen`: Generate tests for a file or module using local patterns and existing test stack.
 - `tests-creator`: Create test scenarios before implementation from acceptance criteria and project patterns.

@@ -76,6 +76,7 @@ Resolution order:
 | pr | quality | Prepare pull request creation or update context from local changes. | gdskills/quality/pr/SKILL.md |
 | pr-issue-documenter | quality | Create PR descriptions and linked issue documentation from branch changes. | gdskills/quality/pr-issue-documenter/SKILL.md |
 | push | quality | Push branches with safety checks, upstream handling, and concise result summary. | gdskills/quality/push/SKILL.md |
+| root-cause | quality | Find the mechanism behind a reported defect, repair it, and leave a guard that fails without the repair. | gdskills/quality/root-cause/SKILL.md |
 | security-audit | quality | Run dependency and secret/security checks and normalize findings. | gdskills/quality/security-audit/SKILL.md |
 | test-gen | quality | Generate tests for a file or module using local patterns and existing test stack. | gdskills/quality/test-gen/SKILL.md |
 | tests-creator | quality | Create test scenarios before implementation from acceptance criteria and project patterns. | gdskills/quality/tests-creator/SKILL.md |
