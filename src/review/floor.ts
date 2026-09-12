@@ -52,11 +52,27 @@
  *   skeleton match below requires the removed and added lines to be identical
  *   once numbers are erased, so `- minCoverage: 80` / `+ minimumCoverage: 70`
  *   is a false negative. Loosening that match is what turns this detector into
- *   "a number changed somewhere", which is noise, not signal.
+ *   "a number changed somewhere", which is noise, not signal. A trailing
+ *   COMMENT is the one edit that does not break the pair ({@link codeOf}),
+ *   because "lower it and explain on the same line" is the evasion this guard
+ *   is for.
  * - **A threshold whose name says nothing.** `- limit: 10` / `+ limit: 100`
  *   fires because `limit` is a ceiling word; `- n: 10` / `+ n: 3` does not fire
- *   at all. A bare number moving is not evidence, and this module refuses to
- *   pretend it is.
+ *   at all, and neither does a number with no name in front of it at all — a
+ *   renumbered markdown list, an argument after a comma. A bare number moving
+ *   is not evidence, and this module refuses to pretend it is.
+ * - **A resource CEILING that is also a real bar.** `maxFailedRows: 0 -> 50`
+ *   is silent, because `rows` is a capacity word and `max` is a ceiling; see
+ *   {@link thresholdDirection} for why that asymmetry is deliberate and why the
+ *   floor half (`minItems: 3 -> 0`) is not silent.
+ * - **A test disabled without being called.** The detector requires `(` after
+ *   the keyword, so a `skip` assigned and invoked later — `const t = it.skip; t(…)`
+ *   — is invisible. Bought deliberately: without the `(`, English punctuation put
+ *   every sentence mentioning `it.skip` into the output.
+ * - **A suppression that moved AND changed.** A marker re-added with one more
+ *   rule in its list is reported as added, because the trimmed text no longer
+ *   matches what was removed. That is the right side to err on, but it means a
+ *   reindent that also reflows the comment is a finding.
  * - **A weakening spread across files** — a threshold lowered in one file to
  *   accommodate a test disabled in another. Each half is reported on its own or
  *   not at all; nothing here correlates them.
@@ -93,8 +109,41 @@ export type FloorFinding = {
   added?: string;
 };
 
+/**
+ * The report's discriminant, and the reason the CLI has a third exit code.
+ *
+ * `scanned` means the guard looked; `cannot-scan` means it could not — an
+ * unresolvable ref, an unreadable diff file, a shallow clone. Those are not the
+ * same answer as "found nothing", and `rules/core/cli-interface-design.mdc`
+ * reserves exit **2** for exactly that difference. Without the discriminant the
+ * `scanned` counts below are simply ABSENT on every failure path, so the one
+ * distinction this module was built around — 0 findings versus 0 input —
+ * collapses precisely when it matters.
+ */
+export type FloorOutcome = "scanned" | "cannot-scan";
+
+/**
+ * What `--json` emits when the guard could not look.
+ *
+ * Data on stdout rather than prose on stderr, because a machine reader that
+ * only ever receives prose has to parse English to tell a bad ref from a clean
+ * diff. Same `schemaVersion` as {@link FloorReport}: one shape family, two arms,
+ * told apart by `outcome`.
+ */
+export type FloorCannotScan = {
+  schemaVersion: 1;
+  outcome: "cannot-scan";
+  /** Why, in the words the plain-text mode would have printed. */
+  error: string;
+};
+
+export function floorCannotScan(error: string): FloorCannotScan {
+  return { schemaVersion: 1, outcome: "cannot-scan", error };
+}
+
 export type FloorReport = {
   schemaVersion: 1;
+  outcome: "scanned";
   findings: FloorFinding[];
   counts: {
     total: number;
@@ -270,7 +319,7 @@ const CAPACITY_WORDS = new Set([
 
 const NUMBER = /[0-9]+(?:\.[0-9]+)?/g;
 
-/** Identifier tokens on a line: camelCase and snake_case both split. */
+/** Identifier tokens in a fragment: camelCase and snake_case both split. */
 function tokensOf(text: string): string[] {
   return text
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
@@ -279,32 +328,120 @@ function tokensOf(text: string): string[] {
     .filter((token) => token.length > 0);
 }
 
+/**
+ * The line with its trailing comment removed, so the pairing below compares
+ * CODE with CODE.
+ *
+ * Without this, `- minCoverage: 80,` / `+ minCoverage: 70, // keeps the page
+ * size sane` is not a paired edit at all — the skeletons differ by the comment
+ * — and the guard whose whole purpose is to be hard to slip past is evaded by
+ * typing a justification on the same line. {@link COMMENTED_LINE} does not help:
+ * it only skips lines that are *entirely* comment.
+ *
+ * Quote state is tracked so a `//` inside a URL or a `#` inside a string is not
+ * mistaken for an opener. `--` needs a following space to count, because
+ * `--max-warnings` is a flag, not a SQL comment.
+ */
+function stripTrailingComment(text: string): string {
+  let quote: string | undefined;
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.charAt(index);
+    if (quote !== undefined) {
+      if (char === "\\") {
+        index += 1;
+        continue;
+      }
+      if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+    if (char === '"' || char === "'" || char === "`") {
+      quote = char;
+      continue;
+    }
+    const priorIsSpace = index === 0 || /\s/.test(text.charAt(index - 1));
+    if (text.startsWith("//", index) || text.startsWith("/*", index)) {
+      return text.slice(0, index);
+    }
+    if (char === "#" && priorIsSpace) {
+      return text.slice(0, index);
+    }
+    if (text.startsWith("-- ", index) && priorIsSpace) {
+      return text.slice(0, index);
+    }
+  }
+  return text;
+}
+
+/** A line reduced to the code the pairing compares: comment gone, tail trimmed. */
+function codeOf(text: string): string {
+  return stripTrailingComment(text).trimEnd();
+}
+
 /** The line with every numeric literal erased — two lines match iff only numbers differ. */
 function numericSkeleton(text: string): string {
   return text.replace(NUMBER, "\u0000");
 }
 
-function numbersOf(text: string): number[] {
-  return (text.match(NUMBER) ?? []).map(Number);
+type NumberHit = { value: number; index: number };
+
+function numbersOf(text: string): NumberHit[] {
+  return [...text.matchAll(NUMBER)].map((match) => ({ value: Number(match[0]), index: match.index ?? 0 }));
+}
+
+/**
+ * Trailing separators between a key and its value: whitespace, the assignment
+ * and key punctuation, an opening bracket, a quote. Deliberately NOT `,` and
+ * not a closing bracket — `foo(bar, 5)` must not attribute `5` to `bar`.
+ */
+const KEY_SEPARATORS = /[\s:=(["'`{<]*$/;
+const TRAILING_IDENTIFIER = /[A-Za-z0-9_$.-]+$/;
+
+/**
+ * The identifier or key the number at `index` belongs to — and nothing else on
+ * the line.
+ *
+ * Reading the WHOLE line, which is what this did first, let one unrelated word
+ * silence a real weakening or invent a fake one. Both halves were measured:
+ *
+ * - `"lint": "eslint --max-warnings 0 --max-size 10"` with the `0` becoming
+ *   `50` — this module's own headline example, see {@link CEILING_WORDS} — went
+ *   silent, because `--max-size` elsewhere on the same line put `size` in
+ *   {@link CAPACITY_WORDS}.
+ * - Over the last 200 commits of `main`, whole-line reading produced 25
+ *   `threshold-lowered` findings of which 24 were markdown ordered lists being
+ *   renumbered: `5. Explicitly allowed global fallback skills` becoming `6.`
+ *   fired on the word `allowed`, sitting four words away from the number.
+ *
+ * A number with no identifier in front of it — a list marker, a bare argument
+ * after a comma — yields no tokens and therefore no direction, which is the
+ * honest answer rather than a guess.
+ */
+function adjacentTokens(code: string, index: number): string[] {
+  const before = code.slice(0, index).replace(KEY_SEPARATORS, "");
+  return tokensOf(TRAILING_IDENTIFIER.exec(before)?.[0] ?? "");
 }
 
 type ThresholdDirection = { weakenedBy: "decrease" | "increase"; word: string } | undefined;
 
 /**
- * Which direction weakens this line, decided by the WORDS on it, not by the
- * numbers.
+ * Which direction weakens this number, decided by the words in the identifier
+ * that NAMES it — not by the numbers, and not by the rest of the line.
  *
- * A line that names both a floor and a ceiling (`minTimeout`) is ambiguous and
- * returns `undefined`: the guard would have to guess which number the words
- * belong to, and a guess in a guard is worse than a gap. A line that names a
- * capacity ({@link CAPACITY_WORDS}) is not a bar at all and is silent in both
- * directions.
+ * A name carrying both a floor and a ceiling (`minTimeout`) is ambiguous and
+ * returns `undefined`: the guard would have to guess which one the number
+ * belongs to, and a guess in a guard is worse than a gap.
+ *
+ * {@link CAPACITY_WORDS} suppresses a CEILING and not a FLOOR, and that
+ * asymmetry is load-bearing. A ceiling on a resource — `maxOutputTokens`,
+ * `maxRows`, `bufferSize` — is a budget, and raising it weakens nothing; that
+ * was the measured false positive the list was added for. A *minimum* stated in
+ * the same units is still a demand: `minItems: 3` becoming `minItems: 0` is a
+ * required-count guard relaxed to nothing, and a rule that sees `items` and
+ * falls silent hides exactly the edit this module exists to show.
  */
-function thresholdDirection(text: string): ThresholdDirection {
-  const tokens = tokensOf(text);
-  if (tokens.some((token) => CAPACITY_WORDS.has(token))) {
-    return undefined;
-  }
+function thresholdDirection(tokens: readonly string[]): ThresholdDirection {
   const floorWord = tokens.find((token) => FLOOR_WORDS.has(token));
   const ceilingWord = tokens.find((token) => CEILING_WORDS.has(token));
   if (floorWord !== undefined && ceilingWord !== undefined) {
@@ -314,9 +451,34 @@ function thresholdDirection(text: string): ThresholdDirection {
     return { weakenedBy: "decrease", word: floorWord };
   }
   if (ceilingWord !== undefined) {
-    return { weakenedBy: "increase", word: ceilingWord };
+    return tokens.some((token) => CAPACITY_WORDS.has(token)) ? undefined : { weakenedBy: "increase", word: ceilingWord };
   }
   return undefined;
+}
+
+/**
+ * The one direction every moved number on the line agrees on.
+ *
+ * Unanimity, not a majority: if one moved number is named by a ceiling and
+ * another by nothing at all, the line is doing two things at once and this
+ * module cannot say which of them the reader should be asked about.
+ */
+function agreedDirection(code: string, moved: readonly { index: number }[]): ThresholdDirection {
+  let decided: ThresholdDirection;
+  for (const pair of moved) {
+    const here = thresholdDirection(adjacentTokens(code, pair.index));
+    if (here === undefined) {
+      return undefined;
+    }
+    if (decided === undefined) {
+      decided = here;
+      continue;
+    }
+    if (decided.weakenedBy !== here.weakenedBy) {
+      return undefined;
+    }
+  }
+  return decided;
 }
 
 const COMMENTED_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
@@ -330,16 +492,21 @@ const COMMENTED_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
  *    every number is erased, so this is one expression being re-tuned rather
  *    than two unrelated lines that happen to hold digits. This also guarantees
  *    the two lines carry the same count of numbers, so the comparison below is
- *    positional and total.
- * 2. **A named direction.** The line must name a floor or a ceiling
- *    ({@link FLOOR_WORDS}, {@link CEILING_WORDS}), and only the direction that
- *    weakens THAT kind of number fires. A coverage minimum moving up is silent;
- *    a timeout moving down is silent. A bare `count: 5` -> `count: 3` is silent
- *    in both directions, because nothing on the line says which way is worse.
+ *    positional and total. Compared on CODE ({@link codeOf}), not on the raw
+ *    line: a trailing comment added in the same edit must not break the pair,
+ *    or the evasion is "lower the number and explain yourself on the same line".
+ * 2. **A named direction.** The identifier ADJACENT to each moved number must
+ *    name a floor or a ceiling ({@link FLOOR_WORDS}, {@link CEILING_WORDS}), and
+ *    only the direction that weakens THAT kind of number fires. A coverage
+ *    minimum moving up is silent; a timeout moving down is silent. A bare
+ *    `count: 5` -> `count: 3` is silent in both directions, because its name
+ *    does not say which way is worse — and so is `5.` -> `6.` in a renumbered
+ *    markdown list, which has no name in front of it at all.
  * 3. **An unmixed move.** If some numbers on the line went up and others went
  *    down, nothing fires: `retry(3, 100)` -> `retry(5, 50)` is a redesign, and
  *    reporting half of it as a weakening would be a claim this module cannot
- *    support.
+ *    support. {@link agreedDirection} adds the same demand to the naming: two
+ *    moved numbers whose names disagree about which way is worse fire nothing.
  *
  * Residual false positives, measured and accepted: `limit` and `max` are
  * ordinary words, so `limit: 10` -> `limit: 100` in a pagination query fires.
@@ -356,26 +523,27 @@ function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLin
     if (removed.kind !== "del" || COMMENTED_LINE.test(removed.text)) {
       continue;
     }
-    const skeleton = numericSkeleton(removed.text);
-    if (skeleton === removed.text) {
+    const removedCode = codeOf(removed.text);
+    const skeleton = numericSkeleton(removedCode);
+    if (skeleton === removedCode) {
       continue; // no numbers at all
     }
-    const oldNumbers = numbersOf(removed.text);
+    const oldNumbers = numbersOf(removedCode);
 
     for (const [index, added] of adds.entries()) {
-      if (used.has(index) || numericSkeleton(added.text) !== skeleton) {
+      if (used.has(index) || numericSkeleton(codeOf(added.text)) !== skeleton) {
         continue;
       }
-      const newNumbers = numbersOf(added.text);
+      const newNumbers = numbersOf(codeOf(added.text));
       const moved = oldNumbers
-        .map((value, position) => ({ from: value, to: newNumbers[position] ?? value }))
+        .map((hit, position) => ({ from: hit.value, to: newNumbers[position]?.value ?? hit.value, index: hit.index }))
         .filter((pair) => pair.from !== pair.to);
       if (moved.length === 0) {
         continue;
       }
       used.add(index);
 
-      const direction = thresholdDirection(removed.text);
+      const direction = agreedDirection(removedCode, moved);
       if (direction === undefined) {
         break;
       }
@@ -392,8 +560,8 @@ function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLin
         line: added.line,
         detail:
           direction.weakenedBy === "decrease"
-            ? `a floor named by "${direction.word}" moved down (${movement}); the line is otherwise unchanged`
-            : `a ceiling named by "${direction.word}" moved up (${movement}); the line is otherwise unchanged`,
+            ? `a floor named by "${direction.word}" moved down (${movement}); the code on the line is otherwise unchanged`
+            : `a ceiling named by "${direction.word}" moved up (${movement}); the code on the line is otherwise unchanged`,
         removed: removed.text.trim(),
         added: added.text.trim(),
       });
@@ -408,18 +576,29 @@ function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLin
 // ---------------------------------------------------------------------------
 
 /**
- * A test turned off, in statement position.
+ * A test turned off, in statement position AND in call position.
  *
  * `.only` counts: it disables every OTHER test in the file, which is the same
  * loss with a friendlier name and no trace in the run output.
  *
- * The leading `(?:^|[{;}]|=>)\s*` is the narrowing. Without it the detector
- * fires on any line that merely CONTAINS the token — a marker in a string
- * array, a regex in a linter, a sentence in this very file — and a guard that
- * flags its own source is a guard nobody keeps.
+ * Two narrowings, and the second was bought with a false positive:
+ *
+ * - The leading `(?:^|[{;}]|=>)\s*` puts the token in statement position, so a
+ *   marker inside a string array or a linter's own rule list does not fire.
+ * - The trailing `\s*\(` requires it to be CALLED. Statement position alone was
+ *   not enough, because `;`, `{` and `}` are ordinary punctuation in English:
+ *   `We ban this; it.skip is the usual culprit.` and `Bad: { describe.only is
+ *   worse }` both fired, and this branch ships thousands of lines of prose about
+ *   skipped tests. A sentence does not call anything.
+ *
+ * One chained modifier segment is allowed before the terminal keyword, because
+ * `test.concurrent.skip(…)` and `describe.each(cases).skip` are jest/vitest API
+ * and the first spelling is common enough that missing it would be a hole a
+ * reader could drive a suite through. `skipIf`/`runIf` are vitest's conditional
+ * forms, which take their predicate first and the test body in a second call.
  */
 const DISABLED_CALL =
-  /(?:^|[{;}]|=>)\s*((?:x(?:it|test|describe|context|specify))\s*\(|(?:it|test|describe|context|suite|scenario|specify)\s*\.\s*(?:skip|only|todo|failing)\b)/;
+  /(?:^|[{;}]|=>)\s*((?:x(?:it|test|describe|context|specify))\s*\(|(?:it|test|describe|context|suite|scenario|specify)\s*(?:\.\s*[A-Za-z_$][A-Za-z0-9_$]*)?\s*\.\s*(?:skip|only|todo|failing|skipIf|runIf)\s*\()/;
 
 /** Annotation and attribute forms, which are always their own line. */
 const DISABLED_ANNOTATION =
@@ -594,6 +773,14 @@ const ANNOTATION_MARKERS = new Set(["@suppresswarnings", "@suppress", "#[allow("
  *   a string array does not, and neither does a bare mention in prose that
  *   never reaches a comment opener.
  *
+ * A marker that merely MOVED is not added. {@link detectRemovedAssertions} nets
+ * per region on purpose and this now does the same, for the same reason: a
+ * region that deletes an `eslint-disable-next-line` and re-adds the identical
+ * line two lines down has changed nothing a reader needs to be asked about, and
+ * a guard that demands a justification for a reindent is a guard that gets
+ * switched off. Matched on the trimmed text, so only a byte-identical
+ * suppression is forgiven — a marker whose rule list grew is still a finding.
+ *
  * What that misses: a suppression written inside a string that is later
  * evaluated, and a marker in a language whose comments this does not recognise.
  * Both are false negatives, which is the direction a guard should fail in when
@@ -601,8 +788,9 @@ const ANNOTATION_MARKERS = new Set(["@suppresswarnings", "@suppress", "#[allow("
  */
 function detectAddedSuppressions(region: ScopedRegion, lines: readonly RegionLine[]): FloorFinding[] {
   const findings: FloorFinding[] = [];
+  const removedHere = new Set(lines.filter((line) => line.kind === "del").map((line) => line.text.trim()));
   for (const line of lines) {
-    if (line.kind !== "add") {
+    if (line.kind !== "add" || removedHere.has(line.text.trim())) {
       continue;
     }
     const lowered = line.text.toLowerCase();
@@ -661,6 +849,7 @@ export function detectFloorRegressions(scope: ReviewScope): FloorReport {
 
   return {
     schemaVersion: 1,
+    outcome: "scanned",
     findings,
     counts: { total: findings.length, byKind },
     scanned: {

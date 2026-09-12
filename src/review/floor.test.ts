@@ -85,6 +85,64 @@ test("a ceiling on how much DATA a thing carries is not a bar and is not reporte
   expect(kinds(rows)).toEqual([]);
 });
 
+test("a capacity word elsewhere on the line does not silence the bar that moved", () => {
+  // T20/MAJOR-2. The carve-out above used to tokenise the WHOLE line, so one
+  // unrelated word switched the guard off. This is the module's own headline
+  // example — `--max-warnings 0` becoming `50` — and it went silent purely
+  // because `--max-size` also appears on the line.
+  const lintScript = diffOf(
+    "package.json",
+    4,
+    ['-    "lint": "eslint --max-warnings 0 --max-size 10"', '+    "lint": "eslint --max-warnings 50 --max-size 10"'].join("\n"),
+  );
+  const findings = report(lintScript).findings;
+  expect(findings.map((finding) => finding.kind)).toEqual(["threshold-lowered"]);
+  expect(findings[0]?.detail).toContain("0 -> 50");
+  // The unmoved number on the same line is not reported as movement.
+  expect(findings[0]?.detail).not.toContain("10 ->");
+});
+
+test("a floor named in capacity units still fires; the same unit under a ceiling does not", () => {
+  // The asymmetry, pinned. "at least 3 items" relaxed to "at least 0" is a
+  // demand removed. "at most N items" raised is a budget, and raising a budget
+  // weakens nothing — which is the measured case CAPACITY_WORDS was added for.
+  const minimum = diffOf("schema.json", 4, ['-    "minItems": 3,', '+    "minItems": 0,'].join("\n"));
+  const budget = diffOf("schema.json", 4, ['-    "maxItems": 3,', '+    "maxItems": 300,'].join("\n"));
+
+  expect(kinds(minimum)).toEqual(["threshold-lowered"]);
+  expect(kinds(budget)).toEqual([]);
+});
+
+test("a trailing comment added in the same edit does not break the pairing", () => {
+  // The one-word evasion of a guard whose entire purpose is to be hard to slip
+  // past: lower the number and explain yourself on the same line. Before the
+  // fix the skeletons differed by the comment, so the pair never formed at all.
+  const excused = diffOf("jest.config.js", 10, ["-      minCoverage: 80,", "+      minCoverage: 70, // keeps the page size sane"].join("\n"));
+  const findings = report(excused).findings;
+  expect(findings.map((finding) => finding.kind)).toEqual(["threshold-lowered"]);
+  expect(findings[0]?.detail).toContain("80 -> 70");
+  // The evidence is still the line as written, comment and all.
+  expect(findings[0]?.added).toBe("minCoverage: 70, // keeps the page size sane");
+});
+
+test("a number with no identifier in front of it is never a threshold", () => {
+  // Measured over the last 200 commits of `main`: whole-line reading produced
+  // 25 threshold findings and 24 were markdown ordered lists being renumbered.
+  const renumbered = diffOf(
+    "SKILL.md",
+    12,
+    ["-5. Explicitly allowed global fallback skills", "+6. Explicitly allowed global fallback skills"].join("\n"),
+  );
+  const step = diffOf(
+    "SKILL.md",
+    12,
+    ["-□ Step 9: Analyze tests (understand coverage)", "+□ Step 7: Analyze tests (understand coverage)"].join("\n"),
+  );
+
+  expect(kinds(renumbered)).toEqual([]);
+  expect(kinds(step)).toEqual([]);
+});
+
 test("a line whose numbers move in both directions is not reported", () => {
   const mixed = diffOf("src/retry.ts", 4, ["-  retry({ maxAttempts: 3, backoff: 200 });", "+  retry({ maxAttempts: 5, backoff: 100 });"].join("\n"));
   expect(kinds(mixed)).toEqual([]);
@@ -151,6 +209,30 @@ test("python and go forms are reported", () => {
 
   expect(kinds(python)).toEqual(["test-disabled"]);
   expect(kinds(go)).toEqual(["test-disabled"]);
+});
+
+test("a sentence that merely mentions a disable form is not reported", () => {
+  // T20/MINOR-3. Statement position alone was not enough: `;`, `{` and `}` are
+  // ordinary English punctuation, so both of these fired — on a branch that
+  // ships thousands of lines of prose about skipped tests. A sentence does not
+  // call anything, so the detector now requires the `(`.
+  const semicolon = diffOf("docs/guide.md", 4, ["+We ban this; it.skip is the usual culprit."].join("\n"));
+  const braces = diffOf("docs/guide.md", 4, ["+Bad: { describe.only is worse }"].join("\n"));
+
+  expect(kinds(semicolon)).toEqual([]);
+  expect(kinds(braces)).toEqual([]);
+  // And the call form in the very same file still fires, so this is a narrowing
+  // and not an off switch.
+  expect(kinds(diffOf("docs/guide.md", 4, ['+  it.skip("x", () => {}); // in a fenced block'].join("\n")))).toEqual(["test-disabled"]);
+});
+
+test("a chained modifier and vitest's conditional forms are reported", () => {
+  // T20/MINOR-4. Both are mainstream jest/vitest API and both returned nothing.
+  const concurrent = diffOf("src/pay/pay.test.ts", 12, ['+  test.concurrent.skip("refunds", async () => {', "   });"].join("\n"));
+  const conditional = diffOf("src/pay/pay.test.ts", 12, ['+  describe.skipIf(process.env.CI)("refunds", () => {', "   });"].join("\n"));
+
+  expect(kinds(concurrent)).toEqual(["test-disabled"]);
+  expect(kinds(conditional)).toEqual(["test-disabled"]);
 });
 
 test("a marker that merely appears inside a string or mid-expression is not reported", () => {
@@ -261,6 +343,36 @@ test("eslint and python suppressions are reported in their own comment syntax", 
   expect(kinds(python)).toEqual(["suppression-added"]);
 });
 
+test("a suppression that merely MOVED within the region is not reported", () => {
+  // T20/MINOR-6. `detectRemovedAssertions` nets per region deliberately; this
+  // did not, so a reindent that deleted a marker and re-added the identical line
+  // two lines down demanded a justification for a change nobody made.
+  const moved = diffOf(
+    "src/pay/refund.ts",
+    8,
+    [
+      "-  // eslint-disable-next-line no-control-regex",
+      "   const pattern = /\\x00/;",
+      "+  // eslint-disable-next-line no-control-regex",
+      "   apply(pattern);",
+    ].join("\n"),
+  );
+  expect(kinds(moved)).toEqual([]);
+
+  // A marker whose rule list GREW is a different line, and is still reported.
+  const widened = diffOf(
+    "src/pay/refund.ts",
+    8,
+    [
+      "-  // eslint-disable-next-line no-control-regex",
+      "   const pattern = /\\x00/;",
+      "+  // eslint-disable-next-line no-control-regex, no-misused-promises",
+      "   apply(pattern);",
+    ].join("\n"),
+  );
+  expect(kinds(widened)).toEqual(["suppression-added"]);
+});
+
 test("a suppression marker inside a string literal is not reported", () => {
   // The position rule: the marker must sit after a comment opener with no
   // quote before it. This is what keeps the guard's own marker list, and every
@@ -298,8 +410,12 @@ test("the report shape is fixed: schema version, every kind counted, what was sc
   // Nothing consumes this JSON yet, so this test IS the pin. A field renamed
   // without a reader is how `attempts.count` stayed wrong for a release.
   const result = report(COVERAGE_LOWERED);
-  expect(Object.keys(result).sort()).toEqual(["counts", "findings", "scanned", "schemaVersion"]);
+  expect(Object.keys(result).sort()).toEqual(["counts", "findings", "outcome", "scanned", "schemaVersion"]);
   expect(result.schemaVersion).toBe(1);
+  // The discriminant. A reader that cannot tell "the guard looked and found
+  // nothing" from "the guard could not look" has lost the one distinction this
+  // module's `scanned` counts exist for — see `floorCannotScan`.
+  expect(result.outcome).toBe("scanned");
   expect(Object.keys(result.counts.byKind).sort()).toEqual([...FLOOR_FINDING_KINDS].sort());
   expect(Object.keys(result.scanned).sort()).toEqual(["changedLines", "files", "regions"]);
   expect(Object.keys(result.findings[0] ?? {}).sort()).toEqual(["added", "detail", "kind", "line", "path", "removed"]);

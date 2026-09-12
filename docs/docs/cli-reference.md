@@ -1788,32 +1788,61 @@ no model call, over the same scoped regions `review scope` builds.
 
 | Flag | Description |
 |---|---|
-| `--ref <base>` | Diff against this base instead of the working tree. |
+| `--ref <base>` | Widen the diff to the **merge base** of `HEAD` and this ref. Uncommitted work is still scanned — this adds committed history to the window, it does not replace the working tree with it. Without it, only uncommitted changes are scanned. |
 | `--diff <file\|->` | Read a unified diff from a file or stdin instead of running git. |
 | `--context <n>` | Context lines around each change, as for `review scope`. Default **20**. |
-| `--json` | Machine-readable report: `findings`, `counts.byKind`, and `scanned`. |
+| `--json` | Machine-readable report: `outcome`, `findings`, `counts.byKind`, and `scanned`. |
 | `--report-only` | Print the same report and exit **0**. The adoption path: measure the rate before the guard starts refusing. |
 
-**Exit 1 on any finding**, 0 on none — the same choice `review budget` and
-`review loop` make. A finding is a *question the diff has not answered*, and a
-question asked with exit 0 is a question nobody answers. The command does not
+Exit codes, per `rules/core/cli-interface-design.mdc`: **0** clean, **1** a
+finding, **2** the guard could not look. A finding is a *question the diff has
+not answered*, and a question asked with exit 0 is a question nobody answers —
+the same choice `review budget` and `review loop` make. The command does not
 claim any finding is wrong; it claims the diff should say why.
+
+**2** is the one a script must not fold into 1. A ref that will not resolve, a
+`--diff` file that will not open and a shallow clone with no merge base all mean
+the guard never ran, which is not a pass and not a finding. Under `--json` that
+answer is *data on stdout*, not prose on stderr:
+
+```json
+{ "schemaVersion": 1, "outcome": "cannot-scan", "error": "…" }
+```
+
+A clean or finding-bearing run carries `"outcome": "scanned"` alongside its
+`scanned` counts, so a reader tells the two apart by a field rather than by
+parsing English. Getting the *invocation* wrong — an unknown flag, a `--context`
+that is not a number — stays **1**; that is a validation error, not an inability
+to tell.
+
+In a `--depth 1` clone (which is what `actions/checkout` gives you by default)
+`--ref` has no merge base to resolve against. The command says so and names the
+fix: `git fetch --unshallow`, or `fetch-depth: 0` on the checkout step.
 
 What each detection requires, because a guard that fires on the repair as well
 as the damage gets switched off:
 
 - **Threshold lowered.** The removed and added lines must be identical once
-  every number is erased, and the line must *name* a floor (`coverage`,
+  every number is erased (a trailing **comment** is ignored on both sides, so
+  "lower it and explain on the same line" is not an escape), and the identifier
+  *directly in front of each moved number* must name a floor (`coverage`,
   `minimum`, `threshold`, `precision`, …) that moved **down**, or a ceiling
-  (`max`, `limit`, `timeout`, `retries`, `tolerance`, …) that moved **up**. A
-  coverage minimum raised is silent, a timeout shortened is silent, and a bare
-  `rows: 50` → `rows: 10` is silent in both directions: nothing on the line says
-  which way is worse. Residual noise, accepted: `limit` and `max` are ordinary
-  words, so a pagination `limit` raised does fire.
-- **Test disabled.** `.skip`, `.only`, `xit`/`xdescribe`, `@pytest.mark.skip`,
-  `t.Skip(` and friends, on an **added** line, in statement position. `.only`
-  counts: it disables every other test in the file. A `.skip` being *removed*
-  never fires, and neither does a marker inside a string or mid-expression.
+  (`max`, `limit`, `timeout`, `retries`, `tolerance`, …) that moved **up**. Only
+  that identifier is read, not the whole line: `5.` → `6.` in a renumbered
+  markdown list is silent even though the sentence contains the word `allowed`.
+  A coverage minimum raised is silent, a timeout shortened is silent, and a bare
+  `rows: 50` → `rows: 10` is silent in both directions: nothing names it. A
+  *ceiling* in resource units (`maxOutputTokens`, `maxRows`) is a budget and is
+  silent; a *floor* in the same units (`minItems: 3` → `0`) is a demand removed
+  and does fire. Residual noise, accepted: `limit` and `max` are ordinary words,
+  so a pagination `limit` raised does fire.
+- **Test disabled.** `.skip`, `.only`, `.todo`, `.failing`, vitest's `.skipIf` /
+  `.runIf`, `xit`/`xdescribe`, `@pytest.mark.skip`, `t.Skip(` and friends, on an
+  **added** line, in statement position, **called**. One chained modifier is
+  allowed, so `test.concurrent.skip(…)` fires. `.only` counts: it disables every
+  other test in the file. A `.skip` being *removed* never fires, and neither does
+  a marker inside a string, mid-expression, or in a sentence that merely mentions
+  it — the required `(` is what keeps prose about skipped tests out.
 - **Assertion removed.** A count, not a parse: a region of a **test file** that
   ends with fewer assertion-carrying lines than it started with. An assertion
   moved a few lines nets to zero; an assertion *weakened in place*
@@ -1822,8 +1851,9 @@ as the damage gets switched off:
 - **Suppression added.** `eslint-disable`, `@ts-expect-error`, `@ts-ignore`,
   `# type: ignore`, `# noqa`, `//nolint`, `@SuppressWarnings`, `#[allow(` and
   the rest — on an added line, after a comment opener, with no quote before it.
-  A marker listed in a string array is not a suppression, and a suppression
-  being *deleted* is not a finding.
+  A marker listed in a string array is not a suppression, a suppression being
+  *deleted* is not a finding, and a suppression that merely **moved** — removed
+  and re-added byte-identical inside the same region — is not "added".
 
 It sees only what the pre-filter retained, so a threshold lowered inside a
 vendored or generated path is invisible by construction — and it depends on

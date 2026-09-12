@@ -41,7 +41,7 @@ import {
   renderScopedDiff,
   type ReviewScope,
 } from "../review/scope";
-import { detectFloorRegressions, renderFloorMarkdown, FLOOR_FINDING_KINDS } from "../review/floor";
+import { detectFloorRegressions, renderFloorMarkdown, floorCannotScan, FLOOR_FINDING_KINDS } from "../review/floor";
 import {
   blastRadiusRecomputeDecision,
   computeBlastRadius,
@@ -1627,17 +1627,56 @@ async function runScope(args: string[]): Promise<void> {
  * annotate`: print the findings, exit 0, let a project measure its own rate
  * before the guard starts refusing. Nothing is hidden either way — the report
  * is identical, only the exit code moves.
+ *
+ * ## Three exit codes, because the branch that added this rule demands three
+ *
+ * `rules/core/cli-interface-design.mdc` — added on this same branch — reserves
+ * **2** for "could not tell" and says a NEW command uses 0/1/2 as defined. This
+ * command went out with the shared `catch` at the top of {@link reviewCommand}
+ * collapsing every failure to **1**, which made a typo'd `--ref` indistinguish-
+ * able from a lowered bar: both exit 1, and under `--json` both wrote zero bytes
+ * to stdout. That is the failure the rule exists to name, in the command that
+ * shipped alongside it.
+ *
+ * So the diff-acquisition step is caught HERE:
+ *
+ * - a ref that will not resolve, a diff file that will not open, a `git diff`
+ *   that fails — the guard could not look — is **2**, with
+ *   `{ outcome: "cannot-scan", error }` on stdout under `--json`, mirroring
+ *   `keryx memory search`'s `store-unreadable` (`src/commands/memory.ts:188-196`);
+ * - a bad flag or a bad `--context` value is a VALIDATION error and stays **1**,
+ *   which is the same split `memory search` draws;
+ * - a finding is **1**; a clean scan is **0**.
+ *
+ * Free to do today and breaking tomorrow: `keryx review floor` is in no released
+ * tag and nothing in this repository or its CI gates on it yet.
  */
 async function runFloor(args: string[]): Promise<void> {
+  // Outside the try on purpose: an unknown flag and an unparseable --context are
+  // the caller getting the invocation wrong, not the guard being unable to look.
   rejectUnknownFlags(args, FLOOR_FLAGS, "floor");
   const contextLines = parseContextLines(optionValue(args, "--context"));
+  const asJson = args.includes("--json");
   const diffFile = optionValue(args, "--diff");
   const ref = optionValue(args, "--ref") ?? optionValue(args, "--base");
-  const base = ref === undefined ? undefined : await mergeBaseWithHead(ref);
-  const diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(base, contextLines);
+
+  let diff: string;
+  try {
+    const base = ref === undefined ? undefined : await mergeBaseWithHead(ref);
+    diff = diffFile !== undefined ? await readDiffSource(diffFile) : await gitDiff(base, contextLines);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (asJson) {
+      console.log(JSON.stringify(floorCannotScan(message), null, 2));
+    } else {
+      console.error(`cannot-scan: ${message}`);
+    }
+    process.exitCode = 2;
+    return;
+  }
   const report = detectFloorRegressions(buildReviewScope(diff, { contextLines }));
 
-  if (args.includes("--json")) {
+  if (asJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
     console.log(renderFloorMarkdown(report));
@@ -1875,18 +1914,49 @@ async function gitDiff(ref: string | undefined, contextLines: number): Promise<s
  * that ships with its consumers named, not as a side effect of a floor fix.
  * Named here rather than left for the next person to rediscover.
  */
-async function mergeBaseWithHead(ref: string): Promise<string> {
-  const proc = Bun.spawn(["git", "merge-base", "HEAD", ref], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
+async function gitOutput(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  const proc = Bun.spawn(["git", ...args], { cwd: process.cwd(), stdout: "pipe", stderr: "pipe" });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
     proc.exited,
   ]);
+  return { stdout, stderr, exitCode };
+}
+
+/**
+ * True when this checkout does not hold enough history to HAVE a merge base.
+ *
+ * Asked only on the failure path, because it is a second `git` call and the
+ * answer is only ever needed to choose the wording of a refusal.
+ */
+async function isShallowClone(): Promise<boolean> {
+  const { stdout, exitCode } = await gitOutput(["rev-parse", "--is-shallow-repository"]);
+  return exitCode === 0 && stdout.trim() === "true";
+}
+
+async function mergeBaseWithHead(ref: string): Promise<string> {
+  const { stdout, stderr, exitCode } = await gitOutput(["merge-base", "HEAD", ref]);
   const base = stdout.trim();
   if (exitCode !== 0 || base.length === 0) {
     // Refused rather than silently falling back to `ref`: the fallback IS the
     // bug this function exists to remove, and a guard that quietly returns to
     // blaming the base would be worse than one that stops and says so.
+    //
+    // The shallow case is separated out because the generic advice is actively
+    // WRONG there and sends the reader looking for a problem they do not have.
+    // `git merge-base` exits 1 with no output in a `--depth 1` clone, which is
+    // indistinguishable from unrelated histories from the exit code alone — and
+    // `actions/checkout` defaults to `fetch-depth: 1`, so a CI job is the most
+    // likely place this guard is ever run. HEAD and the base do share history;
+    // the clone simply does not have it.
+    if (await isShallowClone()) {
+      throw new Error(
+        `Cannot resolve a merge base between HEAD and ${ref}: this is a SHALLOW clone, so the commit where the branch forked is not present. ` +
+          `HEAD and ${ref} do share history — this checkout does not have it. ` +
+          `Run \`git fetch --unshallow\` (or \`git fetch --deepen=<n>\`), or set \`fetch-depth: 0\` on actions/checkout, then re-run.`,
+      );
+    }
     throw new Error(
       `Cannot resolve a merge base between HEAD and ${ref}${stderr.trim().length > 0 ? `: ${stderr.trim()}` : " (no common ancestor)"}. ` +
         `\`floor\` compares against the merge base so that commits ${ref} gained since this branch forked are not reported as this branch's removals. ` +
@@ -2134,10 +2204,10 @@ Usage:
                      [--json | --scoped-diff] [--append <file>]
   keryx review floor [--ref <base>] [--diff <file|->] [--context <n>]
                      [--json] [--report-only]
-                     --ref compares against the MERGE BASE of HEAD and <base>,
+                     --ref WIDENS the diff to the MERGE BASE of HEAD and <base>,
                      so commits <base> gained since this branch forked are not
                      reported as this branch's removals. Uncommitted work is
-                     still scanned.
+                     still scanned, with or without --ref.
   keryx review blast-radius [--ref <base> | --changed a,b] [--depth <n>] [--max-files <n>]
                             [--no-related-tests] [--final] [--previous <blast-radius.json>]
                             [--json | --brief] [--out <file>]
@@ -2198,6 +2268,11 @@ floor:
   Each is individually defensible; the guard does not claim any is wrong, only
   that the diff should say why. EXITS 1 when it finds anything — a question
   asked with exit 0 is a question nobody answers — and 0 when it finds nothing.
+  EXITS 2 when it could not look at all: a ref that will not resolve, a --diff
+  that will not open, a shallow clone with no merge base. Under --json that is
+  \`{"schemaVersion":1,"outcome":"cannot-scan","error":...}\` on STDOUT, so a
+  script tells "nothing weakened" from "nothing was read" by a field and not by
+  an exit code alone. A bad flag or a bad flag VALUE stays 1.
   \`--report-only\` prints the same report and exits 0, which is how a project
   measures its own rate before the guard starts refusing.
   It sees only what the pre-filter retained: a threshold lowered inside a
