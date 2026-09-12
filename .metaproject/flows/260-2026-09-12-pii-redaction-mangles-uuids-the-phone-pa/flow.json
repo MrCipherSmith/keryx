@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "gates": {
     "tasks": true,
     "review": true
@@ -7,15 +7,44 @@
   "id": "260",
   "slug": "pii-redaction-mangles-uuids-the-phone-pa",
   "title": "PII redaction mangles UUIDs: the phone pattern eats a correlationId in MCP output",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-12T08:33:33.069Z",
-  "updatedAt": "2026-09-12T08:33:33.069Z",
+  "updatedAt": "2026-09-12T09:00:48.162Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:0ed8d2694ffa444033bd0339cfe8220b4196ede5890dde9d08d456f33a1152bd",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-12T08:54:18.241Z",
+      "note": "bun ./src/cli.ts security check-output --stdin on the CI UUID: gate PASS, action allow, findings 0"
+    },
+    "AC2": {
+      "at": "2026-09-12T08:54:18.361Z",
+      "note": "pii-phone-identifier.test.ts: 10 000 seeded v4 UUIDs, zero phone findings; CONTROL test asserts the corpus really contains phone-shaped middles"
+    },
+    "AC3": {
+      "at": "2026-09-12T08:54:18.494Z",
+      "note": "Guard disabled temporarily: 5 of 8 tests in pii-phone-identifier.test.ts fail, including the verbatim CI UUID and the 10k enumeration"
+    },
+    "AC4": {
+      "at": "2026-09-12T08:54:18.613Z",
+      "note": "pii-phone.test.ts unchanged and green; pii-phone-identifier.test.ts re-asserts every corpus number plus punctuation-adjacent cases"
+    },
+    "AC5": {
+      "at": "2026-09-12T08:54:18.733Z",
+      "note": "proposal-lifecycle-parity.test.ts pins the redaction seam with the verbatim failing correlationId; 2 pass"
+    },
+    "AC6": {
+      "at": "2026-09-12T08:54:18.854Z",
+      "note": "pii-identifier-sweep.test.ts: all 8 rules probed against UUID/digest/slug/long-digit shapes; only pii.ssn is reachable by the same shape, asserted and documented rather than silently changed"
+    },
+    "AC7": {
+      "at": "2026-09-12T09:00:48.162Z",
+      "note": "bun test: 9810 pass, 19 skip, 0 fail (753 files); bunx tsc --noEmit -p . clean; bun run lint clean"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -25,34 +54,131 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Root cause read off the detector: the phone pattern's lookarounds accept a hyphen that is also a legal internal separator"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Boundary guard isIdentifierFragment added to pii.ts; pattern unchanged"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "pii-phone-identifier.test.ts (8), pii-identifier-sweep.test.ts (9), parity seam pin; 5 of 8 fail against the unfixed detector"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo"
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
     {
       "at": "2026-09-12T08:33:33.069Z",
       "event": "created"
+    },
+    {
+      "at": "2026-09-12T08:44:12.867Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-12T08:44:12.989Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-12T08:54:09.744Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-12T08:54:09.862Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-12T08:54:09.976Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-12T08:54:18.241Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: bun ./src/cli.ts security check-output --stdin on the CI UUID: gate PASS, action allow, findings 0"
+    },
+    {
+      "at": "2026-09-12T08:54:18.361Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: pii-phone-identifier.test.ts: 10 000 seeded v4 UUIDs, zero phone findings; CONTROL test asserts the corpus really contains phone-shaped middles"
+    },
+    {
+      "at": "2026-09-12T08:54:18.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: Guard disabled temporarily: 5 of 8 tests in pii-phone-identifier.test.ts fail, including the verbatim CI UUID and the 10k enumeration"
+    },
+    {
+      "at": "2026-09-12T08:54:18.613Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: pii-phone.test.ts unchanged and green; pii-phone-identifier.test.ts re-asserts every corpus number plus punctuation-adjacent cases"
+    },
+    {
+      "at": "2026-09-12T08:54:18.733Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: proposal-lifecycle-parity.test.ts pins the redaction seam with the verbatim failing correlationId; 2 pass"
+    },
+    {
+      "at": "2026-09-12T08:54:18.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: pii-identifier-sweep.test.ts: all 8 rules probed against UUID/digest/slug/long-digit shapes; only pii.ssn is reachable by the same shape, asserted and documented rather than silently changed"
+    },
+    {
+      "at": "2026-09-12T09:00:48.162Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bun test: 9810 pass, 19 skip, 0 fail (753 files); bunx tsc --noEmit -p . clean; bun run lint clean"
     }
   ]
 }

@@ -3,6 +3,21 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Fixed
+
+- **A UUID is no longer read as a telephone number.** The PII detector redacted
+  the middle of hyphenated identifiers — `730344f3-3668-4760-9056-bf7292686b67`
+  came back as `730344f3-[REDACTED:phone]-bf7292686b67` — because a hyphen
+  satisfied both of the phone pattern's boundary checks while also being a legal
+  separator inside it. Any identifier crossing a redacting surface, MCP tool
+  output included, was silently corrupted at that rate: 46 of 5 000 random v4
+  UUIDs, about one in a hundred. A match embedded in a longer alphanumeric
+  token, or in one carrying more digits than E.164 allows a phone number, is now
+  rejected; the phone corpus is unchanged, so every number the detector caught
+  before it still catches.
+
 ## [0.2.98] — 2026-09-12
 Credentials, and what keryx says about them. `shell_exec` stops handing saved
 provider keys to the commands it runs; `/provider` stops going mute when one is

@@ -206,6 +206,64 @@ function containsCalendarDate(value: string): boolean {
   return CALENDAR_DATE.test(value);
 }
 
+// A UUID is not a telephone number.
+//
+// The phone pattern bounds itself with `(?<![\w.])` / `(?![\w.])`, and a hyphen
+// satisfies both — while a hyphen is also a legal separator INSIDE the pattern.
+// So a digit run in the middle of a longer hyphenated identifier passed every
+// test above it: in `730344f3-3668-4760-9056-bf7292686b67`, the middle
+// `3668-4760-9056` is 12 digits in 2-4 digit groups, has no whitespace and
+// carries no calendar date. `keryx security check-output` duly returned
+// `730344f3-[REDACTED:phone]-bf7292686b67`, and the MCP surface handed that
+// corrupted id to its caller.
+//
+// About 0.9 % of v4 UUIDs have a phone-shaped middle (46 of 5 000 measured), so
+// this silently mangled roughly one identifier in a hundred, and made
+// `proposal-lifecycle-parity.test.ts` — which compares the CLI's JSON against
+// the MCP surface's — fail on a dice roll.
+//
+// The fix is a boundary, not a weaker pattern: the characters a match is
+// EMBEDDED in decide it, and a real phone number is never embedded in an
+// alphanumeric token.
+const IDENTIFIER_CHAR = /[0-9A-Za-z_-]/;
+
+/** The `[0-9A-Za-z_-]` run the match at `[start, end)` sits inside. */
+function enclosingToken(content: string, start: number, end: number): string {
+  let from = start;
+  while (from > 0 && IDENTIFIER_CHAR.test(content[from - 1] as string)) {
+    from -= 1;
+  }
+  let to = end;
+  while (to < content.length && IDENTIFIER_CHAR.test(content[to] as string)) {
+    to += 1;
+  }
+  return content.slice(from, to);
+}
+
+/**
+ * True when the candidate is only a FRAGMENT of a longer identifier.
+ *
+ * Two ways to tell, and a phone number satisfies neither:
+ *   - the enclosing token carries a letter or underscore — a dialling sequence
+ *     never does, whatever punctuation surrounds it (`"415-555-0199"`,
+ *     `[415-555-0199]`, `Tel:+14155550199` all keep their token letter-free,
+ *     because `"`, `[` and `:` are not identifier characters);
+ *   - the enclosing token carries more than 15 digits — E.164 caps a subscriber
+ *     number at 15, which is the same bound the digit check above already
+ *     applies to the match itself. An all-digit identifier long enough to
+ *     contain a phone-shaped run is an identifier.
+ */
+function isIdentifierFragment(content: string, matchStart: number, matchEnd: number): boolean {
+  const token = enclosingToken(content, matchStart, matchEnd);
+  if (token.length === matchEnd - matchStart) {
+    return false; // Nothing around it — the match IS the token.
+  }
+  if (/[A-Za-z_]/.test(token)) {
+    return true;
+  }
+  return countDigits(token) > 15;
+}
+
 function hasPhoneSeparatorShape(value: string): boolean {
   if (/\s{2,}/.test(value)) {
     return false;
@@ -248,6 +306,9 @@ export function detectPii(content: string): DetectorMatch[] {
           continue;
         }
         if (containsCalendarDate(value)) {
+          continue;
+        }
+        if (isIdentifierFragment(content, m.index, m.index + m[0].length)) {
           continue;
         }
       }

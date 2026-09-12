@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildMcpContext } from "../mcp/dispatch";
+import { redactToolOutput } from "../mcp/redact-seam";
 import { createMcpServer } from "../mcp/server";
 import { createWikiGuardedTargetWriter, ProposalLifecycleService } from "./proposal-lifecycle";
 import { localWorkspaceAuthorizationServer, WorkspaceService } from "./workspace-service";
@@ -53,4 +54,43 @@ test("actual CLI and real stdio MCP SDK preserve terminal review and replay pari
   const conflict = await client.callTool({ name: "sac.review", arguments: { workspaceId: "workspace-a", proposalId: "proposal-a", decision: "rejected", reason: "again", idempotencyKey: "proposal-review-idempotency-0002" } });
   expect(cliConflict.exitCode).toBe(1); expect(conflict.isError).toBe(true); expect(conflict.content[0]!.text).toContain("proposal already has a terminal transition");
   await client.close(); await server.close();
+});
+
+// The parity test above once failed on a dice roll.
+//
+// Its `correlationId` is a fresh `randomUUID()`, and the MCP surface runs every
+// tool result through the redaction seam. When the UUID happened to carry a
+// phone-shaped middle — about one run in a hundred — the seam masked it, the MCP
+// JSON stopped matching the CLI's, and the gate failed for a reason that had
+// nothing to do with parity. The other ninety-nine runs passed while the ids
+// they returned were one draw away from being corrupted in production too
+// (flow 260).
+//
+// The draw is removed here: the id that DID fail is a literal, so the property
+// is asserted on every run rather than sampled.
+test("the MCP redaction seam returns a review event verbatim, phone-shaped correlationId and all", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-sac-parity-redact-"));
+  const event = {
+    event: {
+      // The exact id from the CI failure that opened flow 260.
+      correlationId: "730344f3-3668-4760-9056-bf7292686b67",
+      eventId: "event-f53fd8cbab7a47fd",
+      fromStatus: "proposed",
+      idempotencyKey: "proposal-review-idempotency-0001",
+      occurredAt: now,
+      priorEventHash: "901131d838b17aac0f7885b81e03cbdc9f5157a00343d30ab22083685ed1416a",
+      proposalId: "proposal-a",
+      proposalRevision: "r1",
+      reason: "not-applicable",
+      recordType: "proposal-transition",
+      schemaVersion: "1.0",
+      sequence: 1,
+      toStatus: "rejected",
+      workspaceId: "workspace-a",
+    },
+  };
+  const serialized = JSON.stringify(event);
+  const throughSeam = await redactToolOutput(root, serialized);
+  expect(JSON.parse(throughSeam)).toEqual(event);
+  expect(throughSeam).toContain("730344f3-3668-4760-9056-bf7292686b67");
 });
