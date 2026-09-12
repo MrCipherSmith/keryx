@@ -9,7 +9,7 @@
   "title": "Skill gaps: debugging, doubt, source-verification, deprecation, floor-guard, definition of done",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:13.725Z",
-  "updatedAt": "2026-09-12T09:48:13.153Z",
+  "updatedAt": "2026-09-12T10:59:36.497Z",
   "source": {
     "type": "description",
     "ref": null
@@ -81,8 +81,14 @@
         "T16"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:59:36.497Z",
+            "outcome": "started",
+            "detail": "258-T3 full verification plus review floor on this branch's own diff"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -109,87 +115,122 @@
       "id": "T5",
       "title": "W1: the debugging / root-cause skill (AC1, AC2, AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:50:26.512Z",
+            "outcome": "started",
+            "detail": "258-T5 W1 debugging skill; owns the corpus lane"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "W1: the in-flight adversarial doubt skill (AC1, AC2, AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:57:48.996Z",
+            "outcome": "started",
+            "detail": "258-T6 W1 doubt skill; takes the corpus lane from T5 at 290/292"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "W1: the source-driven development skill (AC1, AC2, AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:04:57.507Z",
+            "outcome": "started",
+            "detail": "258-T7 W1 source-driven development; takes the corpus lane at 295/297"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "W1: the deprecation and migration skill, and the rank-1 record re-measured for all four (AC1, AC2, AC3)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:12:49.942Z",
+            "outcome": "started",
+            "detail": "258-T8 W1 deprecation skill and the lane's single re-measurement; pair stands at 300/302"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "W2: the definition-of-done rule, citing every rule whose bar it reconciles (AC4)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:50:26.627Z",
+            "outcome": "started",
+            "detail": "258-T9 W2 definition-of-done rule; measures the existing bar first"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "W2: the CLI interface design rule (AC4)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -199,94 +240,130 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
       "title": "W3: keryx review floor — the diff-scoped guard and its four detections (AC5)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:50:26.733Z",
+            "outcome": "started",
+            "detail": "258-T11 W3 keryx review floor"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
       "title": "W4: the task-implementer output contract gains the three structured fields (AC7)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T09:50:26.842Z",
+            "outcome": "started",
+            "detail": "258-T12 W4 task-implementer contract fields"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
       "title": "W4: task-implementer's SKILL.md fills them, paid for inside its ceiling (AC8)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8",
         "T12"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:27:43.717Z",
+            "outcome": "started",
+            "detail": "258-T13 + T18 together; same file, 670-line budget"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T14",
       "title": "W4: interviewer — a hedged answer is not approval, confidence per question (AC9)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:27:43.921Z",
+            "outcome": "started",
+            "detail": "258-T14 interviewer; 131-line budget"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T15",
       "title": "W4: perf-check states neutral is a revert and attempts are recorded; review-performance cites it (AC10)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T8"
       ],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:27:44.023Z",
+            "outcome": "started",
+            "detail": "258-T15 perf mechanics; 104 and 374-line budgets"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T16",
       "title": "Attribution: an MIT credit in each adapting document, by the existing convention (AC11)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5",
         "T6",
@@ -296,12 +373,60 @@
         "T10"
       ],
       "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:34:25.635Z",
+            "outcome": "started",
+            "detail": "258-T16 attribution, by the inline convention; owns the ceiling file for its line changes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "The status protocol cites the done bar for the unmet-criterion case, so the two cannot be read as disagreeing (AC4)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
         "count": 0,
         "log": []
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "task-implementer maps its internal partial to DONE_WITH_CONCERNS, contradicting its own line 563 and the done rule (AC8)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T12"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T10:27:43.821Z",
+            "outcome": "started",
+            "detail": "258-T18 folded into the T13 worker; same file"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -407,6 +532,151 @@
     {
       "at": "2026-09-12T09:48:13.153Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-12T09:50:26.512Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 258-T5 W1 debugging skill; owns the corpus lane"
+    },
+    {
+      "at": "2026-09-12T09:50:26.627Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 258-T9 W2 definition-of-done rule; measures the existing bar first"
+    },
+    {
+      "at": "2026-09-12T09:50:26.733Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 258-T11 W3 keryx review floor"
+    },
+    {
+      "at": "2026-09-12T09:50:26.842Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 258-T12 W4 task-implementer contract fields"
+    },
+    {
+      "at": "2026-09-12T09:53:44.010Z",
+      "event": "task-done",
+      "detail": "T9: W2: the definition-of-done rule, citing every rule whose bar it reconciles (AC4)"
+    },
+    {
+      "at": "2026-09-12T09:53:44.123Z",
+      "event": "task-added",
+      "detail": "T17: The status protocol cites the done bar for the unmet-criterion case, so the two cannot be read as disagreeing (AC4)"
+    },
+    {
+      "at": "2026-09-12T09:55:11.053Z",
+      "event": "task-done",
+      "detail": "T12: W4: the task-implementer output contract gains the three structured fields (AC7)"
+    },
+    {
+      "at": "2026-09-12T09:56:48.955Z",
+      "event": "task-done",
+      "detail": "T17: The status protocol cites the done bar for the unmet-criterion case, so the two cannot be read as disagreeing (AC4)"
+    },
+    {
+      "at": "2026-09-12T09:56:49.063Z",
+      "event": "task-added",
+      "detail": "T18: task-implementer maps its internal partial to DONE_WITH_CONCERNS, contradicting its own line 563 and the done rule (AC8)"
+    },
+    {
+      "at": "2026-09-12T09:57:41.789Z",
+      "event": "task-done",
+      "detail": "T5: W1: the debugging / root-cause skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T09:57:48.996Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 258-T6 W1 doubt skill; takes the corpus lane from T5 at 290/292"
+    },
+    {
+      "at": "2026-09-12T10:00:58.305Z",
+      "event": "task-done",
+      "detail": "T10: W2: the CLI interface design rule (AC4)"
+    },
+    {
+      "at": "2026-09-12T10:04:57.405Z",
+      "event": "task-done",
+      "detail": "T6: W1: the in-flight adversarial doubt skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T10:04:57.507Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 258-T7 W1 source-driven development; takes the corpus lane at 295/297"
+    },
+    {
+      "at": "2026-09-12T10:05:51.662Z",
+      "event": "task-done",
+      "detail": "T11: W3: keryx review floor — the diff-scoped guard and its four detections (AC5)"
+    },
+    {
+      "at": "2026-09-12T10:12:49.840Z",
+      "event": "task-done",
+      "detail": "T7: W1: the source-driven development skill (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T10:12:49.942Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 258-T8 W1 deprecation skill and the lane's single re-measurement; pair stands at 300/302"
+    },
+    {
+      "at": "2026-09-12T10:26:43.836Z",
+      "event": "task-done",
+      "detail": "T8: W1: the deprecation and migration skill, and the rank-1 record re-measured for all four (AC1, AC2, AC3)"
+    },
+    {
+      "at": "2026-09-12T10:27:43.717Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 258-T13 + T18 together; same file, 670-line budget"
+    },
+    {
+      "at": "2026-09-12T10:27:43.821Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 258-T18 folded into the T13 worker; same file"
+    },
+    {
+      "at": "2026-09-12T10:27:43.921Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 258-T14 interviewer; 131-line budget"
+    },
+    {
+      "at": "2026-09-12T10:27:44.023Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 258-T15 perf mechanics; 104 and 374-line budgets"
+    },
+    {
+      "at": "2026-09-12T10:30:28.860Z",
+      "event": "task-done",
+      "detail": "T14: W4: interviewer — a hedged answer is not approval, confidence per question (AC9)"
+    },
+    {
+      "at": "2026-09-12T10:31:38.255Z",
+      "event": "task-done",
+      "detail": "T13: W4: task-implementer's SKILL.md fills them, paid for inside its ceiling (AC8)"
+    },
+    {
+      "at": "2026-09-12T10:31:38.360Z",
+      "event": "task-done",
+      "detail": "T18: task-implementer maps its internal partial to DONE_WITH_CONCERNS, contradicting its own line 563 and the done rule (AC8)"
+    },
+    {
+      "at": "2026-09-12T10:34:25.529Z",
+      "event": "task-done",
+      "detail": "T15: W4: perf-check states neutral is a revert and attempts are recorded; review-performance cites it (AC10)"
+    },
+    {
+      "at": "2026-09-12T10:34:25.635Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 258-T16 attribution, by the inline convention; owns the ceiling file for its line changes"
+    },
+    {
+      "at": "2026-09-12T10:55:47.362Z",
+      "event": "task-done",
+      "detail": "T16: Attribution: an MIT credit in each adapting document, by the existing convention (AC11)"
+    },
+    {
+      "at": "2026-09-12T10:59:36.497Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 258-T3 full verification plus review floor on this branch's own diff"
     }
   ]
 }
