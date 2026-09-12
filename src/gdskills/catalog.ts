@@ -306,6 +306,12 @@ export const BUNDLED_GDSKILLS: BundledSkill[] = [
     "Reduce to the smallest failing case, then state the cause as a mechanism before changing anything.",
     "Leave a guard that was watched failing against the unfixed code; when nothing reproduces, report attempts, evidence and surviving hypotheses instead of a fix.",
   ]),
+  skill("fresh-eyes", "quality", ["recommended", "full"], "Doubt work still in flight from a reader who was never told why it works.", [
+    "Take the artifact and the contract it must satisfy; refuse the author's walkthrough, rationale, and \"I already checked that\".",
+    "Ask only procedural questions — how to run it, which branch is live — and never why it is right.",
+    "Raise a doubt only when it names a concrete failure, is anchored to a line or step, is checkable, and survives one honest re-read.",
+    "Bound the loop before round one; end at the first round with no new qualifying doubt, and report finding nothing as a completed cycle.",
+  ]),
   skill("test-gen", "quality", ["recommended", "full"], "Generate tests for a file or module using local patterns and existing test stack.", [
     "Discover test framework and nearby test examples.",
     "Generate tests that cover behavior, edge cases, and errors.",

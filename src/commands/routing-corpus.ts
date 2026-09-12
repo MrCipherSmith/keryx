@@ -764,6 +764,35 @@ export const ROUTING_CORPUS: readonly RoutingCase[] = [
     ],
   },
   {
+    skill: "fresh-eyes",
+    positives: [
+      "I have been staring at this migration too long, can someone who has not heard my reasoning say where it breaks",
+      "give this design to somebody who knows nothing about why I built it and ask what is wrong",
+      // The two hazard proofs for this skill's own NOT-for clause. It excludes
+      // its neighbours by DESCRIBING them — "judging a finished diff against a
+      // rubric", "re-testing a finding somebody has already written down" —
+      // rather than by naming their owners, because a name in a description is
+      // a name in the query the user echoes back, and the scorer pays +30 for
+      // it. Both `KNOWN_ROUTING_GAPS` above are that mechanism. So the
+      // exclusion has to cost this skill nothing: a user quoting the excluded
+      // wording back is still asking for this skill, and still gets it, 50
+      // against 40 and 90 against 30.
+      "I am halfway through this and I want it doubted before I call it done, not a rubric check on a finished diff",
+      "this artifact is still in flight — have somebody doubt it now, not re-test a finding somebody already wrote down",
+      "poke holes in this before I finish",
+    ],
+    negatives: [
+      // The three neighbours, each asked for in a user's own words. The first
+      // re-tests findings that already exist; the second takes the review
+      // request that names no specialist; the third owns a defect nobody can
+      // yet explain. None of them reads an artifact with its author's account
+      // withheld, which is the only thing this skill does.
+      { prompt: "check these findings", owner: "review-verifier" },
+      { prompt: "review my code", owner: "review-orchestrator" },
+      { prompt: "the app crashes when a user saves and nobody knows what produces it", owner: "root-cause" },
+    ],
+  },
+  {
     skill: "test-gen",
     positives: [
       "write tests",

@@ -71,6 +71,7 @@ Resolution order:
 | db-migrate | quality | Guide database migration creation, apply, rollback, status, and verification flows. | gdskills/quality/db-migrate/SKILL.md |
 | dependency-update | quality | Plan and verify dependency upgrades. | gdskills/quality/dependency-update/SKILL.md |
 | deploy | quality | Run deployment pre-flight checks and deployment workflow summaries. | gdskills/quality/deploy/SKILL.md |
+| fresh-eyes | quality | Doubt work still in flight from a reader who was never told why it works. | gdskills/quality/fresh-eyes/SKILL.md |
 | metaproject-security | quality | Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration. | gdskills/quality/metaproject-security/SKILL.md |
 | perf-check | quality | Run or summarize performance, bundle, and complexity checks. | gdskills/quality/perf-check/SKILL.md |
 | pr | quality | Prepare pull request creation or update context from local changes. | gdskills/quality/pr/SKILL.md |

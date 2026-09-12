@@ -72,6 +72,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `db-migrate`: Guide database migration creation, apply, rollback, status, and verification flows.
 - `dependency-update`: Plan and verify dependency upgrades.
 - `deploy`: Run deployment pre-flight checks and deployment workflow summaries.
+- `fresh-eyes`: Doubt work still in flight from a reader who was never told why it works.
 - `metaproject-security`: Check Metaproject Security policies for prompts, external content, memory/wiki/report writes, PII, secrets, prompt injection, and data exfiltration.
 - `perf-check`: Run or summarize performance, bundle, and complexity checks.
 - `pr`: Prepare pull request creation or update context from local changes.
