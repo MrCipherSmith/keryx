@@ -452,8 +452,8 @@ const TYPE_KEYWORDS = new Set([
 ]);
 
 /**
- * The identifier or key the number at `index` belongs to — and nothing else on
- * the line.
+ * The identifiers the number at `index` belongs to, INNERMOST FIRST — one group
+ * of tokens per step of the walk, and the groups are never merged.
  *
  * Reading the WHOLE line, which is what this did first, let one unrelated word
  * silence a real weakening or invent a fake one. Both halves were measured:
@@ -482,11 +482,33 @@ const TYPE_KEYWORDS = new Set([
  *   ({@link TRAILING_INDEX}).
  *
  * A number with no identifier in front of it — a list marker, a bare argument
- * after a comma — still yields no tokens and therefore no direction, which is
+ * after a comma — still yields no groups and therefore no direction, which is
  * the honest answer rather than a guess.
+ *
+ * ## The walk both ADDS and REMOVES findings, and the groups are why
+ *
+ * Widening the reach of a name is not a one-way widening of the guard: a step
+ * outward brings in a word that can CONTRADICT the one next to the number, and
+ * a contradiction is silence ({@link thresholdDirection}). Flattening every
+ * step into one bag of tokens is how that happened. Each of these is silent with
+ * the steps flattened and fires with them kept apart — measured at T24, both
+ * readings, and pinned as fixtures in `floor.test.ts` so the pair stays testable:
+ *
+ * - `"coverage": { "maxWarnings": 0 -> 50 }` — this module's own headline
+ *   bar-lowering ({@link CEILING_WORDS}), voided by `coverage` being a floor word.
+ * - `thresholds: { maxLatencyMs: 500 -> 900 }`, `"slo": { "timeoutMs": 100 -> 900 }`
+ *   — a ceiling raised under a floor-named container.
+ * - `"budget": { "minScore": 90 -> 50 }` — a floor lowered under a ceiling-named
+ *   container.
+ * - `maxRows: { minItems: 3 -> 0 }` — the very sentence {@link CAPACITY_WORDS}
+ *   was narrowed to protect, voided by the `max` one container out.
+ *
+ * So the groups stay separate and the INNERMOST name that speaks about direction
+ * decides; see {@link thresholdDirection} for what "speaks" means and why an
+ * enclosing key is never allowed to overrule it.
  */
-function adjacentTokens(code: string, index: number): string[] {
-  const tokens: string[] = [];
+function enclosingNames(code: string, index: number): string[][] {
+  const names: string[][] = [];
   let before = code.slice(0, index);
   for (let step = 0; step < 4; step += 1) {
     const separator = KEY_SEPARATORS.exec(before)?.[0] ?? "";
@@ -500,12 +522,14 @@ function adjacentTokens(code: string, index: number): string[] {
     if (here.length > 0 && here.every((token) => TYPE_KEYWORDS.has(token))) {
       continue; // a type annotation names nothing about the bar
     }
-    tokens.push(...here);
+    if (here.length > 0) {
+      names.push(here);
+    }
     if (!OPENS_CONTAINER.test(KEY_SEPARATORS.exec(before)?.[0] ?? "")) {
       break; // nothing encloses this key: it is the whole name
     }
   }
-  return tokens;
+  return names;
 }
 
 type ThresholdDirection = { weakenedBy: "decrease" | "increase"; word: string } | undefined;
@@ -514,9 +538,21 @@ type ThresholdDirection = { weakenedBy: "decrease" | "increase"; word: string } 
  * Which direction weakens this number, decided by the words in the identifier
  * that NAMES it — not by the numbers, and not by the rest of the line.
  *
+ * One name decides, and it is the innermost one that says anything about
+ * direction. The names arrive as separate groups, innermost first
+ * ({@link enclosingNames}); a group holding neither a floor nor a ceiling word
+ * names nothing about the bar, so the walk asks the key enclosing it, and the
+ * first group that does hold one answers for the number — including when its
+ * answer is "no direction". An enclosing key never overrules a nearer one,
+ * because that veto is the bug this shape was written to fix: the flat version
+ * let `coverage` silence `maxWarnings: 0 -> 50`.
+ *
  * A name carrying both a floor and a ceiling (`minTimeout`) is ambiguous and
  * returns `undefined`: the guard would have to guess which one the number
- * belongs to, and a guess in a guard is worse than a gap.
+ * belongs to, and a guess in a guard is worse than a gap. That `undefined` is
+ * final rather than a reason to keep walking — `coverage: { minTimeout: 500 }`
+ * is a number the nearest name genuinely cannot read, and an outer word is not
+ * evidence about it.
  *
  * {@link CAPACITY_WORDS} suppresses a CEILING and not a FLOOR, and that
  * asymmetry is load-bearing. A ceiling on a resource — `maxOutputTokens`,
@@ -525,18 +561,26 @@ type ThresholdDirection = { weakenedBy: "decrease" | "increase"; word: string } 
  * the same units is still a demand: `minItems: 3` becoming `minItems: 0` is a
  * required-count guard relaxed to nothing, and a rule that sees `items` and
  * falls silent hides exactly the edit this module exists to show.
+ *
+ * The units are read from the deciding name only, which has a stated cost: a
+ * capacity word that sits ONLY in an enclosing key — `tokens: { max: 16 -> 256 }`
+ * — no longer suppresses, so that shape is noise. It is the price of the rule
+ * above, and the alternative is the veto this fix removed.
  */
-function thresholdDirection(tokens: readonly string[]): ThresholdDirection {
-  const floorWord = tokens.find((token) => FLOOR_WORDS.has(token));
-  const ceilingWord = tokens.find((token) => CEILING_WORDS.has(token));
-  if (floorWord !== undefined && ceilingWord !== undefined) {
-    return undefined;
-  }
-  if (floorWord !== undefined) {
-    return { weakenedBy: "decrease", word: floorWord };
-  }
-  if (ceilingWord !== undefined) {
-    return tokens.some((token) => CAPACITY_WORDS.has(token)) ? undefined : { weakenedBy: "increase", word: ceilingWord };
+function thresholdDirection(names: readonly (readonly string[])[]): ThresholdDirection {
+  for (const tokens of names) {
+    const floorWord = tokens.find((token) => FLOOR_WORDS.has(token));
+    const ceilingWord = tokens.find((token) => CEILING_WORDS.has(token));
+    if (floorWord !== undefined && ceilingWord !== undefined) {
+      return undefined;
+    }
+    if (floorWord !== undefined) {
+      return { weakenedBy: "decrease", word: floorWord };
+    }
+    if (ceilingWord !== undefined) {
+      return tokens.some((token) => CAPACITY_WORDS.has(token)) ? undefined : { weakenedBy: "increase", word: ceilingWord };
+    }
+    // this name says nothing about direction; ask the key enclosing it
   }
   return undefined;
 }
@@ -562,7 +606,7 @@ function thresholdDirection(tokens: readonly string[]): ThresholdDirection {
 function agreedDirection(code: string, moved: readonly { index: number }[]): ThresholdDirection {
   let decided: ThresholdDirection;
   for (const pair of moved) {
-    const here = thresholdDirection(adjacentTokens(code, pair.index));
+    const here = thresholdDirection(enclosingNames(code, pair.index));
     if (here === undefined) {
       continue;
     }
@@ -592,13 +636,18 @@ const COMMENTED_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
  *    line: a trailing comment added in the same edit must not break the pair,
  *    or the evasion is "lower the number and explain yourself on the same line".
  * 2. **A named direction.** The identifier the moved number BELONGS to — found
- *    by walking left from it, see {@link adjacentTokens} — must name a floor or
+ *    by walking left from it, see {@link enclosingNames} — must name a floor or
  *    a ceiling ({@link FLOOR_WORDS}, {@link CEILING_WORDS}), and only the
  *    direction that weakens THAT kind of number fires. A coverage minimum moving
  *    up is silent; a timeout moving down is silent. A line whose every moved
  *    number is unnamed is silent in both directions — `count: 5` -> `count: 3`,
  *    and `5.` -> `6.` in a renumbered markdown list, which has no name in front
- *    of it at all.
+ *    of it at all. The walk reaches PAST the adjacent identifier to the keys
+ *    enclosing it, and that reach cuts both ways: a further name can supply a
+ *    direction the adjacent one lacked, and — if the two are merged instead of
+ *    kept apart — it can also CONTRADICT the adjacent one and take a real
+ *    finding away. {@link enclosingNames} keeps them apart for exactly that
+ *    reason, and the shapes it cost are listed there.
  * 3. **An unmixed move.** If some numbers on the line went up and others went
  *    down, nothing fires: `retry(3, 100)` -> `retry(5, 50)` is a redesign, and
  *    reporting half of it as a weakening would be a claim this module cannot
@@ -616,25 +665,32 @@ const COMMENTED_LINE = /^\s*(\/\/|\/\*|\*|#|--)/;
  *
  * ## The window, and how to re-derive it
  *
- * The 200 commits ending at `main` = `5d5e1acc`, each read as
- * `git diff <sha>^ <sha> -U3` and scoped with
+ * The 200 commits ending at `main` = `5d5e1acc`, enumerated as
+ * `git log -n 200 --format=%H 5d5e1acc` and each read as
+ * `git diff <sha>^ <sha> -U3`, scoped with
  * `buildReviewScope(diff, { contextLines: 3 })`; the merge commits among them
- * contribute their first-parent diff, which is what that command gives:
+ * contribute their first-parent diff, which is what that command gives. The
+ * enumeration is pinned because `git log`'s default ordering is not the only one
+ * available, and a different 200 is a different measurement:
  *
  * | reading | `threshold-lowered` |
  * |---|---|
  * | whole line | **25** — 22 a renumbered ordered list (14, `5.` -> `6.`) or step heading (8, `Step 9:` -> `Step 7:`); 3 not a list |
  * | adjacent identifier only | **2** |
- * | the walk in {@link adjacentTokens}, as it stands now | **2** |
+ * | the walk in {@link enclosingNames}, as it stands now | **2** |
  *
  * Both survivors are the same edit in two copies of one file,
  * `"maximum": 2` -> `3` in a JSON schema — a real ceiling, correctly reported.
  * Of the three non-list findings whole-line reading produced, the narrowing kept
  * those two and gave up `expect(score.recall).toBe(1)` -> `toBe(0)`, which is
- * named in NOT DETECTED above rather than left unsaid. The widenings in this
- * round add nothing over the window: all four kinds produce a byte-identical
- * finding list before and after them (37 `suppression-added`, 17
- * `assertion-removed`, 11 `test-disabled`, 2 `threshold-lowered`).
+ * named in NOT DETECTED above rather than left unsaid.
+ *
+ * Re-run over that window at T24, before and after the walk stopped flattening
+ * its steps: 37 `suppression-added`, 17 `assertion-removed`, 11 `test-disabled`,
+ * 2 `threshold-lowered` — the same 67 findings on both sides, byte-identical
+ * once serialised. So the shapes {@link enclosingNames} recovers are shapes this
+ * window does not contain, and nothing in it changed hands; the recovery is
+ * evidenced by the fixtures named there, not by a count that moved.
  */
 function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLine[]): FloorFinding[] {
   const findings: FloorFinding[] = [];
@@ -713,8 +769,13 @@ function detectLoweredThresholds(region: ScopedRegion, lines: readonly RegionLin
  *   worse }` both fired, and this branch ships thousands of lines of prose about
  *   skipped tests. A sentence does not call anything.
  *
- * Modifier segments are allowed on BOTH sides of the disabling keyword, and a
- * segment may carry an argument list. One bare segment before the keyword was
+ * Up to TWO modifier segments are allowed on EACH side of the disabling keyword,
+ * and a segment may carry an argument list. The bound is stated rather than left
+ * to the pattern because it is a real edge, measured here (T24):
+ * `test.concurrent.failing.skip(` fires and `test.a.b.c.skip(` — one segment more
+ * — is silent. Two per side is what the spellings below need; a longer chain is
+ * a shape nobody writes, and this is a regex, so every repetition it admits is
+ * one a pathological line can make it walk. One bare segment before the keyword was
  * the first rule, and it did not match the shapes its own comment cited: the
  * pattern admitted no call between segments, so the table-driven spellings
  * (`describe.each(cases).skip(…)`, and the one jest and vitest actually

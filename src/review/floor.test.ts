@@ -205,6 +205,61 @@ test("a line whose numbers move in both directions is not reported", () => {
   expect(kinds(mixed)).toEqual([]);
 });
 
+test("the innermost name decides, and an enclosing key cannot veto it", () => {
+  // T24/MINOR. The walk was flattening every step into one bag of tokens, so an
+  // enclosing key whose words pulled the other way made the pair ambiguous and
+  // took away a finding the previous, narrower reading had reported. Each of
+  // these five fired when only the adjacent identifier was read and was silent
+  // once the container was mixed in with it.
+  const nested: [string, string, string, string][] = [
+    ["package.json", '"coverage": { "maxWarnings": 0 },', '"coverage": { "maxWarnings": 50 },', "0 -> 50"],
+    ["src/slo.ts", "thresholds: { maxLatencyMs: 500 },", "thresholds: { maxLatencyMs: 900 },", "500 -> 900"],
+    ["budget.json", '"budget": { "minScore": 90 },', '"budget": { "minScore": 50 },', "90 -> 50"],
+    ["slo.json", '"slo": { "timeoutMs": 100 },', '"slo": { "timeoutMs": 900 },', "100 -> 900"],
+    ["schema.ts", "maxRows: { minItems: 3 },", "maxRows: { minItems: 0 },", "3 -> 0"],
+  ];
+  for (const [path, removed, added, movement] of nested) {
+    const findings = report(diffOf(path, 4, [`-  ${removed}`, `+  ${added}`].join("\n"))).findings;
+    expect(findings.map((finding) => finding.kind)).toEqual(["threshold-lowered"]);
+    expect(findings[0]?.detail).toContain(movement);
+  }
+
+  // And the controls, one per shape: the same five containers with the number
+  // moving the SAFE way stay silent, so what fires is the direction and not the
+  // nesting.
+  const repaired: [string, string, string][] = [
+    ["package.json", '"coverage": { "maxWarnings": 50 },', '"coverage": { "maxWarnings": 0 },'],
+    ["src/slo.ts", "thresholds: { maxLatencyMs: 900 },", "thresholds: { maxLatencyMs: 500 },"],
+    ["budget.json", '"budget": { "minScore": 50 },', '"budget": { "minScore": 90 },'],
+    ["slo.json", '"slo": { "timeoutMs": 900 },', '"slo": { "timeoutMs": 100 },'],
+    ["schema.ts", "maxRows: { minItems: 0 },", "maxRows: { minItems: 3 },"],
+  ];
+  for (const [path, removed, added] of repaired) {
+    expect(kinds(diffOf(path, 4, [`-  ${removed}`, `+  ${added}`].join("\n")))).toEqual([]);
+  }
+});
+
+test("reaching an enclosing key does not reopen the noise the narrowing removed", () => {
+  // The other half of T24/MINOR: the walk must not undo the two carve-outs it
+  // walks past. A renumbered heading still has no name in front of it however
+  // far left the walk looks, and a data budget is still a budget when it sits
+  // inside a container.
+  const renumbered = diffOf("SKILL.md", 12, ["-5. Explicitly allowed global fallback skills", "+6. Explicitly allowed global fallback skills"].join("\n"));
+  const step = diffOf("SKILL.md", 12, ["-□ Step 9: Analyze tests (understand coverage)", "+□ Step 7: Analyze tests (understand coverage)"].join("\n"));
+  const tokens = diffOf("src/tui/game-modal.ts", 4, ["-      maxOutputTokens: 16,", "+      maxOutputTokens: 256,"].join("\n"));
+  const nestedTokens = diffOf("src/tui/game-modal.ts", 4, ["-  budget: { maxOutputTokens: 16 },", "+  budget: { maxOutputTokens: 256 },"].join("\n"));
+  // An ambiguous name is answered by nothing further out: `min` and `timeout` on
+  // one key is a number this module cannot read, and `coverage` is not evidence
+  // about it.
+  const ambiguous = diffOf("src/wait.ts", 4, ["-  coverage: { minTimeout: 500 },", "+  coverage: { minTimeout: 100 },"].join("\n"));
+  // A comma is still not an opener, however many steps the walk is allowed.
+  const argument = diffOf("src/gate.ts", 4, ["-  computeThreshold(scores, 80);", "+  computeThreshold(scores, 70);"].join("\n"));
+
+  for (const control of [renumbered, step, tokens, nestedTokens, ambiguous, argument]) {
+    expect(kinds(control)).toEqual([]);
+  }
+});
+
 test("a rewrite that is not the same line with a different number is not reported", () => {
   // The skeleton match: without it, any removed line holding a digit next to
   // any added line holding a digit becomes a finding.
@@ -310,6 +365,13 @@ test("the table-driven spellings the pattern claimed to cover are reported", () 
   // argument list is paren-free, because this is a regex and not a parser.
   const computed = diffOf("src/pay/pay.test.ts", 12, ['+  describe.each(buildCases(x)).skip("refunds", (c) => {', "   });"].join("\n"));
   expect(kinds(computed)).toEqual([]);
+
+  // T24/INFO-A. The other stated boundary: TWO modifier segments per side, not
+  // an unbounded chain. `test.concurrent.failing.skip` above is the two the
+  // docstring promises; one more is silent, and the docstring now says so
+  // instead of leaving the reader to count the `{0,2}` in the pattern.
+  const threeModifiers = diffOf("src/pay/pay.test.ts", 12, ['+  test.a.b.c.skip("refunds", async () => {', "   });"].join("\n"));
+  expect(kinds(threeModifiers)).toEqual([]);
 });
 
 test("a marker that merely appears inside a string or mid-expression is not reported", () => {
