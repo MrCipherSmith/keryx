@@ -1245,6 +1245,8 @@
     "src/security/detect/injection/adapter.ts",
     "src/security/detect/mcp.test.ts",
     "src/security/detect/mcp.ts",
+    "src/security/detect/pii-identifier-sweep.test.ts",
+    "src/security/detect/pii-phone-identifier.test.ts",
     "src/security/detect/pii-phone.test.ts",
     "src/security/detect/pii.ts",
     "src/security/detect/pii/ner-adapter.test.ts",
