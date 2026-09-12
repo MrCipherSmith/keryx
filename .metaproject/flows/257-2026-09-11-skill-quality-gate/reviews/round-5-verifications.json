@@ -1,0 +1,14 @@
+{
+  "status": "DONE",
+  "verifier": "round-6",
+  "summary": "1 round-5 finding at or above minor re-checked AT THE FIX (a1ea358c) by the round-6 reviewer, which did not raise it: 1 execution, 1 refuted, 0 confirmed, 0 unverifiable. `refuted` is the post-fix reading — the reviewer looked for R5-m1 at this head and it no longer reproduces. Round 6 raised a new minor of its own about the same comment block (the test name said the install refuses the link, when only the sweep does); that is R6-m1, not a claim that R5-m1 was wrong. The info item was not checked, by design.",
+  "verifications": [
+    {
+      "finding": "R5-m1",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-6",
+      "evidence": "Checked at a1ea358c, the commit that fixes this finding. The install-level test round 5 said was impossible now exists and works: installGdskills was driven twice against a symlinked category in scratch, the second call resolved and returned 1 warning and 0 notices, and the refusal names the category once although orchestration holds 8 skills. It is a regression detector, not decoration — replacing lstat with stat in resolveSweepableDir makes the new test fail at toHaveLength(1) with 8 received, and breaking only the categories memo makes this test the sole failure in the file. The hand-written file in the link target keeps its mtime and size across an install that wrote 8 sibling skill directories into the same place, so it was reached and left alone rather than merely unreachable."
+    }
+  ]
+}

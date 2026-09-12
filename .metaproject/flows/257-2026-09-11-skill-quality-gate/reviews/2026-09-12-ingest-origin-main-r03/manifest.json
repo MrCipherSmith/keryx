@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-12-ingest-origin-main-r03",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "origin/main",
-    "head": "731a8ef1"
+    "head": "d09f28d0"
   },
   "artifacts": {
     "scope": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r03/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-12T08:52:14.809Z",
-  "updatedAt": "2026-09-12T08:52:14.809Z",
+  "createdAt": "2026-09-12T09:33:44.706Z",
+  "updatedAt": "2026-09-12T09:33:47.767Z",
   "flow": {
     "id": "257",
     "path": ".metaproject/flows/257-2026-09-11-skill-quality-gate"

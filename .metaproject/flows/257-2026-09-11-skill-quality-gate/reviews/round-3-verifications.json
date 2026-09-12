@@ -1,0 +1,28 @@
+{
+  "status": "DONE",
+  "verifier": "round-4",
+  "summary": "3 round-3 findings re-checked AT THE FIX (ae2ff9b7, commit bbd6e7ce) by the round-4 reviewer, which raised none of them: 3 execution, 0 site-check, 0 reasoning; 3 refuted, 0 confirmed, 0 unverifiable. `refuted` is the post-fix reading the gate asks for — the reviewer looked for each finding at this head and it no longer reproduces; all three were real at d09f28d0, which is what their acted-on dispositions record. Round 4 raised one new minor finding of its own (R4-m1) about a comment in the same file; that is its own finding, not a refutation of these.",
+  "verifications": [
+    {
+      "finding": "R3-m1",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-4",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. The header of src/commands/init.test.ts no longer carries line numbers; it names the symbol and the behaviour, matching the style the same commit gave update.test.ts and skills-install-warnings.test.ts. Nothing in the file cites init.ts:624 or :1089 any more."
+    },
+    {
+      "finding": "R3-m2",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-4",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. In a scratch copy, deleting the Notices block at skills.ts:125-130 and at init.ts:1093-1098 turns each command's new test red at `noticesAt > -1`. Each test also asserts that the removal line's index is greater than noticesAt and that a Warnings heading never appears, so ordering is checked rather than mere presence."
+    },
+    {
+      "finding": "R3-m3",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-4",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. An independent extractor replicating PATH_REFERENCE with docs/ added, run over the bundled tree, returns 17 distinct paths: 7 exist under the repository root and 0 under defaultBundledRoot(), which is exactly what the corrected sentence claims. GENERATED_PATH_ROOTS holds only rules/entrypoints/, so all 17 would indeed be findings. The counts, the six generated names and the package.json files bullet are unchanged and correct."
+    }
+  ]
+}

@@ -10,7 +10,17 @@
     "confidence": "high",
     "file": "src/commands/init.test.ts",
     "line": 14,
-    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m1"
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. The header of src/commands/init.test.ts no longer carries line numbers; it names the symbol and the behaviour, matching the style the same commit gave update.test.ts and skills-install-warnings.test.ts. Nothing in the file cites init.ts:624 or :1089 any more.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bbd6e7ce — the header names the symbol and the behaviour instead of line numbers, matching update.test.ts and skills-install-warnings.test.ts."
+    }
   },
   {
     "id": "R3-m2",
@@ -23,7 +33,17 @@
     "confidence": "high",
     "file": "src/commands/skills.ts",
     "line": 109,
-    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m2"
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. In a scratch copy, deleting the Notices block at skills.ts:125-130 and at init.ts:1093-1098 turns each command's new test red at `noticesAt > -1`. Each test also asserts that the removal line's index is greater than noticesAt and that a Warnings heading never appears, so ordering is checked rather than mere presence.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bbd6e7ce — one test each added to skills-install-warnings.test.ts and init.test.ts; deleting either print block turns its test red, and each asserts the Notices heading comes before the removal line."
+    }
   },
   {
     "id": "R3-m3",
@@ -36,6 +56,16 @@
     "confidence": "high",
     "file": "src/gdskills/bundled-eval.ts",
     "line": 1344,
-    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m3"
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at ae2ff9b7, the tree that carries bbd6e7ce, which is where this finding was fixed. An independent extractor replicating PATH_REFERENCE with docs/ added, run over the bundled tree, returns 17 distinct paths: 7 exist under the repository root and 0 under defaultBundledRoot(), which is exactly what the corrected sentence claims. GENERATED_PATH_ROOTS holds only rules/entrypoints/, so all 17 would indeed be findings. The counts, the six generated names and the package.json files bullet are unchanged and correct.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bbd6e7ce — re-measured at both roots (7 exist at the repo root, 0 under defaultBundledRoot()); the text now says the citation would break in every tree, which is the stronger reason to refuse."
+    }
   }
 ]

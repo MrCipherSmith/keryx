@@ -19,14 +19,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M1",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "All three reproductions executed in tmp trees (scratchpad/r2-257/repro.ts): symlinked skills root, symlinked category, symlinked skill dir. In every case the victim SKILL.zed.md survives, the sweep returns exactly one skipped-dir outcome with reason \"symlink\", and the warning names the blocked component. Category probed once, so one symlinked category yields one notice rather than 67.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. All three reproductions executed in tmp trees (scratchpad/r2-257/repro.ts): symlinked skills root, symlinked category, symlinked skill dir. In every case the victim SKILL.zed.md survives, the sweep returns exactly one skipped-dir outcome with reason \"symlink\", and the warning names the blocked component. Category probed once, so one symlinked category yields one notice rather than 67.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "62cd9424 — the sweep walks each path component with lstat, refuses a symlinked parent and confirms containment with realpath; round 2 executed all three reproductions."
+      "evidence": "0a4b9430 — the sweep walks each path component with lstat, refuses a symlinked parent and confirms containment with realpath; round 2 executed all three reproductions at that tree."
     }
   },
   {
@@ -48,14 +48,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M2",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "The tmp filesystem here is case-insensitive — existsSync(\"SKILL.zed.md\") returns true for an on-disk skill.zed.md. With that file present the sweep returns an empty list and the file survives; readdir plus exact-name matching is what does the work.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. The tmp filesystem here is case-insensitive — existsSync(\"SKILL.zed.md\") returns true for an on-disk skill.zed.md. With that file present the sweep returns an empty list and the file survives; readdir plus exact-name matching is what does the work.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "62cd9424 — candidates come from readdir and are matched by exact name; round 2 executed it on the case-insensitive filesystem here and the differently-cased user file survives."
+      "evidence": "0a4b9430 — candidates come from readdir and are matched by exact name; round 2 ran it on the case-insensitive filesystem here and the differently-cased user file survives."
     }
   },
   {
@@ -77,14 +77,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M3",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "Happy path removes a genuine stale build and returns {action:\"removed\"}, rendered as a printed notice. SKILL.md, SKILL.detail.md and reference.md are untouched; a symlink as the candidate file gives kept-not-regular-file with the target intact.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. Happy path removes a genuine stale build and returns {action:\"removed\"}, rendered as a printed notice. SKILL.md, SKILL.detail.md and reference.md are untouched; a symlink as the candidate file gives kept-not-regular-file with the target intact.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "62cd9424 — the sweep returns an outcome per candidate and removals are reported; the heading they were reported under was corrected in a91679b9."
+      "evidence": "0a4b9430 — the sweep returns an outcome per candidate and removals are reported; the heading they were reported under was corrected in 953f1c35."
     }
   },
   {
@@ -107,14 +107,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M4",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "The message at src/gdskills/bundled-eval.ts:1986 now says \"Split the skill... A ceiling only ever moves DOWN\"; the Length Ceilings blockquote in skills-storage-workflow.mdc matches it word for word, compared by hand. bundled-eval.test.ts:1704-1718 reads both files. The .metaproject mirror is byte-identical to the bundled copy.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea and 9a1b0e74, which is where this finding was fixed. The message at src/gdskills/bundled-eval.ts:1986 now says \"Split the skill... A ceiling only ever moves DOWN\"; the Length Ceilings blockquote in skills-storage-workflow.mdc matches it word for word, compared by hand. bundled-eval.test.ts:1704-1718 reads both files. The .metaproject mirror is byte-identical to the bundled copy.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 and 580dc5c2 — the message says to split the skill and that a ceiling only moves down; the rule quotes it, and a91679b9 made the test compare the quote verbatim."
+      "evidence": "fc8323ea and 9a1b0e74 — the message says to split the skill and that a ceiling only moves down; the rule quotes it, and 953f1c35 made the test compare the quote verbatim."
     }
   },
   {
@@ -136,14 +136,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M5",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "RANK1_FIRST=285 and RANK1_TOTAL=287 are both re-measured live and compared with toBe, not a bound; the denominator is the corpus's own counted positives. Lowering silently is impossible — the only escape is KNOWN_ROUTING_GAPS[].excluded, a visible registry rather than a number. bun test src/commands/routing-corpus.test.ts: 181 pass, 0 fail.",
+      "evidence": "Checked at 7ee6a712, the tree that carries bb28ab6a, which is where this finding was fixed. RANK1_FIRST=285 and RANK1_TOTAL=287 are both re-measured live and compared with toBe, not a bound; the denominator is the corpus's own counted positives. Lowering silently is impossible — the only escape is KNOWN_ROUTING_GAPS[].excluded, a visible registry rather than a number. bun test src/commands/routing-corpus.test.ts: 181 pass, 0 fail.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "437a6f3e — RANK1_FIRST and RANK1_TOTAL are integers compared with toBe against a live recount, so a regression and an unrecorded improvement both fail."
+      "evidence": "bb28ab6a — RANK1_FIRST and RANK1_TOTAL are integers compared with toBe against a live recount, so a regression and an unrecorded improvement both fail."
     }
   },
   {
@@ -166,14 +166,14 @@
     },
     "global_id": "2026-09-12-ingest-origin-main#R1-M6",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "Three tests at bundled-eval.test.ts:2035-2077 pin the ledger's existence, header, separator row, the append-only statement and the rule's citation; bun test src/gdskills/bundled-eval.test.ts gives 60 pass, 0 fail. The instructed CHECKED_PATH_ROOTS change was independently re-measured: package.json files does not publish docs/skills/, so the refusal holds; the replacement is sufficient for AC11.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. Three tests at bundled-eval.test.ts:2035-2077 pin the ledger's existence, header, separator row, the append-only statement and the rule's citation; bun test src/gdskills/bundled-eval.test.ts gives 60 pass, 0 fail. The instructed CHECKED_PATH_ROOTS change was independently re-measured: package.json files does not publish docs/skills/, so the refusal holds; the replacement is sufficient for AC11.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — three contract tests pin the ledger and the rule's citation of it. The instructed CHECKED_PATH_ROOTS change was refused with measurement and the refusal upheld in round 2; its overstated evidence was corrected in a91679b9."
+      "evidence": "fc8323ea — three contract tests pin the ledger and the rule's citation of it. The instructed CHECKED_PATH_ROOTS change was refused with measurement, upheld in round 2, and its evidence corrected in 953f1c35 and bbd6e7ce."
     }
   },
   {
@@ -188,14 +188,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m1",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "Fixtures reject \"not formatted\", \"not forced\" and \"not fortunate\"; the control with a real NOT-for clause passes. skills verify --bundled passes every check across all 67 shipped skills, so the boundary introduces no false positive.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. Fixtures reject \"not formatted\", \"not forced\" and \"not fortunate\"; the control with a real NOT-for clause passes. skills verify --bundled passes every check across all 67 shipped skills, so the boundary introduces no false positive.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — a word boundary after 'not for'; fixtures reject not formatted, not forced, not fortunate."
+      "evidence": "fc8323ea — a word boundary after 'not for'; fixtures reject not formatted, not forced, not fortunate."
     }
   },
   {
@@ -210,14 +210,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m2",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "The determiner gate has its own unit test, and the sweep over the 67 shipped skills reports no description finding — the nouns that previously tripped it now pass.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. The determiner gate has its own unit test, and the sweep over the 67 shipped skills reports no description finding — the nouns that previously tripped it now pass.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — noun-ambiguous verbs are gated behind a determiner test; no false positive across the 67 shipped skills."
+      "evidence": "fc8323ea — noun-ambiguous verbs are gated behind a determiner test; no false positive across the 67 shipped skills."
     }
   },
   {
@@ -232,14 +232,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m3",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "A fixture skill carrying a Codex build produces exactly one anatomy:sections finding, not one per build.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture skill carrying a Codex build produces exactly one anatomy:sections finding, not one per build.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — anatomy findings are attributed to the skill; a fixture with a Codex build reports one finding."
+      "evidence": "fc8323ea — anatomy findings are attributed to the skill; a fixture with a Codex build reports one finding."
     }
   },
   {
@@ -254,14 +254,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m4",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "A fixture with an empty Verification body is rejected; the control with a body passes.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture with an empty Verification body is rejected; the control with a body passes.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — a Verification section must have a non-empty body."
+      "evidence": "fc8323ea — a Verification section must have a non-empty body."
     }
   },
   {
@@ -276,14 +276,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m5",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "A fixture whose Red Flags rows are placeholders is rejected; the shipped tree passes, so the floor does not fire on real tables.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture whose Red Flags rows are placeholders is rejected; the shipped tree passes, so the floor does not fire on real tables.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — Red Flags rows carry a substance floor; placeholder rows are rejected."
+      "evidence": "fc8323ea — Red Flags rows carry a substance floor; placeholder rows are rejected."
     }
   },
   {
@@ -298,14 +298,14 @@
     "file": "src/gdskills/bundled-eval.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m6",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "anatomy:red-flags-collision exists, fires on a fixture pair sharing a table, is attributed to the later key only, and reports nothing on the shipped tree.",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. anatomy:red-flags-collision exists, fires on a fixture pair sharing a table, is attributed to the later key only, and reports nothing on the shipped tree.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "ce8e43c9 — new anatomy:red-flags-collision check, attributed to the later key; the shipped tree is clean."
+      "evidence": "fc8323ea — new anatomy:red-flags-collision check, attributed to the later key; the shipped tree is clean."
     }
   },
   {
@@ -320,14 +320,14 @@
     "file": "src/gdskills/bundled/skills/quality/context-collector/SKILL.md",
     "global_id": "2026-09-12-ingest-origin-main#R1-m7",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "Both interview and interviewer are present in the catalog, so the rewritten NOT-for clause resolves to a skill that exists.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. Both interview and interviewer are present in the catalog, so the rewritten NOT-for clause resolves to a skill that exists.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "580dc5c2 — the NOT-for clause names interview, which exists in the catalog."
+      "evidence": "9a1b0e74 — the NOT-for clause names interview, which exists in the catalog."
     }
   },
   {
@@ -342,14 +342,14 @@
     "file": "src/gdskills/bundled/skills/quality/reviewer-skill-creator/SKILL.md",
     "global_id": "2026-09-12-ingest-origin-main#R1-m8",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "The quoted row in reviewer-skill-creator matches src/review/reviewers.ts:200-205 exactly, including the \"no recorded origin\" case for drift === \"none\".",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. The quoted row in reviewer-skill-creator matches src/review/reviewers.ts:200-205 exactly, including the \"no recorded origin\" case for drift === \"none\".",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "580dc5c2 — the quoted row matches src/review/reviewers.ts:200-205 exactly, including the no-recorded-origin case."
+      "evidence": "9a1b0e74 — the quoted row matches src/review/reviewers.ts:200-205 exactly, including the no-recorded-origin case."
     }
   },
   {
@@ -364,14 +364,14 @@
     "file": "src/gdskills/bundled/skills/platform/agent-entrypoint-distiller/SKILL.md",
     "global_id": "2026-09-12-ingest-origin-main#R1-m9",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "keryx flow check was run: it takes no flow id, so the argument the skill used to pass was wrong and its removal is correct.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. keryx flow check was run: it takes no flow id, so the argument the skill used to pass was wrong and its removal is correct.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "580dc5c2 — the flow id was dropped; keryx flow check takes none."
+      "evidence": "9a1b0e74 — the flow id was dropped; keryx flow check takes none."
     }
   },
   {
@@ -386,14 +386,14 @@
     "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
     "global_id": "2026-09-12-ingest-origin-main#R1-m10",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "site-check",
-      "evidence": "The storage rule now enumerates both divergence cases — different instructions, different metadata.compatible_harnesses — and names the seven gproject skills that qualify; 15 runtime builds remain in the tree, consistent with that list.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. The storage rule now enumerates both divergence cases — different instructions, different metadata.compatible_harnesses — and names the seven gproject skills that qualify; 15 runtime builds remain in the tree, consistent with that list.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "580dc5c2 — the rule enumerates the two divergence cases and names the seven gproject skills."
+      "evidence": "9a1b0e74 — the rule enumerates the two divergence cases and names the seven gproject skills."
     }
   },
   {
@@ -408,14 +408,14 @@
     "file": "src/gdskills/export.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m11",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "schemaVersion is 2 with a pinning assertion, and no usedFallbackBuild reference remains in shipped code (only comments and journals). export-runtime-builds.test.ts is part of the 130 pass / 0 fail run.",
+      "evidence": "Checked at 7ee6a712, the tree that carries 6a74e1b4 and 9a1b0e74, which is where this finding was fixed. schemaVersion is 2 with a pinning assertion, and no usedFallbackBuild reference remains in shipped code (only comments and journals). export-runtime-builds.test.ts is part of the 130 pass / 0 fail run.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "5eee9eed and 580dc5c2 — usedFallbackBuild removed and schemaVersion bumped to 2, tied together by a test."
+      "evidence": "6a74e1b4 and 9a1b0e74 — usedFallbackBuild removed and schemaVersion bumped to 2, tied together by a test."
     }
   },
   {
@@ -430,14 +430,14 @@
     "file": "src/commands/routing-corpus.ts",
     "global_id": "2026-09-12-ingest-origin-main#R1-m12",
     "verification": {
-      "verdict": "confirmed",
+      "verdict": "refuted",
       "method": "execution",
-      "evidence": "Every positive added by 437a6f3e was extracted and scored: 48 of 48 rank their own skill first and 0 quote any of their own triggers verbatim; triggers are present on the catalog entries, so the no-quoting check is non-vacuous.",
+      "evidence": "Checked at 7ee6a712, the tree that carries bb28ab6a, which is where this finding was fixed. Every positive added by 437a6f3e was extracted and scored: 48 of 48 rank their own skill first and 0 quote any of their own triggers verbatim; triggers are present on the catalog entries, so the no-quoting check is non-vacuous.",
       "verifier": "round-2"
     },
     "disposition": {
       "state": "acted-on",
-      "evidence": "437a6f3e — every skill carries at least two paraphrases; all 48 added were scored and each ranks its own skill first."
+      "evidence": "bb28ab6a — every skill carries at least two paraphrases; all 48 added were scored and each ranks its own skill first."
     }
   }
 ]

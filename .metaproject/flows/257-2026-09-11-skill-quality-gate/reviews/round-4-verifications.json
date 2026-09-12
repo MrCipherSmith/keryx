@@ -1,0 +1,14 @@
+{
+  "status": "DONE",
+  "verifier": "round-5",
+  "summary": "1 round-4 finding at or above minor re-checked AT THE FIX (162e34db) by the round-5 reviewer, which did not raise it: 1 execution, 1 refuted, 0 confirmed, 0 unverifiable. `refuted` is the post-fix reading — the reviewer looked for R4-m1 at this head and it no longer reproduces. Round 5 did find that the replacement comment introduced a DIFFERENT overstatement; that is its own finding (R5-m1), not a claim that R4-m1 was wrong. The two info items from round 4 were not checked, by design.",
+  "verifications": [
+    {
+      "finding": "R4-m1",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-5",
+      "evidence": "Checked at 162e34db, the commit that fixes this finding. Both halves of the corrected sentence were verified against the code: staleRuntimeBuildSeverity at install.ts:361 is `action === \"removed\" ? \"notice\" : \"warning\"` — one predicate, blind to the four non-removed kinds — and both .filter call sites at install.ts:119 and :123 use it, so the mapping really is one kind-agnostic severity filter. The notice/warning-split test at install.test.ts:220 drives installGdskills and asserts the removal in result.notices, the kept symlink in result.warnings, and the removal absent from warnings, so both branches are covered. keryx ctx rg \"skipped-dir\" over the test files finds only install.test.ts:337 and :372, each preceded by a direct removeStaleRuntimeBuilds call, so no test drove a skipped-dir outcome through an install."
+    }
+  ]
+}

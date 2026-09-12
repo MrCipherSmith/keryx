@@ -6,7 +6,7 @@
   "target": {
     "kind": "report",
     "ref": "origin/main",
-    "head": "03c2d1c6"
+    "head": "7ee6a712"
   },
   "artifacts": {
     "scope": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r02/scope.md",
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-12T08:51:24.769Z",
-  "updatedAt": "2026-09-12T08:51:34.294Z",
+  "createdAt": "2026-09-12T09:33:44.594Z",
+  "updatedAt": "2026-09-12T09:33:47.434Z",
   "flow": {
     "id": "257",
     "path": ".metaproject/flows/257-2026-09-11-skill-quality-gate"

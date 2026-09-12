@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-12-ingest-origin-main",
+  "reviewId": "2026-09-12-ingest-origin-main-r07",
   "mode": "ingest",
-  "status": "closed",
+  "status": "draft",
   "target": {
     "kind": "report",
     "ref": "origin/main",
-    "head": "b6dfa8cd"
+    "head": "a13c0e8b"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/scope.md",
-    "coverage": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/coverage.md",
-    "report": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/report.md",
-    "findings": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/findings.json",
-    "learning": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/learning.md",
-    "decisions": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main/decisions.md"
+    "scope": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/scope.md",
+    "coverage": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/coverage.md",
+    "report": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/report.md",
+    "findings": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/findings.json",
+    "learning": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/learning.md",
+    "decisions": ".metaproject/flows/257-2026-09-11-skill-quality-gate/reviews/2026-09-12-ingest-origin-main-r07/decisions.md"
   },
   "coverage": [
     {
@@ -25,13 +25,13 @@
   ],
   "filter_stats": {
     "schema_version": 1,
-    "total": 18,
+    "total": 0,
     "dropped_prefilter": null,
     "dropped_low_confidence": null,
     "dropped_refuted": 0,
     "dropped_scope_b": null,
     "dropped_findings_cap": 0,
-    "retained": 18,
+    "retained": 0,
     "dismissed_by_round": null,
     "by_reason": {},
     "not_measured": [
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-12T09:33:44.474Z",
-  "updatedAt": "2026-09-12T09:33:47.100Z",
+  "createdAt": "2026-09-12T09:34:26.349Z",
+  "updatedAt": "2026-09-12T09:34:26.349Z",
   "flow": {
     "id": "257",
     "path": ".metaproject/flows/257-2026-09-11-skill-quality-gate"

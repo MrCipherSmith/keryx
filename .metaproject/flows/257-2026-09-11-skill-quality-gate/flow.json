@@ -7,9 +7,9 @@
   "id": "257",
   "slug": "skill-quality-gate",
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-12T08:58:00.281Z",
+  "updatedAt": "2026-09-12T09:34:39.241Z",
   "source": {
     "type": "description",
     "ref": null
@@ -63,10 +63,14 @@
     "AC12": {
       "at": "2026-09-12T08:29:23.124Z",
       "note": "At 03c2d1c6 (rebased onto origin/main): rules mirror byte-identical (diff -rq clean), skills mirror differs only by rendered-only directories, 'skills verify --bundled' exit 0, tsc --noEmit exit 0, eslint clean, bun test 10065 pass / 20 skip / 0 fail across 751 files in 251s. The pre-change baseline in journal.md is 9772 pass / 0 fail; no failure absent from it."
+    },
+    "AC13": {
+      "at": "2026-09-12T09:30:49.054Z",
+      "note": "Seven rounds. The closing round ran against the PR head a13c0e8b and reported nothing at or above minor, having been told an empty answer was the expected one. Every finding at or above minor across rounds 1-6 (18 + 3 + 3 + 1 + 1 + 1 = 27) carries a terminal disposition — 26 acted-on naming the commit that closed it, 1 dismissed-wont-fix with its reason — and each is backed by a verifier claim from the FOLLOWING round, recorded as verdict refuted: the checker went looking for it at the fixed head and it no longer reproduced. No reviewer verified its own finding. External comments collected at the PR head: none. CI at a13c0e8b: 18 checks pass. The advisory round cap of 3 was exceeded deliberately — rounds 4 through 7 each found a real defect in the fix that preceded them, three of them in the same comment block, and stopping at 3 would have shipped a comment that describes behaviour the code does not have."
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/540"
   },
   "baseBranch": "main",
   "tasks": [
@@ -156,7 +160,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T19",
         "T20",
@@ -190,7 +194,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -1140,6 +1145,72 @@
       "at": "2026-09-12T08:58:00.281Z",
       "event": "task-done",
       "detail": "T24: R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3"
+    },
+    {
+      "at": "2026-09-12T09:01:07.007Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:01:07.122Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:01:12.974Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC13 | pull-request: PR checks not green | tasks: not done: T4 | review: 4 of 5 conditions failed — terminal-dispositions (violated): 24 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-origin-main#R1-M1 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M2 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M3 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M4 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M5 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-M6 (major, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m1 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m2 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m3 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m4 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m5 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m6 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m7 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m8 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m9 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m10 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m11 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main#R1-m12 (minor, round 2026-09-12-ingest-origin-main): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m1 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m2 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r02#R2-m3 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | 2026-09-12-ingest-origin-main-r03#R3-m1 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | 2026-09-12-ingest-origin-main-r03#R3-m2 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | 2026-09-12-ingest-origin-main-r03#R3-m3 (minor, round 2026-09-12-ingest-origin-main-r03): no disposition recorded | head-commit (violated): the latest round ran against 731a8ef1, but the PR head is ae2ff9b70125aff8a1c8868c792f826b33965c52. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#540 was last collected against 731a8ef196a4864eaa78333c0b16bca0e0f6892f (round 1), but the PR head is ae2ff9b70125aff8a1c8868c792f826b33965c52. Everything anyone said after 731a8ef196a4864eaa78333c0b16bca0e0f6892f is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 540 --sha <pr-head>`. | verifier-stats (violated): round `2026-09-12-ingest-origin-main-r03` ran with `verification_mode: annotate` and received 0 claims while retaining 3 finding(s) at or above `minor` (2026-09-12-ingest-origin-main-r03#R3-m1, 2026-09-12-ingest-origin-main-r03#R3-m2, 2026-09-12-ingest-origin-main-r03#R3-m3). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:30:48.939Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-12T09:30:49.054Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Seven rounds. The closing round ran against the PR head a13c0e8b and reported nothing at or above minor, having been told an empty answer was the expected one. Every finding at or above minor across rounds 1-6 (18 + 3 + 3 + 1 + 1 + 1 = 27) carries a terminal disposition — 26 acted-on naming the commit that closed it, 1 dismissed-wont-fix with its reason — and each is backed by a verifier claim from the FOLLOWING round, recorded as verdict refuted: the checker went looking for it at the fixed head and it no longer reproduced. No reviewer verified its own finding. External comments collected at the PR head: none. CI at a13c0e8b: 18 checks pass. The advisory round cap of 3 was exceeded deliberately — rounds 4 through 7 each found a real defect in the fix that preceded them, three of them in the same comment block, and stopping at 3 would have shipped a comment that describes behaviour the code does not have."
+    },
+    {
+      "at": "2026-09-12T09:30:51.061Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:31:00.440Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:31:06.736Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 26 finding(s) at or above `minor` are not terminal: 2026-09-12-ingest-origin-main#R1-M1 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M2 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M3 (major, round 2026-09-12-ingest-origin-main): marked fixed at 62cd9424, a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M4 (major, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9, 580dc5c2, a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M5 (major, round 2026-09-12-ingest-origin-main): marked fixed at 437a6f3e but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-M6 (major, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9, a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m1 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m2 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m3 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m4 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m5 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m6 (minor, round 2026-09-12-ingest-origin-main): marked fixed at ce8e43c9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m7 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m8 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m9 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m10 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main#R1-m11 (minor, round 2026-09-12-ingest-origin-main): marked fixed at 5eee9eed, 580dc5c2 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m1 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m2 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r02#R2-m3 (minor, round 2026-09-12-ingest-origin-main-r02): marked fixed at a91679b9, aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m1 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m2 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r03#R3-m3 (minor, round 2026-09-12-ingest-origin-main-r03): marked fixed at aa209ae4 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r04#R4-m1 (minor, round 2026-09-12-ingest-origin-main-r04): marked fixed at 162e34db but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r05#R5-m1 (minor, round 2026-09-12-ingest-origin-main-r05): marked fixed at a1ea358c but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge | 2026-09-12-ingest-origin-main-r06#R6-m1 (minor, round 2026-09-12-ingest-origin-main-r06): marked fixed at a13c0e8b but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:34:11.005Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:34:11.134Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:34:17.270Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against a1ea358c, but the PR head is a13c0e8b913826b0691e07231f1ef1e036b62cbf. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-12T09:34:33.150Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/540 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-12T09:34:33.270Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-12T09:34:39.241Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
