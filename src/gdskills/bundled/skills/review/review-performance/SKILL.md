@@ -235,6 +235,12 @@ boundary is the trigger-and-outcome test.
    frequency *is* the trigger shared law 1 asks for.
 2. **Do not flag patterns outside the diff.** Review only changed code. Legacy
    issues outside the diff are `info` at most, with a note to track separately.
+3. **An optimisation with no before/after is an unmeasured claim, and a neutral
+   one is a finding.** Ask what was measured and on what workload. No pair at all
+   is `minor` — unjustified, not wrong. A neutral pair is `revert`: what counts as
+   neutral under noise, and what the attempt owes the journal, are `perf-check`'s
+   Rules, not restated here. Writing that entry is the author's job, not yours; a
+   revert that lands with no entry behind it is its own `minor` finding.
 
 ---
 
@@ -340,11 +346,9 @@ Stop and re-read these rules if you are thinking:
 | Rationalization | Why it's wrong |
 |---|---|
 | "This loop iterates over user data, so N+1 is obviously a problem" | State the expected N and query cost; "user data" is not self-evidently large |
-| "I'll flag this as major because it looks slow" | Looking slow is not a hot path; cite the execution context |
 | "Missing useMemo here is a performance issue" | useMemo has overhead; only flag when the computation is measurably expensive or the component re-renders at high frequency |
-| "I'll add a minor finding for every lodash default import" | Correct — but only flag if the library is large and the import is demonstrably not tree-shaken |
 | "The dataset could grow large, so I'll call it a blocker" | "Could grow" = minor or info; known to be large = major or blocker |
-| "Skipping the hot-path citation to keep the finding concise" | Performance law 1: the hot path is mandatory for blocker/major; omitting it means downgrading to `info` |
+| "The optimisation measures neutral, but it does no harm — no reason to hold the diff" | The complexity it bought with no measured gain *is* the harm, and it passes review precisely because nothing in it is wrong. Neutral is `revert`, per performance law 3 |
 
 ---
 
@@ -365,10 +369,6 @@ If provided and the file exists, read the context document before starting the r
 
 If the file does not exist or is not provided, proceed normally — context is optional and non-blocking.
 
-
 ## Orchestrated Review Contract
 
 When dispatched by `review-orchestrator`, follow the provided `reviewer-input.schema.json` payload. Return a `REVIEW_RESULT` object compatible with `.metaproject/skills/gdskills/review/review-orchestrator/reviewer-finding.schema.json`, then a concise markdown summary. Keep findings evidence-based, include concrete `suggested_fix` for every blocker/major, and return `NEEDS_CONTEXT` instead of guessing when required context is missing.
-
----
-
