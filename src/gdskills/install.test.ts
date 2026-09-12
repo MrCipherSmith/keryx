@@ -111,8 +111,16 @@ test("a per-runtime build the bundle no longer ships is removed from an existing
     expect(await readFile(path.join(skillDir, "notes.md"), "utf8")).toBe("unrelated file\n");
     expect(await readFile(path.join(skillDir, "SKILL.md"), "utf8"))
       .toBe(await readFile(path.join(bundledDir, "SKILL.md"), "utf8"));
-    // Removal succeeded, so there is nothing to tell the operator.
-    expect(result.warnings.filter((warning) => warning.includes("per-runtime build"))).toEqual([]);
+    // Nothing is content-gated here, so a removal must never be silent: the
+    // operator gets one notice per file that left their tree, and no others.
+    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    expect(removals.sort()).toEqual([
+      "SKILL.codex.md",
+      "SKILL.cursor.md",
+      "SKILL.opencode.md",
+      "SKILL.zed.md",
+    ].map((stale) => `.metaproject/skills/gdskills/orchestration/job-orchestrator/${stale} was removed: a per-runtime build keryx no longer ships (that runtime now reads SKILL.md), which every later runtime export would otherwise have kept preferring over the current SKILL.md`));
+    expect(result.warnings.filter((warning) => warning.includes("kept because"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -140,9 +148,13 @@ test("a per-runtime build the bundle still ships is replaced, not removed", asyn
       .toBe(await readFile(path.join(bundledDir, "SKILL.codex.md"), "utf8"));
     expect(await readFile(path.join(skillDir, "SKILL.cursor.md"), "utf8"))
       .toBe(await readFile(path.join(bundledDir, "SKILL.cursor.md"), "utf8"));
-    // Not shipped for this skill: removed, in the same run.
+    // Not shipped for this skill: removed, in the same run, and reported.
     expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
-    expect(result.warnings.filter((warning) => warning.includes("per-runtime build"))).toEqual([]);
+    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    expect(removals).toHaveLength(1);
+    expect(removals[0]).toContain(".metaproject/skills/gdskills/planning/planner/SKILL.zed.md was removed");
+    // The refreshed codex/cursor builds are not reported as anything.
+    expect(result.warnings.filter((warning) => warning.includes("SKILL.codex.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -220,12 +232,111 @@ test("a stale build whose removal fails is kept and becomes a warning, without a
     expect(outcomes.map((outcome) => `${path.basename(outcome.path)}:${outcome.action}`).sort())
       .toEqual(["SKILL.codex.md:kept-error", "SKILL.zed.md:removed"]);
 
-    const warnings = outcomes
-      .map((outcome) => staleRuntimeBuildWarning(outcome, root))
-      .filter((warning): warning is string => warning !== null);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
-    expect(warnings[0]).toContain("could not be removed (EPERM)");
+    const warnings = outcomes.map((outcome) => staleRuntimeBuildWarning(outcome, root));
+    // Both halves are reported: the failure to act, and the file that went.
+    expect(warnings).toHaveLength(2);
+    const kept = warnings.find((warning) => warning.includes("SKILL.codex.md"));
+    expect(kept).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
+    expect(kept).toContain("could not be removed (EPERM)");
+    expect(warnings.find((warning) => warning.includes("SKILL.zed.md")))
+      .toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md was removed");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- round-1 major: the sweep must not delete through a symlinked parent ----
+//
+// The sweep composes `<skillsRoot>/<category>/<name>/SKILL.<runtime>.md` and
+// lstat'ed only the last component, so any symlinked *parent* was followed and
+// the unlink landed in the link's target, outside `.metaproject`.
+
+test("a skill directory reached through a symlink is not swept, and the target keeps its files", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+
+    // Relocate one installed skill behind a symlink — the shape a shared
+    // checkout or a moved tree produces — and put a hand-written build in the
+    // target, which is not keryx's to delete.
+    const relocated = path.join(root, "shared-skills", "job-orchestrator");
+    await mkdir(relocated, { recursive: true });
+    await rm(skillDir, { recursive: true, force: true });
+    await symlink(relocated, skillDir);
+    await writeFile(path.join(relocated, "SKILL.zed.md"), "# hand-written, not keryx's\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect(await readFile(path.join(relocated, "SKILL.zed.md"), "utf8")).toBe("# hand-written, not keryx's\n");
+    expect((await lstat(skillDir)).isSymbolicLink()).toBe(true);
+    const warning = result.warnings.find((entry) => entry.includes("was not swept"));
+    expect(warning).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator was not swept");
+    expect(warning).toContain("it is a symlink, and keryx will not delete through one");
+    // Refusing to sweep is not refusing to warn about the wrong thing: no
+    // removal was claimed for a tree keryx did not touch.
+    expect(result.warnings.filter((entry) => entry.includes("was removed"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked skills root is skipped whole, with one notice for the tree", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    // The skills root itself is the link: every composed path below it would
+    // resolve into someone else's tree.
+    const shared = path.join(root, "shared", "gdskills");
+    const sharedSkillDir = path.join(shared, "orchestration", "job-orchestrator");
+    await mkdir(sharedSkillDir, { recursive: true });
+    await writeFile(path.join(sharedSkillDir, "SKILL.zed.md"), "# hand-written\n", "utf8");
+
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await mkdir(path.join(metaprojectRoot, "skills"), { recursive: true });
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    await symlink(shared, skillsRoot);
+
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
+
+    expect(await readFile(path.join(sharedSkillDir, "SKILL.zed.md"), "utf8")).toBe("# hand-written\n");
+    // One notice for the whole tree — not one per bundled skill in the catalogue.
+    expect(outcomes).toEqual([
+      { path: skillsRoot, blockedAt: skillsRoot, action: "skipped-dir", reason: "symlink" },
+    ]);
+    const warning = staleRuntimeBuildWarning(outcomes[0]!, root);
+    expect(warning).toContain(".metaproject/skills/gdskills was not swept");
+    expect(warning).toContain("it is a symlink, and keryx will not delete through one");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("only an exactly-matching directory entry is removed, so a differently-cased file survives", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    // On a case-insensitive filesystem (macOS, Windows) a composed
+    // `SKILL.codex.md` resolves to this file, so lstat+unlink would delete the
+    // user's own file and report it under the canonical spelling. Matching a
+    // real directory entry by exact name cannot do that. On a case-sensitive
+    // filesystem this is simply an unrelated file, which must also survive.
+    await writeFile(path.join(skillDir, "skill.codex.md"), "# my own notes\n", "utf8");
+    // A genuine stale build alongside it, to prove exact matching still removes.
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const survivors = await readdir(skillDir);
+    expect(survivors).toContain("skill.codex.md");
+    expect(await readFile(path.join(skillDir, "skill.codex.md"), "utf8")).toBe("# my own notes\n");
+    expect(survivors).not.toContain("SKILL.zed.md");
+    const removals = result.warnings.filter((warning) => warning.includes("was removed"));
+    expect(removals).toHaveLength(1);
+    expect(removals[0]).toContain("SKILL.zed.md was removed");
+    expect(result.warnings.filter((warning) => warning.toLowerCase().includes("skill.codex.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
