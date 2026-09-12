@@ -7,9 +7,9 @@
   "id": "260",
   "slug": "pii-redaction-mangles-uuids-the-phone-pa",
   "title": "PII redaction mangles UUIDs: the phone pattern eats a correlationId in MCP output",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-12T08:33:33.069Z",
-  "updatedAt": "2026-09-12T09:00:48.162Z",
+  "updatedAt": "2026-09-12T09:02:03.561Z",
   "source": {
     "type": "description",
     "ref": null
@@ -46,7 +46,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/541"
   },
   "tasks": [
     {
@@ -105,7 +105,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -113,7 +113,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review done; PR #541 opened"
     }
   ],
   "history": [
@@ -179,6 +181,17 @@
       "at": "2026-09-12T09:00:48.162Z",
       "event": "ac-confirmed",
       "detail": "AC7: bun test: 9810 pass, 19 skip, 0 fail (753 files); bunx tsc --noEmit -p . clean; bun run lint clean"
+    },
+    {
+      "at": "2026-09-12T09:02:01.603Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-12T09:02:03.561Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/541 (warning: PR is not a draft) (base: main)"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }

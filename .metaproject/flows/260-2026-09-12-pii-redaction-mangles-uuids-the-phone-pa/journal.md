@@ -13,3 +13,5 @@
 - 2026-09-12T08:54:18.733Z - ac-confirmed: AC5: proposal-lifecycle-parity.test.ts pins the redaction seam with the verbatim failing correlationId; 2 pass
 - 2026-09-12T08:54:18.854Z - ac-confirmed: AC6: pii-identifier-sweep.test.ts: all 8 rules probed against UUID/digest/slug/long-digit shapes; only pii.ssn is reachable by the same shape, asserted and documented rather than silently changed
 - 2026-09-12T09:00:48.162Z - ac-confirmed: AC7: bun test: 9810 pass, 19 skip, 0 fail (753 files); bunx tsc --noEmit -p . clean; bun run lint clean
+- 2026-09-12T09:02:01.603Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-12T09:02:03.561Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/541 (warning: PR is not a draft) (base: main)
