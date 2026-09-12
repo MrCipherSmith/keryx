@@ -1,0 +1,28 @@
+{
+  "status": "DONE",
+  "verifier": "round-3",
+  "summary": "3 round-2 findings checked at 731a8ef1 by the round-3 reviewer, which did not raise any of them: 3 execution, 0 site-check, 0 reasoning; 3 confirmed, 0 refuted, 0 unverifiable. Each was checked against the fix in a91679b9 by re-measuring independently or by mutating a scratch copy. Round 3 also found that the replacement text for R2-m1 carries a further wrong inference, recorded separately as its own finding rather than as a refutation of this one.",
+  "verifications": [
+    {
+      "finding": "R2-m1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "An independent script replicating PATH_REFERENCE with docs/ added, run over the whole bundled tree, finds exactly 17 distinct docs/ paths: 10 absent and 7 present at the repository root — so the old text, which claimed none exists, was wrong for seven of them. The six named autodoc outputs are all in the absent set. The load-bearing measurement was re-checked: package.json files lists dist, docs/requirements/shared-agent-context/schemas, src/gdgraph, src/gdskills/bundled, src/gdskills/contracts and others, and does not publish docs/skills/."
+    },
+    {
+      "finding": "R2-m2",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "keryx update run on a scratch project holding one removable build and one symlinked build prints exactly one Notices line and one Warnings line, in that order; a second fixture with only a symlink prints no Notices heading at all. Mutating away the severity === \"warning\" filter in a scratch copy turns 3 tests red, so the split is asserted rather than incidental. keryx ctx rg for installGdskills( finds three command call sites, all updated, and InstallGdskillsResult is never serialised, so no schema version is owed."
+    },
+    {
+      "finding": "R2-m3",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "Three independent mutations of a scratch copy: changing one word of the rule's blockquote turns the assertion red; renaming the Length Ceilings heading makes the helper throw; deleting the blockquote makes it throw. The whitespace collapse is /\\s+/g to a single space only — the rule wraps the quote over five lines and the message is one line, so nothing that carries meaning is normalised away."
+    }
+  ]
+}

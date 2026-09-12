@@ -9,7 +9,7 @@
   "title": "Skill quality gate: anatomy lint, routing evals, installed-tree xref, generated runtime variants",
   "status": "in-progress",
   "createdAt": "2026-09-11T16:54:12.985Z",
-  "updatedAt": "2026-09-12T08:40:55.104Z",
+  "updatedAt": "2026-09-12T08:58:00.281Z",
   "source": {
     "type": "description",
     "ref": null
@@ -164,7 +164,7 @@
         "T22"
       ],
       "attempts": {
-        "count": 3,
+        "count": 4,
         "log": [
           {
             "at": "2026-09-12T07:43:22.387Z",
@@ -180,6 +180,11 @@
             "at": "2026-09-12T08:30:21.095Z",
             "outcome": "failed",
             "detail": "round 2 (narrow): all round-1 findings closed — install containment verified by executing all three reproductions, ceiling ratchet exercised by raising a ceiling in-test, corpus record compared with toBe, 48/48 new paraphrases rank their own skill first and quote no trigger. 3 new minor findings."
+          },
+          {
+            "at": "2026-09-12T08:50:09.932Z",
+            "outcome": "failed",
+            "detail": "round 3 at PR head 731a8ef1: 14 claims of a91679b9 verified true by execution and mutation; 3 new minor findings (L1 stale line citations in init.test.ts, L2 the new Notices print untested at 2 of 3 call sites, L3 one inference in the rewritten refusal still wrong — the sweep's own root sees none of the 7 paths). Separately: CI typecheck-and-tests fails on Linux, 1 test."
           }
         ]
       },
@@ -642,6 +647,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-12T08:50:10.144Z",
+            "outcome": "started",
+            "detail": "257-T24 round-3 fix + CI"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1092,6 +1120,26 @@
       "at": "2026-09-12T08:40:55.104Z",
       "event": "task-done",
       "detail": "T23: R2 fix: overstated docs-root evidence, removal notices printed as warnings, ceiling message compared verbatim, and the length freeze documented"
+    },
+    {
+      "at": "2026-09-12T08:50:09.932Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 4) — round 3 at PR head 731a8ef1: 14 claims of a91679b9 verified true by execution and mutation; 3 new minor findings (L1 stale line citations in init.test.ts, L2 the new Notices print untested at 2 of 3 call sites, L3 one inference in the rewritten refusal still wrong — the sweep's own root sees none of the 7 paths). Separately: CI typecheck-and-tests fails on Linux, 1 test."
+    },
+    {
+      "at": "2026-09-12T08:50:10.039Z",
+      "event": "task-added",
+      "detail": "T24: R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3"
+    },
+    {
+      "at": "2026-09-12T08:50:10.144Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 257-T24 round-3 fix + CI"
+    },
+    {
+      "at": "2026-09-12T08:58:00.281Z",
+      "event": "task-done",
+      "detail": "T24: R3 fix: the symlink test must not depend on fs.cp accepting a symlinked destination (Linux CI), plus L1-L3"
     }
   ]
 }

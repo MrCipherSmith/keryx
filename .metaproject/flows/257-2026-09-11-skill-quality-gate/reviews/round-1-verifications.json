@@ -1,0 +1,133 @@
+{
+  "status": "DONE",
+  "verifier": "round-2",
+  "summary": "18 round-1 findings checked at 03c2d1c6 by the round-2 reviewer, which did not raise any of them: 13 execution, 5 site-check, 0 reasoning; 18 confirmed, 0 refuted, 0 unverifiable. Every check was run against the fix, so each verdict says both that the finding was real and that it is closed. Experiments in scratchpad/r2-257 (tmp trees for the installer, scratch copies for mutations); ROOT was not mutated.",
+  "verifications": [
+    {
+      "finding": "R1-M1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "All three reproductions executed in tmp trees (scratchpad/r2-257/repro.ts): symlinked skills root, symlinked category, symlinked skill dir. In every case the victim SKILL.zed.md survives, the sweep returns exactly one skipped-dir outcome with reason \"symlink\", and the warning names the blocked component. Category probed once, so one symlinked category yields one notice rather than 67."
+    },
+    {
+      "finding": "R1-M2",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "The tmp filesystem here is case-insensitive — existsSync(\"SKILL.zed.md\") returns true for an on-disk skill.zed.md. With that file present the sweep returns an empty list and the file survives; readdir plus exact-name matching is what does the work."
+    },
+    {
+      "finding": "R1-M3",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "Happy path removes a genuine stale build and returns {action:\"removed\"}, rendered as a printed notice. SKILL.md, SKILL.detail.md and reference.md are untouched; a symlink as the candidate file gives kept-not-regular-file with the target intact."
+    },
+    {
+      "finding": "R1-M4",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "verifier": "round-2",
+      "evidence": "The message at src/gdskills/bundled-eval.ts:1986 now says \"Split the skill... A ceiling only ever moves DOWN\"; the Length Ceilings blockquote in skills-storage-workflow.mdc matches it word for word, compared by hand. bundled-eval.test.ts:1704-1718 reads both files. The .metaproject mirror is byte-identical to the bundled copy."
+    },
+    {
+      "finding": "R1-M5",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "RANK1_FIRST=285 and RANK1_TOTAL=287 are both re-measured live and compared with toBe, not a bound; the denominator is the corpus's own counted positives. Lowering silently is impossible — the only escape is KNOWN_ROUTING_GAPS[].excluded, a visible registry rather than a number. bun test src/commands/routing-corpus.test.ts: 181 pass, 0 fail."
+    },
+    {
+      "finding": "R1-M6",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "Three tests at bundled-eval.test.ts:2035-2077 pin the ledger's existence, header, separator row, the append-only statement and the rule's citation; bun test src/gdskills/bundled-eval.test.ts gives 60 pass, 0 fail. The instructed CHECKED_PATH_ROOTS change was independently re-measured: package.json files does not publish docs/skills/, so the refusal holds; the replacement is sufficient for AC11."
+    },
+    {
+      "finding": "R1-m1",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "Fixtures reject \"not formatted\", \"not forced\" and \"not fortunate\"; the control with a real NOT-for clause passes. skills verify --bundled passes every check across all 67 shipped skills, so the boundary introduces no false positive."
+    },
+    {
+      "finding": "R1-m2",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "The determiner gate has its own unit test, and the sweep over the 67 shipped skills reports no description finding — the nouns that previously tripped it now pass."
+    },
+    {
+      "finding": "R1-m3",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "A fixture skill carrying a Codex build produces exactly one anatomy:sections finding, not one per build."
+    },
+    {
+      "finding": "R1-m4",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "A fixture with an empty Verification body is rejected; the control with a body passes."
+    },
+    {
+      "finding": "R1-m5",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "A fixture whose Red Flags rows are placeholders is rejected; the shipped tree passes, so the floor does not fire on real tables."
+    },
+    {
+      "finding": "R1-m6",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "anatomy:red-flags-collision exists, fires on a fixture pair sharing a table, is attributed to the later key only, and reports nothing on the shipped tree."
+    },
+    {
+      "finding": "R1-m7",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "verifier": "round-2",
+      "evidence": "Both interview and interviewer are present in the catalog, so the rewritten NOT-for clause resolves to a skill that exists."
+    },
+    {
+      "finding": "R1-m8",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "verifier": "round-2",
+      "evidence": "The quoted row in reviewer-skill-creator matches src/review/reviewers.ts:200-205 exactly, including the \"no recorded origin\" case for drift === \"none\"."
+    },
+    {
+      "finding": "R1-m9",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "keryx flow check was run: it takes no flow id, so the argument the skill used to pass was wrong and its removal is correct."
+    },
+    {
+      "finding": "R1-m10",
+      "verdict": "confirmed",
+      "method": "site-check",
+      "verifier": "round-2",
+      "evidence": "The storage rule now enumerates both divergence cases — different instructions, different metadata.compatible_harnesses — and names the seven gproject skills that qualify; 15 runtime builds remain in the tree, consistent with that list."
+    },
+    {
+      "finding": "R1-m11",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "schemaVersion is 2 with a pinning assertion, and no usedFallbackBuild reference remains in shipped code (only comments and journals). export-runtime-builds.test.ts is part of the 130 pass / 0 fail run."
+    },
+    {
+      "finding": "R1-m12",
+      "verdict": "confirmed",
+      "method": "execution",
+      "verifier": "round-2",
+      "evidence": "Every positive added by 437a6f3e was extracted and scored: 48 of 48 rank their own skill first and 0 quote any of their own triggers verbatim; triggers are present on the catalog entries, so the no-quoting check is non-vacuous."
+    }
+  ]
+}

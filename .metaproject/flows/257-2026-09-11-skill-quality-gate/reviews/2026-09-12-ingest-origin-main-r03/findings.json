@@ -1,0 +1,41 @@
+[
+  {
+    "id": "R3-m1",
+    "reviewer": "round-3",
+    "severity": "minor",
+    "problem": "The test header cites init.ts:624 and init.ts:1089; after a91679b9 those symbols are at :625 and :1099.",
+    "impact": "A reader follows the citation to the wrong lines, and the citation rots again on the next edit.",
+    "suggested_fix": "Name the symbol rather than the line, as the same commit did for update.test.ts and skills-install-warnings.test.ts.",
+    "evidence": "installGdskills is at src/commands/init.ts:625 and the Warnings print at :1099 at 731a8ef1; the commit added ten lines above both.",
+    "confidence": "high",
+    "file": "src/commands/init.test.ts",
+    "line": 14,
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m1"
+  },
+  {
+    "id": "R3-m2",
+    "reviewer": "round-3",
+    "severity": "minor",
+    "problem": "The new Notices print is asserted at only one of its three call sites; skills.ts and init.ts print it untested.",
+    "impact": "A regression that drops the Notices print in either command survives a green run — the same failure mode those files' headers record as round-1 finding T-001, reintroduced for the new heading.",
+    "suggested_fix": "Add one assertion per uncovered call site, mirroring src/commands/update.test.ts:146.",
+    "evidence": "Deleting both print blocks in a scratch copy (heading(\"Notices\") count 0, console.log(\"Notices:\") gone) leaves install.test.ts, update.test.ts, skills-install-warnings.test.ts and init.test.ts at 48 pass / 0 fail.",
+    "confidence": "high",
+    "file": "src/commands/skills.ts",
+    "line": 109,
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m2"
+  },
+  {
+    "id": "R3-m3",
+    "reviewer": "round-3",
+    "severity": "minor",
+    "problem": "The rewritten refusal infers that the citation would resolve in this tree and break in another; the sweep resolves paths against defaultBundledRoot(), under which none of the seven exists.",
+    "impact": "A recorded justification states something the code would not do, which is the defect the rewrite was meant to remove.",
+    "suggested_fix": "Say the seven exist at the repository root and that the sweep's own root would not see them either — the citation would break in every tree.",
+    "evidence": "existsSync(path.join(root, resolved)) at bundled-eval.ts:1558 with root = defaultBundledRoot() = src/gdskills/bundled (:1740). Measured: 7 of 17 exist under the repo root, 0 under the bundled root.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "line": 1344,
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m3"
+  }
+]

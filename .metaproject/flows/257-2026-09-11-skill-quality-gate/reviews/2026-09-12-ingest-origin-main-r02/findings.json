@@ -1,0 +1,71 @@
+[
+  {
+    "id": "R2-m1",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The recorded reason for refusing the docs path root claims of eight named paths that none exists in this repository; docs/analysis, docs/plans and docs/report all exist.",
+    "impact": "At least 3 of the claimed 13 would-be findings would not fire, so the count recorded against a refused change is overstated. The refusal itself stands on a different measurement.",
+    "suggested_fix": "Name only the autodoc-generated paths and drop or re-measure the count; the same numbers are repeated at bundled-eval.test.ts:2038-2041.",
+    "evidence": "ls -d on the three paths at 03c2d1c6 returns all three. The load-bearing measurement — docs/skills/ absent from package.json files — was verified independently and holds.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "line": 1342,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m1",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "An independent script replicating PATH_REFERENCE with docs/ added, run over the whole bundled tree, finds exactly 17 distinct docs/ paths: 10 absent and 7 present at the repository root — so the old text, which claimed none exists, was wrong for seven of them. The six named autodoc outputs are all in the absent set. The load-bearing measurement was re-checked: package.json files lists dist, docs/requirements/shared-agent-context/schemas, src/gdgraph, src/gdskills/bundled, src/gdskills/contracts and others, and does not publish docs/skills/.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a91679b9 — the 17 cited docs paths were re-extracted (10 absent, 7 present) and the sentence now names only the autodoc outputs. Round 3 found one further wrong inference in the replacement text and it is being corrected in T24."
+    }
+  },
+  {
+    "id": "R2-m2",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "Every removed outcome from the stale-build sweep is pushed into InstallGdskillsResult.warnings and printed by keryx update under a Warnings heading, though install.ts's own doc comment calls these notices.",
+    "impact": "The first keryx update after this release prints roughly 88 lines under a heading that says Warnings for work that succeeded exactly as designed.",
+    "suggested_fix": "Split the field into notices and warnings, or print removals under their own heading.",
+    "evidence": "src/commands/update.ts:240-245 renders result.warnings under heading(\"Warnings\"); the flow journal records ~88 identical runtime copies removed in this branch. No exit-code effect.",
+    "confidence": "high",
+    "file": "src/gdskills/install.ts",
+    "line": 96,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m2",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "keryx update run on a scratch project holding one removable build and one symlinked build prints exactly one Notices line and one Warnings line, in that order; a second fixture with only a symlink prints no Notices heading at all. Mutating away the severity === \"warning\" filter in a scratch copy turns 3 tests red, so the split is asserted rather than incidental. keryx ctx rg for installGdskills( finds three command call sites, all updated, and InstallGdskillsResult is never serialised, so no schema version is owed.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a91679b9 — InstallGdskillsResult carries notices beside warnings, a severity function decides placement, and keryx update prints the two headings separately; round 3 confirmed by running the command on a fixture."
+    }
+  },
+  {
+    "id": "R2-m3",
+    "reviewer": "round-2",
+    "severity": "minor",
+    "problem": "The test claims the rule quotes the anatomy:length message verbatim, but asserts only three fragments, so the rule and the message can drift in every other word.",
+    "impact": "The check that keeps tool and rule in agreement does not actually compare them.",
+    "suggested_fix": "Strip the blockquote prefix from the rule's Length Ceilings quote and assert equality with the finding text.",
+    "evidence": "The test asserts only \"A ceiling **moves down**, never up\" on the rule and \"Split the skill\" plus /only ever moves DOWN/ on the message; the blockquote is never compared to the message string.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.test.ts",
+    "line": 1714,
+    "global_id": "2026-09-12-ingest-origin-main-r02#R2-m3",
+    "verification": {
+      "verdict": "confirmed",
+      "method": "execution",
+      "evidence": "Three independent mutations of a scratch copy: changing one word of the rule's blockquote turns the assertion red; renaming the Length Ceilings heading makes the helper throw; deleting the blockquote makes it throw. The whitespace collapse is /\\s+/g to a single space only — the rule wraps the quote over five lines and the message is one line, so nothing that carries meaning is normalised away.",
+      "verifier": "round-3"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a91679b9 — the test extracts the rule's blockquote, collapses whitespace and asserts equality; round 3 proved it bites with three mutations."
+    }
+  }
+]
