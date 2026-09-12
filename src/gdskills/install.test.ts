@@ -314,19 +314,17 @@ test("a skill directory reached through a symlink is not swept, and the target k
     // The sweep is driven directly, not through a second `installGdskills`.
     // That second install would reach the `cp(bundledDir, skillDir, { force })`
     // in `installGdskills` with `skillDir` now a symlink, and on Linux `fs.cp`
-    // refuses to overwrite a non-directory with a directory
-    // (ERR_FS_CP_DIR_TO_NON_DIR / EISDIR, as CI reported it) and aborts the
-    // whole install BEFORE the sweep
-    // runs — so the test never reached its own subject there. macOS's `cp`
-    // happens to accept it, which is the only reason that form passed at all.
+    // refuses to overwrite a non-directory with a directory —
+    // `ERR_FS_CP_DIR_TO_NON_DIR` / `EISDIR` — and aborts the whole install
+    // BEFORE the sweep runs, so the test never reached its own subject there.
+    // macOS's `cp` happens to accept it, which is the only reason that form
+    // passed at all.
     // The claim belongs to `removeStaleRuntimeBuilds`, so it is made of
-    // `removeStaleRuntimeBuilds`, on every platform. An install carries these
-    // outcomes into `warnings`/`notices` through one kind-agnostic severity
-    // filter, and both of that filter's branches are covered by the
-    // notice/warning-split test above, which needs no symlinked directory. No
-    // test drives a `skipped-dir` outcome through an install: reaching one
-    // needs the symlink this test plants, and planting it is what makes the
-    // install itself unrunnable on Linux.
+    // `removeStaleRuntimeBuilds`, on every platform. A `skipped-dir` outcome
+    // does reach `result.warnings` through a real install — the test below
+    // plants the link one level up, at a category, where the copy destination
+    // is still a directory `mkdir` just created. It is the link AT THE SKILL
+    // DIRECTORY, this shape, that the copy cannot survive on Linux.
     const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
 
     expect(await readFile(path.join(relocated, "SKILL.zed.md"), "utf8")).toBe("# hand-written, not keryx's\n");
@@ -344,6 +342,55 @@ test("a skill directory reached through a symlink is not swept, and the target k
     // removal was claimed for a tree keryx did not touch.
     expect(outcomes.filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")).toEqual([]);
     expect(outcomes.filter((outcome) => outcome.action === "removed")).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-5 minor: the comment above used to say a `skipped-dir` outcome could
+// not be observed through an install at all. It can — one level up. A link at a
+// CATEGORY leaves `<skillsRoot>/<category>/<name>` a real directory that
+// `mkdir(..., { recursive: true })` just created, so the copy never meets a
+// non-directory destination and the install runs to completion on every
+// platform. That makes the carry-through from outcome to `warnings` testable
+// end to end, which is the half the direct-sweep test cannot reach.
+test("a symlinked category is refused by a real install, and the refusal reaches warnings", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const [category] = INSTALLED_JOB_ORCHESTRATOR.slice(2);
+    const categoryDir = path.join(skillsRoot, category!);
+
+    // Relocate the whole category behind a link, and leave a hand-written build
+    // in the target so a sweep that followed the link would have something to
+    // destroy.
+    const relocated = path.join(root, "shared-skills", category!);
+    await mkdir(path.join(relocated, "job-orchestrator"), { recursive: true });
+    await rm(categoryDir, { recursive: true, force: true });
+    await symlink(relocated, categoryDir);
+    await writeFile(
+      path.join(relocated, "job-orchestrator", "SKILL.zed.md"),
+      "# hand-written, not keryx's\n",
+      "utf8",
+    );
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // The install completed — this is the shape `fs.cp` survives.
+    expect(await readFile(path.join(relocated, "job-orchestrator", "SKILL.zed.md"), "utf8")).toBe(
+      "# hand-written, not keryx's\n",
+    );
+    expect((await lstat(categoryDir)).isSymbolicLink()).toBe(true);
+    const refusal = result.warnings.filter((warning) => warning.includes("was not swept"));
+    expect(refusal).toHaveLength(1);
+    expect(refusal[0]).toContain(`.metaproject/skills/gdskills/${category} was not swept`);
+    expect(refusal[0]).toContain("it is a symlink, and keryx will not delete through one");
+    // A refusal is not a removal, and the category is named once, not once per
+    // skill inside it.
+    expect(result.notices.filter((notice) => notice.includes("was not swept"))).toEqual([]);
+    expect(result.notices.filter((notice) => notice.includes("SKILL.zed.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
