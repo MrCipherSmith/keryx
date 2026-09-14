@@ -1,3 +1,5 @@
+import { GIT_DISCOVERY_OVERRIDE_VARS } from "../lib/git-env";
+
 export function renderTestingConfig(input: {
   postCommitRefresh: boolean;
   prePushGate: boolean;
@@ -204,6 +206,11 @@ export function renderTestingPrePushHook(): string {
   if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
     return 0
   fi
+
+  # Git exports GIT_DIR to hooks. Inherited by the suite, it redirects every
+  # fixture repo a test creates onto this checkout, so a fixture's
+  # 'git config user.name' rewrites the identity of the repo being pushed.
+  unset ${GIT_DISCOVERY_OVERRIDE_VARS.join(" ")}
 
   if command -v keryx >/dev/null 2>&1; then
     keryx test run --changed --strict

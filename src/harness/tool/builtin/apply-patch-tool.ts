@@ -15,6 +15,7 @@
 
 import { confineToRoot, type InteractiveTool, type InteractiveToolResult } from "./interactive-tools";
 import { parsePatchTargets, type PatchTarget } from "../../../lib/patch-risk";
+import { withoutGitDiscoveryOverrides } from "../../../lib/git-env";
 
 const MAX_OUTPUT_BYTES = 20_000;
 
@@ -28,35 +29,16 @@ export interface GitApplyResult {
 export type GitApplyRunner = (patch: string, cwd: string) => Promise<GitApplyResult>;
 
 /**
- * Git env vars that OVERRIDE repository discovery from `cwd` (`GIT_DIR` and
- * friends). Found the hard way: a `GIT_DIR`/`GIT_WORK_TREE` leaked into a
- * subprocess's inherited environment makes git operate on WHATEVER
- * repository those vars name, completely ignoring the explicit `cwd` this
- * function is given — silently applying a patch to the wrong repository. A
- * real leak happened during this feature's own development (an ambient
- * `keryx ctx run` wrapper's git-diffing left these set for a spawned `bun
- * test`, which then contaminated an unrelated worktree via this exact
- * subprocess pattern). `cwd` is the ONLY source of truth this tool has for
- * "which repository" — strip every override before spawning, every time.
+ * `process.env`, minus every var that could redirect git away from `cwd`.
+ * Found the hard way: a `GIT_DIR`/`GIT_WORK_TREE` leaked into a subprocess's
+ * inherited environment makes git operate on WHATEVER repository those vars
+ * name, completely ignoring the explicit `cwd` this function is given —
+ * silently applying a patch to the wrong repository. `cwd` is the ONLY source
+ * of truth this tool has for "which repository" — strip every override before
+ * spawning, every time. The list lives in `lib/git-env`.
  */
-const GIT_DISCOVERY_OVERRIDE_VARS: readonly string[] = [
-  "GIT_DIR",
-  "GIT_WORK_TREE",
-  "GIT_INDEX_FILE",
-  "GIT_OBJECT_DIRECTORY",
-  "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-  "GIT_COMMON_DIR",
-];
-
-/** `process.env`, minus every var that could redirect git away from `cwd`. */
 function gitDiscoveryCleanEnv(): Record<string, string> {
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined && !GIT_DISCOVERY_OVERRIDE_VARS.includes(key)) {
-      env[key] = value;
-    }
-  }
-  return env;
+  return withoutGitDiscoveryOverrides(process.env);
 }
 
 /** One `git apply` subprocess call, patch fed over stdin, argv fixed. Never throws. */

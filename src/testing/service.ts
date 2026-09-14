@@ -3,6 +3,7 @@ import type { Dirent } from "node:fs";
 import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isPathInside, pathExists, writeFileAtomic } from "../lib/fs";
+import { withoutGitDiscoveryOverrides } from "../lib/git-env";
 import { collectGitProvenance } from "../metrics/provenance";
 import { readArtifactPointer } from "../metrics/lifecycle";
 import { guardOutput, redactRaw, formatGuardWarning, prepareOutputForPersistence } from "../security/guard";
@@ -914,7 +915,15 @@ async function runCommand(command: string[], cwd: string): Promise<{
   combined: string;
   exitCode: number;
 }> {
-  const proc = Bun.spawn(command, { cwd, stdout: "pipe", stderr: "pipe" });
+  // `keryx test run` is what the pre-push hook calls, and git exports `GIT_DIR`
+  // to hooks: passed through, it points every fixture repo the suite creates at
+  // the checkout being pushed. See `lib/git-env`.
+  const proc = Bun.spawn(command, {
+    cwd,
+    env: withoutGitDiscoveryOverrides(process.env),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
     new Response(proc.stderr).text(),
