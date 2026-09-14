@@ -1579,9 +1579,8 @@ async function runAgentTurnCore(
       // web content entered history, EVERY later tool call for the rest of
       // the session was refused, including plain code/graph/wiki lookups
       // that have nothing to do with the tainted content.
-      // FIX: Allow read tools even when untrusted content is present.
-      const isReadTool = risk === "read";
-      if (!isReadTool && isDurableToolCall(call.name, risk) && (untrustedContentSeen || batchContainsUntrustedWeb)) {
+      const isPureReadTool = risk === "read" && !DURABLE_READ_TOOL_NAMES.has(call.name);
+      if (!isPureReadTool && (untrustedContentSeen || batchContainsUntrustedWeb)) {
         const result: InteractiveToolResult = {
           output: "tool blocked: external web content cannot authorize further tool calls in this turn",
           isError: true,
