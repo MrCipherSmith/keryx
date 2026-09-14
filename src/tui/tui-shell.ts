@@ -136,7 +136,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -1624,7 +1624,7 @@ function pickAuthMethodStep(
   });
 }
 
-function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Promise<boolean> {
+function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string, dir?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "device-login");
     r.root.add(box);
@@ -1652,6 +1652,7 @@ function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Prom
       provider,
       fetch: (input, init) => globalThis.fetch(input, init),
       signal: controller.signal,
+      ...(dir !== undefined ? { dir } : {}),
       onChallenge: (challenge) => {
         status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Open that URL on any device and enter the code. Waiting for authorization…")}`;
         openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
@@ -1849,14 +1850,19 @@ export function selectProviderModelInTui(
         }
 
         // `/connect` only switches: never edit the endpoint or collect a key.
+        // Copilot's API host comes from the token exchange (`endpoints.api`),
+        // not from typing api.githubcopilot.com — that origin 404s on /v1/models.
+        const lockDiscoveredHost = prov.name === "github-copilot";
         let selectedBaseUrl =
-          options.onlyConnected || prov.baseUrl === undefined
+          options.onlyConnected || prov.baseUrl === undefined || lockDiscoveredHost
             ? prov.baseUrl
             : await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl);
-        if (!options.onlyConnected && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
+        if (!options.onlyConnected && !lockDiscoveredHost && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
           continue;
         }
-        if (!options.onlyConnected && selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl, options.configDir);
+        if (!options.onlyConnected && !lockDiscoveredHost && selectedBaseUrl !== undefined) {
+          saveProviderBaseUrl(prov.name, selectedBaseUrl, options.configDir);
+        }
         let selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
 
         const envKey = prov.envKey;
@@ -1890,7 +1896,15 @@ export function selectProviderModelInTui(
             }
           }
           if (method === "device-code") {
-            return (await runDeviceLoginInTui(otui, r, prov.name)) ? "ok" : "back";
+            if (!(await runDeviceLoginInTui(otui, r, prov.name, options.configDir))) {
+              return "back";
+            }
+            const saved = loadShellConfig(options.configDir).baseUrls?.[prov.name];
+            if (typeof saved === "string" && saved.length > 0) {
+              selectedBaseUrl = saved;
+              selectedProvider = { ...prov, baseUrl: saved };
+            }
+            return "ok";
           }
           const kr = await promptApiKeyStep(otui, r, {
             label,

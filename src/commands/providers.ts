@@ -240,6 +240,11 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
     label: "GitHub Copilot",
     baseUrl: "https://api.githubcopilot.com",
     envKey: "GITHUB_COPILOT_TOKEN",
+    // Copilot is OpenAI-shaped but not versioned under /v1 — GET /v1/models is a
+    // 404 HTML page ("404 page not found"), which the picker then treats as a
+    // bad host. Chat is the same: /chat/completions, not /v1/chat/completions.
+    chatPath: "/chat/completions",
+    modelsPath: "/models",
     models: ["gpt-4o", "gpt-4.1", "gpt-4o-mini"],
     note: "Copilot · device login",
   },

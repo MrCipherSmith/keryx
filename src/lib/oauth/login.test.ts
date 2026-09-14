@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { tmpdir } from "node:os";
 import { uniqueTestRoot } from "../test-tmp";
+import { loadShellConfig } from "../shell-config";
 import { loadOAuthGrant } from "./grants";
 import { loginDeviceCode } from "./login";
 
@@ -113,7 +114,11 @@ test("loginDeviceCode for github-copilot exchanges the GitHub token with Copilot
       return jsonResponse(200, { access_token: "ghu_github" });
     }
     if (url.includes("/copilot_internal/v2/token")) {
-      return jsonResponse(200, { token: "tid-copilot", expires_at: Math.floor(Date.now() / 1000) + 120 });
+      return jsonResponse(200, {
+        token: "tid-copilot",
+        expires_at: Math.floor(Date.now() / 1000) + 120,
+        endpoints: { api: "https://api.individual.githubcopilot.com" },
+      });
     }
     return jsonResponse(500, { error: "unexpected" });
   };
@@ -129,6 +134,7 @@ test("loginDeviceCode for github-copilot exchanges the GitHub token with Copilot
   expect(result).toEqual({ ok: true, provider: "github-copilot" });
   expect(loadOAuthGrant("github-copilot", root)?.access).toBe("tid-copilot");
   expect(loadOAuthGrant("github-copilot", root)?.refresh).toBe("ghu_github");
+  expect(loadShellConfig(root).baseUrls?.["github-copilot"]).toBe("https://api.individual.githubcopilot.com");
   const device = seen.find((row) => row.url.includes("/login/device/code"));
   expect(device?.body).toContain("Iv1.b507a08c87ecfe98");
   expect(device?.editor).toBe("vscode/1.99.3");

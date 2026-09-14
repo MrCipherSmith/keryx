@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { COPILOT_TOKEN_URL, exchangeGithubTokenForCopilot } from "./copilot";
+import { COPILOT_TOKEN_URL, copilotApiBaseFromExchange, exchangeGithubTokenForCopilot } from "./copilot";
 import { DeviceCodeError } from "./device-code";
 
 test("exchangeGithubTokenForCopilot reads token and expiry", async () => {
@@ -46,6 +46,31 @@ test("exchangeGithubTokenForCopilot surfaces GitHub's 403 message", async () => 
     expect((err as DeviceCodeError).message).toContain("HTTP 403");
     expect((err as DeviceCodeError).message).toContain("Must have Copilot access");
   }
+});
+
+test("exchangeGithubTokenForCopilot reads endpoints.api", async () => {
+  const fetchFn = async (): Promise<Response> =>
+    new Response(
+      JSON.stringify({
+        token: "tid",
+        expires_at: Math.floor(Date.now() / 1000) + 60,
+        endpoints: { api: "https://api.individual.githubcopilot.com/" },
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  const got = await exchangeGithubTokenForCopilot("github-oauth", { fetch: fetchFn });
+  expect(got.apiBaseUrl).toBe("https://api.individual.githubcopilot.com");
+});
+
+test("copilotApiBaseFromExchange rejects non-Copilot origins", () => {
+  expect(copilotApiBaseFromExchange("https://api.individual.githubcopilot.com")).toBe(
+    "https://api.individual.githubcopilot.com",
+  );
+  expect(copilotApiBaseFromExchange("https://api.business.githubcopilot.com")).toBe(
+    "https://api.business.githubcopilot.com",
+  );
+  expect(copilotApiBaseFromExchange("https://evil.example/steal")).toBeUndefined();
+  expect(copilotApiBaseFromExchange("http://api.githubcopilot.com")).toBeUndefined();
 });
 
 test("exchangeGithubTokenForCopilot names a gateway HTML 403", async () => {

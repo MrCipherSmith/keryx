@@ -1,3 +1,4 @@
+import { saveProviderBaseUrl } from "../shell-config";
 import { catalogRefusal, deviceCodeMethodLabel, GITHUB_COPILOT_DEVICE, XAI_GROK_DEVICE, authCatalogEntry } from "./catalog";
 import { exchangeGithubTokenForCopilot } from "./copilot";
 import {
@@ -83,6 +84,9 @@ async function loginRfc8628(input: DeviceLoginInput): Promise<DeviceTokenSet> {
   );
   if (endpoints.afterToken === "github-copilot") {
     const copilot = await exchangeGithubTokenForCopilot(tokens.accessToken, http);
+    if (copilot.apiBaseUrl !== undefined) {
+      saveProviderBaseUrl("github-copilot", copilot.apiBaseUrl, input.dir);
+    }
     return {
       accessToken: copilot.accessToken,
       refreshToken: tokens.accessToken,
@@ -152,6 +156,9 @@ export async function refreshProviderGrant(
   const endpoints = provider === "github-copilot" ? GITHUB_COPILOT_DEVICE : XAI_GROK_DEVICE;
   if (provider === "github-copilot") {
     const copilot = await exchangeGithubTokenForCopilot(grant.refresh, http);
+    if (copilot.apiBaseUrl !== undefined) {
+      saveProviderBaseUrl("github-copilot", copilot.apiBaseUrl, dir);
+    }
     const next = grantFromTokens("device-code", {
       accessToken: copilot.accessToken,
       refreshToken: grant.refresh,
