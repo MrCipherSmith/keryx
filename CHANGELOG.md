@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.105] — 2026-09-15
+MCP servers and other read tools keep working after a session has read
+untrusted web content, and `git push` no longer rewrites your commit identity.
+
+`v0.2.103` and `v0.2.104` were tagged but never published: their release runs
+stopped at lint. Everything they contained ships here.
+
+### Fixed
+
+- **Read tools refused for the rest of the session after untrusted content.**
+  Once any untrusted web content entered history, every later tool call was
+  blocked, including MCP servers such as context7 and plain code, graph and
+  wiki lookups. Only tools that can act on an injected instruction are blocked
+  now: write, shell, network, credential, delegate and destructive tools, plus
+  the three read-risk tools that persist state (`workspace_create`,
+  `workspace_propose`, `slate_write_seed`).
+- **`git push` rewrote the repository's git identity.** The pre-push testing
+  hook ran the suite with the `GIT_DIR` git exports to hooks, so test fixtures
+  that set `user.name`/`user.email` in a temp repo wrote them into the checkout
+  being pushed. Later commits were authored `Test <test@example.com>`, which
+  GitHub links to no account. The hook and `keryx test run` now clear git's
+  repository-discovery variables before running tests. Run `keryx update` to
+  reinstall the hook, then check `git config --local --get-regexp '^user\.'`
+  and remove any identity a past push left there.
+
 ## [0.2.102] — 2026-09-14
 GitHub Copilot can list models after login. The picker was calling
 `/v1/models` on `api.githubcopilot.com`, which is a 404 HTML page, and then
