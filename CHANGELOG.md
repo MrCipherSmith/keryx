@@ -3,6 +3,20 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.101] — 2026-09-14
+GitHub Copilot device login completes again: the token exchange no longer 403s
+because keryx used OpenCode's OAuth App instead of the Copilot GitHub App.
+
+### Fixed
+
+- **GitHub Copilot login: `token exchange failed (HTTP 403)`.** Device-code
+  succeeded, then `GET /copilot_internal/v2/token` was refused. The catalog used
+  OpenCode's OAuth App (`Ov23li…`, `gho_` tokens) and `User-Agent: keryx`.
+  GitHub's Copilot API accepts the Copilot GitHub App (`Iv1.b507a08c87ecfe98`)
+  plus Copilot Chat identity headers. Login, refresh, `/models`, and inference
+  now send those headers. A 403 surfaces GitHub's message instead of a bare
+  status. Re-login is required; an old `Ov23li` grant will still fail.
+
 ## [0.2.100] — 2026-09-13
 `/mcp` is a modal, not a dump of lines into the transcript: name, status, and
 connect/disconnect on the same surface the other agent CLIs already have.

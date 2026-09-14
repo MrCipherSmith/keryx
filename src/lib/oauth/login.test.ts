@@ -84,3 +84,56 @@ test("loginDeviceCode refuses a DeepSeek subscription grant that does not exist"
   expect(result.refused).toBe(true);
   expect(result.error).toContain("DEEPSEEK_API_KEY");
 });
+
+test("loginDeviceCode for github-copilot exchanges the GitHub token with Copilot identity headers", async () => {
+  const root = uniqueTestRoot(tmpdir(), "keryx-oauth-copilot");
+  const seen: Array<{ url: string; authorization?: string; userAgent?: string; editor?: string; body?: string }> = [];
+  const fetchFn: import("./device-code").OAuthFetch = async (input, init) => {
+    const url = String(input);
+    const headers = new Headers(init?.headers);
+    const row: { url: string; authorization?: string; userAgent?: string; editor?: string; body?: string } = { url };
+    const authorization = headers.get("Authorization");
+    if (authorization !== null) row.authorization = authorization;
+    const userAgent = headers.get("User-Agent");
+    if (userAgent !== null) row.userAgent = userAgent;
+    const editor = headers.get("Editor-Version");
+    if (editor !== null) row.editor = editor;
+    if (typeof init?.body === "string") row.body = init.body;
+    seen.push(row);
+    if (url.includes("/login/device/code")) {
+      return jsonResponse(200, {
+        device_code: "dev",
+        user_code: "WXYZ-9",
+        verification_uri: "https://github.com/login/device",
+        interval: 1,
+        expires_in: 60,
+      });
+    }
+    if (url.includes("/login/oauth/access_token")) {
+      return jsonResponse(200, { access_token: "ghu_github" });
+    }
+    if (url.includes("/copilot_internal/v2/token")) {
+      return jsonResponse(200, { token: "tid-copilot", expires_at: Math.floor(Date.now() / 1000) + 120 });
+    }
+    return jsonResponse(500, { error: "unexpected" });
+  };
+  const result = await loginDeviceCode({
+    provider: "github-copilot",
+    fetch: fetchFn,
+    dir: root,
+    sleep: async () => {},
+    onChallenge: (c) => {
+      expect(c.userCode).toBe("WXYZ-9");
+    },
+  });
+  expect(result).toEqual({ ok: true, provider: "github-copilot" });
+  expect(loadOAuthGrant("github-copilot", root)?.access).toBe("tid-copilot");
+  expect(loadOAuthGrant("github-copilot", root)?.refresh).toBe("ghu_github");
+  const device = seen.find((row) => row.url.includes("/login/device/code"));
+  expect(device?.body).toContain("Iv1.b507a08c87ecfe98");
+  expect(device?.editor).toBe("vscode/1.99.3");
+  const exchange = seen.find((row) => row.url.includes("/copilot_internal/v2/token"));
+  expect(exchange?.authorization).toBe("token ghu_github");
+  expect(exchange?.userAgent).toContain("GitHubCopilotChat");
+  expect(exchange?.editor).toBe("vscode/1.99.3");
+});

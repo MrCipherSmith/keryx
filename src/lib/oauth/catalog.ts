@@ -36,14 +36,40 @@ export const XAI_GROK_DEVICE: DeviceCodeEndpoints = {
   headers: { "User-Agent": "keryx" },
 };
 
+/**
+ * Identity GitHub's Copilot endpoints accept. `copilot_internal/v2/token`
+ * and `api.githubcopilot.com` 403 without these; `User-Agent: keryx` is not enough.
+ */
+export const GITHUB_COPILOT_REQUEST_HEADERS: Readonly<Record<string, string>> = {
+  Accept: "application/json",
+  "User-Agent": "GitHubCopilotChat/0.26.7",
+  "Editor-Version": "vscode/1.99.3",
+  "Editor-Plugin-Version": "copilot-chat/0.26.7",
+  "Copilot-Integration-Id": "vscode-chat",
+};
+
+/**
+ * GitHub Copilot GitHub App — same client VS Code, Copilot CLI, copilot.vim,
+ * and LiteLLM use. OpenCode's OAuth App `Ov23li8tweQw6odWQebz` mints `gho_`
+ * tokens that `copilot_internal/v2/token` rejects with 403/404.
+ */
+export const GITHUB_COPILOT_OAUTH_CLIENT_ID = "Iv1.b507a08c87ecfe98";
+
 export const GITHUB_COPILOT_DEVICE: DeviceCodeEndpoints = {
   deviceAuthorizationEndpoint: "https://github.com/login/device/code",
   tokenEndpoint: "https://github.com/login/oauth/access_token",
-  clientId: "Ov23li8tweQw6odWQebz",
+  clientId: GITHUB_COPILOT_OAUTH_CLIENT_ID,
   scope: "read:user",
-  headers: { Accept: "application/json", "User-Agent": "keryx" },
+  headers: GITHUB_COPILOT_REQUEST_HEADERS,
   afterToken: "github-copilot",
 };
+
+export function extraRequestHeaders(provider: string): Readonly<Record<string, string>> | undefined {
+  if (provider === "github-copilot") {
+    return GITHUB_COPILOT_REQUEST_HEADERS;
+  }
+  return undefined;
+}
 
 export const PROVIDER_AUTH_CATALOG: readonly ProviderAuthCatalog[] = [
   {
