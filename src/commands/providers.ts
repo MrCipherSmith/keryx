@@ -20,6 +20,7 @@ import {
   familyOf,
   loadCustomCompatProviders,
 } from "../lib/provider-config";
+import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
 import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
@@ -425,8 +426,13 @@ export async function fetchOpenAiCompatModelsDetailed(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const init: RequestInit = { signal: controller.signal };
+    const extraHeaders = extraRequestHeaders(provider.name);
+    const headers: Record<string, string> = extraHeaders === undefined ? {} : { ...extraHeaders };
     if (apiKey !== undefined && apiKey.length > 0) {
-      init.headers = { authorization: `Bearer ${apiKey}` };
+      headers.authorization = `Bearer ${apiKey}`;
+    }
+    if (Object.keys(headers).length > 0) {
+      init.headers = headers;
     }
     const res = await fetchFn(url, init);
     if (!res.ok) {

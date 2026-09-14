@@ -115,6 +115,21 @@ test("fetchOpenAiCompatModels: parses data[].id deduped + sorted, honours models
   expect(auth).toBe("Bearer sk-test");
 });
 
+test("fetchOpenAiCompatModels: github-copilot sends Copilot identity headers with the bearer", async () => {
+  let headers: Record<string, string> | undefined;
+  const fetchFn = (async (_url: string, init?: RequestInit) => {
+    headers = init?.headers as Record<string, string> | undefined;
+    return { ok: true, json: async () => ({ data: [{ id: "gpt-4o" }] }) } as Response;
+  }) as unknown as typeof fetch;
+  const copilot = providerByName("github-copilot");
+  expect(copilot).toBeDefined();
+  const models = await fetchOpenAiCompatModels(fetchFn, copilot!, "tid-copilot");
+  expect(models).toEqual(["gpt-4o"]);
+  expect(headers?.authorization).toBe("Bearer tid-copilot");
+  expect(headers?.["Editor-Version"]).toBe("vscode/1.99.3");
+  expect(headers?.["Copilot-Integration-Id"]).toBe("vscode-chat");
+});
+
 test("fetchOpenAiCompatModels: default /v1/models path; no auth header without a key", async () => {
   let calledUrl = "";
   let hadAuth = true;

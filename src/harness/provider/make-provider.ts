@@ -21,6 +21,7 @@
 // entries; giving each its own real provider id is a separate, out-of-scope
 // naming fix, not part of this pure-extraction task).
 import { providerByName, resolveProviderBaseUrl } from "../../commands/providers";
+import { extraRequestHeaders } from "../../lib/oauth/catalog";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
@@ -127,6 +128,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
     if (needsKey && (apiKey === undefined || apiKey.length === 0)) {
       return new FakeProvider([]);
     }
+    const extraHeaders = extraRequestHeaders(name);
     const grant: {
       network: true;
       baseUrl: string;
@@ -135,6 +137,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       chatPath?: string;
       apiKey?: string;
       streamUsage?: true;
+      headers?: Readonly<Record<string, string>>;
     } = {
       network: true,
       // Only where the gateway is known to honour it. Without the field a stream
@@ -148,6 +151,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
+      ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
     };
     // The label is the registry's own, so an error names the gateway that sent it.
     // A grok session used to report `Ollama API returned HTTP 403` — and whoever
