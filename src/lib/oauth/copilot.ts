@@ -9,6 +9,28 @@ export const COPILOT_TOKEN_URL = "https://api.github.com/copilot_internal/v2/tok
 export interface CopilotToken {
   accessToken: string;
   expiresInSeconds?: number;
+  /** Plan-specific API origin from the token exchange (`endpoints.api`). */
+  apiBaseUrl?: string;
+}
+
+/** Accept only https Copilot API origins from the exchange payload. */
+export function copilotApiBaseFromExchange(raw: unknown): string | undefined {
+  if (typeof raw !== "string" || raw.length === 0) {
+    return undefined;
+  }
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:" || url.username.length > 0 || url.password.length > 0) {
+      return undefined;
+    }
+    const host = url.hostname;
+    if (host !== "api.githubcopilot.com" && !host.endsWith(".githubcopilot.com")) {
+      return undefined;
+    }
+    return `https://${host}${url.port.length > 0 ? `:${url.port}` : ""}`;
+  } catch {
+    return undefined;
+  }
 }
 
 function expiresInSecondsFrom(rec: { expires_at?: unknown; refresh_in?: unknown }, now: number): number | undefined {
@@ -71,10 +93,15 @@ export async function exchangeGithubTokenForCopilot(
   if (!response.ok || typeof json !== "object" || json === null) {
     throw new DeviceCodeError("failed", describeExchangeFailure(response.status, json, body));
   }
-  const rec = json as { token?: unknown; expires_at?: unknown; refresh_in?: unknown };
+  const rec = json as { token?: unknown; expires_at?: unknown; refresh_in?: unknown; endpoints?: { api?: unknown } };
   if (typeof rec.token !== "string" || rec.token.length === 0) {
     throw new DeviceCodeError("failed", "GitHub Copilot token exchange returned no token");
   }
   const expiresInSeconds = expiresInSecondsFrom(rec, Date.now());
-  return { accessToken: rec.token, ...(expiresInSeconds !== undefined ? { expiresInSeconds } : {}) };
+  const apiBaseUrl = copilotApiBaseFromExchange(rec.endpoints?.api);
+  return {
+    accessToken: rec.token,
+    ...(expiresInSeconds !== undefined ? { expiresInSeconds } : {}),
+    ...(apiBaseUrl !== undefined ? { apiBaseUrl } : {}),
+  };
 }

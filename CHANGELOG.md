@@ -3,6 +3,20 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.102] — 2026-09-14
+GitHub Copilot can list models after login. The picker was calling
+`/v1/models` on `api.githubcopilot.com`, which is a 404 HTML page, and then
+asking you to edit the host.
+
+### Fixed
+
+- **Copilot `/models` 404.** Copilot's OpenAI-shaped API is not versioned under
+  `/v1`: models are `GET /models` and chat is `POST /chat/completions`. The
+  registry now uses those paths. Token exchange also stores `endpoints.api`
+  (individual / business / enterprise) so the picker does not stay on the
+  generic host that 404s for some plans. Re-login once so the discovered host
+  is saved.
+
 ## [0.2.101] — 2026-09-14
 GitHub Copilot device login completes again: the token exchange no longer 403s
 because keryx used OpenCode's OAuth App instead of the Copilot GitHub App.
