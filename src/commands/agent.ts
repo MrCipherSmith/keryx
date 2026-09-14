@@ -46,10 +46,6 @@ import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type 
 
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
 
-function isDurableToolCall(name: string, risk: string | undefined): boolean {
-  return risk !== "read" || DURABLE_READ_TOOL_NAMES.has(name);
-}
-
 /**
  * Extra context handed to an approver alongside the raw tool input.
  *
