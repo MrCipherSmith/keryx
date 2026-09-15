@@ -7,6 +7,7 @@ import { ASK_USER_NO_HOST, type AskUserFn } from "../harness/tool/builtin/ask-us
 
 let host: AskUserFn | undefined;
 
+
 export function setAskUserHost(fn: AskUserFn | undefined): void {
   host = fn;
 }
