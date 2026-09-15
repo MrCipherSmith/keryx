@@ -1,0 +1,216 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "262",
+  "slug": "review-pipeline-derive-the-finding-s-lin",
+  "title": "Review pipeline: derive the finding's line from a quoted snippet, repair mechanical malformation, price the round",
+  "status": "initializing",
+  "createdAt": "2026-09-15T16:27:25.876Z",
+  "updatedAt": "2026-09-15T16:28:55.281Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "A: quote field in the finding schema + ingest locator (exact, then whitespace-normalised, then unlocatable)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "A: swap the line-number instruction for the quote instruction in review-orchestrator and every reviewer output contract",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "A: re-ingest the flow-260 report and produce the derived-vs-recorded discrepancy list (AC8 — the measurement of whether A was worth doing)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "C: estimate at scope, record usage at ingest, cost per retained finding at complete",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "D: decide the related-file grouping question and record the decision with its evidence in decisions.md",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-15T16:27:25.876Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-15T16:28:54.704Z",
+      "event": "task-added",
+      "detail": "T5: A: quote field in the finding schema + ingest locator (exact, then whitespace-normalised, then unlocatable)"
+    },
+    {
+      "at": "2026-09-15T16:28:54.819Z",
+      "event": "task-added",
+      "detail": "T6: A: swap the line-number instruction for the quote instruction in review-orchestrator and every reviewer output contract"
+    },
+    {
+      "at": "2026-09-15T16:28:54.937Z",
+      "event": "task-added",
+      "detail": "T7: A: re-ingest the flow-260 report and produce the derived-vs-recorded discrepancy list (AC8 — the measurement of whether A was worth doing)"
+    },
+    {
+      "at": "2026-09-15T16:28:55.055Z",
+      "event": "task-added",
+      "detail": "T8: B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields"
+    },
+    {
+      "at": "2026-09-15T16:28:55.168Z",
+      "event": "task-added",
+      "detail": "T9: C: estimate at scope, record usage at ingest, cost per retained finding at complete"
+    },
+    {
+      "at": "2026-09-15T16:28:55.281Z",
+      "event": "task-added",
+      "detail": "T10: D: decide the related-file grouping question and record the decision with its evidence in decisions.md"
+    }
+  ]
+}
