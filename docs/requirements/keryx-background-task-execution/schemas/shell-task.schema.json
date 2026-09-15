@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx-shell-task",
+  "title": "Shell Task",
+  "description": "A supervised shell task started by shell_exec. Planned contract for keryx-background-task-execution (v1.1.0).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["taskId", "pid", "command", "cwd", "status", "phase", "startedAt", "yieldMs", "idleTimeoutMs", "observed"],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "pattern": "^task-[0-9]+-[0-9]+$",
+      "description": "Session-scoped identifier; the task-<n>-<pid> shape generalizes the existing job-<n>-<pid>."
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Direct child PID; also the process-group id (detached spawn)."
+    },
+    "command": { "type": "string", "minLength": 1 },
+    "description": { "type": "string" },
+    "cwd": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["running", "completed", "failed", "killed"],
+      "description": "D-14: completed = exit 0, failed = non-zero exit, killed = a kill was requested (see killReason). No 'unknown': tasks are not persisted."
+    },
+    "phase": {
+      "type": "string",
+      "enum": ["foreground", "background"],
+      "description": "D-12: foreground until the yield elapses (or background immediately with background:true). Only background tasks count toward the concurrency cap."
+    },
+    "killReason": {
+      "type": "string",
+      "enum": ["model", "operator", "idle", "output-cap", "hold-timeout", "session-exit"],
+      "description": "Present only when status is killed (D-14)."
+    },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": { "type": "string", "format": "date-time" },
+    "exitCode": { "type": "integer" },
+    "signal": { "type": "string" },
+    "output": {
+      "type": "string",
+      "description": "Bounded retained output: a 2 MiB ring, shrunk to a 4 000-byte tail once the completion is delivered (D-18)."
+    },
+    "truncated": { "type": "boolean" },
+    "yieldMs": { "type": "integer", "minimum": 0 },
+    "idleTimeoutMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Effective idle timeout. A per-call value is clamped to [1000, 1800000]; 0 only via operator env KERYX_SHELL_IDLE_MS=0 (D-13)."
+    },
+    "observed": {
+      "type": "boolean",
+      "description": "The main session has seen this task's terminal status (tool result or delivered notification). Drives exactly-once delivery (N5, D-10, D-16)."
+    }
+  }
+}
