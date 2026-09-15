@@ -1595,7 +1595,13 @@ async function runAgentTurnCore(
       // the fail-closed sentinel reports that nobody could be asked. Only `auto`
       // resolves the question here, and it never calls the host at all.
       let selfAnswered: InteractiveToolResult | undefined;
-      if (call.name === "ask_user") {
+      // `toolByName.has(...)` is load-bearing, not defensive: `--deny-tools
+      // ask_user` REMOVES the tool from `deps.tools`, and without this check the
+      // interception would answer a question the operator explicitly took away —
+      // a denial silently bypassed, in exactly the mode that already skips the
+      // most. With it, a denied `ask_user` falls through to `executeCall`'s
+      // "unknown tool" refusal, identical to what ask/trust already do.
+      if (call.name === "ask_user" && toolByName.has("ask_user")) {
         const mode = io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
         if (resolveQuestionAnswerer(mode) === "self") {
           const questionInput = parseToolInput(call.input);

@@ -790,3 +790,40 @@ test("P1/unattended wins over auto: the SLATE-11 whole-turn stop is unchanged", 
   expect(terminalReason).toBe("ask_user_unanswerable");
   expect(io.calls).toEqual([]);
 });
+
+test("P1/auto: --deny-tools ask_user is NOT bypassed — a denied tool stays denied", async () => {
+  // Review finding. `--deny-tools ask_user` removes the tool from `deps.tools`;
+  // the interception keyed off the CALL NAME alone, so under `auto` it answered
+  // a question the operator had explicitly taken away — a denial bypassed in the
+  // very mode that skips the most. The `toolByName.has(...)` guard makes this
+  // fall through to the same "unknown tool" refusal ask/trust already produce.
+  const host = spyHost("mvp");
+  const selfAnswered: unknown[] = [];
+  const history: NormalizedMessage[] = [];
+  const agentIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onQuestionSelfAnswered: (...args) => {
+      selfAnswered.push(args);
+    },
+  };
+  await runAgentTurn(
+    agentIo,
+    {
+      provider: scriptedProvider(callScript("ask_user", ASK_QUESTION)),
+      providerId: "s",
+      modelId: "m",
+      // The denial's effect: the tool is simply absent from the roster.
+      tools: [],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(host.calls).toEqual([]); // no host, as ever under auto
+  expect(selfAnswered).toEqual([]); // …and no self-answer either
+  const toolMessage = history.find((m) => m.role === "tool");
+  expect(toolMessage?.content).toMatch(/unknown tool/);
+  expect(toolMessage?.content).not.toMatch(/auto mode/);
+});
