@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.106] — 2026-09-15
+Review records follow a flow when it is renumbered, and records an older
+renumber left behind can be repaired with one command.
+
+### Fixed
+
+- **`flow renumber` left review packages naming the old flow id.** It renamed
+  the flow directory and recorded the move in `id-map.json`, but every managed
+  review package inside kept `manifest.flow.id`/`path`, the six
+  `manifest.artifacts` paths, the `flow:` line of `scope.md` and finding paths
+  pointing at the old number and a directory that no longer existed. Nothing
+  failed, because the review gate finds rounds by listing the directory. A
+  renumber now rewrites those records before the rename and restores them if the
+  rename fails. Review notes' `Link:`/`Location:` lines follow too. Paths quoted
+  in reviewer prose are left as written. (#535)
+
+### Added
+
+- **`keryx flow repair-reviews`.** Re-points the review records of flows
+  renumbered before that fix, by replaying `id-map.json` against where each flow
+  lives now. Moves are followed by directory, so a flow moved twice and a number
+  that left twice for two different flows both resolve correctly. It changes
+  nothing on a second run. Run it once in a project that has renumbered flows,
+  then commit what it lists. (#556)
+
 ## [0.2.105] — 2026-09-15
 MCP servers and other read tools keep working after a session has read
 untrusted web content, and `git push` no longer rewrites your commit identity.
