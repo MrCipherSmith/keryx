@@ -19,6 +19,7 @@ import {
   decideCrossFamilyReview,
   familyOf,
   loadCustomCompatProviders,
+  normalizeOpenAiCompatBaseUrl,
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
@@ -116,7 +117,7 @@ export function resolveProviderBaseUrl(
     if ((url.protocol !== "http:" && url.protocol !== "https:") || url.username.length > 0 || url.password.length > 0) {
       return provider.baseUrl;
     }
-    return override.replace(/\/+$/, "");
+    return normalizeOpenAiCompatBaseUrl(override, provider);
   } catch {
     return provider.baseUrl;
   }
@@ -420,7 +421,8 @@ export async function fetchOpenAiCompatModelsDetailed(
   apiKey?: string,
   opts?: { timeoutMs?: number },
 ): Promise<ModelsResolveResult> {
-  const url = `${provider.baseUrl.replace(/\/+$/, "")}${provider.modelsPath ?? DEFAULT_MODELS_PATH}`;
+  const baseUrl = normalizeOpenAiCompatBaseUrl(provider.baseUrl, provider);
+  const url = `${baseUrl}${provider.modelsPath ?? DEFAULT_MODELS_PATH}`;
   const timeoutMs = opts?.timeoutMs ?? MODELS_FETCH_TIMEOUT_MS;
   // A failed discovery must never turn curated/documentary ids into selectable
   // models: only the provider's live `/models` response is authoritative. The
@@ -493,12 +495,17 @@ export async function resolveModelsForPicker(
   const envKey = provider.envKey ?? compat.envKey;
   const raw = envKey === undefined ? undefined : env[envKey];
   const apiKey = typeof raw === "string" && raw.length > 0 ? raw : compat.apiKey;
-  return fetchOpenAiCompatModelsDetailed(
+  const live = await fetchOpenAiCompatModelsDetailed(
     fetchFn,
     { ...compat, ...(provider.baseUrl !== undefined ? { baseUrl: provider.baseUrl } : {}) },
     apiKey,
     opts,
   );
+  if (live.models.length > 0 || live.failure === undefined) return live;
+  if (compat.envKey !== undefined) return live;
+  const declared = provider.models;
+  if (declared.length === 0) return live;
+  return { ...live, models: [...declared] };
 }
 
 

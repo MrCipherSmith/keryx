@@ -5,6 +5,7 @@ import path from "node:path";
 import {
   loadCustomCompatProviders,
   llmProvidersConfigPath,
+  normalizeOpenAiCompatBaseUrl,
   saveCustomCompatProvider,
   type CustomCompatProvider,
 } from "./provider-config";
@@ -30,7 +31,7 @@ describe("llm-providers.json custom provider registry", () => {
     expect(loaded).toHaveLength(1);
     expect(loaded[0]).toMatchObject({
       name: "internal-qwen",
-      baseUrl: "http://10.110.43.19:8080/v1",
+      baseUrl: "http://10.110.43.19:8080",
       apiKey: "sk-test",
       models: ["Qwen/Qwen3.5-122B-A10B-FP8"],
     });
@@ -58,5 +59,18 @@ describe("llm-providers.json custom provider registry", () => {
       JSON.stringify({ schemaVersion: 1, providers: { broken: { name: "broken", models: [] } } }),
     );
     expect(loadCustomCompatProviders(dir)).toEqual([]);
+  });
+});
+
+describe("normalizeOpenAiCompatBaseUrl", () => {
+  test("strips a trailing /v1 that vLLM-style LLM_BASE_URL includes", () => {
+    expect(normalizeOpenAiCompatBaseUrl("http://10.0.0.1:8080/v1/")).toBe("http://10.0.0.1:8080");
+    expect(normalizeOpenAiCompatBaseUrl("http://10.0.0.1:8080")).toBe("http://10.0.0.1:8080");
+  });
+
+  test("leaves /v1 alone when the operator set explicit chat or models paths", () => {
+    expect(normalizeOpenAiCompatBaseUrl("http://10.0.0.1:8080/v1", { chatPath: "/chat/completions" })).toBe(
+      "http://10.0.0.1:8080/v1",
+    );
   });
 });

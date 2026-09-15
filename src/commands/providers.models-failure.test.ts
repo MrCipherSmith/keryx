@@ -199,3 +199,31 @@ describe("modelsFailureLine says which of the four things went wrong", () => {
     expect(line).not.toContain("HTTP");
   });
 });
+
+describe("a custom provider keeps the models the operator declared when /models is unreachable", () => {
+  test("declared ids are selectable and the failure is still reported", async () => {
+    const broken = (async () => {
+      throw new Error("The socket connection was closed unexpectedly.");
+    }) as unknown as typeof fetch;
+    const result = await resolveModelsForPicker(
+      broken,
+      { name: "internal-qwen-test-fallback", models: ["Qwen/Qwen3.5-122B-A10B-FP8"] },
+      {},
+    );
+    expect(result.models).toEqual(["Qwen/Qwen3.5-122B-A10B-FP8"]);
+    expect(result.source).toBe("fallback");
+  });
+
+  test("a built-in still offers no curated ids on a failed probe", async () => {
+    const broken = (async () => {
+      throw new Error("The socket connection was closed unexpectedly.");
+    }) as unknown as typeof fetch;
+    const result = await resolveModelsForPicker(
+      broken,
+      { name: "grok", models: ["grok-2-latest"], envKey: "XAI_API_KEY" },
+      { XAI_API_KEY: "stale" },
+    );
+    expect(result.models).toEqual([]);
+    expect(result.failure?.kind).toBe("unreachable");
+  });
+});

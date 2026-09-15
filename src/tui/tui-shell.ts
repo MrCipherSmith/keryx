@@ -137,7 +137,7 @@ import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
 import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
-import { saveCustomCompatProvider } from "../lib/provider-config";
+import { normalizeOpenAiCompatBaseUrl, saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
   parseShellExecCommand,
@@ -175,6 +175,7 @@ import {
   type SessionHandle,
 } from "../session";
 import { setAskUserHost } from "./ask-user-bridge";
+import { ASK_USER_CANCEL, ASK_USER_UNANSWERABLE } from "../harness/tool/builtin/ask-user-tool";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
 import { createShellChrome, createShellRenderer, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
@@ -511,7 +512,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
       if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || parsed.username.length > 0 || parsed.password.length > 0) {
         continue; // only plain http(s) URLs, no embedded credentials
       }
-      const baseUrl = baseUrlRaw.replace(/\/+$/, "");
+      const baseUrl = normalizeOpenAiCompatBaseUrl(baseUrlRaw);
       const keyStep = await promptCustomFieldStep(otui, r, {
         title: "API key (optional)",
         note: "empty = no key · saved owner-only (0600) in your keryx config dir",
@@ -1528,7 +1529,7 @@ function promptBaseUrlStep(
     const unsub = onKeypress(r, (key) => {
       if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
     });
-    input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); cleanup(); resolve(value.length > 0 ? value : undefined); });
+    input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); cleanup(); resolve(value.length > 0 ? normalizeOpenAiCompatBaseUrl(value) : undefined); });
   });
 }
 
@@ -1950,6 +1951,7 @@ export function selectProviderModelInTui(
           !options.onlyConnected
           && selectedProvider.baseUrl !== undefined
           && endpointMayBeAtFault(models.failure)
+          && models.models.length === 0
         ) {
           const corrected = await promptBaseUrlStep(
             otui,
@@ -3303,6 +3305,10 @@ export async function launchTuiAgentShell(opts: {
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       setMainAgent("blocked", "ask");
       setBusyPhase("waiting for your answer (menu above input)");
+      // Captured BEFORE mounting: `onBusy` fires synchronously inside
+      // `showComposerChoice` when the dock is already visible, which is the one
+      // case where the resolved `cancelId` does not mean "the user pressed Esc".
+      let busyDuringAsk = false;
       // Keep a short transcript breadcrumb; the interactive picker is at the input.
       const qShort = req.question.length > 100 ? `${req.question.slice(0, 97)}…` : req.question;
       transcript.add(
@@ -3314,7 +3320,16 @@ export async function launchTuiAgentShell(opts: {
       const chosen = await showComposerChoice(otui, r, chrome.dock, {
         title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
         subtitle: "Pick an option · Esc cancels",
-        cancelId: "__cancel__",
+        // Esc is a real dismissal (ASK_USER_CANCEL); a dock that could not be
+        // mounted at all is NOT — it means no human ever saw the question. The
+        // two sentinels keep that distinction alive in the tool result, which
+        // `showComposerChoice`'s reentrancy guard would otherwise erase by
+        // resolving to whichever single `cancelId` was passed here.
+        cancelId: ASK_USER_CANCEL,
+        onBusy: () => {
+          busyDuringAsk = true;
+          io.onSystem?.("ask_user could not be shown — another prompt already owns the picker. Nothing was answered.\n");
+        },
         options: req.options.map(
           (o): ChoiceOption => ({
             id: o.id,
@@ -3325,7 +3340,20 @@ export async function launchTuiAgentShell(opts: {
         ),
       });
       input.focus();
-      if (chosen !== "__cancel__") {
+      // A busy dock resolves to `cancelId` WITHOUT ever mounting, so a bare
+      // `chosen !== ASK_USER_CANCEL` check would let "nobody was asked" report as
+      // "the user cancelled" — the exact silence this path exists to close. Ask
+      // the dock instead of guessing from the value.
+      if (chosen === ASK_USER_CANCEL && busyDuringAsk) {
+        transcript.add(
+          new otui.TextRenderable(r, {
+            id: `askd${uid++}`,
+            content: otui.t`${otui.yellow("→ not shown — another prompt owns the picker; nothing was answered")}`,
+          }),
+        );
+        return ASK_USER_UNANSWERABLE;
+      }
+      if (chosen !== ASK_USER_CANCEL) {
         const picked = req.options.find((o) => o.id === chosen);
         transcript.add(
           new otui.TextRenderable(r, {
@@ -3373,6 +3401,21 @@ export async function launchTuiAgentShell(opts: {
         new otui.TextRenderable(r, {
           id: `ap${uid++}`,
           content: otui.t`${otui.yellow(label)} ${otui.dim(preview)}`,
+        }),
+      );
+    };
+
+    io.onQuestionSelfAnswered = (question, chosen) => {
+      // NOT dimmed, for the same reason as `onAutoApproved` directly above:
+      // under `auto` the model answered a question the user never saw, so this
+      // transcript line is the ONLY record of it. It names the question and the
+      // chosen option, not merely the fact, so the user can see which judgement
+      // was made on their behalf — and correct it.
+      const q = question.length > 100 ? `${question.slice(0, 97)}…` : question;
+      transcript.add(
+        new otui.TextRenderable(r, {
+          id: `aq${uid++}`,
+          content: otui.t`${otui.yellow(`◇ auto-answered (${permissionMode})`)} ${otui.dim(`"${q}" → ${chosen.label}`)}`,
         }),
       );
     };

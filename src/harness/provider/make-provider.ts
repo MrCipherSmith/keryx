@@ -22,6 +22,7 @@
 // naming fix, not part of this pure-extraction task).
 import { providerByName, resolveProviderBaseUrl } from "../../commands/providers";
 import { extraRequestHeaders } from "../../lib/oauth/catalog";
+import { normalizeOpenAiCompatBaseUrl } from "../../lib/provider-config";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
@@ -146,7 +147,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       // this is declared per provider in the registry and confirmed per provider.
       // Today that is grok alone; the rest are unchecked, not unsupported.
       ...(compat.streamUsage === true ? { streamUsage: true as const } : {}),
-      baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
+      baseUrl: normalizeOpenAiCompatBaseUrl(opts.baseUrl ?? resolveProviderBaseUrl(compat, env), compat),
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
       ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),

@@ -84,6 +84,41 @@ export type ApprovalGateDecision = "auto" | "ask";
  *     responsible for the one-time confirmation + persistent banner before
  *     any action is skipped under it.
  */
+/**
+ * Who answers a question the MODEL asks the human (`ask_user`)?
+ *
+ * A SEPARATE axis from {@link resolveApprovalDecision}, deliberately, and not a
+ * variant of it. That function decides whether a mutating action may run; this
+ * one decides who answers a question about what to DO. Merging them would put
+ * questions under the security gate and let `auto` self-approve destructive
+ * actions as a side effect — the two are different authorities and the whole
+ * reason `ask_user` is `risk: "read"` is that asking is not acting.
+ *
+ * The three modes map as:
+ *
+ *   - `ask`   — the human answers. Unchanged.
+ *   - `trust` — the human answers. `trust` is a statement about ACTIONS
+ *     ("do not interrupt me for a command I would have approved"), never about
+ *     judgement ("decide for me what to build"). Letting it answer design
+ *     questions is the failure this axis exists to name.
+ *   - `auto`  — the MODEL answers. This is the mode that already declared it
+ *     will act without being asked, so a question put to an absent human is the
+ *     one thing left to resolve; it answers and SAYS SO (see
+ *     `AgentIO.onQuestionSelfAnswered` — a self-answer the user cannot notice is
+ *     a self-answer they cannot object to).
+ *
+ * The reference implementations agree on the separation: Codex gates
+ * `request_user_input` by COLLABORATION mode and refuses it outright in `exec`
+ * (`allows_request_user_input`), and OpenCode's `--auto` replies only to
+ * `permission.asked` while `question.asked` still waits for a human.
+ */
+export type QuestionAnswerer = "human" | "self";
+
+/** Resolve {@link QuestionAnswerer} for a mode. Pure; no host inspection. */
+export function resolveQuestionAnswerer(mode: PermissionMode): QuestionAnswerer {
+  return mode === "auto" ? "self" : "human";
+}
+
 export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateDecision {
   const { mode, risk, destructive, credentials, sacReviewConfirmation } = input;
 
