@@ -50,6 +50,15 @@ export const ASK_USER_UNANSWERABLE = "__unanswerable__";
 export const ASK_USER_NO_HOST = "__no_host__";
 
 /**
+ * The ceiling `promptAskUser` applies when the caller says the surface is
+ * NON-INTERACTIVE (no TTY): nobody is there to type, so waiting forever is not
+ * patience, it is a hang. An interactive prompt passes no ceiling on purpose —
+ * a human may legitimately take minutes, and a deadline that cancels a real
+ * person's answer would be a worse defect than the one it fixes.
+ */
+export const ASK_USER_NONINTERACTIVE_TIMEOUT_MS = 30_000;
+
+/**
  * Which option an `auto`-mode self-answer picks, when no human will.
  *
  * Extracted and pure so the rule is testable without a terminal or a session:
@@ -61,8 +70,20 @@ export const ASK_USER_NO_HOST = "__no_host__";
  *
  * Returns `undefined` when there is nothing to choose from, which the caller
  * must render as `ASK_USER_UNANSWERABLE` rather than as an answer.
+ *
+ * The minimum is the tool's OWN minimum ({@link MIN_ASK_USER_OPTIONS}), not a
+ * second opinion: `invoke()` refuses a question offering fewer than two valid
+ * options, and an `auto` path that happily answered one would be the permissive
+ * half of a disagreement about what a valid question is — with the permissive
+ * half being the one that speaks for the user. A question the tool would refuse
+ * must not be answered just because nobody had to be asked it.
  */
+export const MIN_ASK_USER_OPTIONS = 2;
+
 export function chooseSelfAnswer(options: readonly AskUserOption[]): AskUserOption | undefined {
+  if (options.length < MIN_ASK_USER_OPTIONS) {
+    return undefined;
+  }
   const recommended = options.find((option) => option.recommended === true);
   return recommended ?? options[0];
 }
@@ -122,8 +143,8 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
         return { output: "ask_user requires a non-empty 'question'", isError: true };
       }
       const rawOpts = input.options;
-      if (!Array.isArray(rawOpts) || rawOpts.length < 2) {
-        return { output: "ask_user requires at least 2 options", isError: true };
+      if (!Array.isArray(rawOpts) || rawOpts.length < MIN_ASK_USER_OPTIONS) {
+        return { output: `ask_user requires at least ${MIN_ASK_USER_OPTIONS} options`, isError: true };
       }
       const options: AskUserOption[] = [];
       for (const raw of rawOpts) {
@@ -144,8 +165,11 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           ...(o.recommended === true ? { recommended: true } : {}),
         });
       }
-      if (options.length < 2) {
-        return { output: "ask_user: need at least 2 valid options with id+label", isError: true };
+      if (options.length < MIN_ASK_USER_OPTIONS) {
+        return {
+          output: `ask_user: need at least ${MIN_ASK_USER_OPTIONS} valid options with id+label`,
+          isError: true,
+        };
       }
       try {
         const chosen = await ask({

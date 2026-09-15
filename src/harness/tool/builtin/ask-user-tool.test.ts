@@ -6,6 +6,7 @@ import {
   createAskUserTool,
   chooseSelfAnswer,
   SELF_ANSWERED_MARKER,
+  MIN_ASK_USER_OPTIONS,
 } from "./ask-user-tool";
 
 test("ask_user returns chosen option from host callback", async () => {
@@ -124,5 +125,29 @@ describe("chooseSelfAnswer — which option auto mode picks", () => {
     // choice to a user who never made it is the bug this axis closes.
     expect(SELF_ANSWERED_MARKER).toMatch(/auto mode/);
     expect(SELF_ANSWERED_MARKER).toMatch(/without asking the user/i);
+  });
+});
+
+// F-558-02: the auto path must apply the tool's OWN minimum, or the two paths
+// disagree about what a valid question is — the permissive one being the one
+// that speaks for the user.
+describe("chooseSelfAnswer refuses what the tool refuses", () => {
+  test("a single usable option is NOT an answer — the tool would have refused it", async () => {
+    const one = [{ id: "a", label: "Only", description: "" }];
+    expect(chooseSelfAnswer(one)).toBeUndefined();
+    // The rule the refusal mirrors, asserted against the real tool so the two
+    // cannot drift apart again.
+    const result = await createAskUserTool(async () => "a").invoke({ question: "q", options: one });
+    expect(result.isError).toBe(true);
+    expect(result.output).toMatch(/at least 2/i);
+  });
+
+  test("exactly two usable options IS an answer — the boundary, from below and at it", async () => {
+    const two = [
+      { id: "a", label: "A", description: "" },
+      { id: "b", label: "B", description: "", recommended: true },
+    ];
+    expect(chooseSelfAnswer(two)?.id).toBe("b");
+    expect(MIN_ASK_USER_OPTIONS).toBe(2);
   });
 });

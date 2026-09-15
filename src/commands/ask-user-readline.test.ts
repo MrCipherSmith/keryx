@@ -117,3 +117,37 @@ describe("the human sees the whole question before answering", () => {
     expect(io.written()).toMatch(/1-2/);
   });
 });
+
+// F-558-03: a bounded wait, and the distinction that matters on expiry.
+describe("a bounded wait returns UNANSWERABLE, never a decline", () => {
+  test("expiry is UNANSWERABLE — nobody declined, so it is not a cancel", async () => {
+    const io: AskUserPromptIo = { out: () => {}, readLine: () => new Promise<string>(() => {}) };
+    const chosen = await promptAskUser(io, REQUEST, undefined, "", { timeoutMs: 20 });
+    expect(chosen).toBe(ASK_USER_UNANSWERABLE);
+    expect(chosen).not.toBe(ASK_USER_CANCEL);
+  });
+
+  test("an answer inside the ceiling still wins, and no timer is left behind", async () => {
+    const io: AskUserPromptIo = { out: () => {}, readLine: async () => "2" };
+    expect(await promptAskUser(io, REQUEST, undefined, "", { timeoutMs: 5_000 })).toBe("full");
+  });
+
+  test("no ceiling means no deadline — a human may take as long as they take", async () => {
+    // The default must stay unbounded: a prompt for a person is not a hang.
+    let released: ((value: string) => void) | undefined;
+    const io: AskUserPromptIo = {
+      out: () => {},
+      readLine: () => new Promise<string>((resolve) => { released = resolve; }),
+    };
+    const pending = promptAskUser(io, REQUEST); // no options at all
+    // Give a 20ms deadline every chance to fire; it must not.
+    await new Promise((r) => setTimeout(r, 40));
+    released?.("1");
+    expect(await pending).toBe("mvp");
+  });
+
+  test("a zero or negative ceiling is treated as 'no ceiling', not as 'already expired'", async () => {
+    const io: AskUserPromptIo = { out: () => {}, readLine: async () => "1" };
+    expect(await promptAskUser(io, REQUEST, undefined, "", { timeoutMs: 0 })).toBe("mvp");
+  });
+});

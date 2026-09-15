@@ -1594,6 +1594,31 @@ async function runAgentTurnCore(
       // `ask` and `trust` fall through to the REAL host — the human answers, or
       // the fail-closed sentinel reports that nobody could be asked. Only `auto`
       // resolves the question here, and it never calls the host at all.
+      //
+      // F-558-01 — what the `selfAnswered ??` short-circuit below does and does
+      // NOT skip, stated so a later reader does not have to re-derive it:
+      //
+      //   STILL APPLIED to a self-answered call, because they sit outside
+      //   `executeCall` for every call in this loop: the abort check, the
+      //   unattended check above, the untrusted-content gate, `reserveToolAttempt`
+      //   (the per-signature 3-attempt guard), `io.onToolCall`/`io.onToolResult`,
+      //   the slate touch, the repeated-failure hint, and the tool log.
+      //
+      //   SKIPPED, deliberately: `toolByName.get()` existence (hence the explicit
+      //   `toolByName.has` guard above), `validateAgainstSchemaObject` (the
+      //   option parse below is the schema this path honours), `requestApproval`
+      //   (that is the entire point — `auto` is the mode that declared it would
+      //   not ask), and BOTH invocation-budget calls
+      //   (`hasInvocationCapacity`/`reserveInvocation`, reachable only inside
+      //   `executeCall`). So a self-answered question does not consume
+      //   `maxToolCalls`.
+      //
+      // That last exemption is the deliberate choice, not an oversight: the
+      // budget counts REAL tool invocations, and nothing was invoked — the
+      // question was answered in-process. Spending a tool-call slot on it would
+      // charge the user's budget for work the harness did itself. The turn stays
+      // bounded regardless by `maxRounds` and by the per-signature attempt guard,
+      // neither of which this path escapes.
       let selfAnswered: InteractiveToolResult | undefined;
       // `toolByName.has(...)` is load-bearing, not defensive: `--deny-tools
       // ask_user` REMOVES the tool from `deps.tools`, and without this check the

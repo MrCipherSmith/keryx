@@ -16,7 +16,7 @@ Native bundled Metaproject working skills and orchestrators.
 - `entity-skill-creator`: Create canonical project-skills from a path, symbol, wiki page, module, component, store, service, or domain entity.
 - `entity-skill-learner`: Update project-skills from review findings, test failures, health reports, memory entries, and verifier reports.
 - `entity-skill-router`: Select relevant project-skills for known modules, components, stores, services, and domain entities.
-- `entity-skill-verifier`: Verify project-skills against current code, graph, wiki, health, memory, tests, and review lessons.
+- `entity-skill-verifier`: Run `keryx skills verify` to check a project-skill's required files, SKILL.md metadata, manifest registration, target-path existence, and evidence artifacts (gdgraph, gdctx, validated gdwiki, Code Health, canonical accepted memory), then classify it as fresh, needs-review, stale, or blocked. The command does not read the skill's prose or compare it against current code — that comparison is a manual agent step.
 - `metaproject-router`: Choose which Metaproject module, working skill, or project-skill should be used for a user request.
 - `reviewer-skill-creator`: Create a project-local reviewer for review-orchestrator from a rules file, review profile, or written team standard.
 

@@ -19,6 +19,23 @@
 
 import { ASK_USER_CANCEL, ASK_USER_UNANSWERABLE } from "../harness/tool/builtin/ask-user-tool";
 
+/** Caller-supplied knobs for {@link promptAskUser}. */
+export interface AskUserPromptOptions {
+  /**
+   * Ceiling on the wait for an answer, in milliseconds.
+   *
+   * OMITTED for a human-facing prompt on purpose: a person may legitimately take
+   * minutes, and a deadline that cancels a real answer would be a worse defect
+   * than the unbounded wait it fixes. SUPPLIED for a non-interactive surface,
+   * where nobody is there to type and an unbounded await is not patience, it is
+   * a hang (F-558-03).
+   *
+   * On expiry the result is {@link ASK_USER_UNANSWERABLE} — never a cancel,
+   * because nobody declined.
+   */
+  readonly timeoutMs?: number;
+}
+
 export interface AskUserPromptIo {
   readonly out: (text: string) => void;
   /** `undefined` means end of input — nobody is left who could answer. */
@@ -46,6 +63,38 @@ type Paint = {
 
 const IDENTITY: Paint = { yellow: (t) => t, dim: (t) => t, green: (t) => t };
 
+/**
+ * Distinct from `undefined` (end of input) and from every string: the wait was
+ * bounded and the bound was reached. A third outcome needs a third marker —
+ * folding it into `undefined` would claim the input ended, and into a string
+ * would invent an answer.
+ */
+const TOO_LATE = Symbol("ask-user-timeout");
+
+/**
+ * Await the next line with an optional ceiling.
+ *
+ * The timer is cleared on the fast path too, so a question answered in one
+ * second does not leave a 30-second timer holding the event loop open.
+ */
+async function readBounded(
+  io: AskUserPromptIo,
+  timeoutMs: number | undefined,
+): Promise<string | undefined | typeof TOO_LATE> {
+  if (timeoutMs === undefined || timeoutMs <= 0) {
+    return await io.readLine();
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const expired = new Promise<typeof TOO_LATE>((resolve) => {
+    timer = setTimeout(() => resolve(TOO_LATE), timeoutMs);
+  });
+  try {
+    return await Promise.race([io.readLine(), expired]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 /** Retries on an unparseable answer before giving up, so a typo is not a cancel. */
 const MAX_REREAD = 2;
 
@@ -63,6 +112,7 @@ export async function promptAskUser(
   request: AskUserPromptRequest,
   style: Paint = IDENTITY,
   gutter = "",
+  promptOptions: AskUserPromptOptions = {},
 ): Promise<string> {
   const options = request.options;
   io.out(`\n${gutter}${style.yellow(`? ${request.question}`)}\n`);
@@ -80,7 +130,13 @@ export async function promptAskUser(
 
   for (let attempt = 0; attempt <= MAX_REREAD; attempt += 1) {
     io.out(`${gutter}${style.dim(attempt === 0 ? hint : `[1-${options.length}, Enter to skip] `)}`);
-    const answer = await io.readLine();
+    const answer = await readBounded(io, promptOptions.timeoutMs);
+    if (answer === TOO_LATE) {
+      // Bounded, and the bound passed. Reported as UNANSWERABLE, not as a
+      // decline: a cancel would tell the model a human saw the question and said
+      // no, which is the false attribution this module exists to prevent.
+      return ASK_USER_UNANSWERABLE;
+    }
     if (answer === undefined) {
       // EOF is not a refusal. A refused question was seen; this one cannot be.
       io.out(`${style.dim("no input — nobody could answer\n")}\n`);

@@ -127,6 +127,7 @@ import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from 
 import { runGoalCommand } from "./goal-command";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 import { promptAskUser } from "./ask-user-readline";
+import { ASK_USER_NONINTERACTIVE_TIMEOUT_MS } from "../harness/tool/builtin/ask-user-tool";
 import { setAskUserHost } from "../tui/ask-user-bridge";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
@@ -1395,6 +1396,10 @@ async function runAgentRepl(
       request,
       { yellow: style.yellow, dim: style.dim, green: style.green },
       GUTTER,
+      // A ceiling ONLY where nobody is there to type. On a TTY the wait is the
+      // human's to spend; without one, waiting forever is the hang `ask_user`
+      // shipped with (F-558-03).
+      process.stdin.isTTY === true ? {} : { timeoutMs: ASK_USER_NONINTERACTIVE_TIMEOUT_MS },
     );
   });
 
