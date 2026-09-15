@@ -3,7 +3,7 @@
 target: report
 ref: main
 mode: ingest
-flow: 222 (explicit-flow-id)
+flow: 223 (explicit-flow-id)
 created_at: 2026-09-03T21:20:03.353Z
 context_mode: light
 

@@ -36,7 +36,7 @@ import { readdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic } from "../lib/fs";
 import { flowsRoot } from "../flow/store";
-import type { FlowRenumberReviewRecords } from "../flow/types";
+import type { FlowIdMapEntry, FlowRenumberReviewRecords } from "../flow/types";
 import { reviewNotesDir } from "./review-notes";
 
 export type FlowMove = {
@@ -82,7 +82,14 @@ const NOTE_PATH_LINE = /^(- (?:Link|Location): `?)([^`\s]+)/gm;
  * the plan and the rename.
  */
 export async function moveFlowDirWithReviewRecords(move: FlowMove): Promise<FlowRenumberReviewRecords> {
-  const plan = await planReviewRecordRewrites(move);
+  const fromRoot = path.join(flowsRoot(move.cwd), move.fromDir);
+  const toRoot = path.join(flowsRoot(move.cwd), move.toDir);
+  const plan = await planReviewRecordRewrites(move, fromRoot, (file) =>
+    path.relative(
+      move.cwd,
+      file.startsWith(`${fromRoot}${path.sep}`) ? path.join(toRoot, path.relative(fromRoot, file)) : file,
+    ),
+  );
   const written: PlannedRewrite[] = [];
   try {
     for (const rewrite of plan.rewrites) {
@@ -116,22 +123,92 @@ async function restore(written: readonly PlannedRewrite[]): Promise<string[]> {
   return failed;
 }
 
-async function planReviewRecordRewrites(move: FlowMove): Promise<Plan> {
+/**
+ * Re-point the review records of flows renumbered before a renumber rewrote them.
+ *
+ * Replays `id-map.json`, in order, against where each flow lives NOW. A flow can
+ * move more than once (221 -> 222 -> 223), so an entry follows the later entries
+ * by DIRECTORY to the flow's current home. Ids alone would be wrong: one number
+ * can leave twice for two different flows (252 went to 253 and to 256). Every
+ * step is the rewrite a renumber performs, so records a fixed renumber already
+ * moved, or a previous repair already fixed, are left as they are.
+ *
+ * All-or-nothing: a failure restores every file already written.
+ */
+export async function repairMovedFlowReviewRecords(cwd: string): Promise<FlowRenumberReviewRecords> {
+  const moves = await readIdMap(cwd);
+  const originals = new Map<string, PlannedRewrite>();
+  const unreadable = new Set<string>();
+  try {
+    for (const [index, entry] of moves.entries()) {
+      const currentDir = moves
+        .slice(index + 1)
+        .reduce((dir, later) => (later.fromDir === dir ? later.toDir : dir), entry.toDir);
+      const packagesRoot = path.join(flowsRoot(cwd), currentDir);
+      if (!(await pathExists(packagesRoot))) {
+        continue;
+      }
+      const move: FlowMove = { cwd, from: entry.from, to: entry.to, fromDir: entry.fromDir, toDir: entry.toDir };
+      const plan = await planReviewRecordRewrites(move, packagesRoot, (file) => path.relative(cwd, file));
+      for (const rewrite of plan.rewrites) {
+        if (!originals.has(rewrite.current)) {
+          originals.set(rewrite.current, rewrite);
+        }
+        await writeFileAtomic(rewrite.current, rewrite.after);
+      }
+      for (const file of plan.unreadable) {
+        unreadable.add(file);
+      }
+    }
+  } catch (error) {
+    const unrestored = await restore([...originals.values()]);
+    if (unrestored.length > 0) {
+      throw new Error(
+        `review record repair failed, and ${unrestored.length} file(s) could not be restored: ${unrestored.join(", ")}`,
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+  return { rewritten: [...originals.values()].map((rewrite) => rewrite.final), unreadable: [...unreadable] };
+}
+
+async function readIdMap(cwd: string): Promise<FlowIdMapEntry[]> {
+  const file = path.join(flowsRoot(cwd), "id-map.json");
+  if (!(await pathExists(file))) {
+    return [];
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(file, "utf8"));
+  } catch (error) {
+    throw new Error(`Cannot read ${path.relative(cwd, file)}: not valid JSON`, { cause: error });
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Cannot read ${path.relative(cwd, file)}: expected an array`);
+  }
+  return parsed as FlowIdMapEntry[];
+}
+
+/**
+ * The rewrites that re-point one move's review records.
+ *
+ * `packagesRoot` is where the flow's packages are when this runs — the old
+ * directory for a renumber in progress, the current one for a repair — and
+ * `finalOf` names each file where it will end up.
+ */
+async function planReviewRecordRewrites(
+  move: FlowMove,
+  packagesRoot: string,
+  finalOf: (file: string) => string,
+): Promise<Plan> {
   const oldPrefix = `${RECORDED_FLOWS_ROOT}/${move.fromDir}`;
   const newPrefix = `${RECORDED_FLOWS_ROOT}/${move.toDir}`;
   const movePath = (value: string): string =>
     value === oldPrefix || value.startsWith(`${oldPrefix}/`) ? `${newPrefix}${value.slice(oldPrefix.length)}` : value;
-
-  const fromRoot = path.join(flowsRoot(move.cwd), move.fromDir);
-  const toRoot = path.join(flowsRoot(move.cwd), move.toDir);
-  const finalOf = (file: string): string =>
-    path.relative(
-      move.cwd,
-      file.startsWith(`${fromRoot}${path.sep}`) ? path.join(toRoot, path.relative(fromRoot, file)) : file,
-    );
   const plan: Plan = { rewrites: [], unreadable: [] };
 
-  const reviewsDir = path.join(fromRoot, "reviews");
+  const reviewsDir = path.join(packagesRoot, "reviews");
   if (await pathExists(reviewsDir)) {
     for (const entry of await readdir(reviewsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) {

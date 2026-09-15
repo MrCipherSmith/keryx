@@ -3,7 +3,7 @@
 target: pr
 ref: 421
 mode: attach-review
-flow: 202 (explicit-flow-id)
+flow: 224 (explicit-flow-id)
 created_at: 2026-08-31T11:55:57.469Z
 context_mode: light
 

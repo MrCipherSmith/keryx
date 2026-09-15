@@ -3,7 +3,7 @@
 target: pr
 ref: 421
 mode: ingest
-flow: 202 (explicit-flow-id)
+flow: 224 (explicit-flow-id)
 created_at: 2026-08-31T12:08:58.786Z
 context_mode: light
 

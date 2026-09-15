@@ -513,6 +513,25 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "rewrites the flow's review package records (manifest.json, scope.md, findings.json) and review-note links",
     ],
   },
+  {
+    module: "tasks",
+    command: "flow repair-reviews",
+    summary:
+      "Re-point review records of flows renumbered before renumber rewrote them, by replaying id-map.json. Idempotent.",
+    intent: [
+      "почини ревью после переномерации",
+      "старые номера флоу в ревью",
+      "repair review records after renumber",
+      "stale flow id in review manifest",
+    ],
+    args: [],
+    json: false,
+    read: false,
+    sideEffects: [
+      "rewrites review package records (manifest.json, scope.md, findings.json) under renumbered flows",
+      "rewrites review-note links",
+    ],
+  },
   // ---- sandbox (OS containment visibility) ------------------------------
   {
     module: "sandbox",

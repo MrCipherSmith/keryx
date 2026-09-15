@@ -1061,6 +1061,7 @@ keryx flow block <id> --reason "<why>"
 keryx flow unblock <id>
 keryx flow check
 keryx flow renumber <dir> --to <id> --reason "<why>"
+keryx flow repair-reviews
 keryx flow schema [--out <path>]
 ```
 
@@ -1086,6 +1087,7 @@ keryx flow schema [--out <path>]
 | `unblock <id>` | — | Restore the saved previous status. |
 | `check` | — | Consistency audit across all flows: structure, checksums, schema, duplicate ids, plus every `dependsOn` that can never be satisfied (unknown id, self-reference, cycle) and every task recorded `failed`/`blocked` with no attempt behind it. |
 | `renumber <dir>` | `--to <id>` (required), `--reason "<why>"` (required) | Repair a duplicate flow id. |
+| `repair-reviews` | — | Re-point review records (`manifest.json`, `scope.md`, `findings.json`, review-note links) of flows renumbered before `renumber` rewrote them, by replaying `id-map.json` against each flow's current directory. Idempotent. |
 | `schema` | `--out <path>` | Emit the flow JSON schema. |
 
 Statuses: `initializing`, `ready`, `in-progress`, `implemented`, `completing`,
