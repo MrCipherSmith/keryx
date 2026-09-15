@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import http from "node:http";
 import path from "node:path";
 import { saveSandboxDefaults } from "../../../lib/sandbox-config";
+import * as shellExecModule from "./shell-exec-tool";
 import {
   type CommandRunner,
   extraReadDenyRoots,
@@ -12,6 +13,14 @@ import {
   resolveShellSandboxMode,
   shellExecTool,
 } from "./shell-exec-tool";
+
+// flow 263 (RED): new exports, read off the namespace so this file still loads
+// (and its existing tests still run) before they exist.
+const { DEFAULT_SHELL_YIELD_MS, ENV_SHELL_YIELD_MS, resolveShellYieldMs } = shellExecModule as unknown as {
+  DEFAULT_SHELL_YIELD_MS: number;
+  ENV_SHELL_YIELD_MS: string;
+  resolveShellYieldMs: (env: Record<string, string | undefined>) => number;
+};
 
 function recordingRunner(result = { output: "done", isError: false }): {
   run: CommandRunner;
@@ -43,6 +52,40 @@ test("shell_exec is risk shell with a command input schema", () => {
   expect(tool.definition.name).toBe("shell_exec");
   expect(tool.definition.risk).toBe("shell");
   expect(tool.definition.inputSchema.required).toEqual(["command"]);
+});
+
+// flow 263: task-supervisor inputs (spec §4.1) and the yield resolver (§3).
+test("shell_exec input schema: command, background, description, idle_timeout_ms; no additional properties", () => {
+  const { run } = recordingRunner();
+  const schema = shellExecTool("/proj", run).definition.inputSchema as {
+    properties: Record<string, { type: string }>;
+    additionalProperties: unknown;
+  };
+  expect(Object.keys(schema.properties).sort()).toEqual(["background", "command", "description", "idle_timeout_ms"]);
+  expect(schema.properties.command?.type).toBe("string");
+  expect(schema.properties.background?.type).toBe("boolean");
+  expect(schema.properties.description?.type).toBe("string");
+  expect(schema.properties.idle_timeout_ms?.type).toBe("integer");
+  expect(schema.additionalProperties).toBe(false);
+});
+
+test("resolveShellYieldMs: KERYX_SHELL_YIELD_MS, default 10000, malformed falls back, explicit 0 allowed", () => {
+  expect(ENV_SHELL_YIELD_MS).toBe("KERYX_SHELL_YIELD_MS");
+  expect(DEFAULT_SHELL_YIELD_MS).toBe(10_000);
+  expect(resolveShellYieldMs({})).toBe(10_000);
+  expect(resolveShellYieldMs({ KERYX_SHELL_YIELD_MS: "" })).toBe(10_000);
+  expect(resolveShellYieldMs({ KERYX_SHELL_YIELD_MS: "nonsense" })).toBe(10_000);
+  expect(resolveShellYieldMs({ KERYX_SHELL_YIELD_MS: "-1" })).toBe(10_000);
+  expect(resolveShellYieldMs({ KERYX_SHELL_YIELD_MS: "2500" })).toBe(2_500);
+  expect(resolveShellYieldMs({ KERYX_SHELL_YIELD_MS: "0" })).toBe(0);
+});
+
+test("AC7: without a registry, a long command still goes through the injected synchronous runner unchanged", async () => {
+  const { run, calls } = recordingRunner({ output: "sync-only", isError: false });
+  const tool = shellExecTool("/proj", run, undefined, { yieldMs: 1 });
+  const result = await tool.invoke({ command: "sleep 120 && gh run list --workflow=release.yml" });
+  expect(calls).toEqual(["sleep 120 && gh run list --workflow=release.yml"]);
+  expect(result).toEqual({ output: "sync-only", isError: false });
 });
 
 test("shell_exec passes the command through to the runner", async () => {
