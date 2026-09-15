@@ -3,13 +3,11 @@ name: review-frontend
 model_tier: standard
 description: "Use when a frontend review is requested, checking React component patterns, MobX state management (observer, actions, computed, reactions, lifecycle), View-Store boundaries, and TypeScript safety in changed frontend code. NOT for backend patterns, security vulnerabilities, performance bottlenecks, or cross-layer architecture."
 triggers:
-  - "review frontend"
   - "frontend review"
+  - "component review"
+  - "ui review"
   - "review React"
-  - "review MobX"
-  - "review store"
   - "review components"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"

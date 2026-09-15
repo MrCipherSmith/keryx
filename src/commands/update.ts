@@ -237,6 +237,12 @@ export async function updateCommand(args: string[] = []): Promise<void> {
   if (summary.modules.sac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
   }
+  if (summary.gdskillsNotices.length > 0) {
+    heading("Notices");
+    for (const notice of summary.gdskillsNotices) {
+      note(notice);
+    }
+  }
   if (summary.gdskillsWarnings.length > 0) {
     heading("Warnings");
     for (const warning of summary.gdskillsWarnings) {
@@ -269,11 +275,20 @@ type RefreshSummary = {
   };
   gdskillsProfile: GdskillsProfile;
   /**
-   * Human-readable notices from `installGdskills` (see `InstallGdskillsResult.warnings`
-   * in `src/gdskills/install.ts`), surfaced under the "Warnings" heading below.
-   * Empty when gdskills is disabled or nothing needed reporting.
+   * Things the install left for the operator to do (see
+   * `InstallGdskillsResult.warnings` in `src/gdskills/install.ts`), surfaced
+   * under the "Warnings" heading below. Empty when gdskills is disabled or
+   * nothing needed reporting.
    */
   gdskillsWarnings: string[];
+  /**
+   * Informational outcomes from the same install (see
+   * `InstallGdskillsResult.notices`) — chiefly the stale per-runtime builds the
+   * sweep removed — printed under their own "Notices" heading. The release that
+   * retired the identical-copy builds removes ~88 of them on a project's first
+   * `keryx update`, and none of it is a warning.
+   */
+  gdskillsNotices: string[];
   backfilledTasks: boolean;
   recoveredManifest: boolean;
 };
@@ -474,9 +489,11 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
   }
 
   let gdskillsWarnings: string[] = [];
+  let gdskillsNotices: string[] = [];
   if (enableGdskills) {
     const gdskillsInstallResult = await installGdskills(metaprojectRoot, gdskillsProfile, { createDataDirs: false });
     gdskillsWarnings = gdskillsInstallResult.warnings;
+    gdskillsNotices = gdskillsInstallResult.notices;
     if (manifest.modules?.gdskills?.hooks?.gitPostCommit) {
       await installManagedHook(projectRoot, "post-commit", "gdskills-post-commit", renderGdskillsPostCommitHook());
     }
@@ -612,6 +629,7 @@ async function refreshServiceFiles(projectRoot: string, options: UpdateOptions):
     },
     gdskillsProfile,
     gdskillsWarnings,
+    gdskillsNotices,
     backfilledTasks: backfillTasks,
     recoveredManifest,
   };

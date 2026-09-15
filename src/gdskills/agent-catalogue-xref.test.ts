@@ -38,8 +38,8 @@
 //
 // The check runs over BOTH trees and over every `*.md` in them — the harness
 // builds too, not one file per skill, because a divergence that reintroduces a
-// dangling reference in `SKILL.codex.md` alone is the same defect on four fifths
-// of the shipped harnesses.
+// dangling reference in a `SKILL.codex.md` alone is the same defect for every
+// agent on that harness.
 
 import { describe, expect, test } from "bun:test";
 import { readFileSync, readdirSync, existsSync } from "node:fs";
@@ -194,7 +194,29 @@ describe("a shipped skill never dispatches an agent this tree does not have", ()
   test("the sweep reads both trees, every harness build, and the rules", () => {
     const files = SCANNED_TREES.flatMap((tree) => agentDocuments(tree));
     expect(files.length).toBeGreaterThan(100);
-    expect(files.some((file) => file.endsWith("SKILL.codex.md"))).toBe(true);
+    // Every harness build that ships is in the sweep. Found independently of
+    // `agentDocuments` (per skill directory, by exact build name), so a walker
+    // that skipped builds cannot agree with itself. Since flow 257 only skills
+    // whose builds genuinely differ ship one — seven gproject-* skills today —
+    // so the set is derived rather than assumed, but asserted non-empty while
+    // the tree still ships any.
+    const scanned = new Set(files);
+    const shippedBuilds: string[] = [];
+    for (const tree of SKILL_TREES) {
+      if (!existsSync(tree)) continue;
+      for (const category of readdirSync(tree, { withFileTypes: true })) {
+        if (!category.isDirectory()) continue;
+        for (const skill of readdirSync(path.join(tree, category.name), { withFileTypes: true })) {
+          if (!skill.isDirectory()) continue;
+          for (const build of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
+            const file = path.join(tree, category.name, skill.name, build);
+            if (existsSync(file)) shippedBuilds.push(file);
+          }
+        }
+      }
+    }
+    expect(shippedBuilds.length).toBeGreaterThan(0);
+    for (const file of shippedBuilds) expect(scanned.has(file)).toBe(true);
     expect(files.some((file) => file.includes(`${path.sep}.metaproject${path.sep}`))).toBe(true);
     expect(files.some((file) => file.endsWith(".mdc"))).toBe(true);
     expect(files.some((file) => file.includes(`${path.sep}rules${path.sep}`))).toBe(true);

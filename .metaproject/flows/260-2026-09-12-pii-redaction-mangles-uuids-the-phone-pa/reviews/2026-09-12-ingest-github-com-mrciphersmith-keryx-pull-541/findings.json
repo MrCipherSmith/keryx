@@ -1,0 +1,101 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "isIdentifierFragment treats any adjacent letter as proof of identifier, un-redacting real phone numbers.",
+    "impact": "A real phone number adjacent to a letter across a hyphen is no longer redacted anywhere the PII detector is the last line of defence — MCP tool output, keryx security check-output, session transcripts. A single letter suffices, so it is also a trivial deliberate evasion.",
+    "suggested_fix": "Require positive evidence of an identifier — the whole token being a UUID, or a hex run of 8+ characters carrying an a-f beside the match — rather than the presence of any letter.",
+    "evidence": "Before/after execution against dd7f3df0 and parent 558c5e9e: contact-415-555-0199-primary, ticket TCK-415-555-0199-open, call 415-555-0199-ext205, a-415-555-0199 and a JSON-key form all returned [\"415-555-0199\"] before and [] after. Reproduced independently by review-logic and by the orchestrator.",
+    "confidence": "high",
+    "file": "src/security/detect/pii.ts",
+    "line": 261,
+    "class_scope": {
+      "sites": [
+        "src/security/detect/pii.ts:256 (isIdentifierFragment)",
+        "src/security/detect/pii.ts:311 (its sole call site)"
+      ],
+      "enumeration_method": "keryx ctx rg \"isIdentifierFragment\" src returned exactly two matches: the definition and one call site, gating pii.phone only. That is the complete reachable set."
+    },
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — guard rewritten to positive hex evidence; 6 regression cases in pii-phone-identifier.test.ts"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "major",
+    "problem": "enclosingToken's unbounded outward scan adds a second quadratic term on adversarial input.",
+    "impact": "detectPii runs on every tool output, including externally-influenced text. On a 272 KB adversarial blob the guard added ~60% to an already-quadratic cost (46.5s vs 28.8s).",
+    "suggested_fix": "Cap the outward scan to a small fixed window each direction; the evidence the guard needs is local.",
+    "evidence": "Timed on dd7f3df0 vs parent 558c5e9e with identical input construction; ~4x per doubling in both, so the quadratic itself predates the change and the added term does not.",
+    "confidence": "high",
+    "file": "src/security/detect/pii.ts",
+    "line": 233,
+    "class_scope": {
+      "sites": [
+        "src/security/detect/pii.ts:231 (enclosingToken)",
+        "src/security/detect/pii.ts:311 (the only path that reaches it)"
+      ],
+      "enumeration_method": "enclosingToken is a private helper with one caller, isIdentifierFragment, which itself has one call site (verified by reading the whole file and by keryx ctx rg). No other rule reaches this scan."
+    },
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — scan bounded to 64 chars each way; overhead re-measured at ~9% vs the unguarded baseline"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The countDigits(token) > 15 branch is unreachable, and the test claiming to cover it never reaches the guard.",
+    "impact": "A future author trusting this branch as a safety net for long all-digit identifiers is wrong, and no test would catch a refactor that garbled it.",
+    "suggested_fix": "Delete the branch, or add an input that actually reaches it.",
+    "evidence": "Mutating the branch to `return false` left 17/17 tests passing. The cited test input produces one greedy 34-digit match, rejected by the pre-existing digits>15 gate before isIdentifierFragment is called.",
+    "confidence": "high",
+    "file": "src/security/detect/pii.ts",
+    "line": 264,
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — unreachable branch deleted; the test comment now names the gate that rejects that input"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The new parity test names the MCP dispatch path but calls a wrapper nothing else calls.",
+    "impact": "A regression confined to the dispatchCallTool/outputSchema wiring — the surface the title names — would not be caught here.",
+    "suggested_fix": "Rename and re-scope the comment, or route the assertion through buildMcpContext/dispatchCallTool as the untouched first test does.",
+    "evidence": "redactToolOutput's only caller in the tree is this test; dispatchCallTool calls validateToolOutput(result, tool.outputSchema). Both reach validateOutputForTransport, so the flow-260 regression itself is pinned.",
+    "confidence": "high",
+    "file": "src/sac/proposal-lifecycle-parity.test.ts",
+    "line": 93,
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — proposal-lifecycle-parity.test.ts renamed and its scope stated in the comment"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "A live SSN identifier-fragment false positive is pinned as expected behaviour with no tracked follow-up.",
+    "impact": "The same data-corrupting bug class, in pii.ssn, recorded only in a code comment with no forward pointer, so it can persist indefinitely.",
+    "suggested_fix": "Open a tracked flow for it and reference the id from the test comment.",
+    "evidence": "detectPii(\"release-123-45-6789-hotfix\") returns pii.ssn \"123-45-6789\"; the ssn regex is bounded by \\b, which a hyphen satisfies.",
+    "confidence": "medium",
+    "file": "src/security/detect/pii-identifier-sweep.test.ts",
+    "line": 68,
+    "global_id": "2026-09-12-ingest-github-com-mrciphersmith-keryx-pull-541#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ea40936d — flow 261 opened; pii-identifier-sweep.test.ts now references it"
+    }
+  }
+]

@@ -219,6 +219,109 @@ test("closing with no disposition flags still works, and writes nothing", async 
 });
 
 // ---------------------------------------------------------------------------
+// What `complete` says about the package's disposition state
+// ---------------------------------------------------------------------------
+
+test("a bare `complete` on a fully dispositioned package does not claim nobody recorded an outcome", async () => {
+  // The defect: the "every finding still reads `unknown`" line was printed
+  // whenever no --disposition flag was passed, without reading the package. A
+  // round is dispositioned across as many closes as it takes, so the second
+  // close of a package whose every finding was already recorded was told its
+  // outcomes did not exist — a false report of the exact condition this field
+  // exists to make visible.
+  await writeFile(
+    path.join(ROOT, "report.md"),
+    reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
+    "utf8",
+  );
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-09-12-cli-all-dispositioned",
+  ]);
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-all-dispositioned");
+
+  await reviewCommand([
+    "complete",
+    pkg,
+    "--finding",
+    "F-001",
+    "--disposition",
+    "acted-on",
+    "--evidence",
+    "closed by 380bf3b0",
+    "--finding",
+    "F-002",
+    "--disposition",
+    "acted-on",
+    "--evidence",
+    "closed by 380bf3b0",
+  ]);
+  expect(process.exitCode).toBe(0);
+  expect((await findingsOf(pkg)).every((f) => f.disposition?.state === "acted-on")).toBe(true);
+
+  logs = [];
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(0);
+
+  const output = logs.join("\n");
+  expect(output).not.toContain("nobody recorded an outcome");
+  expect(output).not.toContain("every finding in this package still reads");
+  expect(output).toContain("findings: 2 — 2 with a recorded disposition, 0 still `unknown`");
+});
+
+test("a bare `complete` on a package nobody dispositioned still says so", async () => {
+  // Non-vacuity. Removing the false claim must not remove the true one.
+  const pkg = await ingest("2026-09-12-cli-none-dispositioned");
+  logs = [];
+  await reviewCommand(["complete", pkg]);
+  expect(process.exitCode).toBe(0);
+
+  const output = logs.join("\n");
+  expect(output).toContain("findings: 1 — 0 with a recorded disposition, 1 still `unknown`");
+  expect(output).toContain("1 of 1 findings read `unknown` — nobody recorded an outcome for them.");
+});
+
+test("a partly dispositioned package is reported as partly dispositioned", async () => {
+  await writeFile(
+    path.join(ROOT, "report.md"),
+    reportWith([FINDING, { ...FINDING, id: "F-002", problem: "a second observation" }]),
+    "utf8",
+  );
+  await reviewCommand([
+    "ingest",
+    "--report",
+    "report.md",
+    "--ref",
+    "report.md",
+    "--review-id",
+    "2026-09-12-cli-partly-dispositioned",
+  ]);
+  const pkg = path.join(ROOT, ".metaproject", "reviews", "2026-09-12-cli-partly-dispositioned");
+
+  logs = [];
+  await reviewCommand([
+    "complete",
+    pkg,
+    "--finding",
+    "F-001",
+    "--disposition",
+    "acted-on",
+    "--evidence",
+    "closed by 380bf3b0",
+  ]);
+  expect(process.exitCode).toBe(0);
+
+  const output = logs.join("\n");
+  expect(output).toContain("findings: 2 — 1 with a recorded disposition, 1 still `unknown`");
+  expect(output).toContain("1 of 2 findings read `unknown` — nobody recorded an outcome for them.");
+});
+
+// ---------------------------------------------------------------------------
 // AC14: what a round REFUTED, from the command line
 // ---------------------------------------------------------------------------
 

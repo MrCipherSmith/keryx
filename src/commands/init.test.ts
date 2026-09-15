@@ -11,10 +11,11 @@ import { initCommand } from "./init";
 
 // Round-1 finding T-001: the retired-rule warning print was tested only at
 // the `keryx skills install` call site (skills-install-warnings.test.ts).
-// `installGdskills` is also called from `keryx init` (init.ts:624, printed
-// at init.ts:1089) and `keryx update` (see update.test.ts) — a regression
-// that silences either print stayed green under the old coverage. These two
-// tests drive `keryx init` directly.
+// `installGdskills` is also called from `keryx init` (printed by its
+// `Notices`/`Warnings` headings at the end of the scaffold summary) and
+// `keryx update` (see update.test.ts) — a regression that silences either
+// print stayed green under the old coverage. These tests drive `keryx init`
+// directly.
 const retiredFixturesRootForInit = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -106,6 +107,42 @@ test("keryx init: an unmodified retired rule is removed with no Warnings printed
     expect(existsSync(path.join(rulesCore, retiredEntry.fileName))).toBe(false);
     expect(logs.some((line) => line.includes("Warnings"))).toBe(false);
     expect(logs.some((line) => line.includes("is no longer shipped by keryx"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-3 minor: the "Notices" print added beside "Warnings" was asserted at
+// the `keryx update` call site only, so deleting this command's whole Notices
+// block left every install/update/init test green. Same reason the Warnings
+// print is covered here: `keryx init` prints through its own `heading`/`note`
+// pair, which a regression in `update.ts` or `skills.ts` cannot reach.
+test("keryx init: a removed stale runtime build prints under Notices, not Warnings", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-init-stale-builds-"));
+  try {
+    // The shape an older install leaves behind: a per-runtime build sitting in
+    // an installed skill directory that the current bundle no longer ships.
+    const installedSkillDir = path.join(
+      root, ".metaproject", "skills", "gdskills", "orchestration", "job-orchestrator",
+    );
+    await mkdir(installedSkillDir, { recursive: true });
+    await writeFile(path.join(installedSkillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+
+    const { logs, restore } = captureInitConsoleLog();
+    try {
+      await withCwd(root, async () => {
+        await initCommand(MINIMAL_INIT_ARGS_KEEPING_GDSKILLS);
+      });
+    } finally {
+      restore();
+    }
+
+    expect(existsSync(path.join(installedSkillDir, "SKILL.zed.md"))).toBe(false);
+    const noticesAt = logs.findIndex((line) => line.includes("Notices"));
+    expect(noticesAt).toBeGreaterThan(-1);
+    expect(logs.findIndex((line) => line.includes("SKILL.zed.md was removed")))
+      .toBeGreaterThan(noticesAt);
+    expect(logs.some((line) => line.includes("Warnings"))).toBe(false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

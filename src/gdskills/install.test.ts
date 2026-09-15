@@ -6,7 +6,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "bun:test";
 import { CONTRACTS, contractPath } from "./contracts";
-import { installGdskills, normalizeRetiredRuleContent, removeUnmodifiedRetiredRules, retiredRuleWarning } from "./install";
+import {
+  checkInstallDestination,
+  checkInstallFile,
+  installGdskills,
+  normalizeRetiredRuleContent,
+  removeStaleRuntimeBuilds,
+  removeUnmodifiedRetiredRules,
+  retiredRuleWarning,
+  staleRuntimeBuildMessage,
+  staleRuntimeBuildSeverity,
+} from "./install";
 import { RETIRED_RULE_SIZE_CAP_BYTES, RETIRED_RULES } from "./retired-rules";
 
 test("installs real bundled gdskills, contracts, shared assets, and rules", async () => {
@@ -60,6 +70,398 @@ test("installs real bundled gdskills, contracts, shared assets, and rules", asyn
       "utf8",
     )).toContain("Git");
     await access(path.join(metaprojectRoot, "jobs"));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- flow 257: stale per-runtime builds in an existing install ---------------
+//
+// install copies each bundled skill directory over the installed one and never
+// deleted anything, so a project installed before the byte-identical
+// SKILL.<runtime>.md copies were dropped keeps them — and a runtime export
+// prefers an existing SKILL.<runtime>.md over SKILL.md.
+
+const INSTALLED_JOB_ORCHESTRATOR = ["skills", "gdskills", "orchestration", "job-orchestrator"];
+
+test("a per-runtime build the bundle no longer ships is removed from an existing install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    const bundledDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled", "skills", "orchestration", "job-orchestrator");
+    // Precondition: the bundle ships SKILL.md alone for this skill.
+    expect(existsSync(path.join(bundledDir, "SKILL.md"))).toBe(true);
+    expect(existsSync(path.join(bundledDir, "SKILL.codex.md"))).toBe(false);
+
+    // What a pre-257 install left behind, plus files that must survive.
+    for (const stale of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
+      await writeFile(path.join(skillDir, stale), "# stale build from an older keryx\n", "utf8");
+    }
+    await writeFile(path.join(skillDir, "SKILL.detail.md"), "companion, not a build\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.claude.md"), "not a harness build name\n", "utf8");
+    await writeFile(path.join(skillDir, "notes.md"), "unrelated file\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    for (const stale of ["SKILL.codex.md", "SKILL.cursor.md", "SKILL.zed.md", "SKILL.opencode.md"]) {
+      expect(existsSync(path.join(skillDir, stale))).toBe(false);
+    }
+    // Only runtime-build names are touched.
+    expect(await readFile(path.join(skillDir, "SKILL.detail.md"), "utf8")).toBe("companion, not a build\n");
+    expect(await readFile(path.join(skillDir, "SKILL.claude.md"), "utf8")).toBe("not a harness build name\n");
+    expect(await readFile(path.join(skillDir, "notes.md"), "utf8")).toBe("unrelated file\n");
+    expect(await readFile(path.join(skillDir, "SKILL.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.md"), "utf8"));
+    // Nothing is content-gated here, so a removal must never be silent: the
+    // operator gets one notice per file that left their tree, and no others.
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
+    expect(removals.sort()).toEqual([
+      "SKILL.codex.md",
+      "SKILL.cursor.md",
+      "SKILL.opencode.md",
+      "SKILL.zed.md",
+    ].map((stale) => `.metaproject/skills/gdskills/orchestration/job-orchestrator/${stale} was removed: a per-runtime build keryx no longer ships (that runtime now reads SKILL.md), which every later runtime export would otherwise have kept preferring over the current SKILL.md`));
+    expect(result.warnings.filter((warning) => warning.includes("kept because"))).toEqual([]);
+    // A clean sweep asks nothing of the operator, so it warns about nothing.
+    expect(result.warnings).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a per-runtime build the bundle still ships is replaced, not removed", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    // `planner` (a gproject-* subagent) is in the full profile and still ships
+    // its codex and cursor builds, which differ by `compatible_harnesses`.
+    await installGdskills(metaprojectRoot, "full");
+    const skillDir = path.join(metaprojectRoot, "skills", "gdskills", "planning", "planner");
+    const bundledDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "bundled", "skills", "planning", "planner");
+    expect(existsSync(path.join(bundledDir, "SKILL.codex.md"))).toBe(true);
+    expect(existsSync(path.join(bundledDir, "SKILL.zed.md"))).toBe(false);
+
+    await writeFile(path.join(skillDir, "SKILL.codex.md"), "# locally edited codex build\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale zed build\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "full");
+
+    // Shipped: refreshed to the bundled bytes.
+    expect(await readFile(path.join(skillDir, "SKILL.codex.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.codex.md"), "utf8"));
+    expect(await readFile(path.join(skillDir, "SKILL.cursor.md"), "utf8"))
+      .toBe(await readFile(path.join(bundledDir, "SKILL.cursor.md"), "utf8"));
+    // Not shipped for this skill: removed, in the same run, and reported.
+    expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
+    expect(removals).toHaveLength(1);
+    expect(removals[0]).toContain(".metaproject/skills/gdskills/planning/planner/SKILL.zed.md was removed");
+    // The refreshed codex/cursor builds are not reported as anything.
+    expect(result.notices.filter((notice) => notice.includes("SKILL.codex.md"))).toEqual([]);
+    expect(result.warnings.filter((warning) => warning.includes("SKILL.codex.md"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a project-skill's SKILL.codex.md is never touched by install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    // A project-skill that happens to share a bundled skill's name and category
+    // path shape — install must still leave it alone.
+    const projectSkillDir = path.join(metaprojectRoot, "project-skills", "orchestration", "job-orchestrator");
+    await mkdir(projectSkillDir, { recursive: true });
+    await writeFile(path.join(projectSkillDir, "SKILL.md"), "# project skill\n", "utf8");
+    await writeFile(path.join(projectSkillDir, "SKILL.codex.md"), "# project codex build\n", "utf8");
+    // …and a skill directory in the gdskills tree that keryx does not ship.
+    const unmanagedDir = path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "not-a-bundled-skill");
+    await mkdir(unmanagedDir, { recursive: true });
+    await writeFile(path.join(unmanagedDir, "SKILL.codex.md"), "# someone else's build\n", "utf8");
+
+    await installGdskills(metaprojectRoot, "recommended");
+
+    expect(await readFile(path.join(projectSkillDir, "SKILL.codex.md"), "utf8")).toBe("# project codex build\n");
+    expect(await readFile(path.join(unmanagedDir, "SKILL.codex.md"), "utf8")).toBe("# someone else's build\n");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlink at a stale build name is kept, not followed, and warned about", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    const target = path.join(root, "outside-target.md");
+    await writeFile(target, "outside\n", "utf8");
+    await symlink(target, path.join(skillDir, "SKILL.codex.md"));
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(path.join(skillDir, "SKILL.codex.md"))).isSymbolicLink()).toBe(true);
+    expect(await readFile(target, "utf8")).toBe("outside\n");
+    const warning = result.warnings.find((entry) => entry.includes("per-runtime build"));
+    expect(warning).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
+    expect(warning).toContain("not a regular file");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-2 minor: every stale-build outcome used to land in `warnings`, so the
+// first `keryx update` after this release printed ~88 lines under "Warnings"
+// for a sweep that did exactly what it was built to do — and buried the one
+// line that needed a human. The two kinds are separated at the result, not at
+// the print, so all three call sites (skills.ts / update.ts / init.ts) inherit
+// the split.
+test("a successful removal is a notice, and a build kept behind a symlink is a warning", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    // One genuine stale build, which the sweep removes…
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+    // …and one the sweep must refuse to touch, which leaves work behind.
+    const target = path.join(root, "outside-target.md");
+    await writeFile(target, "outside\n", "utf8");
+    await symlink(target, path.join(skillDir, "SKILL.codex.md"));
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const removal = `.metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md`;
+    expect(result.notices.filter((notice) => notice.includes(removal))).toHaveLength(1);
+    // The load-bearing half: the successful removal is NOWHERE in `warnings`.
+    expect(result.warnings.filter((warning) => warning.includes("SKILL.zed.md"))).toEqual([]);
+    expect(result.warnings.filter((warning) => warning.includes("was removed"))).toEqual([]);
+
+    const kept = result.warnings.filter((warning) => warning.includes("SKILL.codex.md"));
+    expect(kept).toHaveLength(1);
+    expect(kept[0]).toContain("not a regular file");
+    // …and the kept one is not quietly duplicated into the notices either.
+    expect(result.notices.filter((notice) => notice.includes("SKILL.codex.md"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a stale build whose removal fails is kept and becomes a warning, without aborting", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const skillDir = path.join(skillsRoot, ...INSTALLED_JOB_ORCHESTRATOR.slice(2));
+    await writeFile(path.join(skillDir, "SKILL.codex.md"), "stale\n", "utf8");
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "stale\n", "utf8");
+
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot, {
+      unlink: async (target) => {
+        if (target.endsWith("SKILL.codex.md")) {
+          throw Object.assign(new Error("EPERM"), { code: "EPERM" });
+        }
+        await rm(target);
+      },
+    });
+
+    // One failure did not stop the next entry.
+    expect(existsSync(path.join(skillDir, "SKILL.codex.md"))).toBe(true);
+    expect(existsSync(path.join(skillDir, "SKILL.zed.md"))).toBe(false);
+    expect(outcomes.map((outcome) => `${path.basename(outcome.path)}:${outcome.action}`).sort())
+      .toEqual(["SKILL.codex.md:kept-error", "SKILL.zed.md:removed"]);
+
+    const messages = outcomes.map((outcome) => staleRuntimeBuildMessage(outcome, root));
+    // Both halves are reported: the failure to act, and the file that went.
+    expect(messages).toHaveLength(2);
+    const kept = messages.find((message) => message.includes("SKILL.codex.md"));
+    expect(kept).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.codex.md");
+    expect(kept).toContain("could not be removed (EPERM)");
+    expect(messages.find((message) => message.includes("SKILL.zed.md")))
+      .toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator/SKILL.zed.md was removed");
+    // …under different headings: the unlink that failed left a file behind.
+    expect(outcomes.map(staleRuntimeBuildSeverity).sort()).toEqual(["notice", "warning"]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// --- round-1 major: the sweep must not delete through a symlinked parent ----
+//
+// The sweep composes `<skillsRoot>/<category>/<name>/SKILL.<runtime>.md` and
+// lstat'ed only the last component, so any symlinked *parent* was followed and
+// the unlink landed in the link's target, outside `.metaproject`.
+
+test("a skill directory reached through a symlink is not swept, and the target keeps its files", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const skillDir = path.join(skillsRoot, ...INSTALLED_JOB_ORCHESTRATOR.slice(2));
+
+    // Relocate one installed skill behind a symlink — the shape a shared
+    // checkout or a moved tree produces — and put a hand-written build in the
+    // target, which is not keryx's to delete.
+    const relocated = path.join(root, "shared-skills", "job-orchestrator");
+    await mkdir(relocated, { recursive: true });
+    await rm(skillDir, { recursive: true, force: true });
+    await symlink(relocated, skillDir);
+    await writeFile(path.join(relocated, "SKILL.zed.md"), "# hand-written, not keryx's\n", "utf8");
+
+    // The sweep is driven directly, not through a second `installGdskills`.
+    // That second install would reach the `cp(bundledDir, skillDir, { force })`
+    // in `installGdskills` with `skillDir` now a symlink, and on Linux `fs.cp`
+    // refuses to overwrite a non-directory with a directory —
+    // `ERR_FS_CP_DIR_TO_NON_DIR` / `EISDIR` — and aborts the whole install
+    // BEFORE the sweep runs, so the test never reached its own subject there.
+    // macOS's `cp` happens to accept it, which is the only reason that form
+    // passed at all.
+    // The claim belongs to `removeStaleRuntimeBuilds`, so it is made of
+    // `removeStaleRuntimeBuilds`, on every platform. A `skipped-dir` outcome
+    // does reach `result.warnings` through a real install — the test below
+    // plants the link one level up, at a category, where the copy destination
+    // is still a directory `mkdir` just created. It is the link AT THE SKILL
+    // DIRECTORY, this shape, that the copy cannot survive on Linux.
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
+
+    expect(await readFile(path.join(relocated, "SKILL.zed.md"), "utf8")).toBe("# hand-written, not keryx's\n");
+    expect((await lstat(skillDir)).isSymbolicLink()).toBe(true);
+    // One outcome for the linked skill and nothing else: the rest of the freshly
+    // installed tree holds no build the bundle stopped shipping.
+    expect(outcomes).toEqual([
+      { path: skillDir, blockedAt: skillDir, action: "skipped-dir", reason: "symlink" },
+    ]);
+    const warning = staleRuntimeBuildMessage(outcomes[0]!, root);
+    expect(staleRuntimeBuildSeverity(outcomes[0]!)).toBe("warning");
+    expect(warning).toContain(".metaproject/skills/gdskills/orchestration/job-orchestrator was not swept");
+    expect(warning).toContain("it is a symlink, and keryx will not delete through one");
+    // Refusing to sweep is not refusing to warn about the wrong thing: no
+    // removal was claimed for a tree keryx did not touch.
+    expect(outcomes.filter((outcome) => staleRuntimeBuildSeverity(outcome) === "notice")).toEqual([]);
+    expect(outcomes.filter((outcome) => outcome.action === "removed")).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// Round-5 minor: the comment above used to say a `skipped-dir` outcome could
+// not be observed through an install at all. It can — one level up. A link at a
+// CATEGORY leaves `<skillsRoot>/<category>/<name>` a real directory, because
+// `mkdir(..., { recursive: true })` follows the link and creates it INSIDE the
+// target. So the copy never meets a non-directory destination: it writes
+// through the link, into someone else's tree, and the install runs to
+// completion on every platform. Only the sweep refuses — deleting through a
+// link is the operation keryx will not perform. That asymmetry is the point of
+// this test, and it makes the carry-through from outcome to `warnings`
+// testable end to end, which is the half the direct-sweep test cannot reach.
+test("a symlinked category: the copy follows the link, the sweep refuses to, and the refusal reaches warnings", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    const [category] = INSTALLED_JOB_ORCHESTRATOR.slice(2);
+    const categoryDir = path.join(skillsRoot, category!);
+
+    // Relocate the whole category behind a link, and leave a hand-written build
+    // in the target so a sweep that followed the link would have something to
+    // destroy.
+    const relocated = path.join(root, "shared-skills", category!);
+    await mkdir(path.join(relocated, "job-orchestrator"), { recursive: true });
+    await rm(categoryDir, { recursive: true, force: true });
+    await symlink(relocated, categoryDir);
+    await writeFile(
+      path.join(relocated, "job-orchestrator", "SKILL.zed.md"),
+      "# hand-written, not keryx's\n",
+      "utf8",
+    );
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // The install completed — this is the shape `fs.cp` survives — and it
+    // COPIED THROUGH the link: the canonical build now sits in the target, not
+    // in `.metaproject`. Writing through a link is not what keryx refuses;
+    // deleting through one is.
+    expect(existsSync(path.join(relocated, "job-orchestrator", "SKILL.md"))).toBe(true);
+    expect(await readFile(path.join(relocated, "job-orchestrator", "SKILL.zed.md"), "utf8")).toBe(
+      "# hand-written, not keryx's\n",
+    );
+    expect((await lstat(categoryDir)).isSymbolicLink()).toBe(true);
+    const refusal = result.warnings.filter((warning) => warning.includes("was not swept"));
+    expect(refusal).toHaveLength(1);
+    expect(refusal[0]).toContain(`.metaproject/skills/gdskills/${category} was not swept`);
+    expect(refusal[0]).toContain("it is a symlink, and keryx will not delete through one");
+    // A refusal is not a removal, and the category is named once, not once per
+    // skill inside it.
+    expect(result.notices.filter((notice) => notice.includes("was not swept"))).toEqual([]);
+    expect(result.notices.filter((notice) => notice.includes("SKILL.zed.md"))).toEqual([]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked skills root is skipped whole, with one notice for the tree", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    // The skills root itself is the link: every composed path below it would
+    // resolve into someone else's tree.
+    const shared = path.join(root, "shared", "gdskills");
+    const sharedSkillDir = path.join(shared, "orchestration", "job-orchestrator");
+    await mkdir(sharedSkillDir, { recursive: true });
+    await writeFile(path.join(sharedSkillDir, "SKILL.zed.md"), "# hand-written\n", "utf8");
+
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await mkdir(path.join(metaprojectRoot, "skills"), { recursive: true });
+    const skillsRoot = path.join(metaprojectRoot, "skills", "gdskills");
+    await symlink(shared, skillsRoot);
+
+    const outcomes = await removeStaleRuntimeBuilds(skillsRoot);
+
+    expect(await readFile(path.join(sharedSkillDir, "SKILL.zed.md"), "utf8")).toBe("# hand-written\n");
+    // One notice for the whole tree — not one per bundled skill in the catalogue.
+    expect(outcomes).toEqual([
+      { path: skillsRoot, blockedAt: skillsRoot, action: "skipped-dir", reason: "symlink" },
+    ]);
+    const warning = staleRuntimeBuildMessage(outcomes[0]!, root);
+    expect(staleRuntimeBuildSeverity(outcomes[0]!)).toBe("warning");
+    expect(warning).toContain(".metaproject/skills/gdskills was not swept");
+    expect(warning).toContain("it is a symlink, and keryx will not delete through one");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("only an exactly-matching directory entry is removed, so a differently-cased file survives", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-stale-builds-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    await installGdskills(metaprojectRoot, "recommended");
+    const skillDir = path.join(metaprojectRoot, ...INSTALLED_JOB_ORCHESTRATOR);
+    // On a case-insensitive filesystem (macOS, Windows) a composed
+    // `SKILL.codex.md` resolves to this file, so lstat+unlink would delete the
+    // user's own file and report it under the canonical spelling. Matching a
+    // real directory entry by exact name cannot do that. On a case-sensitive
+    // filesystem this is simply an unrelated file, which must also survive.
+    await writeFile(path.join(skillDir, "skill.codex.md"), "# my own notes\n", "utf8");
+    // A genuine stale build alongside it, to prove exact matching still removes.
+    await writeFile(path.join(skillDir, "SKILL.zed.md"), "# stale build\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    const survivors = await readdir(skillDir);
+    expect(survivors).toContain("skill.codex.md");
+    expect(await readFile(path.join(skillDir, "skill.codex.md"), "utf8")).toBe("# my own notes\n");
+    expect(survivors).not.toContain("SKILL.zed.md");
+    const removals = result.notices.filter((notice) => notice.includes("was removed"));
+    expect(removals).toHaveLength(1);
+    expect(removals[0]).toContain("SKILL.zed.md was removed");
+    expect(result.notices.filter((notice) => notice.toLowerCase().includes("skill.codex.md"))).toEqual([]);
+    expect(result.warnings.filter((warning) => warning.toLowerCase().includes("skill.codex.md"))).toEqual([]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -714,6 +1116,324 @@ test("no retired rule name is present in the currently bundled rules", async () 
 
   const overlap = RETIRED_RULES.map((rule) => rule.fileName).filter((name) => bundledFileNames.has(name));
   expect(overlap).toEqual([]);
+});
+
+// A symlink at an install destination is a real shape — a shared checkout, a
+// relocated tree, a skill kept under version control elsewhere — and the two
+// platforms used to disagree about it in opposite, equally wrong directions:
+//
+//   Linux: `cp(dir, symlink, { recursive: true })` throws
+//     ERR_FS_CP_DIR_TO_NON_DIR (EISDIR) straight out of `installGdskills`, so
+//     nothing at all is installed — not one rule, contract or skill — because
+//     the bulk skill copy runs before everything else.
+//   macOS: the same call *succeeds* by following the link and writing the
+//     bundled tree into whatever directory it points at, silently overwriting
+//     files outside `.metaproject`.
+//
+// Because macOS quietly "worked", this only ever surfaced in Linux CI. These
+// tests are deliberately not gated to one platform: each asserts both halves
+// (the link and its target are untouched, AND the install still completed), so
+// either regression fails the suite on either OS.
+
+test("a symlinked skill directory is skipped with a warning and the rest of the install completes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeSkillDir = path.join("skills", "gdskills", "orchestration", "job-orchestrator");
+    const skillDir = path.join(metaprojectRoot, relativeSkillDir);
+
+    // A skill directory kept somewhere else and linked into the install tree.
+    const elsewhere = path.join(root, "elsewhere", "job-orchestrator");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(path.join(elsewhere, "SKILL.md"), "my own job-orchestrator\n", "utf8");
+
+    await mkdir(path.dirname(skillDir), { recursive: true });
+    await symlink(elsewhere, skillDir);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // The link is still a link, and nothing was written through it: the
+    // linked directory holds exactly what it held before, byte for byte.
+    expect((await lstat(skillDir)).isSymbolicLink()).toBe(true);
+    expect(await readdir(elsewhere)).toEqual(["SKILL.md"]);
+    expect(await readFile(path.join(elsewhere, "SKILL.md"), "utf8")).toBe("my own job-orchestrator\n");
+
+    expect(result.warnings).toContain(
+      `${relativeSkillDir} was not updated because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+      + `the link points at yourself`,
+    );
+
+    // The rest of the install ran to completion — this is the half that was
+    // lost entirely on Linux. Catalog, manifest, contracts, rules, and the
+    // other skills are all present.
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+    for (const contract of CONTRACTS) {
+      await access(path.join(metaprojectRoot, "core", "gdskills", "contracts", contract.fileName));
+    }
+    expect(await readFile(path.join(metaprojectRoot, "rules", "core", "git-rules.mdc"), "utf8")).toContain("Git");
+    expect(await readFile(
+      path.join(metaprojectRoot, "skills", "gdskills", "orchestration", "flow-orchestrator", "SKILL.md"),
+      "utf8",
+    )).toContain("Task Manager-aware implementation orchestrator");
+
+    // The skipped skill is not counted as installed, but every other one is.
+    expect(result.installedSkills).toBeGreaterThan(20);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a regular file at a skill directory's name is skipped with a warning instead of aborting the install", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-notdir-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeSkillDir = path.join("skills", "gdskills", "orchestration", "job-orchestrator");
+    const skillDir = path.join(metaprojectRoot, relativeSkillDir);
+
+    await mkdir(path.dirname(skillDir), { recursive: true });
+    await writeFile(skillDir, "not a directory\n", "utf8");
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // Left exactly as found — the old code aborted here on `mkdir` (EEXIST)
+    // before it ever reached the copy.
+    expect((await lstat(skillDir)).isFile()).toBe(true);
+    expect(await readFile(skillDir, "utf8")).toBe("not a directory\n");
+    expect(result.warnings).toContain(
+      `${relativeSkillDir} was not updated because it is not a directory (a regular file, FIFO, or `
+      + `similar); keryx will not overwrite it — delete or rename it, then re-run the install`,
+    );
+
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked rules/core is skipped, its target untouched, and retired-rule cleanup does not run through it", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-rules-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeRulesCore = path.join("rules", "core");
+    const rulesCore = path.join(metaprojectRoot, relativeRulesCore);
+
+    const retiredEntry = RETIRED_RULES[0];
+    if (!retiredEntry) {
+      throw new Error("RETIRED_RULES is empty; this test needs at least one entry to exercise.");
+    }
+
+    // The linked directory holds an unmodified retired rule: if cleanup ran
+    // through the link it would delete a file outside `.metaproject`.
+    const elsewhere = path.join(root, "elsewhere-rules");
+    await mkdir(elsewhere, { recursive: true });
+    const unmodifiedContent = await readFile(path.join(retiredFixturesRoot, retiredEntry.fileName));
+    await writeFile(path.join(elsewhere, retiredEntry.fileName), unmodifiedContent);
+
+    await mkdir(path.dirname(rulesCore), { recursive: true });
+    await symlink(elsewhere, rulesCore);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(rulesCore)).isSymbolicLink()).toBe(true);
+    // Neither written to nor cleaned up through.
+    expect(await readdir(elsewhere)).toEqual([retiredEntry.fileName]);
+    expect(await readFile(path.join(elsewhere, retiredEntry.fileName))).toEqual(unmodifiedContent);
+
+    expect(result.warnings).toContain(
+      `${relativeRulesCore} was not updated because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+      + `the link points at yourself`,
+    );
+
+    // Skills, catalog and manifest still installed.
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+    expect(result.installedSkills).toBeGreaterThan(20);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked shared-skills directory is skipped with a warning and the rest of the install completes", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-gdskills-shared-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeShared = path.join("skills", "gdskills", "shared");
+    const sharedDir = path.join(metaprojectRoot, relativeShared);
+
+    const elsewhere = path.join(root, "elsewhere-shared");
+    await mkdir(elsewhere, { recursive: true });
+    await writeFile(path.join(elsewhere, "git-merge-base.md"), "my own copy\n", "utf8");
+
+    await mkdir(path.dirname(sharedDir), { recursive: true });
+    await symlink(elsewhere, sharedDir);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(sharedDir)).isSymbolicLink()).toBe(true);
+    expect(await readFile(path.join(elsewhere, "git-merge-base.md"), "utf8")).toBe("my own copy\n");
+    expect(result.warnings).toContain(
+      `${relativeShared} was not updated because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+      + `the link points at yourself`,
+    );
+
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// `checkInstallDestination` is the single rule the three cases above share.
+// Driving it directly pins the decisions that the end-to-end tests only
+// observe through their side effects.
+test("checkInstallDestination allows a missing or directory destination and rejects everything else", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-destination-check-"));
+  try {
+    expect(await checkInstallDestination(path.join(root, "missing"), "missing")).toEqual({ usable: true });
+
+    const realDir = path.join(root, "real");
+    await mkdir(realDir);
+    expect(await checkInstallDestination(realDir, "real")).toEqual({ usable: true });
+
+    const filePath = path.join(root, "a-file");
+    await writeFile(filePath, "x", "utf8");
+    const fileCheck = await checkInstallDestination(filePath, "a-file");
+    expect(fileCheck.usable).toBe(false);
+
+    // A link to a directory and a *dangling* link are both refused. The
+    // dangling one matters on its own: `existsSync`/`stat` report it as
+    // missing, so any check that followed links would have created a
+    // directory at the link's target instead of reporting the link.
+    const dirLink = path.join(root, "dir-link");
+    await symlink(realDir, dirLink);
+    const dirLinkCheck = await checkInstallDestination(dirLink, "dir-link");
+    expect(dirLinkCheck.usable).toBe(false);
+    expect(dirLinkCheck.usable === false && dirLinkCheck.warning).toContain("is a symlink");
+
+    const danglingLink = path.join(root, "dangling-link");
+    await symlink(path.join(root, "nothing-here"), danglingLink);
+    const danglingCheck = await checkInstallDestination(danglingLink, "dangling-link");
+    expect(danglingCheck.usable).toBe(false);
+    expect(danglingCheck.usable === false && danglingCheck.warning).toContain("is a symlink");
+    // Refusing it must not have created anything at the link's target.
+    expect(existsSync(path.join(root, "nothing-here"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// `installContracts` used a bare `copyFile`, which FOLLOWS a symlinked
+// destination and overwrites whatever it points at. That is the same hazard
+// `checkInstallDestination` closes for the directory copies, but with a much
+// quieter failure mode: no EISDIR, no error at all — just a file somewhere
+// outside `.metaproject` silently replaced with a bundled contract, on every
+// platform rather than only one.
+
+test("a symlinked contract is skipped with a warning and its target is left untouched", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-contract-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const contract = CONTRACTS[0];
+    if (contract === undefined) {
+      throw new Error("CONTRACTS is empty; this test needs at least one entry to exercise.");
+    }
+    const relativeContract = path.join("core", "gdskills", "contracts", contract.fileName);
+    const contractDestination = path.join(metaprojectRoot, relativeContract);
+
+    // Someone keeps this contract under version control elsewhere and links it in.
+    const elsewhere = path.join(root, "my-contract.json");
+    await writeFile(elsewhere, "{\"mine\":true}\n", "utf8");
+    await mkdir(path.dirname(contractDestination), { recursive: true });
+    await symlink(elsewhere, contractDestination);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    // Still a link, and the file it points at is byte-for-byte what it was.
+    expect((await lstat(contractDestination)).isSymbolicLink()).toBe(true);
+    expect(await readFile(elsewhere, "utf8")).toBe("{\"mine\":true}\n");
+    expect(result.warnings).toContain(
+      `${relativeContract} was not written because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a regular file to let keryx manage it, or update whatever the `
+      + `link points at yourself`,
+    );
+
+    // The rest of the install still completed, including the OTHER contracts.
+    await access(result.catalogPath);
+    await access(result.manifestPath);
+    for (const other of CONTRACTS.slice(1)) {
+      await access(path.join(metaprojectRoot, "core", "gdskills", "contracts", other.fileName));
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("a symlinked contracts directory is skipped whole, with one warning for the tree", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-contracts-dir-symlink-"));
+  try {
+    const metaprojectRoot = path.join(root, ".metaproject");
+    const relativeContracts = path.join("core", "gdskills", "contracts");
+    const contractsRoot = path.join(metaprojectRoot, relativeContracts);
+
+    const elsewhere = path.join(root, "elsewhere-contracts");
+    await mkdir(elsewhere, { recursive: true });
+    await mkdir(path.dirname(contractsRoot), { recursive: true });
+    await symlink(elsewhere, contractsRoot);
+
+    const result = await installGdskills(metaprojectRoot, "recommended");
+
+    expect((await lstat(contractsRoot)).isSymbolicLink()).toBe(true);
+    // Not one contract was written through the link.
+    expect(await readdir(elsewhere)).toEqual([]);
+    expect(result.warnings).toContain(
+      `${relativeContracts} was not updated because it is a symlink (-> ${elsewhere}); keryx will not write `
+      + `through it — replace it with a real directory to let keryx manage it, or update whatever `
+      + `the link points at yourself`,
+    );
+    await access(result.catalogPath);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("checkInstallFile accepts a missing path or a regular file and refuses everything else", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-file-check-"));
+  try {
+    expect(await checkInstallFile(path.join(root, "missing.json"), "missing.json")).toEqual({ usable: true });
+
+    // The steady state of a re-install: overwriting keryx's own earlier copy.
+    const regular = path.join(root, "regular.json");
+    await writeFile(regular, "{}", "utf8");
+    expect(await checkInstallFile(regular, "regular.json")).toEqual({ usable: true });
+
+    const dir = path.join(root, "a-dir");
+    await mkdir(dir);
+    const dirCheck = await checkInstallFile(dir, "a-dir");
+    expect(dirCheck.usable).toBe(false);
+    expect(dirCheck.usable === false && dirCheck.warning).toContain("not a regular file");
+
+    // A link to a file and a DANGLING link are both refused. The dangling one
+    // matters on its own: `existsSync`/`stat` call it missing, so a check that
+    // followed links would have created the contract at the link's target.
+    const fileLink = path.join(root, "file-link");
+    await symlink(regular, fileLink);
+    const linkCheck = await checkInstallFile(fileLink, "file-link");
+    expect(linkCheck.usable).toBe(false);
+    expect(linkCheck.usable === false && linkCheck.warning).toContain("is a symlink");
+
+    const dangling = path.join(root, "dangling");
+    await symlink(path.join(root, "nothing-here"), dangling);
+    const danglingCheck = await checkInstallFile(dangling, "dangling");
+    expect(danglingCheck.usable).toBe(false);
+    expect(existsSync(path.join(root, "nothing-here"))).toBe(false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 async function listFiles(root: string): Promise<string[]> {

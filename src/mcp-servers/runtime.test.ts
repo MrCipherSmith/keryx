@@ -276,3 +276,108 @@ describe("where a server runs", () => {
     expect(defaultServerCwd(server, "/somewhere/else")).toBe("/somewhere/else");
   });
 });
+
+
+describe("connectServer / disconnectServer — the /mcp toggle", () => {
+  test("disconnectServer closes the connection, drops the catalog, and reports disabled", async () => {
+    const closed: string[] = [];
+    const { configDir, projectRoot } = workspace({ a: { command: "x" } });
+    const runtime = createMcpRuntime({
+      cwd: projectRoot,
+      gitRoot: projectRoot,
+      configDir,
+      connect: async () => connection([{ name: "read" }] as McpToolDescriptor[], closed, "a"),
+    });
+    await runtime.ready();
+    expect(runtime.servers()[0]?.status).toBe("connected");
+    expect(runtime.catalog().entries.map((e) => e.fqn)).toEqual(["a__read"]);
+
+    const result = await runtime.disconnectServer("a");
+    expect(result).toEqual({ ok: true });
+    expect(closed).toEqual(["a"]);
+    expect(runtime.servers()[0]?.status).toBe("disabled");
+    expect(runtime.catalog().entries).toEqual([]);
+  });
+
+  test("connectServer dials a disabled server and puts its tools in the catalog", async () => {
+    const { configDir, projectRoot } = workspace({ off: { command: "x", enabled: false } });
+    let dialled = 0;
+    const runtime = createMcpRuntime({
+      cwd: projectRoot,
+      gitRoot: projectRoot,
+      configDir,
+      connect: async () => {
+        dialled += 1;
+        return connection([{ name: "ping" }] as McpToolDescriptor[]);
+      },
+    });
+    await runtime.ready();
+    expect(dialled).toBe(0);
+    expect(runtime.servers()[0]?.status).toBe("disabled");
+
+    const result = await runtime.connectServer("off");
+    expect(result).toEqual({ ok: true });
+    expect(dialled).toBe(1);
+    expect(runtime.servers()[0]?.status).toBe("connected");
+    expect(runtime.catalog().entries.map((e) => e.fqn)).toEqual(["off__ping"]);
+  });
+
+  test("connectServer on an already-connected server is success, not a second dial", async () => {
+    const { configDir, projectRoot } = workspace({ a: { command: "x" } });
+    let dialled = 0;
+    const runtime = createMcpRuntime({
+      cwd: projectRoot,
+      gitRoot: projectRoot,
+      configDir,
+      connect: async () => {
+        dialled += 1;
+        return connection([]);
+      },
+    });
+    await runtime.ready();
+    expect(dialled).toBe(1);
+    expect(await runtime.connectServer("a")).toEqual({ ok: true });
+    expect(dialled).toBe(1);
+  });
+
+  test("a missing name is a named failure, not a crash", async () => {
+    const { configDir, projectRoot } = workspace({ a: { command: "x" } });
+    const runtime = createMcpRuntime({
+      cwd: projectRoot,
+      gitRoot: projectRoot,
+      configDir,
+      connect: async () => connection([]),
+    });
+    await runtime.ready();
+    const result = await runtime.connectServer("nope");
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("nope");
+  });
+
+  test("disconnect during startup is not clobbered when the sweep lands", async () => {
+    const closed: string[] = [];
+    const { configDir, projectRoot } = workspace({ slow: { command: "x" } });
+    let resolveDial: (() => void) | undefined;
+    const runtime = createMcpRuntime({
+      cwd: projectRoot,
+      gitRoot: projectRoot,
+      configDir,
+      connect: async () => {
+        await new Promise<void>((resolve) => {
+          resolveDial = resolve;
+        });
+        return connection([{ name: "t" }] as McpToolDescriptor[], closed, "slow");
+      },
+    });
+    expect(runtime.servers()[0]?.status).toBe("connecting");
+    // Connecting is refused — the dial is already in flight.
+    const refused = await runtime.disconnectServer("slow");
+    expect(refused.ok).toBe(false);
+    resolveDial?.();
+    await runtime.ready();
+    expect(runtime.servers()[0]?.status).toBe("connected");
+    const gone = await runtime.disconnectServer("slow");
+    expect(gone).toEqual({ ok: true });
+    expect(runtime.servers()[0]?.status).toBe("disabled");
+  });
+});

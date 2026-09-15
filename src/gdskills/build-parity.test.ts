@@ -35,6 +35,16 @@ import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
  * automatic. What remains hand-written is the ALLOW-LIST, which is where a
  * decision belongs: each entry names a hunk that is genuinely harness-specific
  * and says why.
+ *
+ * FLOW 257: A BUILD EXISTS ONLY WHEN IT DIFFERS
+ *
+ * Once flow 209 reconciled the drift, 88 of the 102 harness builds were
+ * byte-identical to their own `SKILL.md` — copies that existed only to be kept
+ * in sync. Export already falls back to `SKILL.md` for a runtime with no build
+ * of its own, so flow 257 deleted them. What remains is the seven `gproject-*`
+ * subagents' codex and cursor builds, which differ by the one allowed field.
+ * The census below is that number, and the guard gains its other half: a build
+ * that is byte-identical to `SKILL.md` must not ship at all.
  */
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -83,15 +93,20 @@ function enrolledSkills(): SkillLocation[] {
 const PARITY_ENFORCED_SKILLS: readonly SkillLocation[] = enrolledSkills();
 
 /**
- * The census the 2026-08-31 measurement ran, pinned as a floor.
+ * The skills still shipping a harness build after flow 257, pinned as a floor.
  *
- * Not an equality: a new skill that ships builds must raise this number without
- * anyone editing this file, and that is the point of computing the set. A DROP
- * is the failure mode worth catching — a skill whose builds are deleted, or a
- * category renamed, would silently shrink the denominator back toward the
- * one-skill frontier this flow replaced.
+ * It was 37 (the 2026-08-31 census). Flow 257 removed every build that was a
+ * byte-identical copy of its `SKILL.md`, leaving the seven `gproject-*`
+ * subagents whose codex/cursor builds carry a different
+ * `compatible_harnesses` — so the honest floor is 7, not 37.
+ *
+ * Not an equality: a new skill that ships a (genuinely different) build must
+ * raise this number without anyone editing this file. A DROP is the failure
+ * mode worth catching — a category renamed or a walker that stopped finding
+ * builds would silently shrink the denominator toward zero, and the allow-list
+ * checks below would then fail loudly rather than pass over nothing.
  */
-const CENSUS_FLOOR = 37;
+const CENSUS_FLOOR = 7;
 
 /**
  * A documented, harness-specific difference that a build is allowed to carry.
@@ -102,13 +117,12 @@ const CENSUS_FLOOR = 37;
  * older" is never a reason; that is drift, and drift belongs in a fix, not
  * here.
  *
- * `job-orchestrator`'s list is EMPTY, and that is a finding rather than an
- * oversight. Its three drifted hunks — the `2.8.2 SKILL LEARNING` step, its
- * `## Skill Updates` report section, and the execution-metrics opt-in — call
- * generic `keryx` commands (`keryx skills learn`) and harness-agnostic rule
- * files (`rules/core/skill-lifecycle.mdc`, `rules/core/model-selection.mdc`,
- * `.metaproject/rules/core/execution-metrics.md`). Nothing in them is
- * Claude-specific, so all five builds should carry all three.
+ * `job-orchestrator` used to carry an EMPTY list here, as a finding: its three
+ * drifted hunks called generic `keryx` commands and harness-agnostic rule
+ * files, so all five builds had to carry them. Reconciled, its four harness
+ * builds became byte-identical copies of `SKILL.md` and flow 257 deleted them —
+ * it ships `SKILL.md` alone now, so it is no longer enrolled and its entry is
+ * gone (an entry for an unenrolled skill fails the allow-list test below).
  *
  * FLOW 209'S VERDICT ON THE OTHER 36
  *
@@ -159,7 +173,6 @@ const HARNESS_FAMILY_DECLARATION: ParityAllowance = {
 };
 
 const BUILD_PARITY_ALLOWANCES: Record<string, readonly ParityAllowance[]> = {
-  "job-orchestrator": [],
   // The seven gproject-* subagents. Named one by one rather than matched by
   // prefix: an allowance that covers a pattern covers skills nobody looked at.
   "project-discovery": [HARNESS_FAMILY_DECLARATION],
@@ -428,17 +441,24 @@ test("build-parity: the enforced sweep has a real denominator", () => {
     expect(readdirSync(root).length).toBeGreaterThan(0);
   }
 
-  // The census floor. One enrolled skill is what flow 205 shipped and what the
-  // measurement then showed to be disjoint from the defect; anything near that
-  // number again means enrolment has stopped working.
+  // The census floor: every skill that still ships a build (flow 257). Zero
+  // would mean enrolment has stopped working and every check below passes over
+  // nothing.
+  expect(CENSUS_FLOOR).toBeGreaterThan(0);
   expect(PARITY_ENFORCED_SKILLS.length).toBeGreaterThanOrEqual(CENSUS_FLOOR);
 
-  // Named members, so a sweep that enrolled 37 of the wrong directories fails.
-  // `job-orchestrator` was the only clean skill and `task-implementer` the worst
-  // offender: a denominator containing both is one that covers the range.
+  // Named members, so a sweep that enrolled the right number of the wrong
+  // directories fails: every skill the allow-list speaks for must be enrolled
+  // under the category it lives in.
   const enrolled = new Set(PARITY_ENFORCED_SKILLS.map((location) => `${location.category}/${location.skill}`));
-  expect(enrolled.has("orchestration/job-orchestrator")).toBe(true);
-  expect(enrolled.has("orchestration/task-implementer")).toBe(true);
+  for (const skill of Object.keys(BUILD_PARITY_ALLOWANCES)) {
+    expect(enrolled.has(`planning/${skill}`)).toBe(true);
+  }
+  // …and a skill whose builds flow 257 deleted as byte-identical copies is not:
+  // a walker that still "found" them would be reading something that does not
+  // ship.
+  expect(enrolled.has("orchestration/job-orchestrator")).toBe(false);
+  expect(enrolled.has("orchestration/task-implementer")).toBe(false);
 
   for (const location of PARITY_ENFORCED_SKILLS) {
     const dirs = locateSkill(location);
@@ -510,6 +530,46 @@ describe("build-parity: the allow-list", () => {
 });
 
 /**
+ * Flow 257, AC8: a harness build ships only when it differs from `SKILL.md`.
+ *
+ * Export already hands `SKILL.md` to a runtime with no build of its own, so a
+ * byte-identical `SKILL.<runtime>.md` adds nothing but a copy to keep in sync —
+ * 88 of them had accumulated. This sweeps every skill directory in both trees
+ * (not only enrolled ones, so the check does not depend on the enrolment it is
+ * meant to constrain) and fails on any build equal to its `SKILL.md`.
+ */
+test("build-parity: no harness build is a byte-identical copy of its SKILL.md", () => {
+  const redundant: string[] = [];
+  let buildsSeen = 0;
+  for (const root of SKILL_ROOTS) {
+    for (const category of readdirSync(root, { withFileTypes: true })) {
+      if (!category.isDirectory()) continue;
+      for (const skill of readdirSync(path.join(root, category.name), { withFileTypes: true })) {
+        if (!skill.isDirectory()) continue;
+        const dir = path.join(root, category.name, skill.name);
+        const canonicalPath = path.join(dir, "SKILL.md");
+        if (!existsSync(canonicalPath)) continue;
+        const canonical = readFileSync(canonicalPath);
+        for (const name of HARNESS_BUILD_NAMES) {
+          const buildPath = path.join(dir, name);
+          if (!existsSync(buildPath)) continue;
+          buildsSeen += 1;
+          if (readFileSync(buildPath).equals(canonical)) redundant.push(relative(buildPath));
+        }
+      }
+    }
+  }
+
+  // Non-vacuity: the sweep saw builds — at least one per enrolled skill.
+  expect(buildsSeen).toBeGreaterThanOrEqual(PARITY_ENFORCED_SKILLS.length);
+  if (redundant.length > 0) {
+    throw new Error(
+      `These builds are byte-identical to their SKILL.md. Delete them from src/gdskills/bundled/skills and the .metaproject mirror — the runtime reads SKILL.md when it has no build of its own:\n${redundant.join("\n")}`,
+    );
+  }
+});
+
+/**
  * The diff engine must bite. A guard whose comparator silently returns "no
  * differences" would pass over real drift forever, so prove on synthetic input
  * that it finds a removal, an addition, and reports the right line numbers —
@@ -576,7 +636,7 @@ test("build-parity: every build of an enforced skill matches SKILL.md", () => {
         "src/gdskills/build-parity.test.ts). An allowance is legitimate only when",
         "the text names a harness-only command, path, tool, or capability.",
         "",
-        "Almost every allow-list here is EMPTY, and that is the finding rather",
+        "The allow-list holds a single class, and that is the finding rather",
         "than an oversight. Flow 209 read all 36 diverging skills hunk by hunk:",
         "35 were stale ancestors of their own SKILL.md — pre-extraction inline",
         "scripts, a superseded output format, hard-coded paths SKILL.md had",
@@ -587,7 +647,8 @@ test("build-parity: every build of an enforced skill matches SKILL.md", () => {
         "FIX: add each hunk below to the builds listed as missing it (do not delete",
         "it from SKILL.md — the Claude build is the complete one), keeping the",
         "bundled source and its .metaproject mirror byte-identical as",
-        "round-bound.test.ts requires.",
+        "round-bound.test.ts requires. If that leaves a build byte-identical to",
+        "SKILL.md, delete the build instead: the runtime then reads SKILL.md.",
         "",
         ...sections,
       ].join("\n"),

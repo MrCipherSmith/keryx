@@ -86,12 +86,16 @@ test("no shipped skill names bun.lockb on a line that does not also name bun.loc
 });
 
 test("the shipped security-audit skill detects bun and states a not-run outcome", () => {
-  const files = SKILL_ROOTS.map((root) => path.join(root, "quality", "security-audit"))
-    .filter((dir) => existsSync(dir))
+  const dirs = SKILL_ROOTS.map((root) => path.join(root, "quality", "security-audit"))
+    .filter((dir) => existsSync(dir));
+  const files = dirs
     .flatMap((dir) => readdirSync(dir).filter((name) => name.startsWith("SKILL")).map((name) => path.join(dir, name)));
 
-  // Both roots ship this skill, in three builds each.
-  expect(files.length).toBeGreaterThanOrEqual(6);
+  // Both roots ship this skill, each with its SKILL.md. Its harness builds were
+  // byte-identical copies and flow 257 deleted them; any build that ships again
+  // is in `files` and held to the same assertions below.
+  expect(dirs.length).toBeGreaterThanOrEqual(2);
+  for (const dir of dirs) expect(files).toContain(path.join(dir, "SKILL.md"));
 
   for (const file of files) {
     const text = readFileSync(file, "utf8");

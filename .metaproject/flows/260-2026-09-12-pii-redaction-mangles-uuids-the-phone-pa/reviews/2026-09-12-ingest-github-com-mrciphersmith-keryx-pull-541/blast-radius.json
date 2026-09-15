@@ -1,0 +1,471 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "src/sac/proposal-lifecycle-parity.test.ts",
+    "src/security/detect/pii-identifier-sweep.test.ts",
+    "src/security/detect/pii-phone-identifier.test.ts",
+    "src/security/detect/pii.ts"
+  ],
+  "files": [
+    {
+      "file": "src/security/redact.ts",
+      "hop": 1,
+      "fanIn": 20,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/detect/index.ts",
+      "hop": 1,
+      "fanIn": 11,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/output-validation.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/output-validation.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/contracts/export-audit.ts",
+      "hop": 1,
+      "fanIn": 1,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/contracts/export-audit.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/detect/pii-phone.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/pii-phone.test.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/detect/structured-pii.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/structured-pii.test.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/session/slate.ts",
+      "hop": 2,
+      "fanIn": 30,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/session/slate.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/agent.ts",
+      "hop": 2,
+      "fanIn": 26,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/commands/agent.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/guard.ts",
+      "hop": 2,
+      "fanIn": 24,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/guard.ts",
+        "src/security/output-validation.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/store.ts",
+      "hop": 2,
+      "fanIn": 14,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/session/store.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/service.ts",
+      "hop": 2,
+      "fanIn": 13,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/service.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/session/slate-terminal-state.ts",
+      "hop": 2,
+      "fanIn": 5,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/session/slate-terminal-state.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/security.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/commands/security.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/slate-tool.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/harness/tool/builtin/slate-tool.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/workspace-resolve.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/sac/workspace-resolve.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/eval/harness.ts",
+      "hop": 2,
+      "fanIn": 4,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/eval/harness.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/web/web-content.ts",
+      "hop": 2,
+      "fanIn": 3,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/harness/web/web-content.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/harness/tool/builtin/web-search-tool.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/harness/tool/builtin/web-search-tool.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/sac/service.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/sac/service.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/harness-scan.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/harness-scan.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/security/resolve.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/resolve.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/contracts/agent-first-core.fixtures.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/contracts/agent-first-core.fixtures.test.ts",
+        "src/contracts/export-audit.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/detect/exfil.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/exfil.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/detect/injection/adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/injection/adapter.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/detect/pii/ner-adapter.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/detect/pii/ner-adapter.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/eval/harness.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/eval/harness.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/golden-rule-e.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/golden-rule-e.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/guard.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/guard.test.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/output-validation.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/output-validation.test.ts",
+        "src/security/output-validation.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/project-root.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/project-root.test.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/redact.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/redact.test.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/security.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/security.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/service.memo.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/service.memo.test.ts",
+        "src/security/redact.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/security/structural-detection.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/security/detect/pii.ts",
+      "path": [
+        "src/security/structural-detection.test.ts",
+        "src/security/detect/index.ts",
+        "src/security/detect/pii.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [],
+  "unresolved": [],
+  "counts": {
+    "changedFilesSeen": 4,
+    "changedFilesResolved": 4,
+    "changedFilesUnresolved": 0,
+    "candidates": 34,
+    "retained": 34,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 15,
+    "hopHistogram": {
+      "1": 6,
+      "2": 28
+    }
+  },
+  "graph": {
+    "nodes": 1458,
+    "edges": 4342
+  }
+}

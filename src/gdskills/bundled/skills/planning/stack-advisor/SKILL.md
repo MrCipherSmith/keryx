@@ -5,6 +5,10 @@ description: >
   technology stack with trade-off analysis.
   Use when: dispatched by gproject-orchestrator Phase 2.
   NOT for: direct user invocation.
+triggers:
+  - "stack advice"
+  - "choose stack"
+  - "technology choice"
 metadata:
   version: 1.0.0
 ---

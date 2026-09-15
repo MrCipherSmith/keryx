@@ -702,6 +702,7 @@ export function openAuthorisationUrl(
   log: (line: string) => void,
   platform: NodeJS.Platform = process.platform,
   env: NodeJS.ProcessEnv = process.env,
+  open: typeof openVerificationUrl = openVerificationUrl,
 ): void {
   const plan = browserOpenPlan(url.toString(), platform, env);
   if (plan === undefined) {
@@ -711,7 +712,15 @@ export function openAuthorisationUrl(
     log(`Open this URL yourself to continue:\n\n  ${url.toString()}\n`);
     return;
   }
-  openVerificationUrl(url.toString());
+  // The opener takes the SAME platform/env the decision was made with,
+  // and is itself a parameter. Half an injection is worse than none:
+  // the first version decided by the substituted values and then opened
+  // by the real ones, so a test naming "darwin" spawned `open` on the
+  // developer's machine — twice per run of the decision tests, against
+  // an `.test` host that never resolves, leaving two hung tabs behind.
+  // Passing only `{ platform, env }` would not be enough either: on a
+  // Linux box with a graphical session the real `xdg-open` still runs.
+  open(url.toString(), { platform, env });
 }
 
 function removeCommand(args: readonly string[], deps: McpConsumerDeps): number {

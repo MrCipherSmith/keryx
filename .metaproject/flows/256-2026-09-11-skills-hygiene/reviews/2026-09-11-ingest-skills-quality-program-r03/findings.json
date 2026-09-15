@@ -22,7 +22,17 @@
       ],
       "enumeration_method": "`keryx ctx rg -n -i \"commit (exactly|the worker|changed_files)|stage and commit|task.boundary commit|orchestrator (stages|commits)\" src/gdskills/bundled --all` finds the orchestrator-side commit prescriptions only in flow-orchestrator and in the 5 job-orchestrator builds. task-implementer and git-concurrency hits describe the protocol and are not orchestrator steps. `cmp` shows the installed mirror is byte-identical, with the same line numbers."
     },
-    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-015"
+    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-015",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 8420d553 (T29), with the path-quoting placeholder from 98641bcf (T30 N-1). scratchpad/gate256/run.sh extracts the flow-orchestrator 'Task boundary commit, after every accepted worker result' bash block verbatim at 958f47ae, substitutes only the placeholders, stubs keryx, and runs it in fresh git repos under bash and zsh with identical results. s2 (the worker already committed a.txt, the default auto_commit=true path) prints 'boundary commit: nothing left to commit, skipped' and exits 0 with 0 commits; at cb4175a3 git commit exited 1. s3 (empty changed_files) skips and exits 0. s1 (auto-commit off, M+A+D) exits 0 with one commit 'M a.txt D del.txt A new.txt'. s4 (quoted paths with spaces) commits both. s5 leaves another lane's staged other.txt staged. s8 commits only the leftover new.txt. `<worktree_path>` is defined at flow-orchestrator SKILL.md:324-330 and pinned in the dispatch constraint at :359. The bundled and installed copies are byte-identical.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8420d553 (T29), quoting placeholder 98641bcf (N-1); verified refuted at 958f47ae by review-verifier: execution - flow-orchestrator boundary step skips with exit 0 when the worker committed or reported nothing, commits exactly the reported paths otherwise (bash and zsh)"
+    }
   },
   {
     "id": "C-016",
@@ -35,7 +45,17 @@
     "confidence": "high",
     "file": "src/gdskills/bundled/skills/orchestration/job-orchestrator/SKILL.md",
     "line": 813,
-    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-016"
+    "global_id": "2026-09-11-ingest-skills-quality-program-r03#C-016",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 8420d553 (T29). Site-check at 958f47ae: the job-orchestrator Step B Workspace block now carries `- auto_commit: <implementer_settings.auto_commit>` (:829) under 'Automation (task-implementer input `automation`)', and the response line reads 'Commits: none (auto_commit=false)' when it is off (:834). keryx ctx rg counts 3 matches in each of SKILL.md, SKILL.codex.md, SKILL.cursor.md, SKILL.zed.md and SKILL.opencode.md, and all 5 mirrors are byte-identical. Execution: run.sh on the job-orchestrator block ('Task boundary commit, for every accepted result') under bash and zsh. In s2 (worker committed) it skips and exits 0; at cb4175a3 this exited 1 with 'nothing to commit'. In s1 it commits exactly the reported paths and exits 0.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fixed in 8420d553 (T29); verified refuted at 958f47ae by review-verifier: execution - job-orchestrator Step B passes auto_commit in all 5 builds and its boundary step skips with exit 0 after a worker commit"
+    }
   },
   {
     "id": "C-017",

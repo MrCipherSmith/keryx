@@ -729,6 +729,15 @@ export type CompleteManagedReviewResult = {
    * one for (flow 207 AC5/AC6).
    */
   reviewNotes: ReviewNoteResult;
+  /**
+   * What the package's findings read AFTER this close, counted off disk.
+   *
+   * Returned so the caller can report the state instead of asserting it. The
+   * dispositions this invocation passed are only part of the answer: a package
+   * is dispositioned across as many closes as it takes, and the ones recorded
+   * earlier are just as recorded.
+   */
+  dispositions: FindingDispositionTally;
 };
 
 /**
@@ -793,7 +802,7 @@ export async function completeManagedReview(
     ...(options.now === undefined ? {} : { now: options.now }),
   });
 
-  return { manifest: updated, reviewNotes };
+  return { manifest: updated, reviewNotes, dispositions: tallyDispositions(recorded) };
 }
 
 export async function validateManagedReviewManifest(
@@ -1115,6 +1124,43 @@ export function findingDispositionState(finding: {
   disposition?: ReviewFindingDisposition | undefined;
 }): FindingDispositionState {
   return finding.disposition?.state ?? "unknown";
+}
+
+/**
+ * How many findings in a package have had an outcome recorded, and how many
+ * have not.
+ *
+ * `recorded` counts every state except `unknown`, because every other state in
+ * {@link FINDING_DISPOSITION_STATES} is terminal: the finding was acted on,
+ * dismissed for a named reason, or answered in disagreement. There is no
+ * in-progress disposition, so "not `unknown`" and "terminal" are the same set.
+ *
+ * This exists because the CLI used to ASSERT the all-unknown case instead of
+ * counting it — `review complete` with no disposition flags printed "every
+ * finding in this package still reads `unknown`" without reading the package,
+ * so a round that had dispositioned all 18 of its findings in earlier
+ * invocations was told nobody had recorded anything. A field whose whole job is
+ * to make an unrecorded outcome visible cannot be reported by a sentence that
+ * did not look.
+ */
+export type FindingDispositionTally = {
+  total: number;
+  /** Findings carrying a terminal disposition — anything but `unknown`. */
+  recorded: number;
+  /** Findings reading `unknown`, whether written so or absent entirely. */
+  unknown: number;
+};
+
+export function tallyDispositions(
+  findings: readonly { disposition?: ReviewFindingDisposition | undefined }[],
+): FindingDispositionTally {
+  let unknown = 0;
+  for (const finding of findings) {
+    if (findingDispositionState(finding) === "unknown") {
+      unknown += 1;
+    }
+  }
+  return { total: findings.length, recorded: findings.length - unknown, unknown };
 }
 
 /** The key a finding is joined by: `<reviewId>#<id>`. */

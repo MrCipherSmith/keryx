@@ -81,10 +81,12 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
+import { normalizeRouteText, routeTokens } from "../lib/route-tokens";
 import { BUNDLED_GDSKILLS } from "./catalog";
 import { HARNESS_SKILL_RUNTIMES, skillBuildFileName } from "./export";
 import { concreteModelDeclarations } from "./model-tier";
 import { parseSkillFrontmatter } from "./skill-frontmatter";
+import { DEFAULT_SKILL_LENGTH_CEILING, SKILL_LENGTH_CEILINGS } from "./skill-length-ceilings";
 
 // ---------------------------------------------------------------------------
 // Findings
@@ -99,6 +101,13 @@ export const BUNDLED_SKILL_CHECKS = [
   "frontmatter:name",
   "frontmatter:name-unique",
   "frontmatter:description",
+  "description:trigger-phrase",
+  "description:bare-imperative",
+  "description:length",
+  "description:collision",
+  "anatomy:sections",
+  "anatomy:red-flags-collision",
+  "anatomy:length",
   "frontmatter:metadata",
   "frontmatter:harness-claude",
   "frontmatter:category",
@@ -136,12 +145,17 @@ export interface BundledSkillEvaluation {
   /** How many `SKILL.md` files were found. Zero means the sweep proved nothing. */
   readonly skills: number;
   /**
-   * How many skill DOCUMENTS were read — `SKILL.md` plus every harness build.
+   * How many skill DOCUMENTS were read — `SKILL.md`, every harness build, and
+   * every companion document `KNOWN_SKILL_COMPANION_DOCUMENTS` names
+   * (`orchestrator-prompt.md`, `SKILL.detail.md` — swept for cross-references
+   * only, per flow 257 T16; see the loop that reads them for why).
    *
    * A second denominator, not a replacement: `skills` counts the skills, this
-   * counts the files whose bytes were actually checked. They differ by the 111
-   * harness builds, and reporting only the first is what let a build diverge
-   * from its own `SKILL.md` while the sweep reported everything clean.
+   * counts the files whose bytes were actually checked. They differ by the
+   * harness builds that ship (111 when this was written; 14 once flow 257
+   * deleted the byte-identical ones) plus the handful of companions, and
+   * reporting only the first is what let a build diverge from its own
+   * `SKILL.md` while the sweep reported everything clean.
    */
   readonly documents: number;
   /** Every skill directory name found, sorted — the resolvable cross-reference set. */
@@ -368,6 +382,913 @@ export const REQUIRED_FRONTMATTER_FIELDS = Object.keys(
 ) as readonly (keyof typeof REQUIRED_FRONTMATTER_CHECKS)[];
 
 // ---------------------------------------------------------------------------
+// Description quality (flow 257 T7)
+// ---------------------------------------------------------------------------
+//
+// `frontmatter:description` (above) answers one question: does the field exist
+// and resolve to text a harness can serve at all. It fires on absence and on a
+// block scalar that resolves to nothing. It does NOT judge the text's shape,
+// and three shapes slip past it while still routing badly:
+//
+//   - no trigger phrase at all, so an agent choosing between skills has no
+//     situational cue and has to infer one from a summary of what the skill
+//     DOES rather than WHEN to reach for it;
+//   - a trigger phrase followed by a bare imperative verb ("Use when
+//     implement a feature…") — grammatically a command aimed at the skill,
+//     not a description of the situation that should trigger it, and the
+//     shape flow 257 T6 removed from the tree;
+//   - a description past the length a harness's routing prompt can afford,
+//     concretely the 1024-character cap agentskills.io's skill spec sets.
+//
+// These are kept as a SEPARATE `description:*` family rather than folded into
+// `frontmatter:description`, on purpose: that check is a parse-level fact
+// ("does this resolve to text"), these three are a content-quality judgment
+// ("is that text shaped to route on"), and collapsing four unrelated failure
+// reasons into one id is exactly what `REQUIRED_FRONTMATTER_CHECKS`'s own
+// comment above warns against — an operator reading `frontmatter:description:
+// 3 finding(s)` could not tell an empty field from a well-formed paragraph
+// that is merely too long.
+
+/**
+ * Trigger phrases a description's routing clause may open with.
+ *
+ * Derived empirically, not guessed: every one of the 67 shipped `SKILL.md`
+ * descriptions contains at least one of these three, and none contains "Use
+ * before", "Use after", or "Use while" — phrases that read as equally valid
+ * English but that this sweep has no shipped example to verify against. A
+ * set that admits a phrase nothing on disk uses is an aspiration, the same
+ * defect `REQUIRED_FRONTMATTER_FIELDS`'s comment already refuses for required
+ * fields. Widen this set only once a shipped description actually needs the
+ * wider phrase — the check adapts to the tree, not the other way round.
+ */
+export const ALLOWED_DESCRIPTION_TRIGGER_PHRASES: readonly string[] = ["Use when", "Use to", "Use for"];
+
+const TRIGGER_PHRASE_PATTERN = new RegExp(
+  `\\b(?:${ALLOWED_DESCRIPTION_TRIGGER_PHRASES.map((phrase) => phrase.replace(/\s+/g, "\\s+")).join("|")})\\b`,
+  "i",
+);
+
+/** Whether `description` carries none of `ALLOWED_DESCRIPTION_TRIGGER_PHRASES`. */
+export function descriptionLacksTriggerPhrase(description: string): boolean {
+  return !TRIGGER_PHRASE_PATTERN.test(description);
+}
+
+/**
+ * Verb infinitives that read as a command when they follow "Use when" —
+ * "Use when implement a feature" says to the reader "implement", not "use
+ * this when a feature needs implementing".
+ *
+ * Not an attempt at an exhaustive English verb list — that trades a false
+ * negative on some verb missing from it for a false positive on every common
+ * noun this sweep cannot tell apart from a verb (a list of ALL infinitives
+ * would have to include words like "test" and "plan" that are ordinary nouns
+ * as often as they are verbs, e.g. "Use when test coverage drops"). Sized to
+ * the mistake this rule exists to catch: an author writing the clause as an
+ * instruction to the skill out of habit, using the bare form of a verb that
+ * unambiguously reads as an action when it opens a sentence.
+ *
+ * THIS SET IS THE UNAMBIGUOUS HALF, and it used to be both halves. Fourteen
+ * words — "review", "check", "commit", "update", "install", "document",
+ * "push", "run", "start", "debug", "fix", "split", "draft", "edit" — shipped
+ * here alongside "implement" and "decompose", and every one of them is an
+ * ordinary NOUN at least as often as it is a verb. "Use when review comments
+ * arrive", "Use when check results land", "Use when commit history needs
+ * rewriting", "Use when install fails" are all noun-phrase subjects — exactly
+ * the situational shape this check exists to encourage — and every one of
+ * them was reported as a bare imperative. That is the same defect the comment
+ * above already refuses for "test" and "plan", left in the set by oversight.
+ * They moved to `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` below rather than being
+ * deleted, because each really is imperative in the shape the check was
+ * written for; what changed is that the shape now has to be visible.
+ */
+export const BARE_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
+  "implement",
+  "create",
+  "write",
+  "add",
+  "build",
+  "analyze",
+  "generate",
+  "deploy",
+  "measure",
+  "save",
+  "explore",
+  "open",
+  "take",
+  "decompose",
+  "refactor",
+  "migrate",
+  "extract",
+  "convert",
+  "summarize",
+  "classify",
+  "rewrite",
+  "verify",
+  "validate",
+  "audit",
+  "execute",
+  "distill",
+  "customize",
+  "configure",
+  "launch",
+  "remove",
+  "delete",
+  "scaffold",
+  "replace",
+  "rename",
+  "investigate",
+  "diagnose",
+  "resolve",
+]);
+
+/**
+ * Verbs that are ALSO ordinary nouns, and so only count as a bare imperative
+ * when the token after them makes the imperative reading the only one
+ * available.
+ *
+ * "Use when review the diff" can only be a command: "review" heads a verb
+ * phrase whose object is introduced by a determiner. "Use when review
+ * comments arrive" is a noun phrase — "review comments" is the subject of
+ * "arrive" — and is precisely the situational description the check wants to
+ * see. The distinguishing token is the determiner, not the verb, so the verb
+ * alone cannot decide.
+ */
+export const NOUN_AMBIGUOUS_IMPERATIVE_VERBS: ReadonlySet<string> = new Set([
+  "review",
+  "check",
+  "commit",
+  "update",
+  "install",
+  "document",
+  "push",
+  "run",
+  "start",
+  "debug",
+  "fix",
+  "split",
+  "draft",
+  "edit",
+]);
+
+/**
+ * Determiners and possessives that can only introduce the OBJECT of a verb
+ * phrase, never continue a noun-phrase subject headed by the preceding word.
+ *
+ * "review the diff" — "the" cannot attach to "review" as a compound noun, so
+ * "review" is the verb. "review comments" — "comments" can and does. The list
+ * is deliberately closed and small: every entry is a function word with no
+ * reading in which it modifies the word before it. Widen it only for another
+ * word with that same property.
+ */
+export const IMPERATIVE_OBJECT_DETERMINERS: ReadonlySet<string> = new Set([
+  "a",
+  "an",
+  "the",
+  "this",
+  "that",
+  "these",
+  "those",
+  "its",
+  "it",
+  "them",
+  "their",
+  "your",
+  "my",
+  "our",
+  "every",
+  "each",
+]);
+
+/**
+ * Match "Use when" (any casing, an optional colon/dash after it) followed by
+ * one bare word — the token this rule classifies — and, optionally, the word
+ * after it, which is what decides a `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` entry.
+ */
+const USE_WHEN_OPENING = /\buse\s+when\s*[:\-—]?\s*([A-Za-z][\w'-]*)(?:\s+([A-Za-z][\w'-]*))?/gi;
+
+/**
+ * The offending verb, if `description` opens a "Use when" clause with a bare
+ * imperative — `undefined` otherwise.
+ *
+ * Deliberately conservative in what it calls a verb: a capitalized token
+ * ("Use when MobX…") is a proper noun, not a verb in imperative mood, and a
+ * token ending in "-ing" ("Use when reviewing…") is already the gerund this
+ * rule wants, not the defect. Only a lowercase, non-gerund token that matches
+ * `BARE_IMPERATIVE_VERBS` fires — an unrecognized lowercase word (e.g. "Use
+ * when a…", "Use when dispatched…") is left alone rather than guessed at,
+ * because a false positive here breaks a description this sweep did not
+ * write and cannot safely rewrite on its own.
+ *
+ * A `NOUN_AMBIGUOUS_IMPERATIVE_VERBS` entry additionally needs the following
+ * token to be an `IMPERATIVE_OBJECT_DETERMINERS` word — see both sets for
+ * why the verb alone cannot decide those fourteen.
+ */
+export function bareImperativeOpening(description: string): string | undefined {
+  for (const match of description.matchAll(USE_WHEN_OPENING)) {
+    const token = match[1] ?? "";
+    if (token.length === 0) continue;
+    if (/^[A-Z]/.test(token)) continue;
+    if (/ing$/i.test(token)) continue;
+    const verb = token.toLowerCase();
+    if (BARE_IMPERATIVE_VERBS.has(verb)) return token;
+    if (
+      NOUN_AMBIGUOUS_IMPERATIVE_VERBS.has(verb) &&
+      IMPERATIVE_OBJECT_DETERMINERS.has((match[2] ?? "").toLowerCase())
+    ) {
+      return token;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * The description length cap agentskills.io's skill spec sets. Past this, a
+ * harness's routing prompt pays for prose that will not fit whatever budget
+ * it allotted the description, on every request it ever considers this
+ * skill for.
+ */
+export const MAX_DESCRIPTION_LENGTH = 1024;
+
+// ---------------------------------------------------------------------------
+// Description collision (flow 257 T11, AC6)
+// ---------------------------------------------------------------------------
+//
+// The three checks above each judge ONE description in isolation. None of
+// them can see two descriptions that read as near-duplicates of EACH OTHER —
+// a router scores both skills for the same request and an agent choosing
+// between them has no signal beyond a coin flip. `context-router`'s own
+// SKILL.md carries a comment (`catalog.ts`) explicitly carving "collect
+// context" out of its trigger list because `context-collector` already owns
+// that phrase; nothing before this check verified the tree does not have
+// OTHER pairs quietly reproducing what that one hand-written comment guards
+// against.
+//
+// MEASURE: Jaccard similarity — |intersection| / |union| — over
+// `routeTokens(normalizeRouteText(description))` for each of two skills' own
+// descriptions. Both functions are imported from `../lib/route-tokens`
+// (`routeTokens` exported for exactly this use; see its comment there) rather
+// than restated, so this check judges a description on the IDENTICAL
+// tokenisation the router itself scores it with — not a second guess at what
+// counts as a token. `../commands/skills.ts` (the router) imports the same
+// two functions from that same module rather than defining its own, which is
+// what keeps the two sides on one tokenizer — see `route-tokens.ts`'s header
+// for why it moved out of `commands/skills.ts` (flow 257 T18, an
+// import-policy boundary fix). Unexpanded (`expand` left `false`): expansion
+// adds Russian-prefix synonyms to an INCOMING QUERY (see `expandQueryTokens`), and
+// a skill's own description is never a query — `scoreBundledSkillRoute`
+// builds its own haystack the same unexpanded way.
+//
+// Jaccard, not cosine/TF-IDF: `scoreBundledSkillRoute`'s own overlap term is
+// `overlap.length * 10`, a plain per-token count with no frequency or rarity
+// weighting anywhere in the router. A weighted measure here would judge a
+// pair by a signal the router never consults when it actually decides between
+// them. Intersection-over-union of the two token sets asks the same question
+// the router's own scoring asks: of everything either description would
+// match a query against, how much do both share.
+//
+// THRESHOLD: >= `DESCRIPTION_COLLISION_THRESHOLD` (0.75) is a finding, naming
+// both skills and the score. AC6 also asks for pairs at >= 0.50 to be visible
+// as a non-failing note — but neither `BundledSkillEvaluation` nor
+// `renderBundledEvaluation` carries any channel for a non-failing observation
+// alongside `findings`; every existing check reports by being silent or by
+// adding a finding, nothing between. Inventing a second reporting channel for
+// one check would be exactly the kind of aspiration `ALLOWED_DESCRIPTION_
+// TRIGGER_PHRASES`'s comment above refuses ("derived from what the tree
+// already does", not from what one check alone would like to have). The
+// 0.50 tier is therefore left OUT of `findings` entirely: `collisionPairs`
+// below is exported so a caller — an operator, or the top-10 report flow 257
+// T11 hands to T12 — can still ask "what is close to the line" directly,
+// without this check treating "close" as a failure.
+//
+// Pairwise, not per-file: unlike every check above, one description's
+// collision status depends on every OTHER skill's description, not on its own
+// text. It cannot run inside the per-document loop below; `evaluateBundledTree`
+// collects every non-empty served description first and sweeps pairs once
+// all of them are known.
+
+/** Jaccard similarity threshold at which two descriptions are a finding. */
+export const DESCRIPTION_COLLISION_THRESHOLD = 0.75;
+
+/**
+ * The tier AC6 asks to be visible without failing. Not read by
+ * `evaluateBundledTree` — see the comment above for why no non-failing
+ * channel exists to gate on it — kept here so the number this check
+ * distinguishes from a real finding is written down once, not repeated at
+ * every call site that reports on `collisionPairs`.
+ */
+export const DESCRIPTION_COLLISION_WATCH_THRESHOLD = 0.5;
+
+/** One pair of skills whose descriptions collide, and the score they collided at. */
+export interface DescriptionCollisionPair {
+  /** `${category}/${name}`, the lexicographically earlier of the two. */
+  readonly a: string;
+  /** `${category}/${name}`, the lexicographically later of the two. */
+  readonly b: string;
+  /** Jaccard similarity of the two descriptions' route tokens, in `[0, 1]`. */
+  readonly similarity: number;
+}
+
+/** `routeTokens(normalizeRouteText(description))` — see the MEASURE note above for why this exact pipeline, unexpanded. */
+export function descriptionRouteTokens(description: string): ReadonlySet<string> {
+  return routeTokens(normalizeRouteText(description));
+}
+
+/** Jaccard similarity of two token sets: `|intersection| / |union|`. `0` when either is empty — an empty description never "collides". */
+export function jaccardSimilarity(a: ReadonlySet<string>, b: ReadonlySet<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const token of a) {
+    if (b.has(token)) intersection += 1;
+  }
+  const union = a.size + b.size - intersection;
+  return union === 0 ? 0 : intersection / union;
+}
+
+/**
+ * Every pair of `entries` (key -> description) at or above `minSimilarity`,
+ * sorted by similarity descending (ties broken by key, for a deterministic
+ * report). `entries` is keyed by `${category}/${name}`, matching every other
+ * exemption map in this file (`PENDING_ANATOMY_BACKFILL` and friends).
+ */
+export function collisionPairs(
+  entries: ReadonlyMap<string, string>,
+  minSimilarity: number,
+): DescriptionCollisionPair[] {
+  const keys = [...entries.keys()].sort();
+  const tokensByKey = new Map(keys.map((key) => [key, descriptionRouteTokens(entries.get(key) ?? "")]));
+  const out: DescriptionCollisionPair[] = [];
+  for (let i = 0; i < keys.length; i++) {
+    for (let j = i + 1; j < keys.length; j++) {
+      const a = keys[i] as string;
+      const b = keys[j] as string;
+      const similarity = jaccardSimilarity(tokensByKey.get(a) ?? new Set(), tokensByKey.get(b) ?? new Set());
+      if (similarity >= minSimilarity) out.push({ a, b, similarity });
+    }
+  }
+  return out.sort((x, y) => y.similarity - x.similarity || x.a.localeCompare(y.a) || x.b.localeCompare(y.b));
+}
+
+/** Canonical, order-independent key for one pair — `(a, b)` and `(b, a)` resolve to the same entry, since similarity is symmetric. */
+export function collisionPairKey(a: string, b: string): string {
+  return [a, b].sort().join(" :: ");
+}
+
+/** An exemption from one `description:collision` finding, with the reason a human can check. */
+export interface DescriptionCollisionExemption {
+  /** Why this pair ships at or above the threshold anyway. Must name T12 — see `collisionReasonNamesOwner`. */
+  readonly reason: string;
+}
+
+/**
+ * Real collisions the shipped tree has TODAY, each owed to flow 257's T12 (the
+ * task this dispatch hands the list to, per AC6) rather than fixed here: T11
+ * owns this check and its fixtures, not the wording of any bundled skill's
+ * description, and three OTHER tasks (T13, T14, T15) are editing skill bodies
+ * and descriptions concurrently as this file is written — editing a
+ * description out from under one of them is exactly the collision a worktree
+ * split exists to prevent. An entry here is what keeps the shipped tree's
+ * `description:collision` finding count at zero while T12 has not yet acted;
+ * it is not a permanent allowance the way `PERMANENT_ANATOMY_EXEMPTIONS` is; a
+ * key surviving here after T12 lands is itself something T3 (flow 257's final
+ * verification task) should notice, the same role `PENDING_ANATOMY_BACKFILL`
+ * plays for the anatomy checks above.
+ */
+export const KNOWN_DESCRIPTION_COLLISIONS: ReadonlyMap<string, DescriptionCollisionExemption> = new Map([]);
+
+/** Every entry's reason must name flow 257's T12, or this map has quietly become a silent, unowned suppression list. */
+export function collisionReasonNamesOwner(reason: string): boolean {
+  return /\bT12\b/.test(reason);
+}
+
+// ---------------------------------------------------------------------------
+// Anatomy sections (flow 257 T8, AC3)
+// ---------------------------------------------------------------------------
+//
+// The `description:*` family above judges the ROUTING clause in isolation. It
+// says nothing about the rest of the document, and three structural gaps slip
+// past every check above while a skill still routes fine and still "works" on
+// a lucky run:
+//
+//   - no disambiguation for the agent that already chose this skill and needs
+//     to know what it is NOT the tool for;
+//   - no catalogue of the specific ways an agent talks itself into skipping
+//     this skill's own rules — the exact failure mode a generic reminder to
+//     "be careful" cannot prevent, because it names nothing concrete;
+//   - no stated shape for "done" — a caller (a human, or an orchestrator
+//     reading a subagent's final line) has nothing to check the result
+//     against.
+//
+// Each of the three is defined below precisely enough that "does this skill
+// have it" is decidable by reading the file, not a judgment call — the same
+// bar `ALLOWED_DESCRIPTION_TRIGGER_PHRASES` and `BARE_IMPERATIVE_VERBS` above
+// hold themselves to: derived from what the 67 shipped skills that already do
+// this well actually wrote, not from an aspiration nothing on disk uses.
+
+/**
+ * The three anatomy sections this check requires, and the vocabulary the
+ * exemption maps below key their entries by. Not check ids on their own —
+ * every deficiency reports under the single `anatomy:sections` id, per AC3,
+ * with the finding's message naming which of these three is missing.
+ */
+export const ANATOMY_SECTIONS = ["trigger-not-for", "red-flags", "verification"] as const;
+
+export type AnatomySection = (typeof ANATOMY_SECTIONS)[number];
+
+/**
+ * DEFINITION 1 — trigger + "NOT for" clause.
+ *
+ * WHERE IT MAY LIVE: anywhere in the shipped document — the frontmatter
+ * `description` (as a trailing sentence of a single-line or block-scalar
+ * value) or the Markdown body (as a bullet, a sentence, or its own line). Both
+ * shapes ship today: 34 of the 35 skills that already have this clause carry
+ * it inside `description`, folded into the routing text an agent reads before
+ * ever opening the file (e.g. `review-architecture`'s `description: |` block
+ * ends "NOT for: style/naming preferences, …"); exactly one
+ * (`metaproject-security`) states it as body prose directly under the H1
+ * instead ("Use this skill for the `security` module, not for dependency CVEs
+ * …"). Restricting the check to `description` only would report that one
+ * skill as missing a disambiguation it already states in plain English one
+ * line into the file — a false positive this definition exists to avoid.
+ *
+ * ACCEPTED SPELLING: the literal phrase "not for" (case-insensitive — the
+ * shipped tree spells it "NOT for" every time, but nothing about the
+ * disambiguation depends on capitalisation, unlike the trigger-phrase check
+ * above whose whole point IS the exact opening words a harness pattern-
+ * matches). No other spelling ("not applicable to", "never for", "excludes")
+ * is accepted, for the same reason `ALLOWED_DESCRIPTION_TRIGGER_PHRASES`
+ * accepts only three phrases: a spelling nothing on disk uses is a guess, not
+ * a rule derived from the tree.
+ *
+ * This intentionally does NOT require the clause to sit inside the
+ * `description:trigger-phrase` clause specifically (i.e. literally following
+ * "Use when …") — `description:trigger-phrase` (above) already guarantees a
+ * trigger exists somewhere in the description; this check only adds "and did
+ * the document also say what it is not for", wherever that statement lives.
+ *
+ * BOUNDED ON BOTH SIDES, AND WHY THAT IS NOT PEDANTRY: the first spelling of
+ * this pattern was a bare `/not for/i`, with a word boundary at neither end.
+ * "This output is not formatted as JSON" contains the substring "not for" and
+ * satisfied it — a sentence about formatting, in any skill, silently supplied
+ * that skill's disambiguation. The same hole admits "not forced", "not
+ * fortunate", "not foreseeable", and every other "not for…" word. `\s+` rather
+ * than a literal space because prose wraps: "…, not\nfor anything else" is the
+ * same clause with a line break in the middle of it.
+ */
+const NOT_FOR_CLAUSE_PATTERN = /\bnot\s+for\b/i;
+
+/** Whether `text` (the whole document: frontmatter + body) states a "NOT for" disambiguation. */
+export function hasNotForClause(text: string): boolean {
+  return NOT_FOR_CLAUSE_PATTERN.test(text);
+}
+
+/**
+ * DEFINITION 2 — Red Flags / rationalization table.
+ *
+ * HEADING SPELLINGS: a Markdown heading (`#` through `####`) whose text
+ * contains, case-insensitively, "red flag" (matches "Red Flags", "Red Flags
+ * Table", and the singular "Red Flag") or "rationali" (matches
+ * "Rationalization"/"Rationalisation", either spelling). Both stems are
+ * already shipped headings — "Red Flags" (11 skills), "Red Flags Table" (4
+ * skills, all `review-*`) — and matched by heading text rather than by an
+ * exact string so a heading such as `## Red Flags — Stop and re-read this
+ * skill if you are thinking:` (task-implementer, feature-dev, issue-analyzer)
+ * still counts.
+ *
+ * WHAT MAKES IT A TABLE (OR A TWO-COLUMN LIST): the heading alone is not
+ * enough — `job-orchestrator` has two `### Red Flag` headings, and each is
+ * one bolded rationalization quote followed by one paragraph of rebuttal,
+ * scattered numbers of paragraphs apart under unrelated parent sections. That
+ * is a single inline catch, not the consolidated reference table this check
+ * requires, and it must not satisfy the same bar a real table does. So the
+ * heading's own section (every line up to the next heading at the same or a
+ * shallower level) must additionally contain either:
+ *
+ *   - a Markdown table with at least `ANATOMY_RED_FLAGS_MIN_ROWS` DATA rows
+ *     (the header row itself does not count), or
+ *   - at least `ANATOMY_RED_FLAGS_MIN_ROWS` consecutive two-column bullet
+ *     rows (`- <quote> — <why>`) — no shipped skill uses this shape today,
+ *     but AC3 names it as an accepted alternative to a table, so a future
+ *     skill that lists rationalizations as bullets rather than a `|…|…|`
+ *     table is not forced into table syntax just to pass this check.
+ *
+ * WHY 3 ROWS: every genuine shipped table has at least 4 data rows
+ * (`stack-advisor`'s is the shortest, at 4; `review-logic` and
+ * `review-performance` both have 6). Three sits one below that observed floor
+ * — high enough that a single scattered callout (one row, by construction)
+ * cannot pass, low enough that no compliant skill on the tree today is
+ * pushed into non-compliance by a threshold picked too high. It is not "the
+ * smallest number that rules out one row": two would already do that. Three
+ * is chosen so the bar reads as "a handful of ways this goes wrong", plural
+ * in the ordinary sense, rather than the bare minimum that defeats a single
+ * counterexample.
+ *
+ * AND WHAT MAKES A ROW A ROW (flow 257 T19): the row count above was the only
+ * thing standing between a rationalization table and a placeholder, so three
+ * lines reading `| a | b |` satisfied the whole check. The table is the one
+ * anatomy section whose value is entirely in its CONTENT — a named excuse and
+ * the rebuttal that answers it — so a row that names neither is not a row this
+ * check should count. Two conditions, both derived from the shipped tree
+ * rather than guessed:
+ *
+ *   - at least two non-empty cells, because the shape is a pair (the excuse
+ *     and the answer), and a one-column list of excuses is a list of things
+ *     nobody has answered;
+ *   - at least `ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS` characters of cell text
+ *     in the row, all cells taken together.
+ *
+ * WHY 24 CHARACTERS: the shortest data row in any shipped Red Flags table
+ * carries 72 characters of cell text (`review-security-code`'s "The team
+ * would never send that payload" / "Attackers are not on the team"), and the
+ * shortest non-empty single cell carries 11 (`spec-writer`'s "Scope creep").
+ * 24 sits at a third of the observed row floor — far enough below it that no
+ * shipped table is near the line and a genuinely terse future pair is not
+ * pushed into padding, far enough above `| a | b |` (2 characters) that a
+ * placeholder cannot pass. The same floor applies to the two-column bullet
+ * shape, since a bullet row and a table row are the same claim in different
+ * syntax.
+ */
+export const ANATOMY_RED_FLAGS_MIN_ROWS = 3;
+
+/** Minimum characters of cell text one counted Red Flags row must carry. See the note above for the derivation. */
+export const ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS = 24;
+
+const RED_FLAGS_HEADING_PATTERN = /^(#{1,4})\s.*(red flag|rationali)/i;
+const MARKDOWN_HEADING_PATTERN = /^(#{1,4})\s/;
+const TABLE_ROW_PATTERN = /^\|.*\|\s*$/;
+const TABLE_SEPARATOR_PATTERN = /^\|[\s:|-]+\|\s*$/;
+const TWO_COLUMN_BULLET_PATTERN = /^-\s+\S.*(—|--|:).+\S/;
+
+/** Every line of `text` from just after `start` up to the next heading at `level` or shallower. */
+function sectionBody(lines: readonly string[], start: number, level: number): readonly string[] {
+  const out: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    const heading = MARKDOWN_HEADING_PATTERN.exec(line);
+    if (heading !== null && (heading[1] ?? "").length <= level) break;
+    out.push(line);
+  }
+  return out;
+}
+
+/** The non-empty cell texts of one `|…|…|` row, outer pipes dropped. */
+function tableRowCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, "")
+    .replace(/\|$/, "")
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+}
+
+/** Whether one data row carries enough to be a named excuse plus its answer. See `ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS`. */
+function isSubstantiveTableRow(line: string): boolean {
+  const cells = tableRowCells(line);
+  if (cells.length < 2) return false;
+  return cells.join("").length >= ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS;
+}
+
+/** The bullet-list spelling of the same claim, held to the same floor. */
+function isSubstantiveBulletRow(line: string): boolean {
+  if (!TWO_COLUMN_BULLET_PATTERN.test(line)) return false;
+  return line.replace(/^-\s+/, "").replace(/[\s—:-]/g, "").length >= ANATOMY_RED_FLAGS_MIN_ROW_CHARACTERS;
+}
+
+/**
+ * The data rows of `text`'s first qualifying Red Flags section, trimmed and
+ * joined — the table's CONTENT, independent of its heading spelling and its
+ * surrounding prose.
+ *
+ * `[]` when the document has no qualifying section. Exported because
+ * `anatomy:red-flags-collision` (below) compares these bodies across skills:
+ * a table pasted verbatim from another skill satisfies `hasRedFlagsSection`
+ * perfectly while naming that OTHER skill's rationalizations, which is the
+ * same "passes on borrowed substance" failure as a placeholder row, one step
+ * further along.
+ */
+export function redFlagsTableBody(text: string): readonly string[] {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const heading = RED_FLAGS_HEADING_PATTERN.exec(lines[i] ?? "");
+    if (heading === null) continue;
+    const body = sectionBody(lines, i, (heading[1] ?? "").length);
+    const tableRows = body.filter((line) => TABLE_ROW_PATTERN.test(line) && !TABLE_SEPARATOR_PATTERN.test(line));
+    // The first `|…|` row is the header, not a rationalization.
+    const dataRows = tableRows.slice(1).filter(isSubstantiveTableRow);
+    const bulletRows = body.filter(isSubstantiveBulletRow);
+    const rows = dataRows.length >= bulletRows.length ? dataRows : bulletRows;
+    if (rows.length >= ANATOMY_RED_FLAGS_MIN_ROWS) return rows.map((row) => row.trim());
+  }
+  return [];
+}
+
+/** Whether `text` carries a Red Flags / rationalization table, per the definition above. */
+export function hasRedFlagsSection(text: string): boolean {
+  return redFlagsTableBody(text).length > 0;
+}
+
+/**
+ * DEFINITION 3 — Verification / exit-criteria / STATUS section.
+ *
+ * HEADING SPELLINGS: a Markdown heading (`#` through `####`) whose text
+ * contains, case-insensitively, "verification" or "exit criteria" (hyphen or
+ * space) ANYWHERE in the heading, not only at its start — `flow-orchestrator`
+ * ships `## Phase 3: Verification And Review` and `task-implementer` ships a
+ * bare `## Verification`; both must count, so the pattern is not anchored
+ * past the `#` marks. A heading containing only the bare word "status"
+ * ("Status Updates", "Status line (first line of response)") does NOT count
+ * on its own — those are formatting notes about where a line goes, not a
+ * statement of what "done" looks like, and admitting them would make this
+ * leg of the check nearly vacuous (half the `review-*` skills have a "Status
+ * line" heading purely by formatting convention).
+ *
+ * WHAT ELSE COUNTS, PER THE TASK'S OWN CONTENT LIST: a heading is not the only
+ * shape this repository already uses for "what done looks like":
+ *
+ *   - the STATUS CONTRACT LINE for subagent skills — a line, once leading
+ *     Markdown decoration (`*`, `` ` ``, whitespace) is stripped, of the exact
+ *     shape `STATUS: <UPPER_CASE_TOKEN>` (e.g. `STATUS: DONE`,
+ *     `STATUS: BLOCKED`). This is the literal first-line-of-response contract
+ *     `code-verifier`, `context-collector`, `tests-creator` and
+ *     `job-orchestrator` all document, and for a skill dispatched only as a
+ *     subagent it plays exactly the role a "## Verification" heading plays
+ *     for a skill a user runs directly: a finite, checkable set of terminal
+ *     states. Matched by the CAPITALISED form only — a YAML field such as
+ *     `status: pass | fail | skipped` describing some OTHER thing's outcome
+ *     (a single check's result, a job step's state) is not this skill's own
+ *     reporting contract, and the shipped convention already reserves
+ *     upper-case `STATUS:` for exactly this purpose;
+ *   - an EXPLICIT EXIT-CRITERIA LIST in the shape the Phase-subagent family
+ *     (`autodoc-analyst` and its siblings) uses instead of a prose contract:
+ *     an Output Contract's `status:` field enumerating its own terminal
+ *     values with `|`, e.g. `status: "DONE" | "DONE_WITH_CONCERNS" |
+ *     "NEEDS_CONTEXT"`. This is the same information the STATUS line encodes
+ *     — a finite named set of outcomes — spelled as a YAML enum because the
+ *     subagent's contract IS a YAML block, not a prose response line.
+ *
+ * A bare checkbox list (`- [ ] …`) is deliberately NOT accepted as its own
+ * qualifying shape here: several shipped skills use `- [ ]` purely for a
+ * WORKFLOW progress tracker ("Phase 1: …", "Phase 2: …"), which is not an
+ * exit criterion — it says what to do, not when the skill is done. Widen this
+ * only if a shipped skill needs a genuine checkbox-shaped exit list that none
+ * of the three shapes above already covers, per the same "widen once the tree
+ * needs it" rule the trigger-phrase set states above.
+ */
+const VERIFICATION_HEADING_PATTERN = /^(#{1,4})\s.*(verification|exit[\s-]criteria)/i;
+const STATUS_CONTRACT_LINE_PATTERN = /^[\s*`]*STATUS:\s*[A-Z_]/;
+// Requires the FIRST alternative to be a quoted, all-caps token — the shape
+// `autodoc-analyst` and its siblings use for their own terminal states
+// (`status: "DONE" | "DONE_WITH_CONCERNS" | "NEEDS_CONTEXT"`). A lowercase,
+// unquoted enum such as `status: pass | fail | skipped` (a single check's
+// result, not the skill's own exit state — see the comment above) must NOT
+// match, so the first alternative is anchored to `"UPPER_CASE"`.
+const STATUS_CONTRACT_ENUM_PATTERN = /^[\s*`]*status:\s*"[A-Z][A-Z0-9_]*"\s*\|/;
+
+/**
+ * Whether `text` carries a Verification / exit-criteria / STATUS section, per
+ * the definition above.
+ *
+ * A HEADING IS NOT A SECTION (flow 257 T19). `## Verification` with nothing
+ * under it says no more about what "done" looks like than the absence of the
+ * heading does, and it passed this check for the same reason a `| a | b |`
+ * row passed the Red Flags one: presence was the whole bar. A heading now
+ * qualifies only when its own section — every line up to the next heading at
+ * the same level or shallower, the same span `hasRedFlagsSection` reads —
+ * holds at least one non-blank line. The other two shapes need no such guard:
+ * a `STATUS: DONE` line and a `status: "DONE" | …` enum ARE the content, not
+ * an announcement of content to follow.
+ */
+export function hasVerificationSection(text: string): boolean {
+  const lines = text.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (STATUS_CONTRACT_LINE_PATTERN.test(line) || STATUS_CONTRACT_ENUM_PATTERN.test(line)) return true;
+    const heading = VERIFICATION_HEADING_PATTERN.exec(line);
+    if (heading === null) continue;
+    const body = sectionBody(lines, i, (heading[1] ?? "").length);
+    if (body.some((bodyLine) => bodyLine.trim().length > 0)) return true;
+  }
+  return false;
+}
+
+/**
+ * The line count `anatomy:length` compares against a ceiling, counted the way
+ * `wc -l` counts: newline characters, so a file's trailing newline does not
+ * add a line and a file without one does not lose its last.
+ *
+ * The count is the whole document, frontmatter included. What a ceiling bounds
+ * is what an agent has to read before it can act, and the frontmatter is part
+ * of that read.
+ */
+export function skillLineCount(text: string): number {
+  let count = 0;
+  for (const character of text) {
+    if (character === "\n") count += 1;
+  }
+  return count;
+}
+
+/** What each `AnatomySection` reports as, when a finding names it. */
+const ANATOMY_SECTION_LABELS: Record<AnatomySection, string> = {
+  "trigger-not-for": 'a trigger with a "NOT for" clause',
+  "red-flags": "a Red Flags / rationalization table",
+  verification: "a Verification / exit-criteria / STATUS section",
+};
+
+/**
+ * An exemption from one or more `anatomy:sections` findings, with the reason
+ * a human can check.
+ */
+export interface AnatomySectionExemption {
+  /** Which of the three sections this entry excuses — never all-purpose. */
+  readonly sections: readonly AnatomySection[];
+  /** Why, stated so a reviewer can tell a real reason from a rubber stamp. */
+  readonly reason: string;
+}
+
+/**
+ * PERMANENT exemptions — never expected to empty out.
+ *
+ * Every entry here is a Phase subagent: dispatched exactly once, by exactly
+ * one orchestrator, at a fixed point in that orchestrator's pipeline, and
+ * never by a user typing a request or an agent choosing among skills by
+ * description. The `trigger-not-for` section — a disambiguation aimed at
+ * whoever is CHOOSING this skill from a list — has no audience for a skill
+ * nothing ever chooses; the caller already decided by writing `Task({
+ * subagent_type: "…", … })` with this skill's name literally in the dispatch.
+ *
+ * This does NOT exempt a Phase subagent from `red-flags` or `verification` —
+ * AC9 requires every workflow skill to earn both outright, and a subagent
+ * being un-invocable by a user says nothing about whether ITS OWN failure
+ * modes are documented or its own output has a checkable shape. Ten of these
+ * twelve were missing `red-flags`; T14 wrote a phase-specific Red Flags table
+ * into each rather than widening this map, so none of them is carried in
+ * `PENDING_ANATOMY_BACKFILL` below any more.
+ *
+ * What a Phase subagent must still have, in place of the exempted section:
+ * every one of the twelve already ships an Iron Laws table (its equivalent of
+ * Red Flags — firm rules rather than named rationalizations) and an Output
+ * Contract with an explicit `status:` enum (its equivalent of Verification —
+ * see `hasVerificationSection`'s third bullet above), so the exemption trades
+ * one document shape for another rather than for nothing.
+ *
+ * Non-vacuous today in name only: all twelve already carry a "NOT for" clause
+ * in their `description` regardless (see `hasNotForClause` — none of the
+ * twelve appear in the "missing NOT-for" set the shipped-tree survey
+ * produced), so this map currently excuses zero live findings. It is kept
+ * because the exemption is a statement of POLICY — a Phase subagent is
+ * allowed to drop that clause without becoming non-compliant — not a patch
+ * for a defect on today's tree, the same distinction `GENERATED_PATH_ROOTS`
+ * draws above ("an allowance is not an exemption from the check; it is a
+ * statement that the referent exists in a place this sweep cannot see").
+ */
+export const PERMANENT_ANATOMY_EXEMPTIONS: ReadonlyMap<string, AnatomySectionExemption> = new Map([
+  [
+    "planning/autodoc-analyst",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 2 subagent dispatched only by autodoc-orchestrator, one instance per module; never chosen by a user from a description, so the description needs no user-facing NOT-for disambiguation. Its Iron Laws table and Output Contract status enum are the discipline that substitutes for it.",
+    },
+  ],
+  [
+    "planning/autodoc-architect",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 3 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-assembler",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 5 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-scanner",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 1 subagent dispatched only by autodoc-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/autodoc-writer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 4 subagent dispatched only by autodoc-orchestrator, one instance per section; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/consistency-checker",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 5 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/planner",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 6 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/problem-definer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 1 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/project-discovery",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 0 subagent dispatched only by gproject-orchestrator, always called through it; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/spec-writer",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 4 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/stack-advisor",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 2 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+  [
+    "planning/patterns-researcher",
+    {
+      sections: ["trigger-not-for"],
+      reason:
+        "Phase 3 subagent dispatched only by gproject-orchestrator; never chosen by a user from a description. Its Iron Laws and Output Contract status enum substitute for a user-facing NOT-for clause.",
+    },
+  ],
+]);
+
+/**
+ * PENDING exemptions — flow 257's own backfill debt, and expected to reach
+ * empty.
+ *
+ * Every entry here names a skill this sweep would otherwise fail today, and a
+ * REASON that must name the flow-257 task doing the backfill (T13, T14 or
+ * T15 — see `pendingReasonNamesBackfillTask` below, which a test asserts over
+ * every entry) so this map cannot quietly turn into a second permanent
+ * exemption list by omission. T3 (flow 257's final verification task) checks
+ * this map is EMPTY once T13-T15 land; until then it is what keeps the
+ * shipped tree's `anatomy:sections` finding count at zero while the backfill
+ * is still in flight.
+ *
+ * Grouped by the task that owns the fix:
+ *   - T13 — quality-category skills;
+ *   - T14 — platform, planning and orchestration-category skills (this is
+ *     also where the ten Phase subagents missing `red-flags` live, since they
+ *     ship under `planning/`);
+ *   - T15 — review-category skills, plus `core/reviewer-skill-creator`
+ *     (shipped under `core/`, not `review/`, but its whole subject is
+ *     authoring reviewer skills — closer to T15's remit than to T14's
+ *     "platform, planning, orchestration" one; flagged here rather than
+ *     silently folded in, since the task split names categories that do not
+ *     quite cover it).
+ */
+export const PENDING_ANATOMY_BACKFILL: ReadonlyMap<string, AnatomySectionExemption> = new Map([
+  // --- T13: quality — LANDED, all 13 quality skills now earn all three sections outright.
+
+  // --- T14: platform, planning, orchestration — LANDED, all 29 entries removed.
+  // The three platform skills, the ten planning skills and the nine
+  // orchestration skills now state a "NOT for" clause, carry a Red Flags table
+  // and state their own exit criteria outright. The ten Phase subagents
+  // (`autodoc-*`, `consistency-checker`, `planner`, `problem-definer`,
+  // `project-discovery`, `patterns-researcher`) were BACKFILLED rather than
+  // moved to `PERMANENT_ANATOMY_EXEMPTIONS`: each one's Red Flags table names
+  // rationalizations specific to its own phase, which is what AC9 asks for and
+  // what an Iron Laws table — firm rules, not named excuses — does not supply.
+
+  // --- T15: review, plus core/reviewer-skill-creator — LANDED, entries removed.
+  // All eleven now carry the sections outright; nothing here excuses them.
+]);
+
+/** Every entry's reason must name the flow-257 task doing the backfill, or this map has quietly become a second permanent exemption list. */
+export function pendingReasonNamesBackfillTask(reason: string): boolean {
+  return /\bT1[345]\b/.test(reason);
+}
+
+// ---------------------------------------------------------------------------
 // Cross-references
 // ---------------------------------------------------------------------------
 
@@ -411,8 +1332,66 @@ export const KNOWN_EXTERNAL_SKILL_REFERENCES: ReadonlyMap<string, string> = new 
  * the USER's project or is produced at runtime, and this evaluator has no
  * standing to call any of it missing. Checking those would be the "judge that
  * flags everything" failure from the other direction.
+ *
+ * `docs` WAS PROPOSED AS A FOURTH ROOT, AND MEASURED (flow 257 T19). The
+ * prompt was `skills-storage-workflow.mdc`'s citation of
+ * `docs/skills/rejected-skill-changes.md` (AC11's ledger), which nothing
+ * checked. Adding `docs` here and to `PATH_REFERENCE` was tried and produces a
+ * check that is wrong twice over:
+ *
+ *   - THE TREE. Seventeen distinct concrete `docs/…` paths are cited across
+ *     the bundled tree (counted as `PATH_REFERENCE` extracts them), and ten
+ *     resolve to nothing in this repository. Six of those ten are the sections
+ *     `autodoc-orchestrator` GENERATES in the USER's project
+ *     (`docs/architecture.md`, `docs/modules.md`, `docs/api-reference.md`,
+ *     `docs/data-models.md`, `docs/onboarding.md`, `docs/index.md`) — they
+ *     exist only once that pipeline has run somewhere else, so each is a
+ *     finding on every checkout. The remaining seven (`docs/analysis`,
+ *     `docs/plans`, `docs/report`, `docs/requirements`, …) exist at this
+ *     REPOSITORY's root — but that is not where the check looks. Existence is
+ *     `existsSync(path.join(root, resolved))` with `root` the bundled tree
+ *     (`defaultBundledRoot()` — `src/gdskills/bundled`), which ships no `docs/`
+ *     at all: 7 of the 17 exist under the repository root, 0 under the bundled
+ *     root. So all seventeen would be findings HERE too, and the seven exist
+ *     only because this repository happens to keep the layout
+ *     `documentation-management.mdc` prescribes — nothing makes them exist in a
+ *     user's project either. The citation would break in every tree, resolving
+ *     in none, which is worse than a verdict that merely varies by tree: this
+ *     root cannot decide these paths from where the sweep stands.
+ *   - THE INSTALL. `package.json`'s `files` ships `dist`, `src/gdgraph`,
+ *     `src/gdskills/bundled`, `src/gdskills/contracts` and one schema
+ *     directory. `docs/skills/` is NOT published, so the one reference this
+ *     root was meant to check would resolve in a checkout and fail for every
+ *     installed user — exactly the flow-252 defect the header describes,
+ *     rebuilt facing the other way. Nothing distinguishes a checkout from an
+ *     install by layout, because the install mirrors the source layout
+ *     deliberately.
+ *
+ * The ledger is a CONTRIBUTOR-facing file, so it is checked where it is true:
+ * `REJECTED_CHANGES_LEDGER` below states the contract, and this module's own
+ * test suite — which only ever runs in a checkout — asserts the file exists,
+ * carries the documented header, and is the path the rule names. A check that
+ * can only be right in one of the two places this evaluator runs does not
+ * belong in the evaluator.
  */
 const CHECKED_PATH_ROOTS = ["skills", "rules", "scripts"] as const;
+
+/**
+ * AC11's rejected-change ledger, stated once so the file, the rule that cites
+ * it, and the test that pins both cannot drift apart.
+ *
+ * `path` is repository-relative (see `CHECKED_PATH_ROOTS` above for why it is
+ * not an `xref:path` root). `header` is the table's column row verbatim: the
+ * ledger's value is that a row records what was tried, why it was rejected,
+ * and the evidence that sank it — a file with the heading and no columns to
+ * fill would be an append-only record of nothing.
+ */
+export const REJECTED_CHANGES_LEDGER = {
+  path: "docs/skills/rejected-skill-changes.md",
+  header: "| date | skill | change tried | why rejected | evidence (before → after) | link |",
+  /** The rule that requires it, bundled-tree-relative. */
+  rule: "rules/core/skills-storage-workflow.mdc",
+} as const;
 
 /**
  * Prefixes that address the same artifacts through the INSTALLED layout.
@@ -458,6 +1437,28 @@ export const GENERATED_PATH_ROOTS: readonly { prefix: string; producedBy: string
  * a concrete path and gets existence-checked as one.
  */
 const PATH_REFERENCE = /(?:^|[\s"'`([])((?:\.metaproject\/|skills\/|rules\/|scripts\/)[\w./@*-]*[\w.@*-])/g;
+
+/**
+ * Drop a sentence-ending period a path reference swept up mid-match.
+ *
+ * `.` is itself a valid path character (`.md`, `.json`), so `PATH_REFERENCE`
+ * cannot tell "the extension's period" from "the sentence's period" while it
+ * is still matching — a plain-prose reference such as "see
+ * skills/quality/foo/SKILL.md." captures the trailing full stop along with
+ * the file, and the path that resolves is `SKILL.md`, not `SKILL.md.`.
+ *
+ * Safe to strip unconditionally once matching is done, and never the
+ * extension's own period: an extension's period is always followed by
+ * extension letters (`.md`, never bare `.` at the end of a name), so a
+ * period sitting as the very LAST character of the match cannot be one —
+ * only a sentence's period lands there. Stripping it leaves a genuine
+ * `skills/x/SKILL.md` reference exactly as `skills/x/SKILL.md` (its own
+ * period is followed by `md`, not by the end of the match), and turns
+ * `skills/x/SKILL.md.` back into the `skills/x/SKILL.md` it was quoting.
+ */
+function stripTrailingSentencePeriod(raw: string): string {
+  return raw.endsWith(".") ? raw.slice(0, -1) : raw;
+}
 
 /**
  * Resolve a reference the way an INSTALLED project would have to: as the
@@ -539,7 +1540,7 @@ function scanCrossReferences(
       }
     }
     for (const match of line.matchAll(PATH_REFERENCE)) {
-      const raw = match[1] as string;
+      const raw = stripTrailingSentencePeriod(match[1] as string);
       if (raw.includes("<") || raw.includes("*") || raw.includes("$")) continue;
       const resolved = resolveInstalledReference(raw, known);
       if (resolved === undefined) continue;
@@ -591,21 +1592,40 @@ const SKILL_DOCUMENT_NAMES: ReadonlySet<string> = new Set(
 );
 
 /**
- * `SKILL*.md` files that are deliberately NOT builds, each with its reason.
+ * `SKILL*.md` files that are deliberately NOT builds, each with its reason —
+ * and, more broadly since flow 257 T16, the full list of shipped companion
+ * documents this sweep knows about at all.
  *
- * The set exists so `document:addressable` can tell "a companion document" from
- * "a build no runtime can reach". The distinction is not academic: nine
- * `SKILL.claude.md` files shipped in 0.2.72 and were read by nothing —
- * `skillBuildFileName("claude")` is `SKILL.md`, so no `--runtime` export, no
- * install, and no sweep ever opened them. They were Claude Code slash-command
- * files left behind by the conversion to skills, and they were removed rather
- * than allowed, because an allowance without a reader is a backlog entry
- * wearing an exemption's clothes.
+ * The `SKILL.*.md`-shaped set exists so `document:addressable` can tell "a
+ * companion document" from "a build no runtime can reach". The distinction is
+ * not academic: nine `SKILL.claude.md` files shipped in 0.2.72 and were read
+ * by nothing — `skillBuildFileName("claude")` is `SKILL.md`, so no `--runtime`
+ * export, no install, and no sweep ever opened them. They were Claude Code
+ * slash-command files left behind by the conversion to skills, and they were
+ * removed rather than allowed, because an allowance without a reader is a
+ * backlog entry wearing an exemption's clothes.
+ *
+ * `orchestrator-prompt.md` — shipped by five orchestration skills
+ * (`context-collector`, `feature-analyzer`, `issue-analyzer`,
+ * `job-orchestrator`, `task-implementer`) — does not fit that pattern at all:
+ * it is not spelled `SKILL.*.md`, so `document:addressable` never had an
+ * opinion on it either way. It is listed here anyway, and this ONE map is
+ * reused rather than a second one, because the two file kinds share the same
+ * real property: both are prose a skill author wrote and ships, addressed by
+ * name from the skill's own `SKILL.md`, carrying no frontmatter of their own.
+ * `bundledSkillCompanionDocuments` below walks every name this map lists —
+ * this is now the SINGLE registry of "documents that exist, are not builds,
+ * and are still worth reading for a dead cross-reference", not merely a
+ * `document:addressable` exemption list.
  */
 export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new Map([
   [
     "SKILL.detail.md",
     "overflow reference for `orchestration/feature-analyzer`, linked from its SKILL.md; carries no frontmatter and is not addressed by any runtime",
+  ],
+  [
+    "orchestrator-prompt.md",
+    "the prompt template an orchestrator skill reads to build a subagent dispatch (context-collector, feature-analyzer, issue-analyzer, job-orchestrator, task-implementer); carries no frontmatter and is not addressed by any runtime — read by the skill's own instructions, not by a harness loader",
   ],
 ]);
 
@@ -636,14 +1656,33 @@ export function bundledSkillFiles(root: string): string[] {
  * build beside it.
  *
  * This is the set the sweep actually walks, and it is a different number from
- * `bundledSkillFiles`. The tree ships 65 `SKILL.md` and 111 harness builds; a
+ * `bundledSkillFiles`. The tree shipped 65 `SKILL.md` and 111 harness builds; a
  * sweep that reads only the first spelling reported `xref:path` clean over 65 of
  * 176 documents and said nothing about the other 111 — which is how
  * `task-implementer` shipped four builds missing their entire reporting
- * contract while every check reported "pass".
+ * contract while every check reported "pass". Flow 257 deleted the builds that
+ * were byte-identical to their `SKILL.md` (a runtime with no build of its own
+ * reads `SKILL.md`), so only genuinely different builds remain to be walked.
  */
 export function bundledSkillDocuments(root: string): string[] {
   return walkSkillDocuments(root, (name) => SKILL_DOCUMENT_NAMES.has(name));
+}
+
+/**
+ * Every companion document under `root` — a file `KNOWN_SKILL_COMPANION_DOCUMENTS`
+ * names, wherever it ships (flow 257 T16).
+ *
+ * Before this, `orchestrator-prompt.md` — the file five orchestrator skills
+ * read to build a subagent dispatch, and the exact file `docs/requirements/
+ * keryx-orchestrator-hardening/measurement-2026-08-31.md` names for citing a
+ * denied `wave-executor` in four places — was invisible to every check in this
+ * sweep: it is not `SKILL.md`, not a harness build `HARNESS_SKILL_RUNTIMES`
+ * knows about, and `document:addressable`'s own walk only ever looks at files
+ * spelled `SKILL.*.md`. A dead path or skill reference inside one was
+ * structurally undetectable, not merely unchecked.
+ */
+export function bundledSkillCompanionDocuments(root: string): string[] {
+  return walkSkillDocuments(root, (name) => KNOWN_SKILL_COMPANION_DOCUMENTS.has(name));
 }
 
 /**
@@ -706,6 +1745,7 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
   const skillsRoot = path.join(root, "skills");
   const canonical = bundledSkillFiles(skillsRoot);
   const files = bundledSkillDocuments(skillsRoot);
+  const companionDocuments = bundledSkillCompanionDocuments(skillsRoot);
   const skillNames = [...new Set(canonical.map((file) => path.basename(path.dirname(file))))].sort();
   const known = new Set(skillNames);
   const findings: BundledSkillFinding[] = [];
@@ -720,6 +1760,28 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
   const declaredNames = new Map<string, { dir: string; file: string }>();
   /** `<category>/<directory>` pairs the install catalogue names. */
   const catalogued = new Set(BUNDLED_GDSKILLS.map((entry) => `${entry.category}/${entry.name}`));
+  /**
+   * `${category}/${skill}` -> its served description, one entry per skill.
+   *
+   * Populated only from the CANONICAL `SKILL.md` (see the guard where this is
+   * written, below) — a harness build's description is supposed to be the
+   * same text (`document:build-parity` catches drift), and a pairwise sweep
+   * over builds too would report the same collision once per build pair
+   * instead of once per skill pair. `description:collision` (after the main
+   * loop) reads this map once every document has been walked.
+   */
+  const descriptionsByKey = new Map<string, string>();
+  /** `${category}/${skill}` -> the relative canonical file path, for the finding location. */
+  const descriptionFileByKey = new Map<string, string>();
+  /**
+   * `${category}/${skill}` -> its Red Flags table's data rows, canonical
+   * `SKILL.md` only — the input to `anatomy:red-flags-collision` below.
+   * Populated inside the anatomy block, where the section is already parsed,
+   * rather than by a second walk over the same text.
+   */
+  const redFlagsByKey = new Map<string, readonly string[]>();
+  /** `${category}/${skill}` -> the relative canonical file path, for the collision finding's location. */
+  const redFlagsFileByKey = new Map<string, string>();
 
   for (const file of files) {
     const skillDir = path.dirname(file);
@@ -745,6 +1807,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       );
     } else {
       const keys = frontmatterKeys(block);
+      // The one parse every field below that must match what the RUNTIME sees
+      // reads through — `description` already did (see its comment below);
+      // `metadata.category` and `compatible_harnesses` join it here rather
+      // than staying on `frontmatterKeys`' single-line regexes, which read a
+      // YAML block list or flow list as absent rather than as a value to
+      // check (see `parseSkillFrontmatter`'s own comment on the field).
+      const parsed = parseSkillFrontmatter(text);
       for (const [field, check] of Object.entries(REQUIRED_FRONTMATTER_CHECKS)) {
         if (!keys.has(field)) {
           add(check, 1, `frontmatter is missing the required \`${field}\` field.`);
@@ -773,13 +1842,49 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       // `skills_catalog` handed that indicator to an agent as the skill's whole
       // description. Both sides now read through `parseSkillFrontmatter`.
       if (keys.has("description")) {
-        const served = parseSkillFrontmatter(text).description ?? "";
+        const served = parsed.description ?? "";
         if (served.length === 0) {
           add(
             "frontmatter:description",
             1,
             "frontmatter `description` is present but resolves to nothing a harness can match a request against; a block scalar (`description: |`) needs its text on the following indented lines.",
           );
+        } else {
+          // Collected here, before the three per-description checks below,
+          // guarded to the canonical file only (see `descriptionsByKey`'s
+          // comment above) — a harness build reaching this branch with the
+          // same skill key would otherwise overwrite nothing incorrectly, but
+          // there is no reason to let it try.
+          if (path.basename(file) === "SKILL.md") {
+            const key = `${category}/${skill}`;
+            descriptionsByKey.set(key, served);
+            descriptionFileByKey.set(key, rel);
+          }
+          // The three content-quality checks only judge text that actually
+          // exists — an empty description already failed above, and judging
+          // the shape of nothing would double-report the same defect twice.
+          if (descriptionLacksTriggerPhrase(served)) {
+            add(
+              "description:trigger-phrase",
+              1,
+              `frontmatter \`description\` has no trigger phrase (${ALLOWED_DESCRIPTION_TRIGGER_PHRASES.map((p) => `"${p}"`).join(", ")}); without one an agent has no situational cue for when to reach for this skill, only a summary of what it does.`,
+            );
+          }
+          const bareVerb = bareImperativeOpening(served);
+          if (bareVerb !== undefined) {
+            add(
+              "description:bare-imperative",
+              1,
+              `frontmatter \`description\` opens "Use when ${bareVerb} …" — a bare imperative reads as an instruction aimed at the skill, not a description of the situation that should trigger it; use the gerund ("Use when ${bareVerb}ing …") or rephrase around the situation.`,
+            );
+          }
+          if (served.length > MAX_DESCRIPTION_LENGTH) {
+            add(
+              "description:length",
+              1,
+              `frontmatter \`description\` is ${served.length} characters, over the ${MAX_DESCRIPTION_LENGTH}-character cap agentskills.io's skill spec sets for descriptions; trim it.`,
+            );
+          }
         }
       }
       if (keys.has("metadata")) {
@@ -800,16 +1905,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
         // the directory the skill actually ships under — `catalog:registered`
         // above already ties that directory to `BUNDLED_GDSKILLS`, so a
         // skill that passes both checks has one category, not two.
-        const metadataCategory = /^\s{2,}category\s*:\s*(.+)$/m.exec(block);
-        if (metadataCategory !== null) {
-          const declaredCategory = (metadataCategory[1] ?? "").trim().replace(/^["']|["']$/g, "");
-          if (declaredCategory.length > 0 && declaredCategory !== category) {
-            add(
-              "frontmatter:category",
-              1,
-              `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
-            );
-          }
+        const declaredCategory = parsed.metadataCategory ?? "";
+        if (declaredCategory.length > 0 && declaredCategory !== category) {
+          add(
+            "frontmatter:category",
+            1,
+            `frontmatter \`metadata.category\` is "${declaredCategory}" but this skill ships under \`${category}/${skill}\`; set it to "${category}" or drop the field.`,
+          );
         }
       }
       // `compatible_harnesses` is per-build metadata (see
@@ -820,22 +1922,81 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
       // build lying about the harness that loads it. Checked by exact
       // filename, not by runtime lookup, so the check reads the same way in a
       // fixture tree that never calls `evaluateBundledTree` through the CLI.
-      if (path.basename(file) === "SKILL.md") {
-        const compatibleHarnesses = /^\s{2,}compatible_harnesses\s*:\s*(.+)$/m.exec(block);
-        if (compatibleHarnesses !== null) {
-          const declared = (compatibleHarnesses[1] ?? "").trim().replace(/^["']|["']$/g, "");
-          const harnesses = declared
-            .split(",")
-            .map((entry) => entry.trim())
-            .filter((entry) => entry.length > 0);
-          if (!harnesses.includes("claude")) {
-            add(
-              "frontmatter:harness-claude",
-              1,
-              `frontmatter \`compatible_harnesses\` ("${declared}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
-            );
-          }
+      if (path.basename(file) === "SKILL.md" && parsed.compatibleHarnesses !== undefined) {
+        const harnesses = parsed.compatibleHarnesses;
+        if (!harnesses.includes("claude")) {
+          add(
+            "frontmatter:harness-claude",
+            1,
+            `frontmatter \`compatible_harnesses\` ("${harnesses.join(",")}") omits \`claude\`, but this file IS the Claude build — add \`claude\` to the list.`,
+          );
         }
+      }
+    }
+
+    // --- anatomy: trigger/NOT-for, Red Flags, Verification -----------------
+    //
+    // Runs over the whole document (`text`), not only the frontmatter parsed
+    // above — `hasNotForClause` explicitly reads body prose too (see its
+    // definition comment). Keyed by `${category}/${skill}` because that is
+    // the same key `catalogued` (above) and `BUNDLED_GDSKILLS` use, and
+    // because a skill's category is exactly what routes it to a T13/T14/T15
+    // pending entry.
+    //
+    // Canonical `SKILL.md` only, for the reason `anatomy:length` below already
+    // gives: `document:build-parity` forces every harness build to carry its
+    // `SKILL.md`'s body verbatim, so a build's anatomy is the SAME fact, not a
+    // second one. Ungated, a skill shipping four builds reported one missing
+    // section five times — five identical findings, one defect, and an
+    // operator counting findings would read a five-times-worse tree than the
+    // one they have. The build is not going unchecked: if it ever stops
+    // matching its `SKILL.md`, that is a `document:build-parity` finding,
+    // which is the accurate name for it.
+    if (path.basename(file) === "SKILL.md") {
+      const exemptionKey = `${category}/${skill}`;
+      redFlagsByKey.set(exemptionKey, redFlagsTableBody(text));
+      redFlagsFileByKey.set(exemptionKey, rel);
+      const permanent = PERMANENT_ANATOMY_EXEMPTIONS.get(exemptionKey);
+      const pending = PENDING_ANATOMY_BACKFILL.get(exemptionKey);
+      const missing: AnatomySection[] = [];
+      if (!hasNotForClause(text)) missing.push("trigger-not-for");
+      if (!hasRedFlagsSection(text)) missing.push("red-flags");
+      if (!hasVerificationSection(text)) missing.push("verification");
+      for (const section of missing) {
+        if (permanent?.sections.includes(section) === true) continue;
+        if (pending?.sections.includes(section) === true) continue;
+        add("anatomy:sections", null, `missing ${ANATOMY_SECTION_LABELS[section]}.`);
+      }
+    }
+
+    // --- anatomy: length ----------------------------------------------------
+    //
+    // A ceiling is not a claim that the skill's current size is right — several
+    // shipped skills sit past 2000 lines. It is the one thing this sweep can
+    // decide that the others cannot: whether a skill grew past what it already
+    // was without anyone choosing that. `skill-length-ceilings.ts` records
+    // today's count per skill; a skill with no entry falls back to the 500
+    // lines the rules already name as the point to split at, so a NEW skill
+    // cannot arrive oversized without a decision recorded in that file.
+    //
+    // Canonical `SKILL.md` only: `document:build-parity` already forces every
+    // harness build to match it except for `compatible_harnesses`, so a build's
+    // length is the same fact, and measuring both would report one overage
+    // twice.
+    if (path.basename(file) === "SKILL.md") {
+      const ceilingKey = `${category}/${skill}`;
+      const recordedCeiling = SKILL_LENGTH_CEILINGS.get(ceilingKey);
+      const ceiling = recordedCeiling ?? DEFAULT_SKILL_LENGTH_CEILING;
+      const lines = skillLineCount(text);
+      if (lines > ceiling) {
+        const recorded = recordedCeiling === undefined
+          ? `no recorded ceiling, so the default ${DEFAULT_SKILL_LENGTH_CEILING} applies`
+          : `its recorded ceiling of ${ceiling}`;
+        add(
+          "anatomy:length",
+          null,
+          `${lines} lines exceeds ${recorded}. Split the skill, or move reference material into a sibling document, and lower the ceiling to the new count in the same change. A ceiling only ever moves DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc ("Length Ceilings") forbids, because it converts a measured limit into a record of whatever the file grew to.`,
+        );
       }
     }
 
@@ -876,6 +2037,65 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     scanCrossReferences(text, root, known, true, add);
   }
 
+  // --- description collisions across every catalog skill (flow 257 T11, AC6) -
+  //
+  // Runs once, over every skill's description collected above, not inside the
+  // per-document loop — a description's collision status is a property of the
+  // PAIR, decidable only once both sides are known. `KNOWN_DESCRIPTION_
+  // COLLISIONS` (see its comment) is checked here so a pair T12 has not yet
+  // resolved does not fail the shipped tree while it is still in flight.
+  for (const { a, b, similarity } of collisionPairs(descriptionsByKey, DESCRIPTION_COLLISION_THRESHOLD)) {
+    if (KNOWN_DESCRIPTION_COLLISIONS.has(collisionPairKey(a, b))) continue;
+    // Attributed to `b` (the lexicographically later skill of the pair, per
+    // `collisionPairs`' sort) so the finding still has exactly one home
+    // directory, the same convention `frontmatter:name-unique` uses for its
+    // own two-file finding above — the message names BOTH skills regardless.
+    findings.push({
+      check: "description:collision",
+      skill: b.split("/").slice(1).join("/") || b,
+      file: descriptionFileByKey.get(b) ?? `skills/${b}/SKILL.md`,
+      line: null,
+      message: `description collides with \`${a}\` at Jaccard similarity ${similarity.toFixed(2)} (>= ${DESCRIPTION_COLLISION_THRESHOLD}) on the router's own tokenisation — an agent routing between \`${a}\` and \`${b}\` has near-identical text to choose between; narrow one or both descriptions, or record the pair in KNOWN_DESCRIPTION_COLLISIONS with a reason naming its owner.`,
+    });
+  }
+
+  // --- one skill's Red Flags table, shipped by two skills (flow 257 T19) -----
+  //
+  // `anatomy:sections` asks whether a table EXISTS. A table copied verbatim
+  // from a sibling skill exists, has its rows, and names that other skill's
+  // rationalizations — so the check passes while the document supplies nothing
+  // about the ways THIS skill specifically gets talked out of its own rules,
+  // which is the entire reason AC3 asks for the section. It is the same defect
+  // as a `| a | b |` placeholder row, one step further along: substance that
+  // is present and not the skill's own.
+  //
+  // Grouped, not pairwise: unlike `description:collision` this is exact
+  // equality, so N skills sharing one table are one group rather than N*(N-1)/2
+  // pairs. The first key in sorted order is treated as the original and every
+  // later one draws the finding, the same "attribute to the later of the pair"
+  // convention `description:collision` and `frontmatter:name-unique` use.
+  {
+    const byBody = new Map<string, string[]>();
+    for (const [key, rows] of [...redFlagsByKey].sort(([a], [b]) => a.localeCompare(b))) {
+      if (rows.length === 0) continue;
+      const body = rows.join("\n");
+      byBody.set(body, [...(byBody.get(body) ?? []), key]);
+    }
+    for (const keys of byBody.values()) {
+      if (keys.length < 2) continue;
+      const original = keys[0] as string;
+      for (const key of keys.slice(1)) {
+        findings.push({
+          check: "anatomy:red-flags-collision",
+          skill: key.split("/").slice(1).join("/") || key,
+          file: redFlagsFileByKey.get(key) ?? `${key}/SKILL.md`,
+          line: null,
+          message: `its Red Flags table is byte-identical to \`${original}\`'s (${keys.length} skills ship this table: ${keys.join(", ")}). A rationalization table names the excuses an agent makes about THIS skill; a copied one documents another skill's failure modes and passes \`anatomy:sections\` while saying nothing about this one. Write the rows this skill's own rules get talked out of.`,
+        });
+      }
+    }
+  }
+
   // --- rule files: xref:path only, not the SKILL.md checks -------------------
   //
   // Rule frontmatter (`description`, `globs`, `alwaysApply`) has no `name` or
@@ -897,9 +2117,38 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     scanCrossReferences(text, root, known, false, add);
   }
 
+  // --- companion documents: xref:skill + xref:path only, not frontmatter/anatomy (flow 257 T16) --
+  //
+  // `orchestrator-prompt.md` and `SKILL.detail.md` — `KNOWN_SKILL_COMPANION_
+  // DOCUMENTS`'s two entries — are skill-authored prose, addressed by name
+  // from the skill's own `SKILL.md`, exactly the shape a dead `skills/…` path
+  // or a named-but-unbundled skill could hide in. Unlike a rule file, this
+  // prose IS a skill talking about itself and other skills, the same voice
+  // `SKILL.md` uses — so `xref:skill` applies here (`checkSkillNames: true`),
+  // where it does not for a rule file's prose ABOUT skills in the abstract.
+  //
+  // What does NOT apply: frontmatter, anatomy, catalog registration, model
+  // declarations, persona markers. A companion document carries no
+  // frontmatter by definition — `frontmatterBlock` would return `undefined`
+  // for every one of them, and running the frontmatter/anatomy loop above
+  // would report `frontmatter:block` and all three `anatomy:sections` on a
+  // file that was never meant to open with `---` or restate its own skill's
+  // trigger and Red Flags. Only the two checks that judge WHAT THE FILE SAYS,
+  // not WHAT SHAPE THE FILE HAS, generalise to a document with no frontmatter.
+  for (const file of companionDocuments) {
+    const skillDir = path.dirname(file);
+    const skill = path.basename(skillDir);
+    const rel = path.relative(skillsRoot, file).split(path.sep).join("/");
+    const text = readFileSync(file, "utf8");
+    const add = (check: "xref:skill" | "xref:path", line: number, message: string): void => {
+      findings.push({ check, skill, file: rel, line, message });
+    };
+    scanCrossReferences(text, root, known, true, add);
+  }
+
   // --- every SKILL*.md in the tree is either read above or named a companion --
   //
-  // The sweep now reads `SKILL.md` and the four harness builds. That is only
+  // The sweep now reads `SKILL.md` and every harness build that ships. That is only
   // full coverage if nothing ELSE in a skill directory is spelled like a build,
   // so this closes the set: a `SKILL.<x>.md` that no runtime addresses is a
   // document that ships, is never opened, and whose every claim is inert.
@@ -958,7 +2207,13 @@ export function evaluateBundledTree(root: string = defaultBundledRoot()): Bundle
     }
   }
 
-  return { root, skills: canonical.length, documents: files.length, skillNames, findings };
+  return {
+    root,
+    skills: canonical.length,
+    documents: files.length + companionDocuments.length,
+    skillNames,
+    findings,
+  };
 }
 
 /**
@@ -985,9 +2240,9 @@ export function renderBundledEvaluation(evaluation: BundledSkillEvaluation): str
   lines.push(`evaluator: ${evaluatorSource()}`);
   lines.push(`skills_evaluated: ${evaluation.skills}`);
   // Both denominators, always. `skills_evaluated` alone read as full coverage
-  // while 111 harness builds went unread; printing the document count is what
+  // while 111 harness builds went unread (flow 209); printing the document count is what
   // makes the gap visible without anyone having to know it exists.
-  lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds)`);
+  lines.push(`documents_evaluated: ${evaluation.documents} (SKILL.md + harness builds + companion documents)`);
   lines.push(`findings: ${evaluation.findings.length}`);
   lines.push("");
 

@@ -1,0 +1,25 @@
+[
+  {
+    "id": "R3-m1",
+    "reviewer": "round-3",
+    "severity": "minor",
+    "problem": "The widened walk flattens every step's tokens into one bag, so a key one container out can contradict the name beside the number and take a real finding away. The commit presents the change as pure widening, and none of the three docstrings that discuss the walk says it can also remove findings.",
+    "impact": "Two of the five shapes lost are the module's own examples: the headline bar-lowering it calls the plainest there is, and the very line the capacity carve-out was narrowed to protect.",
+    "suggested_fix": "Keep the steps as separate token groups and let the innermost name that speaks decide; state in the docstring that the walk removes findings as well as adding them.",
+    "evidence": "Measured against 9da95727~1, each fired before and is silent now: \"coverage\": { \"maxWarnings\": 0 -> 50 }, thresholds: { maxLatencyMs: 500 -> 900 }, \"budget\": { \"minScore\": 90 -> 50 }, \"slo\": { \"timeoutMs\": 100 -> 900 }, maxRows: { minItems: 3 -> 0 }. The flat controls still fire, so the loss is exactly a bar nested inside a key whose words pull the other way. The in-window byte-identical check cannot see it: no such shape occurs in the 200 commits.",
+    "confidence": "high",
+    "file": "src/review/floor.ts",
+    "line": 479,
+    "global_id": "2026-09-12-ingest-origin-main-r03#R3-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 27ee602f, the commit that fixes this finding. All five recovered shapes fire with the right movement and all five per-shape controls stay silent, so what fires is the direction rather than the nesting. The noise the narrowing removed stays removed: markdown renumber, step heading, and maxOutputTokens 16->256 both flat and nested in a budget key. The rejected alternative was built in a scratch copy and is genuinely worse — under nearest-decided, budget: { maxOutputTokens: 16 -> 256 } and limits: { maxRows: 100 -> 5000 } fire and coverage: { minTimeout: 500 -> 100 } fires, while it recovers nothing the shipped version misses. The fix's own stated cost is verified: tokens: { max: 16 -> 256 } now fires. The 200-commit re-measurement reproduces byte for byte, 37/17/11/2 with the same digest on both sides.",
+      "verifier": "round-4"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "27ee602f — the steps are separate token groups and the innermost name that speaks decides; the docstring now says the walk removes findings as well as adding them."
+    }
+  }
+]

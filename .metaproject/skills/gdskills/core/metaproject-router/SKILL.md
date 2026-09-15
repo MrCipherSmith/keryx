@@ -16,6 +16,7 @@ Choose which Metaproject module, working skill, or project-skill should be used 
 - which skill should be used
 - ordinary product-development request
 - agent should decide tools
+- pick the module
 
 ## Workflow
 

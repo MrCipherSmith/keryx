@@ -58,6 +58,7 @@ import {
 import {
   estimateContextTokens,
   fmtTokens,
+  modelPickerNotice,
   modelsForPicker,
   onKeypress,
   pickModelInTui,
@@ -648,7 +649,13 @@ export async function launchTuiChatShell(opts: {
           return await selectProviderModelInTui(otui, r, detected);
         }
         const prov = detected.find((d) => d.name === only);
-        const chosen = await pickModelInTui(otui, r, prov !== undefined ? await modelsForPicker(prov) : []);
+        const models = prov === undefined ? undefined : await modelsForPicker(prov);
+        const chosen = await pickModelInTui(
+          otui,
+          r,
+          models?.models ?? [],
+          prov === undefined || models === undefined ? undefined : modelPickerNotice(prov.label ?? prov.name, models),
+        );
         if (chosen === undefined) {
           return undefined;
         }

@@ -1,0 +1,36 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "Independent post-fix verification of the 4 round-2 findings at or above minor, at the PR #533 head 958f47aeecb2c0f389b406417a416ff60569b86d (squash-merged as 56934fe2). This verifier did not raise any of them: the raiser was review-architecture or review-logic. Experiments ran on a `git archive 958f47ae` copy under scratchpad/gate256; ROOT was not mutated. 4 checked: 3 execution, 1 site-check; 4 refuted. The 5 info findings were not checked, by design.",
+  "verifications": [
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r02#C-009",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 75b45f69 (T25). skills-storage-workflow.mdc at 958f47ae (:72-95, :102, :139-146) was followed in scratchpad/gate256/proj9, with HOME=gate256/home9 holding .cursor, .codex, .config/zed and .config/opencode, CODEX_HOME unset, and bun <958f47ae copy>/src/cli.ts. init --yes, skills verify --all, update and skills create src/demo --module docs --name demo-skill each exit 0. For every runtime (cursor, codex, zed, opencode), skills export demo-skill --runtime <r> and then skills sync --runtime <r> --global both exit 0, and SKILL.md lands at home9/.cursor/skills/docs-demo-skill/, home9/.codex/skills/docs-demo-skill/, home9/.config/zed/skills/docs-demo-skill/ and home9/.config/opencode/skills/docs-demo-skill/. `skills export task-implementer --runtime cursor` exits 1 with 'Project skill not found for: task-implementer', the message the rule quotes at :79 for shipped skills. At 0cdc36d1 the prescribed chain exited 1.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r02#C-010",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in cb4175a3 (T26) and corrected in 8420d553 (T29). Site-check at 958f47ae: the job-orchestrator Step B dispatch passes `- auto_commit: <implementer_settings.auto_commit>` (:829), the Commits line is conditional (:834), and the zero-commit retry row applies only to implementer_settings.auto_commit=true (:949); 3 matches in each of the 5 builds. flow-orchestrator SKILL.md now has a boundary-commit step (13 'commit' mentions; 0 at 0cdc36d1) and an auto-commit-off dispatch constraint (:360). Execution: scratchpad/gate256/run.sh extracts both boundary-commit bash blocks verbatim and runs them in throwaway repos under bash and zsh. In s1 (auto-commit off: modified, added and deleted file) each commits exactly the reported paths (exit 0, HEAD 'M a.txt D del.txt A new.txt'). In s5, another lane's staged file stays staged and is not swept into the commit.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r02#C-011",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed in 75b45f69 (T25). At 958f47ae, rule-management-workflow.mdc:15-26 separates two sources: keryx's shipped rules are edited in src/gdskills/bundled/rules/core/*.mdc (installed to .metaproject/rules/core), and a project's own instructions go in the root AGENTS.md/CLAUDE.md, imported with keryx rules sync/distill. It states 'A project-owned rule never lives under `.metaproject/rules/core/`'. Mandatory Behavior :37-40 agrees. No line names .metaproject/rules/core as a tree to edit. The bundled and installed copies are byte-identical (cmp).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r02#L-008",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 2db34d71 (T27); the cross-platform test was added in dca9bcb0 (T31). bun scratchpad/gate256/install-check.ts against the 958f47ae copy: case l008-readonly-dir-unmodified (darwin: first install, then the unmodified shipped blob, then chmod 555 rules/core, then install) gives ok:true, the file kept, and the warning '...matches a shipped version but could not be removed (EACCES) - delete it by hand'. Case l008-injected-unlink-failure, using the exported removeUnmodifiedRetiredRules with an unlink that throws EACCES, gives outcome {action: kept-error, stage: unlink} and the same wording. The control case l008-read-failure-control (chmod 000) still says 'could not be read (EACCES)'. At 0cdc36d1 the removal failure was reported as 'could not be read'.",
+      "verifier": "review-verifier"
+    }
+  ],
+  "stats": { "confirmed": 0, "refuted": 4, "unverifiable": 0, "not_checked": 5 }
+}

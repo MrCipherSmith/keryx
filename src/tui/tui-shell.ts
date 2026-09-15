@@ -74,7 +74,7 @@ import { isMcpToolsCommand, openMcpTools } from "./mcp-inspector";
 import {
   buildConsumerModel,
   isMcpConsumerCommand,
-  renderConsumerLines,
+  openMcpConsumer,
 } from "./mcp-consumer";
 import { projectConfigFile, userConfigFile } from "../mcp-servers/store";
 import {
@@ -119,9 +119,11 @@ import { openThemePicker } from "./theme-picker";
 import { openGamesModal } from "./games";
 import { mountBalancePanel } from "./balance-panel";
 import type { DetectedProvider } from "../commands/select";
+import type { ModelsFailure, ModelsResolveResult } from "../commands/providers";
 import {
   MODELS_FETCH_TIMEOUT_MS,
   fetchOpenAiCompatModelsDetailed,
+  modelsFailureLine,
   providerByName,
   resolveModelsForPicker,
 } from "../commands/providers";
@@ -134,7 +136,7 @@ import { catalogAllows, catalogMethods, deviceCodeMethodLabel } from "../lib/oau
 import { applyOAuthAccessToEnv, oauthAccessToken } from "../lib/oauth/grants";
 import { loginDeviceCode } from "../lib/oauth/login";
 import { openVerificationUrl } from "../lib/oauth/open-url";
-import { noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
+import { loadShellConfig, noteSavedCredentialEnv, saveApiKey, saveProviderBaseUrl, saveShellConfig } from "../lib/shell-config";
 import { saveCustomCompatProvider } from "../lib/provider-config";
 import {
   allowShellPattern,
@@ -360,6 +362,14 @@ export interface SelectProviderModelOptions {
   fetch?: typeof fetch;
   /** Test/injected environment for env-key checks; defaults to process.env. */
   env?: Record<string, string | undefined>;
+  /**
+   * Config directory the wizard persists into (base URL, API key). Defaults to
+   * the operator's real one. Threaded so a test of this wizard cannot write to
+   * the machine running it — `keryxConfigDir` only honours `XDG_DATA_HOME` on
+   * Linux, so an env-var-only seam would still hit `~/.local/share/keryx` on a
+   * developer's Mac.
+   */
+  configDir?: string;
 }
 
 /**
@@ -1488,12 +1498,28 @@ export async function searchProviderWizardInTui(
   }
 }
 
-/** Ask for a local provider endpoint, keeping its configured value editable. */
-function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: string): Promise<string | undefined> {
+/**
+ * Ask for a local provider endpoint, keeping its configured value editable.
+ *
+ * `notice` is set only on the retry, after a probe of this endpoint already
+ * failed: same shape as `promptApiKeyStep`'s, and for the same reason — the
+ * operator is being asked a second time and deserves the provider's own words
+ * for why.
+ */
+function promptBaseUrlStep(
+  otui: OpenTui,
+  r: Renderer,
+  label: string,
+  baseUrl: string,
+  notice?: string,
+): Promise<string | undefined> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "base-url-picker");
     r.root.add(box);
   box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    if (notice !== undefined) {
+      box.add(new otui.TextRenderable(r, { id: "bp-notice", content: otui.t`${otui.red("✗")} ${notice}`, marginTop: 1 }));
+    }
     box.add(new otui.TextRenderable(r, { id: "bp-note", content: otui.t`${otui.dim("Edit host and port before discovering models")}`, marginTop: 1 }));
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
@@ -1511,11 +1537,15 @@ function promptBaseUrlStep(otui: OpenTui, r: Renderer, label: string, baseUrl: s
  * a key); Esc → `back` (return to the previous step). Absolute overlay; removes its
  * key handler on close.
  */
-function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; envKey: string; placeholder?: string }): Promise<KeyStepResult> {
+function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; envKey: string; placeholder?: string; notice?: string }): Promise<KeyStepResult> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "key-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "kp-title", content: otui.t`${otui.bold(`Paste your ${opts.label} API key`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    if (opts.notice !== undefined) {
+      // Why they are being asked again, in the provider's own words.
+      box.add(new otui.TextRenderable(r, { id: "kp-notice", content: otui.t`${otui.red("✗")} ${opts.notice}`, marginTop: 1 }));
+    }
     box.add(
       new otui.TextRenderable(r, {
         id: "kp-note",
@@ -1594,7 +1624,7 @@ function pickAuthMethodStep(
   });
 }
 
-function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Promise<boolean> {
+function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string, dir?: string): Promise<boolean> {
   return new Promise((resolve) => {
     const box = overlayBox(otui, r, "device-login");
     r.root.add(box);
@@ -1622,6 +1652,7 @@ function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Prom
       provider,
       fetch: (input, init) => globalThis.fetch(input, init),
       signal: controller.signal,
+      ...(dir !== undefined ? { dir } : {}),
       onChallenge: (challenge) => {
         status.content = otui.t`${otui.bold(challenge.userCode)}\n${otui.dim(challenge.verificationUri)}\n${otui.dim("Open that URL on any device and enter the code. Waiting for authorization…")}`;
         openVerificationUrl(challenge.verificationUriComplete ?? challenge.verificationUri);
@@ -1652,9 +1683,50 @@ function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string): Prom
  * the provider is OpenAI-compat (network available + optional Bearer key);
  * curated registry list is offline/401 fallback only.
  */
-export async function modelsForPicker(prov: DetectedProvider): Promise<string[]> {
-  const result = await resolveModelsForPicker(globalThis.fetch, prov, process.env);
-  return result.models;
+export async function modelsForPicker(
+  prov: DetectedProvider,
+  deps: { fetch?: typeof fetch; env?: Record<string, string | undefined> } = {},
+): Promise<ModelsResolveResult> {
+  return await resolveModelsForPicker(deps.fetch ?? globalThis.fetch, prov, deps.env ?? process.env);
+}
+
+/**
+ * Is this empty model list plausibly the endpoint's fault, rather than the
+ * credential's or the provider's?
+ *
+ * A typo'd base URL reaches the picker as `unreachable` (DNS, TLS, timeout —
+ * nothing answered at all) or as `http` (something answered, but not a model
+ * list: a wrong host, or a path that is not this provider's). Both are worth
+ * re-opening the endpoint step for.
+ *
+ * The other two kinds deliberately are not. `rejected` is the credential's
+ * business — the endpoint was found and it spoke, it just refused the key — and
+ * the picker fixes that by asking for the key instead. `empty` means the
+ * endpoint was correct and answered honestly that it has no models; re-asking
+ * for a URL there sends the operator hunting a fault that is not theirs.
+ *
+ * Pure and exported so the decision is asserted without a terminal, the same
+ * way `modelsFailureLine` makes the wording testable.
+ *
+ * Declared as a type guard because a `true` answer necessarily means there IS
+ * a failure — the caller needs exactly that to hand it to `modelsFailureLine`
+ * for the notice.
+ */
+export function endpointMayBeAtFault(failure: ModelsFailure | undefined): failure is ModelsFailure {
+  return failure?.kind === "unreachable" || failure?.kind === "http";
+}
+
+/**
+ * The line the model picker shows when the list is empty.
+ *
+ * `undefined` when there are models, or when the emptiness carries no
+ * explanation (an offline `fake`/`ollama` entry that never probed).
+ */
+export function modelPickerNotice(label: string, result: ModelsResolveResult): string | undefined {
+  if (result.models.length > 0 || result.failure === undefined) {
+    return undefined;
+  }
+  return modelsFailureLine(label, result.failure);
 }
 
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
@@ -1778,55 +1850,125 @@ export function selectProviderModelInTui(
         }
 
         // `/connect` only switches: never edit the endpoint or collect a key.
-        const selectedBaseUrl =
-          options.onlyConnected || prov.baseUrl === undefined
+        // Copilot's API host comes from the token exchange (`endpoints.api`),
+        // not from typing api.githubcopilot.com — that origin 404s on /v1/models.
+        const lockDiscoveredHost = prov.name === "github-copilot";
+        let selectedBaseUrl =
+          options.onlyConnected || prov.baseUrl === undefined || lockDiscoveredHost
             ? prov.baseUrl
             : await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl);
-        if (!options.onlyConnected && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
+        if (!options.onlyConnected && !lockDiscoveredHost && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
           continue;
         }
-        if (!options.onlyConnected && selectedBaseUrl !== undefined) saveProviderBaseUrl(prov.name, selectedBaseUrl);
-        const selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
+        if (!options.onlyConnected && !lockDiscoveredHost && selectedBaseUrl !== undefined) {
+          saveProviderBaseUrl(prov.name, selectedBaseUrl, options.configDir);
+        }
+        let selectedProvider = selectedBaseUrl === undefined ? prov : { ...prov, baseUrl: selectedBaseUrl };
 
         const envKey = prov.envKey;
-        if (!options.onlyConnected && envKey !== undefined) {
-          const existingKey = process.env[envKey];
-          const hasOauth = oauthAccessToken(prov.name) !== undefined;
-          if ((existingKey === undefined || existingKey.length === 0) && !hasOauth) {
-            const offered: AuthMethodChoice[] = [];
-            if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
-            if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
-            let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
-            if (offered.length > 1) {
-              method = await pickAuthMethodStep(otui, r, prov.label ?? prov.name, offered);
-              if (method === undefined) {
-                continue;
-              }
-            }
-            if (method === "device-code") {
-              const ok = await runDeviceLoginInTui(otui, r, prov.name);
-              if (!ok) {
-                continue;
-              }
-            } else {
-              const kr = await promptApiKeyStep(otui, r, { label: prov.label ?? prov.name, envKey });
-              if (kr.kind === "back") {
-                continue; // Esc at the key step → re-pick the provider
-              }
-              if (kr.kind === "key") {
-                process.env[envKey] = kr.value;
-                // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
-                noteSavedCredentialEnv([envKey]);
-                saveApiKey(envKey, kr.value); // persist (0600), opencode-style
-              }
-              // kind === "skip" → proceed without a key (curated fallback models)
+        const label = prov.label ?? prov.name;
+
+        /**
+         * The credential step. `notice` is set only on the retry, where the
+         * provider has already refused what we hold: a value in `env` is then
+         * proof of nothing, so the "we already have one" shortcut is skipped
+         * and the operator finally gets asked.
+         */
+        const collectCredential = async (notice?: string): Promise<"ok" | "back"> => {
+          if (options.onlyConnected || envKey === undefined) {
+            return "ok";
+          }
+          if (notice === undefined) {
+            const existingKey = (options.env ?? process.env)[envKey];
+            const hasOauth = oauthAccessToken(prov.name, options.configDir) !== undefined;
+            if ((existingKey !== undefined && existingKey.length > 0) || hasOauth) {
+              return "ok";
             }
           }
+          const offered: AuthMethodChoice[] = [];
+          if (catalogAllows(prov.name, "device-code")) offered.push("device-code");
+          if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
+          let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
+          if (offered.length > 1) {
+            method = await pickAuthMethodStep(otui, r, label, offered);
+            if (method === undefined) {
+              return "back";
+            }
+          }
+          if (method === "device-code") {
+            if (!(await runDeviceLoginInTui(otui, r, prov.name, options.configDir))) {
+              return "back";
+            }
+            const saved = loadShellConfig(options.configDir).baseUrls?.[prov.name];
+            if (typeof saved === "string" && saved.length > 0) {
+              selectedBaseUrl = saved;
+              selectedProvider = { ...prov, baseUrl: saved };
+            }
+            return "ok";
+          }
+          const kr = await promptApiKeyStep(otui, r, {
+            label,
+            envKey,
+            ...(notice === undefined ? {} : { notice }),
+          });
+          if (kr.kind === "back") {
+            return "back"; // Esc at the key step → re-pick the provider
+          }
+          if (kr.kind === "key") {
+            process.env[envKey] = kr.value;
+            // Set here, not exported by the operator: `shell_exec` withholds it (K-015).
+            noteSavedCredentialEnv([envKey]);
+            saveApiKey(envKey, kr.value, options.configDir); // persist (0600), opencode-style
+          }
+          // kind === "skip" → proceed without a key (curated fallback models)
+          return "ok";
+        };
+
+        if ((await collectCredential()) === "back") {
+          continue;
         }
 
+        const modelDeps = {
+          ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+          ...(options.env === undefined ? {} : { env: options.env }),
+        };
         // Fetch AFTER key is available so live GET /models can authenticate.
-        const models = await modelsForPicker(selectedProvider);
-        const model = await pickModelInTui(otui, r, models);
+        let models = await modelsForPicker(selectedProvider, modelDeps);
+        // A refused credential is the one failure that is fixable from right
+        // here, and the old code could not offer the fix: the dead value in
+        // `env` was itself the reason the key step never ran, so an expired
+        // grok login produced an empty model list and no way out of it.
+        if (models.failure?.kind === "rejected") {
+          if ((await collectCredential(modelsFailureLine(label, models.failure))) === "back") {
+            continue;
+          }
+          models = await modelsForPicker(selectedProvider, modelDeps);
+        }
+        // The endpoint is the other failure fixable from right here — see
+        // `endpointMayBeAtFault` for which kinds re-open the URL step and why.
+        if (
+          !options.onlyConnected
+          && selectedProvider.baseUrl !== undefined
+          && endpointMayBeAtFault(models.failure)
+        ) {
+          const corrected = await promptBaseUrlStep(
+            otui,
+            r,
+            label,
+            selectedProvider.baseUrl,
+            modelsFailureLine(label, models.failure),
+          );
+          if (corrected === undefined) {
+            continue; // Esc at the endpoint step → re-pick the provider
+          }
+          if (corrected !== selectedProvider.baseUrl) {
+            saveProviderBaseUrl(prov.name, corrected, options.configDir);
+            selectedBaseUrl = corrected;
+            selectedProvider = { ...prov, baseUrl: corrected };
+            models = await modelsForPicker(selectedProvider, modelDeps);
+          }
+        }
+        const model = await pickModelInTui(otui, r, models.models, modelPickerNotice(label, models));
         if (model === undefined) {
           continue; // Esc at the model step → re-pick the provider
         }
@@ -1859,14 +2001,26 @@ export function adaptiveSelectHeight(count: number, available: number, per = 1):
  * and Backspace edit a live filter over the (potentially large) model list. Resolves
  * the chosen model, or `undefined` on Esc / no match. Removes its key handler on close.
  * Exported since flow 112: chat's `/models` opens this same picker.
+ *
+ * `notice` is the reason the list is empty. Without it the picker said
+ * "(no models found)" to an operator whose token had expired, which reads as
+ * "this provider has no models" — the one thing it did not mean.
  */
-export function pickModelInTui(otui: OpenTui, r: Renderer, models: string[]): Promise<string | undefined> {
+export function pickModelInTui(
+  otui: OpenTui,
+  r: Renderer,
+  models: string[],
+  notice?: string,
+): Promise<string | undefined> {
   return new Promise((resolve) => {
     const all = models;
-    const NO_MODELS = "(no models found)";
+    const NO_MODELS = notice ?? "(no models found)";
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
+    if (all.length === 0 && notice !== undefined) {
+      box.add(new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${otui.red("✗")} ${notice}` }));
+    }
     const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to go back")}` });
     box.add(filterLine);
     const NO_MATCH = "(no match)";
@@ -3601,22 +3755,33 @@ export async function launchTuiAgentShell(opts: {
      * anything, so it never creates the runtime.
      */
     const showMcpConsumer = (): void => {
-      const runtime = deps.mcpRuntime?.();
       const cwd = inspectorCwd();
-      const model =
-        runtime === undefined
-          ? undefined
-          : buildConsumerModel({
-              configured: runtime.configured(),
-              states: runtime.servers(),
-              problems: runtime.problems(),
-              userFile: userConfigFile(),
-              projectFile: projectConfigFile(cwd),
-            });
-      const lines = renderConsumerLines(model);
-      for (const line of lines) {
-        transcript.add(new otui.TextRenderable(r, { id: `mcp${uid++}`, content: otui.t`${otui.dim(line)}` }));
-      }
+      const snapshot = () => {
+        const live = deps.mcpRuntime?.();
+        if (live === undefined) return undefined;
+        return buildConsumerModel({
+          configured: live.configured(),
+          states: live.servers(),
+          problems: live.problems(),
+          userFile: userConfigFile(),
+          projectFile: projectConfigFile(cwd),
+        });
+      };
+      openMcpConsumer(otui, chrome, {
+        snapshot,
+        connect: async (name) => {
+          const live = deps.mcpRuntime?.();
+          if (live === undefined) return { ok: false, message: "No MCP session yet" };
+          return live.connectServer(name);
+        },
+        disconnect: async (name) => {
+          const live = deps.mcpRuntime?.();
+          if (live === undefined) return { ok: false, message: "No MCP session yet" };
+          return live.disconnectServer(name);
+        },
+        renderer: r,
+        ...inspectorKeys,
+      });
     };
 
     const showTools = (): void => {
@@ -4722,8 +4887,12 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const prov = detected.find((d) => d.name === currentSel.provider);
             // Registered providers fetch their live, filterable list; others use detected.
-            const models = prov !== undefined ? await modelsForPicker(prov) : [];
-            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models));
+            const models = prov !== undefined ? await modelsForPicker(prov) : undefined;
+            const notice =
+              prov === undefined || models === undefined
+                ? undefined
+                : modelPickerNotice(prov.label ?? prov.name, models);
+            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models?.models ?? [], notice));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined

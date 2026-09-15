@@ -9,11 +9,10 @@ description: |
   (use review-security-code for XSS/injection/auth-bypass), or performance profiling
   (use review-performance).
 triggers:
-  - "review backend"
   - "backend review"
-  - "review API"
+  - "api review"
+  - "service review"
   - "review NestJS"
-  - "review --backend"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

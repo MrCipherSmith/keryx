@@ -110,9 +110,15 @@ test("AC14: the bundled skill and its .metaproject mirror are byte-identical", (
     const bundled = path.join(SKILL_ROOTS[0] as string, skill);
     const mirror = path.join(SKILL_ROOTS[1] as string, skill);
     const names = readdirSync(bundled).filter((name) => name.startsWith("SKILL") && name.endsWith(".md"));
-    expect(names.length).toBeGreaterThan(0);
+    // SKILL.md at minimum; since flow 257 these three ship no harness builds.
+    expect(names).toContain("SKILL.md");
     for (const name of names) {
       expect(read(path.join(mirror, name))).toBe(read(path.join(bundled, name)));
     }
+    // The other direction: the mirror carries no SKILL*.md the bundle dropped.
+    // A stale SKILL.<runtime>.md left there would be preferred by a runtime
+    // export over the current SKILL.md, so "same files" is part of "identical".
+    const mirrorNames = readdirSync(mirror).filter((name) => name.startsWith("SKILL") && name.endsWith(".md"));
+    expect(mirrorNames.sort()).toEqual([...names].sort());
   }
 });

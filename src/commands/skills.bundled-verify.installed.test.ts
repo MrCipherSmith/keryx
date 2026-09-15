@@ -29,7 +29,23 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, write
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { bundledSkillFiles, defaultBundledRoot } from "../gdskills/bundled-eval";
+
 const REPO_ROOT = path.resolve(import.meta.dir, "..", "..");
+
+// Counted from the repository's own bundled tree rather than written as a
+// literal. Three separate pins of this number went stale inside one flow, each
+// found as a red suite rather than as an intended change — a count nobody can
+// remember to update measures the author's memory, not the tree.
+//
+// It is not tautological. This side counts files in the REPOSITORY; the
+// assertion checks it against what the INSTALLED copy evaluated, and the
+// installed copy is a separately built tree with a different layout — which is
+// the whole reason this second guard exists. A package that ships fewer skills
+// than the repo holds still fails here, which is the defect of 2026-08-31 in
+// its general form. Catalog length would be the wrong source: it counts 82
+// entries, eleven of them rendered on the fly with no SKILL.md to evaluate.
+const SHIPPED_SKILLS = bundledSkillFiles(defaultBundledRoot()).length;
 
 const MANIFEST = JSON.parse(readFileSync(path.join(REPO_ROOT, "package.json"), "utf8")) as {
   bin: Record<string, string>;
@@ -161,7 +177,7 @@ describe("keryx skills verify --bundled, from an installed copy", () => {
       // The regression, stated as the assertion that catches it.
       expect(result.out).not.toContain("skills_evaluated: 0");
       expect(result.out).not.toContain("NOTHING WAS EVALUATED");
-      expect(result.out).toContain("skills_evaluated: 67");
+      expect(result.out).toContain(`skills_evaluated: ${SHIPPED_SKILLS}`);
       expect(result.out).toContain("findings: 0");
       expect(result.code).toBe(0);
 
@@ -183,7 +199,7 @@ describe("keryx skills verify --bundled, from an installed copy", () => {
       const result = await runInstalled(root, ["skills", "verify", "--bundled", "--json"]);
       expect(result.code).toBe(0);
       const parsed = JSON.parse(result.out) as { skills: number; documents: number };
-      expect(parsed.skills).toBe(67);
+      expect(parsed.skills).toBe(SHIPPED_SKILLS);
       expect(parsed.documents).toBeGreaterThan(parsed.skills);
     } finally {
       rmSync(root, { recursive: true, force: true });

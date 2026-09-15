@@ -12,8 +12,8 @@ description: |
 triggers:
   - "verify findings"
   - "review --verify"
-  - "check these findings"
   - "verification pass"
+  - "check these findings"
 metadata:
   author: "MrCipherSmith"
   version: "1.1.0"

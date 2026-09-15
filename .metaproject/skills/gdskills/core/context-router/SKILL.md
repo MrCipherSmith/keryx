@@ -13,7 +13,6 @@ Choose between gdgraph, gdctx, gdwiki, memory, health, and project-skills before
 
 - find files
 - understand code
-- collect context
 - what should I inspect
 - agent routing
 

@@ -1,0 +1,22 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "Independent post-fix verification of the 2 round-3 findings at or above minor, at the PR #533 head 958f47aeecb2c0f389b406417a416ff60569b86d (squash-merged as 56934fe2). This verifier did not raise either of them; the raiser was review-architecture. The boundary-commit snippets were extracted verbatim from the 958f47ae copy and run only in throwaway repos under scratchpad/gate256/repos. 2 checked: 1 execution, 1 execution plus site-check; 2 refuted. C-017 (info) was not checked, by design.",
+  "verifications": [
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r03#C-015",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 8420d553 (T29), with the path-quoting placeholder from 98641bcf (T30 N-1). scratchpad/gate256/run.sh extracts the flow-orchestrator 'Task boundary commit, after every accepted worker result' bash block verbatim at 958f47ae, substitutes only the placeholders, stubs keryx, and runs it in fresh git repos under bash and zsh with identical results. s2 (the worker already committed a.txt, the default auto_commit=true path) prints 'boundary commit: nothing left to commit, skipped' and exits 0 with 0 commits; at cb4175a3 git commit exited 1. s3 (empty changed_files) skips and exits 0. s1 (auto-commit off, M+A+D) exits 0 with one commit 'M a.txt D del.txt A new.txt'. s4 (quoted paths with spaces) commits both. s5 leaves another lane's staged other.txt staged. s8 commits only the leftover new.txt. `<worktree_path>` is defined at flow-orchestrator SKILL.md:324-330 and pinned in the dispatch constraint at :359. The bundled and installed copies are byte-identical.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program-r03#C-016",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 8420d553 (T29). Site-check at 958f47ae: the job-orchestrator Step B Workspace block now carries `- auto_commit: <implementer_settings.auto_commit>` (:829) under 'Automation (task-implementer input `automation`)', and the response line reads 'Commits: none (auto_commit=false)' when it is off (:834). keryx ctx rg counts 3 matches in each of SKILL.md, SKILL.codex.md, SKILL.cursor.md, SKILL.zed.md and SKILL.opencode.md, and all 5 mirrors are byte-identical. Execution: run.sh on the job-orchestrator block ('Task boundary commit, for every accepted result') under bash and zsh. In s2 (worker committed) it skips and exits 0; at cb4175a3 this exited 1 with 'nothing to commit'. In s1 it commits exactly the reported paths and exits 0.",
+      "verifier": "review-verifier"
+    }
+  ],
+  "stats": { "confirmed": 0, "refuted": 2, "unverifiable": 0, "not_checked": 1 }
+}

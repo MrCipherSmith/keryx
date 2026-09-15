@@ -1,19 +1,14 @@
 ---
 name: job-orchestrator
-description: "Use when a GitHub issue or complex intent needs to be analyzed, planned, and implemented end-to-end with sub-agents."
+description: "Use when a GitHub issue or complex intent needs to be analyzed, planned, and implemented end-to-end with sub-agents. NOT for: the same pipeline under Task Manager flow state (use flow-orchestrator)."
 triggers:
-  - "Implement issue"
+  - "implement issue"
+  - "full workflow"
+  - "orchestrate task"
   - "Issue to PR"
-  - "Orchestrate"
   - "Run pipeline"
   - "Analyze and implement"
   - "Full implementation"
-  - "Full review"
-  - "Полное ревью"
-  - "Review my code"
-  - "Analyze branch"
-  - "Review via orchestrator"
-  - "Orchestrated review"
   - "Auto-implement"
   - "Auto-implement issue"
   - "Orchestrate issue"
@@ -2126,6 +2121,25 @@ wrong, cannot be undone by trying again.
   resumes into a state that never existed.
 - **Ask for the project directory in Phase 0.** There is no default. A wrong
   guess writes a job package into somebody else's repository.
+
+---
+
+## Red Flags
+
+The two callouts above ("the result looks fine without a status line", "the
+subagent can read `state.json` itself") are the two this orchestrator gets wrong
+most often. These are the rest. Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The worker returned `STATUS: DONE`, so the task is verified." | `DONE` is the worker's report that it finished its own task, self-check included. The gate is step 2.8: `code-verifier` over the wave's whole diff. A task can be individually DONE and still break the build the moment it meets the other tasks in the wave. |
+| "The user is right here — I'll just ask which option they prefer." | Between Phase 0 and completion there are exactly two reasons to ask: a critical failure, and extending the plan from analyze to implement. Everything else was settled in Phase 0. A mid-run question turns an autonomous run into a session the user has to babysit. |
+| "`git checkout -b` is simpler than setting up a worktree for this one." | It switches the user's own working directory out from under their live session, mid-run. This is in the "unrecoverable if wrong" list: `git worktree add`, always, and every later command runs inside that worktree. |
+| "I know this step completed — recording it through `keryx job` is bookkeeping." | The package IS the state. `keryx job` is the only writer of `state.json`, and a resumed session knows only what it reads there. A step held in this session's head did not happen as far as the next session is concerned. |
+| "The subagent will work better with the full analysis JSON, so I'll paste it in." | The minimality principle: each subagent type gets its scoped slice. Extra context does not add capability; it fills the window with material the worker must first decide is irrelevant, and raises the odds it invents something from it. |
+| "This step failed twice — one more attempt with a sharper prompt should do it." | The retry protocol is one retry with the EXACT same prompt plus the error list; a second failure escalates to the user. Re-deriving the prompt causes drift, and the drifted attempt no longer tests the same thing. |
+| "The branch is ready and the PR is the obvious next step, so I'll push." | Do not push until the user confirms, unless `auto_create_pr` is set. A push is visible to everyone watching the repository, and there is no un-push they will not see. |
+| "The job finished cleanly, so the report can be short." | Say where the job package is, every time. It is the only durable record of the run; a user who cannot find it is left with a summary and nothing to check it against. |
 
 ---
 

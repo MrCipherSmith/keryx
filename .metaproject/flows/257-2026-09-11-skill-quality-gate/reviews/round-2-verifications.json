@@ -1,0 +1,28 @@
+{
+  "status": "DONE",
+  "verifier": "round-3",
+  "summary": "3 round-2 findings re-checked AT THE FIX (d09f28d0, commit 953f1c35) by the round-3 reviewer, which raised none of them: 3 execution, 0 site-check, 0 reasoning; 3 refuted, 0 confirmed, 0 unverifiable. `refuted` is the post-fix reading the gate asks for — the reviewer looked for each finding at this head and it no longer reproduces; all three were real at 7ee6a712, which is what their acted-on dispositions record. Round 3 separately found that the replacement text for R2-m1 carries a further wrong inference; that is its own finding (R3-m3), not a refutation of this one.",
+  "verifications": [
+    {
+      "finding": "R2-m1",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "Checked at d09f28d0, the tree that carries 953f1c35 and bbd6e7ce, which is where this finding was fixed. An independent script replicating PATH_REFERENCE with docs/ added, run over the whole bundled tree, finds exactly 17 distinct docs/ paths: 10 absent and 7 present at the repository root — so the old text, which claimed none exists, was wrong for seven of them. The six named autodoc outputs are all in the absent set. The load-bearing measurement was re-checked: package.json files lists dist, docs/requirements/shared-agent-context/schemas, src/gdgraph, src/gdskills/bundled, src/gdskills/contracts and others, and does not publish docs/skills/."
+    },
+    {
+      "finding": "R2-m2",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "Checked at d09f28d0, the tree that carries 953f1c35, which is where this finding was fixed. keryx update run on a scratch project holding one removable build and one symlinked build prints exactly one Notices line and one Warnings line, in that order; a second fixture with only a symlink prints no Notices heading at all. Mutating away the severity === \"warning\" filter in a scratch copy turns 3 tests red, so the split is asserted rather than incidental. keryx ctx rg for installGdskills( finds three command call sites, all updated, and InstallGdskillsResult is never serialised, so no schema version is owed."
+    },
+    {
+      "finding": "R2-m3",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-3",
+      "evidence": "Checked at d09f28d0, the tree that carries 953f1c35 and bbd6e7ce, which is where this finding was fixed. Three independent mutations of a scratch copy: changing one word of the rule's blockquote turns the assertion red; renaming the Length Ceilings heading makes the helper throw; deleting the blockquote makes it throw. The whitespace collapse is /\\s+/g to a single space only — the rule wraps the quote over five lines and the message is one line, so nothing that carries meaning is normalised away."
+    }
+  ]
+}

@@ -7,17 +7,82 @@
   "id": "256",
   "slug": "skills-hygiene",
   "title": "Skills and rules hygiene: duplicates, contradictions, dead references, metadata drift",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-11T16:54:12.310Z",
-  "updatedAt": "2026-09-11T20:22:28.057Z",
+  "updatedAt": "2026-09-11T20:55:24.641Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1d78e3f2d0b220c5a5f374eea1c6b0d4052b3a3b39012f567ad2104544862345",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-11T20:36:36.644Z",
+      "note": "review-agent-profile.mdc and review-strict-profile.mdc deleted from bundled and installed rules (72a850b0); keryx ctx rg finds no reference outside flow history (T5 report, round-1 site checks)."
+    },
+    "AC2": {
+      "at": "2026-09-11T20:36:36.761Z",
+      "note": "Install removes an unmodified retired copy and keeps/reports a modified one: install.test.ts (fixtures for every shipped hash, CRLF/BOM, dir/symlink/FIFO/oversized/unreadable/read-only), update/init/skills-install command tests (T6, T19, T23, T27); the removal-failure branch is tested on every platform through an injected unlink (T31); closure verified by execution in rounds 2-3."
+    },
+    "AC3": {
+      "at": "2026-09-11T20:36:36.889Z",
+      "note": "review-orchestrator input contract, review-context and reviewer-input schemas and templates carry only ask|adaptive and the keryx review tier model block (72a850b0, T20); round-2 closure: retired strategies appear only in the sentence recording their removal."
+    },
+    "AC4": {
+      "at": "2026-09-11T20:36:37.023Z",
+      "note": "code-verifier, test-gen, tests-creator (all builds) run keryx health run / keryx test run, no npx/cat|grep/find invocations, fix-loop bound 3 (T7); round-1 content pass confirmed."
+    },
+    "AC5": {
+      "at": "2026-09-11T20:36:37.156Z",
+      "note": "job-orchestrator writes <job>/ai/context.md; keryx ctx rg finds no context_v in the bundled tree (T8)."
+    },
+    "AC6": {
+      "at": "2026-09-11T20:36:37.271Z",
+      "note": "Dead references removed across 47 skills and 3 rules (T9) and the stricter xref found and fixed more (T10); round-1 content pass: no banned pattern remains outside valid installed paths."
+    },
+    "AC7": {
+      "at": "2026-09-11T20:36:37.388Z",
+      "note": "bundled-eval xref:path resolves against the installed layout and sweeps rules; bundled-eval.test.ts SOURCE_TREE_ONLY_SKILL and BROKEN_RULE fixtures (T10); mutation M11/M14 killed in round 1."
+    },
+    "AC8": {
+      "at": "2026-09-11T20:36:37.505Z",
+      "note": "frontmatter:harness-claude and frontmatter:category checks with fixtures (T11); skills verify --bundled 0 findings; mutations M17/M20 killed."
+    },
+    "AC9": {
+      "at": "2026-09-11T20:36:37.621Z",
+      "note": "11 rendered descriptions are situation triggers (T12, catalog.ts descriptionOverride); skills-route test bans 'Use when <imperative>'; catalog-frontmatter.test.ts YAML round-trip; routing-baseline, skills-route, trigger-reachability green."
+    },
+    "AC10": {
+      "at": "2026-09-11T20:36:37.735Z",
+      "note": "Heading-only entrypoint body takes the fallback (templates.ts isHeadingOnlyBody, T13); templates.test.ts covers heading-only, real content and plain-instruction first line (T23)."
+    },
+    "AC11": {
+      "at": "2026-09-11T20:36:37.854Z",
+      "note": "Unhandled-rejection rule stated once (async-patterns, error-handling cross-references); documentation rules defer to requirements-package-standard, plan locations agree with feature-analyzer (T14, T18, T21); skill-lifecycle uses keryx review tier --findings 1 --diff-lines 0 (verified light)."
+    },
+    "AC12": {
+      "at": "2026-09-11T20:36:37.989Z",
+      "note": "git-concurrency.mdc shipped and installed; cited by flow-, job-orchestrator and task-implementer; destructive-git.test.ts fails a skill instructing git stash or git add -A (T15; mutations M33/M34 killed); orchestrator boundary commit verified in throwaway repos (T29, T30)."
+    },
+    "AC13": {
+      "at": "2026-09-11T20:36:38.130Z",
+      "note": "Eight stack rules declare stack_requires in the detector vocabulary incl. new playwright/sql/http-server tags (T16); rules README states on-demand loading and that alwaysApply/globs are not read; stack.test.ts and templates.test.ts pin both (T23)."
+    },
+    "AC14": {
+      "at": "2026-09-11T20:36:38.245Z",
+      "note": "entity-skill-verifier and skill-lifecycle describe only what verify.ts checks; project-skill footer points at verification.md (T17, T21); skills-route AC14 test and project-skills footer test."
+    },
+    "AC15": {
+      "at": "2026-09-11T20:36:38.362Z",
+      "note": "Baseline 9335/20/0. T28 at cb4175a3: skills verify --bundled exit 0, rules mirror identical, tsc 0, eslint clean, full suite 9477 pass/20 skip/0 fail in two runs (one load-dependent src/sac flake in a third run, unrelated, tracked separately). CI green on PR #533."
+    },
+    "AC16": {
+      "at": "2026-09-11T20:36:38.474Z",
+      "note": "Review rounds 1-3 (reviews/round-*-report.md, ingested) plus the user-approved T30 closure check: zero open blocker/major/minor; remaining items are info."
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/533"
   },
   "baseBranch": "main",
   "tasks": [
@@ -760,6 +825,29 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T31",
+      "title": "CI: removal-failure test depended on macOS cp semantics; test the unlink-failure branch through an injected unlink, keep the read-only-dir case macOS-only",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T30"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-11T20:28:21.288Z",
+            "outcome": "started",
+            "detail": "PR #533 typecheck-and-tests failed on Linux: Bun fs.cp(force) unlinks every destination, so a read-only rules/core aborts the bulk rule copy (install.ts:127) before the retired-rule cleanup; the T27 test's premise holds only on macOS"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -1265,6 +1353,130 @@
       "at": "2026-09-11T20:22:28.057Z",
       "event": "renumbered",
       "detail": "252 -> 256: Flow id 252 collided after merging main: 252-mcp-servers-p3b (PR #531) was renumbered 250 -> 252 onto main at 19:42 while this flow, created at 16:54 on skills/quality-program, already held 252. This branch lands later, so it takes the next free id; 253-255 of this program do not collide."
+    },
+    {
+      "at": "2026-09-11T20:28:21.176Z",
+      "event": "task-added",
+      "detail": "T31: CI: removal-failure test depended on macOS cp semantics; test the unlink-failure branch through an injected unlink, keep the read-only-dir case macOS-only"
+    },
+    {
+      "at": "2026-09-11T20:28:21.288Z",
+      "event": "task-attempt",
+      "detail": "T31: started (attempt 1) — PR #533 typecheck-and-tests failed on Linux: Bun fs.cp(force) unlinks every destination, so a read-only rules/core aborts the bulk rule copy (install.ts:127) before the retired-rule cleanup; the T27 test's premise holds only on macOS"
+    },
+    {
+      "at": "2026-09-11T20:30:27.125Z",
+      "event": "task-done",
+      "detail": "T31: CI: removal-failure test depended on macOS cp semantics; test the unlink-failure branch through an injected unlink, keep the read-only-dir case macOS-only"
+    },
+    {
+      "at": "2026-09-11T20:36:36.476Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/533 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-11T20:36:36.644Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: review-agent-profile.mdc and review-strict-profile.mdc deleted from bundled and installed rules (72a850b0); keryx ctx rg finds no reference outside flow history (T5 report, round-1 site checks)."
+    },
+    {
+      "at": "2026-09-11T20:36:36.761Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: Install removes an unmodified retired copy and keeps/reports a modified one: install.test.ts (fixtures for every shipped hash, CRLF/BOM, dir/symlink/FIFO/oversized/unreadable/read-only), update/init/skills-install command tests (T6, T19, T23, T27); the removal-failure branch is tested on every platform through an injected unlink (T31); closure verified by execution in rounds 2-3."
+    },
+    {
+      "at": "2026-09-11T20:36:36.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: review-orchestrator input contract, review-context and reviewer-input schemas and templates carry only ask|adaptive and the keryx review tier model block (72a850b0, T20); round-2 closure: retired strategies appear only in the sentence recording their removal."
+    },
+    {
+      "at": "2026-09-11T20:36:37.023Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: code-verifier, test-gen, tests-creator (all builds) run keryx health run / keryx test run, no npx/cat|grep/find invocations, fix-loop bound 3 (T7); round-1 content pass confirmed."
+    },
+    {
+      "at": "2026-09-11T20:36:37.156Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: job-orchestrator writes <job>/ai/context.md; keryx ctx rg finds no context_v in the bundled tree (T8)."
+    },
+    {
+      "at": "2026-09-11T20:36:37.271Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: Dead references removed across 47 skills and 3 rules (T9) and the stricter xref found and fixed more (T10); round-1 content pass: no banned pattern remains outside valid installed paths."
+    },
+    {
+      "at": "2026-09-11T20:36:37.388Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: bundled-eval xref:path resolves against the installed layout and sweeps rules; bundled-eval.test.ts SOURCE_TREE_ONLY_SKILL and BROKEN_RULE fixtures (T10); mutation M11/M14 killed in round 1."
+    },
+    {
+      "at": "2026-09-11T20:36:37.505Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: frontmatter:harness-claude and frontmatter:category checks with fixtures (T11); skills verify --bundled 0 findings; mutations M17/M20 killed."
+    },
+    {
+      "at": "2026-09-11T20:36:37.621Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: 11 rendered descriptions are situation triggers (T12, catalog.ts descriptionOverride); skills-route test bans 'Use when <imperative>'; catalog-frontmatter.test.ts YAML round-trip; routing-baseline, skills-route, trigger-reachability green."
+    },
+    {
+      "at": "2026-09-11T20:36:37.735Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Heading-only entrypoint body takes the fallback (templates.ts isHeadingOnlyBody, T13); templates.test.ts covers heading-only, real content and plain-instruction first line (T23)."
+    },
+    {
+      "at": "2026-09-11T20:36:37.854Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: Unhandled-rejection rule stated once (async-patterns, error-handling cross-references); documentation rules defer to requirements-package-standard, plan locations agree with feature-analyzer (T14, T18, T21); skill-lifecycle uses keryx review tier --findings 1 --diff-lines 0 (verified light)."
+    },
+    {
+      "at": "2026-09-11T20:36:37.990Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: git-concurrency.mdc shipped and installed; cited by flow-, job-orchestrator and task-implementer; destructive-git.test.ts fails a skill instructing git stash or git add -A (T15; mutations M33/M34 killed); orchestrator boundary commit verified in throwaway repos (T29, T30)."
+    },
+    {
+      "at": "2026-09-11T20:36:38.130Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: Eight stack rules declare stack_requires in the detector vocabulary incl. new playwright/sql/http-server tags (T16); rules README states on-demand loading and that alwaysApply/globs are not read; stack.test.ts and templates.test.ts pin both (T23)."
+    },
+    {
+      "at": "2026-09-11T20:36:38.245Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: entity-skill-verifier and skill-lifecycle describe only what verify.ts checks; project-skill footer points at verification.md (T17, T21); skills-route AC14 test and project-skills footer test."
+    },
+    {
+      "at": "2026-09-11T20:36:38.363Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: Baseline 9335/20/0. T28 at cb4175a3: skills verify --bundled exit 0, rules mirror identical, tsc 0, eslint clean, full suite 9477 pass/20 skip/0 fail in two runs (one load-dependent src/sac flake in a third run, unrelated, tracked separately). CI green on PR #533."
+    },
+    {
+      "at": "2026-09-11T20:36:38.475Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: Review rounds 1-3 (reviews/round-*-report.md, ingested) plus the user-approved T30 closure check: zero open blocker/major/minor; remaining items are info."
+    },
+    {
+      "at": "2026-09-11T20:36:38.588Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-11T20:36:44.044Z",
+      "event": "completion-failed",
+      "detail": "review: 4 of 5 conditions failed — terminal-dispositions (violated): 20 finding(s) at or above `minor` are not terminal: 2026-09-11-ingest-skills-quality-program#S-001 (major, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#L-001 (major, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#L-002 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-001 (major, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-002 (major, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-003 (major, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-004 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-005 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#C-006 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#T-001 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#T-002 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#T-003 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#T-004 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program#T-005 (minor, round 2026-09-11-ingest-skills-quality-program): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r02#C-009 (major, round 2026-09-11-ingest-skills-quality-program-r02): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r02#C-010 (minor, round 2026-09-11-ingest-skills-quality-program-r02): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r02#C-011 (minor, round 2026-09-11-ingest-skills-quality-program-r02): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r02#L-008 (minor, round 2026-09-11-ingest-skills-quality-program-r02): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r03#C-015 (major, round 2026-09-11-ingest-skills-quality-program-r03): no disposition recorded | 2026-09-11-ingest-skills-quality-program-r03#C-016 (minor, round 2026-09-11-ingest-skills-quality-program-r03): no disposition recorded | head-commit (violated): the latest round ran against cb4175a3f24281b4da3f6b2781e4188c3c929f10, but the PR head is 958f47aeecb2c0f389b406417a416ff60569b86d. A clean round against a stale SHA proves nothing about what will merge — re-run the round. | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#533 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__533.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 533 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (violated): round `2026-09-11-ingest-skills-quality-program-r03` ran with `verification_mode: annotate` and received 0 claims while retaining 2 finding(s) at or above `minor` (2026-09-11-ingest-skills-quality-program-r03#C-015, 2026-09-11-ingest-skills-quality-program-r03#C-016). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-11T20:55:19.154Z",
+      "event": "completing",
+      "detail": "merged commit: 56934fe2f73f4e58106f73d4337ef2ae21263b9b"
+    },
+    {
+      "at": "2026-09-11T20:55:24.641Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "56934fe2f73f4e58106f73d4337ef2ae21263b9b",
+    "ref": "origin/main",
+    "at": "2026-09-11T20:55:24.640Z"
+  }
 }

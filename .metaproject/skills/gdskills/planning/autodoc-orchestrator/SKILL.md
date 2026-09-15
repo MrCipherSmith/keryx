@@ -8,6 +8,8 @@ description: >
   NOT for: writing new PRDs or planning new features (use gproject-orchestrator).
 triggers:
   - "autodoc"
+  - "document codebase"
+  - "reverse engineer docs"
   - "автодок"
   - "document this codebase"
   - "generate docs for my project"
@@ -52,6 +54,21 @@ emit it when dispatched as a subagent.
 | 5 | Phase 4 writers run in PARALLEL — one per documentation section |
 | 6 | Subagents receive ONLY artifacts listed in their dispatch contract |
 | 7 | If a subagent returns NEEDS_CONTEXT, resolve autonomously before re-dispatching |
+
+---
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The subagent's response summarized its findings, so the phase is complete." | Iron Law 3 requires an artifact FILE. The next phase reads `artifacts/analysis/*.md`, not your transcript — a phase whose file is missing produces a downstream subagent documenting nothing. Check the path exists before advancing. |
+| "This module is tiny — faster to describe it myself than to dispatch an analyst." | Iron Laws 1 and 2 have no size exception. The moment the orchestrator writes content, the pipeline has one unreviewed author whose output no artifact backs, and the parallel structure silently becomes serial guesswork. |
+| "The scanner found 12 modules; I'll analyze the important ones and cover the rest later." | Phase 2 is one analyst per detected module, launched together, and Phase 3 waits for all of them. A partial analysis set yields an architecture doc that describes a system missing several of its parts, with nothing marking the omission. |
+| "A writer came back DONE_WITH_CONCERNS, but the file looks fine, so I'll drop the concern." | `DONE_WITH_CONCERNS` exists so the concern reaches the user. It goes into `state.json` and into the Final Report's `Concerns` line. A dropped concern is indistinguishable from a clean run. |
+| "The subagent asked for context twice — I know this repo, I'll answer from memory." | Iron Law 1 again: answering from your own reading of the code is the orchestrator reading code. Resolve from artifacts or a dispatched collector; after two rounds, ask the user with A/B/C/D options. |
+| "There is an interrupted job in `jobs/`, but starting fresh is cleaner." | State Resumption is the user's call, offered as A/B/C. Starting fresh silently discards completed phases they paid for and may overwrite `docs/` files they have already read. |
 
 ---
 

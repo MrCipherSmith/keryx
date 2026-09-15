@@ -1,0 +1,14 @@
+{
+  "status": "DONE",
+  "verifier": "round-7",
+  "summary": "1 round-6 finding at or above minor re-checked AT THE FIX (a13c0e8b) by the round-7 reviewer, which raised nothing at or above minor: 1 execution, 1 refuted, 0 confirmed, 0 unverifiable. `refuted` is the post-fix reading — the reviewer looked for R6-m1 at this head and it no longer reproduces. The info item was not checked, by design.",
+  "verifications": [
+    {
+      "finding": "R6-m1",
+      "verdict": "refuted",
+      "method": "execution",
+      "verifier": "round-7",
+      "evidence": "Checked at a13c0e8b, the commit that fixes this finding. Every sentence of the comment block and the test name was checked against execution. A scratch experiment confirmed mkdir(..., {recursive:true}) follows the link and creates the skill directory inside the target while the physical skillsRoot still holds only the link; an instrumented install confirmed all 8 orchestration skill directories materialise in the target, job-orchestrator gaining SKILL.md, orchestrator-prompt.md and three schemas; and the sweep produced exactly one 'was not swept' warning with zero notices and zero removals, the hand-written SKILL.zed.md surviving. The new existsSync assertion is a regression detector, not documentation: patching node:fs/promises.cp to stop following a symlinked parent leaves the suite at 30 pass / 1 fail, the single failure being that line and nothing else. No elision remains — the one thing the comment leaves out, that the whole category is re-created in the target, makes the behaviour worse rather than milder."
+    }
+  ]
+}

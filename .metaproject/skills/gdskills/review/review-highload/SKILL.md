@@ -11,13 +11,11 @@ description: |
   (review-performance), clean code style (review-clean-code), or NestJS module structure
   (review-architecture).
 triggers:
-  - "review highload"
-  - "review scalability"
   - "highload review"
-  - "review concurrency"
+  - "concurrency review"
+  - "race condition"
+  - "review scalability"
   - "review distributed"
-  - "review --highload"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

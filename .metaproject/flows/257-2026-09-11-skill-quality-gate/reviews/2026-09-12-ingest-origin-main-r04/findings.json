@@ -1,0 +1,58 @@
+[
+  {
+    "id": "R4-m1",
+    "reviewer": "round-4",
+    "severity": "minor",
+    "problem": "The comment sends the reader to the notice/warning-split test for the claim that an install carries these outcomes through, but that test covers a removal and a kept file, not a skipped directory.",
+    "impact": "A reader trusts coverage that does not exist — the same class of overstated claim this flow exists to remove.",
+    "suggested_fix": "Say the outcomes are carried by one kind-agnostic severity filter whose two branches that test covers, and state plainly that no test drives a skipped-dir outcome through an install.",
+    "evidence": "keryx ctx rg \"was not swept\" finds only install.test.ts:336 and :371, both asserting against staleRuntimeBuildMessage directly, never through installGdskills.",
+    "confidence": "high",
+    "file": "src/gdskills/install.test.ts",
+    "line": 322,
+    "global_id": "2026-09-12-ingest-origin-main-r04#R4-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 162e34db, the commit that fixes this finding. Both halves of the corrected sentence were verified against the code: staleRuntimeBuildSeverity at install.ts:361 is `action === \"removed\" ? \"notice\" : \"warning\"` — one predicate, blind to the four non-removed kinds — and both .filter call sites at install.ts:119 and :123 use it, so the mapping really is one kind-agnostic severity filter. The notice/warning-split test at install.test.ts:220 drives installGdskills and asserts the removal in result.notices, the kept symlink in result.warnings, and the removal absent from warnings, so both branches are covered. keryx ctx rg \"skipped-dir\" over the test files finds only install.test.ts:337 and :372, each preceded by a direct removeStaleRuntimeBuilds call, so no test drove a skipped-dir outcome through an install.",
+      "verifier": "round-5"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "162e34db — the comment names the one kind-agnostic severity filter and the test covering both its branches, and says plainly that no test drives a skipped-dir outcome through an install. Round 5 verified both halves against the code."
+    }
+  },
+  {
+    "id": "R4-i1",
+    "reviewer": "round-4",
+    "severity": "info",
+    "problem": "The commit message of aa209ae4 says no step calls fs.cp with a non-directory destination on any platform; that is true of the test file but not of installGdskills, which still does so whenever a user's skill directory is a symlink.",
+    "impact": "Two sentences of the same message can be read as contradicting each other.",
+    "suggested_fix": "Scope the sentence to the test, or leave it — a merged commit message cannot be edited without rewriting the branch.",
+    "evidence": "The install.ts comment added by the same commit records the live behaviour three paragraphs away from that sentence.",
+    "confidence": "high",
+    "file": "src/gdskills/install.test.ts",
+    "global_id": "2026-09-12-ingest-origin-main-r04#R4-i1",
+    "disposition": {
+      "state": "dismissed-wont-fix",
+      "evidence": "The sentence lives in the message of bbd6e7ce, already pushed. Rewriting it means rewriting the branch and invalidating the round that ran against that head, and it buys nothing a reader of the code would see: both places a reader lands — the install.ts comment at the cp and the test comment above the sweep call — state the scope, and 162e34db and a1ea358c sharpened both."
+    }
+  },
+  {
+    "id": "R4-i2",
+    "reviewer": "round-4",
+    "severity": "info",
+    "problem": "The test comment names ERR_FS_CP_DIR_TO_NON_DIR without the hedge its twin in install.ts carries.",
+    "impact": "A reader may take the code as reproduced locally rather than read from a CI log.",
+    "suggested_fix": "Match install.ts and name the error the way CI reported it.",
+    "evidence": "install.ts:86-93 writes \"/ EISDIR\"; the test comment did not.",
+    "confidence": "medium",
+    "file": "src/gdskills/install.test.ts",
+    "line": 314,
+    "global_id": "2026-09-12-ingest-origin-main-r04#R4-i2",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "162e34db added the hedge, and a1ea358c dropped the CI attribution so the pair of codes is named exactly the way install.ts names it."
+    }
+  }
+]

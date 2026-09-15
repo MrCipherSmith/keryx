@@ -10,12 +10,12 @@ description: |
   NOT for: architectural layer violations (review-architecture), naming convention formatting
   (review-style), logic correctness bugs (review-logic), or security (review-security-code).
 triggers:
-  - "review clean code"
+  - "clean code review"
+  - "functions do too much"
+  - "solid review"
+  - "maintainability"
   - "check clean code"
   - "Uncle Bob review"
-  - "SOLID review"
-  - "review --clean-code"
-  - dispatched by review-orchestrator
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"

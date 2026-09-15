@@ -107,3 +107,40 @@ skill-lifecycle.mdc's skill-changelog records applied learn changes only.
 - feature-dev, hookify, deploy hardcode `npx tsc --noEmit` (flow 256 journal).
 - Bare `skills/gdskills/...` and 2-segment `skills/<category>/<name>` spellings are accepted by xref
   but inconsistent with `.metaproject/...` used elsewhere.
+
+## Re-verification 2026-09-12 (dispatch 257-T1, after flow 256 merged as #533)
+
+Corrections to the sections above; everything not listed held up.
+
+- Routing: scorer and baseline locations unchanged; `ROUTING_BASELINE` is routing-baseline.ts:39-66
+  (27 entries); the exact assertion loop is routing-baseline.test.ts:27-38. The scorer reads only the
+  catalog entry — SKILL.md frontmatter triggers are a second, unscored trigger list.
+- Collisions in the CATALOG (what the router scores): interview/interviewer, job-orchestrator's
+  review triggers, and test-gen/tests-creator are already disjoint (catalog.ts:354-363, :88, :148,
+  :295, :300); live `skills route` puts the owner first for "clarify requirements", "review my code",
+  "full review", "write tests", "generate tests". The earlier collision list came from SKILL.md
+  frontmatter triggers, which still overlap — fixing that is the "one trigger list" half of AC1.
+- Open collision: "check performance" is a three-way tie at 20 by token overlap between perf-check,
+  review-performance and review-flow-graph, no trigger hit (review-performance's trigger is
+  "perf check", word order differs). "why is it slow" resolves to review-performance.
+- Descriptions: all 67 fallback catalog descriptions (not 52) read "Use when <imperative>" — the
+  formula at catalog.ts:509 always yields it. Max catalog description 432 chars.
+- Anatomy (67 SKILL.md): NOT-for 31/67, Iron Laws 35/67, Red Flags 18/67, "When to Use" heading
+  11/67; a Verification/exit/STATUS count is definition-dependent (7-35) — anatomy:sections must pin
+  the definition. Largest: job-orchestrator 2233, review-orchestrator 1928, review-pr-feedback 895,
+  flow-orchestrator 681, task-implementer 669, context-collector 656, review-frontend 637,
+  review-highload 553, review-clean-code 546, feature-analyzer 425.
+- Missing both Red Flags and Verification (31): agent-entrypoint-distiller, brainstorm, changelog,
+  claude-md-management, code-ai-review, code-learned-review, code-mobx-store-review,
+  code-style-review, commit, db-migrate, dependency-update, deploy, docpack-orchestrator,
+  feature-analyzer, hookify, interview, interviewer, metaproject-security, perf-check, pr,
+  pr-issue-documenter, prd-creator, push, review-core-boundaries, review-flow-graph,
+  review-frontend-conventions, review-regression, review-testing-practices, reviewer-skill-creator,
+  security-audit, test-gen. flow-orchestrator, code-verifier, tests-creator, context-collector,
+  job-orchestrator have Verification but no Red Flags.
+- Variants: 102 files, 88 identical, 14 differ (7 planning/* skills × cursor+codex, one
+  compatible_harnesses line). build-parity CENSUS_FLOOR is 37 (declared :94, asserted :434, :566),
+  not 94.
+- Carry-overs still true: `npx tsc --noEmit` in feature-dev:92, deploy:44, hookify:91; xref does not
+  sweep orchestrator-prompt.md; L-005 half-fixed (description via parseSkillFrontmatter, but
+  frontmatter:category :803 and harness-claude :824 still regex); L-006 trailing period (:460).

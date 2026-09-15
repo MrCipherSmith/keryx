@@ -33,16 +33,52 @@ export interface SkillFrontmatter {
   readonly description?: string;
   /** The `triggers:` list, in declaration order. */
   readonly triggers?: string[];
+  /** `metadata.category`, whatever shape it was declared in. */
+  readonly metadataCategory?: string;
+  /**
+   * `metadata.compatible_harnesses`, split into individual harness names
+   * regardless of whether the source wrote a quoted comma-separated scalar
+   * (`"cursor,codex,claude"`, the shape every shipped skill uses today), a
+   * flow list (`[cursor, codex, claude]`), or a YAML block list (one `- name`
+   * per line). All three are valid YAML for the same field; a caller that
+   * only understood the first would silently stop checking a skill the
+   * moment it — or a future one — used either of the other two.
+   */
+  readonly compatibleHarnesses?: string[];
+}
+
+/** Split a comma-separated scalar (already unquoted) into trimmed, non-empty names. */
+function splitHarnessScalar(value: string): string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 /**
- * Forgiving frontmatter parse for a SKILL.md's `description`/`triggers` fields.
+ * `compatible_harnesses`'s value on the SAME line as its key, in either of
+ * the two single-line shapes it may take: a flow list (`[a, b]`) or a
+ * (usually quoted) comma-separated scalar. `undefined` when `value` is empty
+ * — the caller is left to decide that means "look for a block list next".
+ */
+function parseInlineHarnesses(value: string): string[] | undefined {
+  if (value.length === 0) return undefined;
+  const flowList = /^\[(.*)\]$/.exec(value);
+  if (flowList !== null) {
+    return splitHarnessScalar((flowList[1] ?? "").replace(/["']/g, ""));
+  }
+  return splitHarnessScalar(stripSkillFieldQuotes(value));
+}
+
+/**
+ * Forgiving frontmatter parse for a SKILL.md's routing and metadata fields.
  * Never throws: a malformed or absent frontmatter block yields `{}`, degrading
  * that one catalog entry rather than failing the whole `skillsCatalog` call.
  *
  * `description` takes either a plain scalar or a YAML block scalar (`|`/`>`,
  * with an optional `-`/`+` chomping indicator) whose text sits on the following
- * indented lines.
+ * indented lines. `metadata.category` and `metadata.compatible_harnesses` are
+ * read from inside the `metadata:` mapping, wherever it opens.
  */
 export function parseSkillFrontmatter(content: string): SkillFrontmatter {
   if (!content.startsWith("---")) {
@@ -56,6 +92,11 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
   let description: string | undefined;
   const triggers: string[] = [];
   let inTriggers = false;
+  let inMetadata = false;
+  let metadataCategory: string | undefined;
+  let compatibleHarnesses: string[] | undefined;
+  /** True on the line right after an empty `compatible_harnesses:`, looking for a block list next. */
+  let awaitingHarnessesList = false;
   /** Collected lines of an open block scalar, or `null` when none is open. */
   let descriptionBlock: string[] | null = null;
 
@@ -81,10 +122,14 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
         description = stripSkillFieldQuotes(value);
       }
       inTriggers = false;
+      inMetadata = false;
+      awaitingHarnessesList = false;
       continue;
     }
     if (/^triggers:\s*$/.test(line)) {
       inTriggers = true;
+      inMetadata = false;
+      awaitingHarnessesList = false;
       continue;
     }
     if (inTriggers) {
@@ -95,9 +140,54 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
       }
       inTriggers = false;
     }
+    // A block list continuing from an empty `compatible_harnesses:` line,
+    // checked ahead of the top-level-key test below so a `- name` item (no
+    // colon of its own) is not mistaken for the mapping having ended.
+    if (awaitingHarnessesList) {
+      const itemMatch = /^\s+-\s*(.+)$/.exec(line);
+      if (itemMatch !== null && itemMatch[1] !== undefined) {
+        (compatibleHarnesses ??= []).push(stripSkillFieldQuotes(itemMatch[1].trim()));
+        continue;
+      }
+      awaitingHarnessesList = false;
+    }
+    if (/^metadata:\s*$/.test(line)) {
+      inMetadata = true;
+      continue;
+    }
+    if (inMetadata) {
+      // The mapping ends at the first line that is not indented under it —
+      // a blank line does not end it (YAML permits blank lines inside a
+      // block mapping), but a new top-level key or the body starting does.
+      if (line.trim() !== "" && !/^\s/.test(line)) {
+        inMetadata = false;
+      } else {
+        const categoryMatch = /^\s+category:\s*(.+)$/.exec(line);
+        if (categoryMatch !== null && categoryMatch[1] !== undefined) {
+          metadataCategory = stripSkillFieldQuotes(categoryMatch[1].trim());
+          continue;
+        }
+        const harnessesMatch = /^\s+compatible_harnesses:\s*(.*)$/.exec(line);
+        if (harnessesMatch !== null) {
+          const inline = parseInlineHarnesses((harnessesMatch[1] ?? "").trim());
+          if (inline !== undefined) {
+            compatibleHarnesses = inline;
+          } else {
+            // Empty value on this line: a block list may follow, one `- name` per line.
+            awaitingHarnessesList = true;
+          }
+          continue;
+        }
+      }
+    }
   }
   if (descriptionBlock !== null) {
     description = foldBlock(descriptionBlock);
   }
-  return { ...(description !== undefined ? { description } : {}), ...(triggers.length > 0 ? { triggers } : {}) };
+  return {
+    ...(description !== undefined ? { description } : {}),
+    ...(triggers.length > 0 ? { triggers } : {}),
+    ...(metadataCategory !== undefined ? { metadataCategory } : {}),
+    ...(compatibleHarnesses !== undefined ? { compatibleHarnesses } : {}),
+  };
 }

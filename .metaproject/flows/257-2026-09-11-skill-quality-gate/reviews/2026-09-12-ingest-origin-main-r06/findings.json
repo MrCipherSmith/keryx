@@ -1,0 +1,42 @@
+[
+  {
+    "id": "R6-m1",
+    "reviewer": "round-6",
+    "severity": "minor",
+    "problem": "The test name says a real install refuses a symlinked category; the install actually copies through the link, writing the bundled skills into the target, and only the sweep refuses to delete through it. The comment above stops one step short of the mkdir behaviour that makes its own claim true.",
+    "impact": "A reader takes the install for the thing that rejects the link, which is the opposite of what the code does — the third overstatement found in this one comment block.",
+    "suggested_fix": "Name the asymmetry in both the comment and the test title, and assert the write-through so the claim is checked rather than described.",
+    "evidence": "Executed: the second install copied all 8 bundled orchestration skills into <root>/shared-skills/orchestration/, outside .metaproject. mkdir(..., {recursive:true}) creates <name> inside the link target; lstat reports a real directory and readdir(skillsRoot) shows only the link.",
+    "confidence": "high",
+    "file": "src/gdskills/install.test.ts",
+    "line": 354,
+    "global_id": "2026-09-12-ingest-origin-main-r06#R6-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at a13c0e8b, the commit that fixes this finding. Every sentence of the comment block and the test name was checked against execution. A scratch experiment confirmed mkdir(..., {recursive:true}) follows the link and creates the skill directory inside the target while the physical skillsRoot still holds only the link; an instrumented install confirmed all 8 orchestration skill directories materialise in the target, job-orchestrator gaining SKILL.md, orchestrator-prompt.md and three schemas; and the sweep produced exactly one 'was not swept' warning with zero notices and zero removals, the hand-written SKILL.zed.md surviving. The new existsSync assertion is a regression detector, not documentation: patching node:fs/promises.cp to stop following a symlinked parent leaves the suite at 30 pass / 1 fail, the single failure being that line and nothing else. No elision remains — the one thing the comment leaves out, that the whole category is re-created in the target, makes the behaviour worse rather than milder.",
+      "verifier": "round-7"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "a13c0e8b — the comment and the test title name the asymmetry (the copy follows the link, the sweep refuses to delete through it) and the test asserts the write-through; round 7 proved that assertion is the only guard on that half by constructing a cp mutant."
+    }
+  },
+  {
+    "id": "R6-i1",
+    "reviewer": "round-6",
+    "severity": "info",
+    "problem": "Two assertions in the new test never fire under a single-point regression — the toHaveLength(1) assertion trips first and the realpath belt-and-braces check keeps the file alive.",
+    "impact": "They read as regression detectors while being defence in depth.",
+    "suggested_fix": "Keep them; do not mistake them for what makes the test load-bearing.",
+    "evidence": "With the symlink guard removed, the first failure is toHaveLength(1) receiving 8; the hand-written file survives regardless.",
+    "confidence": "medium",
+    "file": "src/gdskills/install.test.ts",
+    "line": 381,
+    "global_id": "2026-09-12-ingest-origin-main-r06#R6-i1",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "Kept deliberately as defence in depth; a13c0e8b added the one assertion that is a single-point regression detector, which round 7 confirmed by mutation."
+    }
+  }
+]

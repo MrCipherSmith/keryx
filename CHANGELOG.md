@@ -3,7 +3,103 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.2.105] — 2026-09-15
+MCP servers and other read tools keep working after a session has read
+untrusted web content, and `git push` no longer rewrites your commit identity.
+
+`v0.2.103` and `v0.2.104` were tagged but never published: their release runs
+stopped at lint. Everything they contained ships here.
+
+### Fixed
+
+- **Read tools refused for the rest of the session after untrusted content.**
+  Once any untrusted web content entered history, every later tool call was
+  blocked, including MCP servers such as context7 and plain code, graph and
+  wiki lookups. Only tools that can act on an injected instruction are blocked
+  now: write, shell, network, credential, delegate and destructive tools, plus
+  the three read-risk tools that persist state (`workspace_create`,
+  `workspace_propose`, `slate_write_seed`).
+- **`git push` rewrote the repository's git identity.** The pre-push testing
+  hook ran the suite with the `GIT_DIR` git exports to hooks, so test fixtures
+  that set `user.name`/`user.email` in a temp repo wrote them into the checkout
+  being pushed. Later commits were authored `Test <test@example.com>`, which
+  GitHub links to no account. The hook and `keryx test run` now clear git's
+  repository-discovery variables before running tests. Run `keryx update` to
+  reinstall the hook, then check `git config --local --get-regexp '^user\.'`
+  and remove any identity a past push left there.
+
+## [0.2.102] — 2026-09-14
+GitHub Copilot can list models after login. The picker was calling
+`/v1/models` on `api.githubcopilot.com`, which is a 404 HTML page, and then
+asking you to edit the host.
+
+### Fixed
+
+- **Copilot `/models` 404.** Copilot's OpenAI-shaped API is not versioned under
+  `/v1`: models are `GET /models` and chat is `POST /chat/completions`. The
+  registry now uses those paths. Token exchange also stores `endpoints.api`
+  (individual / business / enterprise) so the picker does not stay on the
+  generic host that 404s for some plans. Re-login once so the discovered host
+  is saved.
+
+## [0.2.101] — 2026-09-14
+GitHub Copilot device login completes again: the token exchange no longer 403s
+because keryx used OpenCode's OAuth App instead of the Copilot GitHub App.
+
+### Fixed
+
+- **GitHub Copilot login: `token exchange failed (HTTP 403)`.** Device-code
+  succeeded, then `GET /copilot_internal/v2/token` was refused. The catalog used
+  OpenCode's OAuth App (`Ov23li…`, `gho_` tokens) and `User-Agent: keryx`.
+  GitHub's Copilot API accepts the Copilot GitHub App (`Iv1.b507a08c87ecfe98`)
+  plus Copilot Chat identity headers. Login, refresh, `/models`, and inference
+  now send those headers. A 403 surfaces GitHub's message instead of a bare
+  status. Re-login is required; an old `Ov23li` grant will still fail.
+
+## [0.2.100] — 2026-09-13
+`/mcp` is a modal, not a dump of lines into the transcript: name, status, and
+connect/disconnect on the same surface the other agent CLIs already have.
+
+### Changed
+
+- **`/mcp` opens a modal with connect/disconnect per server.** It used to print
+  one dim line per configured server into the transcript, with no way to act on
+  it. The row now shows the name, source, transport and a status glyph
+  (`● connected` / `○ disabled` / `✗ failed` / `… connecting`); `c`/`d` then
+  `y` — or a second click on the same row — dials or closes that server. A
+  project server still held for `keryx mcp trust` names the command instead of
+  offering connect. The toggle writes the personal overlay, not the native
+  config file, the same way `keryx mcp enable`/`disable` already do.
+  `/integrations` remains the installer of keryx itself.
+
+## [0.2.99] — 2026-09-12
+The PII detector stops mangling identifiers, without starting to miss phone
+numbers. Both halves were needed: the first attempt fixed the mangling by
+suppressing any match with a letter nearby, which quietly stopped redacting real
+numbers that merely sat next to a word — caught by this repository's own review
+round before it reached a release.
+
+### Fixed
+
+- **A UUID is no longer read as a telephone number.** The PII detector redacted
+  the middle of hyphenated identifiers — `730344f3-3668-4760-9056-bf7292686b67`
+  came back as `730344f3-[REDACTED:phone]-bf7292686b67` — because a hyphen
+  satisfied both of the phone pattern's boundary checks while also being a legal
+  separator inside it. Any identifier crossing a redacting surface, MCP tool
+  output included, was silently corrupted at that rate: 46 of 5 000 random v4
+  UUIDs, about one in a hundred. A candidate is now dropped only where the
+  surroundings are demonstrably a hex identifier — the whole token is a UUID, or
+  a hex run of 8+ characters carrying an `a`-`f` sits beside it. Where the shape
+  is genuinely ambiguous (`word-1234-5678-9012-word`) the number is redacted:
+  corrupting an identifier is a smaller harm than handing out a phone number,
+  and no local signal separates the two.
+
+## [0.2.98] — 2026-09-12
+Credentials, and what keryx says about them. `shell_exec` stops handing saved
+provider keys to the commands it runs; `/provider` stops going mute when one is
+refused, and lets you replace it; a scripted shell refreshes an expired grant
+instead of sending it; and the test suite stops opening browser tabs on the
+machine running it.
 
 ### Changed
 
@@ -18,6 +114,27 @@ All notable changes to `keryx` are documented here. The format follows
   proxy.
 
 ### Fixed
+
+- **`/provider` says why the model list is empty, and lets you replace a refused
+  credential.** Picking a provider whose stored credential had expired asked for
+  nothing and opened an empty model picker: the live `GET /models` answered
+  `403 The OAuth2 access token could not be validated`, and every failure —
+  refused credential, wrong endpoint, offline, genuinely no models — collapsed
+  into the same mute "(no models found)" (regression from `d0d86c76`). The
+  picker now names the cause in the provider's own words, and a 401/403 re-opens
+  the credential step — which previously could never run, because the dead value
+  in the environment was itself the reason it was skipped. `/model` and chat's
+  provider picker show the same line.
+
+- **Running the test suite no longer opens browser tabs on the developer's
+  machine.** `openAuthorisationUrl` took a platform and an environment for the
+  decision and then opened the URL through the real `process.platform`,
+  `process.env` and `spawn`. A test that named `darwin` or a Wayland session to
+  exercise the "a browser will open" branch therefore spawned a real browser —
+  `open https://auth.test/…` twice per run of the `keryx mcp auth` decision
+  tests, against a `.test` host RFC 6761 guarantees will never resolve, so the
+  tabs opened and hung. The opener is now a parameter and receives the same
+  platform and environment the decision used.
 
 - **A scripted `keryx shell` no longer sends an expired grok login.** The refresh
   of a stored grant ran only in the TUI's start-up, so `--no-tui` and `--print`

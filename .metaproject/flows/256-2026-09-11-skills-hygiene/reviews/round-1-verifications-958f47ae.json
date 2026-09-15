@@ -1,0 +1,106 @@
+{
+  "status": "DONE",
+  "verifier": "review-verifier",
+  "summary": "Post-fix re-verification of the 14 round-1 findings at the PR #533 head 958f47aeecb2c0f389b406417a416ff60569b86d (squash-merged as 56934fe2). Every check ran against a `git archive 958f47ae` copy under scratchpad/gate256 (tree, mut, proj9); ROOT was not mutated. 14 checked: 10 execution, 4 site-check; 14 refuted (the finding no longer holds), 0 confirmed, 0 unverifiable. These supersede the round-1 `confirmed` verdicts in round-1-verifications.json, which were taken at 2078a9a6 before the fixes.",
+  "verifications": [
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#S-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 0bfcf66d (T19). bun scratchpad/gate256/install-check.ts drives installGdskills from the 958f47ae copy, profile minimal, one fresh project per case, with catalog.md and modules/gdskills.md deleted before the second install: s001-directory, s001-chmod000, s001-symlink-to-dir, s001-symlink-to-devzero and s001-fifo each return ok:true (no throw), catalog_written=true, manifest_written=true, the entry kept with exactly one kept-* warning (not-a-regular-file or could-not-be-read (EACCES)); the FIFO case returns in 9 ms. At 2078a9a6 the directory, chmod-000 and symlink-to-dir cases threw EISDIR/EACCES before the catalog was written.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#L-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 0bfcf66d (T19). install-check.ts with the shipped blob of review-agent-profile.mdc (git show c44f5f0f:..., 1494 bytes): l001-crlf, l001-bom and l001-bom-crlf copies are all removed (kept=false) with warnings=[], same as the l001-lf-control copy. At 2078a9a6 the CRLF and BOM copies were kept with a 'modified' warning.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#L-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 0bfcf66d (T19). install-check.ts case l002-modified (shipped blob plus a local edit): kept, and the warning is 'review-agent-profile.mdc is no longer shipped by keryx (Byte-identical duplicate of code-review-ai-assistant.mdc ...); kept because it differs from every shipped version - delete it, or rename it if you still rely on it', which names RETIRED_RULES[].reason and a remedy (install.ts retiredRuleWarning :246-269).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-001",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed in e4cac009 (T20). At 958f47ae, keryx ctx rg 'economy|per-group|current-session|model_class|\"current\"' over the bundled and installed review-orchestrator packages finds only SKILL.md:661, the sentence recording the removal. Parsing review-context.schema.json gives model_plan.strategy enum [ask, adaptive]. reviewer-input.schema.json has no model_class; its model block keys are tier, tier_reasons, provider, model, inherit, tier_resolution, model_discovery (the keryx review tier vocabulary).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-002",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed in 7ad7b290 (T21). At 958f47ae, implementation-plans.mdc:12-26 scopes the rule to plans inside a requirements package and names docs/plans/<name>/ and docs/analysis/<feature>/implementation-plan.md as governed by documentation-management.mdc. 'No separate plans/ tree' is gone. That agrees with documentation-management.mdc:56 (docs/plans/<name>/) and :67 (docs/analysis/<feature-name>/), and with feature-analyzer SKILL.md:336 (<DOCS_ROOT>/analysis/<feature-name>/).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 7ad7b290 (T21) and completed in 75b45f69 (T25). keryx ctx rg 'Sync Targets|\\.cursor/rules|keryx install' over rule-management-workflow.mdc and skills-storage-workflow.mdc at 958f47ae gives only rule-management :18 'There is no `keryx install` command'. skills-storage-workflow.mdc:21-24 names src/gdskills/bundled/skills/<category>/<skill-name>/ as the source and the <category> mirror as regenerated, and :102 says 'four in total'. Execution of the rule's chain in scratchpad/gate256/proj9 with a tmp HOME, bun <958f47ae copy>/src/cli.ts: init --yes, skills verify --all, update, skills create, then export + skills sync --runtime <r> --global for cursor, codex, zed and opencode. Every step exits 0, and SKILL.md lands in all four home destinations.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-004",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed in 7e388451 (T22). At 958f47ae, keryx ctx rg for bare 'git (add|commit|checkout|reset|restore)' over task-implementer (SKILL.md and all 4 builds) hits only :405 and :407, which are prohibitions ('Never run git reset --hard', 'bans git stash and unscoped git add'). git-concurrency.mdc:12 reads 'Cited by `flow-orchestrator`, ...', and 'Always loaded' has 0 hits. The bundled and installed copies are byte-identical (cmp).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-005",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in 7ad7b290 (T21). At 958f47ae, with a tmp HOME, `bun ./src/cli.ts review tier --findings 1 --diff-lines 0 --json` prints tier light, tier_reasons [base:standard, light:small-scope]. job-orchestrator SKILL.md:1471, identical in all 5 builds, prescribes exactly this form for the learn dispatch, and skill-lifecycle.mdc:49 names it. The old form `--scope narrow` (which prints standard) survives only as the counter-example at skill-lifecycle.mdc:51.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#C-006",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Fixed in 7ad7b290 (T21). At 958f47ae, catalog.ts:74 describes the evidence artifacts '(gdgraph, gdctx, gdwiki, Code Health, memory), followed by a manual read of its claims against current code'. keryx ctx rg 'review lessons|tests, or review' over catalog.ts and the installed core/entity-skill-verifier/SKILL.md gives 0 hits.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#T-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in fc01bfcb (T23). Mutations run by scratchpad/gate256/mutate.ts on a copy of 958f47ae (gate256/mut). The baseline of the 6 target test files is 189 pass, 0 fail. update.ts:240 mutated to `if (false && summary.gdskillsWarnings.length > 0)`: update.test.ts gives 9 pass, 1 fail (KILLED). init.ts:1089 mutated the same way: init.test.ts gives 4 pass, 1 fail (KILLED). The restored baseline is 189 pass, 0 fail. At 2078a9a6 both mutations survived.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#T-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in fc01bfcb (T23). mutate.ts on the 958f47ae copy. Replacing the first review-strict-profile.mdc hash in retired-rules.ts with 64 zeros: install.test.ts gives 19 pass, 2 fail (KILLED). Replacing the second with 64 ones: 19 pass, 2 fail (KILLED). At 2078a9a6 the same corruption survived.",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#T-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in fc01bfcb (T23). mutate.ts on the 958f47ae copy. templates.ts:1802 isHeadingOnlyBody `body.replace(/^#[^\\n]*\\n?/, \"\")` mutated to `/^[^\\n]*\\n?/`: templates.test.ts gives 21 pass, 1 fail (KILLED).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#T-004",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in fc01bfcb (T23). mutate.ts on the 958f47ae copy. (a) The rules README sentence 'is an on-demand rule library, not something loaded automatically.' changed to 'is loaded automatically into every session.': templates.test.ts gives 21 pass, 1 fail (KILLED). (b) nestjs-dto.mdc `stack_requires: \"nestjs\"` changed to \"bogus-tag\" in the bundled rule and its installed mirror: stack.test.ts gives 52 pass, 1 fail (KILLED).",
+      "verifier": "review-verifier"
+    },
+    {
+      "finding": "2026-09-11-ingest-skills-quality-program#T-005",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Fixed in fc01bfcb (T23). mutate.ts on the 958f47ae copy. catalog.ts:542 YAML quoting disabled (`false && skillEntry.description.includes(\":\")`): catalog-frontmatter.test.ts gives 64 pass, 14 fail (KILLED).",
+      "verifier": "review-verifier"
+    }
+  ],
+  "stats": { "confirmed": 0, "refuted": 14, "unverifiable": 0, "not_checked": 9 }
+}

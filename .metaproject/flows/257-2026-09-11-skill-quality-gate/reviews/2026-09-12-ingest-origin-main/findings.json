@@ -1,0 +1,443 @@
+[
+  {
+    "id": "R1-M1",
+    "reviewer": "round-1-code",
+    "severity": "major",
+    "problem": "The sweep resolved the skills root, category and skill directory by path construction, so a symlinked component let it unlink files outside the installed tree.",
+    "impact": "An installed tree whose skills root, category or skill directory is a symlink (a shared checkout, a relocated tree) loses files in the link's target.",
+    "suggested_fix": "Walk each path component with lstat, stop at a symlink or non-directory with a recorded outcome, and confirm containment with realpath.",
+    "evidence": "Raised in round 1 against 50d2dd0c; round 2 reproduced all three cases in tmp trees and confirmed the fix (reviews/round-2-report.md).",
+    "confidence": "high",
+    "file": "src/gdskills/install.ts",
+    "symbol": "removeStaleRuntimeBuilds",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/install.ts removeStaleRuntimeBuilds",
+        "src/gdskills/install.ts removeUnmodifiedRetiredRules"
+      ],
+      "enumeration_method": "keryx ctx rg for unlink/rm over src/gdskills/install.ts, export.ts and src/commands/update.ts, init.ts, skills.ts: unlink appears only in install.ts, in these two helpers. removeUnmodifiedRetiredRules was already lstat-first from flow 256 (#533); this one was not."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. All three reproductions executed in tmp trees (scratchpad/r2-257/repro.ts): symlinked skills root, symlinked category, symlinked skill dir. In every case the victim SKILL.zed.md survives, the sweep returns exactly one skipped-dir outcome with reason \"symlink\", and the warning names the blocked component. Category probed once, so one symlinked category yields one notice rather than 67.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "0a4b9430 — the sweep walks each path component with lstat, refuses a symlinked parent and confirms containment with realpath; round 2 executed all three reproductions at that tree."
+    }
+  },
+  {
+    "id": "R1-M2",
+    "reviewer": "round-1-code",
+    "severity": "major",
+    "problem": "Candidates were matched on a normalised name, so on a case-insensitive filesystem a user's differently-cased file satisfied the match and was removed.",
+    "impact": "A user file named skill.zed.md is deleted on macOS while SKILL.zed.md is what the sweep meant.",
+    "suggested_fix": "Take candidates from readdir and match the on-disk name exactly.",
+    "evidence": "Raised in round 1; round 2 executed it on the case-insensitive tmp filesystem here — the sweep returns an empty list and the file survives.",
+    "confidence": "high",
+    "file": "src/gdskills/install.ts",
+    "symbol": "removeStaleRuntimeBuilds",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/install.ts removeStaleRuntimeBuilds"
+      ],
+      "enumeration_method": "The only name-matched deletion in the install path; removeUnmodifiedRetiredRules compares content hashes, not names."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. The tmp filesystem here is case-insensitive — existsSync(\"SKILL.zed.md\") returns true for an on-disk skill.zed.md. With that file present the sweep returns an empty list and the file survives; readdir plus exact-name matching is what does the work.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "0a4b9430 — candidates come from readdir and are matched by exact name; round 2 ran it on the case-insensitive filesystem here and the differently-cased user file survives."
+    }
+  },
+  {
+    "id": "R1-M3",
+    "reviewer": "round-1-code",
+    "severity": "major",
+    "problem": "Removals were silent: nothing told the operator that a file had been deleted from their tree.",
+    "impact": "Roughly 88 files disappear from an installed tree on upgrade with no record.",
+    "suggested_fix": "Return an outcome per candidate and report removals.",
+    "evidence": "Raised in round 1; round 2 confirmed a printed notice per removal. Round 2 then found the reporting landed under the wrong heading (NEW-2).",
+    "confidence": "high",
+    "file": "src/gdskills/install.ts",
+    "symbol": "removeStaleRuntimeBuilds",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/install.ts removeStaleRuntimeBuilds"
+      ],
+      "enumeration_method": "The one new deleting helper in this branch; the retired-rule sweep already reported its kept outcomes since flow 256."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries 0a4b9430, which is where this finding was fixed. Happy path removes a genuine stale build and returns {action:\"removed\"}, rendered as a printed notice. SKILL.md, SKILL.detail.md and reference.md are untouched; a symlink as the candidate file gives kept-not-regular-file with the target intact.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "0a4b9430 — the sweep returns an outcome per candidate and removals are reported; the heading they were reported under was corrected in 953f1c35."
+    }
+  },
+  {
+    "id": "R1-M4",
+    "reviewer": "round-1-content",
+    "severity": "major",
+    "problem": "The anatomy:length finding told the author to raise the ceiling, while skills-storage-workflow.mdc forbids raising it. The tool and the rule instructed opposite actions.",
+    "impact": "An author following the message violates the rule; an author following the rule cannot clear the finding.",
+    "suggested_fix": "Rewrite the message to say split the skill, state that a ceiling only moves down, and have the rule quote it.",
+    "evidence": "Raised in round 1; round 2 read both files and confirmed the message and the rule's blockquote now agree.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "class_scope": {
+      "sites": [
+        "src/gdskills/bundled-eval.ts anatomy:length message",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc Length Ceilings",
+        ".metaproject/rules/core/skills-storage-workflow.mdc Length Ceilings"
+      ],
+      "enumeration_method": "The ceiling rule is stated in exactly two places — the finding message and the storage rule, plus its byte-identical install mirror; all were read."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea and 9a1b0e74, which is where this finding was fixed. The message at src/gdskills/bundled-eval.ts:1986 now says \"Split the skill... A ceiling only ever moves DOWN\"; the Length Ceilings blockquote in skills-storage-workflow.mdc matches it word for word, compared by hand. bundled-eval.test.ts:1704-1718 reads both files. The .metaproject mirror is byte-identical to the bundled copy.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea and 9a1b0e74 — the message says to split the skill and that a ceiling only moves down; the rule quotes it, and 953f1c35 made the test compare the quote verbatim."
+    }
+  },
+  {
+    "id": "R1-M5",
+    "reviewer": "round-1-tests",
+    "severity": "major",
+    "problem": "The routing record was a single ratio asserted as greater than 0.5, so a large regression still passed and an improvement was never recorded.",
+    "impact": "The corpus could not detect the regressions it exists to detect.",
+    "suggested_fix": "Record rank-1 first-place and total as integers and compare them for equality against a live recount.",
+    "evidence": "Raised in round 1; round 2 confirmed toBe on both integers and that the denominator is the corpus's own counted positives.",
+    "confidence": "high",
+    "file": "src/commands/routing-corpus.test.ts",
+    "class_scope": {
+      "sites": [
+        "src/commands/routing-corpus.test.ts rank-1 assertion",
+        "src/commands/skills.ts ROUTING_BASELINE"
+      ],
+      "enumeration_method": "Both routing baselines in the branch were read: ROUTING_BASELINE pins exact scores per entry and was already exact; the corpus ratio was the loose one."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries bb28ab6a, which is where this finding was fixed. RANK1_FIRST=285 and RANK1_TOTAL=287 are both re-measured live and compared with toBe, not a bound; the denominator is the corpus's own counted positives. Lowering silently is impossible — the only escape is KNOWN_ROUTING_GAPS[].excluded, a visible registry rather than a number. bun test src/commands/routing-corpus.test.ts: 181 pass, 0 fail.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb28ab6a — RANK1_FIRST and RANK1_TOTAL are integers compared with toBe against a live recount, so a regression and an unrecorded improvement both fail."
+    }
+  },
+  {
+    "id": "R1-M6",
+    "reviewer": "round-1-tests",
+    "severity": "major",
+    "problem": "AC11's ledger had no test, and the citation of it in skills-storage-workflow.mdc was not covered by the xref sweep, so either could rot unnoticed.",
+    "impact": "The criterion could be satisfied by a file that is later deleted or renamed with nothing failing.",
+    "suggested_fix": "Add a contract test pinning the ledger's existence, header and append-only statement, and the rule's citation of it.",
+    "evidence": "Raised in round 1; round 2 confirmed three tests at bundled-eval.test.ts:2035-2077 and judged them sufficient for AC11.",
+    "confidence": "high",
+    "file": "docs/skills/rejected-skill-changes.md",
+    "class_scope": {
+      "sites": [
+        "docs/skills/rejected-skill-changes.md",
+        "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc citation",
+        "src/gdskills/bundled-eval.ts CHECKED_PATH_ROOTS"
+      ],
+      "enumeration_method": "The ledger is referenced from exactly one rule and checked by one sweep; all three sites were read."
+    },
+    "global_id": "2026-09-12-ingest-origin-main#R1-M6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. Three tests at bundled-eval.test.ts:2035-2077 pin the ledger's existence, header, separator row, the append-only statement and the rule's citation; bun test src/gdskills/bundled-eval.test.ts gives 60 pass, 0 fail. The instructed CHECKED_PATH_ROOTS change was independently re-measured: package.json files does not publish docs/skills/, so the refusal holds; the replacement is sufficient for AC11.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — three contract tests pin the ledger and the rule's citation of it. The instructed CHECKED_PATH_ROOTS change was refused with measurement, upheld in round 2, and its evidence corrected in 953f1c35 and bbd6e7ce."
+    }
+  },
+  {
+    "id": "R1-m1",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "The NOT-for clause was matched without a word boundary, so 'not formatted', 'not forced' and 'not fortunate' satisfied it.",
+    "impact": "A skill with no NOT-for clause passes anatomy:sections.",
+    "suggested_fix": "Require a word boundary after 'not for'.",
+    "evidence": "Round 2 confirmed all three strings are now rejected by fixture.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. Fixtures reject \"not formatted\", \"not forced\" and \"not fortunate\"; the control with a real NOT-for clause passes. skills verify --bundled passes every check across all 67 shipped skills, so the boundary introduces no false positive.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — a word boundary after 'not for'; fixtures reject not formatted, not forced, not fortunate."
+    }
+  },
+  {
+    "id": "R1-m2",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "The bare-imperative list flagged nouns used as nouns — 'review', 'check' — producing false description findings.",
+    "impact": "A correct description is reported as a bare imperative.",
+    "suggested_fix": "Gate the noun-ambiguous verbs behind a determiner test.",
+    "evidence": "Round 2 confirmed the gate and found no false positives across the 67 shipped skills.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. The determiner gate has its own unit test, and the sweep over the 67 shipped skills reports no description finding — the nouns that previously tripped it now pass.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — noun-ambiguous verbs are gated behind a determiner test; no false positive across the 67 shipped skills."
+    }
+  },
+  {
+    "id": "R1-m3",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "An anatomy finding was reported once per runtime build rather than once per skill.",
+    "impact": "A skill with a Codex build reports the same missing section twice.",
+    "suggested_fix": "Attribute anatomy findings to the skill.",
+    "evidence": "Round 2 confirmed with a fixture carrying a Codex build: one finding, not two.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture skill carrying a Codex build produces exactly one anatomy:sections finding, not one per build.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — anatomy findings are attributed to the skill; a fixture with a Codex build reports one finding."
+    }
+  },
+  {
+    "id": "R1-m4",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "An empty Verification body satisfied anatomy:sections.",
+    "impact": "A heading with nothing under it counts as an exit criterion.",
+    "suggested_fix": "Require a non-empty body.",
+    "evidence": "Round 2 confirmed the fixture is rejected.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture with an empty Verification body is rejected; the control with a body passes.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — a Verification section must have a non-empty body."
+    }
+  },
+  {
+    "id": "R1-m5",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "A Red Flags table of placeholder rows satisfied anatomy:sections.",
+    "impact": "A table copied without content counts as a Red Flags table.",
+    "suggested_fix": "Add a substance floor for rows.",
+    "evidence": "Round 2 confirmed placeholder rows are rejected.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. A fixture whose Red Flags rows are placeholders is rejected; the shipped tree passes, so the floor does not fire on real tables.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — Red Flags rows carry a substance floor; placeholder rows are rejected."
+    }
+  },
+  {
+    "id": "R1-m6",
+    "reviewer": "round-1-code",
+    "severity": "minor",
+    "problem": "Two skills could ship the same Red Flags table with nothing noticing.",
+    "impact": "A backfill that copies one skill's table into another passes every check.",
+    "suggested_fix": "Add an anatomy:red-flags-collision check.",
+    "evidence": "Round 2 confirmed the check exists, is attributed to the later key, and the shipped tree is clean.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled-eval.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries fc8323ea, which is where this finding was fixed. anatomy:red-flags-collision exists, fires on a fixture pair sharing a table, is attributed to the later key only, and reports nothing on the shipped tree.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "fc8323ea — new anatomy:red-flags-collision check, attributed to the later key; the shipped tree is clean."
+    }
+  },
+  {
+    "id": "R1-m7",
+    "reviewer": "round-1-content",
+    "severity": "minor",
+    "problem": "The NOT-for clause named a skill that does not exist in the catalog.",
+    "impact": "The clause routes a reader to nothing.",
+    "suggested_fix": "Name the skill that owns the excluded case.",
+    "evidence": "Round 2 confirmed interview and interviewer both exist, so the clause resolves.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/quality/context-collector/SKILL.md",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. Both interview and interviewer are present in the catalog, so the rewritten NOT-for clause resolves to a skill that exists.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9a1b0e74 — the NOT-for clause names interview, which exists in the catalog."
+    }
+  },
+  {
+    "id": "R1-m8",
+    "reviewer": "round-1-content",
+    "severity": "minor",
+    "problem": "The skill quoted output that keryx review reviewers does not produce.",
+    "impact": "An agent following the skill compares against a format that never appears.",
+    "suggested_fix": "Quote the real row, including the no-recorded-origin case.",
+    "evidence": "Round 2 matched the quoted row against src/review/reviewers.ts:200-205 exactly.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/quality/reviewer-skill-creator/SKILL.md",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. The quoted row in reviewer-skill-creator matches src/review/reviewers.ts:200-205 exactly, including the \"no recorded origin\" case for drift === \"none\".",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9a1b0e74 — the quoted row matches src/review/reviewers.ts:200-205 exactly, including the no-recorded-origin case."
+    }
+  },
+  {
+    "id": "R1-m9",
+    "reviewer": "round-1-content",
+    "severity": "minor",
+    "problem": "The skill passed a flow id to keryx flow check, which takes none.",
+    "impact": "The documented command is wrong.",
+    "suggested_fix": "Drop the argument.",
+    "evidence": "Round 2 ran keryx flow check and confirmed it takes no id.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/skills/platform/agent-entrypoint-distiller/SKILL.md",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. keryx flow check was run: it takes no flow id, so the argument the skill used to pass was wrong and its removal is correct.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9a1b0e74 — the flow id was dropped; keryx flow check takes none."
+    }
+  },
+  {
+    "id": "R1-m10",
+    "reviewer": "round-1-content",
+    "severity": "minor",
+    "problem": "The rule did not say what makes a runtime build genuinely differ, so the criterion for keeping one was unstated.",
+    "impact": "A future author cannot tell whether a per-runtime copy is justified.",
+    "suggested_fix": "Enumerate the two cases and name the skills that qualify.",
+    "evidence": "Round 2 confirmed both cases are enumerated and the seven gproject skills named.",
+    "confidence": "high",
+    "file": "src/gdskills/bundled/rules/core/skills-storage-workflow.mdc",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Checked at 7ee6a712, the tree that carries 9a1b0e74, which is where this finding was fixed. The storage rule now enumerates both divergence cases — different instructions, different metadata.compatible_harnesses — and names the seven gproject skills that qualify; 15 runtime builds remain in the tree, consistent with that list.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "9a1b0e74 — the rule enumerates the two divergence cases and names the seven gproject skills."
+    }
+  },
+  {
+    "id": "R1-m11",
+    "reviewer": "round-1-tests",
+    "severity": "minor",
+    "problem": "The export manifest still carried usedFallbackBuild after T5 removed the fallback concept.",
+    "impact": "A consumer reads a field that no longer means anything.",
+    "suggested_fix": "Remove it and bump schemaVersion, with a test tying the two.",
+    "evidence": "Round 2 confirmed schemaVersion 2 with a pinning assertion and no usedFallbackBuild in shipped code.",
+    "confidence": "high",
+    "file": "src/gdskills/export.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries 6a74e1b4 and 9a1b0e74, which is where this finding was fixed. schemaVersion is 2 with a pinning assertion, and no usedFallbackBuild reference remains in shipped code (only comments and journals). export-runtime-builds.test.ts is part of the 130 pass / 0 fail run.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "6a74e1b4 and 9a1b0e74 — usedFallbackBuild removed and schemaVersion bumped to 2, tied together by a test."
+    }
+  },
+  {
+    "id": "R1-m12",
+    "reviewer": "round-1-tests",
+    "severity": "minor",
+    "problem": "Several skills carried only one paraphrase, so a single wording change could move the record without a real routing regression.",
+    "impact": "The corpus measures wording rather than routing for those skills.",
+    "suggested_fix": "Require at least two paraphrases per skill.",
+    "evidence": "Round 2 scored all 48 added paraphrases: 48 of 48 rank their own skill first and none quotes its own triggers.",
+    "confidence": "high",
+    "file": "src/commands/routing-corpus.ts",
+    "global_id": "2026-09-12-ingest-origin-main#R1-m12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Checked at 7ee6a712, the tree that carries bb28ab6a, which is where this finding was fixed. Every positive added by 437a6f3e was extracted and scored: 48 of 48 rank their own skill first and 0 quote any of their own triggers verbatim; triggers are present on the catalog entries, so the no-quoting check is non-vacuous.",
+      "verifier": "round-2"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "bb28ab6a — every skill carries at least two paraphrases; all 48 added were scored and each ranks its own skill first."
+    }
+  }
+]

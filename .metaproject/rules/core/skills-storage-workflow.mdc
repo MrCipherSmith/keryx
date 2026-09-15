@@ -25,13 +25,42 @@ Before creating or editing a skill, ask and confirm:
 - Project-local skill: `.metaproject/project-skills/<skill-name>/`.
 
 ## Required Source Layout
-- `SKILL.md` — canonical source of truth
-- `SKILL.cursor.md` — Cursor-specific variant (optional; falls back to SKILL.md)
-- `SKILL.codex.md` — Codex-specific variant (optional; falls back to SKILL.md)
-- `SKILL.zed.md` — Zed-specific variant (optional; falls back to SKILL.md)
-- `SKILL.opencode.md` — OpenCode-specific variant (optional; falls back to SKILL.md)
+- `SKILL.md` — canonical source of truth, the shared build used by every runtime
+- `SKILL.cursor.md` — Cursor-specific variant, present only where Cursor's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.codex.md` — Codex-specific variant, present only where Codex's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.zed.md` — Zed-specific variant, present only where Zed's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
+- `SKILL.opencode.md` — OpenCode-specific variant, present only where OpenCode's build genuinely differs from `SKILL.md` (falls back to `SKILL.md` otherwise)
 
-`SKILL.md` is always required. Platform variants are optional — if absent, `keryx update` installs `SKILL.md` as fallback.
+`SKILL.md` is always required. A `SKILL.<runtime>.md` variant is the
+exception, not the norm: create one only when that runtime's build genuinely
+differs from `SKILL.md`, and never add one as an identical copy. Falling
+back to `SKILL.md` is the normal case for every runtime without a variant —
+for `keryx update`/`keryx init` (installed mirror) and for `keryx skills
+export`/`keryx skills sync` (global destinations) alike — not a degraded
+path.
+
+"Genuinely differs" covers two cases, and only two:
+
+1. **Different instructions.** The runtime needs prose `SKILL.md` does not
+   carry, or must not carry.
+2. **A different `metadata.compatible_harnesses`.** That field is the
+   machine-readable CSV of supported harnesses, so its correct value is
+   per-build by construction — a build cannot share a harness list that
+   excludes the harness reading it. This is the only field in the tree of
+   which that is true.
+
+Case 2 is why fourteen shipped builds differ from their `SKILL.md` by exactly
+one line: the seven `gproject-*` subagent skills under `planning/`
+(`project-discovery`, `problem-definer`, `patterns-researcher`, `planner`,
+`consistency-checker`, `spec-writer`, `stack-advisor`) each ship a
+`SKILL.codex.md` and a `SKILL.cursor.md` that add
+`compatible_harnesses: "cursor,codex,zed,opencode"`. Their `SKILL.md` declares
+no harness list, because it is the Claude build and cannot carry one that
+excludes Claude. These builds are NOT identical copies and must not be deleted
+as such; `src/gdskills/build-parity.test.ts` exempts this one hunk, by name,
+for these seven skills only, and its allow-list is where any widening has to be
+argued. Every other difference between a build and its `SKILL.md` is drift and
+gets reconciled.
 
 ## Frontmatter Fields (Agent Skills spec alignment)
 
@@ -69,6 +98,50 @@ back toward the spec:
   typed payloads to subagent workers instead, which the spec does not attempt
   to address.
 
+## Length Ceilings
+
+Every shipped skill has a line-count ceiling recorded in
+`src/gdskills/skill-length-ceilings.ts`, set to the skill's length on the day
+the file was introduced; a skill with no entry is bounded by the default (500
+lines, the point at which a skill should be split). `keryx skills verify
+--bundled` reports `anatomy:length` when a skill passes its ceiling.
+
+A ceiling **moves down**, never up:
+
+- trimming a skill — moving reference material into a sibling document, cutting
+  a section that no longer changes behaviour — lowers the ceiling to the new
+  count in the same change;
+- a skill that needs more room than its ceiling allows is split, or its
+  reference material moves out. Raising the number to clear the finding is the
+  one edit this rule forbids: it converts a measured limit into a record of
+  whatever the file grew to.
+
+`keryx skills verify --bundled` states the same remedy in the same words, and
+cites this section by name, so the finding and the rule cannot drift apart. The
+`anatomy:length` message reads, after the count:
+
+> Split the skill, or move reference material into a sibling document, and lower
+> the ceiling to the new count in the same change. A ceiling only ever moves
+> DOWN: raising it is the one edit rules/core/skills-storage-workflow.mdc
+> ("Length Ceilings") forbids, because it converts a measured limit into a record
+> of whatever the file grew to.
+
+Changing either text without the other is the drift this quotation exists to
+prevent; `src/gdskills/bundled-eval.ts` is where the message lives.
+
+A ceiling is not a statement that the skill's current size is right — several
+shipped skills are far past the default and were recorded as they stood. It
+bounds unnoticed growth, which is the part no other check can see.
+
+Editing a skill is therefore a two-file change. Every recorded ceiling equals
+that skill's current count today, so adding a sentence needs a compensating
+deletion or a split: recount the file (`wc -l SKILL.md`) and write that number
+to the skill's key in `src/gdskills/skill-length-ceilings.ts` in the SAME
+commit. A new skill needs a new entry; a deleted skill needs its entry removed.
+`keryx skills verify --bundled` only reports `lines > ceiling`, so a TRIM that
+leaves the old, higher number behind passes locally and fails the
+ceiling-equals-count check in CI.
+
 ## Global Sync Mapping
 Global sync only ever reaches a **project-local skill**
 (`.metaproject/project-skills/<skill-name>/`) that has first been exported for
@@ -83,10 +156,10 @@ written by `keryx init`/`keryx update`), which stays inside the project.
 
 Once a project skill is exported for a runtime, `keryx skills sync --runtime
 <runtime> --global` copies it from `.metaproject/runtime/skills/<runtime>/` to:
-- `cursor` → `~/.cursor/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.cursor.md`, or `SKILL.md` as fallback)
-- `codex` → `${CODEX_HOME:-~/.codex}/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.codex.md`, or `SKILL.md` as fallback)
-- `zed` → `~/.config/zed/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.zed.md`, or `SKILL.md` as fallback)
-- `opencode` → `~/.config/opencode/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.opencode.md`, or `SKILL.md` as fallback)
+- `cursor` → `~/.cursor/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.cursor.md` when the skill ships one, otherwise `SKILL.md`)
+- `codex` → `${CODEX_HOME:-~/.codex}/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.codex.md` when the skill ships one, otherwise `SKILL.md`)
+- `zed` → `~/.config/zed/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.zed.md` when the skill ships one, otherwise `SKILL.md`)
+- `opencode` → `~/.config/opencode/skills/<module>-<skill-name>/SKILL.md` (built from `SKILL.opencode.md` when the skill ships one, otherwise `SKILL.md`)
 
 These four global destinations are written only by the explicit, opt-in
 `keryx skills sync --runtime <runtime> --global` command — never as a side
@@ -96,7 +169,7 @@ those instead.
 
 ## Mandatory Behavior
 1. Always create/update `SKILL.md` as the canonical source.
-2. Create platform variants only when platform-specific adaptations are needed; otherwise `SKILL.md` serves all platforms via fallback.
+2. Create a `SKILL.<runtime>.md` only when that runtime's build genuinely differs from `SKILL.md` — either in its instructions or in its `metadata.compatible_harnesses`, the two cases named under Required Source Layout — never as an identical copy. Otherwise `SKILL.md` serves that runtime via fallback; that fallback is the normal case, not an exception.
 3. Keep all profiles aligned in structure and intent.
 4. Validate skills before sync.
 5. For a **project-local** skill only: export it per runtime first (`keryx skills export <skill-name> --runtime <runtime>`), then sync every global destination that applies (`cursor`, `codex`, `zed`, `opencode` — four in total) with `keryx skills sync --runtime <runtime> --global`, run once per runtime that needs it. A shipped skill cannot be exported and has no global-sync route — it reaches a runtime only via the project-local installed mirror (`keryx update`/`keryx init`).
@@ -153,6 +226,23 @@ If validation fails, do not sync.
 
 ## Forbidden
 - Do not create skills in `~/.cursor/skills-cursor/`.
+
+## Rejected Changes
+Scope: keryx's own bundled skills and rules
+(`src/gdskills/bundled/**` in the keryx repository) only. This rule ships to
+every project via `keryx init`/`keryx update`, but the ledger below exists
+only in the keryx source repo — this section does not apply to
+project-local skills (`.metaproject/project-skills/<skill-name>/`).
+
+- Before proposing a change to a shipped skill or rule, search
+  `docs/skills/rejected-skill-changes.md` in the keryx repository for that
+  skill and that idea.
+- When a change to a shipped skill or rule is rejected (review, a
+  routing/behaviour-eval regression, or a user/maintainer decision), append a
+  row to that ledger — in the same change, on the default branch (`main`) —
+  recording what was tried, why it was rejected, and the evidence (e.g. a
+  routing-eval rank or behaviour-eval number, before → after). Never edit or
+  delete an existing row.
 
 ## Apply Changes Workflow
 Edit skills under `src/gdskills/bundled/skills/<category>/<skill-name>/`

@@ -5,6 +5,10 @@ description: >
   and best practices constraints. Catches contradictions, gaps, and violations.
   Use when: dispatched by gproject-orchestrator Phase 5.
   NOT for: direct user invocation.
+triggers:
+  - "check consistency"
+  - "validate spec"
+  - "doc contradictions"
 metadata:
   version: 1.0.0
 ---
@@ -27,6 +31,19 @@ This agent is adversarial — its job is to find problems, not to approve.
 | 4 | Classify severity: CRITICAL (blocks approval) / WARNING (should fix) / INFO (suggestion) |
 | 5 | NEVER fix violations yourself — only report them |
 | 6 | A clean report still lists what was checked (audit trail) |
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "The first decisions all check out, so the rest of the registry is fine." | Iron Law 1: every decision, no sampling. The registry's later entries are the ones added late under pressure — the most likely to contradict a PRD written before them. |
+| "This violation is one line to fix — cheaper to correct than to report." | Iron Law 5: never fix, only report. This agent is the gate; a gate that edits the artifact it is judging has approved its own change, and the spec-writer never learns its output drifted. |
+| "One CRITICAL violation, but the PRD is strong overall — `DONE` with a note." | The status logic is mechanical: any CRITICAL means `DONE_WITH_CONCERNS`. Softening it lets a document reach human approval carrying exactly the contradiction this phase exists to surface. |
+| "The PRD contradicts a decision, but the PRD's version is clearly better." | Being right is not this agent's job. Report the contradiction and let the orchestrator or the human resolve it — a checker that picks a winner has quietly changed a project decision nobody recorded. |
+| "Nothing was wrong, so a short 'all clear' is the report." | Iron Law 6: a clean report still lists what was checked. Without the audit trail, "no violations" and "did not look" produce the same document. |
+| "I found several violations already — that is enough to block approval." | Iron Law 3: report ALL violations. Stopping early guarantees a second review round for the ones you did not name, and each round costs another full pipeline pass. |
 
 ---
 

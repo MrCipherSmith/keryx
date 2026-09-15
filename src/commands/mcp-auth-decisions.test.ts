@@ -15,12 +15,37 @@ import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import type { openVerificationUrl } from "../lib/oauth/open-url";
 import {
   bothStreamsAreATerminal,
   openAuthorisationUrl,
   resolveInteractive,
   runMcpConsumerCommand,
 } from "./mcp-servers";
+
+type OpenCall = {
+  readonly url: string;
+  readonly platform: NodeJS.Platform | undefined;
+  readonly env: NodeJS.ProcessEnv | undefined;
+};
+
+/**
+ * An opener that records instead of spawning.
+ *
+ * Every test below passes one. A test that leaves the opener out gets
+ * the real `openVerificationUrl`, which spawns a real browser on the
+ * machine running the tests — which is exactly what this file used to
+ * do twice per run.
+ */
+function recordingOpener(): { readonly calls: OpenCall[]; readonly open: typeof openVerificationUrl } {
+  const calls: OpenCall[] = [];
+  return {
+    calls,
+    open: (url, deps = {}) => {
+      calls.push({ url, platform: deps.platform, env: deps.env });
+    },
+  };
+}
 
 type TtyRow = {
   readonly label: string;
@@ -141,13 +166,15 @@ describe("when there is no graphical session, the URL is printed instead", () =>
 
   test("the operator is given the URL to open themselves", () => {
     const lines: string[] = [];
-    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {});
+    const opener = recordingOpener();
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {}, opener.open);
     expect(lines.join("\n")).toContain("https://auth.test/authorize?client_id=x");
   });
 
   test("and told why nothing opened", () => {
     const lines: string[] = [];
-    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {});
+    const opener = recordingOpener();
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", {}, opener.open);
     expect(lines.join("\n")).toContain("No graphical session");
   });
 
@@ -155,15 +182,82 @@ describe("when there is no graphical session, the URL is printed instead", () =>
     // Without this, "always print" would pass the two tests above and
     // the browser would never open for anybody.
     const lines: string[] = [];
+    const opener = recordingOpener();
     // darwin needs no DISPLAY and always has an opener, so it is the
     // cleanest way to exercise the other branch without spawning.
-    openAuthorisationUrl(URL_, (line) => lines.push(line), "darwin", {});
+    openAuthorisationUrl(URL_, (line) => lines.push(line), "darwin", {}, opener.open);
     expect(lines.join("\n")).not.toContain("No graphical session");
   });
 
   test("and a Wayland session counts as graphical too", () => {
     const lines: string[] = [];
-    openAuthorisationUrl(URL_, (line) => lines.push(line), "linux", { WAYLAND_DISPLAY: "wayland-0" });
+    const opener = recordingOpener();
+    openAuthorisationUrl(
+      URL_,
+      (line) => lines.push(line),
+      "linux",
+      { WAYLAND_DISPLAY: "wayland-0" },
+      opener.open,
+    );
     expect(lines.join("\n")).not.toContain("No graphical session");
+  });
+});
+
+describe("REGRESSION — the opener is injected, and is given the substituted platform and env", () => {
+  // The first version of this function was injected halfway: the
+  // DECISION used the substituted platform/env, and the OPEN used the
+  // real `process.platform`, `process.env` and `spawn`. So the two
+  // tests above that name a graphical session spawned a real browser on
+  // the machine running them — `open https://auth.test/…` twice per run
+  // on macOS, `xdg-open` on a Linux desktop — against a host that RFC
+  // 6761 guarantees will never resolve. Two tabs, every run, forever.
+  //
+  // Asserting only "the opener was called" would not have caught it:
+  // the broken code called an opener too, just not the injected one and
+  // not with these values. What pins it is the deps the opener RECEIVES.
+  const URL_ = new URL("https://auth.test/authorize?client_id=x");
+
+  type Row = {
+    readonly label: string;
+    readonly platform: NodeJS.Platform;
+    readonly env: NodeJS.ProcessEnv;
+    readonly opens: boolean;
+  };
+
+  const ROWS: Row[] = [
+    { label: "macOS always has an opener", platform: "darwin", env: {}, opens: true },
+    { label: "Windows always has an opener", platform: "win32", env: {}, opens: true },
+    { label: "Linux with X11", platform: "linux", env: { DISPLAY: ":0" }, opens: true },
+    { label: "Linux with Wayland", platform: "linux", env: { WAYLAND_DISPLAY: "wayland-0" }, opens: true },
+    { label: "Linux headless", platform: "linux", env: {}, opens: false },
+    { label: "Linux with an empty DISPLAY", platform: "linux", env: { DISPLAY: "" }, opens: false },
+  ];
+
+  for (const row of ROWS) {
+    test(`${row.label} — ${row.opens ? "opens through the injected opener" : "never touches the opener"}`, () => {
+      const opener = recordingOpener();
+      openAuthorisationUrl(URL_, () => {}, row.platform, row.env, opener.open);
+      if (!row.opens) {
+        // The plan === undefined branch prints the URL. If it ever
+        // reached an opener at all, the real one would be next.
+        expect(opener.calls).toEqual([]);
+        return;
+      }
+      expect(opener.calls).toEqual([
+        { url: "https://auth.test/authorize?client_id=x", platform: row.platform, env: row.env },
+      ]);
+    });
+  }
+
+  test("the env reaching the opener is the SAME object that decided the plan", () => {
+    // `platform`/`env` arriving as `undefined` is the signature of the
+    // old bug: the opener then falls back to the real process values
+    // and decides for itself, on the developer's machine.
+    const env: NodeJS.ProcessEnv = { DISPLAY: ":0" };
+    const opener = recordingOpener();
+    openAuthorisationUrl(URL_, () => {}, "linux", env, opener.open);
+    expect(opener.calls).toHaveLength(1);
+    expect(opener.calls[0]?.env).toBe(env);
+    expect(opener.calls[0]?.platform).toBe("linux");
   });
 });

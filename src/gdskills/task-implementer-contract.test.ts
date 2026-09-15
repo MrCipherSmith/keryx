@@ -107,9 +107,14 @@ function validResult(): Record<string, unknown> {
 describe("AC1/AC2: the non-vacuity of this file", () => {
   test("both trees are present and every build is read", () => {
     expect(SKILL_DIRS.every((dir) => existsSync(dir))).toBe(true);
-    // Five builds per tree; flow 209 reconciled them and build-parity keeps them so.
-    expect(skillBuilds().length).toBe(10);
-    for (const file of skillBuilds()) {
+    // SKILL.md in each tree at minimum. Flow 209 reconciled the five builds; they
+    // were then byte-identical to SKILL.md and flow 257 deleted the four copies,
+    // so this skill ships SKILL.md alone today. Any build that does ship is still
+    // read by every sweep below (skillBuilds() lists SKILL*.md, not a fixed set).
+    const builds = skillBuilds();
+    for (const dir of SKILL_DIRS) expect(builds).toContain(path.join(dir, "SKILL.md"));
+    expect(builds.length).toBeGreaterThanOrEqual(SKILL_DIRS.length);
+    for (const file of builds) {
       expect(read(file).length).toBeGreaterThan(1000);
     }
   });
@@ -242,6 +247,64 @@ describe("AC5: the two contracts are loadable, so the refusals are the validator
     expect(await validateJson(badStatus, output)).not.toEqual([]);
   });
 
+  test("the three things an implementer knows and used to throw away are declarable", async () => {
+    // Same defect as `skill_drift`, one shape further out: an implementer knows
+    // what it noticed and left alone, what it assumed where the task was silent,
+    // and what it did not touch that a reader would expect it to have touched.
+    // None of it was declared, and the object is `additionalProperties: false`,
+    // so a result carrying any of it was refused by its own contract and the
+    // information went into free-text `notes` or nowhere.
+    const output = schema("task-implementer-output");
+    const full = validResult();
+    full.noticed_not_touched = [
+      { what: "StepForm duplicates the validation the store already does", where: "src/pipelines/components/StepForm.tsx" },
+    ];
+    full.assumptions = ["'Required fields' means the fields the store marks required, not every field on the form"];
+    full.not_touched = [
+      { path: "src/pipelines/stores/StepStore.ts", reason: "already validates on save; the gap was in the view" },
+    ];
+    expect(await validateJson(full, output)).toEqual([]);
+  });
+
+  test("an undeclared field is still refused, so the new declarations are permissions and not an opening", async () => {
+    // The other half of the case above. Declaring three fields is only safe
+    // while `additionalProperties: false` still bites — otherwise the schema
+    // stops being a contract and becomes a suggestion, and the next field
+    // arrives undeclared and unnoticed.
+    const output = schema("task-implementer-output");
+    const stray = validResult();
+    stray.noticed_but_not_fixed = ["the plausible misspelling of a field that now exists"];
+    expect(await validateJson(stray, output)).not.toEqual([]);
+  });
+
+  test("the structured fields refuse the shapes that would make them unreadable", async () => {
+    const output = schema("task-implementer-output");
+
+    // A bare string where an entry must carry its location. This is the shape
+    // the fields would have had if they were arrays of strings, and refusing it
+    // is what the object shape buys.
+    const looseNotice = validResult();
+    looseNotice.noticed_not_touched = ["StepForm duplicates the store's validation"];
+    expect(await validateJson(looseNotice, output)).not.toEqual([]);
+
+    // An entry with no reason: `not_touched` without one is just a list of
+    // files, which `files_modified` already fails to mention.
+    const reasonless = validResult();
+    reasonless.not_touched = [{ path: "src/pipelines/stores/StepStore.ts" }];
+    expect(await validateJson(reasonless, output)).not.toEqual([]);
+
+    // Empty strings are the way a required field gets satisfied without being
+    // answered, so `minLength` closes it.
+    const blank = validResult();
+    blank.assumptions = [""];
+    expect(await validateJson(blank, output)).not.toEqual([]);
+
+    // And an entry may not smuggle its own undeclared key either.
+    const smuggled = validResult();
+    smuggled.not_touched = [{ path: "src/a.ts", reason: "out of scope", severity: "high" }];
+    expect(await validateJson(smuggled, output)).not.toEqual([]);
+  });
+
   test("the result file is recorded by the command that refuses when it is missing", () => {
     for (const file of skillBuilds()) {
       const text = read(file);
@@ -346,8 +409,12 @@ describe("AC4: the one thing that was already wired is still wired", () => {
     }
   });
 
-  test("all five builds carry it, in both trees", () => {
-    expect(skillBuilds().filter((file) => read(file).includes("STATUS: DONE")).length).toBe(10);
+  test("every build carries it, in both trees", () => {
+    // Every shipped build, however many there are — SKILL.md in each tree at
+    // minimum (flow 257 removed the byte-identical harness copies).
+    const builds = skillBuilds();
+    expect(builds.length).toBeGreaterThanOrEqual(SKILL_DIRS.length);
+    expect(builds.filter((file) => read(file).includes("STATUS: DONE")).length).toBe(builds.length);
   });
 });
 

@@ -4,6 +4,10 @@ description: >
   Generates roadmap, milestones, task breakdown, and dependency graph from PRD.
   Use when: dispatched by gproject-orchestrator Phase 6.
   NOT for: direct user invocation.
+triggers:
+  - "create plan"
+  - "roadmap"
+  - "task breakdown"
 metadata:
   version: 1.0.0
   compatible_harnesses: "cursor,codex,zed,opencode"
@@ -27,6 +31,19 @@ to feed into job-orchestrator or task-implementer.
 | 4 | P0 user stories MUST be in Milestone 1 |
 | 5 | Each milestone MUST be independently deployable / demonstrable |
 | 6 | Infrastructure and setup tasks come before feature tasks |
+
+## Red Flags
+
+Stop and re-read this skill if you are thinking:
+
+| Rationalization | Rebuttal |
+|---|---|
+| "This task is obviously needed even though no user story asks for it." | Iron Law 1: every task traces to a user story. An untraceable task is either scope the PRD did not agree to, or a story the PRD is missing — both are worth surfacing, and neither is fixed by adding the task quietly. |
+| "A single estimate is clearer to read than a three-point range." | Iron Law 3: estimates are ranges. A single number is read as a commitment, and the pessimistic case — the one that decides whether the milestone holds — was never stated. |
+| "These two tasks depend on each other, which is just how the work is." | Iron Law 2: dependencies form a DAG. A cycle means the decomposition is wrong, not that the work is circular. Split one task at the boundary where it stops needing the other. |
+| "Milestone 1 is already large, so this P0 story can move to Milestone 2." | Iron Law 4: P0 stories are in Milestone 1. If M1 is too large, the split goes elsewhere — deferring a P0 silently redefines what the PRD called essential. |
+| "Milestone 2 is a coherent chunk of work, even if it demos nothing on its own." | Iron Law 5: each milestone is independently deployable or demonstrable. A milestone with no demo has no completion signal, and slips are invisible until the next one that does. |
+| "Setup is boring — the feature tasks are what matters for the estimate." | Iron Law 6: infrastructure and setup come first, and they are estimated like anything else. Unestimated setup is the most common reason a critical path is wrong from day one. |
 
 ---
 

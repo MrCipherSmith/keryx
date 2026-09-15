@@ -620,9 +620,11 @@ export async function initCommand(args: string[]): Promise<void> {
   }
 
   let gdskillsWarnings: string[] = [];
+  let gdskillsNotices: string[] = [];
   if (enableGdskills) {
     const gdskillsInstallResult = await installGdskills(metaprojectRoot, gdskillsProfile);
     gdskillsWarnings = gdskillsInstallResult.warnings;
+    gdskillsNotices = gdskillsInstallResult.notices;
     if (enableGdskillsHook) {
       await installGdskillsPostCommitHook(projectRoot);
     }
@@ -1085,6 +1087,14 @@ export async function initCommand(args: string[]): Promise<void> {
   }
   if (enableSac) {
     statusLine("sac", true, "shared agent context: cross-session workspace propose/review (opt-in)");
+  }
+  // Successful cleanups (see `InstallGdskillsResult.notices`) get their own
+  // heading; "Warnings" stays the list of things that still need a human.
+  if (gdskillsNotices.length > 0) {
+    heading("Notices");
+    for (const notice of gdskillsNotices) {
+      note(notice);
+    }
   }
   if (gdskillsWarnings.length > 0) {
     heading("Warnings");

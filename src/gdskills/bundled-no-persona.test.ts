@@ -134,10 +134,13 @@ test("AC1: the guard reads a real tree — the denominator is not zero", () => {
  * pull-request comments, by people the project names — is not, and a rewrite
  * that quietly drops one of them is a rewrite back toward a style guide.
  */
-test("AC2: the shipped learned-review skill and rule describe the mechanism, in all five builds", () => {
+test("AC2: the shipped learned-review skill and rule describe the mechanism, in every build", () => {
   const skillDir = path.join(BUNDLED, "skills", "review", "code-learned-review");
   const builds = readdirSync(skillDir).filter((name) => name.startsWith("SKILL") && name.endsWith(".md"));
-  expect(builds).toHaveLength(5);
+  // SKILL.md at minimum: its four harness builds were byte-identical copies and
+  // flow 257 deleted them (every runtime reads SKILL.md). A build that ships
+  // again is read below like the rest.
+  expect(builds).toContain("SKILL.md");
 
   const texts = [
     ...builds.map((name) => read(path.join(skillDir, name))),

@@ -9,13 +9,14 @@ description: |
   NOT for: reviewing code directly — this skill reads human or bot PR feedback and
   makes it actionable. To review code, use the domain review skills.
 triggers:
-  - "analyze PR comments"
   - "review PR feedback"
+  - "analyze PR comments"
+  - "review comments"
+  - "fix PR comments"
   - "what did reviewers say"
   - "parse PR #N"
   - "explain PR comments"
   - "PR feedback"
-  - "fix PR comments"
   - "review-pr-feedback --fix"
 metadata:
   author: "MrCipherSmith"

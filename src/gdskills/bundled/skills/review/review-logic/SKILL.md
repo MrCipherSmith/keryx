@@ -9,12 +9,12 @@ description: |
   NOT for: security vulnerabilities, performance profiling, style/naming preferences,
   or architectural pattern concerns — those belong in their respective specialized reviewers.
 triggers:
-  - "review logic"
+  - "logic review"
+  - "bug review"
+  - "correctness"
   - "check correctness"
   - "are there any bugs"
   - "check this for bugs"
-  - "logic review"
-  - "dispatched by review-orchestrator"
 metadata:
   author: "MrCipherSmith"
   version: "1.0.0"
