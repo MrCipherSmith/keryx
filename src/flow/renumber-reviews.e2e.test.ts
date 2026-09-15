@@ -12,7 +12,7 @@
 // ingest writes, not a fixture that already has the right shape.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { flowCommand, flowServiceDeps } from "../commands/flow";
@@ -73,7 +73,7 @@ async function onlyFlowDir(): Promise<string> {
 }
 
 /** One round, attached with `--flow 001`, holding one finding about a file in the flow itself. */
-async function ingestRound(fromDir: string): Promise<void> {
+async function ingestRound(fromDir: string, flowId = "001", reviewId = "round-1"): Promise<void> {
   const planPath = `.metaproject/flows/${fromDir}/plan.md`;
   const results = [
     {
@@ -108,18 +108,29 @@ async function ingestRound(fromDir: string): Promise<void> {
     "--ref",
     "round.md",
     "--flow",
-    "001",
+    flowId,
     "--review-id",
-    "round-1",
+    reviewId,
     "--reviewers",
     "review-logic",
   ]);
 }
 
-async function readManifest(flowDir: string): Promise<ManagedReviewManifest> {
+async function readManifest(flowDir: string, reviewId = "round-1"): Promise<ManagedReviewManifest> {
   return JSON.parse(
-    await readFile(path.join(ROOT, FLOWS, flowDir, "reviews", "round-1", "manifest.json"), "utf8"),
+    await readFile(path.join(ROOT, FLOWS, flowDir, "reviews", reviewId, "manifest.json"), "utf8"),
   ) as ManagedReviewManifest;
+}
+
+/** What `flow renumber` did before it rewrote review records: move the directory, record the move, nothing else. */
+async function legacyRenumber(fromDir: string, to: string): Promise<string> {
+  const toDir = `${to}${fromDir.slice(3)}`;
+  await rename(path.join(ROOT, FLOWS, fromDir), path.join(ROOT, FLOWS, toDir));
+  const mapFile = path.join(ROOT, FLOWS, "id-map.json");
+  const entries = (await Bun.file(mapFile).exists()) ? (JSON.parse(await readFile(mapFile, "utf8")) as unknown[]) : [];
+  entries.push({ from: fromDir.slice(0, 3), to, fromDir, toDir, at: new Date().toISOString(), reason: "legacy move" });
+  await writeFile(mapFile, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+  return toDir;
 }
 
 test("renumber re-points an ingested round at the new id, and the gate and `keryx review` still read it", async () => {
@@ -213,4 +224,65 @@ test("a renumber whose move fails leaves every review record as it was", async (
 
   expect(await Promise.all(files.map((file) => readFile(path.join(pkg, file), "utf8")))).toEqual(before);
   expect((await readFlow(ROOT, fromDir)).id).toBe("001");
+});
+
+// Flows renumbered before the rewrite existed still hold the old id. In this
+// repository: flow 223's rounds said 222, flow 224's said 202.
+test("repair-reviews re-points rounds left behind by renumbers that predate the rewrite, across a chain of moves", async () => {
+  await enter();
+  await flowCommand(["init", "--title", "renumber probe"]);
+  const firstDir = await onlyFlowDir();
+  const oldPlan = `.metaproject/flows/${firstDir}/plan.md`;
+  await ingestRound(firstDir);
+  const note = path.join(reviewNotesDir(ROOT), "round-1__F-001.md");
+  await mkdir(path.dirname(note), { recursive: true });
+  await writeFile(note, `- Link: .metaproject/flows/${firstDir}/reviews/round-1\n`, "utf8");
+
+  const middleDir = await legacyRenumber(firstDir, "007");
+  const finalDir = await legacyRenumber(middleDir, "009");
+  // The state the repair exists for: still flow 001, pointing at a directory that is gone.
+  expect((await readManifest(finalDir)).flow).toEqual({ id: "001", path: `.metaproject/flows/${firstDir}` });
+
+  await flowCommand(["repair-reviews"]);
+  expect(output()).toContain("review record(s) re-pointed at their flow's current id");
+
+  const manifest = await readManifest(finalDir);
+  expect(manifest.flow).toEqual({ id: "009", path: `.metaproject/flows/${finalDir}` });
+  for (const artifact of Object.values(manifest.artifacts)) {
+    expect(await Bun.file(path.join(ROOT, artifact)).exists()).toBe(true);
+  }
+  const pkg = path.join(ROOT, FLOWS, finalDir, "reviews", "round-1");
+  expect(await readFile(path.join(pkg, "scope.md"), "utf8")).toMatch(/^flow: 009 \(explicit-flow-id\)$/m);
+  const [finding] = JSON.parse(await readFile(path.join(pkg, "findings.json"), "utf8")) as StructuredReviewFinding[];
+  expect(finding?.file).toBe(`.metaproject/flows/${finalDir}/plan.md`);
+  expect(finding?.evidence).toContain(oldPlan);
+  expect(await readFile(note, "utf8")).toBe(`- Link: .metaproject/flows/${finalDir}/reviews/round-1\n`);
+
+  logs = [];
+  await flowCommand(["repair-reviews"]);
+  expect(output()).toContain("already name its current id");
+});
+
+test("repair-reviews follows each flow by directory when one number left twice", async () => {
+  await enter();
+  await flowCommand(["init", "--title", "first probe"]);
+  const aDir = await onlyFlowDir();
+  await ingestRound(aDir, "001", "round-a");
+  await flowCommand(["init", "--title", "second probe"]);
+  const bDir = (await readdir(path.join(ROOT, FLOWS), { withFileTypes: true }))
+    .filter((entry) => entry.isDirectory() && entry.name !== aDir)
+    .map((entry) => entry.name)[0];
+  if (bDir === undefined) {
+    throw new Error("second flow package missing");
+  }
+  await ingestRound(bDir, bDir.slice(0, 3), "round-b");
+
+  const aFinal = await legacyRenumber(aDir, "005");
+  // Flow B takes the number flow A left, then moves on: `001` leaves twice, for two different flows.
+  const bMiddle = await legacyRenumber(bDir, "001");
+  const bFinal = await legacyRenumber(bMiddle, "006");
+
+  await flowCommand(["repair-reviews"]);
+  expect((await readManifest(aFinal, "round-a")).flow).toEqual({ id: "005", path: `.metaproject/flows/${aFinal}` });
+  expect((await readManifest(bFinal, "round-b")).flow).toEqual({ id: "006", path: `.metaproject/flows/${bFinal}` });
 });

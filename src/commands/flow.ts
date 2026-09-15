@@ -6,6 +6,7 @@ import { durableExternalCommentsGate } from "../flow/review-gate";
 import { flowStateSchema } from "../flow/schema";
 import { duplicateFlowIds } from "../flow/store";
 import { githubAdapter } from "../flow/tracker/github";
+import { repairMovedFlowReviewRecords } from "../review/flow-move";
 import { createCodeHealthService } from "../health/service";
 import { securityFlowGate } from "../security/guard";
 import {
@@ -205,6 +206,8 @@ export async function flowCommand(args: string[]): Promise<void> {
         return await runCheck();
       case "renumber":
         return await runRenumber(args.slice(1));
+      case "repair-reviews":
+        return await runRepairReviews();
       case "plan":
         return await runPlan(args.slice(1));
       case "schema":
@@ -805,6 +808,26 @@ async function runRenumber(args: string[]): Promise<void> {
   ]);
 }
 
+// Flows renumbered before `renumber` rewrote review records still name their
+// old id. One pass over id-map.json re-points them; a second pass finds nothing.
+async function runRepairReviews(): Promise<void> {
+  const { rewritten, unreadable } = await repairMovedFlowReviewRecords(process.cwd());
+  if (rewritten.length === 0) {
+    console.log(`  ${style.green(symbols.ok)} Every renumbered flow's review records already name its current id.`);
+  } else {
+    console.log(`  ${style.green(symbols.ok)} ${rewritten.length} review record(s) re-pointed at their flow's current id`);
+    for (const file of rewritten) {
+      note(file);
+    }
+  }
+  for (const file of unreadable) {
+    note(`left unchanged, could not be parsed: ${file}`);
+  }
+  if (rewritten.length > 0) {
+    nextSteps(["Review the diff, then commit the rewritten records listed above."]);
+  }
+}
+
 function requireId(args: string[]): string {
   const id = args.find((arg) => !arg.startsWith("--"));
   if (!id) {
@@ -834,6 +857,7 @@ function printHelp(): void {
     'keryx flow block <id> --reason "<why>"   /   flow unblock <id>',
     "keryx flow check",
     'keryx flow renumber <dir> --to <id> --reason "<why>"   (repair a duplicate id)',
+    "keryx flow repair-reviews   (re-point review records of flows renumbered before renumber rewrote them)",
     "keryx flow plan <id> [--provider <p>] [--json]   (model-suggested task breakdown)",
     "keryx flow schema [--out <path>]",
   ]);
