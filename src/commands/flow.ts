@@ -789,9 +789,19 @@ async function runRenumber(args: string[]): Promise<void> {
     `  ${style.green(symbols.ok)} Flow ${style.bold(result.from)} ${style.cyan(symbols.arrow)} ${style.bold(result.to)}`,
   );
   note(`${result.fromDir} ${symbols.arrow} ${result.toDir}`);
+  const { rewritten, unreadable } = result.reviewRecords;
+  if (rewritten.length > 0) {
+    note(`${rewritten.length} review record(s) re-pointed at flow ${result.to}`);
+  }
+  for (const file of unreadable) {
+    note(`left unchanged, could not be parsed: ${file}`);
+  }
+  // Review notes live outside the flow directory, so they are named here or
+  // they get left out of the commit.
+  const outside = rewritten.filter((file) => !file.startsWith(`.metaproject/flows/${result.toDir}/`));
   nextSteps([
-    `Commit the move together with ${style.cyan(".metaproject/flows/id-map.json")}.`,
-    `Old references to flow ${result.from} stay valid through the id map.`,
+    `Commit the move together with ${[".metaproject/flows/id-map.json", ...outside].map((file) => style.cyan(file)).join(", ")}.`,
+    `id-map.json records ${result.from} ${symbols.arrow} ${result.to} for references outside the repository (PR titles, commit messages); \`keryx flow\` commands take the new id only.`,
   ]);
 }
 

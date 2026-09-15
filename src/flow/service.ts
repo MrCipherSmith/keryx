@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathExists, writeFileAtomic, withFileLock } from "../lib/fs";
 import { validateAgainstSchemaObject } from "../contracts/validator";
@@ -10,6 +10,7 @@ import {
   nextTask,
 } from "./machine";
 import { reviewGate } from "./review-gate";
+import { moveFlowDirWithReviewRecords } from "../review/flow-move";
 import { acFileUnchangedSinceHead, acRelativePathFor } from "./ac-reseal";
 import { flowStateSchema } from "./schema";
 import { collectContext } from "./context";
@@ -797,13 +798,13 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
         }
 
         const toDir = `${to}${fromDir.slice(3)}`;
-        const flowsDir = flowsRoot(cwd);
         // Also hold the per-flow lock: a concurrent taskDone/acConfirm resolves
         // the OLD directory and would write flow.json back into the path we
-        // just moved away, recreating a half-empty package.
-        const flow = await withFileLock(flowLockPath(cwd, fromDir), async () => {
-          await rename(path.join(flowsDir, fromDir), path.join(flowsDir, toDir));
-          return readFlow(cwd, toDir);
+        // just moved away, recreating a half-empty package. The same lock keeps
+        // a concurrent `review ingest --flow` out of the packages being rewritten.
+        const { flow, reviewRecords } = await withFileLock(flowLockPath(cwd, fromDir), async () => {
+          const reviewRecords = await moveFlowDirWithReviewRecords({ cwd, from, to, fromDir, toDir });
+          return { flow: await readFlow(cwd, toDir), reviewRecords };
         });
         flow.id = to;
         const at = now();
@@ -818,7 +819,7 @@ export function createFlowService(deps: FlowServiceDeps): FlowService {
           retired: true,
         });
 
-        return { flow, from, to, fromDir, toDir };
+        return { flow, from, to, fromDir, toDir, reviewRecords };
       });
     },
 

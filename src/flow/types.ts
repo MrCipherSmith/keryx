@@ -320,12 +320,21 @@ export type FlowIdMapEntry = {
   reason: string;
 };
 
+/** The review records `flow renumber` re-pointed at the new id (src/review/flow-move.ts). */
+export type FlowRenumberReviewRecords = {
+  /** Files rewritten, at their post-move paths relative to cwd. */
+  rewritten: string[];
+  /** Records that could not be parsed and were left exactly as they were. */
+  unreadable: string[];
+};
+
 export type FlowRenumberResult = {
   flow: FlowState;
   from: string;
   to: string;
   fromDir: string;
   toDir: string;
+  reviewRecords: FlowRenumberReviewRecords;
 };
 
 export interface FlowService {
