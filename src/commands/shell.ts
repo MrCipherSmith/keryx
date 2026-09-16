@@ -110,6 +110,7 @@ import {
   type AgentIO,
   buildAgentSystemInstruction,
   resolveAgentMaxRounds,
+  resolveMaxAutoWake,
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
@@ -968,6 +969,40 @@ async function runAgentRepl(
     return next.done ? undefined : next.value;
   };
 
+  // Flow 265 (AC7): the MAIN loop's consumer — the next operator line OR the
+  // next finished task, whichever comes first, so an idle REPL reports a
+  // completion without a keystroke. The approval prompts keep calling the bare
+  // `readLine` above: a finished task must never answer a y/N question.
+  type LoopInput = { kind: "line"; line: string } | { kind: "eof" } | { kind: "completion" };
+  let completionWaiters: Array<() => void> = [];
+  // The in-flight line read SURVIVES a lost race — `iterator.next()` consumes
+  // from stdin when called, so re-reading would drop what was typed meanwhile.
+  let pendingLine: Promise<{ kind: "line"; line: string } | { kind: "eof" }> | undefined;
+  const readLineOrCompletion = async (): Promise<LoopInput> => {
+    pendingLine ??= readLine().then((line) =>
+      line === undefined ? ({ kind: "eof" } as const) : ({ kind: "line", line } as const),
+    );
+    if (deps.jobRegistry === undefined) {
+      const settled = await pendingLine;
+      pendingLine = undefined;
+      return settled;
+    }
+    const completion = new Promise<{ kind: "completion" }>((resolve) => {
+      completionWaiters.push(() => resolve({ kind: "completion" }));
+    });
+    const winner = await Promise.race([pendingLine, completion]);
+    if (winner.kind !== "completion") {
+      pendingLine = undefined;
+    }
+    return winner;
+  };
+  let consecutiveAutoWakes = 0;
+  deps.jobRegistry?.onCompletion(() => {
+    const waiters = completionWaiters;
+    completionWaiters = [];
+    for (const wake of waiters) wake();
+  });
+
   // Per-turn token usage (last `usage_update` the provider reported), printed
   // once when the turn ends.
   let lastUsage: NormalizedUsage | undefined;
@@ -1369,7 +1404,37 @@ async function runAgentRepl(
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
-    const line = await readLine();
+    const input = await readLineOrCompletion();
+    if (input.kind === "completion") {
+      // A task finished while nobody was typing. The cap is what keeps a chain
+      // of task-starts-task from running the machine unattended; an operator
+      // line resets it below.
+      if (consecutiveAutoWakes >= resolveMaxAutoWake()) {
+        agentIo.onSystem?.(
+          "◇ a shell task finished; automatic wakes are capped, so it will be reported with your next message.\n",
+        );
+        continue;
+      }
+      consecutiveAutoWakes += 1;
+      out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
+      startSpinner();
+      try {
+        await runAgentTurn(agentIo, deps, history, "", {
+          origin: "task-notification",
+          ...(slateSession !== undefined ? { slateSession } : {}),
+        });
+      } finally {
+        endBlock();
+        stopSpinner();
+      }
+      flushSessionCheckpoint();
+      out(`\n${GUTTER}${turnSeparator()}\n\n`);
+      rich.printPrompt();
+      continue;
+    }
+    const line = input.kind === "line" ? input.line : undefined;
+    // An operator line means a human is here: the auto-wake budget starts over.
+    consecutiveAutoWakes = 0;
     if (line === undefined) {
       // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
       await closeSlateSession(slateSession, mintTimestampAttemptId);

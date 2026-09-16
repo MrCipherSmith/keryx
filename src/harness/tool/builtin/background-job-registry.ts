@@ -53,7 +53,7 @@ export type BackgroundSpawner = (
  * teardown (`session-exit`) — a plain "killed" status cannot tell an operator
  * whether their command failed or the supervisor gave up on it.
  */
-export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit";
+export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit" | "hold-timeout";
 
 /** Public, session-visible snapshot of a tracked task. */
 export interface BackgroundJobInfo {
@@ -74,6 +74,17 @@ export interface BackgroundJobInfo {
   idleTimeoutMs: number;
   /** Set only when `status` is `killed`. */
   killReason?: KillReason;
+  /**
+   * The agent has seen this task's TERMINAL status (flow 265): a delivered
+   * completion notification, a `shell_job_output` that returned it finished, or
+   * a `shell_job_kill` that ended it. Polling a task that is still RUNNING does
+   * not count — nothing about its outcome was reported.
+   *
+   * This is what keeps delivery exactly-once: `drainUndelivered` returns only
+   * tasks that are terminal and unobserved, and marks them observed in the same
+   * step.
+   */
+  observed: boolean;
   /**
    * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, kept from the
    * START and never shrunk — what `shell_exec` builds the synchronous-shaped
@@ -201,6 +212,25 @@ export interface StartTaskOptions {
   idleTimeoutMs?: number;
 }
 
+/**
+ * What `drainUndelivered` hands the agent loop for one finished task (flow 265).
+ *
+ * Self-contained on purpose: the notification is rendered from this record
+ * alone, so the builder never has to reach back into the registry for a task
+ * that may have been evicted by the time the message is written.
+ */
+export interface TaskCompletion {
+  jobId: string;
+  status: "completed" | "failed" | "killed";
+  killReason?: KillReason;
+  exitCode?: number;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  /** Retained output: the ring's tail, falling back to the head snapshot. */
+  output: string;
+}
+
 export interface JobRegistry {
   start(
     command: string,
@@ -224,6 +254,23 @@ export interface JobRegistry {
   promote(jobId: string): { ok: true; overCap?: string } | { ok: false; error: string };
   kill(jobId: string, reason?: KillReason): Promise<{ ok: true } | { ok: false; error: string }>;
   sweepAll(): Promise<void>;
+  /**
+   * Every task that is terminal, was handed back as a handle (`background`
+   * phase) and has not been observed — marked observed IN THE SAME synchronous
+   * step, so a concurrent or replayed drain returns nothing twice (N5).
+   *
+   * A foreground task that exited inside its caller's yield is never returned:
+   * that caller already got the result, so a notification would be a second
+   * copy of something the agent read.
+   */
+  drainUndelivered(): TaskCompletion[];
+  /**
+   * Fires once per task reaching a terminal status, so an idle shell can wake
+   * without polling. Returns an unsubscribe. This is the wake signal only —
+   * WHAT gets delivered is decided by `drainUndelivered`, which is what keeps
+   * "woken" and "delivered" from drifting apart.
+   */
+  onCompletion(listener: (jobId: string) => void): () => void;
 }
 
 /** Env override for the per-task idle timeout. */
@@ -459,6 +506,14 @@ export function createJobRegistry(options?: {
   const maxTrackedJobs = options?.maxTrackedJobs ?? MAX_TRACKED_JOBS;
   const idleMs = options?.idleMs ?? resolveShellIdleMs();
 
+  /**
+   * Flow 265: wake subscribers. Separate from `onEvent` (the TUI store feed) on
+   * purpose — `onEvent` is a firehose of start/phase/output/exit, while this
+   * fires exactly once per task reaching a terminal status, which is the only
+   * thing a shell needs in order to decide whether to start a turn.
+   */
+  const completionListeners = new Set<(jobId: string) => void>();
+
   let nextId = 0;
   const jobs = new Map<string, InternalJob>();
 
@@ -644,6 +699,7 @@ export function createJobRegistry(options?: {
           // Stored AS GIVEN — clamping belongs to the caller (see
           // StartTaskOptions.idleTimeoutMs).
           idleTimeoutMs: opts?.idleTimeoutMs ?? idleMs,
+          observed: false,
           startedAt: nowIso(),
         },
         handle,
@@ -709,6 +765,18 @@ export function createJobRegistry(options?: {
         // delivered — a caller polling shell_job_output has by now seen (or
         // had the chance to see) everything up to this point.
         shrinkTerminatedOutput(job);
+        // Flow 265: the wake signal, fired after the exit event and the shrink
+        // so a listener that immediately drains sees the final record. The
+        // `job.exited` guard at the top of this handler is what keeps a repeat
+        // exit from the process from producing a second notification.
+        for (const listener of completionListeners) {
+          try {
+            listener(jobId);
+          } catch {
+            // A subscriber that throws must not break the output pump or the
+            // other subscribers — same rule the TUI bridge already follows.
+          }
+        }
       });
 
       armIdleTimer(job);
@@ -739,6 +807,13 @@ export function createJobRegistry(options?: {
       }
       const output = job.outputBuffer.slice(job.readCursor);
       job.readCursor = job.outputBuffer.length;
+      // Flow 265: reading a task that has ALREADY finished is the delivery —
+      // the agent asked and was told. Reading one that is still running is
+      // not: nothing about its outcome was reported, so it must still produce
+      // a notification when it ends.
+      if (job.info.status !== "running") {
+        job.info.observed = true;
+      }
       return { ok: true, output };
     },
 
@@ -792,6 +867,12 @@ export function createJobRegistry(options?: {
         return { ok: false, error: `job ${jobId} is not running (status: ${job.info.status})` };
       }
       await requestKill(job, reason);
+      // Flow 265: whoever asked for this kill has their answer — the model
+      // through `shell_job_kill`, the operator through the inspector — so the
+      // outcome needs no second delivery. The rails (`idle`, `output-cap`) and
+      // the session sweep go through `requestKill` directly and are NOT marked
+      // here: nobody asked for those, so they still notify.
+      job.info.observed = true;
       return { ok: true };
     },
 
@@ -799,6 +880,44 @@ export function createJobRegistry(options?: {
       // Foreground tasks are swept too: at session exit nobody is left to
       // await them, so an unswept one would outlive the session.
       await Promise.all(runningJobs().map((job) => requestKill(job, "session-exit")));
+    },
+
+    drainUndelivered() {
+      const drained: TaskCompletion[] = [];
+      for (const job of jobs.values()) {
+        const info = job.info;
+        if (info.status === "running" || info.observed) continue;
+        // A foreground task that exited inside its caller's yield was already
+        // reported to the agent as that call's result; only a task handed back
+        // as a handle can still be waiting to be told about.
+        if (info.phase !== "background") continue;
+        const endedAt = info.endedAt ?? nowIso();
+        const durationMs = Math.max(0, Date.parse(endedAt) - Date.parse(info.startedAt));
+        // Marked in the SAME synchronous pass as the read: nothing awaits
+        // between the filter and the write, so a concurrent drain cannot see
+        // this task unobserved and return it twice (N5).
+        info.observed = true;
+        drained.push({
+          jobId: info.jobId,
+          status: info.status,
+          ...(info.killReason !== undefined ? { killReason: info.killReason } : {}),
+          ...(info.exitCode !== undefined ? { exitCode: info.exitCode } : {}),
+          startedAt: info.startedAt,
+          endedAt,
+          durationMs,
+          // The ring holds the tail (shrunk on exit); the head snapshot is the
+          // fallback for a task whose ring was emptied by a reader.
+          output: job.outputBuffer.length > 0 ? job.outputBuffer : job.outputHead,
+        });
+      }
+      return drained;
+    },
+
+    onCompletion(listener) {
+      completionListeners.add(listener);
+      return () => {
+        completionListeners.delete(listener);
+      };
     },
   };
 }

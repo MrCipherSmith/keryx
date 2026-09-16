@@ -73,6 +73,10 @@ function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
     promote: () => ({ ok: true }),
     kill: async () => ({ ok: true }),
     sweepAll: async () => {},
+    // flow 265: the inspector never delivers completions — it only kills
+    // through the same path the model-facing tool uses — so both are inert here.
+    drainUndelivered: () => [],
+    onCompletion: () => () => {},
     ...overrides,
   };
 }
