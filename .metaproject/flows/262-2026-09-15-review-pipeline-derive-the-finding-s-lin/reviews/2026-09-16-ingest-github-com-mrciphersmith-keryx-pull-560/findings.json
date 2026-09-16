@@ -22,7 +22,11 @@
       ],
       "enumeration_method": "keryx ctx rg for the containment shape across src/ — one match; keryx ctx rg for readTreeFile confirms production ingest never overrides it, so this is the sole check on the real path."
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-001"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — realpath containment; verifier refuted by execution in round r02"
+    }
   },
   {
     "id": "F-002",
@@ -48,7 +52,11 @@
       ],
       "enumeration_method": "keryx ctx rg for locateQuote|locateFinding across src/ — one non-test call site, inside anchorFindings' sequential loop; no length or timeout guard present in either file."
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-002"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — quote/file bounds and an early exit at the second hit; verifier re-measured 49363 ms as 11.1 ms"
+    }
   },
   {
     "id": "F-003",
@@ -73,7 +81,11 @@
       ],
       "enumeration_method": "Searched every caller of locateFinding/anchorFindings in src/review — one definition, one call site — then reproduced the pass-through through the real entry point."
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-003"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — a stale locator is cleared when there is no fresh quote; verifier refuted by execution"
+    }
   },
   {
     "id": "F-004",
@@ -99,7 +111,11 @@
       ],
       "enumeration_method": "Read the whole of renderCostPerFinding; it has exactly two per-finding divisions and both were exercised against the real exported function."
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-004"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — a rounded-down zero prints as less-than; verifier refuted by execution"
+    }
   },
   {
     "id": "F-005",
@@ -118,7 +134,11 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-005"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — acceptRepair refuses removals too; verifier refuted by execution"
+    }
   },
   {
     "id": "F-006",
@@ -137,6 +157,10 @@
       "method": "exact",
       "reported_line": null
     },
-    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-006"
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — the whitespace ambiguity branch is pinned; the verifier's mutant fails exactly that test"
+    }
   }
 ]

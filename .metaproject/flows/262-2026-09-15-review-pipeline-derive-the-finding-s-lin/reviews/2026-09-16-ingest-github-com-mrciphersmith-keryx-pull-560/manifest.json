@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "reviewId": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560",
   "mode": "ingest",
-  "status": "draft",
+  "status": "closed",
   "target": {
     "kind": "report",
     "ref": "https://github.com/MrCipherSmith/keryx/pull/560",
@@ -50,7 +50,7 @@
     "output_tokens": 34202
   },
   "createdAt": "2026-09-16T06:38:49.791Z",
-  "updatedAt": "2026-09-16T06:38:49.791Z",
+  "updatedAt": "2026-09-16T06:57:23.663Z",
   "flow": {
     "id": "262",
     "path": ".metaproject/flows/262-2026-09-15-review-pipeline-derive-the-finding-s-lin"
