@@ -453,7 +453,15 @@ export const MAX_AGENT_MAX_ATTEMPTS_PER_HASH = 10;
  * ATTEMPT ceiling is lifted for this tool — the round budget still applies
  * normally, so this does not weaken the loop-safety guard for any other tool.
  */
-const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_output"]);
+export const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "shell_job_output",
+  // Flow 266 (AC11): polling a task is a legitimate repeat. The same call with
+  // the same arguments is exactly how you follow a running command — the
+  // per-signature attempt rail exists to stop a model looping on a FAILING
+  // call, not to stop it watching one that is working.
+  "shell_task_output",
+  "shell_task_wait",
+]);
 
 /** Env override for how long a `hold` session waits for its own tasks (flow 265). */
 export const ENV_SHELL_HOLD_MS = "KERYX_SHELL_HOLD_MS";

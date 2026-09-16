@@ -1089,6 +1089,40 @@ export function shellTaskOutputTool(registry: JobRegistry, options: TaskToolOpti
   };
 }
 
+/**
+ * Move a running FOREGROUND task to the background (flow 266, AC8) — the effect
+ * behind `/demote`, called by both shells from their own dispatch.
+ *
+ * It lives here rather than in either shell because the rule it enforces is the
+ * registry's, not the surface's: `promote()` is intentionally forgiving — it
+ * re-sets the phase and reports an over-cap rather than refusing, because a
+ * running task cannot be un-started. That is right for the yield path, which
+ * promotes a task it just watched time out, and wrong for an operator command,
+ * where "already in the background" is a mistake worth saying out loud instead
+ * of a silent success.
+ *
+ * Never kills and never aborts the turn: demote releases the WAIT (the same
+ * release an abort performs) and leaves the command running, which is the whole
+ * point of demoting rather than stopping.
+ */
+export function demoteTask(
+  registry: JobRegistry,
+  taskId: string,
+): { ok: true; overCap?: string } | { ok: false; error: string } {
+  const resolved = resolveTaskId(registry, taskId);
+  const info = registry.get(resolved);
+  if (info === undefined) {
+    return { ok: false, error: `unknown task_id: ${taskId}` };
+  }
+  if (info.status !== "running") {
+    return { ok: false, error: `task ${resolved} is not running (status: ${info.status})` };
+  }
+  if (info.phase === "background") {
+    return { ok: false, error: `task ${resolved} is already running in the background` };
+  }
+  return registry.promote(resolved);
+}
+
 /** Upper bound for a model-supplied `shell_task_wait` timeout (flow 266, AC3). */
 export const MAX_TASK_WAIT_MS = 300_000;
 

@@ -104,7 +104,10 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { describeUnavailableCommand, renderCommandHelp } from "./agent-commands";
+import { describeUnavailableCommand, parseDemoteCommand, renderCommandHelp } from "./agent-commands";
+// Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
+// shell, so both dispatch into the same rule instead of growing two.
+import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import {
   type AgentDeps,
   type AgentIO,
@@ -1541,6 +1544,29 @@ async function runAgentRepl(
           } else {
             agentIo.onSystem?.(
               `Compacted −${packed.result.removed} context msgs · archive ${live.summary.archiveMessageCount} · compact×${live.summary.compactCount}\n`,
+            );
+          }
+        }
+      } else if (command === "/demote") {
+        // Flow 266 (AC8). Parse and effect are both shared with the TUI; only
+        // the reporting is this shell's own. Demote never stops the command —
+        // that is the difference between this and killing it, and the message
+        // says so, because an operator who thought they had stopped a build
+        // would not go looking for its output later.
+        const parsed = parseDemoteCommand(rest);
+        if (!parsed.ok) {
+          agentIo.onSystem?.(`${parsed.reason}\n`);
+        } else if (deps.jobRegistry === undefined) {
+          agentIo.onSystem?.("This session tracks no shell tasks, so there is nothing to demote.\n");
+        } else {
+          const demoted = demoteTask(deps.jobRegistry, parsed.taskId);
+          if (!demoted.ok) {
+            agentIo.onSystem?.(`${demoted.error}\n`);
+          } else {
+            const overCap =
+              demoted.overCap !== undefined ? ` Background tasks are over the cap; also running: ${demoted.overCap}.` : "";
+            agentIo.onSystem?.(
+              `Task ${parsed.taskId} keeps running, now in the background — it was NOT stopped.${overCap}\n`,
             );
           }
         }
