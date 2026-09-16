@@ -29,6 +29,10 @@ function stubJobRegistry(): JobRegistry {
     promote: () => ({ ok: true }),
     kill: async () => ({ ok: false, error: "unknown job_id" }),
     sweepAll: async () => {},
+    // flow 265: delivery bookkeeping. This stub proves the tool-list SHAPE
+    // only, so both are inert — the behaviour lives in the registry's own tests.
+    drainUndelivered: () => [],
+    onCompletion: () => () => {},
   };
 }
 
@@ -290,6 +294,7 @@ test("AC7: the registry is actually threaded into shell_exec — a long command 
       status: "running",
       phase: "background",
       idleTimeoutMs: 120_000,
+      observed: false,
       startedAt: "2026-09-16T00:00:00.000Z",
     }),
   };

@@ -64,6 +64,7 @@ function runningTask(jobId = "task-1-1000"): BackgroundJobInfo {
     status: "running",
     phase: "background",
     idleTimeoutMs: 120_000,
+    observed: false,
     startedAt: "2026-01-01T00:00:00.000Z",
   };
 }
@@ -192,14 +193,17 @@ function fakeRegistry(opts: { running?: BackgroundJobInfo[]; pending?: TaskCompl
     waitForExit: async () => "timeout" as const,
     promote: () => ({ ok: true as const }),
     kill: async (jobId: string, reason?: KillReason) => {
-      state.kills.push({ jobId, reason });
+      // `exactOptionalPropertyTypes` is on: an optional property must be
+      // ABSENT rather than explicitly `undefined`, so both spreads omit the
+      // key instead of passing one through.
+      state.kills.push({ jobId, ...(reason !== undefined ? { reason } : {}) });
       const job = running.find((j) => j.jobId === jobId);
       running = running.filter((j) => j.jobId !== jobId);
       pending.push(
         completion({
           jobId,
           status: "killed",
-          killReason: reason,
+          ...(reason !== undefined ? { killReason: reason } : {}),
           exitCode: 143,
           startedAt: job?.startedAt ?? "2026-01-01T00:00:00.000Z",
           output: "partial output before the kill\n",
