@@ -7,15 +7,52 @@
   "id": "262",
   "slug": "review-pipeline-derive-the-finding-s-lin",
   "title": "Review pipeline: derive the finding's line from a quoted snippet, repair mechanical malformation, price the round",
-  "status": "initializing",
+  "status": "in-progress",
   "createdAt": "2026-09-15T16:27:25.876Z",
-  "updatedAt": "2026-09-15T16:28:55.281Z",
+  "updatedAt": "2026-09-16T06:04:15.902Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": null,
-  "acConfirmed": {},
+  "acChecksum": "sha256:0e0fc92e904a4c8453bbc431b306090e8552569419025343b87578e9ffcb4990",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T06:03:53.428Z",
+      "note": "locate-ingest.test.ts: a finding reporting line 99 whose quote sits on line 3 is recorded at 3, with 99 kept in locator.reported_line"
+    },
+    "AC2": {
+      "at": "2026-09-16T06:03:53.680Z",
+      "note": "locate-ingest.test.ts: absent quote, absent file and ambiguous quote each record line:null with their own reason"
+    },
+    "AC3": {
+      "at": "2026-09-16T06:03:53.926Z",
+      "note": "repair-ingest.test.ts: five findings with no id ingest cleanly as F-001..F-005; problem carried from title; manifest.repairs records both"
+    },
+    "AC4": {
+      "at": "2026-09-16T06:03:54.194Z",
+      "note": "repair.test.ts drives a mutating array through the repair: writing class_scope or changing the finding count is refused by name"
+    },
+    "AC5": {
+      "at": "2026-09-16T06:04:15.902Z",
+      "note": "cost-cli.test.ts: estimate at scope, manifest.cost at ingest, per-finding at complete; an unreported round prints \"not recorded\", never 0"
+    },
+    "AC6": {
+      "at": "2026-09-16T06:03:54.708Z",
+      "note": "decisions.md D1: declined, with 307/848 multi-file class_scope measured, the limits of that measurement, and the condition that reopens it"
+    },
+    "AC7": {
+      "at": "2026-09-16T06:03:54.944Z",
+      "note": "review-orchestrator SKILL.md + reviewer-finding.schema.json + review-layout SKILL.md require the quote; no scope or severity rule touched; skill-length ratchet held"
+    },
+    "AC8": {
+      "at": "2026-09-16T06:03:55.199Z",
+      "note": "decisions.md D0: 761 findings audited, 474 anchors resolve, 108 name an absent file, 0 past end; flow 260's own 15 all resolve. Criterion revised before freeze with the reason kept"
+    },
+    "AC9": {
+      "at": "2026-09-16T06:03:55.459Z",
+      "note": "bun test 10298 pass / 19 skip / 0 fail; tsc clean; lint clean"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -25,7 +62,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -33,14 +70,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -48,14 +87,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -63,7 +104,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T4",
@@ -84,7 +127,7 @@
       "id": "T5",
       "title": "A: quote field in the finding schema + ingest locator (exact, then whitespace-normalised, then unlocatable)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -94,13 +137,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T6",
       "title": "A: swap the line-number instruction for the quote instruction in review-orchestrator and every reviewer output contract",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -110,13 +155,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T7",
       "title": "A: re-ingest the flow-260 report and produce the derived-vs-recorded discrepancy list (AC8 — the measurement of whether A was worth doing)",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -126,13 +173,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T8",
       "title": "B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -142,13 +191,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T9",
       "title": "C: estimate at scope, record usage at ingest, cost per retained finding at complete",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -158,13 +209,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     },
     {
       "id": "T10",
       "title": "D: decide the related-file grouping question and record the decision with its evidence in decisions.md",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T1"
       ],
@@ -174,7 +227,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "implemented on feat/review-quote-anchor, PR #560"
     }
   ],
   "history": [
@@ -211,6 +266,110 @@
       "at": "2026-09-15T16:28:55.281Z",
       "event": "task-added",
       "detail": "T10: D: decide the related-file grouping question and record the decision with its evidence in decisions.md"
+    },
+    {
+      "at": "2026-09-16T06:03:38.080Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T06:03:38.334Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T06:03:38.593Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T06:03:38.858Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T06:03:39.130Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T06:03:39.407Z",
+      "event": "task-done",
+      "detail": "T5: A: quote field in the finding schema + ingest locator (exact, then whitespace-normalised, then unlocatable)"
+    },
+    {
+      "at": "2026-09-16T06:03:39.642Z",
+      "event": "task-done",
+      "detail": "T6: A: swap the line-number instruction for the quote instruction in review-orchestrator and every reviewer output contract"
+    },
+    {
+      "at": "2026-09-16T06:03:39.874Z",
+      "event": "task-done",
+      "detail": "T7: A: re-ingest the flow-260 report and produce the derived-vs-recorded discrepancy list (AC8 — the measurement of whether A was worth doing)"
+    },
+    {
+      "at": "2026-09-16T06:03:40.129Z",
+      "event": "task-done",
+      "detail": "T8: B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields"
+    },
+    {
+      "at": "2026-09-16T06:03:40.378Z",
+      "event": "task-done",
+      "detail": "T9: C: estimate at scope, record usage at ingest, cost per retained finding at complete"
+    },
+    {
+      "at": "2026-09-16T06:03:40.640Z",
+      "event": "task-done",
+      "detail": "T10: D: decide the related-file grouping question and record the decision with its evidence in decisions.md"
+    },
+    {
+      "at": "2026-09-16T06:03:53.428Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: locate-ingest.test.ts: a finding reporting line 99 whose quote sits on line 3 is recorded at 3, with 99 kept in locator.reported_line"
+    },
+    {
+      "at": "2026-09-16T06:03:53.680Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: locate-ingest.test.ts: absent quote, absent file and ambiguous quote each record line:null with their own reason"
+    },
+    {
+      "at": "2026-09-16T06:03:53.927Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: repair-ingest.test.ts: five findings with no id ingest cleanly as F-001..F-005; problem carried from title; manifest.repairs records both"
+    },
+    {
+      "at": "2026-09-16T06:03:54.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: repair.test.ts drives a mutating array through the repair: writing class_scope or changing the finding count is refused by name"
+    },
+    {
+      "at": "2026-09-16T06:03:54.460Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: cost-cli.test.ts: estimate at scope, manifest.cost at ingest, per-finding at complete; unreported prints , never 0"
+    },
+    {
+      "at": "2026-09-16T06:03:54.708Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: decisions.md D1: declined, with 307/848 multi-file class_scope measured, the limits of that measurement, and the condition that reopens it"
+    },
+    {
+      "at": "2026-09-16T06:03:54.945Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: review-orchestrator SKILL.md + reviewer-finding.schema.json + review-layout SKILL.md require the quote; no scope or severity rule touched; skill-length ratchet held"
+    },
+    {
+      "at": "2026-09-16T06:03:55.199Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: decisions.md D0: 761 findings audited, 474 anchors resolve, 108 name an absent file, 0 past end; flow 260's own 15 all resolve. Criterion revised before freeze with the reason kept"
+    },
+    {
+      "at": "2026-09-16T06:03:55.459Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun test 10298 pass / 19 skip / 0 fail; tsc clean; lint clean"
+    },
+    {
+      "at": "2026-09-16T06:04:15.902Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: cost-cli.test.ts: estimate at scope, manifest.cost at ingest, per-finding at complete; an unreported round prints \"not recorded\", never 0"
     }
   ]
 }

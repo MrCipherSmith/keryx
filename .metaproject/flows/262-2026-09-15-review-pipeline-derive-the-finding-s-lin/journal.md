@@ -7,3 +7,24 @@
 - 2026-09-15T16:28:55.055Z - task-added: T8: B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields
 - 2026-09-15T16:28:55.168Z - task-added: T9: C: estimate at scope, record usage at ingest, cost per retained finding at complete
 - 2026-09-15T16:28:55.281Z - task-added: T10: D: decide the related-file grouping question and record the decision with its evidence in decisions.md
+- 2026-09-16T06:03:38.080Z - frozen: 9 criteria; checksum recorded
+- 2026-09-16T06:03:38.334Z - started
+- 2026-09-16T06:03:38.593Z - task-done: T1: Collect remaining context
+- 2026-09-16T06:03:38.858Z - task-done: T2: Implement per plan
+- 2026-09-16T06:03:39.130Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-16T06:03:39.407Z - task-done: T5: A: quote field in the finding schema + ingest locator (exact, then whitespace-normalised, then unlocatable)
+- 2026-09-16T06:03:39.642Z - task-done: T6: A: swap the line-number instruction for the quote instruction in review-orchestrator and every reviewer output contract
+- 2026-09-16T06:03:39.874Z - task-done: T7: A: re-ingest the flow-260 report and produce the derived-vs-recorded discrepancy list (AC8 — the measurement of whether A was worth doing)
+- 2026-09-16T06:03:40.129Z - task-done: T8: B: repair id and problem only, with the acceptance test, plus the AC4 guard that fails if repair widens to judged fields
+- 2026-09-16T06:03:40.378Z - task-done: T9: C: estimate at scope, record usage at ingest, cost per retained finding at complete
+- 2026-09-16T06:03:40.640Z - task-done: T10: D: decide the related-file grouping question and record the decision with its evidence in decisions.md
+- 2026-09-16T06:03:53.428Z - ac-confirmed: AC1: locate-ingest.test.ts: a finding reporting line 99 whose quote sits on line 3 is recorded at 3, with 99 kept in locator.reported_line
+- 2026-09-16T06:03:53.680Z - ac-confirmed: AC2: locate-ingest.test.ts: absent quote, absent file and ambiguous quote each record line:null with their own reason
+- 2026-09-16T06:03:53.927Z - ac-confirmed: AC3: repair-ingest.test.ts: five findings with no id ingest cleanly as F-001..F-005; problem carried from title; manifest.repairs records both
+- 2026-09-16T06:03:54.194Z - ac-confirmed: AC4: repair.test.ts drives a mutating array through the repair: writing class_scope or changing the finding count is refused by name
+- 2026-09-16T06:03:54.460Z - ac-confirmed: AC5: cost-cli.test.ts: estimate at scope, manifest.cost at ingest, per-finding at complete; unreported prints , never 0
+- 2026-09-16T06:03:54.708Z - ac-confirmed: AC6: decisions.md D1: declined, with 307/848 multi-file class_scope measured, the limits of that measurement, and the condition that reopens it
+- 2026-09-16T06:03:54.945Z - ac-confirmed: AC7: review-orchestrator SKILL.md + reviewer-finding.schema.json + review-layout SKILL.md require the quote; no scope or severity rule touched; skill-length ratchet held
+- 2026-09-16T06:03:55.199Z - ac-confirmed: AC8: decisions.md D0: 761 findings audited, 474 anchors resolve, 108 name an absent file, 0 past end; flow 260's own 15 all resolve. Criterion revised before freeze with the reason kept
+- 2026-09-16T06:03:55.459Z - ac-confirmed: AC9: bun test 10298 pass / 19 skip / 0 fail; tsc clean; lint clean
+- 2026-09-16T06:04:15.902Z - ac-confirmed: AC5: cost-cli.test.ts: estimate at scope, manifest.cost at ingest, per-finding at complete; an unreported round prints "not recorded", never 0
