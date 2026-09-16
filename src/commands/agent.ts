@@ -1252,8 +1252,26 @@ async function runAgentTurnCore(
 ): Promise<RunAgentTurnResult> {
   const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
-  history.push({ role: "user", content: userLine, provenance: "project" });
-  io.onHistoryChange?.("user");
+  // Flow 265 (AC7): a turn the shell started because a task finished has no
+  // operator line — its INPUT is the notification itself. Pushing `userLine`
+  // here would put an empty `user` message in history, which is both a lie
+  // about who spoke and a message some providers reject outright.
+  //
+  // The drain is what decides whether this turn happens at all: if another
+  // reader took the completion first (the model polled, or a concurrent drain
+  // ran), there is nothing to say and the turn ends before a single request is
+  // made — a wake that announces nothing must not cost a model call.
+  if (options.origin === "task-notification") {
+    const woken = deps.jobRegistry?.drainUndelivered() ?? [];
+    if (woken.length === 0) {
+      return {};
+    }
+    history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool" });
+    io.onHistoryChange?.("user");
+  } else {
+    history.push({ role: "user", content: userLine, provenance: "project" });
+    io.onHistoryChange?.("user");
+  }
   const signal = options.signal;
   const isAborted = (): boolean => signal?.aborted === true;
 

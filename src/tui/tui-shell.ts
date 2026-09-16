@@ -39,7 +39,7 @@
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
-import { runAgentTurn } from "../commands/agent";
+import { resolveMaxAutoWake, runAgentTurn } from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
@@ -4419,9 +4419,18 @@ export async function launchTuiAgentShell(opts: {
 
     // Run a submitted line: a slash command, an unknown-slash notice, a main turn,
     // or (when main is busy) an automatic side worker — no special command needed.
-    const runLine = (line: string): void => {
-      if (line.length === 0) {
+    // Flow 265 (AC7/AC8): `origin` lets a completion reuse this ONE turn
+    // dispatch instead of growing a second one. A notification-started turn
+    // carries no operator text, so it skips the empty-line guard and the user
+    // echo — there is nobody to echo.
+    let consecutiveAutoWakes = 0;
+    const runLine = (line: string, origin: "operator" | "task-notification" = "operator"): void => {
+      if (line.length === 0 && origin === "operator") {
         return;
+      }
+      if (origin === "operator") {
+        // A human is here: the auto-wake budget starts over.
+        consecutiveAutoWakes = 0;
       }
       const displayLine = summarizeSubmittedLine(line);
 
@@ -5220,6 +5229,7 @@ export async function launchTuiAgentShell(opts: {
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
       void runAgentTurn(foregroundIo, deps, history, line, {
         signal: foregroundOperation.signal,
+        ...(origin === "task-notification" ? { origin: "task-notification" as const } : {}),
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
@@ -5266,6 +5276,33 @@ export async function launchTuiAgentShell(opts: {
         }
       });
     };
+
+    // --- flow 265 (AC7/AC8): wake on a finished task, only when idle ---------
+    //
+    // Subscribed HERE rather than beside the store's `setBackgroundJobListener`
+    // (which runs far earlier): `runLine` is defined above this point, and a
+    // listener registered before it would close over a binding that is not
+    // initialised yet.
+    //
+    // Idle means both halves — nothing running in the foreground AND nothing
+    // the operator queued. A queued message is the real next step and the
+    // settle handlers keep draining it first; a notification that jumped that
+    // queue would answer a question nobody asked yet.
+    deps.jobRegistry?.onCompletion(() => {
+      const busy = chrome.isBusy() || foregroundOperation.isActive;
+      const idle = !busy && mainQueue.length === 0;
+      if (!idle) {
+        return;
+      }
+      if (consecutiveAutoWakes >= resolveMaxAutoWake()) {
+        io.onSystem?.(
+          "◇ a shell task finished; automatic wakes are capped, so it will be reported with your next message.\n",
+        );
+        return;
+      }
+      consecutiveAutoWakes += 1;
+      runLine("", "task-notification");
+    });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
     // The mode itself is `createBlockNavController` (transcript-blocks.ts); all
