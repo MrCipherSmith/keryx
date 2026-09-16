@@ -3,7 +3,13 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createProjectSkill } from "../gdskills/project-skills";
-import { escapeRegexLiteral, collectReviewers, renderReviewerInventoryMarkdown } from "./reviewers";
+import {
+  collectReviewers,
+  descriptionFlags,
+  descriptionPathTriggers,
+  escapeRegexLiteral,
+  renderReviewerInventoryMarkdown,
+} from "./reviewers";
 
 let cwd: string;
 
@@ -167,4 +173,75 @@ test("escapeRegexLiteral escapes every regex metacharacter, so a label can never
   for (const label of ["Origin", "Origin Hash", "Imported At"]) {
     expect(escapeRegexLiteral(label)).toBe(label);
   }
+});
+
+describe("project reviewer triggers", () => {
+  async function writeProjectReviewer(name: string, frontmatter: string, body = "# body\n"): Promise<void> {
+    const dir = path.join(cwd, ".metaproject", "project-skills", "review", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\n${frontmatter}---\n\n${body}`, "utf8");
+  }
+
+  test("globs and flags are read out of a block-scalar description", async () => {
+    await writeProjectReviewer(
+      "review-house-core",
+      "description: |\n  Use when reviewing core changes. Dispatched by house-review for --house-core,\n  --house, --all, or src/core/** changes.\n",
+    );
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    expect(reviewer?.paths).toEqual(["src/core/**"]);
+    expect(reviewer?.pathsSource).toBe("description");
+    // `--all` selects every reviewer already; listing it would make every one explicit.
+    expect(reviewer?.flags).toEqual(["--house-core", "--house"]);
+    expect(reviewer?.description).toContain("Use when reviewing core changes.");
+  });
+
+  test("metadata.paths wins over the description", async () => {
+    await writeProjectReviewer(
+      "review-house-ui",
+      'description: Reviews src/ui/** changes.\nmetadata:\n  paths: "src/ui/**/*.tsx, src/theme/**"\n  stack_requires: "react"\n',
+    );
+    const [reviewer] = (await collectReviewers(cwd)).project;
+    expect(reviewer?.paths).toEqual(["src/ui/**/*.tsx", "src/theme/**"]);
+    expect(reviewer?.pathsSource).toBe("metadata");
+    expect(reviewer?.stackRequires).toEqual(["react"]);
+  });
+
+  test("a description with no glob gates on nothing, and says so", async () => {
+    await writeProjectReviewer("review-house-dates", "description: Reviews date utils and formatters.\n");
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project[0]).toMatchObject({ paths: [], pathsSource: "none" });
+    expect(renderReviewerInventoryMarkdown(inventory)).toContain("none — dispatched on every round");
+  });
+
+  test("cited rules the project lacks are listed per reviewer", async () => {
+    await mkdir(path.join(cwd, ".metaproject", "rules", "core"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "present.mdc"), "x", "utf8");
+    await writeProjectReviewer(
+      "review-house-rules",
+      "description: Reviews things.\n",
+      "Standards: `core/present.mdc`, `core/absent.mdc`.\n",
+    );
+    const inventory = await collectReviewers(cwd);
+    expect(inventory.project[0]?.unresolvedRules).toEqual(["core/absent.mdc"]);
+    expect(renderReviewerInventoryMarkdown(inventory)).toContain("- review-house-rules: core/absent.mdc");
+  });
+});
+
+describe("descriptionPathTriggers", () => {
+  test("expands an optional suffix and strips list punctuation", () => {
+    expect(descriptionPathTriggers("Vantage src/**/*.ts(x) changes, src/**/*.css, src/theme/**.")).toEqual([
+      "src/**/*.ts",
+      "src/**/*.tsx",
+      "src/**/*.css",
+      "src/theme/**",
+    ]);
+  });
+
+  test("prose paths without a glob are not triggers", () => {
+    expect(descriptionPathTriggers("rules from src/core/flow/CLAUDE.md and test/e2e changes")).toEqual([]);
+  });
+
+  test("descriptionFlags ignores --all", () => {
+    expect(descriptionFlags("for --x, --all, or (--y)")).toEqual(["--x", "--y"]);
+  });
 });

@@ -1621,7 +1621,7 @@ const SKILL_DOCUMENT_NAMES: ReadonlySet<string> = new Set(
 export const KNOWN_SKILL_COMPANION_DOCUMENTS: ReadonlyMap<string, string> = new Map([
   [
     "SKILL.detail.md",
-    "overflow reference for `orchestration/feature-analyzer`, linked from its SKILL.md; carries no frontmatter and is not addressed by any runtime",
+    "overflow reference linked from its skill's SKILL.md (`orchestration/feature-analyzer`, `review/review-orchestrator`); carries no frontmatter and is not addressed by any runtime",
   ],
   [
     "orchestrator-prompt.md",
