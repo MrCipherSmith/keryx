@@ -3,6 +3,69 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.108] — 2026-09-16
+A long command no longer freezes the session. Every shell command the agent runs
+is now a supervised task that hands back control within a bounded wait, and what
+kills a stuck command is silence rather than the clock.
+
+### Changed
+
+- **`shell_exec` returns within a bounded wait, always.** It used to model a
+  process as a request and a response, which is only true while commands are
+  short. Anything longer blocked the whole turn until a 120-second wall-clock
+  deadline killed it — unless the model remembered an optional `background: true`
+  flag, which is exactly the thing it forgets when a command turns out to be slow.
+  Reported from a live session: `sleep 120 && gh run list …` froze the turn for
+  the full two minutes, the command was killed, and the follow-up
+  `shell_job_kill` answered `not running`, because a blocking call was never
+  registered as a job at all.
+
+  Now every call starts a supervised task. A command that finishes inside the
+  wait (`KERYX_SHELL_YIELD_MS`, 10 s) returns its output exactly as before — the
+  common case is unchanged. One that does not keeps running in the background and
+  the call returns `{task_id, pid, status, output}`, which
+  `shell_job_output(task_id)` reads and `shell_job_kill(task_id)` stops. The same
+  incident command now comes back in about three seconds with a task you can read
+  and kill. `background: true` still works and now means only "do not wait".
+
+- **A command is killed for going silent, not for taking long.** The wall-clock
+  deadline is replaced by an idle timeout (`KERYX_SHELL_IDLE_MS`, 120 s), reset by
+  every line of output: a build that keeps printing for ten minutes survives,
+  while one that has produced nothing for two minutes does not. The kill says
+  which rail fired and how to raise it. `KERYX_SHELL_TIMEOUT_MS` is still read as
+  a deprecated fallback, so an operator who tuned the old knob keeps their value.
+
+- **A killed task says who killed it.** The single terminal status `exited` split
+  into `completed` (exit 0) and `failed` (non-zero), and `killed` now carries a
+  reason: `model`, `operator`, `idle`, `output-cap` or `session-exit`. A kill
+  requested twice still produces exactly one terminal event, and the first reason
+  wins.
+
+- **The concurrency cap counts background tasks only.** Three running dev servers
+  used to be able to refuse a `git status`. A foreground command is bounded by the
+  caller waiting on it, so it no longer consumes the cap, and a task that outlives
+  its wait while the cap is full is never killed for it — the result names the
+  running commands instead.
+
+- **The TUI lists a task once it is actually in the background.** A short command
+  no longer flickers through the Background Jobs panel on its way to finishing,
+  and the inspector shows the kill reason next to the status.
+
+### Added
+
+- **`description` and `idle_timeout_ms` on `shell_exec`.** The first is a short
+  label for the task list. The second is the escape for a command that is
+  deliberately silent for a long time — a sleep, a slow poll — clamped to between
+  1 second and 30 minutes, so the model can raise the rail for its own command but
+  cannot switch it off; only the operator can, with `KERYX_SHELL_IDLE_MS=0`.
+
+Approval, the OS sandbox, process-group kills and the session-scoped lifetime are
+unchanged: a task still dies with its session, and `/clear` and `/new` still do
+not sweep. This is phase P0 of
+`docs/requirements/keryx-background-task-execution/`; completion notifications
+that wake the agent, the `shell_task_*` tools and the documentation sweep are the
+phases after it. (#563)
+
 ## [0.2.107] — 2026-09-16
 A review finding now points at the code it quotes, a round no longer dies on a
 field the report's own ordering already contained, and every round states what
