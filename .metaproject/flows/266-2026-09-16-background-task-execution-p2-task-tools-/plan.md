@@ -44,10 +44,24 @@ already exists.
    a deprecation note in each alias's description (AC4, AC5).
 6. Operator demote as `/demote <task_id>` in BOTH shells, through the same
    release path as abort and without ending the turn; TUI list entry from the
-   `phase` event (AC8). The slash command goes through the shared command
-   registry both shells already read, so one handler serves both and the test
-   drives that handler directly — deliberately not a second source audit, which
-   is the weak proof M12 had to settle for in P1.
+   `phase` event (AC8).
+
+   **Corrected before starting:** an earlier draft of this step said "one handler
+   serves both shells". No such mechanism exists. `AGENT_SLASH_COMMANDS` carries
+   METADATA only (`name`, `description`, `modes`) and `findAgentCommand` merely
+   resolves a line to an entry; each shell then dispatches in its own branch
+   (`shell.ts`'s if/else chain, `tui-shell.ts:4441` and `:4656`). The established
+   shape for an argument-carrying command is `/delegate`: a PURE parser exported
+   from the registry module (`parseDelegateCommand` + `DELEGATE_USAGE`, returning
+   `{ok:true,…} | {ok:false,reason}`), with the effect left to each shell — and
+   note that `/delegate` is called from the TUI only, so "the registry has a
+   parser" does not by itself put a command in both shells.
+
+   So P2 adds a pure `parseDemoteCommand` beside it and ONE effect helper that
+   turns a parsed id into `registry.promote(id)` with its stated errors; both
+   shells call the pair from their own dispatch. The executable proof is the
+   parser plus that helper (unknown id, already-background task, running task),
+   which is what AC8 asks for — not a shared dispatcher, and not a source audit.
 7. Side-worker denial over the real roster, plus `REPEATABLE_TOOL_NAMES`
    (AC9, AC11).
 8. Verify: typecheck, the named suites, the full suite, a live smoke on real
