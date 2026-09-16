@@ -240,6 +240,32 @@ export interface JobRegistry {
   list(): BackgroundJobInfo[];
   readOutput(jobId: string): { ok: true; output: string } | { ok: false; error: string };
   /**
+   * Read from an EXPLICIT, absolute cursor instead of the registry's own
+   * (flow 266, AC1). Two calls with the same `since` return the same bytes,
+   * because nothing here advances shared state — which is what makes this the
+   * one read a side worker may be given.
+   *
+   * `nextCursor` is where the caller should continue. `missed` is how many bytes
+   * were dropped before `since` could be honoured (the ring truncated past it):
+   * silently returning the oldest retained bytes instead would look like output
+   * the caller had not seen yet.
+   *
+   * Never marks the task observed — the CALLER decides that, because only it
+   * knows whether it is the main session or a side worker (D-16).
+   */
+  readOutputSince(
+    jobId: string,
+    since: number,
+  ):
+    | { ok: true; output: string; nextCursor: number; missed: number; status: BackgroundJobInfo["status"] }
+    | { ok: false; error: string };
+  /**
+   * Record that the agent has been told this task's outcome (flow 265's
+   * `observed` flag), so flow 265's drain will not announce it a second time.
+   * Separate from any read: a side worker reads without ever calling this.
+   */
+  markObserved(jobId: string): void;
+  /**
    * Wait up to `ms` for a task to finish. Never kills on timeout — the caller
    * decides what to do (`shell_exec` promotes the task to background).
    * `"unknown"` means this registry never tracked that id.
@@ -345,6 +371,18 @@ interface InternalJob {
   handle: BackgroundProcessHandle;
   outputBuffer: string;
   readCursor: number;
+  /**
+   * Bytes ever dropped from the FRONT of `outputBuffer`, by the ring's over-cap
+   * truncation and by the shrink on exit (flow 266).
+   *
+   * `readCursor` is an index into the CURRENT buffer and is rebased whenever
+   * bytes are dropped, so it cannot be handed out: a caller holding one across a
+   * truncation would silently read the wrong slice. This counter turns it into
+   * an absolute stream position — `dropped + index` — which is what
+   * `readOutputSince` gives a caller with an explicit cursor, and what makes a
+   * second reader safe.
+   */
+  droppedBytes: number;
   exited: boolean;
   /**
    * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, mirrored into
@@ -586,6 +624,7 @@ export function createJobRegistry(options?: {
     const dropped = job.outputBuffer.length - TERMINATED_OUTPUT_TAIL_BYTES;
     job.outputBuffer = job.outputBuffer.slice(dropped);
     job.readCursor = Math.max(0, job.readCursor - dropped);
+    job.droppedBytes += dropped;
   }
 
   function appendOutput(job: InternalJob, chunk: string, stream: "stdout" | "stderr"): void {
@@ -609,6 +648,7 @@ export function createJobRegistry(options?: {
       const dropped = job.outputBuffer.length - MAX_BACKGROUND_OUTPUT_BYTES;
       job.outputBuffer = job.outputBuffer.slice(dropped);
       job.readCursor = Math.max(0, job.readCursor - dropped);
+      job.droppedBytes += dropped;
 
       // F-013: only issue ONE auto-kill per job. The status doesn't flip off
       // "running" until the kill actually lands, so without this guard every
@@ -706,6 +746,7 @@ export function createJobRegistry(options?: {
         outputBuffer: "",
         outputHead: "",
         readCursor: 0,
+        droppedBytes: 0,
         exited: false,
         killRequested: false,
         phaseEmitted: false,
@@ -815,6 +856,31 @@ export function createJobRegistry(options?: {
         job.info.observed = true;
       }
       return { ok: true, output };
+    },
+
+    readOutputSince(jobId, since) {
+      const job = jobs.get(jobId);
+      if (job === undefined) {
+        return { ok: false, error: `unknown job_id: ${jobId}` };
+      }
+      // `since` is an ABSOLUTE stream position; the buffer only holds what has
+      // not been dropped, so map it through `droppedBytes` and say plainly when
+      // part of the range is gone for good.
+      const requested = Number.isFinite(since) && since > 0 ? Math.trunc(since) : 0;
+      const missed = Math.max(0, job.droppedBytes - requested);
+      const index = Math.min(job.outputBuffer.length, Math.max(0, requested - job.droppedBytes));
+      return {
+        ok: true,
+        output: job.outputBuffer.slice(index),
+        nextCursor: job.droppedBytes + job.outputBuffer.length,
+        missed,
+        status: job.info.status,
+      };
+    },
+
+    markObserved(jobId) {
+      const job = jobs.get(jobId);
+      if (job !== undefined) job.info.observed = true;
     },
 
     async waitForExit(jobId, ms) {
@@ -953,6 +1019,71 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
         return { output: result.error, isError: true };
       }
       return { output: result.output, isError: false };
+    },
+  };
+}
+
+/** Who is reading — the only thing that decides whether a read counts as delivery (D-16). */
+export interface TaskToolOptions {
+  /**
+   * `"main"` marks a task observed when it returns a TERMINAL status: the agent
+   * asked and was told, so flow 265 must not announce it again. `"side"` never
+   * marks — a side worker that could mark would make the main session's
+   * notification vanish, and the main session would never learn the task ended.
+   */
+  observer: "main" | "side";
+}
+
+/**
+ * `shell_task_output(task_id, since?)` — risk `read`: the cursor-EXPLICIT read.
+ *
+ * The difference from `shell_job_output` is the whole reason this tool exists:
+ * that one advances a cursor nobody names, so two readers of the same task steal
+ * each other's output. Here the caller says where to start and is told where to
+ * continue, which is what makes a second reader safe — and why this is the only
+ * task read a side worker is offered.
+ */
+export function shellTaskOutputTool(registry: JobRegistry, options: TaskToolOptions): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_output",
+      description:
+        "Read a shell task's output from an EXPLICIT cursor. Input: { task_id: string, since?: integer } — " +
+        "omit `since` (or pass 0) for everything retained, then pass back the next_cursor from the previous " +
+        "result to get only what is new. Two calls with the same `since` return the same bytes, so this is safe " +
+        "to call again after a failure. The result states the task's status and its next_cursor, and says so " +
+        "when older output was dropped before your cursor.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_id: { type: "string" },
+          since: { type: "integer" },
+        },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input): Promise<InteractiveToolResult> => {
+      const taskId = typeof input.task_id === "string" ? input.task_id : "";
+      if (taskId.length === 0) {
+        return { output: "shell_task_output requires a non-empty 'task_id'", isError: true };
+      }
+      const since = typeof input.since === "number" ? input.since : 0;
+      const result = registry.readOutputSince(taskId, since);
+      if (!result.ok) {
+        return { output: result.error, isError: true };
+      }
+      // Only the main session's copy records delivery, and only once the task is
+      // actually over: reading a task that is still running says nothing about
+      // how it ended, so it must still produce a notification when it does.
+      if (options.observer === "main" && result.status !== "running") {
+        registry.markObserved(taskId);
+      }
+      const missed =
+        result.missed > 0 ? `\n[${result.missed} byte(s) older than your cursor were dropped and cannot be re-read]` : "";
+      const trailer = `\n[task ${taskId} status=${result.status} next_cursor=${result.nextCursor}]`;
+      return { output: `${result.output}${missed}${trailer}`, isError: false };
     },
   };
 }

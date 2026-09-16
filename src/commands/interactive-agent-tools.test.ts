@@ -33,6 +33,11 @@ function stubJobRegistry(): JobRegistry {
     // only, so both are inert — the behaviour lives in the registry's own tests.
     drainUndelivered: () => [],
     onCompletion: () => () => {},
+    // flow 266: the explicit-cursor read and the delivery mark it deliberately
+    // does NOT perform. Inert for the same reason as the two above — what this
+    // stub is asked is which tools exist, never what they return.
+    readOutputSince: () => ({ ok: false, error: "unknown job_id" }),
+    markObserved: () => {},
   };
 }
 
