@@ -998,6 +998,7 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_output",
       description:
+        "DEPRECATED — use shell_task_output, which takes an explicit cursor; this name is kept for one release. " +
         "Return output produced by a shell task SINCE the previous call for that id — never the full transcript " +
         "again. Input: { job_id: string } — pass the task_id shell_exec returned for a command that outlived its " +
         "yield (or a background:true job). Poll this instead of re-running shell_exec to check on a long command.",
@@ -1014,7 +1015,7 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
       if (jobId.length === 0) {
         return { output: "shell_job_output requires a non-empty 'job_id'", isError: true };
       }
-      const result = registry.readOutput(jobId);
+      const result = registry.readOutput(resolveTaskId(registry, jobId));
       if (!result.ok) {
         return { output: result.error, isError: true };
       }
@@ -1200,6 +1201,67 @@ export function shellTaskWaitTool(registry: JobRegistry): InteractiveTool {
 }
 
 /**
+ * Accept either spelling of a task id (flow 266, AC5).
+ *
+ * Ids are minted `task-<n>-<pid>`, but `job-<n>-<pid>` is what a transcript from
+ * before the rename still carries, and the model re-reads its own history every
+ * turn. Resolving both is what lets the old NAMES stay aliases for a release
+ * without the old IDS becoming dead references. Returns the id as given when
+ * neither spelling is tracked, so the error names what the caller actually
+ * asked for.
+ */
+function resolveTaskId(registry: JobRegistry, id: string): string {
+  if (registry.get(id) !== undefined) return id;
+  const swapped = id.startsWith("job-")
+    ? `task-${id.slice("job-".length)}`
+    : id.startsWith("task-")
+      ? `job-${id.slice("task-".length)}`
+      : undefined;
+  if (swapped !== undefined && registry.get(swapped) !== undefined) return swapped;
+  return id;
+}
+
+/**
+ * `shell_task_kill(task_id)` — risk `read`: process-group kill, scoped to this
+ * session's own registry.
+ *
+ * Idempotent by way of an ordinary refusal: killing a task that has already
+ * ended is a tool error naming its status, never a second signal. The status it
+ * ended with is left alone — a task that exited cleanly does not become
+ * `killed` because someone asked afterwards.
+ */
+export function shellTaskKillTool(registry: JobRegistry): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_kill",
+      description:
+        "Stop a running shell task — its entire process group, including any descendant it backgrounded. Input: " +
+        "{ task_id: string }. Killing a task that has already finished is refused with its status rather than " +
+        "signalling anything, so calling this twice is safe. Only tasks from this session can be targeted.",
+      inputSchema: {
+        type: "object",
+        properties: { task_id: { type: "string" } },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input): Promise<InteractiveToolResult> => {
+      const raw = typeof input.task_id === "string" ? input.task_id : "";
+      if (raw.length === 0) {
+        return { output: "shell_task_kill requires a non-empty 'task_id'", isError: true };
+      }
+      const taskId = resolveTaskId(registry, raw);
+      const result = await registry.kill(taskId);
+      if (!result.ok) {
+        return { output: result.error, isError: true };
+      }
+      return { output: `task ${taskId} killed`, isError: false };
+    },
+  };
+}
+
+/**
  * `shell_job_kill(job_id)` — risk `read` (no approval): process-group kill,
  * scoped to this session's own registry. Records kill reason `"model"`, which
  * is what distinguishes it in the task list from a task the idle/output-cap
@@ -1210,6 +1272,7 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_kill",
       description:
+        "DEPRECATED — use shell_task_kill; this name is kept for one release. " +
         "Stop a running shell task — its entire process group, including any descendant it backgrounded. Input: " +
         "{ job_id: string } — the task_id shell_exec returned for a command still running after its yield (or a " +
         "background:true job). Only tasks in this session's own registry can be targeted.",
@@ -1226,7 +1289,7 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
       if (jobId.length === 0) {
         return { output: "shell_job_kill requires a non-empty 'job_id'", isError: true };
       }
-      const result = await registry.kill(jobId);
+      const result = await registry.kill(resolveTaskId(registry, jobId));
       if (!result.ok) {
         return { output: result.error, isError: true };
       }
