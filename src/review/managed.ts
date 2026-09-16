@@ -36,6 +36,8 @@ import {
   renderFilterStatsMarkdown,
   type ReviewFilterStats,
 } from "./filter-stats";
+import { locateFinding } from "./locate";
+import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
   DEFAULT_VERIFICATION_MODE,
@@ -221,6 +223,19 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
+  // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
+  // because a finding with no `id` mints the key `<reviewId>#undefined` and five
+  // of them then collide on it — which is how a round was lost to a field the
+  // report's own ordering already contained.
+  const repairs = repairMechanicalOmissions(reported);
+
+  // The line becomes a derived fact here, BEFORE anything downstream reads it:
+  // the verifier cites a finding, the cap reports one by site, `scope.md` lists
+  // them, and every one of those would otherwise be quoting a number nobody
+  // checked. A finding with no quote is untouched — it keeps whatever it said,
+  // and says so by carrying no locator.
+  await anchorFindings(reported, input);
+
   // Minted BEFORE the verifier runs, because a claim names a finding by
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
   // carries round N's key verbatim; only a finding without one is minted here.
@@ -348,6 +363,7 @@ export async function createManagedReviewPackage(
     coverage,
     at,
     filterStats,
+    repairs,
   });
 
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
@@ -904,6 +920,7 @@ function buildManifest(args: {
   coverage: ReviewCoverageEntry[];
   at: string;
   filterStats: ReviewFilterStats;
+  repairs: FindingRepair[];
 }): ManagedReviewManifest {
   // Flow 209 AC2. Written only when the caller supplied one: the property is
   // omitted rather than set to `null`, so `keryx review status` can tell "nobody
@@ -928,6 +945,13 @@ function buildManifest(args: {
     },
     coverage: args.coverage,
     filter_stats: args.filterStats,
+    // Written only when something was repaired. An empty array on every package
+    // would say "a repair pass ran and did nothing" on records where the
+    // distinction never arose — the same rule `cross_family_review` above
+    // follows, and for the same reason.
+    ...(args.repairs.length === 0 ? {} : { repairs: args.repairs }),
+    // Same rule: absent means nobody reported, which is not the same as zero.
+    ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
     createdAt: args.at,
     updatedAt: args.at,
@@ -1040,6 +1064,63 @@ function triage(
   });
 }
 
+/**
+ * Replace every quoted finding's reported line with the line its quote is on.
+ *
+ * Runs over the round's own tree (`input.cwd`), which for an ingest at the
+ * round's head IS the head — and when it is not, the locator says so rather
+ * than guessing: a quote that no longer appears reads `unlocatable`, which is
+ * the honest answer for a report ingested against a moved tree.
+ *
+ * `readTreeFile` is injectable so a test can state a tree in a map instead of
+ * on disk; production reads the working tree.
+ */
+async function anchorFindings(
+  findings: Array<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+): Promise<void> {
+  const read =
+    input.readTreeFile ??
+    (async (relative: string): Promise<string | null> => {
+      // Contained to the round's tree: a finding naming `../../etc/passwd` is a
+      // finding about a file this round is not reviewing, and reading it would
+      // be the record doing something nobody asked for.
+      const resolved = path.resolve(input.cwd, relative);
+      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {
+        return null;
+      }
+      try {
+        return await readFile(resolved, "utf8");
+      } catch {
+        return null;
+      }
+    });
+
+  for (const finding of findings) {
+    const locator = await locateFinding(finding, read);
+    if (locator === undefined) {
+      continue;
+    }
+    if (locator.state === "derived") {
+      finding.line = locator.line;
+      finding.locator = {
+        state: "derived",
+        method: locator.method,
+        ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
+      };
+      continue;
+    }
+    // Null, not the reported number. A line nobody could confirm is worse than
+    // no line: it is acted on, and the acting is where the cost lands.
+    finding.line = null;
+    finding.locator = {
+      state: "unlocatable",
+      reason: locator.reason,
+      ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
+    };
+  }
+}
+
 /** The persisted record: exactly the properties `review-finding.schema.json` allows. */
 function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFinding {
   const record: StructuredReviewFinding = {
@@ -1057,6 +1138,15 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.line !== undefined) {
     record.line = finding.line;
+  }
+  // The quote is what `line` was derived FROM, so a record carrying a derived
+  // line without it would be a number no later reader could re-check. They are
+  // written as a pair or not at all.
+  if (finding.quote !== undefined) {
+    record.quote = finding.quote;
+  }
+  if (finding.locator !== undefined) {
+    record.locator = finding.locator;
   }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;
