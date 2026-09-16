@@ -160,7 +160,84 @@ registry + shell_exec + TUI test files, and `bun run typecheck` clean.
   across 761 files (769 s). The `--timeout 30000` is deliberate: the default 5 s
   produces load-induced flakes on this suite.
 - `keryx test analyze` re-run so the testing context is not stale at push time.
+
+## T10 review — testing-practices reviewer (DONE_WITH_CONCERNS)
+
+Verdict: every AC has a test that fails on regression, and both boundary pairs
+(idle timeout, process-group kill) genuinely pair. Findings to act on:
+
+- **F-001 (major)** `interactive-agent-tools.ts:184` passes `jobRegistry` into
+  `shellExecTool`, and nothing asserts it. Drop that argument and every
+  `shell_exec` silently reverts to the blocking runner — the incident itself —
+  with all nine AC9 suites still green. The wiring test only regex-matches the
+  token `jobRegistry`, so `jobRegistry: undefined` would satisfy it. Needs a
+  value-level test: build the tool list with a stub registry and assert
+  `shell_exec` returns a `task_id` handle rather than the sync result.
+- **F-002 (major)** Load-sensitive timing: idle-reset tests at
+  `background-job-registry.test.ts:1069` (150 ms window, 40 ms ticks) and
+  `:1113` (400 ms window, real `sleep 0.1`), plus the start-buffer test at
+  `:797-812` asserting `fgElapsed < 250 ms`. Widen the idle windows an order of
+  magnitude and assert the RELATION for the buffer test instead of an absolute.
+- **F-003/F-004 (minor)** The registry's grandchild test uses a fixed 500 ms
+  sleep and has no `try/finally`, so a failed assertion leaks two real `sleep
+  100` processes. Its AC6 sibling polls and cleans up — copy it.
+- **F-005 (minor)** `killReason` reaching the TUI entry and `formatJobMeta` is
+  untested, which is the point of splitting `killed` by reason.
+- **F-006 (minor)** Two assertions that cannot fail (a redundant elapsed-time
+  check after a poll already succeeded; constant-equals-literal pins).
+- **F-007 (minor)** Untested branches: the "task is no longer tracked" path, and
+  the `KERYX_SHELL_IDLE_MS` message (proven only by a real-process test that
+  skips on win32). A scripted-spawner case covers both cheaply, and would also
+  pin the `(no output; exit 143)` wording noted above.
+
+All seven were fixed (commit "test(shell): harden the flow-263 tests against the
+review findings"): a behaviour-level wiring test through
+`buildInteractiveAgentTools`; idle windows widened to 2 s against 40 ms/100 ms
+ticks; the start-buffer test asserts a relation instead of an absolute; the
+registry's grandchild test polls to a deadline inside `try/finally` and kills the
+grandchild on failure; `killReason` is asserted on the entry and in the Meta
+view; the redundant elapsed-time assertion became a lower bound proving the idle
+rail waited; and the idle-kill message plus the lost-task branch are now covered
+by scripted fakes on every platform. Re-run: 109 pass / 0 fail across the five
+files, typecheck clean.
+
+## T10 review — logic and blast radius, done by the orchestrator
+
+Both reviewer dispatches stalled with empty transcripts (~28 min, the same
+signature as the implementers), so these two passes were done directly rather
+than dispatched a third time.
+
+**Logic.** No blocker or major found. What was checked and holds:
+- Every kill path funnels through `requestKill` (first reason wins, repeat
+  requests await the in-flight termination), `terminateJob` clears the idle
+  timer before signalling, and only the real `onExit` writes status and emits
+  `exit` — so "exactly one terminal event, one reason" survives the
+  model/operator/idle/output-cap/session-exit races.
+- `waitForExit` returns `exited` immediately for a finished task, never kills on
+  timeout, clears its timer, and `unref`s it; the idle timer is re-armed on every
+  chunk and `unref`'d, so no timer keeps a process alive.
+- The cap counts background-phase running tasks only; `promote` never kills and
+  only reports `overCap`, and every later background start is still refused —
+  the hard bound is `maxConcurrent + 1` with sequential tool calls.
+- Accepted minor: `promote` on a task that exited during the yield still flips
+  `phase` and emits its one `phase` event. Harmless — the TUI store drops a task
+  that exited while pending and keeps it dropped.
+- Accepted minor: memory per terminated task is now the 4 KB ring tail plus the
+  24 KB head snapshot, bounded by the same `MAX_TRACKED_JOBS` LRU.
+- Accepted, documented: `kill` on an already-exited task still returns an error
+  rather than being idempotent; the spec makes that a P2 change.
+
+**Blast radius.** `shell_exec` is constructed in exactly one place, and no other
+surface (MCP, child harness, standard commands) builds or exposes it. Sweep
+wiring is intact at all five call sites. No persisted artifact carries a job
+status string. Stale prose found and handled: the wiki page
+`architecture/background-jobs.md` is now marked `superseded-in-part` with a
+summary of what changed (full rewrite stays P3); `docs/verification/keryx-shell-tui-test-catalog.md`
+rows TOOL-11 and BGJOB-01..03 still describe the opt-in model and are left to P3
+with the rest of the doc sweep.
 - 2026-09-16T06:06:35.294Z - task-attempt: T7: blocked (attempt 4) — second stall: transcript idle 758s with the implementation already on disk; orchestrator verifies and finishes it
 - 2026-09-16T06:11:40.555Z - task-done: T7: shell_exec: bounded yield path, schema and description
 - 2026-09-16T06:24:50.871Z - task-done: T9: Verify: typecheck, AC9 suites, real-process incident smoke
 - 2026-09-16T06:25:11.327Z - task-attempt: T10: started (attempt 1) — review wave: review-logic, review-regression, review-testing-practices
+- 2026-09-16T06:54:23.169Z - task-attempt: T10: blocked (attempt 2) — review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly
+- 2026-09-16T07:12:44.252Z - task-done: T10: Review the P0 diff and fix findings

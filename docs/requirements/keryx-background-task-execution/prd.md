@@ -107,11 +107,11 @@ decision:
 
 | # | Criterion | Status |
 |---|---|---|
-| S1 | The exact incident does not recur: `shell_exec("sleep 120 && …")` with no flag returns within `yield_ms` and the turn continues; the task is then observable and killable. | planned |
-| S2 | A command that keeps producing output past 120 s is not killed; a command silent for `idle_ms` is. | planned |
-| S3 | On task exit the agent is notified without a poll and without a `sleep`-based wait. | planned |
-| S4 | The operator can send a message while a task is awaited and it takes over immediately. | planned |
-| S5 | A process-group kill reaches a grandchild backgrounded by the command. | planned |
+| S1 | The exact incident does not recur: `shell_exec("sleep 120 && …")` with no flag returns within `yield_ms` and the turn continues; the task is then observable and killable. | met (P0) |
+| S2 | A command that keeps producing output past 120 s is not killed; a command silent for `idle_ms` is. | met (P0) |
+| S3 | On task exit the agent is notified without a poll and without a `sleep`-based wait. | planned (P1) |
+| S4 | The operator can send a message while a task is awaited and it takes over immediately. | planned (P2) |
+| S5 | A process-group kill reaches a grandchild backgrounded by the command. | met (P0) |
 | S6 | No implementation claim in this package is unsupported by a `file:line`. | documentation check, not a runtime claim |
 
 ## Risks

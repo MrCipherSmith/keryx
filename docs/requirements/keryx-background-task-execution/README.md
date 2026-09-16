@@ -3,11 +3,23 @@ Version: 1.1.0
 
 ## Status
 
-`spec ready` — **nothing in this package is implemented.** v1.1.0 closes the
-implementation gaps found when v1.0.0 was checked against the code (headless
-delivery, notification shape, wake cap, concurrency cap, idle escape, statuses,
-tool cancellation, side-worker access, no-registry path, on-disk output): see
-[brainstorm.md](brainstorm.md) D-09…D-18. It replaces the
+**Phase P0 is implemented** (2026-09-16, keryx flow 263): every `shell_exec`
+call is a supervised task that returns within a bounded yield, a command that
+outlives the yield keeps running as a background task instead of freezing the
+turn, the wall-clock deadline is replaced by an idle timeout (pulled forward
+from P1), terminal statuses are `completed`/`failed`/`killed` with a
+`killReason`, and the TUI lists a task only once it is in the background. The
+rest of the package — completion delivery and the `hold`/wake rules (P1), the
+task tools, tool cancellation, operator demote and side-worker rules (P2), the
+documentation sweep (P3) — is still `spec ready` and **not implemented**; see
+[metrics-and-validation.md](metrics-and-validation.md) for which invariant is
+proven and by which test.
+
+v1.1.0 closed the implementation gaps found when v1.0.0 was checked against the
+code (headless delivery, notification shape, wake cap, concurrency cap, idle
+escape, statuses, tool cancellation, side-worker access, no-registry path,
+on-disk output): see [brainstorm.md](brainstorm.md) D-09…D-18. The package
+replaces the
 flow-173 **opt-in model** and the synchronous blocking default, while keeping
 the flow-173 background registry, process-group ownership and session-scoping.
 The current behaviour is documented in

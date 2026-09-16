@@ -1,9 +1,16 @@
 # Keryx Background Task Execution — Specification
 Version: 1.1.0
 
-Status: `spec ready` — **planned, not implemented.** Every section that
-describes runtime behaviour is either (a) a description of code that exists
-today, cited with `file:line`, or (b) explicitly marked **planned**.
+Status: **P0 implemented** (2026-09-16, keryx flow 263); P1–P3 `spec ready` and
+not implemented. Sections describing P1/P2/P3 behaviour stay marked **planned**.
+What P0 shipped: the bounded yield and the supervised-task model (§4.1), the
+idle timeout and its config (§3, pulled forward from P1), the derived statuses
+and `killReason` (§5), and the phase-gated TUI list (§6). Deviations from this
+document, recorded in the flow journal: the registry was evolved in place rather
+than split into the `shell-task-*.ts` files of §2 (field names stay `jobId`
+while ids became `task-<n>-<pid>`), and the transcript's first 24 000 bytes are
+snapshotted separately so a short command's synchronous result is still capped
+from the START.
 
 ## 1. Module identity
 

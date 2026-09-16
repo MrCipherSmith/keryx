@@ -9,7 +9,7 @@
   "title": "Background task execution P0: every shell_exec is a supervised task with a bounded yield",
   "status": "in-progress",
   "createdAt": "2026-09-15T18:39:16.109Z",
-  "updatedAt": "2026-09-16T06:25:11.327Z",
+  "updatedAt": "2026-09-16T07:12:44.252Z",
   "source": {
     "type": "description",
     "ref": null
@@ -211,21 +211,27 @@
       "id": "T10",
       "title": "Review the P0 diff and fix findings",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-16T06:25:11.327Z",
             "outcome": "started",
             "detail": "review wave: review-logic, review-regression, review-testing-practices"
+          },
+          {
+            "at": "2026-09-16T06:54:23.168Z",
+            "outcome": "blocked",
+            "detail": "review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -380,6 +386,16 @@
       "at": "2026-09-16T06:25:11.327Z",
       "event": "task-attempt",
       "detail": "T10: started (attempt 1) — review wave: review-logic, review-regression, review-testing-practices"
+    },
+    {
+      "at": "2026-09-16T06:54:23.169Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 2) — review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly"
+    },
+    {
+      "at": "2026-09-16T07:12:44.252Z",
+      "event": "task-done",
+      "detail": "T10: Review the P0 diff and fix findings"
     }
   ]
 }
