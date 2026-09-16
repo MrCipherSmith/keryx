@@ -1548,6 +1548,72 @@ async function runAgentTurnCore(
             "Use a chat-safe fallback (`keryx shell --chat`) or switch to a tool-capable model.\n",
         );
       }
+
+      // Flow 265 (AC6): a session nobody can wake does not end a turn while one
+      // of its OWN tasks is still running. `--print` ends its input after a
+      // single line and an unattended run has no operator at all, so ending the
+      // turn here means the process exits, the session sweep kills the task,
+      // and the command the model started is reported by nobody. An interactive
+      // session does the opposite — it ends the turn and starts a new one when
+      // the completion arrives, which is why the mode, not the loop, decides.
+      const deliveryMode = deps.completionDelivery ?? (deps.unattended === true ? "hold" : "wake");
+      const taskRegistry = deps.jobRegistry;
+      const stillRunning =
+        deliveryMode === "hold" && taskRegistry !== undefined
+          ? taskRegistry.list().filter((t) => t.status === "running" && t.phase === "background")
+          : [];
+      if (taskRegistry !== undefined && stillRunning.length > 0) {
+        const holdMs = resolveShellHoldMs();
+        let unsubscribe: (() => void) | undefined;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        let onAbort: (() => void) | undefined;
+        const outcome = await new Promise<"completed" | "aborted" | "timeout">((resolve) => {
+          // Subscribing is what makes this a wait rather than a poll: the
+          // registry fires once per task reaching a terminal status.
+          unsubscribe = taskRegistry.onCompletion(() => resolve("completed"));
+          if (holdMs > 0) {
+            timer = setTimeout(() => resolve("timeout"), holdMs);
+            // A pending hold must never be the reason a finished CLI run stays
+            // alive; the race above is what ends the wait, not this timer.
+            (timer as { unref?: () => void }).unref?.();
+          }
+          if (signal !== undefined) {
+            if (signal.aborted) {
+              resolve("aborted");
+            } else {
+              onAbort = (): void => resolve("aborted");
+              signal.addEventListener("abort", onAbort, { once: true });
+            }
+          }
+        });
+        unsubscribe?.();
+        if (timer !== undefined) clearTimeout(timer);
+        if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+
+        if (outcome === "aborted") {
+          system("\n[stopped] Model turn interrupted by user.\n");
+          return {};
+        }
+        if (outcome === "timeout") {
+          // The outer bound, not the expected path: a silent task is killed by
+          // its own idle rail long before this. Killing here is what lets the
+          // turn report a real outcome instead of ending on a task that never
+          // exits — and the kill reason says which rail gave up.
+          for (const task of taskRegistry.list().filter((t) => t.status === "running" && t.phase === "background")) {
+            await taskRegistry.kill(task.jobId, "hold-timeout");
+          }
+        }
+        // A text-only round has no tool batch, so the round-boundary drain
+        // never runs for it: deliver here, then continue so the model gets a
+        // round in which to react to what finished.
+        const held = taskRegistry.drainUndelivered();
+        if (held.length > 0) {
+          history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool" });
+          io.onHistoryChange?.("tool");
+        }
+        continue;
+      }
+
       return {}; // error, or a text-only finish → turn complete
     }
 

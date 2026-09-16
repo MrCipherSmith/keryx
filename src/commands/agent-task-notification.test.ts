@@ -474,9 +474,14 @@ describe("AC4/AC5: the notification is delivered at the round boundary", () => {
 // =======================================================================
 describe("AC6: completionDelivery 'hold' does not end a turn while a task is running", () => {
   test("it waits for the completion and continues the turn with the notification", async () => {
+    // Deliberately NEITHER an action request ("build it" carries the `build`
+    // token) NOR a claimed action ("I started…" carries the `i` marker): both
+    // would drag in the pre-existing toolless-reprompt rail, which adds two
+    // more model rounds of its own and would make the round count below assert
+    // that rail rather than the hold. The hold is what this test is about.
     const { provider, requests } = scriptedProvider([
-      [{ kind: "text_delta", text: "I started the build." }, { kind: "model_end" }],
-      [{ kind: "text_delta", text: "The build finished." }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "The compilation is under way." }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "The compilation is over." }, { kind: "model_end" }],
     ]);
     const fake = fakeRegistry({ running: [runningTask("task-3-3000")] });
     const { io } = collectingIo();
