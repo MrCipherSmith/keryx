@@ -81,11 +81,22 @@ function acceptRepair(before: ReadonlyArray<ReadonlySet<string>>, after: readonl
   }
   for (const [index, finding] of after.entries()) {
     const had = before[index] as ReadonlySet<string>;
-    const added = Object.keys(finding).filter((key) => !had.has(key));
-    const illegal = added.filter((key) => !REPAIRABLE.has(key));
+    const keys = new Set(Object.keys(finding));
+    const illegal = [...keys].filter((key) => !had.has(key) && !REPAIRABLE.has(key));
     if (illegal.length > 0) {
       throw new Error(
         `Refusing a repair that wrote ${illegal.join(", ")} onto finding ${index + 1}: only ${[...REPAIRABLE].join(" and ")} may be filled in. Everything else is a claim the reviewer has to make.`,
+      );
+    }
+    // Deletion, checked too. The first version compared only what appeared,
+    // so a repair that CLEARED `evidence` or `class_scope` passed a guard
+    // whose comment promised to catch it — the guard claiming more than it
+    // enforced, which is the shape of defect this whole package keeps
+    // recording about itself. Found by this change's own review round.
+    const removed = [...had].filter((key) => !keys.has(key));
+    if (removed.length > 0) {
+      throw new Error(
+        `Refusing a repair that removed ${removed.join(", ")} from finding ${index + 1}: a repair may fill a field in; it may never clear one.`,
       );
     }
   }

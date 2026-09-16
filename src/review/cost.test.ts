@@ -63,6 +63,24 @@ describe("renderCostPerFinding", () => {
     expect(lines).toContain("per retained finding: 0.3075 USD");
   });
 
+  test("REGRESSION — a small-but-real cost never prints as a bare zero", () => {
+    // `0` in this package means somebody measured zero. Rounding 2/10 down to
+    // it said the round was free one line under `tokens: 2`.
+    const tokens = renderCostPerFinding({ input_tokens: 2 }, 10).join("\n");
+    expect(tokens).toContain("tokens: 2");
+    expect(tokens).toContain("per retained finding: < 1 token");
+    expect(tokens).not.toContain("per retained finding: 0 tokens");
+
+    const usd = renderCostPerFinding({ spent_usd: 0.00001 }, 10).join("\n");
+    expect(usd).toContain("per retained finding: < 0.0001 USD");
+    expect(usd).not.toContain("per retained finding: 0.0000 USD");
+  });
+
+  test("BOUNDARY — a genuinely zero cost still prints zero", () => {
+    // The guard above must not turn a measured zero into `< 1`.
+    expect(renderCostPerFinding({ input_tokens: 0 }, 10).join("\n")).toContain("per retained finding: 0 tokens");
+  });
+
   test("a round that retained nothing reports the bill, not an infinity", () => {
     const lines = renderCostPerFinding({ input_tokens: 38_000 }, 0).join("\n");
     expect(lines).toContain("tokens: 38,000");

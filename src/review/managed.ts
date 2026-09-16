@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -36,7 +36,7 @@ import {
   renderFilterStatsMarkdown,
   type ReviewFilterStats,
 } from "./filter-stats";
-import { locateFinding } from "./locate";
+import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
 import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
@@ -1082,15 +1082,36 @@ async function anchorFindings(
   const read =
     input.readTreeFile ??
     (async (relative: string): Promise<string | null> => {
-      // Contained to the round's tree: a finding naming `../../etc/passwd` is a
-      // finding about a file this round is not reviewing, and reading it would
-      // be the record doing something nobody asked for.
-      const resolved = path.resolve(input.cwd, relative);
-      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {
+      // Contained to the round's tree, and contained against the FILE SYSTEM
+      // rather than against the string.
+      //
+      // The first version compared resolved paths with `startsWith`, which
+      // inspects only the spelling. A symlink whose name sits inside the tree
+      // and whose target does not — `src/link -> /etc/passwd`, plantable by
+      // anyone who can add a file to the branch under review — passed that
+      // check, and `readFile` then followed it. Worse than a read: because the
+      // locator records `derived` or `unlocatable`, a finding's quote becomes a
+      // line-by-line oracle for any file the ingest process can open. Found by
+      // this change's own review round, reproduced against `/etc/passwd`.
+      //
+      // `realpath` is therefore taken on both sides before comparing. A path
+      // that cannot be resolved does not exist, which is already `null`.
+      const root = await realpath(input.cwd).catch(() => path.resolve(input.cwd));
+      const resolved = path.resolve(root, relative);
+      const real = await realpath(resolved).catch(() => null);
+      if (real === null || (real !== root && !real.startsWith(`${root}${path.sep}`))) {
         return null;
       }
       try {
-        return await readFile(resolved, "utf8");
+        // Size is bounded here rather than inside the matcher: locating is
+        // O(file lines x quote lines), so an unbounded file is an unbounded
+        // round. A lockfile is a real, ordinary example of a large file a
+        // finding could name.
+        const info = await stat(real);
+        if (!info.isFile() || info.size > MAX_LOCATE_FILE_BYTES) {
+          return null;
+        }
+        return await readFile(real, "utf8");
       } catch {
         return null;
       }
@@ -1099,6 +1120,13 @@ async function anchorFindings(
   for (const finding of findings) {
     const locator = await locateFinding(finding, read);
     if (locator === undefined) {
+      // No quote, so nothing was checked — and a locator carried in from a
+      // previous round describes a check that did not happen this time. Round
+      // N+1 echoing a finding out of `prior_findings` brings the old pair with
+      // it, and leaving it would write an unverified line under a record that
+      // claims every line is derived. Clearing it makes "no quote means no
+      // locator" true of the record, not just of the happy path.
+      delete finding.locator;
       continue;
     }
     if (locator.state === "derived") {

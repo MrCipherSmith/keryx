@@ -88,6 +88,26 @@ describe("the acceptance check", () => {
     expect(() => repairMechanicalOmissions(sneaky as never)).toThrow(/class_scope/);
   });
 
+  test("AC4 — a repair that CLEARED a judged field is refused too", () => {
+    // The first version of the guard diffed only what appeared, so a repair
+    // that deleted `evidence` or `class_scope` passed a check whose comment
+    // promised to catch it.
+    const findings = [{ id: "F-001", problem: "stated", evidence: "ran it" }] as Array<Record<string, unknown>>;
+    const deleting = new Proxy(findings, {
+      get(target, prop, receiver) {
+        if (prop === "entries") {
+          return function* entries(): Generator<[number, Record<string, unknown>]> {
+            const finding = target[0] as Record<string, unknown>;
+            delete finding["evidence"];
+            yield [0, finding];
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    expect(() => repairMechanicalOmissions(deleting as never)).toThrow(/removed evidence/);
+  });
+
   test("a repair that changed the number of findings is refused", () => {
     const findings = [{ id: "F-001", problem: "stated" }] as Array<Record<string, unknown>>;
     const growing = new Proxy(findings, {

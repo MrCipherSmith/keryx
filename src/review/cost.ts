@@ -126,11 +126,26 @@ export function renderCostPerFinding(cost: ReviewRoundCost | undefined, retained
     lines.push("  Nothing was retained, so there is no per-finding figure — only the bill.");
     return lines;
   }
+  // A rounded-down zero reads exactly like a measured zero, which is the
+  // confusion this module opens by refusing for the unreported case and would
+  // then reintroduce through division. `2 tokens / 10 findings` printed
+  // `0 tokens` one line under `tokens: 2`. Found by this change's own review
+  // round.
   if (tokens !== undefined) {
-    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);
+    const per = tokens / retained;
+    lines.push(
+      per > 0 && Math.round(per) === 0
+        ? "per retained finding: < 1 token"
+        : `per retained finding: ${grouped(Math.round(per))} tokens`,
+    );
   }
   if (cost.spent_usd !== undefined) {
-    lines.push(`per retained finding: ${(cost.spent_usd / retained).toFixed(4)} USD`);
+    const per = cost.spent_usd / retained;
+    lines.push(
+      per > 0 && Number(per.toFixed(4)) === 0
+        ? "per retained finding: < 0.0001 USD"
+        : `per retained finding: ${per.toFixed(4)} USD`,
+    );
   }
   return lines;
 }

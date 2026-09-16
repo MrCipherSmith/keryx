@@ -28,6 +28,28 @@
 // simply label. Revisit if `unlocatable` turns out to be common — the re-ingest
 // of an existing round is how that number gets measured, not guessed.
 
+/**
+ * Bounds, because matching is O(file lines x quote lines) and neither side had
+ * one.
+ *
+ * Measured by this change's own review round, on one core with no I/O: a
+ * 50,000-line file against a 10,000-line quote took 49 seconds for a SINGLE
+ * finding, and a realistic case — a 20,000-line lockfile with a 50-line quote —
+ * cost 118 ms per finding, which is ~2 minutes for a thousand-finding report,
+ * all of it inside one sequential loop. A review report is attacker-influenced
+ * data; an unbounded matcher over it is an unbounded ingest.
+ *
+ * Both limits are generous against the guidance the schema already gives
+ * ("a few lines is enough"), so a quote that trips one has already stopped
+ * being a quote. Tripping a limit is `unlocatable` with the reason named — never
+ * a silent skip, and never a truncated match, which would anchor a finding to
+ * the wrong place while looking successful.
+ */
+export const MAX_QUOTE_LINES = 200;
+export const MAX_LOCATE_FILE_LINES = 50_000;
+/** Read bound for the same reason, applied before the file reaches the matcher. */
+export const MAX_LOCATE_FILE_BYTES = 4_000_000;
+
 /** How a finding's `line` was arrived at. */
 export type LocatorRecord =
   | { state: "derived"; method: "exact" | "whitespace-normalised"; line: number; reported_line?: number | null }
@@ -83,6 +105,18 @@ function deindent(lines: readonly string[]): string[] {
  * snippet that lost its leading spaces on the way through a code fence still
  * matches the indented original, and one that kept them matches too.
  */
+/**
+ * Two hits are as informative as twenty thousand.
+ *
+ * The scan stops at this many, because the only question it answers is "none,
+ * one, or more than one" — ambiguity is already a refusal, so counting past the
+ * second match buys nothing and costs the rest of the file. It also bounds the
+ * REASON: a quote matching every line of a 20,000-line lockfile produced a
+ * failure string carrying 19,951 line numbers, which then went into
+ * `findings.json`.
+ */
+const MAX_HITS = 2;
+
 function findRuns(
   haystack: readonly string[],
   needle: readonly string[],
@@ -96,9 +130,20 @@ function findRuns(
     const window = shape(haystack.slice(start, start + needle.length));
     if (window.every((line, offset) => line === needle[offset])) {
       hits.push(start + 1); // 1-based, like every line number a human reads
+      if (hits.length >= MAX_HITS) {
+        return hits;
+      }
     }
   }
   return hits;
+}
+
+/** "at least 2 places (lines 1, 2)" — bounded, and honest that it stopped counting. */
+function ambiguity(hits: readonly number[], pass: string): LocateOutcome {
+  return {
+    state: "unlocatable",
+    reason: `the quote matches at least ${hits.length} places${pass}(lines ${hits.join(", ")}, and the scan stopped there); an anchor chosen among them would be a guess`,
+  };
 }
 
 /**
@@ -112,7 +157,19 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
   if (needle.length === 0) {
     return { state: "unlocatable", reason: "the quote is empty" };
   }
+  if (needle.length > MAX_QUOTE_LINES) {
+    return {
+      state: "unlocatable",
+      reason: `the quote is ${needle.length} lines, past the ${MAX_QUOTE_LINES}-line bound; quote the few lines the finding is about`,
+    };
+  }
   const haystack = fileText.replace(/\r\n/g, "\n").split("\n");
+  if (haystack.length > MAX_LOCATE_FILE_LINES) {
+    return {
+      state: "unlocatable",
+      reason: `the file is ${haystack.length} lines, past the ${MAX_LOCATE_FILE_LINES}-line bound for locating`,
+    };
+  }
 
   // Exact: both sides de-indented and right-trimmed. Trailing spaces are
   // invisible to whoever copied the quote, so treating them as a difference
@@ -126,10 +183,7 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
     return { state: "derived", method: "exact", line: exact[0] as number };
   }
   if (exact.length > 1) {
-    return {
-      state: "unlocatable",
-      reason: `the quote matches ${exact.length} places in the file (lines ${exact.join(", ")}); an anchor chosen among them would be a guess`,
-    };
+    return ambiguity(exact, " in the file ");
   }
 
   const loose = findRuns(haystack, needle.map(normalise), (window) => window.map(normalise));
@@ -137,10 +191,7 @@ export function locateQuote(fileText: string, quote: string): LocateOutcome {
     return { state: "derived", method: "whitespace-normalised", line: loose[0] as number };
   }
   if (loose.length > 1) {
-    return {
-      state: "unlocatable",
-      reason: `the quote matches ${loose.length} places once whitespace is normalised (lines ${loose.join(", ")}); an anchor chosen among them would be a guess`,
-    };
+    return ambiguity(loose, " once whitespace is normalised ");
   }
   return { state: "unlocatable", reason: "the quote does not appear in the file" };
 }

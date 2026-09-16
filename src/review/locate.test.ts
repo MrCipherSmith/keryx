@@ -4,7 +4,7 @@
 // takes `line` as reported: none of these findings carries a usable line at all.
 
 import { describe, expect, test } from "bun:test";
-import { locateFinding, locateQuote, quoteLines } from "./locate";
+import { locateFinding, locateQuote, MAX_LOCATE_FILE_LINES, MAX_QUOTE_LINES, quoteLines } from "./locate";
 
 const FILE = [
   "export function greet(name: string): string {", // 1
@@ -66,6 +66,30 @@ describe("locateQuote", () => {
     expect(outcome.state).toBe("unlocatable");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
     expect(outcome.state === "unlocatable" && outcome.reason).toContain("lines 2, 10");
+  });
+
+  test("AMBIGUITY — the same rule holds for the whitespace-normalised pass", () => {
+    // The exact pass had this test and the loose pass did not, so collapsing
+    // the loose branch to "return the first hit" left the whole suite green.
+    // These two lines differ exactly, and are identical once whitespace is
+    // collapsed — so only the second pass can see them as two.
+    const file = ["const a = 1;", "const b = 2;", "const  a  =  1;"].join("\n");
+    const outcome = locateQuote(file, "const   a = 1;");
+    expect(outcome.state).toBe("unlocatable");
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain("2 places");
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain("whitespace");
+  });
+
+  test("a quote past the line bound is refused rather than matched slowly", () => {
+    const outcome = locateQuote("a\n".repeat(10), `${"x\n".repeat(MAX_QUOTE_LINES + 1)}`);
+    expect(outcome.state).toBe("unlocatable");
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain(`${MAX_QUOTE_LINES}-line bound`);
+  });
+
+  test("a file past the line bound is refused rather than matched slowly", () => {
+    const outcome = locateQuote("a\n".repeat(MAX_LOCATE_FILE_LINES + 1), "a");
+    expect(outcome.state).toBe("unlocatable");
+    expect(outcome.state === "unlocatable" && outcome.reason).toContain("bound for locating");
   });
 
   test("a quote that is not in the file says so", () => {

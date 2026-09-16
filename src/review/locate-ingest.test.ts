@@ -7,7 +7,7 @@
 // defect this pipeline keeps recording about itself.
 
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createManagedReviewPackage, type ManagedReviewIngestInput } from "./managed";
@@ -123,6 +123,52 @@ test("BOUNDARY: a finding with no quote keeps its reported line and carries no l
 test("a quote naming a file outside the round's tree is refused, not read", async () => {
   const [recorded] = await ingest({
     findings: [finding({ file: "../../../etc/hosts", line: 1, quote: "localhost" })],
+  });
+  expect(recorded?.line).toBeNull();
+  expect(recorded?.locator?.state).toBe("unlocatable");
+});
+
+test("REGRESSION — a symlink inside the tree does not read what it points at", async () => {
+  // The containment check compared resolved path STRINGS, so `src/link` naming
+  // `/etc/passwd` passed it and `readFile` followed the link. Worse than a
+  // read: `derived` versus `unlocatable` then answers "is this line in that
+  // file", one line at a time.
+  const outside = path.join(ROOT, "..", `outside-${path.basename(ROOT)}.txt`);
+  await writeFile(outside, "secret-line-one\nsecret-line-two\n", "utf8");
+  try {
+    await symlink(outside, path.join(ROOT, "src", "link.ts"));
+  } catch {
+    return; // A platform without symlinks has nothing to defend against here.
+  }
+  const [recorded] = await ingest({
+    findings: [finding({ file: "src/link.ts", line: 1, quote: "secret-line-one" })],
+  });
+  expect(recorded?.line).toBeNull();
+  expect(recorded?.locator?.state).toBe("unlocatable");
+  await rm(outside, { force: true });
+});
+
+test("REGRESSION — a locator carried in from a previous round is cleared, not echoed", async () => {
+  // A fix round re-reports a finding out of `prior_findings`, which carries the
+  // previous round's locator. With no fresh quote nothing was checked this
+  // time, so keeping it would write an unverified line under a record that
+  // claims every line is derived.
+  const [recorded] = await ingest({
+    findings: [
+      finding({
+        line: 42,
+        locator: { state: "unlocatable", reason: "stale reason from a previous round", reported_line: 7 },
+      }),
+    ],
+  });
+  expect(recorded?.locator).toBeUndefined();
+  expect(recorded?.line).toBe(42); // reported-only, and saying so by carrying no locator
+});
+
+test("a file past the read bound is not located against", async () => {
+  await writeFile(path.join(ROOT, "src", "huge.ts"), "x\n".repeat(2_100_000), "utf8");
+  const [recorded] = await ingest({
+    findings: [finding({ file: "src/huge.ts", line: 1, quote: "x" })],
   });
   expect(recorded?.line).toBeNull();
   expect(recorded?.locator?.state).toBe("unlocatable");
