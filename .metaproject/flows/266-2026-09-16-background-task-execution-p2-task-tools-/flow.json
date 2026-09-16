@@ -9,13 +9,62 @@
   "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
   "status": "in-progress",
   "createdAt": "2026-09-16T13:03:29.197Z",
-  "updatedAt": "2026-09-16T14:18:18.953Z",
+  "updatedAt": "2026-09-16T14:21:14.686Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:b04923787581a2eb324f174f8d35f5469536498e1f857a9132b74291b0b85529",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T14:20:15.920Z",
+      "note": "shell-task-tools.test.ts: two calls with the same since return the same bytes; the status is reported alongside; an unknown task_id is a tool error naming the id"
+    },
+    "AC2": {
+      "at": "2026-09-16T14:20:16.015Z",
+      "note": "shell-task-tools.test.ts: mode any returns as soon as one named task is terminal (without waiting out the slow one); mode all reaching its bound reports the still-running task; an unknown id is named, not dropped"
+    },
+    "AC3": {
+      "at": "2026-09-16T14:20:16.108Z",
+      "note": "shell-task-tools.test.ts: clampTaskWaitMs pins [0,300000] against negative, zero, in-range, over-range, MAX_SAFE_INTEGER and NaN; the timeout path returns statuses with isError false and the task still running — the wait never kills"
+    },
+    "AC4": {
+      "at": "2026-09-16T14:20:16.193Z",
+      "note": "shell-task-tools.test.ts: killing an already-exited task is an ordinary tool error and the task keeps its completed status — no second signal, no status rewrite"
+    },
+    "AC5": {
+      "at": "2026-09-16T14:20:16.284Z",
+      "note": "shell-task-tools.test.ts: both aliases carry a deprecation note naming their replacement in the built definition; the read alias accepts both id spellings; a kill with the old spelling is REFUSED and the task stays running. Criterion narrowed to reads-only by the owner after the review finding, then re-sealed"
+    },
+    "AC6": {
+      "at": "2026-09-16T14:20:16.376Z",
+      "note": "shell-task-tools.test.ts: a recorder tool driven through the real runAgentTurn receives an AbortSignal as invoke's second argument; every existing tool ignores ctx and is unaffected — typecheck clean, agent suites 114/0"
+    },
+    "AC7": {
+      "at": "2026-09-16T14:21:14.179Z",
+      "note": "shell-task-tools.test.ts plus a LIVE smoke on real processes: shell_exec's yield returned 402ms after an abort against a 60000ms yield and the command was PROMOTED not killed; shell_task_wait returned 401ms after an abort against a 300000ms timeout with the task still running; in both cases the completion was delivered afterwards by the flow-265 drain carrying the command's own output"
+    },
+    "AC8": {
+      "at": "2026-09-16T14:21:14.292Z",
+      "note": "shell-task-tools.test.ts executes both halves: parseDemoteCommand (empty, whitespace, padded, extra-token refusal) and demoteTask against a real registry — a running foreground task is promoted and stays running, a second call is refused as already-background, an unknown id is refused naming it. Wired into the readline chain, the TUI dispatch AND the busy-dispatch allow-list, so it works while the turn is blocked"
+    },
+    "AC9": {
+      "at": "2026-09-16T14:21:14.383Z",
+      "note": "shell-task-tools.test.ts reads the EXPORTED SIDE_WORKER_DENIED_TOOL_NAMES: it contains shell_task_kill, shell_job_kill, shell_task_wait and shell_job_output, and deliberately not shell_task_output; the flow-173 TUI audit was rewritten to assert the property plus this membership instead of a literal one-element Set"
+    },
+    "AC10": {
+      "at": "2026-09-16T14:21:14.475Z",
+      "note": "shell-task-tools.test.ts: a side worker's read of a FINISHED task leaves the main session's notification pending, while the main session's read of the same task marks it observed. Proved again on REAL processes by the abort smoke: after a side-worker read, one completion was still drained"
+    },
+    "AC11": {
+      "at": "2026-09-16T14:21:14.577Z",
+      "note": "shell-task-tools.test.ts reads the EXPORTED REPEATABLE_TOOL_NAMES: shell_task_output, shell_task_wait and shell_job_output are all repeatable, so following a running command is not mistaken for a loop while the per-signature attempt rail still stops a genuine one"
+    },
+    "AC12": {
+      "at": "2026-09-16T14:21:14.686Z",
+      "note": "tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -473,6 +522,66 @@
       "at": "2026-09-16T14:18:18.953Z",
       "event": "ac-updated",
       "detail": "AC5 narrowed to reads-only id resolution after the review finding; re-sealing against the corrected text (the previous re-seal captured the old wording, because the command re-freezes current content rather than editing a criterion)"
+    },
+    {
+      "at": "2026-09-16T14:20:15.920Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-task-tools.test.ts: two calls with the same since return the same bytes; the status is reported alongside; an unknown task_id is a tool error naming the id"
+    },
+    {
+      "at": "2026-09-16T14:20:16.015Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shell-task-tools.test.ts: mode any returns as soon as one named task is terminal (without waiting out the slow one); mode all reaching its bound reports the still-running task; an unknown id is named, not dropped"
+    },
+    {
+      "at": "2026-09-16T14:20:16.108Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-task-tools.test.ts: clampTaskWaitMs pins [0,300000] against negative, zero, in-range, over-range, MAX_SAFE_INTEGER and NaN; the timeout path returns statuses with isError false and the task still running — the wait never kills"
+    },
+    {
+      "at": "2026-09-16T14:20:16.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shell-task-tools.test.ts: killing an already-exited task is an ordinary tool error and the task keeps its completed status — no second signal, no status rewrite"
+    },
+    {
+      "at": "2026-09-16T14:20:16.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shell-task-tools.test.ts: both aliases carry a deprecation note naming their replacement in the built definition; the read alias accepts both id spellings; a kill with the old spelling is REFUSED and the task stays running. Criterion narrowed to reads-only by the owner after the review finding, then re-sealed"
+    },
+    {
+      "at": "2026-09-16T14:20:16.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: shell-task-tools.test.ts: a recorder tool driven through the real runAgentTurn receives an AbortSignal as invoke's second argument; every existing tool ignores ctx and is unaffected — typecheck clean, agent suites 114/0"
+    },
+    {
+      "at": "2026-09-16T14:21:14.179Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-task-tools.test.ts plus a LIVE smoke on real processes: shell_exec's yield returned 402ms after an abort against a 60000ms yield and the command was PROMOTED not killed; shell_task_wait returned 401ms after an abort against a 300000ms timeout with the task still running; in both cases the completion was delivered afterwards by the flow-265 drain carrying the command's own output"
+    },
+    {
+      "at": "2026-09-16T14:21:14.292Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: shell-task-tools.test.ts executes both halves: parseDemoteCommand (empty, whitespace, padded, extra-token refusal) and demoteTask against a real registry — a running foreground task is promoted and stays running, a second call is refused as already-background, an unknown id is refused naming it. Wired into the readline chain, the TUI dispatch AND the busy-dispatch allow-list, so it works while the turn is blocked"
+    },
+    {
+      "at": "2026-09-16T14:21:14.383Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: shell-task-tools.test.ts reads the EXPORTED SIDE_WORKER_DENIED_TOOL_NAMES: it contains shell_task_kill, shell_job_kill, shell_task_wait and shell_job_output, and deliberately not shell_task_output; the flow-173 TUI audit was rewritten to assert the property plus this membership instead of a literal one-element Set"
+    },
+    {
+      "at": "2026-09-16T14:21:14.475Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: shell-task-tools.test.ts: a side worker's read of a FINISHED task leaves the main session's notification pending, while the main session's read of the same task marks it observed. Proved again on REAL processes by the abort smoke: after a side-worker read, one completion was still drained"
+    },
+    {
+      "at": "2026-09-16T14:21:14.577Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: shell-task-tools.test.ts reads the EXPORTED REPEATABLE_TOOL_NAMES: shell_task_output, shell_task_wait and shell_job_output are all repeatable, so following a running command is not mistaken for a loop while the per-signature attempt rail still stops a genuine one"
+    },
+    {
+      "at": "2026-09-16T14:21:14.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94"
     }
   ]
 }

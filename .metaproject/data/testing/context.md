@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-16T12:28:52.749Z
+generatedAt: 2026-09-16T14:20:45.756Z
 status: complete
 
 ## Frameworks
@@ -110,7 +110,7 @@ status: complete
 - src/commands/mcp-tool-surface.test.ts
 - src/commands/mcp-untrusted.test.ts
 
-- ... 688 more
+- ... 689 more
 
 ## CI
 
