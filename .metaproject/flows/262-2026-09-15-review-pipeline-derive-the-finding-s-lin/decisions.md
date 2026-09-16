@@ -1,5 +1,49 @@
 # Decisions
 
+## D2 — The flow is merged and the completion gate is not green. Why it was left that way.
+
+**State.** The work is on `main` (`7a53af36`, PR #560). Nine criteria confirmed,
+ten tasks terminal, health green, security informational, external comments
+collected, the final round recorded against the merged head. The gate's `review`
+condition still refuses, on two grounds, and both are bookkeeping rather than
+substance:
+
+1. The first ingest round (`…-560`) carries dispositions but no verifier
+   verdicts. It was created to measure the locator — it is the round that
+   produced "6 of 6 derived" — and was superseded by `-r02` and `-r03`, which
+   hold the same six findings WITH verdicts.
+2. Five of `-r03`'s dispositions cite the merged commit while the verifier's
+   evidence cites `4bbc9681`, the commit it actually ran on. The gate compares
+   the two and sees no match. `F-001`'s disposition happens to name both and
+   passes, which is what makes the cause legible.
+
+**What was NOT done about it, deliberately.** Every remaining route to a green
+gate is a deletion: remove the superseded round, or remove one to make cap room
+for a corrected round. `review complete` refuses to overwrite a recorded
+citation and says why — the state and its evidence are one record. Deleting
+review records until a gate passes is the exact leak this gate exists to close,
+and a green mark bought that way is worth less than an honest red one.
+
+One deletion WAS made, and is named here rather than left to be found: the empty
+`…-pr-…-560` attach package, holding zero findings, was removed to free a cap
+slot so the final round could be recorded against the merged head instead of a
+stale one. That cost nothing and improved the record.
+
+**The substance, for a reader who only wants to know whether this was checked.**
+Six findings, two of them blockers in code this flow introduced, every one
+verified by an independent agent by execution against the fixed tree, every one
+fixed with a test. The numbers are in `-r03`.
+
+**What would fix the underlying friction** — a real finding about our own
+pipeline, not an excuse. A fix round that merges as a squash necessarily has
+three commits in play: the one the verifier ran on, the branch head, and the
+merge. The gate compares one against another and cannot see that they are the
+same tree. Either a disposition should be allowed to name the verified commit
+alongside the merged one, or the gate should accept a verification whose commit
+is an ancestor of the merge with no source difference — which is checkable, and
+was checked here: `4bbc9681..e8b62dc5` touches 13 files, 0 of them source.
+Worth its own flow.
+
 ## D0 — The anchor audit (item A, AC8): what the corpus can and cannot answer
 
 **The criterion had to be revised, and the reason is worth keeping.** AC8 first

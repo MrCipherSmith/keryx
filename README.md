@@ -325,7 +325,12 @@ Grouped by what you are trying to do, not by internal module layout.
   trends.
 - **review** — managed review packages, standalone under `.metaproject/reviews/`
   or inside the flow package when attached to a flow, so review findings become
-  durable project artifacts.
+  durable project artifacts. A finding points at the code it **quotes**: the
+  line is derived by locating that quote at the commit the round records, not
+  taken on the reviewer's word, and a quote that cannot be found is marked
+  unlocatable rather than carrying a number nobody checked. Each round also
+  states its price — estimated before dispatch, recorded after, and divided by
+  the findings that survived it.
 
 **Operate agents**
 
