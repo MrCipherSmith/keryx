@@ -41,9 +41,22 @@ queued operator message pre-empts a running wait" — describes a mechanism nobo
 built. P2 ships the adjacent capabilities (abort, demote) and the rows say so
 rather than claiming the measure.
 
-The rest — the documentation sweep (P3) — is still `spec ready` and **not
-implemented**; see [metrics-and-validation.md](metrics-and-validation.md) for
-which invariant is proven and by which test.
+P3 (2026-09-16, keryx flow 267): the documentation sweep. The wiki page this
+package supersedes
+([`architecture/background-jobs.md`](../../../.metaproject/wiki/architecture/background-jobs.md))
+now describes the supervised-task model as shipped — completion delivery with
+its env knobs, the task tools and their deprecated aliases, the side-worker
+rules and the operator's levers — while the flow-173 material that survived all
+three phases (process-group ownership, sandbox reuse, the unchanged approval
+gate, session scoping, the bounded rails) is kept rather than re-derived. The
+wiki index entry and the rows of
+[`docs/verification/keryx-shell-tui-test-catalog.md`](../../verification/keryx-shell-tui-test-catalog.md)
+that specified `background: true` and polling were corrected too.
+
+**The whole package is now implemented.** See
+[metrics-and-validation.md](metrics-and-validation.md) for which invariant is
+proven and by which test — including the two rows deliberately closed as out of
+scope rather than met.
 
 v1.1.0 closed the implementation gaps found when v1.0.0 was checked against the
 code (headless delivery, notification shape, wake cap, concurrency cap, idle
