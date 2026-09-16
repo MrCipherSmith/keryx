@@ -1,5 +1,15 @@
-// Session-scoped background job registry (flow 173, T2/T3): the harness-side
-// half of `shell_exec({background:true})`. Sibling of `shell-exec-tool.ts`.
+// Session-scoped TASK supervisor (flow 173 T2/T3; flow 263 turned it into the
+// supervisor for EVERY `shell_exec`, not just `background:true` ones). Sibling
+// of `shell-exec-tool.ts`.
+//
+// Every shell command is a supervised task here. A task starts in one of two
+// PHASES: `foreground` (the caller — `shell_exec` — is waiting on it via
+// `waitForExit`) or `background` (nobody is waiting; the model polls it with
+// `shell_job_output`). A foreground task that outlives its caller's bounded
+// wait is `promote()`d to background rather than killed, which is what makes a
+// slow command a backgrounded task instead of a dead one. Ids are
+// `task-<n>-<pid>`; the internal field names stay `jobId` for compatibility
+// with the existing tool surface.
 // The default spawner (`realSpawner`) reuses `shell-exec-tool.ts`'s
 // `resolveShellEnv`/`resolveSandboxedSpawn` — the SAME env-resolution +
 // OS-sandbox posture the synchronous path applies, including its fail-closed
@@ -37,12 +47,33 @@ export type BackgroundSpawner = (
   cwd: string,
 ) => BackgroundProcessHandle | Promise<BackgroundProcessHandle>;
 
-/** Public, session-visible snapshot of a tracked job. */
+/**
+ * Why a task was killed. Distinguishes a deliberate model/operator kill from
+ * the registry's own safety rails (`idle`, `output-cap`) and from session
+ * teardown (`session-exit`) — a plain "killed" status cannot tell an operator
+ * whether their command failed or the supervisor gave up on it.
+ */
+export type KillReason = "model" | "operator" | "idle" | "output-cap" | "session-exit";
+
+/** Public, session-visible snapshot of a tracked task. */
 export interface BackgroundJobInfo {
   jobId: string;
   pid: number;
   command: string;
-  status: "running" | "exited" | "killed";
+  /**
+   * `completed`/`failed` split what flow 173 reported as a single `exited`:
+   * exit code 0 is `completed`, any non-zero code is `failed`. A task with a
+   * kill requested reports `killed` regardless of the code it died with.
+   */
+  status: "running" | "completed" | "failed" | "killed";
+  /** `foreground` while a caller awaits it; `background` once nobody does. */
+  phase: "foreground" | "background";
+  /** Short human label for the TUI task list (e.g. "watch CI"). */
+  description?: string;
+  /** Effective idle timeout for THIS task in ms; `0` disables the idle rail. */
+  idleTimeoutMs: number;
+  /** Set only when `status` is `killed`. */
+  killReason?: KillReason;
   startedAt: string;
   endedAt?: string;
   exitCode?: number;
@@ -110,21 +141,132 @@ export const MAX_TRACKED_JOBS = 50;
  */
 export const TERMINATED_OUTPUT_TAIL_BYTES = 4_000;
 
-/** Lifecycle/output events for a future TUI bridge to subscribe to (not consumed here — T4/T5 is a separate task). */
+/**
+ * Lifecycle/output events the TUI bridge subscribes to.
+ *
+ * The `phase` event is what makes a task VISIBLE in the TUI task list: the
+ * store lists a task only once it is running in the background, so a
+ * foreground task the caller is still awaiting never flickers into the list.
+ * It fires at most ONCE per task — either right after `start` for a
+ * background-phase start, or at `promote()` for a foreground one.
+ */
 export type BackgroundJobEvent =
-  | { type: "start"; jobId: string; pid: number; command: string; startedAt: string }
+  | { type: "start"; jobId: string; pid: number; command: string; startedAt: string; description?: string }
+  | { type: "phase"; jobId: string; phase: "background" }
   | { type: "output"; jobId: string; chunk: string; stream: "stdout" | "stderr" }
-  | { type: "exit"; jobId: string; status: "exited" | "killed"; exitCode?: number; endedAt: string };
+  | {
+      type: "exit";
+      jobId: string;
+      status: "completed" | "failed" | "killed";
+      killReason?: KillReason;
+      exitCode?: number;
+      endedAt: string;
+    };
+
+/** Options for a single {@link JobRegistry.start}. */
+export interface StartTaskOptions {
+  /** Defaults to `"background"`, preserving flow-173 semantics for direct callers. */
+  phase?: "foreground" | "background";
+  description?: string;
+  /**
+   * Per-task idle timeout in ms, stored AS GIVEN (clamping is the caller's
+   * job — `shell_exec` applies {@link clampTaskIdleTimeoutMs} so the model
+   * cannot disable the rail, while an internal caller may legitimately pass
+   * `0` to disable it). Falls back to the registry-wide `idleMs`.
+   */
+  idleTimeoutMs?: number;
+}
 
 export interface JobRegistry {
   start(
     command: string,
+    opts?: StartTaskOptions,
   ): Promise<{ ok: true; jobId: string; pid: number; output: string } | { ok: false; error: string }>;
   get(jobId: string): BackgroundJobInfo | undefined;
   list(): BackgroundJobInfo[];
   readOutput(jobId: string): { ok: true; output: string } | { ok: false; error: string };
-  kill(jobId: string): Promise<{ ok: true } | { ok: false; error: string }>;
+  /**
+   * Wait up to `ms` for a task to finish. Never kills on timeout — the caller
+   * decides what to do (`shell_exec` promotes the task to background).
+   * `"unknown"` means this registry never tracked that id.
+   */
+  waitForExit(jobId: string, ms: number): Promise<"exited" | "timeout" | "unknown">;
+  /**
+   * Move a still-running foreground task to the background. Never kills and
+   * never refuses on a full concurrency cap — a task that is already running
+   * cannot be un-started, so the cap is reported via `overCap` (naming the
+   * other running background commands) rather than enforced destructively.
+   */
+  promote(jobId: string): { ok: true; overCap?: string } | { ok: false; error: string };
+  kill(jobId: string, reason?: KillReason): Promise<{ ok: true } | { ok: false; error: string }>;
   sweepAll(): Promise<void>;
+}
+
+/** Env override for the per-task idle timeout. */
+export const ENV_SHELL_IDLE_MS = "KERYX_SHELL_IDLE_MS";
+
+/**
+ * Deprecated predecessor of {@link ENV_SHELL_IDLE_MS}: flow 263 replaced
+ * `shell_exec`'s hard deadline with an idle timeout, so an operator who had
+ * already tuned the old knob keeps their setting.
+ *
+ * Spelled out rather than imported from `shell-exec-tool.ts`: that module
+ * imports THIS one (it is the registry's consumer), so importing the constant
+ * back would close an import cycle.
+ */
+const ENV_SHELL_TIMEOUT_MS_FALLBACK = "KERYX_SHELL_TIMEOUT_MS";
+
+/**
+ * Default idle timeout: a task silent for two minutes is presumed stuck.
+ * Unlike flow 173's total-runtime deadline, this measures time since the LAST
+ * OUTPUT, so a long-but-chatty build is never killed for being slow.
+ */
+export const DEFAULT_SHELL_IDLE_MS = 120_000;
+
+/** Lower bound for a model-supplied per-task idle timeout. */
+export const MIN_TASK_IDLE_TIMEOUT_MS = 1_000;
+
+/** Upper bound (30 min) for a model-supplied per-task idle timeout. */
+export const MAX_TASK_IDLE_TIMEOUT_MS = 1_800_000;
+
+function parseEnvMs(raw: string | undefined): number | undefined {
+  if (raw === undefined || raw.trim().length === 0) return undefined;
+  const n = Number.parseInt(raw.trim(), 10);
+  // Malformed/negative is NOT "disabled" — the caller falls back to the
+  // default, mirroring `resolveShellTimeoutMs`. An explicit `0` disables.
+  if (!Number.isFinite(n) || n < 0) return Number.NaN;
+  return n;
+}
+
+/**
+ * Resolve the registry-wide idle timeout. Unset/empty {@link ENV_SHELL_IDLE_MS}
+ * falls back to the deprecated `KERYX_SHELL_TIMEOUT_MS` under the same
+ * fail-safe rules, then to {@link DEFAULT_SHELL_IDLE_MS}. A MALFORMED
+ * `KERYX_SHELL_IDLE_MS` goes straight to the default — it does not fall
+ * through to the deprecated variable, so a typo in the current knob can never
+ * be silently answered by a stale one.
+ */
+export function resolveShellIdleMs(env: Record<string, string | undefined> = process.env): number {
+  const idle = parseEnvMs(env[ENV_SHELL_IDLE_MS]);
+  if (idle !== undefined) {
+    return Number.isNaN(idle) ? DEFAULT_SHELL_IDLE_MS : idle;
+  }
+  const legacy = parseEnvMs(env[ENV_SHELL_TIMEOUT_MS_FALLBACK]);
+  if (legacy !== undefined) {
+    return Number.isNaN(legacy) ? DEFAULT_SHELL_IDLE_MS : legacy;
+  }
+  return DEFAULT_SHELL_IDLE_MS;
+}
+
+/**
+ * Clamp a model-supplied per-task idle timeout into
+ * [{@link MIN_TASK_IDLE_TIMEOUT_MS}, {@link MAX_TASK_IDLE_TIMEOUT_MS}].
+ * Note the floor: the model cannot pass `0` to disable the idle rail on its
+ * own task, only shorten or lengthen it within bounds.
+ */
+export function clampTaskIdleTimeoutMs(ms: number): number {
+  if (!Number.isFinite(ms)) return MIN_TASK_IDLE_TIMEOUT_MS;
+  return Math.min(MAX_TASK_IDLE_TIMEOUT_MS, Math.max(MIN_TASK_IDLE_TIMEOUT_MS, Math.trunc(ms)));
 }
 
 interface InternalJob {
@@ -134,14 +276,31 @@ interface InternalJob {
   readCursor: number;
   exited: boolean;
   /**
-   * Set the moment `terminateJob` is called for this job (flow 173 F-007).
-   * The real `onExit` handler consults this to report status `"killed"`
-   * whenever it is set, regardless of which signal (SIGTERM/SIGKILL) actually
-   * ended the process — the common case (SIGTERM alone succeeds) previously
-   * fell through to `onExit`'s default `"exited"`, indistinguishable from a
-   * natural exit.
+   * Set the moment a kill is requested for this task (flow 173 F-007). The
+   * real `onExit` handler consults this to report status `"killed"` whenever
+   * it is set, regardless of which signal (SIGTERM/SIGKILL) actually ended the
+   * process and regardless of the exit CODE — the common case (SIGTERM alone
+   * succeeds) previously fell through to a natural-exit status,
+   * indistinguishable from a command that finished on its own.
    */
   killRequested: boolean;
+  /**
+   * Why the kill was requested, recorded at REQUEST time and applied to
+   * `info.killReason` once the process actually dies — the reason is known by
+   * the caller that asked, not by `onExit`, which only sees an exit code.
+   */
+  pendingKillReason?: KillReason;
+  /**
+   * At most one `phase` event is ever emitted per task (the TUI store uses it
+   * as the "now list this task" signal, so a repeat would duplicate a row).
+   */
+  phaseEmitted: boolean;
+  /**
+   * Armed on start, reset on every output chunk, cleared on exit. Explicitly
+   * `| undefined`: `clearIdleTimer` assigns `undefined` to disarm, which
+   * `exactOptionalPropertyTypes` forbids for a bare optional property.
+   */
+  idleTimer?: ReturnType<typeof setTimeout> | undefined;
   resolveExited: () => void;
   exitedPromise: Promise<void>;
 }
@@ -257,6 +416,8 @@ export function createJobRegistry(options?: {
   onEvent?: (event: BackgroundJobEvent) => void;
   /** Override for {@link MAX_TRACKED_JOBS} (tests only; production uses the default). */
   maxTrackedJobs?: number;
+  /** Registry-wide default idle timeout; `0` disables the idle rail. */
+  idleMs?: number;
 }): JobRegistry {
   const cwd = options?.cwd ?? process.cwd();
   const maxConcurrent = options?.maxConcurrent ?? resolveMaxConcurrentBackgroundJobs();
@@ -265,12 +426,49 @@ export function createJobRegistry(options?: {
   const initialBufferMs = options?.initialBufferMs ?? DEFAULT_INITIAL_BUFFER_MS;
   const onEvent = options?.onEvent;
   const maxTrackedJobs = options?.maxTrackedJobs ?? MAX_TRACKED_JOBS;
+  const idleMs = options?.idleMs ?? resolveShellIdleMs();
 
   let nextId = 0;
   const jobs = new Map<string, InternalJob>();
 
   function runningJobs(): InternalJob[] {
     return [...jobs.values()].filter((j) => j.info.status === "running");
+  }
+
+  /**
+   * The concurrency cap counts BACKGROUND-phase running tasks only. A
+   * foreground task has a caller blocked on it, so it is bounded by that
+   * caller's own wait — counting it would let a couple of ordinary
+   * `shell_exec` calls refuse every long-running server the model tries to
+   * start.
+   */
+  function backgroundRunningJobs(): InternalJob[] {
+    return runningJobs().filter((j) => j.info.phase === "background");
+  }
+
+  function clearIdleTimer(job: InternalJob): void {
+    if (job.idleTimer === undefined) return;
+    clearTimeout(job.idleTimer);
+    job.idleTimer = undefined;
+  }
+
+  /**
+   * (Re)arm the per-task idle rail. Called on start and after every output
+   * chunk, so the timeout measures SILENCE, not total runtime.
+   */
+  function armIdleTimer(job: InternalJob): void {
+    clearIdleTimer(job);
+    if (job.info.status !== "running") return;
+    const timeout = job.info.idleTimeoutMs;
+    if (timeout <= 0) return; // explicitly disabled
+    const timer = setTimeout(() => {
+      void requestKill(job, "idle");
+    }, timeout);
+    // A pending idle timer must never hold the process open on its own (a
+    // default 120 s timer would otherwise keep a finished CLI run or test
+    // worker alive). `unref` is Node/Bun-only and absent on an injected fake.
+    (timer as { unref?: () => void }).unref?.();
+    job.idleTimer = timer;
   }
 
   /**
@@ -306,6 +504,7 @@ export function createJobRegistry(options?: {
 
   function appendOutput(job: InternalJob, chunk: string, stream: "stdout" | "stderr"): void {
     job.outputBuffer += chunk;
+    armIdleTimer(job); // any output proves the task is alive
     onEvent?.({ type: "output", jobId: job.info.jobId, chunk, stream });
     if (job.outputBuffer.length > MAX_BACKGROUND_OUTPUT_BYTES) {
       // Auto-kill rail (see MAX_BACKGROUND_OUTPUT_BYTES doc comment): an
@@ -327,15 +526,27 @@ export function createJobRegistry(options?: {
       // would re-enter this branch and re-fire terminateJob. Shares the same
       // `killRequested` flag F-007 uses to disambiguate a killed job from a
       // naturally-exited one.
-      if (!job.killRequested) {
-        job.killRequested = true;
-        void terminateJob(job, killGraceMs);
-      }
+      void requestKill(job, "output-cap");
     }
+  }
+
+  /**
+   * Single entry point for every kill path (model, operator, idle rail,
+   * output-cap rail, session sweep). Idempotent: the FIRST reason wins and a
+   * repeat request simply awaits the in-flight termination, which is what
+   * keeps `exit` to exactly one event per task (F-013).
+   */
+  function requestKill(job: InternalJob, reason: KillReason): Promise<void> {
+    if (job.info.status !== "running") return Promise.resolve();
+    if (job.killRequested) return job.exitedPromise;
+    job.killRequested = true;
+    job.pendingKillReason = reason;
+    return terminateJob(job, killGraceMs);
   }
 
   async function terminateJob(job: InternalJob, graceMs: number): Promise<void> {
     if (job.info.status !== "running") return;
+    clearIdleTimer(job); // the task is on its way out; the rail must not fire too
     // F-007: mark BEFORE signaling — the real `onExit` handler consults this
     // to report "killed" (not "exited") whenever it is set, regardless of
     // which signal actually ended the process. This also doubles as the
@@ -357,14 +568,20 @@ export function createJobRegistry(options?: {
   }
 
   return {
-    async start(command) {
-      const running = runningJobs();
-      if (running.length >= maxConcurrent) {
-        const names = running.map((j) => j.info.command).join(", ");
-        return {
-          ok: false,
-          error: `background job limit reached (${maxConcurrent} running: ${names}); wait for one to finish or kill it with shell_job_kill first`,
-        };
+    async start(command, opts) {
+      const phase = opts?.phase ?? "background";
+
+      // The cap applies to background starts only, and counts only
+      // background-phase running tasks (see `backgroundRunningJobs`).
+      if (phase === "background") {
+        const running = backgroundRunningJobs();
+        if (running.length >= maxConcurrent) {
+          const names = running.map((j) => j.info.command).join(", ");
+          return {
+            ok: false,
+            error: `background task limit reached (${maxConcurrent} running: ${names}); wait for one to finish or kill it with shell_job_kill first`,
+          };
+        }
       }
 
       let handle: BackgroundProcessHandle;
@@ -377,7 +594,7 @@ export function createJobRegistry(options?: {
         };
       }
 
-      const jobId = `job-${++nextId}-${handle.pid}`;
+      const jobId = `task-${++nextId}-${handle.pid}`;
       let resolveExited!: () => void;
       const exitedPromise = new Promise<void>((resolve) => {
         resolveExited = resolve;
@@ -388,6 +605,10 @@ export function createJobRegistry(options?: {
           pid: handle.pid,
           command,
           status: "running",
+          phase,
+          // Stored AS GIVEN — clamping belongs to the caller (see
+          // StartTaskOptions.idleTimeoutMs).
+          idleTimeoutMs: opts?.idleTimeoutMs ?? idleMs,
           startedAt: nowIso(),
         },
         handle,
@@ -395,23 +616,47 @@ export function createJobRegistry(options?: {
         readCursor: 0,
         exited: false,
         killRequested: false,
+        phaseEmitted: false,
         resolveExited,
         exitedPromise,
       };
+      if (opts?.description !== undefined) job.info.description = opts.description;
       jobs.set(jobId, job);
       evictOldestTerminatedIfOverCap();
-      onEvent?.({ type: "start", jobId, pid: handle.pid, command, startedAt: job.info.startedAt });
+      onEvent?.({
+        type: "start",
+        jobId,
+        pid: handle.pid,
+        command,
+        startedAt: job.info.startedAt,
+        ...(opts?.description !== undefined ? { description: opts.description } : {}),
+      });
+      // A background-phase start is already "in the background" — emit its one
+      // phase event now so the TUI lists it. A foreground start emits none
+      // until (and unless) it is promoted.
+      if (phase === "background") {
+        job.phaseEmitted = true;
+        onEvent?.({ type: "phase", jobId, phase: "background" });
+      }
 
       handle.onOutput((chunk, stream) => appendOutput(job, chunk, stream));
       handle.onExit((info) => {
         if (job.exited) return;
         job.exited = true;
-        if (job.info.status === "running") {
-          // F-007: a job killed via terminateJob reports "killed" here
-          // whenever killRequested is set, regardless of which signal
-          // actually ended the process (SIGTERM alone succeeding is the
-          // COMMON case and was previously mis-reported as "exited").
-          job.info.status = job.killRequested ? "killed" : "exited";
+        clearIdleTimer(job);
+        // F-007: a task with a kill requested reports "killed" whenever
+        // killRequested is set, regardless of which signal actually ended the
+        // process (SIGTERM alone succeeding is the COMMON case) and
+        // regardless of the code it died with. Otherwise the exit CODE splits
+        // a natural exit into completed (0) vs failed (non-zero).
+        const terminal: "completed" | "failed" | "killed" = job.killRequested
+          ? "killed"
+          : info.exitCode === 0
+            ? "completed"
+            : "failed";
+        job.info.status = terminal;
+        if (job.killRequested) {
+          job.info.killReason = job.pendingKillReason ?? "model";
         }
         job.info.exitCode = info.exitCode;
         job.info.endedAt = nowIso();
@@ -419,7 +664,8 @@ export function createJobRegistry(options?: {
         onEvent?.({
           type: "exit",
           jobId,
-          status: job.info.status,
+          status: terminal,
+          ...(job.info.killReason !== undefined ? { killReason: job.info.killReason } : {}),
           exitCode: info.exitCode,
           endedAt: job.info.endedAt,
         });
@@ -429,7 +675,12 @@ export function createJobRegistry(options?: {
         shrinkTerminatedOutput(job);
       });
 
-      if (initialBufferMs > 0) {
+      armIdleTimer(job);
+
+      // Only a background start buffers early output: a foreground caller is
+      // about to await the task itself, so delaying its return would add the
+      // buffer window to EVERY ordinary shell_exec.
+      if (phase === "background" && initialBufferMs > 0) {
         await sleep(initialBufferMs);
       }
       const output = job.outputBuffer.slice(job.readCursor);
@@ -455,7 +706,48 @@ export function createJobRegistry(options?: {
       return { ok: true, output };
     },
 
-    async kill(jobId) {
+    async waitForExit(jobId, ms) {
+      const job = jobs.get(jobId);
+      if (job === undefined) return "unknown";
+      // An already-finished task resolves at once — a caller must never wait
+      // out the full window for a task that is already gone.
+      if (job.exited || job.info.status !== "running") return "exited";
+
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = await Promise.race([
+        job.exitedPromise.then(() => false),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => resolve(true), ms);
+          (timer as { unref?: () => void }).unref?.();
+        }),
+      ]);
+      if (timer !== undefined) clearTimeout(timer);
+      // A timeout NEVER kills: the caller decides (shell_exec promotes).
+      return timedOut ? "timeout" : "exited";
+    },
+
+    promote(jobId) {
+      const job = jobs.get(jobId);
+      if (job === undefined) {
+        return { ok: false, error: `unknown job_id: ${jobId}` };
+      }
+      job.info.phase = "background";
+      if (!job.phaseEmitted) {
+        job.phaseEmitted = true;
+        onEvent?.({ type: "phase", jobId, phase: "background" });
+      }
+      // A running task cannot be un-started, so an over-cap promote is
+      // REPORTED, never refused or killed. This is the one path by which
+      // running background tasks can exceed `maxConcurrent` — bounded,
+      // because every subsequent background start is still refused.
+      const others = backgroundRunningJobs().filter((j) => j.info.jobId !== jobId);
+      if (job.info.status === "running" && others.length >= maxConcurrent) {
+        return { ok: true, overCap: others.map((j) => j.info.command).join(", ") };
+      }
+      return { ok: true };
+    },
+
+    async kill(jobId, reason = "model") {
       const job = jobs.get(jobId);
       if (job === undefined) {
         return { ok: false, error: `unknown job_id: ${jobId}` };
@@ -463,17 +755,23 @@ export function createJobRegistry(options?: {
       if (job.info.status !== "running") {
         return { ok: false, error: `job ${jobId} is not running (status: ${job.info.status})` };
       }
-      await terminateJob(job, killGraceMs);
+      await requestKill(job, reason);
       return { ok: true };
     },
 
     async sweepAll() {
-      await Promise.all(runningJobs().map((job) => terminateJob(job, killGraceMs)));
+      // Foreground tasks are swept too: at session exit nobody is left to
+      // await them, so an unswept one would outlive the session.
+      await Promise.all(runningJobs().map((job) => requestKill(job, "session-exit")));
     },
   };
 }
 
-/** `shell_job_output(job_id)` — risk `read`: incremental, cursor-based, never a full re-dump. */
+/**
+ * `shell_job_output(job_id)` — risk `read`: incremental, cursor-based, never a
+ * full re-dump. Reads any supervised task, whether it started in the
+ * background or was promoted there after outliving its caller's wait.
+ */
 export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
   return {
     definition: {
@@ -504,7 +802,12 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
   };
 }
 
-/** `shell_job_kill(job_id)` — risk `read` (no approval): process-group kill, scoped to this session's own registry. */
+/**
+ * `shell_job_kill(job_id)` — risk `read` (no approval): process-group kill,
+ * scoped to this session's own registry. Records kill reason `"model"`, which
+ * is what distinguishes it in the task list from a task the idle/output-cap
+ * rails or the session sweep ended.
+ */
 export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
   return {
     definition: {

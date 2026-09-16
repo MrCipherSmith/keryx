@@ -42,39 +42,30 @@
 import { describe, expect, test } from "bun:test";
 // RED: this module does not exist yet — T2/T3 of flow 173 creates it.
 import { tmpdir } from "node:os";
-import * as registryModule from "./background-job-registry";
 import {
   BACKGROUND_KILL_GRACE_MS,
+  DEFAULT_SHELL_IDLE_MS,
   ENV_MAX_BACKGROUND_JOBS,
+  ENV_SHELL_IDLE_MS,
   MAX_BACKGROUND_OUTPUT_BYTES,
   MAX_CONCURRENT_BACKGROUND_JOBS,
+  MAX_TASK_IDLE_TIMEOUT_MS,
+  MIN_TASK_IDLE_TIMEOUT_MS,
   TERMINATED_OUTPUT_TAIL_BYTES,
+  clampTaskIdleTimeoutMs,
   createJobRegistry,
   resolveMaxConcurrentBackgroundJobs,
+  resolveShellIdleMs,
   shellJobKillTool,
   shellJobOutputTool,
 } from "./background-job-registry";
 import type { BackgroundJobEvent, BackgroundProcessHandle, BackgroundSpawner } from "./background-job-registry";
 
-// flow 263 (RED): exports the implementer adds. Read off the module namespace
-// rather than as named imports, so this file still LOADS before they exist and
-// each new test fails on its own (a missing named import is a link-time error
-// that would take down every test in the file, hiding the per-test signal).
-const {
-  DEFAULT_SHELL_IDLE_MS,
-  ENV_SHELL_IDLE_MS,
-  MAX_TASK_IDLE_TIMEOUT_MS,
-  MIN_TASK_IDLE_TIMEOUT_MS,
-  clampTaskIdleTimeoutMs,
-  resolveShellIdleMs,
-} = registryModule as unknown as {
-  DEFAULT_SHELL_IDLE_MS: number;
-  ENV_SHELL_IDLE_MS: string;
-  MAX_TASK_IDLE_TIMEOUT_MS: number;
-  MIN_TASK_IDLE_TIMEOUT_MS: number;
-  clampTaskIdleTimeoutMs: (n: number) => number;
-  resolveShellIdleMs: (env: Record<string, string | undefined>) => number;
-};
+// flow 263: the idle-timeout exports were read off the module namespace through
+// an `as unknown as` cast while these tests were RED (so a missing export was a
+// per-test failure rather than a link-time error taking down the whole file).
+// Now that T6 has implemented them they are ordinary named imports, which also
+// puts their real signatures back under the typechecker.
 
 // F-020: a SINGLE, file-wide pid counter shared by every `fakeSpawner()`
 // instance — mirrors real OS pids, which are globally unique across
