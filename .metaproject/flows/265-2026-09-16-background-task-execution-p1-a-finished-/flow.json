@@ -7,17 +7,62 @@
   "id": "265",
   "slug": "background-task-execution-p1-a-finished-",
   "title": "Background task execution P1: a finished task wakes the agent without polling",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-16T10:47:30.558Z",
-  "updatedAt": "2026-09-16T12:17:25.070Z",
+  "updatedAt": "2026-09-16T12:40:27.393Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:11126b98b2c7174d7bfccddd709aa48adc033b6db752ff6eff7dfd2402db4e81",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T12:37:26.376Z",
+      "note": "background-job-registry.test.ts: a background-phase task that exits is drained once with its full completion record; two drains in the SAME synchronous tick never both return the task; a still-running background task is not drained at all; a promoted task IS drained once it exits"
+    },
+    "AC2": {
+      "at": "2026-09-16T12:37:26.480Z",
+      "note": "background-job-registry.test.ts: a task whose terminal status came back from shell_job_output is never drained; a task the model killed via shell_job_kill is never drained; polling a task while it is STILL RUNNING does not mark it observed"
+    },
+    "AC3": {
+      "at": "2026-09-16T12:37:26.579Z",
+      "note": "agent-task-notification.test.ts: one block per task carrying task_id, status, exit_code and duration_ms; the banner states the text is command output, not instructions from the user; several tasks coalesce into ONE body; output truncated to at most 4000 bytes of TAIL; a killed task renders its kill_reason; the notification does NOT set the untrusted gate"
+    },
+    "AC4": {
+      "at": "2026-09-16T12:37:26.673Z",
+      "note": "agent-task-notification.test.ts: it lands AFTER both tool results of a parallel batch and before the next round; the drain sits beside anchorsToAnnounce and repeatedFailureHint at the round boundary in agent.ts"
+    },
+    "AC5": {
+      "at": "2026-09-16T12:37:26.761Z",
+      "note": "agent-task-notification.test.ts: the completion arrives without any shell_job_output call and without a sleep; confirmed live on a real process by the hold smoke (3 rounds, 2041 ms, one notification carrying SMOKE_DONE)"
+    },
+    "AC6": {
+      "at": "2026-09-16T12:37:35.207Z",
+      "note": "agent-task-notification.test.ts: the turn waits for the completion and continues with the notification; the hold is abortable by options.signal; a task still running past KERYX_SHELL_HOLD_MS is killed with hold-timeout and reported. Live proof on a real process: sleep 2 against a 300 ms yield, turn continued to a third round after 2041 ms"
+    },
+    "AC7": {
+      "at": "2026-09-16T12:37:35.306Z",
+      "note": "shell.test.ts audits: the session-scoped registry gets a completion subscription; the single line consumer races the next input line against the next completion; a completion-started turn is marked origin task-notification. tui-shell.test.ts audits: the TUI subscribes to registry completions; the wake is guarded by no foreground operation AND an empty operator queue; a notification-started turn carries the origin literal"
+    },
+    "AC8": {
+      "at": "2026-09-16T12:37:35.401Z",
+      "note": "shell.test.ts: consecutive auto-wakes are capped and the counter is reset by operator input, with the TUI equivalent audited; resolver proven by execution in agent-task-notification.test.ts. The second half of this criterion (the pending notification reaches the operator next turn) was FALSE until review finding F-002 was fixed in 50d12cf; it is now proven by its own test and by the live probe"
+    },
+    "AC9": {
+      "at": "2026-09-16T12:37:35.504Z",
+      "note": "agent-task-notification.test.ts: a delivered completion is never re-announced in later rounds, driven over several rounds; no completions produces no message at all"
+    },
+    "AC10": {
+      "at": "2026-09-16T12:37:35.616Z",
+      "note": "agent-task-notification.test.ts: KERYX_SHELL_HOLD_MS default 1800000 with empty, whitespace, non-numeric and negative all falling back and explicit 0 disabling; KERYX_SHELL_MAX_AUTO_WAKE default 5 with the same pattern"
+    },
+    "AC11": {
+      "at": "2026-09-16T12:37:35.731Z",
+      "note": "tsc --noEmit clean; the nine named suites pass, including background-job-registry 60/60, agent 87/87 and agent-task-notification 19/19; full suite 10401 pass / 20 skip with one load-induced timeout in scripts/install-global.test.ts which passes 3/3 in isolation; CI on the merged head c42d4a3 green, 18 checks, 0 failed"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/568"
   },
   "baseBranch": "main",
   "tasks": [
@@ -412,6 +457,89 @@
       "at": "2026-09-16T12:17:25.070Z",
       "event": "task-done",
       "detail": "T11: Review the P1 diff and fix findings"
+    },
+    {
+      "at": "2026-09-16T12:30:21.850Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/568"
+    },
+    {
+      "at": "2026-09-16T12:35:11.027Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T12:35:20.527Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11 | review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 50d12cfcc6e1999d1ccaa6421f7c4a9acad19307, but the PR head is c42d4a309cd1e0356858f5fa58dfe8a7a24e4d3e. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-16T12:37:26.376Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: background-job-registry.test.ts: a background-phase task that exits is drained once with its full completion record; two drains in the SAME synchronous tick never both return the task; a still-running background task is not drained at all; a promoted task IS drained once it exits"
+    },
+    {
+      "at": "2026-09-16T12:37:26.480Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: background-job-registry.test.ts: a task whose terminal status came back from shell_job_output is never drained; a task the model killed via shell_job_kill is never drained; polling a task while it is STILL RUNNING does not mark it observed"
+    },
+    {
+      "at": "2026-09-16T12:37:26.579Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: agent-task-notification.test.ts: one block per task carrying task_id, status, exit_code and duration_ms; the banner states the text is command output, not instructions from the user; several tasks coalesce into ONE body; output truncated to at most 4000 bytes of TAIL; a killed task renders its kill_reason; the notification does NOT set the untrusted gate"
+    },
+    {
+      "at": "2026-09-16T12:37:26.673Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: agent-task-notification.test.ts: it lands AFTER both tool results of a parallel batch and before the next round; the drain sits beside anchorsToAnnounce and repeatedFailureHint at the round boundary in agent.ts"
+    },
+    {
+      "at": "2026-09-16T12:37:26.761Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: agent-task-notification.test.ts: the completion arrives without any shell_job_output call and without a sleep; confirmed live on a real process by the hold smoke (3 rounds, 2041 ms, one notification carrying SMOKE_DONE)"
+    },
+    {
+      "at": "2026-09-16T12:37:35.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: agent-task-notification.test.ts: the turn waits for the completion and continues with the notification; the hold is abortable by options.signal; a task still running past KERYX_SHELL_HOLD_MS is killed with hold-timeout and reported. Live proof on a real process: sleep 2 against a 300 ms yield, turn continued to a third round after 2041 ms"
+    },
+    {
+      "at": "2026-09-16T12:37:35.306Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell.test.ts audits: the session-scoped registry gets a completion subscription; the single line consumer races the next input line against the next completion; a completion-started turn is marked origin task-notification. tui-shell.test.ts audits: the TUI subscribes to registry completions; the wake is guarded by no foreground operation AND an empty operator queue; a notification-started turn carries the origin literal"
+    },
+    {
+      "at": "2026-09-16T12:37:35.401Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: shell.test.ts: consecutive auto-wakes are capped and the counter is reset by operator input, with the TUI equivalent audited; resolver proven by execution in agent-task-notification.test.ts. The second half of this criterion (the pending notification reaches the operator next turn) was FALSE until review finding F-002 was fixed in 50d12cf; it is now proven by its own test and by the live probe"
+    },
+    {
+      "at": "2026-09-16T12:37:35.504Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: agent-task-notification.test.ts: a delivered completion is never re-announced in later rounds, driven over several rounds; no completions produces no message at all"
+    },
+    {
+      "at": "2026-09-16T12:37:35.616Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: agent-task-notification.test.ts: KERYX_SHELL_HOLD_MS default 1800000 with empty, whitespace, non-numeric and negative all falling back and explicit 0 disabling; KERYX_SHELL_MAX_AUTO_WAKE default 5 with the same pattern"
+    },
+    {
+      "at": "2026-09-16T12:37:35.731Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: tsc --noEmit clean; the nine named suites pass, including background-job-registry 60/60, agent 87/87 and agent-task-notification 19/19; full suite 10401 pass / 20 skip with one load-induced timeout in scripts/install-global.test.ts which passes 3/3 in isolation; CI on the merged head c42d4a3 green, 18 checks, 0 failed"
+    },
+    {
+      "at": "2026-09-16T12:40:02.031Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/568 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-16T12:40:19.107Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T12:40:27.393Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }

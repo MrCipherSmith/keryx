@@ -202,6 +202,34 @@ Round `2026-09-16-ingest-main-r03` under flow 265: 2 findings in, 2 retained,
 50d12cfcc6e1999d1ccaa6421f7c4a9acad19307, 0 left `unknown`. `review floor`
 reported nothing lowered across 28 files and 2 458 changed lines.
 
+## Closure — the gate refused once, correctly, and round 4 is why
+
+First attempt at closing the flow failed on two conditions, both fair:
+
+1. **acceptance-criteria: all 11 unconfirmed.** Freezing criteria is not
+   confirming them; each now carries its own evidence line naming the test or the
+   run that proves it. AC8's note records something worth keeping: its second
+   half — the pending notification reaching the operator's next turn — was FALSE
+   until review finding F-002 was fixed. Confirming it before the review would
+   have been a lie the gate could not have caught.
+2. **review: head-commit violated.** Round 3 ran against `50d12cf`, the commit
+   that fixed its own findings, while the PR head was `c42d4a3` — three
+   bookkeeping commits later. The gate's words: "a clean round against a stale
+   SHA proves nothing about what will merge". It also noted the round cap (3) was
+   reached and that a fourth round is the operator's call.
+
+Round 4 was run rather than waved through, and the justification is recorded
+rather than asserted: `git diff 50d12cf..c42d4a3 -- src scripts docs` reports
+**0 changed files** — the delta is the review package, the health and testing
+artifacts, the rebuilt graph and this journal. The two findings were re-verified
+at the merged head (probe: `A=pass`, `B=pass`) and CI ran the full matrix on that
+exact SHA: 18 checks, 0 failed.
+
+Worth noticing for next time: the bookkeeping commits a phase needs (review
+package, refreshed artifacts) move the PR head AFTER the review round, so the
+round is stale by construction unless the round is ingested last. Ingest the
+round against the head you are about to merge, or expect to re-run it.
+
 ## T12 — P1 deviations from the specification
 
 Three, all deliberate, now recorded in specification.md §Status:
@@ -260,3 +288,20 @@ for its wiring pin.
 - 2026-09-16T11:39:42.078Z - task-done: T12: Journal deviations and mark P1 in the requirements package
 - 2026-09-16T12:03:11.063Z - task-attempt: T11: blocked (attempt 2) — both dispatched reviewers (code-boss-reviewer, review-regression) stalled: 179-byte transcripts, no output in 29 minutes; stopping them and reviewing the diff myself
 - 2026-09-16T12:17:25.070Z - task-done: T11: Review the P1 diff and fix findings
+- 2026-09-16T12:30:21.850Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/568
+- 2026-09-16T12:35:11.027Z - completing
+- 2026-09-16T12:35:20.527Z - completion-failed: acceptance-criteria: unconfirmed: AC1, AC2, AC3, AC4, AC5, AC6, AC7, AC8, AC9, AC10, AC11 | review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 50d12cfcc6e1999d1ccaa6421f7c4a9acad19307, but the PR head is c42d4a309cd1e0356858f5fa58dfe8a7a24e4d3e. A clean round against a stale SHA proves nothing about what will merge — re-run the round. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.
+- 2026-09-16T12:37:26.376Z - ac-confirmed: AC1: background-job-registry.test.ts: a background-phase task that exits is drained once with its full completion record; two drains in the SAME synchronous tick never both return the task; a still-running background task is not drained at all; a promoted task IS drained once it exits
+- 2026-09-16T12:37:26.480Z - ac-confirmed: AC2: background-job-registry.test.ts: a task whose terminal status came back from shell_job_output is never drained; a task the model killed via shell_job_kill is never drained; polling a task while it is STILL RUNNING does not mark it observed
+- 2026-09-16T12:37:26.579Z - ac-confirmed: AC3: agent-task-notification.test.ts: one block per task carrying task_id, status, exit_code and duration_ms; the banner states the text is command output, not instructions from the user; several tasks coalesce into ONE body; output truncated to at most 4000 bytes of TAIL; a killed task renders its kill_reason; the notification does NOT set the untrusted gate
+- 2026-09-16T12:37:26.673Z - ac-confirmed: AC4: agent-task-notification.test.ts: it lands AFTER both tool results of a parallel batch and before the next round; the drain sits beside anchorsToAnnounce and repeatedFailureHint at the round boundary in agent.ts
+- 2026-09-16T12:37:26.761Z - ac-confirmed: AC5: agent-task-notification.test.ts: the completion arrives without any shell_job_output call and without a sleep; confirmed live on a real process by the hold smoke (3 rounds, 2041 ms, one notification carrying SMOKE_DONE)
+- 2026-09-16T12:37:35.207Z - ac-confirmed: AC6: agent-task-notification.test.ts: the turn waits for the completion and continues with the notification; the hold is abortable by options.signal; a task still running past KERYX_SHELL_HOLD_MS is killed with hold-timeout and reported. Live proof on a real process: sleep 2 against a 300 ms yield, turn continued to a third round after 2041 ms
+- 2026-09-16T12:37:35.306Z - ac-confirmed: AC7: shell.test.ts audits: the session-scoped registry gets a completion subscription; the single line consumer races the next input line against the next completion; a completion-started turn is marked origin task-notification. tui-shell.test.ts audits: the TUI subscribes to registry completions; the wake is guarded by no foreground operation AND an empty operator queue; a notification-started turn carries the origin literal
+- 2026-09-16T12:37:35.401Z - ac-confirmed: AC8: shell.test.ts: consecutive auto-wakes are capped and the counter is reset by operator input, with the TUI equivalent audited; resolver proven by execution in agent-task-notification.test.ts. The second half of this criterion (the pending notification reaches the operator next turn) was FALSE until review finding F-002 was fixed in 50d12cf; it is now proven by its own test and by the live probe
+- 2026-09-16T12:37:35.504Z - ac-confirmed: AC9: agent-task-notification.test.ts: a delivered completion is never re-announced in later rounds, driven over several rounds; no completions produces no message at all
+- 2026-09-16T12:37:35.616Z - ac-confirmed: AC10: agent-task-notification.test.ts: KERYX_SHELL_HOLD_MS default 1800000 with empty, whitespace, non-numeric and negative all falling back and explicit 0 disabling; KERYX_SHELL_MAX_AUTO_WAKE default 5 with the same pattern
+- 2026-09-16T12:37:35.731Z - ac-confirmed: AC11: tsc --noEmit clean; the nine named suites pass, including background-job-registry 60/60, agent 87/87 and agent-task-notification 19/19; full suite 10401 pass / 20 skip with one load-induced timeout in scripts/install-global.test.ts which passes 3/3 in isolation; CI on the merged head c42d4a3 green, 18 checks, 0 failed
+- 2026-09-16T12:40:02.031Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/568 (warning: PR is not a draft)
+- 2026-09-16T12:40:19.107Z - completing
+- 2026-09-16T12:40:27.393Z - done: all gates passed
