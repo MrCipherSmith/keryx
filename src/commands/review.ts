@@ -72,8 +72,10 @@ import {
   collectPrComments,
   createFixturePort,
   createGhPort,
+  describePullRequest,
   externalFindingsFromComments,
   postReplyPass,
+  shaMatchesHead,
   prCommentsStatePath,
   readPrCommentState,
   recordSeenComments,
@@ -199,6 +201,9 @@ const COMMENTS_REPLY_FLAGS = [
   // The skill's own result, checked against `review-pr-feedback-output` before
   // anything is posted. See `refuseInvalidResult`.
   "--result",
+  // The managed review package this reply pass belongs to. With `--result`, one
+  // of the two is required to post: see `refuseUnmanagedReply`.
+  "--review",
   "--sha",
   "--round",
   "--final",
@@ -208,6 +213,9 @@ const COMMENTS_REPLY_FLAGS = [
   "--max-chars",
   "--flow-link",
   "--fixtures",
+  // Post to a closed or merged pull request anyway. Off by default: the pass
+  // refuses a finished pull request, and the head must match either way.
+  "--allow-closed-pr",
 ] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
@@ -1010,6 +1018,22 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   console.log(renderPrCommentsMarkdown({ repo, number, round, result }));
   console.log(`findings: ${findings.length}${out === undefined ? "" : ` (written to ${out})`}`);
   console.log(`collected against: ${sha} (round ${round})`);
+  // The pull request itself, every time. This output used to carry the SHA we
+  // were given and nothing about the pull request, so a collection against a
+  // pre-merge head of a merged PR looked exactly like a current one.
+  console.log(`pull request: ${describePullRequest(result.pull)}`);
+  if (result.pull.state === "unknown") {
+    console.log("WARNING: the pull request's state could not be read — `comments reply` will refuse this pull request.");
+  } else if (result.pull.merged || result.pull.state === "closed") {
+    console.log(
+      "WARNING: the pull request is no longer open — `comments reply` will refuse it unless --allow-closed-pr is passed.",
+    );
+  }
+  if (result.pull.headSha !== null && !shaMatchesHead(sha, result.pull.headSha)) {
+    console.log(
+      `WARNING: --sha ${sha} is not the pull request's head (${result.pull.headSha}) — this collection is stale, and \`comments reply\` refuses a SHA that is not the head.`,
+    );
+  }
   console.log(
     `unanswered so far: ${unansweredComments(recorded).length} — replies are posted ONCE, after the final round.`,
   );
@@ -1028,6 +1052,7 @@ async function runCommentsReply(args: string[]): Promise<void> {
   // comment collection to be told so would hide the refusal behind whatever
   // else can fail first — including, on an unreachable tracker, forever.
   await refuseInvalidResult(optionValue(args, "--result"), optionValue(args, "--outcomes"));
+  await refuseUnmanagedReply(args, repo, number, dryRun || !isFinal);
 
   const cwd = process.cwd();
   const port = await resolvePort(args);
@@ -1061,7 +1086,11 @@ async function runCommentsReply(args: string[]): Promise<void> {
     repo,
     number,
     pass,
-    sha: requiredOption(args, "--sha", "comments reply"),
+    // Checked for SHA shape, as `collect` already was — and then compared with
+    // the pull request's head inside the pass, which it never used to be.
+    sha: requiredSha(args, "--sha", "comments reply"),
+    pull: collected.pull,
+    allowClosed: args.includes("--allow-closed-pr"),
     round: { index: round, isFinal },
     state,
     dryRun,
@@ -1094,7 +1123,7 @@ async function resolvePort(args: string[]): Promise<GitHubPort> {
     return createGhPort();
   }
   const files: Record<string, unknown> = {};
-  for (const key of ["pull-comments", "pull-reviews", "issue-comments"]) {
+  for (const key of ["pull", "pull-comments", "pull-reviews", "issue-comments"]) {
     const file = join(fixtures, `${key}.json`);
     try {
       files[key] = JSON.parse(await readFile(file, "utf8")) as unknown;
@@ -1151,6 +1180,49 @@ async function resolveSelfLogin(args: string[]): Promise<string> {
  * registry records honestly as the limit of this enforcement rather than
  * rounding up to "the contract is enforced".
  */
+/**
+ * Posting replies needs a managed context — a lightweight review is report-only.
+ *
+ * `review-orchestrator` declares `lightweight` as "report-only; no artifacts",
+ * and its Step 14 still told an agent to run `comments reply` unconditionally —
+ * so a plain "review this PR" ended by posting to the pull request. The mode is
+ * not something this command can be told and trust, so it asks for evidence
+ * instead: the managed review package the round wrote (`--review`, whose target
+ * must be this pull request), or the `review-pr-feedback` result (`--result`,
+ * already validated above). A lightweight review has neither. A dry run posts
+ * nothing and is always allowed.
+ */
+async function refuseUnmanagedReply(args: string[], repo: string, number: number, postsNothing: boolean): Promise<void> {
+  // `postsNothing`: a dry run, or a non-final round that the pass refuses with its own, more specific reason.
+  if (postsNothing || optionValue(args, "--result") !== undefined) {
+    return;
+  }
+  const where = `${repo}#${number}`;
+  const ref = optionValue(args, "--review");
+  if (ref === undefined) {
+    throw new Error(
+      `Refusing to reply on ${where}: posting is for a MANAGED review, and nothing here shows one. Pass \`--review <review-id-or-path>\` (the package \`keryx review start/attach\` wrote for this pull request) or \`--result <file>\` (a review-pr-feedback run). A lightweight review is report-only — it answers nobody. \`--dry-run\` still shows what would be posted.`,
+    );
+  }
+  let manifest;
+  try {
+    manifest = await getManagedReviewStatus(process.cwd(), ref);
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- The package ref is the actionable part; the cause is summarised inline.
+    throw new Error(
+      `Refusing to reply on ${where}: \`--review ${ref}\` is not a readable managed review package (${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
+  const target = manifest.target;
+  const refNumber = /(?:^|[/#])(\d+)\/?$/.exec(target.ref.trim())?.[1];
+  const repoMismatch = target.repository !== undefined && target.repository !== "" && !target.repository.toLowerCase().endsWith(repo.toLowerCase());
+  if (target.kind !== "pr" || refNumber !== String(number) || repoMismatch) {
+    throw new Error(
+      `Refusing to reply on ${where}: \`--review ${ref}\` reviewed ${target.kind} \`${target.ref}\`${target.repository ? ` in ${target.repository}` : ""}, not this pull request. A reply pass answers the review that produced its outcomes.`,
+    );
+  }
+}
+
 async function refuseInvalidResult(source: string | undefined, outcomesSource: string | undefined): Promise<void> {
   if (source === undefined) {
     return;
@@ -2453,7 +2525,9 @@ comments:
   UNOBSERVED, on the same rule as no record at all.
   \`reply\` refuses without --final: replying per round turns one review thread
   into six, and a reply written mid-flow states an intention rather than an
-  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
+  outcome. It also refuses a pull request that is closed or merged (override:
+  --allow-closed-pr), one whose state could not be read, and a --sha that is not
+  the pull request's head — the answers must describe the commit it points at. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
   (--max-chars) — CUT to both in code, with the remainder replaced by a link,
   because a sentence budget alone lets one 4,000-character sentence through —
   threaded where GitHub gives a thread, and capped
