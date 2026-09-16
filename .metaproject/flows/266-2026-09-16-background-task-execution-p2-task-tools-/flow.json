@@ -7,9 +7,9 @@
   "id": "266",
   "slug": "background-task-execution-p2-task-tools-",
   "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-16T13:03:29.197Z",
-  "updatedAt": "2026-09-16T14:21:14.686Z",
+  "updatedAt": "2026-09-16T14:33:32.903Z",
   "source": {
     "type": "description",
     "ref": null
@@ -66,7 +66,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/571"
   },
   "tasks": [
     {
@@ -311,7 +311,7 @@
       "id": "T13",
       "title": "Review round ingested against the head that will merge",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -325,7 +325,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "round 2026-09-16-ingest-origin-main ingested against the head that merged (c8f73420), one major finding (resolveTaskId resolved dead ids on ACTING paths, weakening D-14), fixed in 078855b0, verified by execution at that head, disposition acted-on recorded, 0 unknown. The finding also forced a narrowing of this flow's own frozen AC5, decided by the owner and re-sealed"
     },
     {
       "id": "T14",
@@ -582,6 +584,40 @@
       "at": "2026-09-16T14:21:14.686Z",
       "event": "ac-confirmed",
       "detail": "AC12: tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94"
+    },
+    {
+      "at": "2026-09-16T14:24:08.136Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (base: main)"
+    },
+    {
+      "at": "2026-09-16T14:31:37.575Z",
+      "event": "task-done",
+      "detail": "T13: Review round ingested against the head that will merge"
+    },
+    {
+      "at": "2026-09-16T14:31:37.780Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T14:31:47.862Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-16-ingest-origin-main#F-001 (major, round 2026-09-16-ingest-origin-main): marked fixed at 078855b0, c8f73420e61d37a08e6bbfddef68f692aaa1a3d1 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-16T14:32:21.829Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-16T14:33:21.148Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T14:33:32.903Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
