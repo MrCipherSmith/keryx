@@ -201,6 +201,20 @@ rail waited; and the idle-kill message plus the lost-task branch are now covered
 by scripted fakes on every platform. Re-run: 109 pass / 0 fail across the five
 files, typecheck clean.
 
+## Completion path
+
+- Branch `feat/shell-task-supervisor` pushed; PR #563 opened against `main`
+  (https://github.com/MrCipherSmith/keryx/pull/563). All nine ACs confirmed with
+  their evidence. `keryx health run`: PASS, score 94.
+- The pre-push security scan reports findings in `shell-exec-tool.test.ts`
+  (advisory, push allowed). They are pre-existing sandbox-mask fixtures — e.g.
+  `const FIXTURE_KEY = "sk-test-fixture-not-real"` at line 152 and the
+  metadata-URL egress cases — not introduced by this branch.
+- CI: 17 required checks; merge is blocked until they pass. Then merge into
+  `main`, `keryx flow implemented 263 --pr <url>`, `keryx flow complete 263`,
+  and a bookkeeping PR for the post-merge flow.json/journal changes (main is
+  push-gated).
+
 ## T10 review — logic and blast radius, done by the orchestrator
 
 Both reviewer dispatches stalled with empty transcripts (~28 min, the same
@@ -241,3 +255,13 @@ with the rest of the doc sweep.
 - 2026-09-16T06:25:11.327Z - task-attempt: T10: started (attempt 1) — review wave: review-logic, review-regression, review-testing-practices
 - 2026-09-16T06:54:23.169Z - task-attempt: T10: blocked (attempt 2) — review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly
 - 2026-09-16T07:12:44.252Z - task-done: T10: Review the P0 diff and fix findings
+- 2026-09-16T07:14:07.063Z - task-done: T11: Journal deviations and update prompt/comment text
+- 2026-09-16T07:14:54.660Z - ac-confirmed: AC1: shell-exec-background.test.ts flow-263 AC1: incident command with no flag returns a task-<n>-<pid> handle under a 50ms yield, readable via shell_job_output and killed via shell_job_kill with killReason model; live run returned in 3006ms
+- 2026-09-16T07:14:54.768Z - ac-confirmed: AC2: shell-exec-background.test.ts flow-263 AC2: trimmed output, (no output; exit N), isError on non-zero, 20000-byte head cap with truncated marker, no handle
+- 2026-09-16T07:14:54.872Z - ac-confirmed: AC3: background-job-registry.test.ts flow-263 AC3: resolver units plus paired fakes and paired real processes (2s idle window, 100ms ticks); scripted fake covers the KERYX_SHELL_IDLE_MS and idle_timeout_ms message on every platform
+- 2026-09-16T07:15:14.404Z - ac-confirmed: AC4: background-job-registry.test.ts flow-263 AC4: exit 0 completed, non-zero failed, kill defaults to model, operator/session-exit/output-cap reasons each asserted, exactly one exit event per task
+- 2026-09-16T07:15:14.494Z - ac-confirmed: AC5: flow-263 AC5 in registry and shell_exec tests: foreground start never refused by the cap, background:true refused naming the running command, promoted task not killed and handle carries over_cap, running tasks stay at or below maxConcurrent+1
+- 2026-09-16T07:15:14.586Z - ac-confirmed: AC6: shell-exec-background.test.ts AC6 and background-job-registry.test.ts AC3: grandchild alive and pgid==pid before the kill, then polled until its pid is gone; verified live (process gone after shell_job_kill)
+- 2026-09-16T07:15:18.180Z - ac-confirmed: AC7: shell-exec-tool.test.ts AC7 pin plus interactive-agent-tools.test.ts behaviour test: the built roster's shell_exec yields a task handle through the session registry; shell-task-registry-wiring.test.ts pins both shell.ts call sites
+- 2026-09-16T07:15:18.298Z - ac-confirmed: AC8: background-job-session.test.ts: start alone is not listed, phase lists it, output before phase is kept, a task exiting while foreground is dropped and stays dropped, distinct glyphs for running/completed/failed/killed, killReason on the entry and in the Meta view
+- 2026-09-16T07:15:18.431Z - ac-confirmed: AC9: bun run typecheck clean; nine registry/shell_exec/TUI files 143 pass; AC9 suites 276 pass; full suite 10297 pass 0 fail; keryx health run PASS score 94
