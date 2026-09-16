@@ -3,6 +3,43 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.112] — 2026-09-16
+Output from a background task reached the model provider unredacted. Releases
+0.2.109, 0.2.110 and 0.2.111 carry the defect; this release is the fix and
+contains nothing else.
+
+### Fixed
+
+- **A task-completion notification is redacted before it reaches the provider.**
+  `redactSensitiveText` ran on the ordinary tool-result path and nowhere else. A
+  completion notification carries the same kind of bytes into the same
+  provider-bound history and never passed through it, so output was scrubbed when
+  a command returned inline and leaked verbatim when the identical command
+  outlived its yield and finished as a background task. The scrubber's own reason
+  to exist names this case — a contained command that reads a credential must not
+  leak the raw value onward to the provider — and delivery is that path too.
+  Redaction now happens in the single notification builder every delivery path
+  funnels through, after the tail slice rather than before it, because redaction
+  is not length-preserving and scrubbing first would silently change what the
+  4 000-byte bound means.
+
+  **Who is affected.** Only sessions that ran a command whose *output* contained
+  a secret through a background task — `env`, reading a credentials file, a build
+  that echoes a token into its log. A command that merely *uses* a secret without
+  printing it was never exposed by this. The leak went to the configured model
+  provider as part of the conversation, not to disk or to any third party.
+
+  **What you cannot check, and what to do instead.** Notifications are not
+  written to disk and the context sent to a provider is not readable after the
+  fact, so there is no local artifact to audit — "check whether you were
+  affected" is advice that cannot be followed. If you recognise the case above in
+  how you used background tasks on 0.2.109–0.2.111, treat the printed credential
+  as exposed and rotate it.
+
+  Found while drafting the requirements for on-disk transcripts: stating what a
+  transcript must redact required stating what the code redacts today, and this
+  path did not survive the check.
+
 ## [0.2.111] — 2026-09-16
 Review stops acting on the wrong thing. An imported reviewer can now verify and
 brings the rules it cites; a model block no longer pins whatever `keryx shell`
