@@ -9,12 +9,12 @@
   "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
   "status": "in-progress",
   "createdAt": "2026-09-16T13:03:29.197Z",
-  "updatedAt": "2026-09-16T14:09:50.413Z",
+  "updatedAt": "2026-09-16T14:18:18.953Z",
   "source": {
     "type": "description",
     "ref": null
   },
-  "acChecksum": "sha256:53f28612eaf01e8087c5b2e1d0be0bb10b2177743b5ddc13950a83dd9e28ad0d",
+  "acChecksum": "sha256:b04923787581a2eb324f174f8d35f5469536498e1f857a9132b74291b0b85529",
   "acConfirmed": {},
   "pr": {
     "url": null
@@ -282,7 +282,7 @@
       "id": "T14",
       "title": "Journal deviations and mark P2 in the requirements package",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -290,7 +290,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "README/specification/PRD marked P0+P1+P2 implemented; metrics M13 and M15 -> met (P2) with the executed tests and the live smoke; M10 re-proved at 10423 pass with the duration flake disclosed; M7 and S4 deliberately left open with a written reason, because a queued message pre-empting a wait is a mechanism P2 did not build; deviations journaled (absolute cursor, busy-dispatch allow-list, the audit that pinned a literal)"
     }
   ],
   "history": [
@@ -456,6 +458,21 @@
       "at": "2026-09-16T14:09:50.413Z",
       "event": "task-attempt",
       "detail": "T13: started (attempt 1) — review round, ingested LAST against the head that will merge (flow 265's gate refused a round run against a stale SHA)"
+    },
+    {
+      "at": "2026-09-16T14:11:00.862Z",
+      "event": "task-done",
+      "detail": "T14: Journal deviations and mark P2 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T14:16:48.391Z",
+      "event": "ac-updated",
+      "detail": "review finding: AC5 as frozen required both id spellings on BOTH aliases, which conflicts with D-14 (tasks do not survive a session, so a stale handle must resolve to unknown task_id). Resolving spellings on a KILL can land on a live task when the pid is recycled. Narrowed to reads only, by the owner's decision."
+    },
+    {
+      "at": "2026-09-16T14:18:18.953Z",
+      "event": "ac-updated",
+      "detail": "AC5 narrowed to reads-only id resolution after the review finding; re-sealing against the corrected text (the previous re-seal captured the old wording, because the command re-freezes current content rather than editing a criterion)"
     }
   ]
 }

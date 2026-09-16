@@ -63,6 +63,40 @@ Also settled here: both name sets are now EXPORTED, because AC9 and AC11 are
 about what they contain. The alternative was a source-text audit, and the point
 above is exactly why that would have been the weaker choice.
 
+## T13 — the review found a hole in this flow's OWN frozen criterion
+
+`resolveTaskId` swapped `job-<n>-<pid>` to `task-<n>-<pid>` for every caller,
+including both kill paths and demote. Every id in a live session is `task-*`, so
+that swap can only ever fire for an id from an EARLIER session — which D-14 says
+must be a dead reference, because tasks do not survive a session. The swap keeps
+the counter and the pid; a session's counter restarts at 1, so a stale
+`job-5-<pid>` matches a live `task-5-<pid>` whenever that pid is recycled. For a
+read that is a wrong answer; for `shell_job_kill` it is somebody else's work
+destroyed, and D-14's guarantee is what the swap quietly weakened.
+
+The uncomfortable part: **AC5, which I wrote and froze in this flow, required the
+hole.** "Both aliases accept BOTH spellings" cannot be satisfied without letting
+an action resolve a dead id onto a live task. So the finding was not just about
+code — it was about a criterion that had never been checked against the package's
+own decisions. Raised to the owner with options rather than quietly re-scoped;
+the decision was reads-only. AC5 was narrowed through `keryx flow ac update`,
+re-sealed, and the acting paths now take the id exactly as given.
+
+Two process notes worth keeping:
+
+- `keryx flow ac update <id> --reason "…"` does NOT edit a criterion. It
+  re-freezes whatever the file currently holds and clears prior confirmations, so
+  the order is: EDIT the criterion, then run it. Running it first (as I did)
+  seals the old text and the edit breaks the seal again.
+- Re-sealing cleared the confirmations, which is the right behaviour — a
+  confirmation attests to a specific wording — and it means all twelve criteria
+  must be confirmed again before the completion gate will pass.
+
+The evidence for the fix is a new test rather than a probe, and deliberately so:
+a pid collision cannot be staged on demand, so the claim is proved by pinning the
+invariant (a kill with the old spelling is refused, the task stays `running`,
+while the read alias still accepts both) instead of by staging the coincidence.
+
 - 2026-09-16T13:03:29.197Z - flow created
 - 2026-09-16T13:16:03.424Z - frozen: 12 criteria; checksum recorded
 - 2026-09-16T13:16:03.525Z - started
@@ -96,3 +130,6 @@ above is exactly why that would have been the weaker choice.
 - 2026-09-16T13:44:37.438Z - task-attempt: T12: started (attempt 1) — verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health
 - 2026-09-16T14:09:50.308Z - task-done: T12: Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health
 - 2026-09-16T14:09:50.413Z - task-attempt: T13: started (attempt 1) — review round, ingested LAST against the head that will merge (flow 265's gate refused a round run against a stale SHA)
+- 2026-09-16T14:11:00.862Z - task-done: T14: Journal deviations and mark P2 in the requirements package
+- 2026-09-16T14:16:48.391Z - ac-updated: review finding: AC5 as frozen required both id spellings on BOTH aliases, which conflicts with D-14 (tasks do not survive a session, so a stale handle must resolve to unknown task_id). Resolving spellings on a KILL can land on a live task when the pid is recycled. Narrowed to reads only, by the owner's decision.
+- 2026-09-16T14:18:18.953Z - ac-updated: AC5 narrowed to reads-only id resolution after the review finding; re-sealing against the corrected text (the previous re-seal captured the old wording, because the command re-freezes current content rather than editing a criterion)

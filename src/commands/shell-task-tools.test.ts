@@ -190,6 +190,26 @@ describe("AC4/AC5: kill is idempotent and the old names survive one release", ()
     }
   });
 
+  test("a KILL refuses the old spelling: resolving ids across spellings is for reads only", async () => {
+    // Review finding, flow 266. Every id in a live session is `task-*`, so a
+    // `job-*` id can only come from an earlier session — which D-14 says must be
+    // a dead reference. The swap keeps the counter and the pid, and the counter
+    // restarts each session, so a recycled pid can make a stale id match a LIVE
+    // task. A read that lands on the wrong task is a wrong answer; a kill that
+    // lands on it destroys work nobody asked to lose.
+    const f = await withTasks();
+    try {
+      const jobSpelling = f.running.replace(/^task-/, "job-");
+      const kill = registryMod.shellJobKillTool(f.registry);
+      const result = await kill.invoke({ job_id: jobSpelling });
+      expect(result.isError).toBe(true);
+      expect(result.output).toContain(jobSpelling);
+      expect(f.registry.get(f.running)?.status).toBe("running"); // untouched
+    } finally {
+      await f.cleanup();
+    }
+  });
+
   test("each alias carries a deprecation note naming its replacement IN THE DESCRIPTION", async () => {
     const f = await withTasks();
     try {

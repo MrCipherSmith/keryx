@@ -1109,7 +1109,9 @@ export function demoteTask(
   registry: JobRegistry,
   taskId: string,
 ): { ok: true; overCap?: string } | { ok: false; error: string } {
-  const resolved = resolveTaskId(registry, taskId);
+  // Exactly as given. Demote does not kill, but it still ACTS on a task, and
+  // moving a stranger's task aside on a coincidental id match is still wrong.
+  const resolved = taskId;
   const info = registry.get(resolved);
   if (info === undefined) {
     return { ok: false, error: `unknown task_id: ${taskId}` };
@@ -1239,10 +1241,18 @@ export function shellTaskWaitTool(registry: JobRegistry): InteractiveTool {
  *
  * Ids are minted `task-<n>-<pid>`, but `job-<n>-<pid>` is what a transcript from
  * before the rename still carries, and the model re-reads its own history every
- * turn. Resolving both is what lets the old NAMES stay aliases for a release
- * without the old IDS becoming dead references. Returns the id as given when
- * neither spelling is tracked, so the error names what the caller actually
- * asked for.
+ * turn. Returns the id as given when neither spelling is tracked, so the error
+ * names what the caller actually asked for.
+ *
+ * READS ONLY, and that restriction is the whole point (flow 266 review finding).
+ * Every id in a live session is `task-*`, so this swap can only ever fire for an
+ * id from an EARLIER session — which D-14 says must resolve to `unknown task_id`,
+ * because tasks do not survive a session. The swap keeps the counter and the pid,
+ * and a session's counter restarts at 1, so a stale `job-5-<pid>` matches a live
+ * `task-5-<pid>` whenever that pid is recycled. For a read that is a wrong
+ * answer; for a kill it is somebody else's work destroyed. So the kill paths and
+ * the demote path take the id EXACTLY as given, and only the output alias
+ * resolves both spellings.
  */
 function resolveTaskId(registry: JobRegistry, id: string): string {
   if (registry.get(id) !== undefined) return id;
@@ -1285,7 +1295,8 @@ export function shellTaskKillTool(registry: JobRegistry): InteractiveTool {
       if (raw.length === 0) {
         return { output: "shell_task_kill requires a non-empty 'task_id'", isError: true };
       }
-      const taskId = resolveTaskId(registry, raw);
+      // Exactly as given — see `resolveTaskId`: spelling-swapping is for reads.
+      const taskId = raw;
       const result = await registry.kill(taskId);
       if (!result.ok) {
         return { output: result.error, isError: true };
@@ -1323,7 +1334,9 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
       if (jobId.length === 0) {
         return { output: "shell_job_kill requires a non-empty 'job_id'", isError: true };
       }
-      const result = await registry.kill(resolveTaskId(registry, jobId));
+      // NOT resolved across spellings: a kill acts, and acting on a coincidental
+      // id match destroys work nobody asked to lose (see `resolveTaskId`).
+      const result = await registry.kill(jobId);
       if (!result.ok) {
         return { output: result.error, isError: true };
       }
