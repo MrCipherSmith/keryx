@@ -333,6 +333,33 @@ than implying it covered more.
 reviewers, the stop — in the package's `scope.md` under `## Caps`. A cap that
 did not run prints `not recorded`, never `0`.
 
+### Know the price before you spend it
+
+`keryx review scope --reviewers a,b,c` ends with an estimate of the round, in
+the one moment the number can still change what you do:
+
+```text
+### Estimated cost
+
+- ≈ 26,655 prompt tokens of scoped diff per reviewer (characters ÷ 4 — an estimate, not a measurement)
+- ≈ 106,620 across 3 reviewers, before their own prompts, tools and any verifier wave
+```
+
+It multiplies by the fan-out because every reviewer receives the scoped diff.
+Afterwards, `review ingest --tokens-in <n> --tokens-out <n>` records what was
+actually used, and `review complete` divides it by what survived:
+
+```text
+tokens: 552,502
+retained findings: 6
+per retained finding: 92,084 tokens
+```
+
+A round nobody reported a cost for reads `cost: not recorded`, and the command
+says out loud that this is not zero. The point is not accounting — it is that a
+fan-out of reviewers cannot be argued for or against while its price is a
+feeling.
+
 ## Stop a fix loop that is not converging
 
 ```bash
@@ -348,6 +375,36 @@ the remaining budget**, which it deliberately never reads.
 It reads the review packages on disk and `tasks[].attempts.count` from
 `flow.json`, not the session's memory: a resumed orchestrator's context starts at
 zero while the real count does not.
+
+## Tell reviewers to quote, not to count
+
+A finding does not carry a line number. It carries `quote` — the code it is
+about, copied out of `file` — and `review ingest` finds that quote at the commit
+the round records and derives the line from where it matched.
+
+The reason is what it replaces. Nothing used to compare a reported line against
+anything, so a number that had drifted rode into `findings.json`, into the
+report, and into the disposition someone recorded against it. An audit of every
+review package in this repository found **108 of 582 anchored findings naming a
+file that is absent at their own package's recorded head** — the anchor and the
+commit were a pair, and nothing checked them together.
+
+What a reviewer is asked for is also easier to get right: a model is poor at
+counting lines and good at repeating text it has just read.
+
+Three outcomes, all recorded in `locator`, none of them a guess:
+
+- **`derived`** — the quote was found. `line` is where it starts, and
+  `reported_line` keeps whatever the reviewer claimed, so drift stays
+  measurable rather than merely corrected.
+- **`unlocatable`** — it was not, and `line` is `null` rather than a number
+  nobody checked. The reason distinguishes *the file is not there at that
+  commit*, *the quote does not appear*, and *it appears more than once*.
+- **absent** — the finding quoted nothing, because it is about the round rather
+  than a site. Its line is reported-only and says so by carrying no locator.
+
+A quote that matches twice is `unlocatable`, never the first hit. A wrong anchor
+is acted on; an admitted one is investigated.
 
 ## Verify the findings before you report them
 

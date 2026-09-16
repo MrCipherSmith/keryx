@@ -1755,7 +1755,24 @@ acted on several times more often than comments anchored to a whole file.
 | `--context <n>` | Context lines kept around each retained hunk. |
 | `--json` | Machine-readable scope, including `.files` for reviewer auto-detection. |
 | `--scoped-diff` | Emit the retained diff itself, ready to hand to a reviewer. |
+| `--reviewers a,b` | Not used for scoping — it is how the cost estimate knows the fan-out. |
 | `--append <file>` | Write the scope **and the drop list** into a review package's `scope.md`, replacing a `## Pre-filter scope` block already there rather than adding a second. |
+
+The human-readable output ends with an estimate of what the round will cost,
+before any of it is spent:
+
+```text
+### Estimated cost
+
+- ≈ 26,655 prompt tokens of scoped diff per reviewer (characters ÷ 4 — an estimate, not a measurement)
+- ≈ 106,620 across 4 reviewers, before their own prompts, tools and any verifier wave
+```
+
+It multiplies by `--reviewers` because every reviewer receives the scoped diff,
+so a per-round figure that ignored the fan-out would understate the one thing
+the estimate is printed for. It is labelled an estimate wherever it appears, and
+it is deliberately absent from `--json` and `--scoped-diff`: those are read by
+programs and by reviewers, and neither is a place for prose about money.
 
 **Every drop is recorded with its reason**, its granularity, and the lines it
 covered. A scope that silently truncated would read as "we reviewed everything"
@@ -2105,6 +2122,50 @@ arXiv:2310.01798) — so it was removed rather than improved.
 | `--verifications <file\|->` | The verifier's result: an array of claims, or `{verifier, verifications}`. |
 | `--verification-mode <mode>` | `off`, `annotate` (default), or `filter`. |
 | `--scope <scope.json>` | The **whole** `--json` output of `keryx review scope`, so the record carries what the pre-filter dropped and why. Handing over only its `counts` object is refused: eight integers carry no reason for any individual drop. |
+| `--tokens-in <n>`, `--tokens-out <n>` | What the round actually used. Recorded on the package; absent means **nobody reported**, which is not zero. |
+
+### A finding points at the code it quotes
+
+A finding does not report a line number. It reports `quote` — the code it is
+about, copied out of `file` — and `review ingest` locates that quote at the
+commit the round records, writing the line the match started on. `line` is
+therefore **output**, and a number a reviewer puts there is overwritten.
+
+The reason is the failure it replaces: nothing compared a reported line to
+anything, so a number that had drifted travelled into `findings.json`, into the
+report, and into the disposition somebody later recorded against it. On a fix
+round the file has moved under the finding by construction, which is when the
+reported number is least trustworthy and most acted upon.
+
+Matching is exact first, then with whitespace collapsed, then it stops — nothing
+fuzzy. Three outcomes, all recorded in `locator`:
+
+| Outcome | What it means |
+|---|---|
+| `derived` | The quote was found; `line` is where, and `reported_line` keeps whatever the reviewer claimed. |
+| `unlocatable` | It was not, and `line` is `null` rather than a number nobody checked. The `reason` says which: the file is absent at that commit, the quote does not appear, or it appears in more than one place. |
+| absent | The finding carries no quote — one about the round rather than a site. Its `line` is reported-only, and says so by carrying no locator. |
+
+A quote matching twice is `unlocatable` rather than anchored to the first hit:
+choosing between them would be a guess wearing a line number. Files are read at
+the round's recorded commit, contained to that tree with `realpath` on both
+sides, and bounded in size; the quote is bounded in length. A round is a claim
+about a commit, and locating it anywhere else answers a question nobody asked.
+
+### What the ingest fills in, and what it refuses
+
+Two fields are supplied when a report omits them, because both are typing rather
+than judgement: `id`, from the finding's position in the report, and `problem`,
+from the finding's own `title`. Whatever was supplied is recorded in
+`manifest.repairs` — the field, the finding, and where the value came from — so
+a later reader can tell a statement the reviewer made from one carried across.
+
+Everything else stays refused. `class_scope` is an enumeration somebody has to
+perform, `evidence` is something somebody has to have run, a disposition is an
+outcome somebody has to have observed. A repair is accepted only if it
+introduces no property the contract does not define, removes none, and preserves
+the number of findings — so widening it fails a test rather than passing a
+review.
 
 Each claim is `{finding, verdict, method, evidence, verifier}` and nothing else.
 `verdict` is `confirmed`, `refuted` or `unverifiable`; `method` is `execution`,
@@ -2208,6 +2269,21 @@ A recorded state **and its citation** cannot be overwritten by a later close —
 record a correction as a new round. Closing with no disposition flags is allowed
 and leaves every finding reading `unknown`, which means "nobody wrote down what
 happened", never "the finding was correct".
+
+`review complete` also prints what the round cost against what survived it:
+
+```text
+tokens: 552,502
+retained findings: 6
+per retained finding: 92,084 tokens
+```
+
+This is the first moment both halves are known, which is why it is printed here.
+A round nobody reported a cost for prints `cost: not recorded` and says that is
+not zero. A round that retained nothing prints the bill rather than a
+per-finding figure — an infinity dressed as a metric is worse than the plain
+fact. And a per-finding figure that rounds down to nothing prints `< 1 token`
+rather than `0`, because in these records a zero means somebody measured one.
 
 #### The learning note — `.metaproject/memory/review-notes/`
 

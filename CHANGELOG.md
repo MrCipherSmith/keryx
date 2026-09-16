@@ -3,6 +3,80 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.107] — 2026-09-16
+A review finding now points at the code it quotes, a round no longer dies on a
+field the report's own ordering already contained, and every round states what
+it cost.
+
+### Added
+
+- **A finding carries the code it is about, and its line is derived from it.**
+  Reviewers reported a line number and nothing compared it to anything, so a
+  number that had drifted rode into `findings.json`, into the report, and into
+  the disposition recorded against it. On a fix round the file has moved under
+  the finding by construction, which is when the reported number is least
+  trustworthy and most acted upon. A finding now carries `quote`, and
+  `keryx review ingest` locates that quote at the commit the round records —
+  exactly first, then with whitespace collapsed, then not at all. The line is
+  what falls out of the match.
+
+  An audit of every review package in this repository is what made the size of
+  this visible: **108 of 582 anchored findings name a file that is absent at
+  their own package's recorded head.** The anchor and the commit were a pair and
+  nothing checked them together.
+
+  Three outcomes, none of them a guess. `derived` keeps `reported_line` beside
+  the derived one, so drift stays measurable rather than merely corrected.
+  `unlocatable` writes `line: null` and a reason that distinguishes *the file is
+  not there*, *the quote does not appear*, and *it appears more than once* — a
+  quote matching twice is never anchored to the first hit, because choosing
+  between them would be a guess wearing a line number. A finding that quotes
+  nothing, because it is about the round rather than a site, carries no locator
+  at all and says so.
+
+- **Every round states its price.** `keryx review scope --reviewers a,b` prints
+  an estimate before anything is dispatched, multiplied by the fan-out because
+  every reviewer receives the scoped diff. `keryx review ingest --tokens-in
+  <n> --tokens-out <n>` records what was actually used, and `keryx review
+  complete` divides it by the findings that survived. A round nobody reported a
+  cost for reads `not recorded`, and the command says out loud that this is not
+  zero; a round that retained nothing prints the bill rather than an infinity
+  dressed as a metric; and a per-finding figure that rounds down to nothing
+  prints `< 1 token`, because in these records a zero means somebody measured
+  one.
+
+### Changed
+
+- **`review ingest` fills in what is typing and still refuses what is
+  judgement.** A round was lost to five findings that arrived without an `id` —
+  every one recoverable from the report's own ordering — and then to a `problem`
+  the reviewer had already written as a title. Both are supplied now, and what
+  was supplied is recorded in `manifest.repairs` with the field, the finding and
+  where the value came from, so a later reader can tell a statement the reviewer
+  made from one carried across. `class_scope`, evidence and dispositions stay
+  refused: an enumeration somebody has to perform, a check somebody has to have
+  run, an outcome somebody has to have observed. The repair is accepted only if
+  it introduces no property the contract does not define, removes none, and
+  preserves the number of findings.
+
+### Security
+
+- **`review ingest` reads only inside the tree the round names.** Locating a
+  quote means reading the file it names, which is new surface: a review report
+  is data, and it can arrive from a reviewer agent, a file on disk or a pull
+  request. Containment is enforced against the file system rather than the path
+  string — `realpath` on both sides — so a symlink whose name sits inside the
+  tree and whose target does not is refused. Without that, the `derived` /
+  `unlocatable` outcome is a line-by-line oracle for any file the process can
+  open.
+
+- **Locating is bounded in both dimensions.** The matcher is O(file × quote) and
+  ran once per finding with no cap, so a report could hold an ingest for
+  minutes: a 50,000-line file against a 10,000-line quote measured 49 seconds
+  for a single finding. Quote length and file size are bounded, and the scan
+  stops once a second match proves ambiguity — the same three cases now measure
+  11.1 ms, 2.3 ms and 1.3 ms.
+
 ## [0.2.106] — 2026-09-15
 Review records follow a flow when it is renumbered, and records an older
 renumber left behind can be repaired with one command.
