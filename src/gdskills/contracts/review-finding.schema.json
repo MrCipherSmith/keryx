@@ -100,7 +100,40 @@
       "description": "Which repository `file` and `line` are in. Null, the default, means the repository under review. A cross-repo claim names the producer here and pins the ref it was read at in `evidence`; without this field a finding about another service's behaviour could not say where its evidence lived, so the rule that such a claim is `info` unless it has a `file:line` at a pinned ref could not be checked by anything but the reviewer's word. Declared in BOTH this schema and skills/review/review-orchestrator/reviewer-finding.schema.json: this one is additionalProperties:false, so a finding carrying `repo` is rejected here if only the reviewer-side schema knows about it."
     },
     "file": { "type": ["string", "null"] },
-    "line": { "type": ["integer", "null"], "minimum": 1 },
+    "line": {
+      "title": "Where the finding points — DERIVED when the finding quotes code",
+      "description": "Reported by the reviewer only when there is nothing to quote. When `quote` is present this field is OUTPUT: `review ingest` finds the quote in `file` at the round's head and writes the line the match started on, overwriting whatever the reviewer said and recording both in `locator`. The reason is the failure it replaces — nothing compared a reported line to anything, so a number that had drifted travelled into findings.json, into the report, and into the disposition recorded against it. On a fix round the file has moved under the finding by construction, which is when the reported number is least trustworthy and most acted upon.",
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "quote": {
+      "title": "The code this finding is about, copied verbatim out of `file`",
+      "description": "What replaces asking the model for a line number: a model is poor at counting lines and good at repeating text it has just read. The quote is matched against `file` at the round's head — exactly first, then with whitespace collapsed, then not at all. A quote that matches in more than one place is `unlocatable` rather than anchored to the first hit, because choosing among them would be a guess wearing a line number. Absent for a finding that is about the round rather than a site.",
+      "type": ["string", "null"]
+    },
+    "locator": {
+      "title": "How `line` was arrived at",
+      "description": "Present exactly when the finding carries a quote. `derived` means the quote was found and `line` is where; `unlocatable` means it was not, and then `line` is null rather than a number nobody checked. `reported_line` keeps what the reviewer said, so a round can measure how far the claims drifted from the code — which is the only way to know whether deriving them repaired anything or is insurance.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state"],
+      "properties": {
+        "state": { "type": "string", "enum": ["derived", "unlocatable"] },
+        "method": { "type": "string", "enum": ["exact", "whitespace-normalised"] },
+        "reason": { "type": ["string", "null"] },
+        "reported_line": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "state": { "const": "derived" } }, "required": ["state"] },
+          "then": { "required": ["method"] }
+        },
+        {
+          "if": { "properties": { "state": { "const": "unlocatable" } }, "required": ["state"] },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
     "symbol": { "type": ["string", "null"] },
     "problem": { "type": "string" },
     "impact": { "type": "string" },

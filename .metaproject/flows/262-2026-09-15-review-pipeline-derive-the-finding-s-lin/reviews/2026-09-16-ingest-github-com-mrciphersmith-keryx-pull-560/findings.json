@@ -1,0 +1,166 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "The round-tree containment check is lexical, not real: a symlink inside the tree defeats it and lets `review ingest` read arbitrary host files.",
+    "impact": "Anyone who can add a file to the tree under review can plant a symlink and then use the derived locator state as a line-by-line oracle for any file the ingest process can read.",
+    "suggested_fix": "realpath both sides before the containment comparison, and refuse to follow a link whose target falls outside the tree.",
+    "evidence": "Reproduced live: symlinked /etc/passwd into the round tree and drove createManagedReviewPackage with a finding quoting a line of it; findings.json recorded {\"state\":\"derived\",\"method\":\"exact\"}. Lexical traversal attacks are correctly refused, which is what makes the symlink the gap.",
+    "confidence": "high",
+    "file": "src/review/managed.ts",
+    "line": 1088,
+    "quote": "      const resolved = path.resolve(input.cwd, relative);\n      if (resolved !== input.cwd && !resolved.startsWith(`${path.resolve(input.cwd)}${path.sep}`)) {\n        return null;\n      }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts — anchorFindings, default readTreeFile closure"
+      ],
+      "enumeration_method": "keryx ctx rg for the containment shape across src/ — one match; keryx ctx rg for readTreeFile confirms production ingest never overrides it, so this is the sole check on the real path."
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — realpath containment; verifier refuted by execution in round r02"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "blocker",
+    "problem": "locateQuote is O(file lines x quote lines) with no cap on either, and anchorFindings runs it once per finding sequentially, so a report can hang review ingest for minutes.",
+    "impact": "A report is attacker-influenced data by this round's own framing; a single ingest can be made to hang with no cap, no timeout and no bailout, using inputs that look ordinary.",
+    "suggested_fix": "Bound quote length and file size before matching, and stop the scan once ambiguity is established.",
+    "evidence": "Measured on one core with no I/O: 50,000-line file x 10,000-line quote = 49,363 ms for one finding. 20,000 lines x 5,000-line quote = 9,243 ms. Realistic case — 20,000-line lockfile x 50-line quote — 117.9 ms per finding, ~118 s extrapolated to 1,000 findings. No MAX_QUOTE/timeout/AbortController anywhere on the path.",
+    "confidence": "high",
+    "file": "src/review/locate.ts",
+    "line": 95,
+    "quote": "  for (let start = 0; start + needle.length <= haystack.length; start += 1) {\n    const window = shape(haystack.slice(start, start + needle.length));\n    if (window.every((line, offset) => line === needle[offset])) {\n      hits.push(start + 1); // 1-based, like every line number a human reads\n    }\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/locate.ts — findRuns/locateQuote",
+        "src/review/managed.ts — anchorFindings, the sole caller"
+      ],
+      "enumeration_method": "keryx ctx rg for locateQuote|locateFinding across src/ — one non-test call site, inside anchorFindings' sequential loop; no length or timeout guard present in either file."
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — quote/file bounds and an early exit at the second hit; verifier re-measured 49363 ms as 11.1 ms"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "A finding carrying a stale locator and line but no quote is written through unrechecked.",
+    "impact": "On a fix round — the round type this change's own comments call out as where the anchor is least trustworthy — an unverified line/locator pair is written verbatim into the new round's findings.json, defeating the derivation guarantee for exactly that case.",
+    "suggested_fix": "Clear any pre-existing locator when the finding has no quote, so 'no quote means no locator' holds of the record.",
+    "evidence": "Drove createManagedReviewPackage with a finding carrying line 42 and a fabricated unlocatable locator and no quote; the persisted record came back with both intact, unexamined, with no warning and no schema rejection.",
+    "confidence": "high",
+    "file": "src/review/managed.ts",
+    "line": 1099,
+    "quote": "  for (const finding of findings) {\n    const locator = await locateFinding(finding, read);\n    if (locator === undefined) {\n      continue;\n    }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/managed.ts — the `if (locator === undefined) { continue; }` branch in anchorFindings"
+      ],
+      "enumeration_method": "Searched every caller of locateFinding/anchorFindings in src/review — one definition, one call site — then reproduced the pass-through through the real entry point."
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — a stale locator is cleared when there is no fresh quote; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "The per-finding cost rounds a nonzero spend down to a printed zero, contradicting the module's own rule that a zero means somebody measured.",
+    "impact": "A reader who trusts the module's promise reads 'per retained finding: 0 tokens' as free when the round spent tokens — the exact confusion the module exists to prevent, reappearing through a different door.",
+    "suggested_fix": "Print a distinguishing form when the figure rounds to zero but the total did not.",
+    "evidence": "renderCostPerFinding({ input_tokens: 2 }, 10) returned [\"tokens: 2\", \"retained findings: 10\", \"per retained finding: 0 tokens\"]. renderCostPerFinding({ spent_usd: 0.00001 }, 10) returned \"per retained finding: 0.0000 USD\".",
+    "confidence": "high",
+    "file": "src/review/cost.ts",
+    "line": 129,
+    "quote": "  if (tokens !== undefined) {\n    lines.push(`per retained finding: ${grouped(Math.round(tokens / retained))} tokens`);\n  }",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/review/cost.ts — the tokens division in renderCostPerFinding",
+        "src/review/cost.ts — the spent_usd division in the same function"
+      ],
+      "enumeration_method": "Read the whole of renderCostPerFinding; it has exactly two per-finding divisions and both were exercised against the real exported function."
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — a rounded-down zero prints as less-than; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "acceptRepair's key-set check only catches added fields, never deleted ones, so a repair that cleared a judged property would pass.",
+    "impact": "Not live under the current call path, but the guard's comments claim a promise the implementation does not keep: a later edit that clears a field instead of adding one would drop evidence or a class_scope enumeration without being caught.",
+    "suggested_fix": "Compute the removed set too and refuse when it is non-empty.",
+    "evidence": "Read the before/after key-set diff in acceptRepair: it computes only `added` and never the removed set.",
+    "confidence": "high",
+    "file": "src/review/repair.ts",
+    "line": 84,
+    "quote": "    const added = Object.keys(finding).filter((key) => !had.has(key));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-005",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — acceptRepair refuses removals too; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "review-testing-practices",
+    "severity": "minor",
+    "problem": "The whitespace-normalised ambiguity branch has no test and survives deletion.",
+    "impact": "Collapsing the branch to return the first hit — anchoring an ambiguous quote instead of refusing — left the full suite green at 584 pass. The exact-match path is the only one actually protected, and this is the failure mode the module's own comment calls unacceptable.",
+    "suggested_fix": "Add an ambiguity case for the loose pass beside the existing exact-match one.",
+    "evidence": "Mutated a scratchpad copy: replaced the loose-pass ambiguity branch with a first-hit return and ran bun test src/review/ — 584 pass, 0 fail.",
+    "confidence": "high",
+    "file": "src/review/locate.ts",
+    "line": 135,
+    "quote": "  const loose = findRuns(haystack, needle.map(normalise), (window) => window.map(normalise));",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-ingest-github-com-mrciphersmith-keryx-pull-560#F-006",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "4bbc9681 — the whitespace ambiguity branch is pinned; the verifier's mutant fails exactly that test"
+    }
+  }
+]

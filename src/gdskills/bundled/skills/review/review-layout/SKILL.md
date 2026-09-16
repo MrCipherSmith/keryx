@@ -227,7 +227,7 @@ Report done only once all of these hold:
 - The measurement was taken at the worst real case — the longest translation in
   the catalog, the narrowest supported host, the state where the sibling is
   absent — not at the convenient one.
-- Every finding names `file:line` on the component that renders the box.
+- Every finding names the `file` of the component that renders the box and `quote`s the code it is about; `line` is derived at ingest from that quote, never counted.
 - Every `blocker` and `major` carries `class_scope` with `sites` and an
   `enumeration_method` naming the search that derived the set of elements sharing
   the sizing shape.
