@@ -3,6 +3,52 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.109] — 2026-09-16
+A command that outlives the wait now reports itself. 0.2.108 stopped a long
+command from freezing the session; this release closes the other half — the
+result comes back on its own, exactly once, without the agent remembering to ask.
+
+### Added
+
+- **A finished task announces itself.** Until now a command that outlived the
+  bounded wait kept running and its outcome reached nobody unless the model
+  remembered to poll `shell_job_output` — so a build that failed while the model
+  was writing a sentence about it simply vanished from the conversation. Each
+  finished task is now delivered once, as a `<task-notification>` block carrying
+  `task_id`, `status`, `exit_code`, `kill_reason` and `duration_ms`, with the last
+  4 000 bytes of output and a banner stating the text is command output rather
+  than an instruction. It is pushed at a round boundary, so it can never split a
+  batch of tool results.
+
+- **An unattended session waits for its own command instead of abandoning it.**
+  `keryx shell --print` used to end its turn as soon as the model stopped
+  talking, and the session sweep then killed whatever was still running: the
+  command was started, the process died, and the output belonged to nobody. Such
+  a session now holds the turn open until the task ends, reports it, and
+  continues. The outer bound is `KERYX_SHELL_HOLD_MS` (default 30 min); a task
+  still running past it is killed with the reason `hold-timeout` and reported as
+  such, so the turn always ends on a stated outcome.
+
+- **An idle interactive session wakes when a task finishes.** Both the TUI and
+  the `--no-tui` REPL start a turn from the completion — the readline loop races
+  your next line against the next completion, so a line you are typing always
+  wins and nothing typed is dropped, and the TUI wakes only when nothing is
+  running and no message of yours is queued. Consecutive automatic wakes are
+  capped by `KERYX_SHELL_MAX_AUTO_WAKE` (default 5) and the cap resets the moment
+  you type; past it the pending result is surfaced and delivered with your next
+  message. Both knobs follow the project's fail-safe pattern: unset, empty,
+  malformed and negative fall back to the default, and an explicit `0` switches
+  the mechanism off.
+
+### Changed
+
+- **Reading a result counts as being told.** A task whose terminal status you or
+  the model already saw — through `shell_job_output`, or by killing it — is never
+  announced a second time. The rails are deliberately the other way round: a task
+  killed for going idle or for flooding its output buffer still reports, because
+  nobody asked for that kill. There is no recurring reminder: a running task
+  produces no message at all, and a finished one produces exactly one.
+
 ## [0.2.108] — 2026-09-16
 A long command no longer freezes the session. Every shell command the agent runs
 is now a supervised task that hands back control within a bounded wait, and what
