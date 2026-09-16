@@ -1088,6 +1088,117 @@ export function shellTaskOutputTool(registry: JobRegistry, options: TaskToolOpti
   };
 }
 
+/** Upper bound for a model-supplied `shell_task_wait` timeout (flow 266, AC3). */
+export const MAX_TASK_WAIT_MS = 300_000;
+
+/**
+ * Clamp a model-supplied wait into [0, {@link MAX_TASK_WAIT_MS}].
+ *
+ * A rail, not a suggestion: the wait blocks a turn, so an unbounded value from
+ * the model would hand it the power to stall the session. `0` is honoured (ask
+ * what is finished right now); a malformed or infinite value takes the MAXIMUM
+ * rather than the minimum, because a model that asked to wait meant to wait —
+ * silently turning that into "do not wait" would answer a different question.
+ */
+export function clampTaskWaitMs(ms: number): number {
+  if (!Number.isFinite(ms)) return MAX_TASK_WAIT_MS;
+  if (ms <= 0) return 0;
+  return Math.min(MAX_TASK_WAIT_MS, Math.trunc(ms));
+}
+
+/** One line per task in a wait's report: what it is doing, or that it is not ours. */
+function describeWaitedTask(registry: JobRegistry, taskId: string): string {
+  const info = registry.get(taskId);
+  if (info === undefined) return `${taskId}: unknown task_id (not tracked by this session)`;
+  const exit = info.exitCode !== undefined ? ` exit=${info.exitCode}` : "";
+  const reason = info.killReason !== undefined ? ` killReason=${info.killReason}` : "";
+  return `${taskId}: ${info.status}${exit}${reason}`;
+}
+
+/**
+ * `shell_task_wait({ task_ids, mode, timeout_ms })` — risk `read`: wait for
+ * tasks deliberately instead of polling in a loop.
+ *
+ * Two rules give this tool its shape. It NEVER kills: reaching the bound returns
+ * the still-running tasks and their status, because a wait that ended a command
+ * would make "check on it" destructive. And it is ABORTABLE: the turn's signal
+ * ends the WAIT, leaving every task running, so the operator's stop reaches a
+ * blocked turn without discarding work. Either way the completion is delivered
+ * later by flow 265's drain.
+ */
+export function shellTaskWaitTool(registry: JobRegistry): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_wait",
+      description:
+        "Wait for shell tasks to finish instead of polling. Input: { task_ids: string[], mode: \"any\" | \"all\", " +
+        "timeout_ms?: integer } — `any` returns as soon as one of them ends, `all` when every one has. The wait is " +
+        "bounded (timeout_ms is clamped to at most 300000) and NEVER kills: if the bound is reached you get each " +
+        "task's current status and the tasks keep running. Read their output with shell_task_output(task_id).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_ids: { type: "array", items: { type: "string" } },
+          mode: { type: "string", enum: ["any", "all"] },
+          timeout_ms: { type: "integer" },
+        },
+        required: ["task_ids", "mode"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input, ctx): Promise<InteractiveToolResult> => {
+      const rawIds = Array.isArray(input.task_ids) ? input.task_ids : [];
+      const taskIds = rawIds.filter((id): id is string => typeof id === "string" && id.length > 0);
+      if (taskIds.length === 0) {
+        return { output: "shell_task_wait requires a non-empty 'task_ids'", isError: true };
+      }
+      const mode = input.mode === "any" ? "any" : "all";
+      const timeoutMs = clampTaskWaitMs(typeof input.timeout_ms === "number" ? input.timeout_ms : MAX_TASK_WAIT_MS);
+
+      // An unknown id is NAMED rather than dropped from the set: a wait that
+      // quietly ignored a typo'd id would return "everything finished" while the
+      // task the model meant was never watched.
+      const known = taskIds.filter((id) => registry.get(id) !== undefined);
+
+      const signal = ctx?.signal;
+      let onAbort: (() => void) | undefined;
+      const aborted = new Promise<"aborted">((resolve) => {
+        if (signal === undefined) return; // never settles; the waits decide
+        if (signal.aborted) {
+          resolve("aborted");
+          return;
+        }
+        onAbort = (): void => resolve("aborted");
+        signal.addEventListener("abort", onAbort, { once: true });
+      });
+
+      try {
+        if (known.length > 0) {
+          const waits = known.map((id) => registry.waitForExit(id, timeoutMs).then(() => id));
+          const settled =
+            mode === "any"
+              ? await Promise.race([...waits, aborted])
+              : await Promise.race([Promise.all(waits).then(() => "all" as const), aborted]);
+          if (settled === "aborted") {
+            const lines = taskIds.map((id) => describeWaitedTask(registry, id));
+            return {
+              output:
+                "interrupted: the wait was stopped and every task is STILL RUNNING — none was killed.\n" +
+                lines.join("\n"),
+              isError: false,
+            };
+          }
+        }
+        const lines = taskIds.map((id) => describeWaitedTask(registry, id));
+        return { output: lines.join("\n"), isError: false };
+      } finally {
+        if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+      }
+    },
+  };
+}
+
 /**
  * `shell_job_kill(job_id)` — risk `read` (no approval): process-group kill,
  * scoped to this session's own registry. Records kill reason `"model"`, which
