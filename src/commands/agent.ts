@@ -546,7 +546,19 @@ export function buildTaskNotification(completions: readonly TaskCompletion[]): s
       Buffer.byteLength(c.output, "utf8") > NOTIFICATION_OUTPUT_TAIL_BYTES
         ? c.output.slice(-NOTIFICATION_OUTPUT_TAIL_BYTES)
         : c.output;
-    return `<task-notification ${attrs}>\n${tail.trimEnd()}\n</task-notification>`;
+    // SECURITY: scrub before the bytes leave for the provider. This message is
+    // command output on the same path an ordinary tool result takes, and that
+    // path is redacted (`redactSensitiveText` at the tool-result push). Until
+    // this call existed, a command whose output held a credential was scrubbed
+    // when it returned inline and leaked verbatim when the SAME command finished
+    // as a background task — the exact scenario the scrubber documents as its
+    // purpose (finding F3). Redacting here, in the one builder every delivery
+    // path goes through, rather than at each push site: there are four of them,
+    // and four places to remember is three too many.
+    //
+    // After the tail slice, deliberately. Redaction is not length-preserving, so
+    // scrubbing first would make the 4 000-byte bound mean something else.
+    return `<task-notification ${attrs}>\n${redactSensitiveText(tail).trimEnd()}\n</task-notification>`;
   });
   return `${TASK_NOTIFICATION_BANNER}\n${blocks.join("\n")}`;
 }

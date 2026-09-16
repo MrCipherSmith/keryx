@@ -257,6 +257,26 @@ function makeDeps(over: Record<string, unknown>): AgentDeps {
 // AC3 / AC9 — the message
 // =======================================================================
 describe("AC3: buildTaskNotification renders the task-notification envelope", () => {
+  test("SECURITY: a secret in a task's output is redacted before it reaches the model", () => {
+    // Found while drafting the D-18 requirements package and confirmed by
+    // execution: `redactSensitiveText` is called exactly once in the agent loop
+    // (`agent.ts`, the ordinary tool-result path). A completion notification
+    // carries the SAME command output and never passes through it, so output a
+    // contained command was scrubbed for when it returned inline leaks verbatim
+    // when the identical command finishes as a background task.
+    //
+    // The scrubber's own doc comment names this exact scenario as its purpose:
+    // "a contained shell command that reads a credential (`cat ~/.aws/credentials`,
+    // `env`) must not leak the raw value into the model context and onward to the
+    // provider (finding F3)". Delivery is that path too.
+    const build = getBuildTaskNotification();
+    const secret = "ghp_0123456789abcdefghijklmnopqrstuvwxyzAB"; // syntactic, not real
+    const rendered = build([completion({ output: `deploy ok\nTOKEN=${secret}\n` })]);
+
+    expect(rendered).not.toContain(secret);
+    expect(rendered).toContain("deploy ok"); // the rest of the output survives
+  });
+
   test("one block per task carrying task_id, status, exit_code and duration_ms", () => {
     const build = getBuildTaskNotification();
     const body = build([completion({ jobId: "task-7-4242", status: "failed", exitCode: 2, durationMs: 1_234 })]);
