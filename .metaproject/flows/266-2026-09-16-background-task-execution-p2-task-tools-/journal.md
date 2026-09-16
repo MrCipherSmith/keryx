@@ -145,3 +145,10 @@ while the read alias still accepts both) instead of by staging the coincidence.
 - 2026-09-16T14:21:14.475Z - ac-confirmed: AC10: shell-task-tools.test.ts: a side worker's read of a FINISHED task leaves the main session's notification pending, while the main session's read of the same task marks it observed. Proved again on REAL processes by the abort smoke: after a side-worker read, one completion was still drained
 - 2026-09-16T14:21:14.577Z - ac-confirmed: AC11: shell-task-tools.test.ts reads the EXPORTED REPEATABLE_TOOL_NAMES: shell_task_output, shell_task_wait and shell_job_output are all repeatable, so following a running command is not mistaken for a loop while the per-signature attempt rail still stops a genuine one
 - 2026-09-16T14:21:14.686Z - ac-confirmed: AC12: tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94
+- 2026-09-16T14:24:08.136Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (base: main)
+- 2026-09-16T14:31:37.575Z - task-done: T13: Review round ingested against the head that will merge
+- 2026-09-16T14:31:37.780Z - completing
+- 2026-09-16T14:31:47.862Z - completion-failed: review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-16-ingest-origin-main#F-001 (major, round 2026-09-16-ingest-origin-main): marked fixed at 078855b0, c8f73420e61d37a08e6bbfddef68f692aaa1a3d1 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge
+- 2026-09-16T14:32:21.829Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (warning: PR is not a draft)
+- 2026-09-16T14:33:21.148Z - completing
+- 2026-09-16T14:33:32.903Z - done: all gates passed
