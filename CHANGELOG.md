@@ -3,6 +3,56 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.111] — 2026-09-16
+Review stops acting on the wrong thing. An imported reviewer can now verify and
+brings the rules it cites; a model block no longer pins whatever `keryx shell`
+was last pointed at; and a reply pass can no longer post to a pull request that
+has merged, at a commit it has left, from a review that was only ever a report.
+
+### Fixed
+
+- **`comments reply` refuses a merged or closed pull request, a stale `--sha`,
+  and an unmanaged review.** A lightweight "review this PR" ended by replying to
+  a pull request that had merged, citing a pre-merge SHA, and every check passed:
+  the comments path never read `pulls/{n}`, `--final` was the only precondition,
+  and `--sha` was written into the record but never compared. `collect` now reads
+  the pull request and prints its state and head, warning when it is not open or
+  `--sha` is not its head. `reply` refuses a closed or merged PR (`--allow-closed-pr`
+  overrides), one whose state could not be read, and a `--sha` that is not the
+  head — dry runs included — and validates `--sha` as a SHA. Posting requires
+  `--review <managed package for this PR>` or `--result`; `--dry-run` does not.
+
+- **`review tier` and `providers cross-family` read the caller's session.**
+  Without flags both fell back to the provider/model `keryx shell` persisted in
+  `auth.json`, so an orchestrator in Claude Code got a block pinning `keryx
+  shell`'s last model — one its dispatch tool cannot run — and cross-family would
+  class a Claude-authored change as another vendor's. The session now comes from
+  `--session-provider`/`--session-model`, then `KERYX_SESSION_PROVIDER`/
+  `KERYX_SESSION_MODEL` (which `keryx shell` exports to every `shell_exec`
+  command, and external agents never inherit); `auth.json` only with
+  `--from-shell-config`. A block names a model only when discovery assigned one
+  other than the session's; otherwise it is adaptive — the tier plus
+  `inherit: true` — and the host picks its own model for that tier.
+
+- **Imported project-skills verify.** Import kept only the Origin lines of the
+  keryx header, so `keryx skills verify` found no Version or Target (always
+  `stale`) and no `Last Verified:` line to update (always `never`). The header is
+  kept, with the author's `metadata.version` registered; skills imported earlier
+  verify too. Origin is recorded as `~/…` or project-relative rather than an
+  absolute home path that reads as `missing` on every other machine.
+
+### Added
+
+- **Import brings the rules a skill cites.** Missing `core/*.mdc` rules are
+  copied from the overlay's `rules/`; a present rule is never overwritten, and a
+  rule name keryx itself ships is never copied. Re-running `keryx review import`
+  over an existing import fetches only the rules.
+
+- **Project reviewers carry their triggers.** `keryx review reviewers --json`
+  reports `paths` (from `metadata.paths` or the description's globs), `flags`,
+  `stackRequires` and `unresolvedRules`, and review-orchestrator path-gates and
+  selects project reviewers with them instead of running all of them every round.
+
 ## [0.2.110] — 2026-09-16
 A running command is now something you can watch, wait for, interrupt and set
 aside. 0.2.108 stopped a long command from freezing the session and 0.2.109 made
