@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-16T07:20:34.793Z
+generatedAt: 2026-09-16T11:32:36.840Z
 status: complete
 
 ## Frameworks
@@ -69,6 +69,7 @@ status: complete
 - src/commands/agent-destructive-gate.test.ts
 - src/commands/agent-instruction-roster.test.ts
 - src/commands/agent-permission-mode.test.ts
+- src/commands/agent-task-notification.test.ts
 - src/commands/agent-tool-call-budget.test.ts
 - src/commands/agent.test.ts
 - src/commands/agents-external.test.ts
@@ -108,9 +109,8 @@ status: complete
 - src/commands/mcp-servers.test.ts
 - src/commands/mcp-tool-surface.test.ts
 - src/commands/mcp-untrusted.test.ts
-- src/commands/memory-p0.test.ts
 
-- ... 681 more
+- ... 688 more
 
 ## CI
 

@@ -3,17 +3,29 @@ Version: 1.1.0
 
 ## Status
 
-**Phase P0 is implemented** (2026-09-16, keryx flow 263): every `shell_exec`
-call is a supervised task that returns within a bounded yield, a command that
-outlives the yield keeps running as a background task instead of freezing the
-turn, the wall-clock deadline is replaced by an idle timeout (pulled forward
-from P1), terminal statuses are `completed`/`failed`/`killed` with a
-`killReason`, and the TUI lists a task only once it is in the background. The
-rest of the package — completion delivery and the `hold`/wake rules (P1), the
-task tools, tool cancellation, operator demote and side-worker rules (P2), the
-documentation sweep (P3) — is still `spec ready` and **not implemented**; see
-[metrics-and-validation.md](metrics-and-validation.md) for which invariant is
-proven and by which test.
+**Phases P0 and P1 are implemented.**
+
+P0 (2026-09-16, keryx flow 263): every `shell_exec` call is a supervised task
+that returns within a bounded yield, a command that outlives the yield keeps
+running as a background task instead of freezing the turn, the wall-clock
+deadline is replaced by an idle timeout (pulled forward from P1), terminal
+statuses are `completed`/`failed`/`killed` with a `killReason`, and the TUI
+lists a task only once it is in the background.
+
+P1 (2026-09-16, keryx flow 265): a finished task is **reported to the agent
+exactly once**. The registry records what has been delivered (`observed`,
+`drainUndelivered`, `onCompletion`); the agent loop drains at the round boundary
+and injects one `<task-notification>` per task as a tool-provenance user
+message; a session that nobody can wake **holds** its turn open at the text-only
+finish until the task finishes, the run is aborted, or `KERYX_SHELL_HOLD_MS`
+expires (leftovers are then killed with `killReason: "hold-timeout"`); and both
+shells wake an idle session on completion, behind a consecutive-auto-wake cap
+that operator input resets.
+
+The rest of the package — the task tools, tool cancellation, operator demote and
+side-worker rules (P2), the documentation sweep (P3) — is still `spec ready` and
+**not implemented**; see [metrics-and-validation.md](metrics-and-validation.md)
+for which invariant is proven and by which test.
 
 v1.1.0 closed the implementation gaps found when v1.0.0 was checked against the
 code (headless delivery, notification shape, wake cap, concurrency cap, idle
