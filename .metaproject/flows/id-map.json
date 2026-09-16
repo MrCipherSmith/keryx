@@ -214,5 +214,13 @@
     "toDir": "259-2026-09-11-skill-behavior-evals",
     "at": "2026-09-11T20:32:46.614Z",
     "reason": "main now carries 253-keryx-shell-expired-grok-grant-sent-on-t (PR #532); this program's not-yet-started flows 253-255 move together to 257-259 so ids stay contiguous and clear of the ids other sessions allocate next"
+  },
+  {
+    "from": "263",
+    "to": "264",
+    "fromDir": "263-2026-09-16-acceptance-criteria-should-cite-ci-on-th",
+    "toDir": "264-2026-09-16-acceptance-criteria-should-cite-ci-on-th",
+    "at": "2026-09-16T10:26:03.529Z",
+    "reason": "main carries two flows with id 263: the closed background-task-execution P0 flow (created 2026-09-15, merged in PR 563) and this one, allocated later the same day by another session. The not-yet-started flow moves, per the precedent already recorded in id-map.json; this one is still initializing, with no frozen criteria, no confirmations and no PR, so the move costs nothing."
   }
 ]
