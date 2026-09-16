@@ -189,7 +189,7 @@ If `blocker` or `major` findings exist:
 
 After the LAST round only:
 ```bash
-keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file> --sha <sha> --final
+keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file> --review <review-id> --sha <sha> --final
 ```
 
 ### Step: REPORT — Generate Final Report

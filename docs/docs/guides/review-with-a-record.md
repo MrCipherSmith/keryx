@@ -42,9 +42,9 @@ Usage:
                                 [--self <login>] [--round <n>]
                                 [--out <findings.json>] [--json] [--fixtures <dir>]
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                              --sha <head-sha> --final [--round <n>] [--dry-run]
+                              --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                              [--flow-link <url>] [--fixtures <dir>]
+                              [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
   keryx review loop --flow <flow-id> [--task <Tn>]
   keryx review stack [--json]
   keryx review status <review-id-or-path>
@@ -143,7 +143,7 @@ keryx review blast-radius --ref "$BASE" --previous blast-radius.json --final
 keryx review comments collect --repo acme/app --pr 7 --self "$(gh api user --jq .login)" \
   --sha "$(git rev-parse HEAD)" --round 3 --out external-findings.json
 keryx review comments reply --repo acme/app --pr 7 --outcomes outcomes.json \
-  --sha "$(git rev-parse HEAD)" --final --dry-run
+  --review <review-id> --sha "$(gh pr view 7 --json headRefOid --jq .headRefOid)" --final --dry-run
 ```
 
 Comments left on the pull request by other people — and by other bots — are
