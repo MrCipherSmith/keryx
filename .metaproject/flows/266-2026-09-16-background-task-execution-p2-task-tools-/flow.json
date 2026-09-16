@@ -1,0 +1,328 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "266",
+  "slug": "background-task-execution-p2-task-tools-",
+  "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
+  "status": "in-progress",
+  "createdAt": "2026-09-16T13:03:29.197Z",
+  "updatedAt": "2026-09-16T13:17:11.200Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:53f28612eaf01e8087c5b2e1d0be0bb10b2177743b5ddc13950a83dd9e28ad0d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected from docs/requirements/keryx-background-task-execution (spec 4.2/4.3/5/6, decisions D-15..D-18, criteria AC5/AC11/AC13) and the P1 flow journal; written up in description.md and plan.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the explicit task list T6-T11, which name what is implemented and in what order"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5 (RED tests first) and T12 (verification); tests are not a trailing step in this flow"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T13, which ingests a managed review round against the head that will merge"
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for AC1-AC12 across registry, tool surface, agent loop and both shells",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:17:11.200Z",
+            "outcome": "started",
+            "detail": "RED tests for AC1-AC12: behaviour proven by execution wherever a seam exists; source audits only for the two REPL loops that have none"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Tool contract: invoke(input, ctx) and executeCall passes the turn's abort signal",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "shell_task_output with an explicit cursor, plus the observer split on the tool factory",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "shell_task_kill, the two aliases with both id shapes, and their deprecation notes",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "/demote <task_id> in both shells through the shared command registry",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Review round ingested against the head that will merge",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "Journal deviations and mark P2 in the requirements package",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T13:03:29.197Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T13:16:03.424Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T13:16:03.525Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T13:16:45.648Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for AC1-AC12 across registry, tool surface, agent loop and both shells"
+    },
+    {
+      "at": "2026-09-16T13:16:45.751Z",
+      "event": "task-added",
+      "detail": "T6: Tool contract: invoke(input, ctx) and executeCall passes the turn's abort signal"
+    },
+    {
+      "at": "2026-09-16T13:16:45.848Z",
+      "event": "task-added",
+      "detail": "T7: shell_task_output with an explicit cursor, plus the observer split on the tool factory"
+    },
+    {
+      "at": "2026-09-16T13:16:45.943Z",
+      "event": "task-added",
+      "detail": "T8: shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills"
+    },
+    {
+      "at": "2026-09-16T13:16:46.101Z",
+      "event": "task-added",
+      "detail": "T9: shell_task_kill, the two aliases with both id shapes, and their deprecation notes"
+    },
+    {
+      "at": "2026-09-16T13:16:46.386Z",
+      "event": "task-added",
+      "detail": "T10: /demote <task_id> in both shells through the shared command registry"
+    },
+    {
+      "at": "2026-09-16T13:16:46.628Z",
+      "event": "task-added",
+      "detail": "T11: Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES"
+    },
+    {
+      "at": "2026-09-16T13:16:46.751Z",
+      "event": "task-added",
+      "detail": "T12: Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health"
+    },
+    {
+      "at": "2026-09-16T13:16:46.869Z",
+      "event": "task-added",
+      "detail": "T13: Review round ingested against the head that will merge"
+    },
+    {
+      "at": "2026-09-16T13:16:47.132Z",
+      "event": "task-added",
+      "detail": "T14: Journal deviations and mark P2 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T13:17:10.791Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T13:17:10.890Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T13:17:10.994Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T13:17:11.104Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T13:17:11.200Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — RED tests for AC1-AC12: behaviour proven by execution wherever a seam exists; source audits only for the two REPL loops that have none"
+    }
+  ]
+}
