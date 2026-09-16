@@ -1,7 +1,14 @@
 {
   "schemaVersion": 1,
-  "name": "keryx",
+  "standardVersion": "0.1.0",
+  "name": "keryx-metaproject",
   "createdBy": "keryx",
+  "profiles": [
+    "minimal",
+    "agent",
+    "ci",
+    "full"
+  ],
   "paths": {
     "root": ".metaproject",
     "core": ".metaproject/core",
@@ -10,6 +17,7 @@
     "skills": ".metaproject/skills",
     "modules": ".metaproject/modules"
   },
+  "updatedAt": "2026-09-16T15:57:59.796Z",
   "modules": {
     "gdgraph": {
       "enabled": true,
@@ -19,7 +27,8 @@
       "commands": [
         "build",
         "query",
-        "affected"
+        "affected",
+        "repomap"
       ],
       "capabilities": [
         {
@@ -28,11 +37,7 @@
           "kind": "ceiling",
           "optionalDependency": "web-tree-sitter"
         }
-      ],
-      "hooks": {
-        "gitPostCommit": ".git/hooks/post-commit",
-        "postUpdate": ".metaproject/hooks/post-update.d"
-      }
+      ]
     },
     "gdctx": {
       "enabled": true,
@@ -48,10 +53,22 @@
         "show"
       ]
     },
+    "gdwiki": {
+      "enabled": true,
+      "data": ".metaproject/wiki",
+      "manifest": ".metaproject/modules/gdwiki.md",
+      "commands": [
+        "status",
+        "new",
+        "collect",
+        "index",
+        "check-links",
+        "validate"
+      ]
+    },
     "gdskills": {
       "enabled": true,
-      "core": ".metaproject/core/gdskills",
-      "data": ".metaproject/data/gdskills",
+      "data": ".metaproject/project-skills",
       "manifest": ".metaproject/modules/gdskills.md",
       "commands": [
         "status",
@@ -61,40 +78,14 @@
         "catalog",
         "install",
         "create",
+        "import",
+        "update",
         "verify",
         "learn",
         "export",
         "sync",
         "contracts"
       ],
-      "profile": "full",
-      "skills": ".metaproject/skills/gdskills",
-      "catalog": ".metaproject/skills/catalog.md",
-      "projectSkills": ".metaproject/project-skills",
-      "projectSkillRegistry": [
-        {
-          "module": "gdgraph",
-          "name": "module",
-          "target": "src/gdgraph",
-          "path": ".metaproject/project-skills/gdgraph/module",
-          "version": "0.1.0",
-          "status": "active",
-          "updatedAt": "2026-07-06T19:04:32.307Z"
-        },
-        {
-          "module": "metaproject",
-          "name": "init-command",
-          "target": "src/commands/init.ts",
-          "path": ".metaproject/project-skills/metaproject/init-command",
-          "version": "0.1.0",
-          "status": "active",
-          "updatedAt": "2026-07-06T18:48:25.291Z"
-        }
-      ],
-      "hooks": {
-        "gitPostCommit": ".git/hooks/post-commit",
-        "postUpdate": ".metaproject/hooks/post-update.d"
-      },
       "capabilities": [
         {
           "id": "gdskills.external-agents",
@@ -103,15 +94,48 @@
         }
       ]
     },
+    "health": {
+      "enabled": true,
+      "core": ".metaproject/core/health",
+      "data": ".metaproject/data/health",
+      "manifest": ".metaproject/modules/health.md",
+      "commands": [
+        "run",
+        "status",
+        "gate",
+        "sources",
+        "explain",
+        "baseline",
+        "trend"
+      ]
+    },
+    "testing": {
+      "enabled": true,
+      "core": ".metaproject/core/testing",
+      "data": ".metaproject/data/testing",
+      "manifest": ".metaproject/modules/testing.md",
+      "commands": [
+        "init",
+        "analyze",
+        "run",
+        "status",
+        "context",
+        "explain",
+        "related",
+        "report"
+      ]
+    },
     "memory": {
       "enabled": true,
       "core": ".metaproject/core/memory",
-      "data": ".metaproject/data/memory",
+      "data": ".metaproject/memory",
       "manifest": ".metaproject/modules/memory.md",
       "commands": [
         "new",
         "index",
         "search",
+        "supersede",
+        "transition",
         "ingest",
         "check",
         "reflect"
@@ -134,63 +158,7 @@
         "complete",
         "block",
         "unblock",
-        "check",
-        "plan"
-      ]
-    },
-    "health": {
-      "enabled": true,
-      "core": ".metaproject/core/health",
-      "data": ".metaproject/data/health",
-      "manifest": ".metaproject/modules/health.md",
-      "commands": [
-        "run",
-        "status",
-        "gate",
-        "sources",
-        "explain",
-        "baseline",
-        "trend"
-      ],
-      "hooks": {
-        "gitPostCommit": ".git/hooks/post-commit",
-        "postUpdate": ".metaproject/hooks/post-update.d"
-      }
-    },
-    "testing": {
-      "enabled": true,
-      "core": ".metaproject/core/testing",
-      "data": ".metaproject/data/testing",
-      "manifest": ".metaproject/modules/testing.md",
-      "commands": [
-        "init",
-        "analyze",
-        "run",
-        "status",
-        "context",
-        "explain",
-        "related",
-        "report",
-        "suggest"
-      ],
-      "hooks": {
-        "gitPostCommit": ".git/hooks/post-commit",
-        "postUpdate": ".metaproject/hooks/post-update.d"
-      }
-    },
-    "gdwiki": {
-      "enabled": true,
-      "core": ".metaproject/wiki",
-      "data": ".metaproject/data/gdwiki",
-      "manifest": ".metaproject/modules/gdwiki.md",
-      "commands": [
-        "status",
-        "new",
-        "collect",
-        "index",
-        "check-links",
-        "validate",
-        "enrich"
+        "check"
       ]
     },
     "security": {
@@ -215,60 +183,17 @@
         "security.pii",
         "security.prompt-injection",
         "security.egress-control"
-      ],
-      "hooks": {
-        "prePush": ".git/hooks/pre-push",
-        "agent": ".claude/settings.json"
-      }
+      ]
     },
-    "mcp": {
-      "enabled": true,
-      "core": ".metaproject/core/mcp",
-      "data": ".metaproject/data/mcp",
-      "manifest": ".metaproject/modules/mcp.md",
-      "config": ".metaproject/core/mcp/mcp.config.json",
-      "commands": [
-        "serve"
-      ],
-      "capabilities": [],
-      "http": {
-        "enabled": false
-      },
-      "expose": {
-        "tools": true,
-        "resources": true,
-        "modules": [
-          "gdgraph",
-          "gdctx",
-          "security",
-          "flow",
-          "memory",
-          "health",
-          "testing",
-          "wiki",
-          "standard",
-          "sac",
-          "slate",
-          "gdskills"
-        ]
-      }
+    "sac": {
+      "enabled": false
     }
   },
   "agentEntrypoints": {
-    "index": ".metaproject/index.md",
-    "readme": ".metaproject/README.md",
     "root": [
       "AGENTS.md",
       "CLAUDE.md"
     ],
     "metaproject": ".metaproject/index.md"
-  },
-  "standardVersion": "0.1.0",
-  "profiles": [
-    "minimal",
-    "agent",
-    "ci",
-    "full"
-  ],
-  "updatedAt": "2026-09-10T08:05:43.473Z"
+  }
 }

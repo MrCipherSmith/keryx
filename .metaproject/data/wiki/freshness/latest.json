@@ -1,79 +1,83 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-06T10:44:30.345Z",
+  "generatedAt": "2026-09-16T16:25:10.145Z",
   "range": {
-    "toRev": "0bc6418fa1a038f8ec909cf949fecba077acf9a4",
+    "toRev": "93805ac03a719c21cdd2dbc1b3b124dba5eb878f",
     "fromRev": "HEAD~1",
     "queueEntriesConsumed": 0
   },
   "totals": {
-    "pagesTotal": 50,
-    "pagesFresh": 31,
-    "pagesAffected": 15,
+    "pagesTotal": 95,
+    "pagesFresh": 8,
+    "pagesAffected": 83,
     "pagesUndecidable": 0,
     "pagesNotCodeScoped": 4,
-    "filesChanged": 9,
+    "filesChanged": 8,
     "filesCosmetic": 0
   },
   "pages": [
+    {
+      "path": "components/src-commands.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 27,
+      "reasons": []
+    },
+    {
+      "path": "components/src-tui.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 12,
+      "reasons": []
+    },
+    {
+      "path": "components/src-gdskills.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 7,
+      "reasons": []
+    },
     {
       "path": "components/src-standard.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 2,
+      "commitsBehind": 7,
       "reasons": []
-    },
-    {
-      "path": "components/src-commands.md",
-      "category": "stale-reference",
-      "confidence": "review-suggested",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
-      "reasons": [
-        {
-          "sourcePath": "src/commands/init.ts",
-          "changeClass": "body",
-          "edgePath": [
-            "describes"
-          ],
-          "symbols": []
-        },
-        {
-          "sourcePath": "src/commands/update.ts",
-          "changeClass": "body",
-          "edgePath": [
-            "describes"
-          ],
-          "symbols": []
-        },
-        {
-          "sourcePath": "src/lib/templates.ts",
-          "changeClass": "signature",
-          "edgePath": [
-            "imports",
-            "describes"
-          ],
-          "symbols": [
-            "renderIndexGateMarkdown"
-          ]
-        }
-      ]
     },
     {
       "path": "components/src-harness-tool.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
+      "commitsBehind": 6,
       "reasons": []
     },
     {
-      "path": "components/src-health.md",
+      "path": "components/src-security-detect.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
+      "commitsBehind": 6,
+      "reasons": []
+    },
+    {
+      "path": "components/src-flow.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 5,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-tool-builtin.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 5,
       "reasons": []
     },
     {
@@ -81,7 +85,31 @@
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
+      "commitsBehind": 5,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 4,
+      "reasons": []
+    },
+    {
+      "path": "components/src-health.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 4,
+      "reasons": []
+    },
+    {
+      "path": "components/src-testing.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 4,
       "reasons": []
     },
     {
@@ -89,35 +117,158 @@
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
-      "commitsBehind": 1,
+      "commitsBehind": 4,
       "reasons": []
     },
     {
       "path": "components/src.md",
-      "category": "stale-reference",
-      "confidence": "fyi",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 4,
+      "reasons": []
+    },
+    {
+      "path": "components/src-gdgraph.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 3,
+      "reasons": []
+    },
+    {
+      "path": "components/src-health-sources.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 3,
+      "reasons": []
+    },
+    {
+      "path": "components/src-lib.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 3,
+      "reasons": []
+    },
+    {
+      "path": "components/src-review.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 3,
+      "reasons": []
+    },
+    {
+      "path": "components/scripts-benchmark.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-ctx.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-gdgraph-treesitter.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-child.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-memory.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-security.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 2,
+      "reasons": []
+    },
+    {
+      "path": "components/src-flow-tracker.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
       "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
       "commitsBehind": 1,
-      "reasons": [
-        {
-          "sourcePath": "src/lib/templates.ts",
-          "changeClass": "signature",
-          "edgePath": [
-            "imports",
-            "imports",
-            "describes"
-          ],
-          "symbols": [
-            "renderIndexGateMarkdown"
-          ]
-        }
-      ]
+      "reasons": []
+    },
+    {
+      "path": "components/src-mcp-transport.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 1,
+      "reasons": []
+    },
+    {
+      "path": "components/src-memory-embedding.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 1,
+      "reasons": []
+    },
+    {
+      "path": "components/src-metrics.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 1,
+      "reasons": []
+    },
+    {
+      "path": "components/src-security-agent-hooks.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 1,
+      "reasons": []
+    },
+    {
+      "path": "components/src-sync.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "commitsBehind": 1,
+      "reasons": []
     },
     {
       "path": "architecture/background-jobs.md",
       "category": "unknown",
       "confidence": "fyi",
       "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "architecture/os-sandbox.md",
+      "category": "stale-prose",
+      "confidence": "review-suggested",
+      "verifiedAt": "7d38dba02fad6f8f81d8f244f76b08d0b2f59682",
       "commitsBehind": 0,
       "reasons": []
     },
@@ -138,42 +289,292 @@
       "reasons": []
     },
     {
+      "path": "business-rules/code-search-routing.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/fixtures-import-policy-allowed-client-imports-core-facade-gdgraph.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/fixtures-import-policy-tree-shaken-through-barrel-harness.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/fixtures-mcp-servers.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/scripts-stress.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/scripts.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
       "path": "components/src-agents.md",
       "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "7d38dba02fad6f8f81d8f244f76b08d0b2f59682",
       "commitsBehind": 0,
-      "reasons": [
-        {
-          "sourcePath": "src/agents/bootstrap.test.ts",
-          "changeClass": "body",
-          "edgePath": [
-            "describes"
-          ],
-          "symbols": []
-        }
-      ]
+      "reasons": []
     },
     {
-      "path": "components/src-capability.md",
-      "category": "stale-prose",
+      "path": "components/src-contracts.md",
+      "category": "unknown",
       "confidence": "fyi",
-      "verifiedAt": "5886c474beb774901805417efb1cc4d1a03935df",
+      "verifiedAt": null,
       "commitsBehind": 0,
-      "reasons": [
-        {
-          "sourcePath": "src/lib/templates.ts",
-          "changeClass": "signature",
-          "edgePath": [
-            "imports",
-            "imports",
-            "describes"
-          ],
-          "symbols": [
-            "renderIndexGateMarkdown"
-          ]
-        }
-      ]
+      "reasons": []
+    },
+    {
+      "path": "components/src-eval.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-forgetting.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-branch.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-budget.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-completion.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-context.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-evidence.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-extension.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-external-codec.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-external.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-flow.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-monitor.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-mutation.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-parallel.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-policy.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-process-sandbox.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-process.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider-anthropic.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider-compat.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider-gemini.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider-ollama.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-provider-openai.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-replay.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-resume.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-run.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-search.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-session.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-harness-web.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
     },
     {
       "path": "components/src-health-metrics.md",
@@ -184,24 +585,52 @@
       "reasons": []
     },
     {
+      "path": "components/src-job.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-lib-oauth.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-mcp-client.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-mcp-servers.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-retention.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
       "path": "components/src-rules.md",
-      "category": "stale-reference",
+      "category": "stale-prose",
       "confidence": "review-suggested",
       "verifiedAt": "7d38dba02fad6f8f81d8f244f76b08d0b2f59682",
       "commitsBehind": 0,
-      "reasons": [
-        {
-          "sourcePath": "src/lib/templates.ts",
-          "changeClass": "signature",
-          "edgePath": [
-            "imports",
-            "describes"
-          ],
-          "symbols": [
-            "renderIndexGateMarkdown"
-          ]
-        }
-      ]
+      "reasons": []
     },
     {
       "path": "components/src-sac.md",
@@ -210,13 +639,53 @@
       "verifiedAt": "7d38dba02fad6f8f81d8f244f76b08d0b2f59682",
       "commitsBehind": 0,
       "reasons": []
+    },
+    {
+      "path": "components/src-session.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-tui-games-tic-tac-toe.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-tui-games.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/src-wiki-freshness.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
+    },
+    {
+      "path": "components/vscode-extension-src.md",
+      "category": "unknown",
+      "confidence": "fyi",
+      "verifiedAt": null,
+      "commitsBehind": 0,
+      "reasons": []
     }
   ],
   "limitations": [
     {
       "code": "unresolved-edges-present",
-      "detail": "50 of 3487 graph edges (1.4%) are unresolved imports, so propagation could not follow every dependency. Judge whether that share matters before acting on it.",
-      "affectedCount": 50
+      "detail": "63 of 4386 graph edges (1.4%) are unresolved imports, so propagation could not follow every dependency. Judge whether that share matters before acting on it.",
+      "affectedCount": 63
     }
   ]
 }

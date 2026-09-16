@@ -1,0 +1,164 @@
+---
+Title: Module src/harness/branch
+Version: 0.1.0
+Type: component
+Status: draft
+Summary: "`src/harness/branch` groups 4 file(s). Depends on `src/harness/session`, `src/harness/resume`, `src/contracts`."
+---
+
+# Module src/harness/branch
+
+## Summary
+
+`src/harness/branch` is a small component module inside the harness area. It groups branch-related implementation files together with related compaction files and their tests.
+
+The module depends on:
+
+- `src/harness/session`
+- `src/harness/resume`
+- `src/contracts`
+
+It is used by `src/harness`, which indicates it provides branch-related capabilities to the broader harness system.
+
+## Overview
+
+`src/harness/branch` owns the harness-local abstraction for branch behavior and supporting compaction logic. Based on the file names and graph relationships, the module appears to serve as a focused boundary between general harness execution concerns and branch-specific handling.
+
+Its dependencies suggest that it works with harness sessions, resumable execution support, and shared contracts. This places it near the coordination layer of the harness: it is not a top-level entry point, but a supporting component used by `src/harness`.
+
+The module is intentionally narrow:
+
+- `branch.ts` contains the primary branch-oriented implementation.
+- `compaction.ts` contains compaction-related logic.
+- `branch.test.ts` and `compaction.test.ts` validate those behaviors.
+
+## How it works
+
+The module is organized around two related concepts:
+
+1. **Branch handling**
+   - `branch.ts` is the main implementation file for branch behavior.
+   - It is imported by one consumer, shown in the graph as `src/harness`.
+
+2. **Compaction handling**
+   - `compaction.ts` provides supporting behavior related to compaction.
+   - It has two importers, which suggests it is used by both tests and at least one implementation consumer.
+
+The module consumes shared harness and domain concepts through its dependencies:
+
+- **Session support** from `src/harness/session`
+- **Resume support** from `src/harness/resume`
+- **Shared contracts** from `src/contracts`
+
+This suggests a layered relationship:
+
+- `src/harness` uses `src/harness/branch` for branch-related behavior.
+- `src/harness/branch` uses session, resume, and contracts to integrate with the rest of the harness.
+- Tests isolate and validate both branch behavior and compaction behavior.
+
+## Key concepts
+
+### Branch
+
+The module’s primary domain concept is `branch`. In this context, the exact behavior is not inferred from the page alone, but the file structure and consumer relationship indicate that branch is a first-class concept used by the harness.
+
+### Compaction
+
+`compaction.ts` introduces a second, related concept: compaction. Its presence as a separate file implies that compaction is treated as a distinct responsibility inside the branch area, rather than being mixed directly into the main branch implementation.
+
+### Harness integration surface
+
+Because the module depends on `session`, `resume`, and `contracts`, it should be understood as a harness-facing component. It likely bridges:
+
+- branch-specific logic
+- shared execution context
+- resumable execution concerns
+- shared type or behavioral contracts
+
+### Test-facing structure
+
+The presence of both:
+
+- `branch.test.ts`
+- `compaction.test.ts`
+
+indicates that branch behavior and compaction behavior are independently tested. This is a positive signal that the module separates concerns into testable units.
+
+## Main flows
+
+### 1. Harness uses branch behavior
+
+High-level flow:
+
+1. `src/harness` imports from `src/harness/branch`.
+2. It likely uses `branch.ts` as the primary entry point for branch-related behavior.
+3. `src/harness/branch` may rely on:
+   - session state from `src/harness/session`
+   - resume-related capabilities from `src/harness/resume`
+   - shared definitions from `src/contracts`
+
+This flow positions the module as a helper component that the harness consumes rather than a standalone subsystem.
+
+### 2. Compaction is used alongside branch behavior
+
+High-level flow:
+
+1. `compaction.ts` is imported by two consumers.
+2. At least one of those consumers is a test, and at least one is an implementation-side consumer.
+3. This suggests compaction logic is reusable inside the branch area rather than being a one-off helper.
+
+The module appears to separate compaction as a concern that can be used by the branch implementation and tested independently.
+
+### 3. Tests validate the branch and compaction surfaces
+
+High-level flow:
+
+1. `branch.test.ts` tests the behavior associated with `branch.ts`.
+2. `compaction.test.ts` tests the behavior associated with `compaction.ts`.
+3. These tests indirectly exercise the module’s dependencies on session, resume, and contracts.
+
+This indicates that the module’s public value is primarily verified through unit-level tests around its two main implementation files.
+
+---
+
+## Reference (from code graph)
+
+Extracted deterministically by `keryx wiki collect`; regenerated by
+`--force`. The prose sections above are the agent/human-owned part.
+
+### Key files
+
+- `src/harness/branch/branch.test.ts` - imported by 0, imports 5
+- `src/harness/branch/compaction.test.ts` - imported by 0, imports 5
+- `src/harness/branch/compaction.ts` - imported by 2, imports 2
+- `src/harness/branch/branch.ts` - imported by 1, imports 2
+
+### Depends on
+
+- `src/harness/session` - 6 import(s)
+- `src/harness/resume` - 4 import(s)
+- `src/contracts` - 2 import(s)
+
+### Depended on by
+
+- `src/harness` - 1 import(s)
+
+### Graph signals
+
+- Files: 4
+- Cross-module imports: 12
+
+## Related Wiki
+
+Graph-derived - regenerated by `keryx wiki collect --force`. Only pages that
+exist are linked; when enriching, add new links only to pages you have verified.
+
+- [Wiki Index](../index.md)
+- [Module src/harness/session](src-harness-session.md)
+- [Module src/harness/resume](src-harness-resume.md)
+- [Module src/contracts](src-contracts.md)
+- [Module src/harness](src-harness.md)
+
+## Changelog
+
+- 0.1.0 - Generated by `keryx wiki collect` at 2026-09-16T16:24:12.891Z. Prose sections are drafts for the gdwiki enrich workflow.
