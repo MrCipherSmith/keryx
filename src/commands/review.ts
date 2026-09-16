@@ -56,7 +56,8 @@ import {
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
 import { detectProviders } from "./select";
-import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
+import { envWithSavedApiKeys } from "../lib/shell-config";
 import {
   decideDispatchModel,
   type DiscoveredProvider,
@@ -310,6 +311,7 @@ const TIER_FLAGS = [
   "--security",
   "--session-provider",
   "--session-model",
+  "--from-shell-config",
   "--catalog",
   "--json",
 ] as const;
@@ -747,17 +749,17 @@ async function runBudget(args: string[]): Promise<void> {
  * dispatching, instead of eyeballing it".
  *
  * NO MODEL NAME IS WRITTEN HERE, and none is written anywhere this command
- * reads. The session's provider/model come from the persisted shell selection
- * (or from `--session-provider`/`--session-model` for a caller that already
- * holds them), the candidate set comes from live provider detection (or from
- * `--catalog`), and `src/gdskills/model-tier.ts` places the tier relative to the
- * session's own model. When the environment cannot be worked out, the answer is
- * the caller's OWN model — never a downgrade, never a non-zero exit.
+ * reads. The session's provider/model come from the CALLER — flags, or the
+ * `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL` environment a host exports —
+ * the candidate set comes from live provider detection (or from `--catalog`),
+ * and `src/gdskills/model-tier.ts` places the tier relative to the session's
+ * own model. When the caller names nothing, the block is adaptive: the tier
+ * plus `inherit: true`, and the host picks its own model for that tier.
  */
 async function runTier(args: string[]): Promise<void> {
   rejectUnknownFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
-  const session = sessionModelFromArgs(args);
+  const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
   const decision = decideDispatchModel(session, signals, catalog);
   const block = dispatchModelBlock(decision);
@@ -772,16 +774,16 @@ async function runTier(args: string[]): Promise<void> {
   console.log("");
   console.log(`tier: ${decision.tier}`);
   console.log(`tier_reasons: ${decision.tier_reasons.join(", ")}`);
-  console.log(
-    `provider: ${decision.provider === "" ? "not resolved (no --session-provider, and none persisted by `keryx shell`)" : decision.provider}`,
-  );
-  // The operator's standing instruction, printed rather than assumed: an
-  // unresolvable tier inherits the caller's own model. Saying "not resolved" and
-  // stopping there would read as a failure, and the next thing a reader does
-  // with a failure is pick a model by hand.
-  console.log(
-    `model: ${decision.model === "" ? "not resolved — run this dispatch on YOUR OWN model (never a downgrade)" : decision.model}`,
-  );
+  console.log(`session_source: ${SESSION_SOURCE_LABELS[source]}`);
+  // Printed rather than assumed: `inherit` is an answer, and saying "not
+  // resolved" would read as a failure — the next thing a reader does with a
+  // failure is pick a model by hand.
+  if (pinsModel(decision)) {
+    console.log(`provider: ${decision.provider}`);
+    console.log(`model: ${decision.model}`);
+  } else {
+    console.log(`model: inherit — ${ADAPTIVE_GUIDANCE[decision.tier]}`);
+  }
   console.log(`tier_resolution: ${decision.tier_resolution}`);
   console.log(
     `model_discovery: provider=${discovery.provider === "" ? "none" : discovery.provider} candidates=${discovery.candidates.length} ranked=${discovery.ranked.length} session_rank=${discovery.session_rank ?? "none"}`,
@@ -820,20 +822,33 @@ function tierSignalsFromArgs(args: string[]): TierSignals {
   };
 }
 
-/**
- * The session's provider/model: the flags when given, otherwise the selection
- * `keryx shell` persisted.
- *
- * Discovered at runtime by construction — there is no default model id in this
- * file and there must not be. Empty strings when neither source knows, which
- * `rankDiscoveredModels` reads as "no anchor" and answers with a fallback.
- */
-function sessionModelFromArgs(args: string[]): SessionModelContext {
-  const config = loadShellConfig();
-  return {
-    providerId: (optionValue(args, "--session-provider") ?? config.provider ?? "").trim(),
-    modelId: (optionValue(args, "--session-model") ?? config.model ?? "").trim(),
-  };
+/** What the host does with `inherit: true`, per tier. Names no model. */
+const SESSION_SOURCE_LABELS: Readonly<Record<SessionSource, string>> = {
+  flags: "flags (--session-provider/--session-model)",
+  env: "environment (KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL)",
+  "shell-config": "the selection `keryx shell` persisted (--from-shell-config)",
+  none: "none — the caller named no model, so the block is adaptive",
+};
+
+const ADAPTIVE_GUIDANCE: Readonly<Record<string, string>> = {
+  light:
+    "dispatch on a lighter model your own runtime offers (its fast/small class), or on your session model if it offers no choice",
+  standard: "dispatch on your session model",
+  deep: "dispatch on the most capable model your own runtime offers, or on your session model if it offers no choice",
+};
+
+/** The caller's session for `review tier`; see `resolveCallerSession`. */
+export function sessionModelFromArgs(
+  args: string[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { session: SessionModelContext; source: SessionSource } {
+  const resolved = resolveCallerSession({
+    flagProvider: optionValue(args, "--session-provider"),
+    flagModel: optionValue(args, "--session-model"),
+    fromShellConfig: args.includes("--from-shell-config"),
+    env,
+  });
+  return { session: { providerId: resolved.providerId, modelId: resolved.modelId }, source: resolved.source };
 }
 
 /**
@@ -896,21 +911,33 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
 }
 
 /**
+ * Whether the block names a model: only when discovery assigned one that is
+ * NOT the session's.
+ *
+ * `session-ranked` and `session-fallback` both resolve to the session's own
+ * model, and naming it there adds nothing a dispatch can use — it only pins an
+ * id the runner may not have (a different host, a model switched mid-session)
+ * and turns "whatever you are running" into a stale literal.
+ */
+export function pinsModel(decision: DispatchModelDecision): boolean {
+  return decision.tier_resolution === "discovered" && decision.provider !== "" && decision.model !== "";
+}
+
+/**
  * The dispatch document's `model` object, exactly as
  * `contracts/subagent-dispatch.schema.json` defines it.
  *
- * `provider`/`model` are written only when both were resolved; otherwise the
- * block carries `inherit: true`, which is the schema's way of saying what the
- * operator's instruction says — the caller runs the dispatch on its own model.
- * Writing an empty string into either field would produce a schema-invalid
- * dispatch that still looks like an answer.
+ * `provider`/`model` are written only when {@link pinsModel}; otherwise the
+ * block carries `inherit: true` beside the tier — the adaptive answer, which the
+ * host resolves to its own model for that tier. Writing an empty string into
+ * either field would produce a schema-invalid dispatch that still looks like an
+ * answer.
  */
-function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
-  const named = decision.provider !== "" && decision.model !== "";
+export function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
   return {
     tier: decision.tier,
     tier_reasons: decision.tier_reasons,
-    ...(named ? { provider: decision.provider, model: decision.model } : { inherit: true }),
+    ...(pinsModel(decision) ? { provider: decision.provider, model: decision.model } : { inherit: true }),
     tier_resolution: decision.tier_resolution,
     model_discovery: decision.model_discovery,
   };
@@ -2456,11 +2483,13 @@ tier:
   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
   on the table when it resolved; --json prints the block alone.
   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from
-  the selection \`keryx shell\` persisted (override with --session-provider /
-  --session-model), and the candidate set comes from live provider detection
-  (override with --catalog, the \`detectProviders()\` shape). When the environment
-  cannot be worked out, the block says \`inherit\` and the dispatch runs on YOUR
-  OWN model: never a downgrade, never a non-zero exit. Detection is skipped
+  the caller: --session-provider / --session-model, else KERYX_SESSION_PROVIDER /
+  KERYX_SESSION_MODEL, else (only with --from-shell-config) the selection
+  \`keryx shell\` persisted. The candidate set comes from live provider detection
+  (override with --catalog, the \`detectProviders()\` shape). A model is named
+  only when discovery assigned one other than the session's; otherwise the block
+  says \`inherit\` with the tier, and the host picks its own model for that tier
+  (standard: the session model). Never a non-zero exit. Detection is skipped
   entirely when the session names no provider and model, because ranking is
   refused without an anchor whatever the catalogue holds.
 

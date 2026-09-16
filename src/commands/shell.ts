@@ -64,6 +64,7 @@ function reportMcpProblems(runtime: McpRuntime): void {
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
+import { exportCallerSession } from "../lib/caller-session";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -2123,6 +2124,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
       // locally right below, not threaded in from the caller.
       const getSessionDir = (): string | undefined => getSlateSession()?.dir;
+      // Rebuilt on launch and on every `/model` switch, so this is the live session.
+      exportCallerSession(sel.provider, sel.model);
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient: string;
       try {
@@ -2439,6 +2442,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
 
     if (agentMode) {
       // Agent mode: give the model read-only hands + metaproject orientation.
+      exportCallerSession(provider, model);
       const agentProvider = baseFactory(provider, model, baseUrl);
       let orient: string;
       try {
