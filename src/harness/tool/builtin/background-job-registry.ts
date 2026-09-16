@@ -240,6 +240,32 @@ export interface JobRegistry {
   list(): BackgroundJobInfo[];
   readOutput(jobId: string): { ok: true; output: string } | { ok: false; error: string };
   /**
+   * Read from an EXPLICIT, absolute cursor instead of the registry's own
+   * (flow 266, AC1). Two calls with the same `since` return the same bytes,
+   * because nothing here advances shared state — which is what makes this the
+   * one read a side worker may be given.
+   *
+   * `nextCursor` is where the caller should continue. `missed` is how many bytes
+   * were dropped before `since` could be honoured (the ring truncated past it):
+   * silently returning the oldest retained bytes instead would look like output
+   * the caller had not seen yet.
+   *
+   * Never marks the task observed — the CALLER decides that, because only it
+   * knows whether it is the main session or a side worker (D-16).
+   */
+  readOutputSince(
+    jobId: string,
+    since: number,
+  ):
+    | { ok: true; output: string; nextCursor: number; missed: number; status: BackgroundJobInfo["status"] }
+    | { ok: false; error: string };
+  /**
+   * Record that the agent has been told this task's outcome (flow 265's
+   * `observed` flag), so flow 265's drain will not announce it a second time.
+   * Separate from any read: a side worker reads without ever calling this.
+   */
+  markObserved(jobId: string): void;
+  /**
    * Wait up to `ms` for a task to finish. Never kills on timeout — the caller
    * decides what to do (`shell_exec` promotes the task to background).
    * `"unknown"` means this registry never tracked that id.
@@ -345,6 +371,18 @@ interface InternalJob {
   handle: BackgroundProcessHandle;
   outputBuffer: string;
   readCursor: number;
+  /**
+   * Bytes ever dropped from the FRONT of `outputBuffer`, by the ring's over-cap
+   * truncation and by the shrink on exit (flow 266).
+   *
+   * `readCursor` is an index into the CURRENT buffer and is rebased whenever
+   * bytes are dropped, so it cannot be handed out: a caller holding one across a
+   * truncation would silently read the wrong slice. This counter turns it into
+   * an absolute stream position — `dropped + index` — which is what
+   * `readOutputSince` gives a caller with an explicit cursor, and what makes a
+   * second reader safe.
+   */
+  droppedBytes: number;
   exited: boolean;
   /**
    * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, mirrored into
@@ -586,6 +624,7 @@ export function createJobRegistry(options?: {
     const dropped = job.outputBuffer.length - TERMINATED_OUTPUT_TAIL_BYTES;
     job.outputBuffer = job.outputBuffer.slice(dropped);
     job.readCursor = Math.max(0, job.readCursor - dropped);
+    job.droppedBytes += dropped;
   }
 
   function appendOutput(job: InternalJob, chunk: string, stream: "stdout" | "stderr"): void {
@@ -609,6 +648,7 @@ export function createJobRegistry(options?: {
       const dropped = job.outputBuffer.length - MAX_BACKGROUND_OUTPUT_BYTES;
       job.outputBuffer = job.outputBuffer.slice(dropped);
       job.readCursor = Math.max(0, job.readCursor - dropped);
+      job.droppedBytes += dropped;
 
       // F-013: only issue ONE auto-kill per job. The status doesn't flip off
       // "running" until the kill actually lands, so without this guard every
@@ -706,6 +746,7 @@ export function createJobRegistry(options?: {
         outputBuffer: "",
         outputHead: "",
         readCursor: 0,
+        droppedBytes: 0,
         exited: false,
         killRequested: false,
         phaseEmitted: false,
@@ -815,6 +856,31 @@ export function createJobRegistry(options?: {
         job.info.observed = true;
       }
       return { ok: true, output };
+    },
+
+    readOutputSince(jobId, since) {
+      const job = jobs.get(jobId);
+      if (job === undefined) {
+        return { ok: false, error: `unknown job_id: ${jobId}` };
+      }
+      // `since` is an ABSOLUTE stream position; the buffer only holds what has
+      // not been dropped, so map it through `droppedBytes` and say plainly when
+      // part of the range is gone for good.
+      const requested = Number.isFinite(since) && since > 0 ? Math.trunc(since) : 0;
+      const missed = Math.max(0, job.droppedBytes - requested);
+      const index = Math.min(job.outputBuffer.length, Math.max(0, requested - job.droppedBytes));
+      return {
+        ok: true,
+        output: job.outputBuffer.slice(index),
+        nextCursor: job.droppedBytes + job.outputBuffer.length,
+        missed,
+        status: job.info.status,
+      };
+    },
+
+    markObserved(jobId) {
+      const job = jobs.get(jobId);
+      if (job !== undefined) job.info.observed = true;
     },
 
     async waitForExit(jobId, ms) {
@@ -932,6 +998,7 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_output",
       description:
+        "DEPRECATED — use shell_task_output, which takes an explicit cursor; this name is kept for one release. " +
         "Return output produced by a shell task SINCE the previous call for that id — never the full transcript " +
         "again. Input: { job_id: string } — pass the task_id shell_exec returned for a command that outlived its " +
         "yield (or a background:true job). Poll this instead of re-running shell_exec to check on a long command.",
@@ -948,11 +1015,293 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
       if (jobId.length === 0) {
         return { output: "shell_job_output requires a non-empty 'job_id'", isError: true };
       }
-      const result = registry.readOutput(jobId);
+      const result = registry.readOutput(resolveTaskId(registry, jobId));
       if (!result.ok) {
         return { output: result.error, isError: true };
       }
       return { output: result.output, isError: false };
+    },
+  };
+}
+
+/** Who is reading — the only thing that decides whether a read counts as delivery (D-16). */
+export interface TaskToolOptions {
+  /**
+   * `"main"` marks a task observed when it returns a TERMINAL status: the agent
+   * asked and was told, so flow 265 must not announce it again. `"side"` never
+   * marks — a side worker that could mark would make the main session's
+   * notification vanish, and the main session would never learn the task ended.
+   */
+  observer: "main" | "side";
+}
+
+/**
+ * `shell_task_output(task_id, since?)` — risk `read`: the cursor-EXPLICIT read.
+ *
+ * The difference from `shell_job_output` is the whole reason this tool exists:
+ * that one advances a cursor nobody names, so two readers of the same task steal
+ * each other's output. Here the caller says where to start and is told where to
+ * continue, which is what makes a second reader safe — and why this is the only
+ * task read a side worker is offered.
+ */
+export function shellTaskOutputTool(registry: JobRegistry, options: TaskToolOptions): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_output",
+      description:
+        "Read a shell task's output from an EXPLICIT cursor. Input: { task_id: string, since?: integer } — " +
+        "omit `since` (or pass 0) for everything retained, then pass back the next_cursor from the previous " +
+        "result to get only what is new. Two calls with the same `since` return the same bytes, so this is safe " +
+        "to call again after a failure. The result states the task's status and its next_cursor, and says so " +
+        "when older output was dropped before your cursor.",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_id: { type: "string" },
+          since: { type: "integer" },
+        },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input): Promise<InteractiveToolResult> => {
+      const taskId = typeof input.task_id === "string" ? input.task_id : "";
+      if (taskId.length === 0) {
+        return { output: "shell_task_output requires a non-empty 'task_id'", isError: true };
+      }
+      const since = typeof input.since === "number" ? input.since : 0;
+      const result = registry.readOutputSince(taskId, since);
+      if (!result.ok) {
+        return { output: result.error, isError: true };
+      }
+      // Only the main session's copy records delivery, and only once the task is
+      // actually over: reading a task that is still running says nothing about
+      // how it ended, so it must still produce a notification when it does.
+      if (options.observer === "main" && result.status !== "running") {
+        registry.markObserved(taskId);
+      }
+      const missed =
+        result.missed > 0 ? `\n[${result.missed} byte(s) older than your cursor were dropped and cannot be re-read]` : "";
+      const trailer = `\n[task ${taskId} status=${result.status} next_cursor=${result.nextCursor}]`;
+      return { output: `${result.output}${missed}${trailer}`, isError: false };
+    },
+  };
+}
+
+/**
+ * Move a running FOREGROUND task to the background (flow 266, AC8) — the effect
+ * behind `/demote`, called by both shells from their own dispatch.
+ *
+ * It lives here rather than in either shell because the rule it enforces is the
+ * registry's, not the surface's: `promote()` is intentionally forgiving — it
+ * re-sets the phase and reports an over-cap rather than refusing, because a
+ * running task cannot be un-started. That is right for the yield path, which
+ * promotes a task it just watched time out, and wrong for an operator command,
+ * where "already in the background" is a mistake worth saying out loud instead
+ * of a silent success.
+ *
+ * Never kills and never aborts the turn: demote releases the WAIT (the same
+ * release an abort performs) and leaves the command running, which is the whole
+ * point of demoting rather than stopping.
+ */
+export function demoteTask(
+  registry: JobRegistry,
+  taskId: string,
+): { ok: true; overCap?: string } | { ok: false; error: string } {
+  // Exactly as given. Demote does not kill, but it still ACTS on a task, and
+  // moving a stranger's task aside on a coincidental id match is still wrong.
+  const resolved = taskId;
+  const info = registry.get(resolved);
+  if (info === undefined) {
+    return { ok: false, error: `unknown task_id: ${taskId}` };
+  }
+  if (info.status !== "running") {
+    return { ok: false, error: `task ${resolved} is not running (status: ${info.status})` };
+  }
+  if (info.phase === "background") {
+    return { ok: false, error: `task ${resolved} is already running in the background` };
+  }
+  return registry.promote(resolved);
+}
+
+/** Upper bound for a model-supplied `shell_task_wait` timeout (flow 266, AC3). */
+export const MAX_TASK_WAIT_MS = 300_000;
+
+/**
+ * Clamp a model-supplied wait into [0, {@link MAX_TASK_WAIT_MS}].
+ *
+ * A rail, not a suggestion: the wait blocks a turn, so an unbounded value from
+ * the model would hand it the power to stall the session. `0` is honoured (ask
+ * what is finished right now); a malformed or infinite value takes the MAXIMUM
+ * rather than the minimum, because a model that asked to wait meant to wait —
+ * silently turning that into "do not wait" would answer a different question.
+ */
+export function clampTaskWaitMs(ms: number): number {
+  if (!Number.isFinite(ms)) return MAX_TASK_WAIT_MS;
+  if (ms <= 0) return 0;
+  return Math.min(MAX_TASK_WAIT_MS, Math.trunc(ms));
+}
+
+/** One line per task in a wait's report: what it is doing, or that it is not ours. */
+function describeWaitedTask(registry: JobRegistry, taskId: string): string {
+  const info = registry.get(taskId);
+  if (info === undefined) return `${taskId}: unknown task_id (not tracked by this session)`;
+  const exit = info.exitCode !== undefined ? ` exit=${info.exitCode}` : "";
+  const reason = info.killReason !== undefined ? ` killReason=${info.killReason}` : "";
+  return `${taskId}: ${info.status}${exit}${reason}`;
+}
+
+/**
+ * `shell_task_wait({ task_ids, mode, timeout_ms })` — risk `read`: wait for
+ * tasks deliberately instead of polling in a loop.
+ *
+ * Two rules give this tool its shape. It NEVER kills: reaching the bound returns
+ * the still-running tasks and their status, because a wait that ended a command
+ * would make "check on it" destructive. And it is ABORTABLE: the turn's signal
+ * ends the WAIT, leaving every task running, so the operator's stop reaches a
+ * blocked turn without discarding work. Either way the completion is delivered
+ * later by flow 265's drain.
+ */
+export function shellTaskWaitTool(registry: JobRegistry): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_wait",
+      description:
+        "Wait for shell tasks to finish instead of polling. Input: { task_ids: string[], mode: \"any\" | \"all\", " +
+        "timeout_ms?: integer } — `any` returns as soon as one of them ends, `all` when every one has. The wait is " +
+        "bounded (timeout_ms is clamped to at most 300000) and NEVER kills: if the bound is reached you get each " +
+        "task's current status and the tasks keep running. Read their output with shell_task_output(task_id).",
+      inputSchema: {
+        type: "object",
+        properties: {
+          task_ids: { type: "array", items: { type: "string" } },
+          mode: { type: "string", enum: ["any", "all"] },
+          timeout_ms: { type: "integer" },
+        },
+        required: ["task_ids", "mode"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input, ctx): Promise<InteractiveToolResult> => {
+      const rawIds = Array.isArray(input.task_ids) ? input.task_ids : [];
+      const taskIds = rawIds.filter((id): id is string => typeof id === "string" && id.length > 0);
+      if (taskIds.length === 0) {
+        return { output: "shell_task_wait requires a non-empty 'task_ids'", isError: true };
+      }
+      const mode = input.mode === "any" ? "any" : "all";
+      const timeoutMs = clampTaskWaitMs(typeof input.timeout_ms === "number" ? input.timeout_ms : MAX_TASK_WAIT_MS);
+
+      // An unknown id is NAMED rather than dropped from the set: a wait that
+      // quietly ignored a typo'd id would return "everything finished" while the
+      // task the model meant was never watched.
+      const known = taskIds.filter((id) => registry.get(id) !== undefined);
+
+      const signal = ctx?.signal;
+      let onAbort: (() => void) | undefined;
+      const aborted = new Promise<"aborted">((resolve) => {
+        if (signal === undefined) return; // never settles; the waits decide
+        if (signal.aborted) {
+          resolve("aborted");
+          return;
+        }
+        onAbort = (): void => resolve("aborted");
+        signal.addEventListener("abort", onAbort, { once: true });
+      });
+
+      try {
+        if (known.length > 0) {
+          const waits = known.map((id) => registry.waitForExit(id, timeoutMs).then(() => id));
+          const settled =
+            mode === "any"
+              ? await Promise.race([...waits, aborted])
+              : await Promise.race([Promise.all(waits).then(() => "all" as const), aborted]);
+          if (settled === "aborted") {
+            const lines = taskIds.map((id) => describeWaitedTask(registry, id));
+            return {
+              output:
+                "interrupted: the wait was stopped and every task is STILL RUNNING — none was killed.\n" +
+                lines.join("\n"),
+              isError: false,
+            };
+          }
+        }
+        const lines = taskIds.map((id) => describeWaitedTask(registry, id));
+        return { output: lines.join("\n"), isError: false };
+      } finally {
+        if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
+      }
+    },
+  };
+}
+
+/**
+ * Accept either spelling of a task id (flow 266, AC5).
+ *
+ * Ids are minted `task-<n>-<pid>`, but `job-<n>-<pid>` is what a transcript from
+ * before the rename still carries, and the model re-reads its own history every
+ * turn. Returns the id as given when neither spelling is tracked, so the error
+ * names what the caller actually asked for.
+ *
+ * READS ONLY, and that restriction is the whole point (flow 266 review finding).
+ * Every id in a live session is `task-*`, so this swap can only ever fire for an
+ * id from an EARLIER session — which D-14 says must resolve to `unknown task_id`,
+ * because tasks do not survive a session. The swap keeps the counter and the pid,
+ * and a session's counter restarts at 1, so a stale `job-5-<pid>` matches a live
+ * `task-5-<pid>` whenever that pid is recycled. For a read that is a wrong
+ * answer; for a kill it is somebody else's work destroyed. So the kill paths and
+ * the demote path take the id EXACTLY as given, and only the output alias
+ * resolves both spellings.
+ */
+function resolveTaskId(registry: JobRegistry, id: string): string {
+  if (registry.get(id) !== undefined) return id;
+  const swapped = id.startsWith("job-")
+    ? `task-${id.slice("job-".length)}`
+    : id.startsWith("task-")
+      ? `job-${id.slice("task-".length)}`
+      : undefined;
+  if (swapped !== undefined && registry.get(swapped) !== undefined) return swapped;
+  return id;
+}
+
+/**
+ * `shell_task_kill(task_id)` — risk `read`: process-group kill, scoped to this
+ * session's own registry.
+ *
+ * Idempotent by way of an ordinary refusal: killing a task that has already
+ * ended is a tool error naming its status, never a second signal. The status it
+ * ended with is left alone — a task that exited cleanly does not become
+ * `killed` because someone asked afterwards.
+ */
+export function shellTaskKillTool(registry: JobRegistry): InteractiveTool {
+  return {
+    definition: {
+      name: "shell_task_kill",
+      description:
+        "Stop a running shell task — its entire process group, including any descendant it backgrounded. Input: " +
+        "{ task_id: string }. Killing a task that has already finished is refused with its status rather than " +
+        "signalling anything, so calling this twice is safe. Only tasks from this session can be targeted.",
+      inputSchema: {
+        type: "object",
+        properties: { task_id: { type: "string" } },
+        required: ["task_id"],
+        additionalProperties: false,
+      },
+      risk: "read",
+    },
+    invoke: async (input): Promise<InteractiveToolResult> => {
+      const raw = typeof input.task_id === "string" ? input.task_id : "";
+      if (raw.length === 0) {
+        return { output: "shell_task_kill requires a non-empty 'task_id'", isError: true };
+      }
+      // Exactly as given — see `resolveTaskId`: spelling-swapping is for reads.
+      const taskId = raw;
+      const result = await registry.kill(taskId);
+      if (!result.ok) {
+        return { output: result.error, isError: true };
+      }
+      return { output: `task ${taskId} killed`, isError: false };
     },
   };
 }
@@ -968,6 +1317,7 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_kill",
       description:
+        "DEPRECATED — use shell_task_kill; this name is kept for one release. " +
         "Stop a running shell task — its entire process group, including any descendant it backgrounded. Input: " +
         "{ job_id: string } — the task_id shell_exec returned for a command still running after its yield (or a " +
         "background:true job). Only tasks in this session's own registry can be targeted.",
@@ -984,6 +1334,8 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
       if (jobId.length === 0) {
         return { output: "shell_job_kill requires a non-empty 'job_id'", isError: true };
       }
+      // NOT resolved across spellings: a kill acts, and acting on a coincidental
+      // id match destroys work nobody asked to lose (see `resolveTaskId`).
       const result = await registry.kill(jobId);
       if (!result.ok) {
         return { output: result.error, isError: true };

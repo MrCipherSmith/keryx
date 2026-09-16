@@ -846,6 +846,11 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "shell_exec",
     "shell_job_kill",
     "shell_job_output",
+    // Flow 266: the task tools proper; the two `shell_job_*` names stay for one
+    // release as deprecated aliases, so a session offers both spellings.
+    "shell_task_kill",
+    "shell_task_output",
+    "shell_task_wait",
     "skill_load",
     "skills_catalog",
     "slate_read",

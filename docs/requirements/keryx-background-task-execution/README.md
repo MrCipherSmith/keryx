@@ -22,10 +22,28 @@ expires (leftovers are then killed with `killReason: "hold-timeout"`); and both
 shells wake an idle session on completion, behind a consecutive-auto-wake cap
 that operator input resets.
 
-The rest of the package — the task tools, tool cancellation, operator demote and
-side-worker rules (P2), the documentation sweep (P3) — is still `spec ready` and
-**not implemented**; see [metrics-and-validation.md](metrics-and-validation.md)
-for which invariant is proven and by which test.
+P2 (2026-09-16, keryx flow 266): the task tools and the rules around them.
+`shell_task_output` reads from an EXPLICIT cursor (so a second reader cannot
+steal the first one's output), `shell_task_wait` waits for `any`/`all` of a set
+under a clamped bound and never kills, and `shell_task_kill` is idempotent. Tool
+calls can now be cancelled: `invoke` receives the turn's abort signal, and an
+abort ends the WAIT rather than the command — the task is promoted, keeps
+running, and its completion is still delivered. The operator can move a running
+task aside with `/demote <task_id>` in both shells, including while the turn is
+busy. Side workers are denied kill, wait and the implicit-cursor read, and their
+copy of `shell_task_output` never marks a task delivered, which is what keeps
+P1's exactly-once notification true now that a second reader exists. The old
+`shell_job_*` names stay for one release as deprecated aliases and accept both id
+spellings.
+
+**One criterion in this package is deliberately NOT met by P2**: S4 / M7 — "a
+queued operator message pre-empts a running wait" — describes a mechanism nobody
+built. P2 ships the adjacent capabilities (abort, demote) and the rows say so
+rather than claiming the measure.
+
+The rest — the documentation sweep (P3) — is still `spec ready` and **not
+implemented**; see [metrics-and-validation.md](metrics-and-validation.md) for
+which invariant is proven and by which test.
 
 v1.1.0 closed the implementation gaps found when v1.0.0 was checked against the
 code (headless delivery, notification shape, wake cap, concurrency cap, idle

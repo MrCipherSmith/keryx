@@ -270,6 +270,7 @@
     "src/commands/shell-slash-registry.test.ts",
     "src/commands/shell-startup-exit.test.ts",
     "src/commands/shell-task-registry-wiring.test.ts",
+    "src/commands/shell-task-tools.test.ts",
     "src/commands/shell-types.ts",
     "src/commands/shell.test.ts",
     "src/commands/shell.ts",

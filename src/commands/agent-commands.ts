@@ -210,6 +210,14 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    name: "/demote",
+    description: "Move a running foreground task to the background — /demote <task_id>",
+    // Agent-only because chat mode has no tools and therefore no tasks — but
+    // agent mode is BOTH shells, which is the point: a --no-tui session can
+    // demote too, and flow 266 AC8 asks for exactly that.
+    modes: AGENT_ONLY,
+  },
+  {
     name: "/exit",
     description: "Leave the shell (/quit works too)",
     modes: BOTH,
@@ -266,6 +274,41 @@ export function parseDelegateCommand(args: string): ParsedDelegateCommand {
     };
   }
   return { ok: true, agentId, task };
+}
+
+/** Usage line for `/demote`, shown on every parse refusal so the fix is one read away. */
+export const DEMOTE_USAGE = "/demote <task_id>  (the task_id shell_exec returned)";
+
+/** A parsed `/demote` invocation, or the named reason it could not be parsed. */
+export type ParsedDemoteCommand =
+  | { readonly ok: true; readonly taskId: string }
+  | { readonly ok: false; readonly reason: string };
+
+/**
+ * Parse the argument tail of `/demote <task_id>` — the `/demote` token itself is
+ * already consumed by the caller, exactly as {@link parseDelegateCommand}
+ * expects.
+ *
+ * Pure: it validates the SHAPE of the request and touches no registry. Whether
+ * the id exists, and whether that task is still in the foreground, are questions
+ * only the session's own registry can answer, and they are answered where the
+ * effect happens rather than guessed at here.
+ *
+ * A second token is refused rather than ignored. Demote takes one task, so extra
+ * words mean the operator typed something they expect to have taken effect —
+ * silently dropping them would demote the first task and say nothing about the
+ * rest.
+ */
+export function parseDemoteCommand(args: string): ParsedDemoteCommand {
+  const trimmed = args.trim();
+  if (trimmed.length === 0) {
+    return { ok: false, reason: `usage: ${DEMOTE_USAGE}` };
+  }
+  const parts = trimmed.split(/\s+/);
+  if (parts.length > 1) {
+    return { ok: false, reason: `\`/demote\` takes ONE task_id — usage: ${DEMOTE_USAGE}` };
+  }
+  return { ok: true, taskId: parts[0] ?? "" };
 }
 
 /** True when `command` is offered in `mode`. Pure. */

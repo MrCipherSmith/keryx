@@ -110,7 +110,7 @@ decision:
 | S1 | The exact incident does not recur: `shell_exec("sleep 120 && …")` with no flag returns within `yield_ms` and the turn continues; the task is then observable and killable. | met (P0) |
 | S2 | A command that keeps producing output past 120 s is not killed; a command silent for `idle_ms` is. | met (P0) |
 | S3 | On task exit the agent is notified without a poll and without a `sleep`-based wait. | met (P1) |
-| S4 | The operator can send a message while a task is awaited and it takes over immediately. | planned (P2) |
+| S4 | The operator can send a message while a task is awaited and it takes over immediately. | planned — P2 shipped the adjacent capabilities (the turn's abort releases a wait without killing the task, and `/demote` works while the turn is busy) but NOT this one: nothing makes a queued message pre-empt a running wait. See metrics M7. |
 | S5 | A process-group kill reaches a grandchild backgrounded by the command. | met (P0) |
 | S6 | No implementation claim in this package is unsupported by a `file:line`. | documentation check, not a runtime claim |
 
@@ -145,7 +145,8 @@ Adopt the supervised-task model and keep everything else. Specifically:
 
 | Gap | Impact | Tracked |
 |---|---|---|
-| P2 and P3 are not implemented: the task tools, tool cancellation, operator demote and the side-worker rules, and the documentation sweep. | The operator cannot yet demote or interrupt a running task, and a tool call cannot be cancelled. | This package, specification §Acceptance criteria. P0 shipped in flow 263, P1 in flow 265. |
+| P3 is not implemented: the documentation sweep. | The wiki and the user-facing docs still describe the flow-173 background model rather than the supervised-task one. | This package, specification §Acceptance criteria. P0 shipped in flow 263, P1 in flow 265, P2 in flow 266. |
+| S4 / M7 stays open after P2: no queued operator message pre-empts a running wait. | An operator who types while a turn is blocked in `shell_task_wait` is still queued behind it; the levers that DO work are the turn's abort (which releases the wait and leaves the task running) and `/demote`. | metrics M7 and M15; flow 266 froze AC8 as demote only, so the broader measure was never in that phase's scope. |
 | Closed in P1: the completion-wake channel now exists — `drainUndelivered`/`onCompletion` on the registry, a round-boundary drain and a hold in `src/commands/agent.ts`, and a subscription in both REPLs. | It was the largest new mechanism in this package; it is now the one with the most test weight behind it. | brainstorm.md D-02; metrics M5, M6, M11, M16. |
 | Streaming `monitor` and recurring scheduling are not specified here. | Long-lived event streams and periodic checks stay manual. | brainstorm.md D-08; follow-on packages. |
 | No on-disk full output. | Output beyond the 2 MiB ring (or the 4 KB post-delivery tail) is gone. | brainstorm.md D-18; follow-on package. |

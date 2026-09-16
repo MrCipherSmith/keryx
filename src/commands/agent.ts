@@ -453,7 +453,15 @@ export const MAX_AGENT_MAX_ATTEMPTS_PER_HASH = 10;
  * ATTEMPT ceiling is lifted for this tool — the round budget still applies
  * normally, so this does not weaken the loop-safety guard for any other tool.
  */
-const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_output"]);
+export const REPEATABLE_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "shell_job_output",
+  // Flow 266 (AC11): polling a task is a legitimate repeat. The same call with
+  // the same arguments is exactly how you follow a running command — the
+  // per-signature attempt rail exists to stop a model looping on a FAILING
+  // call, not to stop it watching one that is working.
+  "shell_task_output",
+  "shell_task_wait",
+]);
 
 /** Env override for how long a `hold` session waits for its own tasks (flow 265). */
 export const ENV_SHELL_HOLD_MS = "KERYX_SHELL_HOLD_MS";
@@ -1840,6 +1848,7 @@ async function runAgentTurnCore(
           hasInvocationCapacity,
           reserveInvocation,
           invocationBudget.maxCalls,
+          signal,
         ));
       io.onToolResult?.(call.name, result);
       // Scrub secrets/PII from tool output BEFORE it enters provider-bound history
@@ -2335,6 +2344,10 @@ async function executeCall(
   hasInvocationCapacity: () => boolean,
   reserveInvocation: () => boolean,
   maxToolCalls?: number,
+  // Flow 266 (D-15): the turn's abort signal, handed to the tool itself. The
+  // loop already checked abort BETWEEN calls; a tool that waits needs it DURING
+  // one, or the operator's stop cannot reach it.
+  signal?: AbortSignal,
 ): Promise<InteractiveToolResult> {
   const tool = toolByName.get(call.name);
   if (tool === undefined) {
@@ -2448,7 +2461,9 @@ async function executeCall(
   if (!reserveInvocation()) {
     return toolCallBudgetResult(maxToolCalls ?? 0, maxToolCalls ?? 0);
   }
-  return tool.invoke(input);
+  // The context is passed unconditionally: a tool that ignores it is unaffected,
+  // and making the parameter conditional would hide which calls are abortable.
+  return tool.invoke(input, { ...(signal !== undefined ? { signal } : {}) });
 }
 
 function validateDirectBudget(name: "maxRounds" | "maxToolCalls", value: number | undefined, min: number): number | undefined {

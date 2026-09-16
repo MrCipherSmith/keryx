@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-16T12:28:52.749Z",
+  "generatedAt": "2026-09-16T14:20:45.756Z",
   "status": "complete",
   "incompleteReasons": [],
   "frameworks": [
@@ -184,6 +184,7 @@
     "src/commands/shell-slash-registry.test.ts",
     "src/commands/shell-startup-exit.test.ts",
     "src/commands/shell-task-registry-wiring.test.ts",
+    "src/commands/shell-task-tools.test.ts",
     "src/commands/shell.test.ts",
     "src/commands/skills-install-warnings.test.ts",
     "src/commands/skills-route.test.ts",

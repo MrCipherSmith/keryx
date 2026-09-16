@@ -2360,7 +2360,28 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
   const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test("a module-level deny-list constant names shell_job_kill (not a risk-level change — AC6 is frozen)", () => {
-    expect(tuiSourceF003).toContain('const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);');
+    // Flow 266 widened this list, so the audit can no longer pin the literal
+    // one-element Set it was written against. What it protects is unchanged and
+    // is what is asserted here: a MODULE-LEVEL constant that denies tools BY
+    // NAME — not a risk-level change, which AC6 freezes.
+    expect(tuiSourceF003).toContain("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(tuiSourceF003).toContain('"shell_job_kill"');
+  });
+
+  test("flow 266: the deny-list also covers kill/wait and the implicit-cursor read, but NOT shell_task_output", () => {
+    // The executed proof lives in `shell-task-tools.test.ts`, which reads the
+    // exported Set. This audit exists for the file itself: the three additions
+    // are the reason a side worker cannot end a main-session task, block on one,
+    // or consume output the main session has not seen — and the one omission is
+    // deliberate, because `shell_task_output` takes an explicit cursor and its
+    // side-worker copy never marks a task delivered.
+    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(declIdx).toBeGreaterThanOrEqual(0);
+    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
+    for (const name of ["shell_job_kill", "shell_task_kill", "shell_task_wait", "shell_job_output"]) {
+      expect(declBlock).toContain(`"${name}"`);
+    }
+    expect(declBlock).not.toContain('"shell_task_output"');
   });
 
   test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
