@@ -336,3 +336,59 @@ describe("denyInteractiveTools", () => {
     expect(() => assertDeniableTools([tool("a")], ["z"])).toThrow(/z/);
   });
 });
+
+// --- F-558-06: don't advertise a question nothing can answer ----------------
+//
+// `ask_user` used to be rostered unconditionally, so a session whose surface
+// could never display a question still paid a model round trip (plus a
+// description re-read every round) to discover what the roster already knew.
+describe("F-558-06: askUserAvailable controls whether ask_user is offered", () => {
+  async function roster(askUserAvailable?: boolean, denyTools?: readonly string[]) {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-askuser-"));
+    await mkdir(join(cwd, ".metaproject"));
+    return interactiveAgentToolNames(
+      buildInteractiveAgentTools({
+        cwd,
+        metaprojectPort: createMetaprojectAdapter(cwd),
+        searchController: createDefaultSearchProviderController(),
+        spawnTool: stubSpawn,
+        jobRegistry: stubJobRegistry(),
+        ...(askUserAvailable === undefined ? {} : { askUserAvailable }),
+        ...(denyTools === undefined ? {} : { denyTools }),
+      }),
+    );
+  }
+
+  test("false withholds the tool entirely — not merely unapproved", async () => {
+    expect(await roster(false)).not.toContain("ask_user");
+  });
+
+  test("true offers it", async () => {
+    expect(await roster(true)).toContain("ask_user");
+  });
+
+  test("OMITTED still offers it — the default cannot drop the tool from the surface that can always answer", async () => {
+    // Load-bearing default, not laziness: the OpenTUI surface builds this roster
+    // and registers its host LATER, so a default derived from a live
+    // `hasAskUserHost()` read would silently strip the tool from the TUI.
+    expect(await roster(undefined)).toContain("ask_user");
+  });
+
+  test("withholding ask_user does not disturb the rest of the roster", async () => {
+    const full = await roster(true);
+    const narrowed = await roster(false);
+    expect(narrowed).toEqual(full.filter((name) => name !== "ask_user"));
+  });
+
+  test("`--deny-tools ask_user` still resolves when the tool was never offered", async () => {
+    // The denial is validated against the FULL built set, so the same command
+    // line must not pass in one session and fail as "unknown tool" in the next.
+    await expect(roster(false, ["ask_user"])).resolves.toBeDefined();
+    expect(await roster(false, ["ask_user"])).not.toContain("ask_user");
+  });
+
+  test("the invariant that matters: no roster ever offers ask_user without the capability", async () => {
+    expect(await roster(false)).not.toContain("ask_user");
+    expect(await roster(true)).toContain("ask_user");
+  });
+});

@@ -1,11 +1,5 @@
-import { expect, test } from "bun:test";
-import {
-  DEFAULT_PERMISSION_MODE,
-  isPermissionMode,
-  PERMISSION_MODES,
-  resolveApprovalDecision,
-  type PermissionMode,
-} from "./permission-mode";
+import { describe, expect, test } from "bun:test";
+import { DEFAULT_PERMISSION_MODE, PERMISSION_MODES, isPermissionMode, resolveApprovalDecision, resolveQuestionAnswerer, type PermissionMode } from "./permission-mode";
 
 test("default mode is ask, unchanged current behavior for anyone who never opts in", () => {
   expect(DEFAULT_PERMISSION_MODE).toBe("ask");
@@ -197,4 +191,42 @@ test("ADR-0010: write behaves exactly like shell under every mode — ask/trust/
 test("mode is a closed set — TypeScript, not this test, rejects anything else", () => {
   const modes: readonly PermissionMode[] = ["ask", "trust", "auto"];
   expect(modes).toEqual(PERMISSION_MODES);
+});
+
+// ---------------------------------------------------------------------------
+// P1: the QUESTION axis, deliberately separate from the approval axis.
+//
+// `resolveApprovalDecision` above decides whether a mutating action may run.
+// This decides who answers a question about what to DO. Merging them would put
+// questions under the security gate and let `auto` self-approve destructive
+// actions as a side effect.
+// ---------------------------------------------------------------------------
+describe("resolveQuestionAnswerer — who answers a model's question", () => {
+  test("ask: the human answers", () => {
+    expect(resolveQuestionAnswerer("ask")).toBe("human");
+  });
+
+  test("trust: the human answers — trust is about ACTIONS, never about judgement", () => {
+    // The behaviour this feature exists to name. `trust` means "do not
+    // interrupt me for a command I would have approved"; it never means
+    // "decide for me what to build".
+    expect(resolveQuestionAnswerer("trust")).toBe("human");
+  });
+
+  test("auto: the model answers, because it already declared it will act unasked", () => {
+    expect(resolveQuestionAnswerer("auto")).toBe("self");
+  });
+
+  test("exhaustive over every mode — a new mode cannot silently default to self-answering", () => {
+    const answerers = PERMISSION_MODES.map((mode) => resolveQuestionAnswerer(mode));
+    expect(answerers).toEqual(["human", "human", "self"]);
+    // The direction that matters: exactly ONE mode self-answers, so adding a
+    // mode without deciding this fails here rather than shipping a mode that
+    // answers questions on the user's behalf by omission.
+    expect(answerers.filter((a) => a === "self")).toHaveLength(1);
+  });
+
+  test("the default mode never self-answers", () => {
+    expect(resolveQuestionAnswerer(DEFAULT_PERMISSION_MODE)).toBe("human");
+  });
 });

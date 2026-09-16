@@ -17,7 +17,12 @@
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { isDestructiveCommand, touchesAgentCredentials, touchesSacConfirmReview } from "../lib/command-risk";
 import { classifyPatchRisk } from "../lib/patch-risk";
-import { DEFAULT_PERMISSION_MODE, resolveApprovalDecision, type PermissionMode } from "./permission-mode";
+import {
+  DEFAULT_PERMISSION_MODE,
+  resolveApprovalDecision,
+  resolveQuestionAnswerer,
+  type PermissionMode,
+} from "./permission-mode";
 import { redactSensitiveText } from "../security/redact";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
 import type { McpRuntime } from "../mcp-servers/runtime";
@@ -43,6 +48,7 @@ import {
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
+import { chooseSelfAnswer, SELF_ANSWERED_MARKER, type AskUserOption } from "../harness/tool/builtin/ask-user-tool";
 
 const DURABLE_READ_TOOL_NAMES = new Set(["workspace_create", "workspace_propose", "slate_write_seed"]);
 
@@ -141,6 +147,19 @@ export interface AgentIO {
    * was already silent before permission modes existed, and stays that way.
    */
   onAutoApproved?: (tool: string, input: string, meta: { destructive: boolean; credentials: boolean }) => void;
+  /**
+   * An `auto`-mode self-answer just resolved a `ask_user` question WITHOUT
+   * consulting the human — the call ran with no prompt. Fired exactly when the
+   * question axis resolves to `"self"` (see `permission-mode.ts`'s
+   * `resolveQuestionAnswerer`), and never in `ask`/`trust`.
+   *
+   * Optional and side-effect-free from the driver's point of view, but omitting
+   * it in a real UI recreates the failure mode `onAutoApproved`'s own docstring
+   * names: a self-answer the user cannot notice is a self-answer they cannot
+   * object to. It carries the question and the chosen option so a surface can
+   * say WHICH question it answered, not merely that it did.
+   */
+  onQuestionSelfAnswered?: (question: string, chosen: { id: string; label: string }) => void;
   /**
    * The session's current permission mode (see `permission-mode.ts`).
    * Read fresh on every gated call, never cached — this is how a live `/mode`
@@ -1563,6 +1582,88 @@ async function runAgentTurnCore(
         await emitTerminalState(io, deps, options, "ask_user_unanswerable");
         return {};
       }
+      // Permission-mode question axis (P1). Deliberately a SEPARATE decision
+      // from `executeCall`'s risk gate: `ask_user` is `risk: "read"` and never
+      // reaches it, so this is the only place a mode may influence a question.
+      //
+      // Ordering: the `unattended` check above wins, unchanged. An unattended
+      // harness run has no human AND no session mode to consult, and its
+      // existing whole-turn-stop contract (SLATE-11 AC3) must not be rewritten
+      // by a mode feature.
+      //
+      // `ask` and `trust` fall through to the REAL host — the human answers, or
+      // the fail-closed sentinel reports that nobody could be asked. Only `auto`
+      // resolves the question here, and it never calls the host at all.
+      //
+      // F-558-01 — what the `selfAnswered ??` short-circuit below does and does
+      // NOT skip, stated so a later reader does not have to re-derive it:
+      //
+      //   STILL APPLIED to a self-answered call, because they sit outside
+      //   `executeCall` for every call in this loop: the abort check, the
+      //   unattended check above, the untrusted-content gate, `reserveToolAttempt`
+      //   (the per-signature 3-attempt guard), `io.onToolCall`/`io.onToolResult`,
+      //   the slate touch, the repeated-failure hint, and the tool log.
+      //
+      //   SKIPPED, deliberately: `toolByName.get()` existence (hence the explicit
+      //   `toolByName.has` guard above), `validateAgainstSchemaObject` (the
+      //   option parse below is the schema this path honours), `requestApproval`
+      //   (that is the entire point — `auto` is the mode that declared it would
+      //   not ask), and BOTH invocation-budget calls
+      //   (`hasInvocationCapacity`/`reserveInvocation`, reachable only inside
+      //   `executeCall`). So a self-answered question does not consume
+      //   `maxToolCalls`.
+      //
+      // That last exemption is the deliberate choice, not an oversight: the
+      // budget counts REAL tool invocations, and nothing was invoked — the
+      // question was answered in-process. Spending a tool-call slot on it would
+      // charge the user's budget for work the harness did itself. The turn stays
+      // bounded regardless by `maxRounds` and by the per-signature attempt guard,
+      // neither of which this path escapes.
+      let selfAnswered: InteractiveToolResult | undefined;
+      // `toolByName.has(...)` is load-bearing, not defensive: `--deny-tools
+      // ask_user` REMOVES the tool from `deps.tools`, and without this check the
+      // interception would answer a question the operator explicitly took away —
+      // a denial silently bypassed, in exactly the mode that already skips the
+      // most. With it, a denied `ask_user` falls through to `executeCall`'s
+      // "unknown tool" refusal, identical to what ask/trust already do.
+      if (call.name === "ask_user" && toolByName.has("ask_user")) {
+        const mode = io.permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+        if (resolveQuestionAnswerer(mode) === "self") {
+          const questionInput = parseToolInput(call.input);
+          const rawOptions = Array.isArray(questionInput.options) ? questionInput.options : [];
+          const options: AskUserOption[] = rawOptions.flatMap((raw) => {
+            if (raw === null || typeof raw !== "object") return [];
+            const o = raw as Record<string, unknown>;
+            const id = typeof o.id === "string" ? o.id.trim() : "";
+            const label = typeof o.label === "string" ? o.label.trim() : "";
+            if (id.length === 0 || label.length === 0) return [];
+            const description = typeof o.description === "string" ? o.description : "";
+            return [{ id, label, description, ...(o.recommended === true ? { recommended: true } : {}) }];
+          });
+          const chosen = chooseSelfAnswer(options);
+          const question = typeof questionInput.question === "string" ? questionInput.question : "";
+          if (chosen === undefined) {
+            // Nothing to choose from is NOT an answer. Mirrors the sentinel the
+            // bridge returns when no human could be asked, so the model gets one
+            // honest outcome shape ("no answer exists") from every cause.
+            selfAnswered = {
+              output:
+                `${SELF_ANSWERED_MARKER}, but the question offered no usable options — NO answer exists. ` +
+                "State the assumption in your reply and proceed, or stop and ask in your reply text.",
+              isError: true,
+            };
+          } else {
+            io.onQuestionSelfAnswered?.(question, { id: chosen.id, label: chosen.label });
+            selfAnswered = {
+              output:
+                `${SELF_ANSWERED_MARKER}: id="${chosen.id}" label="${chosen.label}"` +
+                `${chosen.recommended === true ? " (its own recommended option)" : " (first option — none was marked recommended)"}. ` +
+                "No human saw this question. Continue, and state this choice in your reply so the user can correct it.",
+              isError: false,
+            };
+          }
+        }
+      }
       const risk = toolByName.get(call.name)?.definition.risk;
       // Only a non-`read` tool (write/shell/network/credential/delegate/
       // destructive) can carry out a side effect an injected instruction
@@ -1614,6 +1715,7 @@ async function runAgentTurnCore(
       // lone `spawn_subagent` not part of a qualifying concurrent group)
       // executes exactly as before.
       const result =
+        selfAnswered ??
         concurrentSpawnResults?.get(call.id) ??
         (await executeCall(
           call,

@@ -5,6 +5,8 @@
 
 import { expect, test } from "bun:test";
 import { runAgentTurn } from "./agent";
+import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
+import type { NormalizedMessage } from "../harness/provider/types";
 import type { AgentIO } from "./agent";
 import type { PermissionMode } from "./permission-mode";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -618,4 +620,210 @@ test("AC10: ask mode (default, no permissionMode getter) still prompts for a bac
   );
   expect(approvalCalls).toBe(1);
   expect(registry.list()).toHaveLength(1);
+});
+
+// ---------------------------------------------------------------------------
+// P1: the QUESTION axis — `ask_user` under each mode, through the real driver.
+//
+// Before this, `ask_user` was `risk: "read"` and therefore invisible to the
+// permission mode entirely; on a surface with no host the model was told
+// nobody answered (or, worse, that the user had declined) and chose for
+// itself. These pin the replacement contract: `ask`/`trust` put the question
+// to the HUMAN, `auto` answers it and says so.
+// ---------------------------------------------------------------------------
+
+const ASK_QUESTION = JSON.stringify({
+  question: "Ship the MVP or the full build?",
+  options: [
+    { id: "mvp", label: "MVP", description: "Smallest ship", recommended: true },
+    { id: "full", label: "Full", description: "Everything" },
+  ],
+});
+
+/** A host that records being asked and answers with `answer`. */
+function spyHost(answer: string): { host: () => Promise<string>; calls: number[] } {
+  const calls: number[] = [];
+  return {
+    calls,
+    host: async () => {
+      calls.push(1);
+      return answer;
+    },
+  };
+}
+
+async function runAskUserTurn(
+  mode: PermissionMode | undefined,
+  io: { host: () => Promise<string>; calls: number[] },
+): Promise<{ selfAnswered: { question: string; chosen: { id: string; label: string } }[]; toolOutput: string }> {
+  const askTool = createAskUserTool(io.host);
+  const selfAnswered: { question: string; chosen: { id: string; label: string } }[] = [];
+  const history: NormalizedMessage[] = [];
+  const agentIo: AgentIO = {
+    write: () => {},
+    ...(mode !== undefined ? { permissionMode: () => mode } : {}),
+    onQuestionSelfAnswered: (question, chosen) => {
+      selfAnswered.push({ question, chosen });
+    },
+  };
+  await runAgentTurn(
+    agentIo,
+    {
+      provider: scriptedProvider(callScript("ask_user", ASK_QUESTION)),
+      providerId: "s",
+      modelId: "m",
+      tools: [askTool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  const toolMessage = history.find((m) => m.role === "tool");
+  return { selfAnswered, toolOutput: toolMessage?.content ?? "" };
+}
+
+test("P1/ask: the question goes to the HUMAN, and the model never self-answers", async () => {
+  const io = spyHost("full");
+  const { selfAnswered, toolOutput } = await runAskUserTurn("ask", io);
+  expect(io.calls).toHaveLength(1); // the host was consulted
+  expect(selfAnswered).toEqual([]); // …and nothing was answered on the user's behalf
+  expect(toolOutput).toContain('id="full"');
+});
+
+test("P1/trust: the question STILL goes to the human — trust is about actions, not judgement", async () => {
+  // The regression this whole feature exists for: under `trust` the model used
+  // to end up choosing for the user. A host must be consulted, and the chosen
+  // option must be the user's, not the recommended one.
+  const io = spyHost("full"); // note: NOT the recommended option
+  const { selfAnswered, toolOutput } = await runAskUserTurn("trust", io);
+  expect(io.calls).toHaveLength(1);
+  expect(selfAnswered).toEqual([]);
+  expect(toolOutput).toContain('id="full"');
+  expect(toolOutput).not.toContain('id="mvp"');
+});
+
+test("P1/auto: the host is NEVER consulted, the model answers, and the answer is announced", async () => {
+  const io = spyHost("full"); // would be the human's pick — must not be reachable
+  const { selfAnswered, toolOutput } = await runAskUserTurn("auto", io);
+  expect(io.calls).toEqual([]); // no human was asked at all
+  expect(selfAnswered).toEqual([{ question: "Ship the MVP or the full build?", chosen: { id: "mvp", label: "MVP" } }]);
+  expect(toolOutput).toContain("[auto mode]");
+  expect(toolOutput).toContain("No human saw this question");
+});
+
+test("P1/auto: the tool result never claims the user chose — it names auto mode as the author", async () => {
+  const { toolOutput } = await runAskUserTurn("auto", spyHost("full"));
+  expect(toolOutput).not.toMatch(/User selected/);
+  expect(toolOutput).not.toMatch(/User answered/);
+  expect(toolOutput).toMatch(/without asking the user/);
+});
+
+test("P1/no getter: behaves exactly like ask — the human answers", async () => {
+  const io = spyHost("mvp");
+  const { selfAnswered } = await runAskUserTurn(undefined, io);
+  expect(io.calls).toHaveLength(1);
+  expect(selfAnswered).toEqual([]);
+});
+
+test("P1/auto: a question offering no usable options is UNANSWERABLE, never a fabricated choice", async () => {
+  const io = spyHost("mvp");
+  const selfAnswered: unknown[] = [];
+  const history: NormalizedMessage[] = [];
+  const agentIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onQuestionSelfAnswered: (...args) => {
+      selfAnswered.push(args);
+    },
+  };
+  await runAgentTurn(
+    agentIo,
+    {
+      provider: scriptedProvider(callScript("ask_user", '{"question":"q","options":[]}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [createAskUserTool(io.host)],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(io.calls).toEqual([]);
+  expect(selfAnswered).toEqual([]); // nothing was "chosen"
+  const toolMessage = history.find((m) => m.role === "tool");
+  expect(toolMessage?.content).toMatch(/NO answer exists/);
+});
+
+test("P1/unattended wins over auto: the SLATE-11 whole-turn stop is unchanged", async () => {
+  // Ordering guard. An unattended harness run has no human AND no session mode
+  // to consult; a mode feature must not rewrite that contract into a
+  // self-answer.
+  const io = spyHost("mvp");
+  let terminalReason: string | undefined;
+  const terminalStates: string[] = [];
+  const agentIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onTerminalState: (state) => {
+      terminalReason = state.reason;
+      terminalStates.push(state.reason);
+    },
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(
+    agentIo,
+    {
+      provider: scriptedProvider(callScript("ask_user", ASK_QUESTION)),
+      providerId: "s",
+      modelId: "m",
+      tools: [createAskUserTool(io.host)],
+      systemInstruction: "sys",
+      idSeq,
+      unattended: true,
+    },
+    history,
+    "go",
+  );
+  expect(terminalStates).toEqual(["ask_user_unanswerable"]);
+  expect(terminalReason).toBe("ask_user_unanswerable");
+  expect(io.calls).toEqual([]);
+});
+
+test("P1/auto: --deny-tools ask_user is NOT bypassed — a denied tool stays denied", async () => {
+  // Review finding. `--deny-tools ask_user` removes the tool from `deps.tools`;
+  // the interception keyed off the CALL NAME alone, so under `auto` it answered
+  // a question the operator had explicitly taken away — a denial bypassed in the
+  // very mode that skips the most. The `toolByName.has(...)` guard makes this
+  // fall through to the same "unknown tool" refusal ask/trust already produce.
+  const host = spyHost("mvp");
+  const selfAnswered: unknown[] = [];
+  const history: NormalizedMessage[] = [];
+  const agentIo: AgentIO = {
+    write: () => {},
+    permissionMode: () => "auto",
+    onQuestionSelfAnswered: (...args) => {
+      selfAnswered.push(args);
+    },
+  };
+  await runAgentTurn(
+    agentIo,
+    {
+      provider: scriptedProvider(callScript("ask_user", ASK_QUESTION)),
+      providerId: "s",
+      modelId: "m",
+      // The denial's effect: the tool is simply absent from the roster.
+      tools: [],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(host.calls).toEqual([]); // no host, as ever under auto
+  expect(selfAnswered).toEqual([]); // …and no self-answer either
+  const toolMessage = history.find((m) => m.role === "tool");
+  expect(toolMessage?.content).toMatch(/unknown tool/);
+  expect(toolMessage?.content).not.toMatch(/auto mode/);
 });

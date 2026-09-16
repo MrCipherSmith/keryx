@@ -43,6 +43,15 @@ export function llmProvidersConfigPath(dir?: string): string {
   return path.join(keryxConfigDir(dir), "llm-providers.json");
 }
 
+export function normalizeOpenAiCompatBaseUrl(
+  raw: string,
+  paths?: { chatPath?: string; modelsPath?: string },
+): string {
+  const trimmed = raw.trim().replace(new RegExp("/+$"), "");
+  if (paths?.chatPath !== undefined || paths?.modelsPath !== undefined) return trimmed;
+  return trimmed.replace(new RegExp("/v1$", "i"), "");
+}
+
 function readJson(file: string): unknown | undefined {
   try {
     if (!existsSync(file)) return undefined;
@@ -83,7 +92,7 @@ export function loadCustomCompatProviders(dir?: string): CustomCompatProvider[] 
     .map((p) => ({
       ...p,
       name: p.name.trim(),
-      baseUrl: p.baseUrl.replace(/\/+$/, ""),
+      baseUrl: normalizeOpenAiCompatBaseUrl(p.baseUrl, p),
       ...(typeof p.apiKey === "string" && p.apiKey.length > 0 ? { apiKey: p.apiKey } : {}),
     }));
 }
@@ -343,7 +352,10 @@ export function saveCustomCompatProvider(provider: CustomCompatProvider, dir?: s
       acc[p.name] = p;
       return acc;
     }, {});
-    current[provider.name] = provider;
+    current[provider.name] = {
+      ...provider,
+      baseUrl: normalizeOpenAiCompatBaseUrl(provider.baseUrl, provider),
+    };
     writeOwnerOnlyFile(
       llmProvidersConfigPath(dir),
       `${JSON.stringify({ schemaVersion: 1, providers: current }, null, 2)}\n`,

@@ -97,6 +97,28 @@ export type InteractiveAgentToolsInput = {
    * roster to be the same as another tool's.
    */
   denyTools?: readonly string[];
+  /**
+   * Whether THIS session has a surface that can put a question to a human.
+   *
+   * `false` keeps `ask_user` out of the roster entirely, which is the honest
+   * shape when the answer is known: a tool whose only possible outcomes are
+   * "this surface has no question host" costs a model round trip to discover
+   * what the roster already knew, and every tool description is re-read on every
+   * round. Same principle `jobRegistry` and `mcp` established above — advertising
+   * a capability backed by nothing is worse than not offering it.
+   *
+   * `undefined` (the default) REGISTERS the tool, and that default is
+   * load-bearing rather than lazy: the OpenTUI surface builds this roster and only
+   * registers its host afterwards (`setAskUserHost` runs later in
+   * `launchTuiAgentShell`), so a default derived from a live `hasAskUserHost()`
+   * check would silently drop the tool from the one surface that can always
+   * answer. A surface that knows it cannot ask must say so.
+   *
+   * Wired today at exactly one place — `shell.ts`'s readline branch — where the
+   * answer is a fact about the session's OWN input stream rather than a guess:
+   * see the call site for what makes it provable.
+   */
+  askUserAvailable?: boolean;
 };
 
 /**
@@ -212,7 +234,16 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
   const offered = hasMetaproject
     ? built
     : built.filter((tool) => !metaprojectTools.includes(tool) || METAPROJECT_FREE_TOOLS.has(tool.definition.name));
-  return denyInteractiveTools(offered, denied);
+  // Applied AFTER `assertDeniableTools`, not before: the assertion checks a
+  // denial against the FULL built set on purpose, so `--deny-tools ask_user` must
+  // keep resolving to a real tool name even in a session that never offered it —
+  // otherwise the same command line would fail here and pass in the next
+  // directory, which is the failure that assertion exists to prevent.
+  const reachable =
+    input.askUserAvailable === false
+      ? offered.filter((tool) => tool.definition.name !== "ask_user")
+      : offered;
+  return denyInteractiveTools(reachable, denied);
 }
 
 export function interactiveAgentToolNames(tools: readonly InteractiveTool[]): string[] {

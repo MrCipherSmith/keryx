@@ -24,6 +24,79 @@ export interface AskUserRequest {
 export type AskUserFn = (request: AskUserRequest) => Promise<string>;
 
 /**
+ * The answer a host returns when the user pressed Esc on a question the host
+ * DID show. A real dismissal: the human saw the options and declined to pick.
+ */
+export const ASK_USER_CANCEL = "__cancel__";
+
+/**
+ * The answer a host returns when the question could NOT reach a human at all —
+ * no host registered on this surface (`src/tui/ask-user-bridge.ts`), a picker
+ * that could not be mounted, or a host torn down mid-turn.
+ *
+ * A distinct sentinel rather than a reuse of {@link ASK_USER_CANCEL}, and the
+ * reason matters: the two demand opposite next moves. After a real dismissal the
+ * honest move is to report the decline; after a question NOBODY ever saw the
+ * honest move is to say so. Collapsing them is how a session comes to look like
+ * it "answered its own questions": on every surface that registers no host
+ * (readline `--no-tui`, a non-TTY, any TUI init fallback) the tool answered
+ * "User cancelled the question", the model picked an option itself, and the
+ * transcript claimed the user had declined. Fail closed — no answer, and the
+ * NAME OF THE CAUSE travels with the result.
+ */
+export const ASK_USER_UNANSWERABLE = "__unanswerable__";
+
+/** The no-host-registered cause of {@link ASK_USER_UNANSWERABLE}. */
+export const ASK_USER_NO_HOST = "__no_host__";
+
+/**
+ * The ceiling `promptAskUser` applies when the caller says the surface is
+ * NON-INTERACTIVE (no TTY): nobody is there to type, so waiting forever is not
+ * patience, it is a hang. An interactive prompt passes no ceiling on purpose —
+ * a human may legitimately take minutes, and a deadline that cancels a real
+ * person's answer would be a worse defect than the one it fixes.
+ */
+export const ASK_USER_NONINTERACTIVE_TIMEOUT_MS = 30_000;
+
+/**
+ * Which option an `auto`-mode self-answer picks, when no human will.
+ *
+ * Extracted and pure so the rule is testable without a terminal or a session:
+ * a reviewer inverted an equivalent comparison elsewhere in this repository
+ * (`return id === "allow"` making "Deny" approve) and the full suite stayed
+ * green. The rule is deliberately narrow — prefer the model's own
+ * `recommended` option, else the FIRST one — and it never invents an option,
+ * because a fabricated choice is worse than an honest "nobody answered".
+ *
+ * Returns `undefined` when there is nothing to choose from, which the caller
+ * must render as `ASK_USER_UNANSWERABLE` rather than as an answer.
+ *
+ * The minimum is the tool's OWN minimum ({@link MIN_ASK_USER_OPTIONS}), not a
+ * second opinion: `invoke()` refuses a question offering fewer than two valid
+ * options, and an `auto` path that happily answered one would be the permissive
+ * half of a disagreement about what a valid question is — with the permissive
+ * half being the one that speaks for the user. A question the tool would refuse
+ * must not be answered just because nobody had to be asked it.
+ */
+export const MIN_ASK_USER_OPTIONS = 2;
+
+export function chooseSelfAnswer(options: readonly AskUserOption[]): AskUserOption | undefined {
+  if (options.length < MIN_ASK_USER_OPTIONS) {
+    return undefined;
+  }
+  const recommended = options.find((option) => option.recommended === true);
+  return recommended ?? options[0];
+}
+
+/**
+ * The marker an `auto`-mode self-answer carries into the tool result, so the
+ * MODEL also knows nobody answered. Worded as a fact about provenance, not a
+ * fake quotation: attributing a choice to a user who never made it is the bug
+ * this whole axis exists to close.
+ */
+export const SELF_ANSWERED_MARKER = "[auto mode] chose this without asking the user";
+
+/**
  * Build the `ask_user` tool. `ask` is injected by the host (TUI wires the
  * composer-dock picker; tests inject a stub).
  */
@@ -70,8 +143,8 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
         return { output: "ask_user requires a non-empty 'question'", isError: true };
       }
       const rawOpts = input.options;
-      if (!Array.isArray(rawOpts) || rawOpts.length < 2) {
-        return { output: "ask_user requires at least 2 options", isError: true };
+      if (!Array.isArray(rawOpts) || rawOpts.length < MIN_ASK_USER_OPTIONS) {
+        return { output: `ask_user requires at least ${MIN_ASK_USER_OPTIONS} options`, isError: true };
       }
       const options: AskUserOption[] = [];
       for (const raw of rawOpts) {
@@ -92,8 +165,11 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
           ...(o.recommended === true ? { recommended: true } : {}),
         });
       }
-      if (options.length < 2) {
-        return { output: "ask_user: need at least 2 valid options with id+label", isError: true };
+      if (options.length < MIN_ASK_USER_OPTIONS) {
+        return {
+          output: `ask_user: need at least ${MIN_ASK_USER_OPTIONS} valid options with id+label`,
+          isError: true,
+        };
       }
       try {
         const chosen = await ask({
@@ -108,8 +184,25 @@ export function createAskUserTool(ask: AskUserFn): InteractiveTool {
             isError: false,
           };
         }
-        if (chosen === "__cancel__") {
-          return { output: "User cancelled the question (Esc).", isError: true };
+        if (chosen === ASK_USER_NO_HOST || chosen === ASK_USER_UNANSWERABLE) {
+          return {
+            output:
+              `ask_user was NOT shown to anyone (${
+                chosen === ASK_USER_NO_HOST
+                  ? "this surface has no question host"
+                  : "the question could not be displayed"
+              }) — NO answer exists. Do NOT infer, assume, or choose an option on the user's behalf: ` +
+              "state the assumption in your reply and proceed, or stop and ask in your reply text.",
+            isError: true,
+          };
+        }
+        if (chosen === ASK_USER_CANCEL) {
+          return {
+            output:
+              "The question was dismissed without an answer (Esc), or its picker could not be mounted. " +
+              "No option was selected — do not treat this as a user choice.",
+            isError: true,
+          };
         }
         return { output: `User answered (freeform): ${chosen}`, isError: false };
       } catch (cause) {

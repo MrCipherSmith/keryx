@@ -126,6 +126,9 @@ import {
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
+import { promptAskUser } from "./ask-user-readline";
+import { ASK_USER_NONINTERACTIVE_TIMEOUT_MS } from "../harness/tool/builtin/ask-user-tool";
+import { setAskUserHost } from "../tui/ask-user-bridge";
 
 export type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
 
@@ -1366,6 +1369,53 @@ async function runAgentRepl(
     }
     flushSessionCheckpoint();
   };
+  // The readline host for `ask_user`.
+  //
+  // Until now `setAskUserHost` had exactly ONE caller, the OpenTUI shell, so
+  // `--no-tui`, a non-TTY, and the documented TUI-init fallback to THIS REPL had
+  // no way to put a question to a human: `ask_user` reached the bridge host-less,
+  // the model was told nobody answered, and it then chose on the user's behalf.
+  // The fallback path was the sharpest case — the TUI registers a host and clears
+  // it in `onDestroy`, so a session landing here after a failed TUI init has, by
+  // construction, no host at all.
+  //
+  // Registered AFTER the shared `readLine` iterator exists and reads through it,
+  // exactly like `requestApproval` above, so a mid-turn question never races the
+  // main loop. Assigned unconditionally rather than "if unset": a stale host left
+  // by a torn-down TUI must not win.
+  //
+  // Deliberately NOT unregistered on the throwing path: a throw escapes to a
+  // caller that tears the process down, and unlike the TUI there is no live
+  // renderer to protect. A stale host here reads a CLOSED iterator, which
+  // resolves `{done: true}` -> `undefined` -> `ASK_USER_UNANSWERABLE` — failing
+  // closed instead of hanging, which is the only outcome that would matter.
+  setAskUserHost((request) => {
+    stopSpinner();
+    return promptAskUser(
+      { out, readLine: async () => await readLine() },
+      request,
+      { yellow: style.yellow, dim: style.dim, green: style.green },
+      GUTTER,
+      // A ceiling ONLY where nobody is there to type. On a TTY the wait is the
+      // human's to spend; without one, waiting forever is the hang `ask_user`
+      // shipped with (F-558-03).
+      process.stdin.isTTY === true ? {} : { timeoutMs: ASK_USER_NONINTERACTIVE_TIMEOUT_MS },
+    );
+  });
+
+  agentIo.onQuestionSelfAnswered = (question, chosen) => {
+    stopSpinner();
+    // NOT dimmed — same principle as `onAutoApproved` directly above. The mode
+    // was chosen once; this question was never put to anyone, so this line is
+    // the ONLY record of the judgement made on the user's behalf. It names the
+    // question and the option, not merely the fact, so the user can correct it.
+    const q = question.length > 100 ? `${question.slice(0, 97)}…` : question;
+    out(
+      `${GUTTER}${style.yellow(`◇ auto-answered (${permissionMode})`)} ` +
+        `${style.dim(`"${q}" → ${chosen.label}`)}\n`,
+    );
+  };
+
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
@@ -1376,6 +1426,10 @@ async function runAgentRepl(
       // Flow 173 (AC7): sweep every tracked background job (process-group
       // SIGTERM→SIGKILL) on real session exit.
       await deps.sweepBackgroundJobs?.();
+      // LAST, immediately before the return: no host may outlive the iterator it
+      // reads. Deliberately after the sweep, not before — a sweep is teardown,
+      // and teardown that somehow asked a question should still reach a host.
+      setAskUserHost(undefined);
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -1387,6 +1441,7 @@ async function runAgentRepl(
         // SLATE-5 close trigger: shell exit (explicit command).
         await closeSlateSession(slateSession, mintTimestampAttemptId);
         await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
+        setAskUserHost(undefined); // LAST: no host may outlive the iterator it reads
         return;
       }
       if (command === "/help") {
@@ -2509,6 +2564,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           getSessionDir: () => slateSessionBox.current?.dir,
           jobRegistry,
           mcp: mcpRuntime,
+          askUserAvailable: oneShotPrompt === undefined && process.stdin.isTTY === true,
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         maxRounds: resolveAgentMaxRounds(),

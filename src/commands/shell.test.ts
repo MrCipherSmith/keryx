@@ -1500,3 +1500,48 @@ describe("--deny-tools", () => {
     expect(flags.denyTools).toEqual(["web_search"]);
   });
 });
+
+// --- F-558-06: the readline call site decides availability from its own --
+// --- input stream, and both halves of that decision must stay -------------
+//
+// `runAgentRepl` has no injection seam (the same precedent the SLATE-3a /
+// SLATE-5 audits above record), so this is a source-text audit. The BEHAVIOUR it
+// guards is proven separately and executable: the shared line iterator yields
+// exactly `oneShotPrompt` and then ends, so a mid-turn question reads
+// `undefined` and the host returns ASK_USER_UNANSWERABLE.
+describe("F-558-06 — shell.ts decides ask_user availability from its own input stream (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const agentModeBranchEnd = shellSource.indexOf("\n    } else {", agentModeBranchStart);
+  const agentModeBranch = shellSource.slice(
+    agentModeBranchStart,
+    agentModeBranchEnd === -1 ? agentModeBranchStart + 4000 : agentModeBranchEnd,
+  );
+
+  test("the readline buildInteractiveAgentTools call passes askUserAvailable", () => {
+    // Matched by SHAPE, not by a character window: this file already carries two
+    // audits whose fixed windows broke when neighbouring code grew, and a ruler
+    // that has to be re-measured on every edit is a ruler that will fail falsely.
+    expect(agentModeBranch).toMatch(/askUserAvailable:\s*oneShotPrompt === undefined && process\.stdin\.isTTY === true/);
+  });
+
+  test("availability requires BOTH a non-one-shot session AND a TTY — neither alone is enough", () => {
+    // One-shot: the iterator ends after the prompt, so nothing can answer.
+    // No TTY: the lines that exist are the SCRIPT's own, so an answer would be
+    // taken from input meant for the user's next message. Both are facts about
+    // this session's input, not guesses about whether a human is around.
+    const idx = agentModeBranch.indexOf("askUserAvailable:");
+    expect(idx).toBeGreaterThanOrEqual(0);
+    const line = agentModeBranch.slice(idx, idx + 200);
+    expect(line).toContain("oneShotPrompt === undefined");
+    expect(line).toContain("process.stdin.isTTY === true");
+  });
+
+  test("the decision is made from the same variable that builds the line iterator", () => {
+    // If `oneShotPrompt` ever stopped being what `sharedLines` switches on, the
+    // availability test above would be reading a variable that no longer decides
+    // anything — so the wiring is asserted, not assumed.
+    expect(shellSource).toMatch(/const oneShotPrompt = flags\.printPrompt;/);
+    expect(shellSource).toMatch(/oneShotPrompt === undefined\s*\?\s*\{ \[Symbol\.asyncIterator\]: \(\) => lineIterator \}/);
+  });
+});
