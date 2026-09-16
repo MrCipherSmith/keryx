@@ -259,3 +259,4 @@ for its wiring pin.
 - 2026-09-16T11:33:50.890Z - task-attempt: T11: started (attempt 1) — review round: boss-style correctness reviewer + blast-radius reviewer dispatched over the P1 diff
 - 2026-09-16T11:39:42.078Z - task-done: T12: Journal deviations and mark P1 in the requirements package
 - 2026-09-16T12:03:11.063Z - task-attempt: T11: blocked (attempt 2) — both dispatched reviewers (code-boss-reviewer, review-regression) stalled: 179-byte transcripts, no output in 29 minutes; stopping them and reviewing the diff myself
+- 2026-09-16T12:17:25.070Z - task-done: T11: Review the P1 diff and fix findings

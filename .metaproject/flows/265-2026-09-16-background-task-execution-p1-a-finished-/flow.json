@@ -9,7 +9,7 @@
   "title": "Background task execution P1: a finished task wakes the agent without polling",
   "status": "in-progress",
   "createdAt": "2026-09-16T10:47:30.558Z",
-  "updatedAt": "2026-09-16T10:51:08.878Z",
+  "updatedAt": "2026-09-16T12:17:25.070Z",
   "source": {
     "type": "description",
     "ref": null
@@ -92,7 +92,7 @@
       "id": "T5",
       "title": "RED tests for AC1-AC11",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -106,97 +106,147 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Registry: observed, drainUndelivered, onCompletion, hold-timeout kill reason",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T11:02:58.260Z",
+            "outcome": "started",
+            "detail": "registry delivery bookkeeping, implemented by the orchestrator"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Agent loop: drain at the round boundary and build the notification message",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T11:08:10.948Z",
+            "outcome": "started",
+            "detail": "agent-loop delivery: message builder, round-boundary drain, resolvers"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Agent loop: hold the turn at the text-only finish for sessions that cannot be woken",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T11:09:57.849Z",
+            "outcome": "started",
+            "detail": "hold at the text-only finish for sessions that cannot be woken"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Shells: readline input-vs-completion race, TUI idle wake, wake cap and reset",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T11:13:08.317Z",
+            "outcome": "started",
+            "detail": "shells: readline race, TUI idle wake, wake cap and reset"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
       "title": "Verify: typecheck, P0 regression suites, real --print hold smoke",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T11:18:17.603Z",
+            "outcome": "started",
+            "detail": "verify: typecheck, P0+P1 suites, real --print hold smoke"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "full suite 10401 pass / 20 skip / 0 fail; live hold smoke on a real sleep-2 process: 3 rounds, elapsed 2023ms, one notification with SMOKE_DONE and status=completed; health PASS 94"
     },
     {
       "id": "T11",
       "title": "Review the P1 diff and fix findings",
       "kind": "review",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-16T11:33:50.890Z",
+            "outcome": "started",
+            "detail": "review round: boss-style correctness reviewer + blast-radius reviewer dispatched over the P1 diff"
+          },
+          {
+            "at": "2026-09-16T12:03:11.063Z",
+            "outcome": "blocked",
+            "detail": "both dispatched reviewers (code-boss-reviewer, review-regression) stalled: 179-byte transcripts, no output in 29 minutes; stopping them and reviewing the diff myself"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "reviewed the P1 diff myself after both dispatched reviewers stalled; 2 findings (blocker + major) at the text-only finish, confirmed by execution, fixed in 50d12cf, round 2026-09-16-ingest-main-r03 closed with both dispositions"
     },
     {
       "id": "T12",
       "title": "Journal deviations and mark P1 in the requirements package",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -204,7 +254,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "README/specification/PRD marked P0+P1 implemented; metrics M5,M6,M11,M16 -> met (P1), M12 -> met (P1, audit), M10 re-proved at 10401 pass; P1 deviations journaled"
     }
   ],
   "history": [
@@ -285,6 +337,81 @@
       "at": "2026-09-16T10:51:08.878Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1) — 265-T5 tests-creator dispatch (RED tests for AC1-AC10)"
+    },
+    {
+      "at": "2026-09-16T11:02:58.166Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for AC1-AC11"
+    },
+    {
+      "at": "2026-09-16T11:02:58.260Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — registry delivery bookkeeping, implemented by the orchestrator"
+    },
+    {
+      "at": "2026-09-16T11:08:10.807Z",
+      "event": "task-done",
+      "detail": "T6: Registry: observed, drainUndelivered, onCompletion, hold-timeout kill reason"
+    },
+    {
+      "at": "2026-09-16T11:08:10.948Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — agent-loop delivery: message builder, round-boundary drain, resolvers"
+    },
+    {
+      "at": "2026-09-16T11:09:57.755Z",
+      "event": "task-done",
+      "detail": "T7: Agent loop: drain at the round boundary and build the notification message"
+    },
+    {
+      "at": "2026-09-16T11:09:57.849Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — hold at the text-only finish for sessions that cannot be woken"
+    },
+    {
+      "at": "2026-09-16T11:13:08.223Z",
+      "event": "task-done",
+      "detail": "T8: Agent loop: hold the turn at the text-only finish for sessions that cannot be woken"
+    },
+    {
+      "at": "2026-09-16T11:13:08.317Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — shells: readline race, TUI idle wake, wake cap and reset"
+    },
+    {
+      "at": "2026-09-16T11:18:16.655Z",
+      "event": "task-done",
+      "detail": "T9: Shells: readline input-vs-completion race, TUI idle wake, wake cap and reset"
+    },
+    {
+      "at": "2026-09-16T11:18:17.603Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — verify: typecheck, P0+P1 suites, real --print hold smoke"
+    },
+    {
+      "at": "2026-09-16T11:33:48.993Z",
+      "event": "task-done",
+      "detail": "T10: Verify: typecheck, P0 regression suites, real --print hold smoke"
+    },
+    {
+      "at": "2026-09-16T11:33:50.890Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — review round: boss-style correctness reviewer + blast-radius reviewer dispatched over the P1 diff"
+    },
+    {
+      "at": "2026-09-16T11:39:42.078Z",
+      "event": "task-done",
+      "detail": "T12: Journal deviations and mark P1 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T12:03:11.063Z",
+      "event": "task-attempt",
+      "detail": "T11: blocked (attempt 2) — both dispatched reviewers (code-boss-reviewer, review-regression) stalled: 179-byte transcripts, no output in 29 minutes; stopping them and reviewing the diff myself"
+    },
+    {
+      "at": "2026-09-16T12:17:25.070Z",
+      "event": "task-done",
+      "detail": "T11: Review the P1 diff and fix findings"
     }
   ]
 }
