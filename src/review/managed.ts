@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, rm } from "node:fs/promises";
+import { mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { validateAgainstSchemaObject } from "../contracts/validator";
 import { loadSchema, validateJson } from "../gdskills/contracts";
@@ -36,6 +36,8 @@ import {
   renderFilterStatsMarkdown,
   type ReviewFilterStats,
 } from "./filter-stats";
+import { locateFinding, MAX_LOCATE_FILE_BYTES } from "./locate";
+import { repairMechanicalOmissions, type FindingRepair } from "./repair";
 import { writeReviewNotes, type ReviewNoteResult } from "./review-notes";
 import {
   DEFAULT_VERIFICATION_MODE,
@@ -221,6 +223,24 @@ export async function createManagedReviewPackage(
     source: input.findings,
     reviewers,
   });
+  // Typing, filled in; judgement, still refused. Runs BEFORE `assignGlobalIds`,
+  // because a finding with no `id` mints the key `<reviewId>#undefined` and five
+  // of them then collide on it — which is how a round was lost to a field the
+  // report's own ordering already contained.
+  const repairs = repairMechanicalOmissions(reported);
+
+  // Resolved HERE rather than beside `buildManifest`, because the locator needs
+  // it: a round is a claim about a commit, and its findings are located at that
+  // commit rather than against whatever the tree currently holds.
+  const head = await resolveTargetHead(input);
+
+  // The line becomes a derived fact here, BEFORE anything downstream reads it:
+  // the verifier cites a finding, the cap reports one by site, `scope.md` lists
+  // them, and every one of those would otherwise be quoting a number nobody
+  // checked. A finding with no quote is untouched — it keeps whatever it said,
+  // and says so by carrying no locator.
+  await anchorFindings(reported, input, head);
+
   // Minted BEFORE the verifier runs, because a claim names a finding by
   // `global_id` and the key has to exist for it to be resolvable. Round N+1
   // carries round N's key verbatim; only a finding without one is minted here.
@@ -333,12 +353,6 @@ export async function createManagedReviewPackage(
     externalRetained: scoped.external.length,
     ...(input.refuted === undefined ? {} : { roundDismissed: roundDismissed.length }),
   });
-  // The commit this round ran against. Resolved HERE rather than left to the
-  // caller because leaving it to the caller is what produced a repository full
-  // of packages with no head at all: `ManagedReviewTarget.head` existed, the
-  // schema accepted it, the completion gate compared against it, and nothing on
-  // the writing side ever set it. See {@link resolveTargetHead}.
-  const head = await resolveTargetHead(input);
   const manifest = buildManifest({
     input,
     target: targetWithHead(input.target, head),
@@ -348,6 +362,7 @@ export async function createManagedReviewPackage(
     coverage,
     at,
     filterStats,
+    repairs,
   });
 
   const validation = await validateManagedReviewManifest(input.cwd, manifest);
@@ -904,6 +919,7 @@ function buildManifest(args: {
   coverage: ReviewCoverageEntry[];
   at: string;
   filterStats: ReviewFilterStats;
+  repairs: FindingRepair[];
 }): ManagedReviewManifest {
   // Flow 209 AC2. Written only when the caller supplied one: the property is
   // omitted rather than set to `null`, so `keryx review status` can tell "nobody
@@ -928,6 +944,13 @@ function buildManifest(args: {
     },
     coverage: args.coverage,
     filter_stats: args.filterStats,
+    // Written only when something was repaired. An empty array on every package
+    // would say "a repair pass ran and did nothing" on records where the
+    // distinction never arose — the same rule `cross_family_review` above
+    // follows, and for the same reason.
+    ...(args.repairs.length === 0 ? {} : { repairs: args.repairs }),
+    // Same rule: absent means nobody reported, which is not the same as zero.
+    ...(args.input.cost === undefined ? {} : { cost: args.input.cost }),
     ...(crossFamily === undefined ? {} : { cross_family_review: crossFamily }),
     createdAt: args.at,
     updatedAt: args.at,
@@ -1040,6 +1063,149 @@ function triage(
   });
 }
 
+/**
+ * Replace every quoted finding's reported line with the line its quote is on.
+ *
+ * Runs over the round's own tree (`input.cwd`), which for an ingest at the
+ * round's head IS the head — and when it is not, the locator says so rather
+ * than guessing: a quote that no longer appears reads `unlocatable`, which is
+ * the honest answer for a report ingested against a moved tree.
+ *
+ * `readTreeFile` is injectable so a test can state a tree in a map instead of
+ * on disk; production reads the working tree.
+ */
+async function anchorFindings(
+  findings: Array<StructuredReviewFinding & { summary: string }>,
+  input: ManagedReviewInput,
+  head: string | null,
+): Promise<void> {
+  const read =
+    input.readTreeFile ??
+    // AT THE HEAD THE ROUND RECORDS, not at whatever the tree happens to hold.
+    //
+    // This is the defect the mechanism found in its own first use. The round on
+    // PR #560 was ingested after its fix commit had rewritten the very lines
+    // the findings quoted, and five of six quotes came back `unlocatable` — a
+    // true statement about the working tree and a useless one about the round.
+    // Re-checked against the recorded head, all six located. The historical
+    // audit had already measured the same shape from the other side: 108 of 582
+    // recorded anchors name a file absent at their own package's head.
+    //
+    // A round is a claim about a commit. Locating it anywhere else answers a
+    // question nobody asked.
+    (head === null
+      ? readFromWorkingTree(input)
+      : async (relative: string): Promise<string | null> => {
+          const contained = await containedRelativePath(input.cwd, relative);
+          return contained === null ? null : readFileAtCommit(input.cwd, head, contained);
+        });
+  for (const finding of findings) {
+    const locator = await locateFinding(finding, read);
+    if (locator === undefined) {
+      // No quote, so nothing was checked — and a locator carried in from a
+      // previous round describes a check that did not happen this time. Round
+      // N+1 echoing a finding out of `prior_findings` brings the old pair with
+      // it, and leaving it would write an unverified line under a record that
+      // claims every line is derived. Clearing it makes "no quote means no
+      // locator" true of the record, not just of the happy path.
+      delete finding.locator;
+      continue;
+    }
+    if (locator.state === "derived") {
+      finding.line = locator.line;
+      finding.locator = {
+        state: "derived",
+        method: locator.method,
+        ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
+      };
+      continue;
+    }
+    // Null, not the reported number. A line nobody could confirm is worse than
+    // no line: it is acted on, and the acting is where the cost lands.
+    finding.line = null;
+    finding.locator = {
+      state: "unlocatable",
+      reason: locator.reason,
+      ...(locator.reported_line === undefined ? {} : { reported_line: locator.reported_line }),
+    };
+  }
+}
+
+/**
+ * `relative` as an absolute path inside `cwd`, or null when it is not.
+ *
+ * `realpath` on both sides, because a lexical comparison is what a symlink
+ * defeats — see the round that found it.
+ */
+async function containedRelativePath(cwd: string, relative: string): Promise<string | null> {
+  const root = await realpath(cwd).catch(() => path.resolve(cwd));
+  const resolved = path.resolve(root, relative);
+  const real = await realpath(resolved).catch(() => null);
+  if (real === null || (real !== root && !real.startsWith(`${root}${path.sep}`))) {
+    return null;
+  }
+  return real;
+}
+
+/** One file as it stood at `commit`, or null. */
+async function readFileAtCommit(cwd: string, commit: string, absolute: string): Promise<string | null> {
+  const relative = path.relative(await realpath(cwd).catch(() => path.resolve(cwd)), absolute);
+  try {
+    const proc = Bun.spawn(["git", "show", `${commit}:${relative}`], {
+      cwd,
+      stdout: "pipe",
+      stderr: "ignore",
+      stdin: "ignore",
+    });
+    const [stdout, exitCode] = await Promise.all([new Response(proc.stdout).text(), proc.exited]);
+    if (exitCode !== 0 || stdout.length > MAX_LOCATE_FILE_BYTES) {
+      return null;
+    }
+    return stdout;
+  } catch {
+    return null;
+  }
+}
+
+/** The fallback when the round records no commit: the tree as it stands. */
+function readFromWorkingTree(input: ManagedReviewInput): (relative: string) => Promise<string | null> {
+  return async (relative: string): Promise<string | null> => {
+      // Contained to the round's tree, and contained against the FILE SYSTEM
+      // rather than against the string.
+      //
+      // The first version compared resolved paths with `startsWith`, which
+      // inspects only the spelling. A symlink whose name sits inside the tree
+      // and whose target does not — `src/link -> /etc/passwd`, plantable by
+      // anyone who can add a file to the branch under review — passed that
+      // check, and `readFile` then followed it. Worse than a read: because the
+      // locator records `derived` or `unlocatable`, a finding's quote becomes a
+      // line-by-line oracle for any file the ingest process can open. Found by
+      // this change's own review round, reproduced against `/etc/passwd`.
+      //
+      // `realpath` is therefore taken on both sides before comparing. A path
+      // that cannot be resolved does not exist, which is already `null`.
+      const root = await realpath(input.cwd).catch(() => path.resolve(input.cwd));
+      const resolved = path.resolve(root, relative);
+      const real = await realpath(resolved).catch(() => null);
+      if (real === null || (real !== root && !real.startsWith(`${root}${path.sep}`))) {
+        return null;
+      }
+      try {
+        // Size is bounded here rather than inside the matcher: locating is
+        // O(file lines x quote lines), so an unbounded file is an unbounded
+        // round. A lockfile is a real, ordinary example of a large file a
+        // finding could name.
+        const info = await stat(real);
+        if (!info.isFile() || info.size > MAX_LOCATE_FILE_BYTES) {
+          return null;
+        }
+        return await readFile(real, "utf8");
+      } catch {
+        return null;
+      }
+  };
+}
+
 /** The persisted record: exactly the properties `review-finding.schema.json` allows. */
 function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFinding {
   const record: StructuredReviewFinding = {
@@ -1057,6 +1223,15 @@ function toContractFinding(finding: StructuredReviewFinding): StructuredReviewFi
   }
   if (finding.line !== undefined) {
     record.line = finding.line;
+  }
+  // The quote is what `line` was derived FROM, so a record carrying a derived
+  // line without it would be a number no later reader could re-check. They are
+  // written as a pair or not at all.
+  if (finding.quote !== undefined) {
+    record.quote = finding.quote;
+  }
+  if (finding.locator !== undefined) {
+    record.locator = finding.locator;
   }
   if (finding.symbol !== undefined) {
     record.symbol = finding.symbol;

@@ -11,6 +11,8 @@ import type { ReviewCapsRecord } from "./caps";
 // filter-stats producer imports the pre-filter shapes declared below, so a value
 // import back would close a runtime cycle. Both directions are erased.
 import type { ReviewFilterStats } from "./filter-stats";
+import type { ReviewRoundCost } from "./cost";
+import type { FindingRepair } from "./repair";
 import type { ReviewNoteResult } from "./review-notes";
 // Type-only: the decision is COMPUTED in `lib/provider-config`, which is where
 // the provider registry has its single reader, and only carried here. A value
@@ -106,6 +108,17 @@ export type ManagedReviewManifest = {
    * back and says `not recorded` rather than letting the silence pass.
    */
   filter_stats?: ReviewFilterStats | undefined;
+  /**
+   * Fields the ingest supplied rather than the reviewer authoring them.
+   * Written only when something was repaired — see
+   * {@link module:review/repair}.
+   */
+  repairs?: FindingRepair[] | undefined;
+  /**
+   * What the round reported having used. Absent means nobody reported —
+   * never zero. See {@link module:review/cost}.
+   */
+  cost?: ReviewRoundCost | undefined;
   /**
    * Which model family reviewed this round, and why (flow 209, AC2).
    *
@@ -364,7 +377,16 @@ export type StructuredReviewFinding = {
   evidence: string;
   confidence: ReviewFindingConfidence;
   file?: string | null | undefined;
+  /**
+   * DERIVED at ingest whenever {@link quote} is present — see
+   * {@link module:review/locate}. Reported by the reviewer only for a finding
+   * with nothing to quote.
+   */
   line?: number | null | undefined;
+  /** The code the finding is about, copied out of {@link file}. */
+  quote?: string | null | undefined;
+  /** How {@link line} was arrived at. Present exactly when {@link quote} is. */
+  locator?: ReviewFindingLocator | undefined;
   symbol?: string | null | undefined;
   dedupe_key?: string | null | undefined;
   blocking_merge?: boolean | undefined;
@@ -445,8 +467,27 @@ export type NormalizedReviewFinding = StructuredReviewFinding & {
   class_scope_present?: boolean | undefined;
 };
 
+/**
+ * How a finding's `line` was arrived at.
+ *
+ * `derived` carries the method that found the quote; `unlocatable` carries the
+ * reason it was not found, and then `line` is null rather than a number nobody
+ * checked. `reported_line` keeps what the reviewer claimed either way — it is
+ * the only thing that can later measure how far those claims drifted.
+ */
+export type ReviewFindingLocator =
+  | { state: "derived"; method: "exact" | "whitespace-normalised"; reported_line?: number | null }
+  | { state: "unlocatable"; reason: string; reported_line?: number | null };
+
 export type ManagedReviewInput = {
   cwd: string;
+  /**
+   * Read a repo-relative file from the round's tree, or null when it is not
+   * there. Defaults to reading `cwd` from disk; a test states the tree in a map
+   * instead. Used to locate a finding's quote — see
+   * {@link module:review/locate}.
+   */
+  readTreeFile?: ((relativePath: string) => Promise<string | null>) | undefined;
   mode: ManagedReviewMode;
   target: ManagedReviewTarget;
   flowId?: string | undefined;
@@ -546,6 +587,8 @@ export type ManagedReviewInput = {
   spend?: number | undefined;
   /** Defaults to {@link module:review/caps.DEFAULT_SPEND_CEILING_USD}. */
   spendCeiling?: number | undefined;
+  /** What the round used, as the caller measured it. See {@link module:review/cost}. */
+  cost?: ReviewRoundCost | undefined;
   /**
    * The parallel dispatch plan, when the caller has one.
    *

@@ -24,6 +24,7 @@ import {
   type ManagedReviewIngestInput,
 } from "../review/managed";
 import { checkFilterStats, renderFilterStatsLine } from "../review/filter-stats";
+import { costFrom, renderCostPerFinding, renderScopeEstimate } from "../review/cost";
 import { collectReviewers, renderReviewerInventoryMarkdown } from "../review/reviewers";
 import { runImportReviewers } from "../review/import-reviewers";
 import {
@@ -163,6 +164,8 @@ const CREATE_FLAGS = [
   "--max-findings",
   "--spent",
   "--spend-ceiling",
+  "--tokens-in",
+  "--tokens-out",
   "--parallel",
   "--outstanding",
 ] as const;
@@ -228,7 +231,19 @@ const SCOPE_FLAGS = [
   "--json",
   "--scoped-diff",
   "--append",
+  // Not used to scope anything — it is how the cost estimate knows the fan-out.
+  // Every reviewer receives the scoped diff, so a per-round figure that ignored
+  // their number would understate the one thing the estimate is printed for.
+  "--reviewers",
 ] as const;
+
+/** The `--reviewers a,b` list, empty when nobody said. */
+function reviewerList(args: readonly string[]): string[] {
+  return (optionValue(args as string[], "--reviewers") ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
 
 /**
  * No `--append` and no `--out`.
@@ -462,6 +477,15 @@ async function runCreate(mode: ManagedReviewMode, args: string[]): Promise<void>
     spend: parseMoney(optionValue(args, "--spent"), "--spent"),
     spendCeiling: parseMoney(optionValue(args, "--spend-ceiling"), "--spend-ceiling"),
     concurrency: parseConcurrency(args),
+    // What the round actually used. `--spent` already existed and went only into
+    // the ceiling evaluation, which is why `review budget` could print a ceiling
+    // beside `spent: not recorded` forever. Recorded on the package now, so the
+    // number outlives the terminal it was printed on.
+    cost: costFrom({
+      inputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-in"), "--tokens-in"),
+      outputTokens: parseNonNegativeInteger(optionValue(args, "--tokens-out"), "--tokens-out"),
+      spentUsd: parseMoney(optionValue(args, "--spent"), "--spent"),
+    }),
   };
   const result = await createManagedReviewPackage(input);
   console.log(`# managed review: ${result.reviewId}`);
@@ -1624,6 +1648,13 @@ async function runScope(args: string[]): Promise<void> {
     console.log(renderScopedDiff(scope));
   } else {
     console.log(renderReviewScopeMarkdown(scope));
+    // The price, while it is still a decision. This is the only point in the
+    // pipeline where the round has not been spent yet, so it is the only place
+    // an estimate can change what happens. Human-readable output only: `--json`
+    // is a contract other commands parse and `--scoped-diff` is what a reviewer
+    // is handed, and neither is a place to put prose about money.
+    console.log("");
+    console.log(renderScopeEstimate(renderScopedDiff(scope), reviewerList(args).length));
   }
 
   // AC5: the drop list belongs in the review record, not only on a terminal.
@@ -2121,6 +2152,13 @@ async function runComplete(args: string[]): Promise<void> {
   console.log(`# managed review complete: ${manifest.reviewId}`);
   console.log(`status: ${manifest.status}`);
   console.log(`dispositions recorded: ${dispositions.length}`);
+  // The price, now that both halves are known. This is the first moment the
+  // round's cost and what survived it are on the same screen, and it is the
+  // number the fan-out has to justify itself with. `not recorded` when nobody
+  // measured — never `0`, which would read as a round that was free.
+  for (const line of renderCostPerFinding(manifest.cost, manifest.filter_stats?.retained ?? 0)) {
+    console.log(line);
+  }
   // Flow 207 AC5/AC6, on the attended path. A `dismissed-incorrect` whose
   // evidence names nobody writes no note and says so here, rather than reaching
   // the learning loop as an unattributed claim that our own reviewer was wrong.

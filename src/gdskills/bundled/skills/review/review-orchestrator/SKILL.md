@@ -1350,10 +1350,10 @@ Each reviewer must return a `REVIEW_RESULT` object matching `.metaproject/skills
 
 Before consolidation, validate every reviewer result:
 - Required status: `DONE`, `DONE_WITH_CONCERNS`, `NEEDS_CONTEXT`, or `BLOCKED`.
-- Required finding fields: id, severity, file, line (nullable only for repo-wide findings), problem, impact, suggested_fix, evidence, confidence, reviewer.
+- Required finding fields: id, severity, file, `quote`, problem, impact, suggested_fix, evidence, confidence, reviewer. **`quote`, not `line`:** copy the code the finding is about verbatim out of `file` and do not count lines — `keryx review ingest` locates the quote at the round's head and derives `line` from where it matched, so a number reported here is overwritten. A model is poor at counting lines and good at repeating text it has just read; this asks only for the second. Quote enough to be unambiguous: a snippet appearing twice in the file is recorded `unlocatable` rather than anchored to the first hit. A finding about the round rather than a site carries neither.
 - Every blocker must include evidence and a concrete suggested fix.
 - Findings without evidence are downgraded to `info` or returned to the reviewer for clarification.
-- Duplicate findings are merged by `dedupe_key` or by `(file, line, problem)`.
+- Duplicate findings are merged by `dedupe_key` or by `(file, quote, problem)`.
 - `NEEDS_CONTEXT` triggers one targeted context refill. If still unresolved, keep it as an explicit open question, not as a blocker.
 - If a reviewer exceeds `max_findings`, keep blockers/majors first and summarize lower severity findings.
 
