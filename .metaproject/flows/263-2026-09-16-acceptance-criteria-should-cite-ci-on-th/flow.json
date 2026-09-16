@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "263",
+  "slug": "acceptance-criteria-should-cite-ci-on-th",
+  "title": "Acceptance criteria should cite CI on the PR head, not a local full test run",
+  "status": "initializing",
+  "createdAt": "2026-09-16T06:40:57.895Z",
+  "updatedAt": "2026-09-16T06:41:56.139Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Enumerate every place that teaches the old gate wording, and record the places checked that had none",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "renderAcceptanceCriteria cites CI on the PR head, keeping the unfilled-placeholder refusal",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Apply the same wording in every skill the enumeration found, within the length ceilings",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "One package.json script mirroring the typecheck-and-tests job, plus the test that fails when either side drifts",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Say which is which: the slice you run while working vs the gate that closes a flow",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T6",
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T06:40:57.895Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T06:41:55.641Z",
+      "event": "task-added",
+      "detail": "T5: Enumerate every place that teaches the old gate wording, and record the places checked that had none"
+    },
+    {
+      "at": "2026-09-16T06:41:55.770Z",
+      "event": "task-added",
+      "detail": "T6: renderAcceptanceCriteria cites CI on the PR head, keeping the unfilled-placeholder refusal"
+    },
+    {
+      "at": "2026-09-16T06:41:55.894Z",
+      "event": "task-added",
+      "detail": "T7: Apply the same wording in every skill the enumeration found, within the length ceilings"
+    },
+    {
+      "at": "2026-09-16T06:41:56.016Z",
+      "event": "task-added",
+      "detail": "T8: One package.json script mirroring the typecheck-and-tests job, plus the test that fails when either side drifts"
+    },
+    {
+      "at": "2026-09-16T06:41:56.139Z",
+      "event": "task-added",
+      "detail": "T9: Say which is which: the slice you run while working vs the gate that closes a flow"
+    }
+  ]
+}
