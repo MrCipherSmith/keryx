@@ -282,6 +282,20 @@ test("formatJobMeta reports id/pid/status/command", () => {
   expect(meta).toContain("npm run dev");
 });
 
+test("AC4/AC8: a killed task carries its killReason onto the entry and into the Meta view", () => {
+  // The whole point of splitting `killed` by reason is that the human can tell
+  // "I stopped it" from "the idle rail gave up on it" — asserting only the
+  // status would let the reason be dropped anywhere between event and view.
+  const store = new BackgroundJobStore();
+  applyVisible(store);
+  store.apply(EXIT("task-1-1001", "killed", { killReason: "idle" }));
+  const entry = store.get("task-1-1001");
+  if (entry === undefined) throw new Error("expected entry");
+  expect(entry.status).toBe("killed");
+  expect(entry.killReason).toBe("idle");
+  expect(formatJobMeta(entry)).toContain("idle");
+});
+
 test("formatJobOutput returns the entry's accumulated output", () => {
   const store = new BackgroundJobStore();
   applyVisible(store);

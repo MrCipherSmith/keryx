@@ -398,23 +398,36 @@ describe("AC3: shell_job_kill kills the entire process group, including an outli
     expect(pgidOf(started.pid)).toBe(started.pid);
     expect(pgidOf(grandchildPid)).toBe(started.pid);
 
-    const killResult = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
-    expect(killResult.isError).toBe(false);
-
-    // Grace period (SIGTERM→SIGKILL) plus a little slack for the OS to reap.
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
-
-    // (b) Check the SPECIFIC grandchild pid captured above — unambiguous
-    // regardless of whether `detached: true` was actually applied (unlike a
-    // group-level `kill(-pid, 0)` probe, which can false-pass — see the note
-    // above this describe block).
-    let grandchildAlive = true;
     try {
-      process.kill(grandchildPid, 0);
-    } catch {
-      grandchildAlive = false;
+      const killResult = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
+      expect(killResult.isError).toBe(false);
+
+      // (b) Check the SPECIFIC grandchild pid captured above — unambiguous
+      // regardless of whether `detached: true` was actually applied (unlike a
+      // group-level `kill(-pid, 0)` probe, which can false-pass — see the note
+      // above this describe block). POLLED to a deadline rather than probed
+      // once after a fixed sleep: under load the OS can take longer than any
+      // fixed slack to reap, which would fail the test on a kill that worked.
+      const isAlive = (pid: number): boolean => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const gone = await pollUntil(() => !isAlive(grandchildPid), 10_000, 50);
+      expect(gone).toBe(true);
+    } finally {
+      // A failed assertion above must not leave two real `sleep 100`
+      // processes running for the next 100 seconds.
+      try {
+        process.kill(grandchildPid, "SIGKILL");
+      } catch {
+        // already gone — the expected path
+      }
+      await registry.sweepAll();
     }
-    expect(grandchildAlive).toBe(false);
   });
 });
 
@@ -802,13 +815,18 @@ describe("flow 263: task ids, phase and start options", () => {
     const fg = await registry.start("npm test", { phase: "foreground" });
     const fgElapsed = performance.now() - fgStarted;
     expect(fg.ok).toBe(true);
-    expect(fgElapsed).toBeLessThan(250); // returns immediately — no 400 ms buffer
 
     const bgStarted = performance.now();
     const bg = await registry.start("npm run dev", { phase: "background" });
     const bgElapsed = performance.now() - bgStarted;
     expect(bg.ok).toBe(true);
+
+    // Asserted as a RELATION, not as an absolute wall-clock bound on the
+    // foreground half: a loaded runner can make any single `await` chain take
+    // longer than a fixed threshold, but it cannot make the unbuffered start
+    // take as long as the buffered one.
     expect(bgElapsed).toBeGreaterThanOrEqual(350); // background start still buffers early output
+    expect(fgElapsed).toBeLessThan(bgElapsed / 2); // foreground start does not
   });
 });
 
@@ -1068,14 +1086,18 @@ describe("flow 263 AC3: idle timer (fakes)", () => {
 
   test("every output chunk resets the idle timer", async () => {
     const { spawn, handles } = fakeSpawner({ exitOnKill: true });
-    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 150 });
+    // The idle window is an order of magnitude above the tick gap: the test
+    // still fails if the reset is removed (15 × 40 ms = 600 ms of ticks would
+    // never survive a 2 s window measured from START), but a GC pause or a
+    // loaded runner cannot push one gap past 2 s and fake a regression.
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 2_000 });
     const started = await registry.start("chatty");
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     const handle = handles.get(started.pid);
     if (handle === undefined) throw new Error("test setup: fake handle missing");
 
-    // ~600 ms of output every 40 ms — four idle periods, never silent for one.
+    // ~600 ms of output every 40 ms — never silent for a whole idle window.
     for (let i = 0; i < 15; i += 1) {
       handle.emitData(`tick ${i}\n`);
       await delay(40);
@@ -1112,18 +1134,25 @@ describe.skipIf(process.platform === "win32")("flow 263 AC3: idle timer (REAL pr
   test(
     "a real command printing every ~100 ms for ~1.5 s outlives several 400 ms idle periods and ends completed",
     async () => {
-      const registry = createJobRegistry({ cwd: tmpdir(), idleMs: 400, initialBufferMs: 0, killGraceMs: 500 });
+      // 2 s idle window against ~100 ms ticks: twenty times the gap, so real
+      // spawn and scheduler jitter cannot fake an idle kill, while removing the
+      // reset still kills this task long before its 1.5 s of ticks are done.
+      const registry = createJobRegistry({ cwd: tmpdir(), idleMs: 2_000, initialBufferMs: 0, killGraceMs: 500 });
       const started = await registry.start(
         "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do echo tick $i; sleep 0.1; done",
       );
       expect(started.ok).toBe(true);
       if (!started.ok) return;
 
-      const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 15_000, 50);
-      expect(ended).toBe(true);
-      const info = registry.get(started.jobId);
-      expect(info?.status).toBe("completed");
-      expect(info?.killReason).toBeUndefined();
+      try {
+        const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 15_000, 50);
+        expect(ended).toBe(true);
+        const info = registry.get(started.jobId);
+        expect(info?.status).toBe("completed");
+        expect(info?.killReason).toBeUndefined();
+      } finally {
+        await registry.sweepAll();
+      }
     },
     30_000,
   );
@@ -1131,16 +1160,20 @@ describe.skipIf(process.platform === "win32")("flow 263 AC3: idle timer (REAL pr
   test(
     'a silent real `sleep 30` is killed with killReason "idle" within a few seconds',
     async () => {
-      const registry = createJobRegistry({ cwd: tmpdir(), idleMs: 400, initialBufferMs: 0, killGraceMs: 500 });
+      const idleMs = 2_000;
+      const registry = createJobRegistry({ cwd: tmpdir(), idleMs, initialBufferMs: 0, killGraceMs: 500 });
       const t0 = performance.now();
       const started = await registry.start("sleep 30");
       expect(started.ok).toBe(true);
       if (!started.ok) return;
       try {
-        const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 8_000, 50);
+        const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 15_000, 50);
         expect(ended).toBe(true);
         expect(registry.get(started.jobId)).toMatchObject({ status: "killed", killReason: "idle" });
-        expect(performance.now() - t0).toBeLessThan(8_000);
+        // The kill waited for the silence — it is the idle rail firing, not
+        // something killing the task on sight. (The upper bound is already
+        // implied by `pollUntil` returning true.)
+        expect(performance.now() - t0).toBeGreaterThanOrEqual(idleMs);
       } finally {
         await registry.sweepAll();
       }

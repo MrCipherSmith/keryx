@@ -265,6 +265,54 @@ test("F-010: WITH jobRegistry, shell_job_output/shell_job_kill ARE registered", 
   expect(names).toContain("shell_job_kill");
 });
 
+test("AC7: the registry is actually threaded into shell_exec — a long command yields a task handle", async () => {
+  // The registry reaching `shellExecTool`'s third argument is the whole
+  // supervision path. Drop that argument and every `shell_exec` silently falls
+  // back to the blocking synchronous runner — the release-watch incident — with
+  // every other suite still green, because nothing else observes it. Asserting
+  // the tool NAMES (the test above) does not catch that; asserting the tool's
+  // BEHAVIOUR through the built roster does.
+  const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-wired-"));
+  const startedCommands: string[] = [];
+  const runningRegistry: JobRegistry = {
+    ...stubJobRegistry(),
+    start: async (command) => {
+      startedCommands.push(command);
+      return { ok: true, jobId: "task-7-4242", pid: 4242, output: "" };
+    },
+    readOutput: () => ({ ok: true, output: "" }),
+    waitForExit: async () => "timeout",
+    promote: () => ({ ok: true }),
+    get: () => ({
+      jobId: "task-7-4242",
+      pid: 4242,
+      command: "sleep 999",
+      status: "running",
+      phase: "background",
+      idleTimeoutMs: 120_000,
+      startedAt: "2026-09-16T00:00:00.000Z",
+    }),
+  };
+
+  const tools = buildInteractiveAgentTools({
+    cwd,
+    metaprojectPort: createMetaprojectAdapter(cwd),
+    searchController: createDefaultSearchProviderController(),
+    spawnTool: stubSpawn,
+    jobRegistry: runningRegistry,
+  });
+
+  const shellExec = tools.find((tool) => tool.definition.name === "shell_exec");
+  expect(shellExec).toBeDefined();
+  const result = await shellExec?.invoke({ command: "sleep 999" });
+
+  expect(startedCommands).toEqual(["sleep 999"]); // it went through the SESSION registry
+  expect(result?.isError).toBe(false);
+  const parsed = JSON.parse(result?.output ?? "{}") as { task_id?: string; status?: string };
+  expect(parsed.task_id).toBe("task-7-4242");
+  expect(parsed.status).toBe("running");
+});
+
 describe("--deny-tools withholds a capability rather than gating it", () => {
   async function build(denyTools?: readonly string[]) {
     const cwd = await mkdtemp(join(tmpdir(), "keryx-deny-"));

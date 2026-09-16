@@ -407,6 +407,37 @@ describe("flow 263 AC5: the cap counts background-phase tasks only (through shel
   });
 });
 
+describe("flow 263: idle kill and lost-task results (fakes, every platform)", () => {
+  test("an idle kill inside the yield returns isError and names both escapes", async () => {
+    // The REAL-process sibling below skips on win32, which would leave this
+    // user-facing message with zero coverage there. A scripted fake proves the
+    // same wording without a subprocess.
+    const { spawn } = scriptedSpawner(() => ({ kind: "hang" }));
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 50, idleMs: 60 });
+    const tool = shellExecTool("/proj", unusedRun, registry, { yieldMs: 5_000 });
+
+    const result = await tool.invoke({ command: "sleep 30" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("KERYX_SHELL_IDLE_MS"); // the operator's knob
+    expect(result.output).toContain("idle_timeout_ms"); // the model's own escape
+    expect(result.output).not.toContain("task_id"); // it ended; there is nothing to come back to
+  });
+
+  test("a task that vanishes before its status can be read reports unknown, never success", async () => {
+    // The entry can be LRU-evicted between start and the post-wait read. That
+    // branch must not fall through to "exit 0".
+    const { spawn } = scriptedSpawner(() => ({ kind: "exit", stdout: "partial\n", exitCode: 0 }));
+    const real = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const vanishing = { ...real, get: () => undefined };
+    const tool = shellExecTool("/proj", unusedRun, vanishing, { yieldMs: 5_000 });
+
+    const result = await tool.invoke({ command: "echo partial" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("no longer tracked");
+    expect(result.output).toContain("partial"); // what it did produce is still reported
+  });
+});
+
 describe.skipIf(process.platform === "win32")("flow 263 AC3: idle kill through shell_exec (REAL process)", () => {
   test(
     "a silent `sleep 30` with a yield longer than the idle timeout returns isError naming KERYX_SHELL_IDLE_MS",
