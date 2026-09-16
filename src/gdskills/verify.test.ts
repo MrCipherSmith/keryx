@@ -4,7 +4,46 @@ import path from "node:path";
 import { expect, test } from "bun:test";
 import { renderWikiPage } from "../wiki/templates";
 import { wikiGenerateIndex } from "../wiki/service";
+import { readFile } from "node:fs/promises";
 import { verifyProjectSkill } from "./verify";
+
+test("a skill imported before the import kept the keryx header still verifies and records Last Verified", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "keryx-verify-legacy-import-"));
+  try {
+    const packageRoot = path.join(root, ".metaproject", "project-skills", "review", "review-house");
+    await mkdir(packageRoot, { recursive: true });
+    await writeFile(
+      path.join(root, ".metaproject", "metaproject.json"),
+      JSON.stringify({
+        modules: {
+          gdskills: {
+            projectSkillRegistry: [
+              { module: "review", name: "review-house", target: "review-house", path: ".metaproject/project-skills/review/review-house", version: "0.1.0", status: "active", updatedAt: "2026-09-09T00:00:00.000Z" },
+            ],
+          },
+        },
+      }),
+      "utf8",
+    );
+    // The exact shape the old import wrote: author frontmatter, origin lines, body.
+    await writeFile(
+      path.join(packageRoot, "SKILL.md"),
+      '---\nname: review-house\nmetadata:\n  version: "2.0.0"\n---\nOrigin: ~/overlay/SKILL.md\nOrigin Hash: sha256:abc\nImported At: 2026-09-09T00:00:00.000Z\n\n# House\n',
+      "utf8",
+    );
+    await writeFile(path.join(packageRoot, "skill-changelog.md"), "# changelog\n", "utf8");
+
+    const report = await verifyProjectSkill(root, { input: "review/review-house" });
+    expect(report.signals.find((signal) => signal.name === "metadata:version")?.status).toBe("pass");
+    expect(report.signals.find((signal) => signal.name === "metadata:target")?.status).toBe("pass");
+    expect(report.status).not.toBe("stale");
+    expect(await readFile(path.join(packageRoot, "SKILL.md"), "utf8")).toMatch(
+      /^Imported At: .*\nLast Verified: 20\d\d-/m,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test("fails gdwiki evidence when wiki index is stale", async () => {
   const root = await createVerificationProject();

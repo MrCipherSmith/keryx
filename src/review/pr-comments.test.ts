@@ -38,7 +38,9 @@ import {
   guardGitHubRequest,
   parseGhJson,
   partitionExternalFindings,
+  parsePullRequest,
   postReplyPass,
+  shaMatchesHead,
   prCommentsStatePath,
   readPrCommentState,
   recordSeenComments,
@@ -52,6 +54,7 @@ import {
   type FixturePort,
   type GitHubRequest,
   type PrCommentState,
+  type PullRequestSnapshot,
 } from "./pr-comments";
 
 const REPO = "acme/app";
@@ -97,8 +100,17 @@ function user(login: string, type = "User"): Record<string, unknown> {
   return { login, type };
 }
 
+/** The pull request a reply pass may answer: open, at `headSha`. */
+function openPull(headSha: string): PullRequestSnapshot {
+  return { state: "open", merged: false, mergedAt: null, headSha };
+}
+
+/** The head every fixture pull request reports, and the SHA the CLI tests pass. */
+const FIXTURE_HEAD = "abc1234";
+
 function fixtures(over: Partial<Record<string, unknown[]>> = {}): Record<string, unknown> {
   return {
+    pull: over.pull ?? [{ number: 7, state: "open", merged: false, merged_at: null, head: { sha: FIXTURE_HEAD } }],
     "pull-comments": over["pull-comments"] ?? [
       {
         id: 11,
@@ -183,14 +195,18 @@ function collect(port: FixturePort, over: { self?: string; handled?: PrCommentSt
 // ---------------------------------------------------------------------------
 
 describe("AC8 collection", () => {
-  test("all three sources are read, each exactly once", async () => {
+  test("the pull request and all three sources are read, each exactly once", async () => {
     const port = createFixturePort(fixtures());
-    await collect(port);
+    const result = await collect(port);
     expect(port.calls.map((call) => `${call.method} ${call.path}`)).toEqual([
+      // The pull request itself. Without this read nothing on the comments path
+      // could know the pull request had merged.
+      `GET repos/${REPO}/pulls/${PR}`,
       `GET repos/${REPO}/pulls/${PR}/comments`,
       `GET repos/${REPO}/pulls/${PR}/reviews`,
       `GET repos/${REPO}/issues/${PR}/comments`,
     ]);
+    expect(result.pull).toEqual({ state: "open", merged: false, mergedAt: null, headSha: FIXTURE_HEAD });
   });
 
   test("a bot's comment is collected exactly like a human's", async () => {
@@ -820,6 +836,7 @@ describe("AC11/AC18 the character ceiling", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
     });
@@ -834,8 +851,9 @@ describe("AC11/AC18 the character ceiling", () => {
 // ---------------------------------------------------------------------------
 
 describe("AC12 the port cannot resolve anything", () => {
-  test("the five allowed endpoints are allowed", () => {
+  test("the six allowed endpoints are allowed", () => {
     for (const path of [
+      `repos/${REPO}/pulls/${PR}`,
       `repos/${REPO}/pulls/${PR}/comments`,
       `repos/${REPO}/pulls/${PR}/reviews`,
       `repos/${REPO}/issues/${PR}/comments`,
@@ -895,6 +913,7 @@ describe("AC12 the port cannot resolve anything", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
       now: new Date("2026-08-30T12:00:00Z"),
@@ -1054,6 +1073,7 @@ describe("AC11 routing and timing", () => {
         number: PR,
         pass,
         sha: "abc123",
+        pull: openPull("abc123"),
         round: { index: 2, isFinal: false },
         state: emptyPrCommentState(REPO, PR),
       }),
@@ -1078,6 +1098,7 @@ describe("AC11 routing and timing", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
       dryRun: true,
@@ -1105,6 +1126,7 @@ describe("AC11 routing and timing", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
     });
@@ -1182,6 +1204,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 4, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
     });
@@ -1206,6 +1229,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
       now: new Date("2026-08-30T12:00:00Z"),
@@ -1224,6 +1248,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: reread,
       now: new Date("2026-08-30T13:00:00Z"),
@@ -1266,6 +1291,7 @@ describe("AC13 exactly one reply per comment", () => {
         number: PR,
         pass,
         sha: "abc123",
+        pull: openPull("abc123"),
         round: { index: 3, isFinal: true },
         state: emptyPrCommentState(REPO, PR),
       }),
@@ -1291,6 +1317,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: afterCrash,
     });
@@ -1322,6 +1349,7 @@ describe("AC13 exactly one reply per comment", () => {
         number: PR,
         pass,
         sha: "abc123",
+        pull: openPull("abc123"),
         round: { index: 3, isFinal: true },
         state: emptyPrCommentState(REPO, PR),
       }),
@@ -1360,6 +1388,7 @@ describe("AC13 exactly one reply per comment", () => {
         outcomes: everyCommentAnswered(recollected.comments),
       }),
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 3, isFinal: true },
       state: afterCrash,
     });
@@ -1402,6 +1431,7 @@ describe("AC13 exactly one reply per comment", () => {
         number: PR,
         pass,
         sha: "abc123",
+        pull: openPull("abc123"),
         round: { index: 1, isFinal: true },
         state: emptyPrCommentState(REPO, PR),
       }),
@@ -1417,6 +1447,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: afterCrash,
     });
@@ -1453,6 +1484,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: recordSeenComments(emptyPrCommentState(REPO, PR), [first], 1),
     });
@@ -1474,6 +1506,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 2, isFinal: true },
       state: stuck,
     });
@@ -1527,6 +1560,7 @@ describe("AC13 exactly one reply per comment", () => {
       number: PR,
       pass,
       sha: "deadbee",
+      pull: openPull("deadbee"),
       round: { index: 5, isFinal: true },
       state,
       now: new Date("2026-08-30T12:00:00Z"),
@@ -1665,6 +1699,7 @@ describe("AC11 the reply cap reports its backlog", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
     });
@@ -1707,6 +1742,7 @@ describe("AC11 the reply cap reports its backlog", () => {
       number: PR,
       pass,
       sha: "abc123",
+      pull: openPull("abc123"),
       round: { index: 1, isFinal: true },
       state: emptyPrCommentState(REPO, PR),
     });
@@ -1809,7 +1845,7 @@ describe("the offline seam", () => {
         "--outcomes",
         path.join(root, "outcomes.json"),
         "--sha",
-        "abc123",
+        FIXTURE_HEAD,
         "--final",
         "--dry-run",
         "--fixtures",
@@ -1883,5 +1919,86 @@ describe("the offline seam", () => {
     expect(markdown).toContain("unclassified_severity=1");
     expect(markdown).toContain("self-authored");
     expect(markdown).toContain("(bot)");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The reply target — a merged pull request with a pre-merge SHA posted, and
+// nothing checked. `isFinal` was the only precondition and `--sha` was only
+// ever written into the record.
+// ---------------------------------------------------------------------------
+
+describe("a reply pass refuses a target the answers do not describe", () => {
+  function passFor() {
+    const one = comment();
+    return buildReplyPass({
+      repo: REPO,
+      number: PR,
+      comments: [one],
+      outcomes: [{ comment: one.id, disposition: "acted-on", text: "Fixed.", link: "https://x.test/flow/journal.md" }],
+    });
+  }
+
+  async function attempt(pull: PullRequestSnapshot, sha: string, extra: { allowClosed?: boolean; dryRun?: boolean } = {}) {
+    const root = await fresh();
+    const port = createFixturePort(fixtures());
+    const pass = passFor();
+    const run = postReplyPass({
+      port,
+      cwd: root,
+      repo: REPO,
+      number: PR,
+      pass,
+      sha,
+      pull,
+      round: { index: 1, isFinal: true },
+      state: emptyPrCommentState(REPO, PR),
+      ...extra,
+    });
+    return { run, port, root };
+  }
+
+  test("a merged pull request is refused, dry run included, and nothing is written", async () => {
+    const merged: PullRequestSnapshot = { state: "closed", merged: true, mergedAt: "2026-09-15T10:00:00Z", headSha: "abc1234" };
+    for (const dryRun of [false, true]) {
+      const { run, port, root } = await attempt(merged, "abc1234", { dryRun });
+      await expect(run).rejects.toThrow(/merged at 2026-09-15T10:00:00Z/);
+      expect(port.posts).toEqual([]);
+      expect((await readPrCommentState(root, REPO, PR)).handled_comments).toEqual([]);
+    }
+  });
+
+  test("a closed pull request is refused; --allow-closed-pr lets it through when the head matches", async () => {
+    const closed: PullRequestSnapshot = { state: "closed", merged: false, mergedAt: null, headSha: "abc1234" };
+    await expect((await attempt(closed, "abc1234")).run).rejects.toThrow(/allow-closed-pr/);
+    const allowed = await attempt(closed, "abc1234", { allowClosed: true });
+    await allowed.run;
+    expect(allowed.port.posts).toHaveLength(1);
+  });
+
+  test("a --sha that is not the head is refused, and allowClosed does not waive it", async () => {
+    const open = openPull("abc1234def");
+    await expect((await attempt(open, "0000000")).run).rejects.toThrow(/is not the pull request's head \(abc1234def\)/);
+    const closed: PullRequestSnapshot = { ...open, state: "closed" };
+    await expect((await attempt(closed, "0000000", { allowClosed: true })).run).rejects.toThrow(/not the pull request's head/);
+  });
+
+  test("a 7+ character prefix of the head is the head", async () => {
+    const ok = await attempt(openPull("abc1234def"), "ABC1234");
+    await ok.run;
+    expect(ok.port.posts).toHaveLength(1);
+    expect(shaMatchesHead("abc12", "abc1234def")).toBe(false);
+  });
+
+  test("an unreadable pull request is refused rather than assumed open", async () => {
+    const unknown = parsePullRequest([]);
+    expect(unknown.state).toBe("unknown");
+    await expect((await attempt(unknown, "abc1234")).run).rejects.toThrow(/state could not be read/);
+  });
+
+  test("parsePullRequest reads GitHub's object: state, merge, head", () => {
+    expect(
+      parsePullRequest({ state: "closed", merged: true, merged_at: "2026-09-15T10:00:00Z", head: { sha: "ABCDEF1" } }),
+    ).toEqual({ state: "closed", merged: true, mergedAt: "2026-09-15T10:00:00Z", headSha: "abcdef1" });
   });
 });

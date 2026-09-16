@@ -904,8 +904,9 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     ],
     args: [
       { name: "opt-in", type: "bool", required: false, desc: "request cross-family review; without it the answer is single-family" },
-      { name: "session-provider", type: "string", required: false, desc: "provider that authored the change; defaults to the persisted shell selection" },
-      { name: "session-model", type: "string", required: false, desc: "model that authored the change; defaults to the persisted shell selection" },
+      { name: "session-provider", type: "string", required: false, desc: "provider that authored the change; defaults to KERYX_SESSION_PROVIDER" },
+      { name: "session-model", type: "string", required: false, desc: "model that authored the change; defaults to KERYX_SESSION_MODEL" },
+      { name: "from-shell-config", type: "bool", required: false, desc: "use the selection keryx shell persisted as the session (off by default)" },
       { name: "json", type: "bool", required: false, desc: "the record a round should carry" },
     ],
     json: true,

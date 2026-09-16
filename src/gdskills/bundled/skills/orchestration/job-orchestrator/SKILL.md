@@ -1349,7 +1349,7 @@ FOR iteration in [1, 2, 3]:
 
 AFTER THE LAST ROUND ONLY — answer every inbound PR comment, once:
   keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file> \
-                             --sha <head-sha> --final [--flow-link <url>]
+                             --review <review-id> --sha <head-sha> --final [--flow-link <url>]
 
 IF still NEEDS_FIX after max iterations, or the stuck check broke the loop:
   Log "Unresolved after <N> iterations" with finding list, and say WHICH of the

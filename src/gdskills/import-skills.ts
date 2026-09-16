@@ -1,8 +1,12 @@
-import { readdir, readFile, stat } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import path from "node:path";
 import { optionValue } from "../lib/args";
 import { pathExists, toPosix, writeFileAtomic } from "../lib/fs";
 import { BUNDLED_GDSKILLS } from "./catalog";
+import { bundledRulesSourcePath } from "./install";
+import { ruleReferences } from "./rule-references";
+import { parseSkillFrontmatter } from "./skill-frontmatter";
 import {
   createProjectSkill,
   resolveOriginPath,
@@ -41,9 +45,28 @@ export type ImportedProjectSkill = {
   wired?: string;
 };
 
+/**
+ * A rule an imported skill names as its standard.
+ *
+ * - `present` — `.metaproject/rules/<ref>` already exists.
+ * - `imported` / `would-import` — found beside the skill's source tree
+ *   (`<overlay>/rules/<ref>`) and copied in.
+ * - `unresolved` — nowhere to take it from; the skill will cite a rule the
+ *   project does not have, and `keryx review reviewers` keeps saying so.
+ */
+export type ImportedRule = {
+  ref: string;
+  status: "present" | "imported" | "would-import" | "unresolved";
+  /** The skills that cite it. */
+  citedBy: string[];
+  origin?: string;
+  reason?: string;
+};
+
 export type ImportProjectSkillsResult = {
   from: string;
   imported: ImportedProjectSkill[];
+  rules: ImportedRule[];
   dryRun: boolean;
   force: boolean;
 };
@@ -79,9 +102,17 @@ export async function importProjectSkills(options: ImportProjectSkillsOptions): 
   for (const source of sources) {
     imported.push(await importOne(options, source));
   }
+  // Rules are resolved for skipped skills too: re-running an import over a
+  // project that already has the skills is how a project imported before this
+  // step existed gets the rules its reviewers cite.
+  const rules = await importReferencedRules(
+    options,
+    sources.filter((source) => options.force === true || !BUNDLED_NAMES.has(source.name)),
+  );
   return {
     from: options.from,
     imported,
+    rules,
     dryRun: options.dryRun === true,
     force: options.force === true,
   };
@@ -118,6 +149,7 @@ export async function updateProjectSkills(options: UpdateProjectSkillsOptions): 
   return {
     from: options.from ?? "(each skill Origin)",
     imported,
+    rules: [],
     dryRun: options.dryRun === true,
     force: true,
   };
@@ -139,6 +171,14 @@ export function renderImportProjectSkillsMarkdown(result: ImportProjectSkillsRes
     lines.push(`- ${row.module}/${row.name}: ${row.status}${extra ? ` — ${extra}` : ""}`);
   }
   lines.push("");
+  if (result.rules.length > 0) {
+    lines.push("## rules the skills cite", "");
+    for (const rule of result.rules) {
+      const detail = [rule.origin ? `from ${rule.origin}` : undefined, rule.reason].filter(Boolean).join(" — ");
+      lines.push(`- ${rule.ref}: ${rule.status}${detail ? ` — ${detail}` : ""} (cited by ${rule.citedBy.join(", ")})`);
+    }
+    lines.push("");
+  }
   if (result.imported.some((row) => row.module === "review" && row.status !== "skipped")) {
     lines.push("Reviewers: `keryx review reviewers` must list every imported review/* name. That is the same call review-orchestrator makes.");
   }
@@ -172,7 +212,35 @@ type ImportSource = {
   module: string;
   origin: string;
   content: string;
+  /** Absolute path of a local source SKILL.md; absent for a URL. */
+  sourcePath?: string;
 };
+
+function isInside(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
+/**
+ * The Origin to record for a local source: project-relative when the file is
+ * in the project, `~/…` when it is under the home directory, absolute only
+ * otherwise.
+ *
+ * An absolute `/Users/<name>/…` origin is true on exactly one machine. Checked
+ * in, it made every reviewer read as drift `missing` on a teammate's laptop
+ * and in CI — a provenance record that is wrong everywhere but its author's.
+ */
+export function portableOriginRef(absolute: string, projectRoot: string, home: string = homedir()): string {
+  const resolved = path.resolve(absolute);
+  const root = path.resolve(projectRoot);
+  if (isInside(root, resolved)) {
+    return toPosix(path.relative(root, resolved));
+  }
+  if (isInside(home, resolved)) {
+    return `~/${toPosix(path.relative(home, resolved))}`;
+  }
+  return resolved;
+}
 
 async function resolveImportSources(options: ImportProjectSkillsOptions): Promise<ImportSource[]> {
   if (isHttpsSkillUrl(options.from)) {
@@ -184,7 +252,7 @@ async function resolveImportSources(options: ImportProjectSkillsOptions): Promis
   }
   const stats = await stat(resolved);
   if (stats.isFile()) {
-    return [await sourceFromFile(options, resolved, options.from)];
+    return [await sourceFromFile(options, resolved)];
   }
   if (!stats.isDirectory()) {
     throw new Error(`keryx skills import: --from ${options.from} is not a file or directory`);
@@ -218,12 +286,11 @@ async function sourceFromUrl(options: ImportProjectSkillsOptions): Promise<Impor
 async function sourceFromFile(
   options: ImportProjectSkillsOptions,
   absolute: string,
-  originRef: string,
 ): Promise<ImportSource> {
   const content = await readFile(absolute, "utf8");
   const name = options.name ?? inferNameFromPath(absolute, content);
   const moduleName = options.module ?? inferModule(name, content);
-  return { name, module: moduleName, origin: originRef, content };
+  return { name, module: moduleName, origin: portableOriginRef(absolute, options.projectRoot), content, sourcePath: absolute };
 }
 
 async function sourceFromDirectory(
@@ -239,7 +306,13 @@ async function sourceFromDirectory(
     const skillMd = path.join(dir, "SKILL.md");
     const content = await readFile(skillMd, "utf8");
     const moduleName = options.module ?? inferModule(name, content);
-    sources.push({ name, module: moduleName, origin: skillMd, content });
+    sources.push({
+      name,
+      module: moduleName,
+      origin: portableOriginRef(skillMd, options.projectRoot),
+      content,
+      sourcePath: skillMd,
+    });
   }
   return sources.sort((a, b) => `${a.module}/${a.name}`.localeCompare(`${b.module}/${b.name}`));
 }
@@ -309,6 +382,7 @@ async function importOne(options: ImportProjectSkillsOptions, source: ImportSour
     note: `Imported from ${options.from}`,
     origin: source.origin,
     originContent: source.content,
+    ...versionOption(source.content),
     format: "single",
   });
   await overwriteImportedSkill(options.projectRoot, created, source.content);
@@ -328,7 +402,7 @@ type RegistryEntry = { module: string; name: string; path: string };
 async function updateOne(options: UpdateProjectSkillsOptions, entry: RegistryEntry): Promise<ImportedProjectSkill> {
   const skillMd = path.join(options.projectRoot, entry.path, "SKILL.md");
   const current = await readFile(skillMd, "utf8");
-  const origin = options.from ?? metadataLine(current, "Origin");
+  let origin = options.from ?? metadataLine(current, "Origin");
   if (!origin) {
     return {
       name: entry.name,
@@ -368,6 +442,7 @@ async function updateOne(options: UpdateProjectSkillsOptions, entry: RegistryEnt
       };
     }
     content = await readFile(resolved, "utf8");
+    origin = portableOriginRef(resolved, options.projectRoot);
   }
 
   if (options.dryRun) {
@@ -388,6 +463,7 @@ async function updateOne(options: UpdateProjectSkillsOptions, entry: RegistryEnt
     note: `Updated from origin ${origin}`,
     origin,
     originContent: content,
+    ...versionOption(content),
     format: "single",
   });
   await overwriteImportedSkill(options.projectRoot, created, content);
@@ -408,8 +484,8 @@ async function overwriteImportedSkill(
 ): Promise<void> {
   const skillPath = path.join(projectRoot, created.skillPath, "SKILL.md");
   const scaffold = await readFile(skillPath, "utf8");
-  const originLines = extractOriginBlock(scaffold);
-  const stamped = stampOrigin(source, originLines);
+  const header = extractImportHeader(scaffold, parseSkillFrontmatter(source).metadataVersion);
+  const stamped = stampImportHeader(source, header);
   const relative = toPosix(path.join(created.skillPath, "SKILL.md"));
   const guard = await guardOutput({
     cwd: projectRoot,
@@ -425,13 +501,47 @@ async function overwriteImportedSkill(
   await writeFileAtomic(skillPath, output.content);
 }
 
-function extractOriginBlock(scaffold: string): string {
-  const lines = scaffold.split("\n").filter((line) => /^(Origin:|Origin Hash:|Imported At:)\s/.test(line));
+/**
+ * The keryx header an imported skill keeps: `Version`, `Target`, `Module`,
+ * the three origin lines, `Status`, `Last Verified` — in the scaffold's order.
+ *
+ * The import used to keep only the origin lines and drop the rest with the
+ * scaffold. `keryx skills verify` reads exactly those dropped labels, so every
+ * imported skill verified as `stale` (no Version, no Target) and could never
+ * record a verification (no `Last Verified:` line to update). The source's
+ * body stays byte-for-byte; the header is what makes it a project skill.
+ */
+const IMPORT_HEADER_LABELS = [
+  "Version",
+  "Target",
+  "Module",
+  "Origin",
+  "Origin Hash",
+  "Imported At",
+  "Status",
+  "Last Verified",
+];
+
+const IMPORT_HEADER_LINE = new RegExp(`^(${IMPORT_HEADER_LABELS.join("|")}):\\s`);
+
+export function extractImportHeader(scaffold: string, version?: string): string {
+  const lines = scaffold
+    .split("\n")
+    .filter((line) => IMPORT_HEADER_LINE.test(line))
+    .map((line) => (version && line.startsWith("Version:") ? `Version: ${version}` : line));
   return lines.length > 0 ? `${lines.join("\n")}\n` : "";
 }
 
-export function stampOrigin(source: string, originBlock: string): string {
-  if (!originBlock) return source;
+/**
+ * Insert `header` right after the source's frontmatter.
+ *
+ * A header left by an earlier import — the run of header lines directly after
+ * the frontmatter — is replaced, not stacked. Origin lines are stripped
+ * wherever they are, as before. Other labels deeper in the body are the
+ * author's text and are left alone: a `Status:` line in a template is not ours.
+ */
+export function stampImportHeader(source: string, header: string): string {
+  if (!header) return source;
   const stripped = source
     .replace(/^Origin Hash:.*\n/gm, "")
     .replace(/^Origin:.*\n/gm, "")
@@ -441,10 +551,109 @@ export function stampOrigin(source: string, originBlock: string): string {
     if (end !== -1) {
       const afterFence = end + "\n---".length;
       const insertAt = stripped[afterFence] === "\n" ? afterFence + 1 : afterFence;
-      return `${stripped.slice(0, insertAt)}${originBlock}${stripped.slice(insertAt)}`;
+      let bodyStart = insertAt;
+      while (true) {
+        const lineEnd = stripped.indexOf("\n", bodyStart);
+        const line = stripped.slice(bodyStart, lineEnd === -1 ? stripped.length : lineEnd);
+        if (!IMPORT_HEADER_LINE.test(line)) break;
+        bodyStart = lineEnd === -1 ? stripped.length : lineEnd + 1;
+      }
+      return `${stripped.slice(0, insertAt)}${header}${stripped.slice(bodyStart)}`;
     }
   }
-  return `${originBlock}${stripped}`;
+  return `${header}${stripped}`;
+}
+
+function versionOption(content: string): { version?: string } {
+  const version = parseSkillFrontmatter(content).metadataVersion;
+  return version ? { version } : {};
+}
+
+/**
+ * Where an overlay keeps the rules its skills cite: a `rules/` directory in
+ * the skill's own directory or up to three levels above it. That covers the
+ * layouts `--from` accepts — `<home>/skills/<name>/SKILL.md` finds
+ * `<home>/rules/`.
+ */
+async function findOverlayRule(sourcePath: string, ref: string): Promise<string | undefined> {
+  let dir = path.dirname(sourcePath);
+  for (let depth = 0; depth <= 3; depth += 1) {
+    const candidate = path.join(dir, "rules", ref);
+    if (await pathExists(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return undefined;
+}
+
+async function importReferencedRules(
+  options: ImportProjectSkillsOptions,
+  sources: ImportSource[],
+): Promise<ImportedRule[]> {
+  const citedBy = new Map<string, { names: string[]; sourcePaths: string[] }>();
+  for (const source of sources) {
+    for (const ref of ruleReferences(source.content)) {
+      const entry = citedBy.get(ref) ?? { names: [], sourcePaths: [] };
+      entry.names.push(source.name);
+      if (source.sourcePath) entry.sourcePaths.push(source.sourcePath);
+      citedBy.set(ref, entry);
+    }
+  }
+
+  const bundledRules = bundledRulesSourcePath();
+  const rules: ImportedRule[] = [];
+  for (const [ref, cited] of [...citedBy.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const base = { ref, citedBy: cited.names.sort() };
+    const target = path.join(options.projectRoot, ".metaproject", "rules", ref);
+    if (await pathExists(target)) {
+      rules.push({ ...base, status: "present" });
+      continue;
+    }
+    // A name keryx itself ships under rules/core is installed — and overwritten
+    // on every install — by `keryx install`. Copying an overlay's file there
+    // would be silently replaced by a different file of the same name.
+    if (ref.startsWith("core/") && (await pathExists(path.join(bundledRules, path.basename(ref))))) {
+      rules.push({ ...base, status: "unresolved", reason: "ships with keryx — run `keryx install` to restore it" });
+      continue;
+    }
+    let found: string | undefined;
+    for (const sourcePath of cited.sourcePaths) {
+      found = await findOverlayRule(sourcePath, ref);
+      if (found) break;
+    }
+    if (!found) {
+      rules.push({
+        ...base,
+        status: "unresolved",
+        reason: cited.sourcePaths.length > 0 ? "no rules/ directory beside the source has it" : "remote source; rules are not fetched",
+      });
+      continue;
+    }
+    const origin = portableOriginRef(found, options.projectRoot);
+    if (options.dryRun) {
+      rules.push({ ...base, status: "would-import", origin });
+      continue;
+    }
+    const content = await readFile(found, "utf8");
+    const relative = toPosix(path.relative(options.projectRoot, target));
+    const guard = await guardOutput({
+      cwd: options.projectRoot,
+      content,
+      target: "skill",
+      source: "untrusted-external",
+      path: relative,
+    });
+    const output = prepareOutputForPersistence(guard, content);
+    if (!output.allowed) {
+      rules.push({ ...base, status: "unresolved", origin, reason: `blocked by the security gate: ${output.reason}` });
+      continue;
+    }
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFileAtomic(target, output.content);
+    rules.push({ ...base, status: "imported", origin });
+  }
+  return rules;
 }
 
 function inferNameFromPath(filePath: string, content: string): string {

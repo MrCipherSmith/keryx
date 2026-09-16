@@ -46,7 +46,7 @@ Review Orchestrator Progress:
 - [ ] Step 11: Sort by severity, deduplicate, emit unified report
 - [ ] Step 12: Emit the machine-readable `keryx:findings` block alongside the report
 - [ ] Step 13: Report the stage counts: dropped by pre-filter, refuted by the verifier, retained
-- [ ] Step 14: AFTER THE FINAL ROUND ONLY — answer every external comment once, `keryx review comments reply --final` — never against a pull request the dispatch named as the caller's
+- [ ] Step 14: MANAGED rounds only (NEVER in `lightweight`, which is report-only), AFTER THE FINAL ROUND, on an OPEN pull request at the head you reviewed — answer every external comment once, `keryx review comments reply --final` — never against a pull request the dispatch named as the caller's
 ```
 
 Step 0 runs on **every** round. Step 14 runs **once**, after the last one. They are
@@ -66,12 +66,12 @@ Working it out in your head is exactly the mechanical step that rule moves into
 code — and it is the step that was documented as running for a whole release
 while nothing called it.
 
-The command names no model. It ranks whatever your provider reports at runtime
-and places the tiers relative to your own model; when ranking fails it still
-names the session's own provider and model as a fallback. Only when the session
-itself has no provider/model to name does it print `inherit: true` and exit 0,
-which means the dispatch runs on the session model. That is a correct answer,
-not a failure — never "fix" it by writing a model id into a dispatch.
+It names a model only if you gave it your session (`--session-provider`/
+`--session-model` or `KERYX_SESSION_*`) and discovery found another. Otherwise it prints
+`inherit: true` with the tier — **adaptive**: pick your own runtime's model for
+that tier (`standard` = your session model; `light`/`deep` = your runtime's
+lighter/most capable class if its dispatch tool offers one, else the session
+model). Never "fix" it by writing a model id into a dispatch.
 
 ---
 
@@ -236,7 +236,7 @@ what happened", and it is the single reason the precision figure cannot be read.
 
 Managed modes:
 
-- `lightweight`: report-only; no flow or managed review artifacts are created.
+- `lightweight`: report-only; no flow or managed review artifacts are created, and nothing is posted — no `comments reply`.
 - `attach-review`: write under
   `.metaproject/flows/<flow-dir>/reviews/<review-id>/`.
 - `review-flow`: write under `.metaproject/reviews/<review-id>/`.
@@ -274,7 +274,7 @@ here.
 keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                               [--self <login>] [--round <n>] [--out <findings.json>] [--json]
 keryx review comments reply   --repo <owner/repo> --pr <n> --outcomes <file|->
-                              --sha <head-sha> --final [--dry-run]
+                              --review <review-id> --sha <head-sha> --final [--dry-run]
                               [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
                               [--flow-link <url>]
 ```
@@ -283,12 +283,11 @@ Add `--fixtures <dir>` to either to run the whole loop against JSON on disk —
 no token, no network, nothing posted. Use it to see what a reply pass would say
 before it says it.
 
-`--sha` is the commit you collected against, and it is required. The completion
-gate compares it to the pull request's head: a collection that ran before the
-comments arrived is **stale**, and a gate that could not tell the difference
-would pass a flow with unanswered reviewers on it while printing
-`0 outstanding`. A record with no SHA reads as "cannot be shown current", never
-as "fresh".
+`--sha` is the pull request's **current head**, and it is required. `collect`
+prints the PR's state and head and warns when they disagree; `reply` **refuses** a
+closed or merged PR (`--allow-closed-pr` overrides), an unreadable one, and a `--sha`
+that is not its head. The completion gate compares the recorded SHA as well; a
+record with no SHA reads as "cannot be shown current", never as "fresh".
 
 ### What collection does, so you do not do it by hand
 
@@ -650,7 +649,7 @@ whether it is computed:
 
 Rules:
 - Never write a model id into a dispatch by hand — paste the `model` block `keryx review tier` printed.
-- When the session has no provider/model to name it prints `inherit: true` and exits 0; that means the dispatch runs on the session model. Record that as `model_assignment: unsupported`, not as a failure.
+- `inherit: true` is the adaptive answer: dispatch on your runtime's model for the block's `tier` (Step 6). Record `model_assignment: adaptive` and the model you actually chose — not a failure.
 - With `model_strategy: ask`, present the model plan once before dispatch, then proceed with the computed model.
 
 ---
@@ -1035,25 +1034,14 @@ Two things it does NOT get:
 - **No self-verification.** The never-self-verify rule is about the actor, not
   the origin.
 
-#### `drift` — the source moved, the reviewer did not
-
-A project reviewer built from an external file — a rules file, a review profile,
-a conventions doc — records where it came from and the hash of that file at
-import. `keryx review reviewers` re-reads the source and reports:
-
-| `drift` | Meaning | What to do this round |
-|---|---|---|
-| `none` | No external source; written here | Nothing |
-| `clean` | Source matches the import | Nothing |
-| `changed` | Source has moved on since import | Dispatch it, and say so in the report |
-| `missing` | Source can no longer be read | Dispatch it, and say so in the report |
-
-**A drifted reviewer still runs.** It is a reviewer built from an older version
-of its source, which is a fact about provenance, not a defect in its findings —
-suppressing it would trade real coverage for tidiness. Record the drift in
-`review_context` and name it once in the report, so the next person knows the
-profile is due a re-read. Never file it as a finding against the code under
-review: it is a fact about the review, not about the diff.
+**Select them with the fields the inventory returns, not by reading prose.**
+Each `project` entry carries `flags` (a passed flag selects it explicitly),
+`paths` + `pathsSource` (the path gate; `none` → dispatch), `stackRequires`
+(stack scoping), `unresolvedRules` (dispatch, name the missing rules once in the
+report) and `drift` (dispatch, name it once in the report). What each means and
+what to do with it: `SKILL.detail.md` beside this file, section "Project-local
+reviewers". A description saying another entry point dispatches it is its
+author's routing note, not a restriction.
 
 ### Convention Reviewer Confirmation
 
@@ -1545,15 +1533,15 @@ Severity ordering for sort: `blocker` > `major` > `minor` > `info`.
 
 ### Model Metadata Rules
 
-`unsupported` is a model-assignment outcome recorded when `keryx review tier` has no session provider/model to name (it prints `inherit: true`), not a model name. Never render it as `model: unsupported` or as the PR comment `Model` value.
+`adaptive` is a model-assignment outcome recorded when `keryx review tier` printed `inherit: true` and the host picked the model for the tier, not a model name. Never render it as `model: adaptive` or as the PR comment `Model` value.
 
 When writing review report metadata or a PR comment:
 1. Read `review_context.token_policy.model_plan`.
 2. Set `Model strategy` from `model_plan.strategy` (`ask` or `adaptive`).
 3. Set `Current model` from the first available value: `model_plan.current_model`, detected tool output, current runtime model shown by the platform, or `unknown`.
 4. Record the model actually assigned per reviewer — the `tier` and (`provider`+`model` or `inherit`) from the `model` block `keryx review tier` printed for that dispatch — rather than a fixed set of classes; include `complex_model`, `normal_model`, and `simple_model` too when `model_plan` reports them.
-5. If model assignment is unsupported (the dispatch's `model` block carried `inherit: true`), write `Model assignment: unsupported` and still write `Current model: <actual model or unknown>`.
-6. If the actual model is unknown, write `unknown`; do not substitute `unsupported` or `inherit`.
+5. If the dispatch's `model` block carried `inherit: true`, write `Model assignment: adaptive` and the model the host actually dispatched on for that tier (or `unknown`).
+6. If the actual model is unknown, write `unknown`; do not substitute `adaptive` or `inherit`.
 
 ---
 

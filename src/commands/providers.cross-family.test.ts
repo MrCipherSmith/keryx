@@ -81,11 +81,24 @@ describe("the seam the review pipeline calls", () => {
     expect(decision.reason.length).toBeGreaterThan(0);
   });
 
-  test("it falls back to the persisted shell selection when the session is omitted", () => {
-    // Same fallback `keryx review tier` uses, so the two seams read one session.
-    const decision = crossFamilyReviewForSession(false);
+  test("an omitted session is NOT filled from the persisted shell selection", () => {
+    // Same rule `keryx review tier` follows, so the two seams read one session.
+    // The persisted selection is whatever `keryx shell` was last pointed at, not
+    // the caller: from Claude Code it made a Claude-authored change another
+    // vendor's.
+    const decision = crossFamilyReviewForSession(false, {}, { env: {} });
     expect(decision.schemaVersion).toBe(1);
+    expect(decision.author_family ?? null).toBeNull();
     expect(typeof decision.reason).toBe("string");
+  });
+
+  test("a host-exported KERYX_SESSION_* names the author family", () => {
+    const decision = crossFamilyReviewForSession(
+      false,
+      {},
+      { env: { KERYX_SESSION_PROVIDER: "anthropic", KERYX_SESSION_MODEL: "claude-opus-5" } },
+    );
+    expect(decision.author_family).toBe("anthropic");
   });
 });
 

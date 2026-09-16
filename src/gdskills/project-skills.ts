@@ -36,6 +36,12 @@ export type CreateProjectSkillOptions = {
    * being read from disk. Required for a GitHub SKILL.md, which is not a file.
    */
   originContent?: string | undefined;
+  /**
+   * The version to register and write into the `Version:` header. An imported
+   * skill carries its author's `metadata.version`; a registry that says 0.1.0
+   * for a 2.0.0 reviewer is a provenance record nobody can trust.
+   */
+  version?: string | undefined;
   format?: ProjectSkillFormat | undefined;
   dryRun?: boolean | undefined;
 };
@@ -143,7 +149,7 @@ export async function createProjectSkill(
         name: skillName,
         target: options.target,
         path: relativeSkillPath,
-        version: VERSION,
+        version: options.version ?? VERSION,
         status: "active",
         updatedAt: new Date().toISOString(),
       });

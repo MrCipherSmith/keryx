@@ -56,7 +56,8 @@ import {
 } from "../review/blast-radius";
 import { loadGraph } from "../gdgraph/query";
 import { detectProviders } from "./select";
-import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { resolveCallerSession, type SessionSource } from "../lib/caller-session";
+import { envWithSavedApiKeys } from "../lib/shell-config";
 import {
   decideDispatchModel,
   type DiscoveredProvider,
@@ -71,8 +72,10 @@ import {
   collectPrComments,
   createFixturePort,
   createGhPort,
+  describePullRequest,
   externalFindingsFromComments,
   postReplyPass,
+  shaMatchesHead,
   prCommentsStatePath,
   readPrCommentState,
   recordSeenComments,
@@ -198,6 +201,9 @@ const COMMENTS_REPLY_FLAGS = [
   // The skill's own result, checked against `review-pr-feedback-output` before
   // anything is posted. See `refuseInvalidResult`.
   "--result",
+  // The managed review package this reply pass belongs to. With `--result`, one
+  // of the two is required to post: see `refuseUnmanagedReply`.
+  "--review",
   "--sha",
   "--round",
   "--final",
@@ -207,6 +213,9 @@ const COMMENTS_REPLY_FLAGS = [
   "--max-chars",
   "--flow-link",
   "--fixtures",
+  // Post to a closed or merged pull request anyway. Off by default: the pass
+  // refuses a finished pull request, and the head must match either way.
+  "--allow-closed-pr",
 ] as const;
 
 const LOOP_FLAGS = ["--flow", "--task"] as const;
@@ -310,6 +319,7 @@ const TIER_FLAGS = [
   "--security",
   "--session-provider",
   "--session-model",
+  "--from-shell-config",
   "--catalog",
   "--json",
 ] as const;
@@ -747,17 +757,17 @@ async function runBudget(args: string[]): Promise<void> {
  * dispatching, instead of eyeballing it".
  *
  * NO MODEL NAME IS WRITTEN HERE, and none is written anywhere this command
- * reads. The session's provider/model come from the persisted shell selection
- * (or from `--session-provider`/`--session-model` for a caller that already
- * holds them), the candidate set comes from live provider detection (or from
- * `--catalog`), and `src/gdskills/model-tier.ts` places the tier relative to the
- * session's own model. When the environment cannot be worked out, the answer is
- * the caller's OWN model — never a downgrade, never a non-zero exit.
+ * reads. The session's provider/model come from the CALLER — flags, or the
+ * `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL` environment a host exports —
+ * the candidate set comes from live provider detection (or from `--catalog`),
+ * and `src/gdskills/model-tier.ts` places the tier relative to the session's
+ * own model. When the caller names nothing, the block is adaptive: the tier
+ * plus `inherit: true`, and the host picks its own model for that tier.
  */
 async function runTier(args: string[]): Promise<void> {
   rejectUnknownFlags(args, TIER_FLAGS, "tier");
   const signals = tierSignalsFromArgs(args);
-  const session = sessionModelFromArgs(args);
+  const { session, source } = sessionModelFromArgs(args);
   const catalog = await tierCatalog(args, session);
   const decision = decideDispatchModel(session, signals, catalog);
   const block = dispatchModelBlock(decision);
@@ -772,16 +782,16 @@ async function runTier(args: string[]): Promise<void> {
   console.log("");
   console.log(`tier: ${decision.tier}`);
   console.log(`tier_reasons: ${decision.tier_reasons.join(", ")}`);
-  console.log(
-    `provider: ${decision.provider === "" ? "not resolved (no --session-provider, and none persisted by `keryx shell`)" : decision.provider}`,
-  );
-  // The operator's standing instruction, printed rather than assumed: an
-  // unresolvable tier inherits the caller's own model. Saying "not resolved" and
-  // stopping there would read as a failure, and the next thing a reader does
-  // with a failure is pick a model by hand.
-  console.log(
-    `model: ${decision.model === "" ? "not resolved — run this dispatch on YOUR OWN model (never a downgrade)" : decision.model}`,
-  );
+  console.log(`session_source: ${SESSION_SOURCE_LABELS[source]}`);
+  // Printed rather than assumed: `inherit` is an answer, and saying "not
+  // resolved" would read as a failure — the next thing a reader does with a
+  // failure is pick a model by hand.
+  if (pinsModel(decision)) {
+    console.log(`provider: ${decision.provider}`);
+    console.log(`model: ${decision.model}`);
+  } else {
+    console.log(`model: inherit — ${ADAPTIVE_GUIDANCE[decision.tier]}`);
+  }
   console.log(`tier_resolution: ${decision.tier_resolution}`);
   console.log(
     `model_discovery: provider=${discovery.provider === "" ? "none" : discovery.provider} candidates=${discovery.candidates.length} ranked=${discovery.ranked.length} session_rank=${discovery.session_rank ?? "none"}`,
@@ -820,20 +830,33 @@ function tierSignalsFromArgs(args: string[]): TierSignals {
   };
 }
 
-/**
- * The session's provider/model: the flags when given, otherwise the selection
- * `keryx shell` persisted.
- *
- * Discovered at runtime by construction — there is no default model id in this
- * file and there must not be. Empty strings when neither source knows, which
- * `rankDiscoveredModels` reads as "no anchor" and answers with a fallback.
- */
-function sessionModelFromArgs(args: string[]): SessionModelContext {
-  const config = loadShellConfig();
-  return {
-    providerId: (optionValue(args, "--session-provider") ?? config.provider ?? "").trim(),
-    modelId: (optionValue(args, "--session-model") ?? config.model ?? "").trim(),
-  };
+/** What the host does with `inherit: true`, per tier. Names no model. */
+const SESSION_SOURCE_LABELS: Readonly<Record<SessionSource, string>> = {
+  flags: "flags (--session-provider/--session-model)",
+  env: "environment (KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL)",
+  "shell-config": "the selection `keryx shell` persisted (--from-shell-config)",
+  none: "none — the caller named no model, so the block is adaptive",
+};
+
+const ADAPTIVE_GUIDANCE: Readonly<Record<string, string>> = {
+  light:
+    "dispatch on a lighter model your own runtime offers (its fast/small class), or on your session model if it offers no choice",
+  standard: "dispatch on your session model",
+  deep: "dispatch on the most capable model your own runtime offers, or on your session model if it offers no choice",
+};
+
+/** The caller's session for `review tier`; see `resolveCallerSession`. */
+export function sessionModelFromArgs(
+  args: string[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): { session: SessionModelContext; source: SessionSource } {
+  const resolved = resolveCallerSession({
+    flagProvider: optionValue(args, "--session-provider"),
+    flagModel: optionValue(args, "--session-model"),
+    fromShellConfig: args.includes("--from-shell-config"),
+    env,
+  });
+  return { session: { providerId: resolved.providerId, modelId: resolved.modelId }, source: resolved.source };
 }
 
 /**
@@ -896,21 +919,33 @@ async function tierCatalog(args: string[], session: SessionModelContext): Promis
 }
 
 /**
+ * Whether the block names a model: only when discovery assigned one that is
+ * NOT the session's.
+ *
+ * `session-ranked` and `session-fallback` both resolve to the session's own
+ * model, and naming it there adds nothing a dispatch can use — it only pins an
+ * id the runner may not have (a different host, a model switched mid-session)
+ * and turns "whatever you are running" into a stale literal.
+ */
+export function pinsModel(decision: DispatchModelDecision): boolean {
+  return decision.tier_resolution === "discovered" && decision.provider !== "" && decision.model !== "";
+}
+
+/**
  * The dispatch document's `model` object, exactly as
  * `contracts/subagent-dispatch.schema.json` defines it.
  *
- * `provider`/`model` are written only when both were resolved; otherwise the
- * block carries `inherit: true`, which is the schema's way of saying what the
- * operator's instruction says — the caller runs the dispatch on its own model.
- * Writing an empty string into either field would produce a schema-invalid
- * dispatch that still looks like an answer.
+ * `provider`/`model` are written only when {@link pinsModel}; otherwise the
+ * block carries `inherit: true` beside the tier — the adaptive answer, which the
+ * host resolves to its own model for that tier. Writing an empty string into
+ * either field would produce a schema-invalid dispatch that still looks like an
+ * answer.
  */
-function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
-  const named = decision.provider !== "" && decision.model !== "";
+export function dispatchModelBlock(decision: DispatchModelDecision): Record<string, unknown> {
   return {
     tier: decision.tier,
     tier_reasons: decision.tier_reasons,
-    ...(named ? { provider: decision.provider, model: decision.model } : { inherit: true }),
+    ...(pinsModel(decision) ? { provider: decision.provider, model: decision.model } : { inherit: true }),
     tier_resolution: decision.tier_resolution,
     model_discovery: decision.model_discovery,
   };
@@ -983,6 +1018,22 @@ async function runCommentsCollect(args: string[]): Promise<void> {
   console.log(renderPrCommentsMarkdown({ repo, number, round, result }));
   console.log(`findings: ${findings.length}${out === undefined ? "" : ` (written to ${out})`}`);
   console.log(`collected against: ${sha} (round ${round})`);
+  // The pull request itself, every time. This output used to carry the SHA we
+  // were given and nothing about the pull request, so a collection against a
+  // pre-merge head of a merged PR looked exactly like a current one.
+  console.log(`pull request: ${describePullRequest(result.pull)}`);
+  if (result.pull.state === "unknown") {
+    console.log("WARNING: the pull request's state could not be read — `comments reply` will refuse this pull request.");
+  } else if (result.pull.merged || result.pull.state === "closed") {
+    console.log(
+      "WARNING: the pull request is no longer open — `comments reply` will refuse it unless --allow-closed-pr is passed.",
+    );
+  }
+  if (result.pull.headSha !== null && !shaMatchesHead(sha, result.pull.headSha)) {
+    console.log(
+      `WARNING: --sha ${sha} is not the pull request's head (${result.pull.headSha}) — this collection is stale, and \`comments reply\` refuses a SHA that is not the head.`,
+    );
+  }
   console.log(
     `unanswered so far: ${unansweredComments(recorded).length} — replies are posted ONCE, after the final round.`,
   );
@@ -1001,6 +1052,7 @@ async function runCommentsReply(args: string[]): Promise<void> {
   // comment collection to be told so would hide the refusal behind whatever
   // else can fail first — including, on an unreachable tracker, forever.
   await refuseInvalidResult(optionValue(args, "--result"), optionValue(args, "--outcomes"));
+  await refuseUnmanagedReply(args, repo, number, dryRun || !isFinal);
 
   const cwd = process.cwd();
   const port = await resolvePort(args);
@@ -1034,7 +1086,11 @@ async function runCommentsReply(args: string[]): Promise<void> {
     repo,
     number,
     pass,
-    sha: requiredOption(args, "--sha", "comments reply"),
+    // Checked for SHA shape, as `collect` already was — and then compared with
+    // the pull request's head inside the pass, which it never used to be.
+    sha: requiredSha(args, "--sha", "comments reply"),
+    pull: collected.pull,
+    allowClosed: args.includes("--allow-closed-pr"),
     round: { index: round, isFinal },
     state,
     dryRun,
@@ -1067,7 +1123,7 @@ async function resolvePort(args: string[]): Promise<GitHubPort> {
     return createGhPort();
   }
   const files: Record<string, unknown> = {};
-  for (const key of ["pull-comments", "pull-reviews", "issue-comments"]) {
+  for (const key of ["pull", "pull-comments", "pull-reviews", "issue-comments"]) {
     const file = join(fixtures, `${key}.json`);
     try {
       files[key] = JSON.parse(await readFile(file, "utf8")) as unknown;
@@ -1124,6 +1180,49 @@ async function resolveSelfLogin(args: string[]): Promise<string> {
  * registry records honestly as the limit of this enforcement rather than
  * rounding up to "the contract is enforced".
  */
+/**
+ * Posting replies needs a managed context — a lightweight review is report-only.
+ *
+ * `review-orchestrator` declares `lightweight` as "report-only; no artifacts",
+ * and its Step 14 still told an agent to run `comments reply` unconditionally —
+ * so a plain "review this PR" ended by posting to the pull request. The mode is
+ * not something this command can be told and trust, so it asks for evidence
+ * instead: the managed review package the round wrote (`--review`, whose target
+ * must be this pull request), or the `review-pr-feedback` result (`--result`,
+ * already validated above). A lightweight review has neither. A dry run posts
+ * nothing and is always allowed.
+ */
+async function refuseUnmanagedReply(args: string[], repo: string, number: number, postsNothing: boolean): Promise<void> {
+  // `postsNothing`: a dry run, or a non-final round that the pass refuses with its own, more specific reason.
+  if (postsNothing || optionValue(args, "--result") !== undefined) {
+    return;
+  }
+  const where = `${repo}#${number}`;
+  const ref = optionValue(args, "--review");
+  if (ref === undefined) {
+    throw new Error(
+      `Refusing to reply on ${where}: posting is for a MANAGED review, and nothing here shows one. Pass \`--review <review-id-or-path>\` (the package \`keryx review start/attach\` wrote for this pull request) or \`--result <file>\` (a review-pr-feedback run). A lightweight review is report-only — it answers nobody. \`--dry-run\` still shows what would be posted.`,
+    );
+  }
+  let manifest;
+  try {
+    manifest = await getManagedReviewStatus(process.cwd(), ref);
+  } catch (error) {
+    // eslint-disable-next-line preserve-caught-error -- The package ref is the actionable part; the cause is summarised inline.
+    throw new Error(
+      `Refusing to reply on ${where}: \`--review ${ref}\` is not a readable managed review package (${error instanceof Error ? error.message : String(error)}).`,
+    );
+  }
+  const target = manifest.target;
+  const refNumber = /(?:^|[/#])(\d+)\/?$/.exec(target.ref.trim())?.[1];
+  const repoMismatch = target.repository !== undefined && target.repository !== "" && !target.repository.toLowerCase().endsWith(repo.toLowerCase());
+  if (target.kind !== "pr" || refNumber !== String(number) || repoMismatch) {
+    throw new Error(
+      `Refusing to reply on ${where}: \`--review ${ref}\` reviewed ${target.kind} \`${target.ref}\`${target.repository ? ` in ${target.repository}` : ""}, not this pull request. A reply pass answers the review that produced its outcomes.`,
+    );
+  }
+}
+
 async function refuseInvalidResult(source: string | undefined, outcomesSource: string | undefined): Promise<void> {
   if (source === undefined) {
     return;
@@ -2426,7 +2525,9 @@ comments:
   UNOBSERVED, on the same rule as no record at all.
   \`reply\` refuses without --final: replying per round turns one review thread
   into six, and a reply written mid-flow states an intention rather than an
-  outcome. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
+  outcome. It also refuses a pull request that is closed or merged (override:
+  --allow-closed-pr), one whose state could not be read, and a --sha that is not
+  the pull request's head — the answers must describe the commit it points at. Each reply is at most ${DEFAULT_MAX_SENTENCES_PER_REPLY} sentences (--max-sentences) AND ${DEFAULT_MAX_REPLY_CHARS} characters
   (--max-chars) — CUT to both in code, with the remainder replaced by a link,
   because a sentence budget alone lets one 4,000-character sentence through —
   threaded where GitHub gives a thread, and capped
@@ -2456,11 +2557,13 @@ tier:
   that produced it, the resolved provider/model, \`tier_resolution\`, and what was
   on the table when it resolved; --json prints the block alone.
   NO MODEL NAME EXISTS IN THIS COMMAND. The session's provider/model come from
-  the selection \`keryx shell\` persisted (override with --session-provider /
-  --session-model), and the candidate set comes from live provider detection
-  (override with --catalog, the \`detectProviders()\` shape). When the environment
-  cannot be worked out, the block says \`inherit\` and the dispatch runs on YOUR
-  OWN model: never a downgrade, never a non-zero exit. Detection is skipped
+  the caller: --session-provider / --session-model, else KERYX_SESSION_PROVIDER /
+  KERYX_SESSION_MODEL, else (only with --from-shell-config) the selection
+  \`keryx shell\` persisted. The candidate set comes from live provider detection
+  (override with --catalog, the \`detectProviders()\` shape). A model is named
+  only when discovery assigned one other than the session's; otherwise the block
+  says \`inherit\` with the tier, and the host picks its own model for that tier
+  (standard: the session model). Never a non-zero exit. Detection is skipped
   entirely when the session names no provider and model, because ranking is
   refused without an anchor whatever the catalogue holds.
 
