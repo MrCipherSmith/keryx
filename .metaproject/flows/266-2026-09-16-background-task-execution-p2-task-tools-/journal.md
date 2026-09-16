@@ -94,3 +94,5 @@ above is exactly why that would have been the weaker choice.
 - 2026-09-16T13:44:37.252Z - task-done: T10: /demote <task_id> in both shells through the shared command registry
 - 2026-09-16T13:44:37.342Z - task-done: T11: Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES
 - 2026-09-16T13:44:37.438Z - task-attempt: T12: started (attempt 1) — verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health
+- 2026-09-16T14:09:50.308Z - task-done: T12: Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health
+- 2026-09-16T14:09:50.413Z - task-attempt: T13: started (attempt 1) — review round, ingested LAST against the head that will merge (flow 265's gate refused a round run against a stale SHA)
