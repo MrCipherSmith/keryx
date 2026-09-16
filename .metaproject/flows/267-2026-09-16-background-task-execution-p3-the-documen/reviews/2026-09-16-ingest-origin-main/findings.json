@@ -1,0 +1,60 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "orchestrator-self-review",
+    "severity": "minor",
+    "problem": "The page's front-matter `Describes:` list still named only the five flow-173 source files, while the rewritten page's subject now includes completion delivery, the /demote parser and the tool roster with the observer split.",
+    "impact": "The wiki's page-to-code linkage is derived from that list, so an agent or a person following this page to the implementation would be pointed at the flow-173 modules only, and would not find the code that implements most of what the page now claims.",
+    "suggested_fix": "Add src/commands/agent.ts, src/commands/agent-commands.ts and src/commands/interactive-agent-tools.ts to the Describes list.",
+    "evidence": "Read of the rewritten page's front-matter at lines 6-11 against its own body, which documents delivery (agent.ts), /demote (agent-commands.ts) and the observer split on the roster (interactive-agent-tools.ts).",
+    "confidence": "high",
+    "file": ".metaproject/wiki/architecture/background-jobs.md",
+    "line": 6,
+    "quote": "Describes:",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-ingest-origin-main#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Verified against commit 510e38bb (docs(wiki): describe the supervised-task model, and retire the page that outlived it), which is contained in head 703b39ecb61918f02f15c12c4ee4fbbad8a235d5 — the head this round was ingested against. At 510e38bb the page's front-matter Describes list holds all eight files: the five flow-173 modules plus src/commands/agent.ts, src/commands/agent-commands.ts and src/commands/interactive-agent-tools.ts, which implement completion delivery, the /demote parser and the roster's observer split. keryx wiki validate reports all checks passed, and keryx wiki index regenerated the entry from the page itself. The finding no longer reproduces: every subject the page claims has a named module in the linkage list.",
+      "verifier": "p3-page-reread (site-check over the rewritten page and the wiki gate)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 510e38bb (docs(wiki): describe the supervised-task model, and retire the page that outlived it): the page's Describes front-matter now lists src/commands/agent.ts, src/commands/agent-commands.ts and src/commands/interactive-agent-tools.ts alongside the five flow-173 modules, so the wiki's page-to-code linkage points at the code implementing completion delivery, the /demote parser and the observer split. Verified at head 703b39ecb61918f02f15c12c4ee4fbbad8a235d5: keryx wiki validate reports all checks passed and the index was regenerated from the page itself."
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "orchestrator-self-review",
+    "severity": "info",
+    "problem": "After the targeted edits the page carried two sections about the tool surface: the new task-tool table near the summary, and the older Details heading whose content had become risk classification, approval and the tool-call budget.",
+    "impact": "Two headings for one subject is the shape a page drifts back into being wrong from: the next edit lands in whichever section the editor happens to open.",
+    "suggested_fix": "Retitle the Details heading to what its content actually is, and keep the surface description in one place.",
+    "evidence": "Read of the page after the edits: the table sits under the summary while `### Model-facing tools` in Details holds only the risk/approval/budget paragraphs.",
+    "confidence": "high",
+    "file": ".metaproject/wiki/architecture/background-jobs.md",
+    "line": null,
+    "quote": "### Model-facing tools",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-ingest-origin-main#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Verified against the same commit 510e38bb, contained in head 703b39ecb61918f02f15c12c4ee4fbbad8a235d5. At that tree one section describes the tool surface (the task-tool table with the deprecated aliases and the reads-only id rule), while the Details heading that used to duplicate it is now 'Tool safety and budget' and holds only the risk classification, the side-worker denial, the approval argument and the tool-call budget. The TUI paragraph names the sidebar's label as the interface's own name rather than framing the page around it. Re-read end to end: no second heading about the tool surface remains.",
+      "verifier": "p3-page-reread (site-check over the rewritten page and the wiki gate)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 510e38bb: the duplicated tool section is gone — the surface is described once, and the Details heading that used to repeat it is now 'Tool safety and budget', holding only risk classification, the side-worker denial, the approval argument and the tool-call budget. Verified at head 703b39ecb61918f02f15c12c4ee4fbbad8a235d5 by re-reading the page end to end."
+    }
+  }
+]
