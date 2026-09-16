@@ -4,23 +4,17 @@ import { homedir, tmpdir } from "node:os";
 import http from "node:http";
 import path from "node:path";
 import { saveSandboxDefaults } from "../../../lib/sandbox-config";
-import * as shellExecModule from "./shell-exec-tool";
 import {
   type CommandRunner,
+  DEFAULT_SHELL_YIELD_MS,
+  ENV_SHELL_YIELD_MS,
   extraReadDenyRoots,
   makeCommandRunner,
   resolveShellRestrictedMasks,
   resolveShellSandboxMode,
+  resolveShellYieldMs,
   shellExecTool,
 } from "./shell-exec-tool";
-
-// flow 263 (RED): new exports, read off the namespace so this file still loads
-// (and its existing tests still run) before they exist.
-const { DEFAULT_SHELL_YIELD_MS, ENV_SHELL_YIELD_MS, resolveShellYieldMs } = shellExecModule as unknown as {
-  DEFAULT_SHELL_YIELD_MS: number;
-  ENV_SHELL_YIELD_MS: string;
-  resolveShellYieldMs: (env: Record<string, string | undefined>) => number;
-};
 
 function recordingRunner(result = { output: "done", isError: false }): {
   run: CommandRunner;

@@ -69,6 +69,8 @@ function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
     get: () => undefined,
     list: () => [],
     readOutput: () => ({ ok: true, output: "" }),
+    waitForExit: async () => "unknown",
+    promote: () => ({ ok: true }),
     kill: async () => ({ ok: true }),
     sweepAll: async () => {},
     ...overrides,
