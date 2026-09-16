@@ -1,0 +1,279 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "265",
+  "slug": "background-task-execution-p1-a-finished-",
+  "title": "Background task execution P1: a finished task wakes the agent without polling",
+  "status": "in-progress",
+  "createdAt": "2026-09-16T10:47:30.558Z",
+  "updatedAt": "2026-09-16T10:50:45.864Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:11126b98b2c7174d7bfccddd709aa48adc033b6db752ff6eff7dfd2402db4e81",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P1 tasks T5-T12"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P1 tasks T5-T12"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P1 tasks T5-T12"
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for AC1-AC11",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Registry: observed, drainUndelivered, onCompletion, hold-timeout kill reason",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Agent loop: drain at the round boundary and build the notification message",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Agent loop: hold the turn at the text-only finish for sessions that cannot be woken",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Shells: readline input-vs-completion race, TUI idle wake, wake cap and reset",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verify: typecheck, P0 regression suites, real --print hold smoke",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review the P1 diff and fix findings",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Journal deviations and mark P1 in the requirements package",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T10:47:30.558Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T10:50:24.599Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T10:50:24.705Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T10:50:24.811Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T10:50:24.900Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T10:50:24.985Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for AC1-AC11"
+    },
+    {
+      "at": "2026-09-16T10:50:25.076Z",
+      "event": "task-added",
+      "detail": "T6: Registry: observed, drainUndelivered, onCompletion, hold-timeout kill reason"
+    },
+    {
+      "at": "2026-09-16T10:50:25.163Z",
+      "event": "task-added",
+      "detail": "T7: Agent loop: drain at the round boundary and build the notification message"
+    },
+    {
+      "at": "2026-09-16T10:50:25.253Z",
+      "event": "task-added",
+      "detail": "T8: Agent loop: hold the turn at the text-only finish for sessions that cannot be woken"
+    },
+    {
+      "at": "2026-09-16T10:50:25.338Z",
+      "event": "task-added",
+      "detail": "T9: Shells: readline input-vs-completion race, TUI idle wake, wake cap and reset"
+    },
+    {
+      "at": "2026-09-16T10:50:25.423Z",
+      "event": "task-added",
+      "detail": "T10: Verify: typecheck, P0 regression suites, real --print hold smoke"
+    },
+    {
+      "at": "2026-09-16T10:50:25.514Z",
+      "event": "task-added",
+      "detail": "T11: Review the P1 diff and fix findings"
+    },
+    {
+      "at": "2026-09-16T10:50:25.610Z",
+      "event": "task-added",
+      "detail": "T12: Journal deviations and mark P1 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T10:50:45.769Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T10:50:45.864Z",
+      "event": "started"
+    }
+  ]
+}
