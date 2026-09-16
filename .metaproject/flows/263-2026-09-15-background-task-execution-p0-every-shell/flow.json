@@ -1,0 +1,489 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "263",
+  "slug": "background-task-execution-p0-every-shell",
+  "title": "Background task execution P0: every shell_exec is a supervised task with a bounded yield",
+  "status": "in-progress",
+  "createdAt": "2026-09-15T18:39:16.109Z",
+  "updatedAt": "2026-09-16T07:15:18.431Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c38efd814221baa9af968248cee0e4767697d5fd7cf0943726cf522f78c7bb8e",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T07:14:54.659Z",
+      "note": "shell-exec-background.test.ts flow-263 AC1: incident command with no flag returns a task-<n>-<pid> handle under a 50ms yield, readable via shell_job_output and killed via shell_job_kill with killReason model; live run returned in 3006ms"
+    },
+    "AC2": {
+      "at": "2026-09-16T07:14:54.768Z",
+      "note": "shell-exec-background.test.ts flow-263 AC2: trimmed output, (no output; exit N), isError on non-zero, 20000-byte head cap with truncated marker, no handle"
+    },
+    "AC3": {
+      "at": "2026-09-16T07:14:54.872Z",
+      "note": "background-job-registry.test.ts flow-263 AC3: resolver units plus paired fakes and paired real processes (2s idle window, 100ms ticks); scripted fake covers the KERYX_SHELL_IDLE_MS and idle_timeout_ms message on every platform"
+    },
+    "AC4": {
+      "at": "2026-09-16T07:15:14.404Z",
+      "note": "background-job-registry.test.ts flow-263 AC4: exit 0 completed, non-zero failed, kill defaults to model, operator/session-exit/output-cap reasons each asserted, exactly one exit event per task"
+    },
+    "AC5": {
+      "at": "2026-09-16T07:15:14.494Z",
+      "note": "flow-263 AC5 in registry and shell_exec tests: foreground start never refused by the cap, background:true refused naming the running command, promoted task not killed and handle carries over_cap, running tasks stay at or below maxConcurrent+1"
+    },
+    "AC6": {
+      "at": "2026-09-16T07:15:14.586Z",
+      "note": "shell-exec-background.test.ts AC6 and background-job-registry.test.ts AC3: grandchild alive and pgid==pid before the kill, then polled until its pid is gone; verified live (process gone after shell_job_kill)"
+    },
+    "AC7": {
+      "at": "2026-09-16T07:15:18.179Z",
+      "note": "shell-exec-tool.test.ts AC7 pin plus interactive-agent-tools.test.ts behaviour test: the built roster's shell_exec yields a task handle through the session registry; shell-task-registry-wiring.test.ts pins both shell.ts call sites"
+    },
+    "AC8": {
+      "at": "2026-09-16T07:15:18.298Z",
+      "note": "background-job-session.test.ts: start alone is not listed, phase lists it, output before phase is kept, a task exiting while foreground is dropped and stays dropped, distinct glyphs for running/completed/failed/killed, killReason on the entry and in the Meta view"
+    },
+    "AC9": {
+      "at": "2026-09-16T07:15:18.431Z",
+      "note": "bun run typecheck clean; nine registry/shell_exec/TUI files 143 pass; AC9 suites 276 pass; full suite 10297 pass 0 fail; keryx health run PASS score 94"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for AC1-AC8",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-15T19:32:16.356Z",
+            "outcome": "started",
+            "detail": "263-T5 tests-creator dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.557Z",
+            "outcome": "started",
+            "detail": "263-T6T7 task-implementer dispatch (registry + shell_exec, coupled tests)"
+          },
+          {
+            "at": "2026-09-16T05:44:06.596Z",
+            "outcome": "blocked",
+            "detail": "implementer hung: no transcript activity for ~10h, no code changes landed; stopped and re-dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "shell_exec: bounded yield path, schema and description",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.654Z",
+            "outcome": "started",
+            "detail": "263-T6T7 task-implementer dispatch"
+          },
+          {
+            "at": "2026-09-16T05:44:07.007Z",
+            "outcome": "blocked",
+            "detail": "same dispatch hung (263-T6T7)"
+          },
+          {
+            "at": "2026-09-16T05:52:58.470Z",
+            "outcome": "started",
+            "detail": "263-T7-retry task-implementer dispatch (shell_exec only, narrowed)"
+          },
+          {
+            "at": "2026-09-16T06:06:35.294Z",
+            "outcome": "blocked",
+            "detail": "second stall: transcript idle 758s with the implementation already on disk; orchestrator verifies and finishes it"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "TUI BackgroundJobStore: phase gating and new statuses",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.749Z",
+            "outcome": "started",
+            "detail": "263-T8 task-implementer dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: typecheck, AC9 suites, real-process incident smoke",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Review the P0 diff and fix findings",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-16T06:25:11.327Z",
+            "outcome": "started",
+            "detail": "review wave: review-logic, review-regression, review-testing-practices"
+          },
+          {
+            "at": "2026-09-16T06:54:23.168Z",
+            "outcome": "blocked",
+            "detail": "review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Journal deviations and update prompt/comment text",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-15T18:39:16.109Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-15T19:31:21.138Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-15T19:31:21.301Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-15T19:31:21.547Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-15T19:31:21.845Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-15T19:31:29.109Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for AC1-AC8"
+    },
+    {
+      "at": "2026-09-15T19:31:29.253Z",
+      "event": "task-added",
+      "detail": "T6: Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers"
+    },
+    {
+      "at": "2026-09-15T19:31:29.410Z",
+      "event": "task-added",
+      "detail": "T7: shell_exec: bounded yield path, schema and description"
+    },
+    {
+      "at": "2026-09-15T19:31:29.531Z",
+      "event": "task-added",
+      "detail": "T8: TUI BackgroundJobStore: phase gating and new statuses"
+    },
+    {
+      "at": "2026-09-15T19:31:29.649Z",
+      "event": "task-added",
+      "detail": "T9: Verify: typecheck, AC9 suites, real-process incident smoke"
+    },
+    {
+      "at": "2026-09-15T19:31:29.769Z",
+      "event": "task-added",
+      "detail": "T10: Review the P0 diff and fix findings"
+    },
+    {
+      "at": "2026-09-15T19:31:29.913Z",
+      "event": "task-added",
+      "detail": "T11: Journal deviations and update prompt/comment text"
+    },
+    {
+      "at": "2026-09-15T19:31:40.391Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-15T19:31:40.577Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-15T19:32:16.356Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 263-T5 tests-creator dispatch"
+    },
+    {
+      "at": "2026-09-15T19:42:57.423Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for AC1-AC8"
+    },
+    {
+      "at": "2026-09-15T19:42:57.557Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 263-T6T7 task-implementer dispatch (registry + shell_exec, coupled tests)"
+    },
+    {
+      "at": "2026-09-15T19:42:57.654Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 263-T6T7 task-implementer dispatch"
+    },
+    {
+      "at": "2026-09-15T19:42:57.749Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 263-T8 task-implementer dispatch"
+    },
+    {
+      "at": "2026-09-15T19:47:27.877Z",
+      "event": "task-done",
+      "detail": "T8: TUI BackgroundJobStore: phase gating and new statuses"
+    },
+    {
+      "at": "2026-09-16T05:44:06.597Z",
+      "event": "task-attempt",
+      "detail": "T6: blocked (attempt 2) — implementer hung: no transcript activity for ~10h, no code changes landed; stopped and re-dispatched"
+    },
+    {
+      "at": "2026-09-16T05:44:07.007Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 2) — same dispatch hung (263-T6T7)"
+    },
+    {
+      "at": "2026-09-16T05:52:58.282Z",
+      "event": "task-done",
+      "detail": "T6: Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers"
+    },
+    {
+      "at": "2026-09-16T05:52:58.470Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 3) — 263-T7-retry task-implementer dispatch (shell_exec only, narrowed)"
+    },
+    {
+      "at": "2026-09-16T06:06:35.294Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 4) — second stall: transcript idle 758s with the implementation already on disk; orchestrator verifies and finishes it"
+    },
+    {
+      "at": "2026-09-16T06:11:40.555Z",
+      "event": "task-done",
+      "detail": "T7: shell_exec: bounded yield path, schema and description"
+    },
+    {
+      "at": "2026-09-16T06:24:50.871Z",
+      "event": "task-done",
+      "detail": "T9: Verify: typecheck, AC9 suites, real-process incident smoke"
+    },
+    {
+      "at": "2026-09-16T06:25:11.327Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — review wave: review-logic, review-regression, review-testing-practices"
+    },
+    {
+      "at": "2026-09-16T06:54:23.169Z",
+      "event": "task-attempt",
+      "detail": "T10: blocked (attempt 2) — review-logic and review-regression both stalled ~28min with empty transcripts; orchestrator performs those two reviews directly"
+    },
+    {
+      "at": "2026-09-16T07:12:44.252Z",
+      "event": "task-done",
+      "detail": "T10: Review the P0 diff and fix findings"
+    },
+    {
+      "at": "2026-09-16T07:14:07.063Z",
+      "event": "task-done",
+      "detail": "T11: Journal deviations and update prompt/comment text"
+    },
+    {
+      "at": "2026-09-16T07:14:54.660Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-exec-background.test.ts flow-263 AC1: incident command with no flag returns a task-<n>-<pid> handle under a 50ms yield, readable via shell_job_output and killed via shell_job_kill with killReason model; live run returned in 3006ms"
+    },
+    {
+      "at": "2026-09-16T07:14:54.768Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shell-exec-background.test.ts flow-263 AC2: trimmed output, (no output; exit N), isError on non-zero, 20000-byte head cap with truncated marker, no handle"
+    },
+    {
+      "at": "2026-09-16T07:14:54.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: background-job-registry.test.ts flow-263 AC3: resolver units plus paired fakes and paired real processes (2s idle window, 100ms ticks); scripted fake covers the KERYX_SHELL_IDLE_MS and idle_timeout_ms message on every platform"
+    },
+    {
+      "at": "2026-09-16T07:15:14.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: background-job-registry.test.ts flow-263 AC4: exit 0 completed, non-zero failed, kill defaults to model, operator/session-exit/output-cap reasons each asserted, exactly one exit event per task"
+    },
+    {
+      "at": "2026-09-16T07:15:14.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: flow-263 AC5 in registry and shell_exec tests: foreground start never refused by the cap, background:true refused naming the running command, promoted task not killed and handle carries over_cap, running tasks stay at or below maxConcurrent+1"
+    },
+    {
+      "at": "2026-09-16T07:15:14.586Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: shell-exec-background.test.ts AC6 and background-job-registry.test.ts AC3: grandchild alive and pgid==pid before the kill, then polled until its pid is gone; verified live (process gone after shell_job_kill)"
+    },
+    {
+      "at": "2026-09-16T07:15:18.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-exec-tool.test.ts AC7 pin plus interactive-agent-tools.test.ts behaviour test: the built roster's shell_exec yields a task handle through the session registry; shell-task-registry-wiring.test.ts pins both shell.ts call sites"
+    },
+    {
+      "at": "2026-09-16T07:15:18.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: background-job-session.test.ts: start alone is not listed, phase lists it, output before phase is kept, a task exiting while foreground is dropped and stays dropped, distinct glyphs for running/completed/failed/killed, killReason on the entry and in the Meta view"
+    },
+    {
+      "at": "2026-09-16T07:15:18.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun run typecheck clean; nine registry/shell_exec/TUI files 143 pass; AC9 suites 276 pass; full suite 10297 pass 0 fail; keryx health run PASS score 94"
+    }
+  ]
+}

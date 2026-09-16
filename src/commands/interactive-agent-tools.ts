@@ -50,23 +50,25 @@ export type InteractiveAgentToolsInput = {
   /** Injected clock for `slate_write_seed` — defaults to `new Date().toISOString()`. */
   clock?: () => string;
   /**
-   * Background-job registry backing `shell_exec`'s `background:true` input
-   * plus `shell_job_output`/`shell_job_kill` (flow 173, T2/T3). A caller that
-   * wants jobs to survive across turns/`makeAgentDeps` rebuilds MUST create
-   * this ONCE at session scope (mirrors `getSessionDir`'s own session-lived
-   * closure) and pass the SAME instance on every call — a registry created
-   * fresh inside this function would lose every job the moment the tool list
-   * is rebuilt.
+   * The session's shell-task supervisor: since flow 263 it backs EVERY
+   * `shell_exec` call (each command is a supervised task that yields a handle
+   * when it outlives `KERYX_SHELL_YIELD_MS`), not just the `background:true`
+   * path it was introduced for in flow 173, plus `shell_job_output`/
+   * `shell_job_kill`. A caller that wants tasks to survive across
+   * turns/`makeAgentDeps` rebuilds MUST create this ONCE at session scope
+   * (mirrors `getSessionDir`'s own session-lived closure) and pass the SAME
+   * instance on every call — a registry created fresh inside this function
+   * would lose every task the moment the tool list is rebuilt.
    *
    * Omitted (flow 173 review finding F-010): NO fallback registry is minted
-   * here. A silently-created, orphaned `JobRegistry` (the old behavior) is
-   * unreachable by any session-exit sweep and worse than simply not offering
-   * the capability — so `shell_job_output`/`shell_job_kill` are OMITTED from
-   * the returned tool list entirely, and `shell_exec` still gets
-   * `background:true` in its schema but reports a clear "background jobs are
-   * not available in this session" tool error (see `shell-exec-tool.ts`'s
-   * `invoke`, which already handles `jobRegistry === undefined` this way)
+   * here. A silently-created, orphaned registry is unreachable by any
+   * session-exit sweep and worse than simply not offering the capability — so
+   * `shell_job_output`/`shell_job_kill` are OMITTED from the returned tool
+   * list entirely and `shell_exec` falls back to its synchronous runner
+   * (flow 263 D-17: no supervision, no yield, the pre-flow-173 behaviour),
    * rather than silently using a registry nothing else can see or clean up.
+   * Both production call sites in `shell.ts` pass one; the fallback exists for
+   * tests and direct callers (pinned by `shell-task-registry-wiring.test.ts`).
    */
   jobRegistry?: JobRegistry;
   /**

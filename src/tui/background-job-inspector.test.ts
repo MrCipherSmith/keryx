@@ -69,6 +69,8 @@ function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
     get: () => undefined,
     list: () => [],
     readOutput: () => ({ ok: true, output: "" }),
+    waitForExit: async () => "unknown",
+    promote: () => ({ ok: true }),
     kill: async () => ({ ok: true }),
     sweepAll: async () => {},
     ...overrides,
@@ -78,6 +80,7 @@ function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
 test("AC8: presentJobInspector opens host modal with Output + Meta tabs", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   const calls: unknown[] = [];
   const openModal: OpenModalFn = (_otui, _chrome, input) => {
     calls.push(input);
@@ -95,6 +98,7 @@ test("AC8: presentJobInspector opens host modal with Output + Meta tabs", () => 
 test("AC8: the footer adds k: kill alongside the existing ←/→ tabs / esc close pair", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   const calls: unknown[] = [];
   const openModal: OpenModalFn = (_otui, _chrome, input) => {
     calls.push(input);
@@ -123,6 +127,7 @@ test("presentJobInspector is a no-op for an unknown id", () => {
 test("AC8: store output updates after open repaint the Output tab body", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   let body: { content: string } | undefined;
   const openModal: OpenModalFn = (_otui, _chrome, input) => {
     input.renderTab("output", {
@@ -145,6 +150,7 @@ test("AC8: store output updates after open repaint the Output tab body", () => {
 test("AC8: a removeAll() session-teardown sweep while the inspector is open repaints the gone-state", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   let body: { content: string } | undefined;
   const openModal: OpenModalFn = (_otui, _chrome, input) => {
     input.renderTab("output", {
@@ -168,6 +174,7 @@ test("AC8: a removeAll() session-teardown sweep while the inspector is open repa
 test("AC8: the Meta tab's Kill action calls registry.kill(jobId) — NOT a private separate kill path", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   const killed: string[] = [];
   const registry = fakeRegistry({
     kill: async (jobId: string) => {
@@ -212,6 +219,7 @@ test("AC8: the Meta tab's Kill action calls registry.kill(jobId) — NOT a priva
 test("F-015: a failed kill (the common case — AC9 keeps a finished job visible) surfaces the error, not a silent no-op", async () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   const registry = fakeRegistry({
     kill: async () => ({ ok: false, error: "job already exited" }),
   });
@@ -251,6 +259,7 @@ test("F-015: a failed kill (the common case — AC9 keeps a finished job visible
 test("F-018: switching tabs nulls the OTHER tab's node — a late store update cannot write into a detached node", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   type IdNode = { id: string; content: string };
   const outputTabNodes: IdNode[] = [];
   const metaTabNodes: IdNode[] = [];
@@ -295,6 +304,7 @@ test("F-018: switching tabs nulls the OTHER tab's node — a late store update c
 test("F-016: the inspector only requires .kill() from its registry — a kill-only stub is a valid registry", () => {
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   const killOnlyRegistry: Pick<JobRegistry, "kill"> = { kill: async () => ({ ok: true }) };
   const openModal: OpenModalFn = (_otui, _chrome, input) => {
     input.renderTab("meta", { add: () => {} });
@@ -326,6 +336,7 @@ test("AC8: paintBackgroundJobSidebar rows fire onOpen on mouse down", () => {
   const children: unknown[] = [];
   const store = new BackgroundJobStore();
   store.apply({ type: "start", jobId: "job-1", pid: 1001, command: "npm run dev", startedAt: "2026-08-19T10:00:00.000Z" });
+  store.apply({ type: "phase", jobId: "job-1", phase: "background" });
   paintBackgroundJobSidebar(
     { TextRenderable: FakeText },
     {},

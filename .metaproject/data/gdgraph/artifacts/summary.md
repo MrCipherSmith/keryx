@@ -2,23 +2,23 @@
 
 ## Stats
 
-- Source files indexed: 1454
+- Source files indexed: 1459
 - Imported asset files indexed: 4
-- Total nodes: 1458
-- Edges: 4342
-- Import edges: 4269
+- Total nodes: 1463
+- Edges: 4371
+- Import edges: 4298
 - Asset edges: 10
 - Unresolved imports: 63
-- Import resolution: 98.5%
-- Skipped generated/static directories: 9
+- Import resolution: 98.6%
+- Skipped generated/static directories: 8
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
 | harness | 264 |
-| commands | 166 |
-| lib | 116 |
+| commands | 167 |
+| lib | 118 |
 | tui | 104 |
 | sac | 58 |
 | wiki | 57 |
@@ -29,9 +29,9 @@
 | gdskills | 50 |
 | gdgraph | 48 |
 | memory | 45 |
-| flow | 38 |
+| flow | 39 |
 | metrics | 38 |
-| review | 34 |
+| review | 35 |
 | fixtures | 31 |
 | mcp | 27 |
 | ctx | 26 |
@@ -52,7 +52,6 @@
 ## Skipped Directories
 
 - `.claude`
-- `.git`
 - `.metaproject`
 - `dist`
 - `docs/requirements/keryx-mcp-client/.metaproject`

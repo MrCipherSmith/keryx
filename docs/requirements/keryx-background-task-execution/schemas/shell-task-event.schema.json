@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx-shell-task-event",
+  "title": "Shell Task Event",
+  "description": "Lifecycle event for a supervised shell task. Exactly one exit event per task (N5). Planned contract for keryx-background-task-execution (v1.1.0).",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "taskId", "pid", "command", "startedAt"],
+      "properties": {
+        "type": { "const": "start" },
+        "taskId": { "type": "string" },
+        "pid": { "type": "integer", "minimum": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "description": { "type": "string" },
+        "startedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "taskId", "chunk", "stream"],
+      "properties": {
+        "type": { "const": "output" },
+        "taskId": { "type": "string" },
+        "chunk": { "type": "string" },
+        "stream": { "type": "string", "enum": ["stdout", "stderr"] }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "taskId", "phase"],
+      "properties": {
+        "type": { "const": "phase" },
+        "taskId": { "type": "string" },
+        "phase": { "const": "background", "description": "Emitted once, when a foreground task outlives its yield or is demoted (D-12). The TUI sidebar lists a task from this event on." }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "taskId", "status", "endedAt"],
+      "properties": {
+        "type": { "const": "exit" },
+        "taskId": { "type": "string" },
+        "status": { "type": "string", "enum": ["completed", "failed", "killed"] },
+        "killReason": { "type": "string", "enum": ["model", "operator", "idle", "output-cap", "hold-timeout", "session-exit"] },
+        "exitCode": { "type": "integer" },
+        "signal": { "type": "string" },
+        "endedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  ]
+}

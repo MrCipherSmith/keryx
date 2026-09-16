@@ -40,12 +40,14 @@ test("setBackgroundJobListener registers a listener that receives every emitted 
       command: "npm run dev",
       startedAt: "2026-08-19T00:00:01.000Z",
     };
+    const phase: BackgroundJobEvent = { type: "phase", jobId: "job-2", phase: "background" };
     const output: BackgroundJobEvent = { type: "output", jobId: "job-2", chunk: "listening on :3000\n", stream: "stdout" };
-    const exit: BackgroundJobEvent = { type: "exit", jobId: "job-2", status: "exited", exitCode: 0, endedAt: "2026-08-19T00:05:00.000Z" };
+    const exit: BackgroundJobEvent = { type: "exit", jobId: "job-2", status: "completed", exitCode: 0, endedAt: "2026-08-19T00:05:00.000Z" };
     emitBackgroundJob(start);
+    emitBackgroundJob(phase);
     emitBackgroundJob(output);
     emitBackgroundJob(exit);
-    expect(received).toEqual([start, output, exit]);
+    expect(received).toEqual([start, phase, output, exit]);
   } finally {
     setBackgroundJobListener(undefined);
   }
@@ -65,7 +67,7 @@ test("emitBackgroundJob never throws even when the registered listener itself th
   });
   try {
     expect(() =>
-      emitBackgroundJob({ type: "exit", jobId: "job-4", status: "killed", endedAt: "2026-08-19T00:00:03.000Z" }),
+      emitBackgroundJob({ type: "exit", jobId: "job-4", status: "killed", killReason: "operator", endedAt: "2026-08-19T00:00:03.000Z" }),
     ).not.toThrow();
   } finally {
     setBackgroundJobListener(undefined);

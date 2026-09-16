@@ -41,18 +41,31 @@
 
 import { describe, expect, test } from "bun:test";
 // RED: this module does not exist yet — T2/T3 of flow 173 creates it.
+import { tmpdir } from "node:os";
 import {
   BACKGROUND_KILL_GRACE_MS,
+  DEFAULT_SHELL_IDLE_MS,
   ENV_MAX_BACKGROUND_JOBS,
+  ENV_SHELL_IDLE_MS,
   MAX_BACKGROUND_OUTPUT_BYTES,
   MAX_CONCURRENT_BACKGROUND_JOBS,
+  MAX_TASK_IDLE_TIMEOUT_MS,
+  MIN_TASK_IDLE_TIMEOUT_MS,
   TERMINATED_OUTPUT_TAIL_BYTES,
+  clampTaskIdleTimeoutMs,
   createJobRegistry,
   resolveMaxConcurrentBackgroundJobs,
+  resolveShellIdleMs,
   shellJobKillTool,
   shellJobOutputTool,
 } from "./background-job-registry";
 import type { BackgroundJobEvent, BackgroundProcessHandle, BackgroundSpawner } from "./background-job-registry";
+
+// flow 263: the idle-timeout exports were read off the module namespace through
+// an `as unknown as` cast while these tests were RED (so a missing export was a
+// per-test failure rather than a link-time error taking down the whole file).
+// Now that T6 has implemented them they are ordinary named imports, which also
+// puts their real signatures back under the typechecker.
 
 // F-020: a SINGLE, file-wide pid counter shared by every `fakeSpawner()`
 // instance — mirrors real OS pids, which are globally unique across
@@ -70,7 +83,7 @@ let sharedNextFakePid = 1000;
  * `handles` map (keyed by pid), mirroring `shell-exec-tool.test.ts`'s
  * `recordingRunner()` injectable-double pattern.
  */
-function fakeSpawner(): {
+function fakeSpawner(opts: { exitOnKill?: boolean } = {}): {
   spawn: BackgroundSpawner;
   handles: Map<
     number,
@@ -96,11 +109,17 @@ function fakeSpawner(): {
     let dataCb: ((chunk: string, stream: "stdout" | "stderr") => void) | undefined;
     let exitCb: ((info: { exitCode: number }) => void) | undefined;
     const kills: Array<"SIGTERM" | "SIGKILL"> = [];
+    let exited = false;
+    const emitExit = (exitCode: number): void => {
+      if (exited) return;
+      exited = true;
+      exitCb?.({ exitCode });
+    };
     handles.set(pid, {
       command,
       kills,
       emitData: (chunk, stream = "stdout") => dataCb?.(chunk, stream),
-      emitExit: (exitCode) => exitCb?.({ exitCode }),
+      emitExit,
     });
     return {
       pid,
@@ -112,6 +131,9 @@ function fakeSpawner(): {
       },
       kill: (signal) => {
         kills.push(signal);
+        // flow 263: a fake that honours the signal like a real process, so a
+        // kill reaches a terminal status without the test driving emitExit.
+        if (opts.exitOnKill === true) emitExit(143);
       },
     };
   };
@@ -197,7 +219,10 @@ test("AC4: a job_id from a DIFFERENT session's registry cannot be killed or read
   const handleB = handlesB.get(startedB.pid);
   if (handleB === undefined) throw new Error("test setup: fake handle missing");
 
-  // job_id embeds the spawned pid (`job-<n>-<pid>`); `fakeSpawner()` draws pids
+  // flow 263: task ids are `task-<n>-<pid>` (was `job-<n>-<pid>`).
+  expect(startedA.jobId).toMatch(/^task-[0-9]+-[0-9]+$/);
+  expect(startedB.jobId).toMatch(/^task-[0-9]+-[0-9]+$/);
+  // job_id embeds the spawned pid (`task-<n>-<pid>`); `fakeSpawner()` draws pids
   // from a MODULE-LEVEL counter shared across every fake spawner instance in
   // this file (mirrors real OS pids, which are globally unique across
   // simultaneously-running processes) — so registryA's and registryB's job
@@ -373,23 +398,36 @@ describe("AC3: shell_job_kill kills the entire process group, including an outli
     expect(pgidOf(started.pid)).toBe(started.pid);
     expect(pgidOf(grandchildPid)).toBe(started.pid);
 
-    const killResult = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
-    expect(killResult.isError).toBe(false);
-
-    // Grace period (SIGTERM→SIGKILL) plus a little slack for the OS to reap.
-    await new Promise<void>((resolve) => setTimeout(resolve, 500));
-
-    // (b) Check the SPECIFIC grandchild pid captured above — unambiguous
-    // regardless of whether `detached: true` was actually applied (unlike a
-    // group-level `kill(-pid, 0)` probe, which can false-pass — see the note
-    // above this describe block).
-    let grandchildAlive = true;
     try {
-      process.kill(grandchildPid, 0);
-    } catch {
-      grandchildAlive = false;
+      const killResult = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
+      expect(killResult.isError).toBe(false);
+
+      // (b) Check the SPECIFIC grandchild pid captured above — unambiguous
+      // regardless of whether `detached: true` was actually applied (unlike a
+      // group-level `kill(-pid, 0)` probe, which can false-pass — see the note
+      // above this describe block). POLLED to a deadline rather than probed
+      // once after a fixed sleep: under load the OS can take longer than any
+      // fixed slack to reap, which would fail the test on a kill that worked.
+      const isAlive = (pid: number): boolean => {
+        try {
+          process.kill(pid, 0);
+          return true;
+        } catch {
+          return false;
+        }
+      };
+      const gone = await pollUntil(() => !isAlive(grandchildPid), 10_000, 50);
+      expect(gone).toBe(true);
+    } finally {
+      // A failed assertion above must not leave two real `sleep 100`
+      // processes running for the next 100 seconds.
+      try {
+        process.kill(grandchildPid, "SIGKILL");
+      } catch {
+        // already gone — the expected path
+      }
+      await registry.sweepAll();
     }
-    expect(grandchildAlive).toBe(false);
   });
 });
 
@@ -488,9 +526,15 @@ test("F-012: onEvent emits the real start -> output -> output -> exit sequence a
   handle.emitExit(0);
   await killPromise;
 
-  expect(events.map((e) => e.type)).toEqual(["start", "output", "output", "exit"]);
+  // flow 263: a background-phase start (the default) emits its single `phase`
+  // event right after `start`, so the TUI store (which lists a task only on
+  // `phase`) still shows a `background:true` task.
+  expect(events.map((e) => e.type)).toEqual(["start", "phase", "output", "output", "exit"]);
 
-  const [startEvent, out1, out2, exitEvent] = events;
+  const [startEvent, phaseEvent, out1, out2, exitEvent] = events;
+  if (phaseEvent?.type !== "phase") throw new Error("expected a phase event");
+  expect(phaseEvent.jobId).toBe(started.jobId);
+  expect(phaseEvent.phase).toBe("background");
   if (startEvent?.type !== "start") throw new Error("expected a start event");
   expect(startEvent.pid).toBe(started.pid);
   expect(startEvent.command).toBe("tail -f /dev/null");
@@ -505,6 +549,7 @@ test("F-012: onEvent emits the real start -> output -> output -> exit sequence a
   if (exitEvent?.type !== "exit") throw new Error("expected an exit event");
   expect(exitEvent.jobId).toBe(started.jobId);
   expect(exitEvent.status).toBe("killed");
+  expect(exitEvent.killReason).toBe("model");
   expect(exitEvent.exitCode).toBe(0);
   expect(typeof exitEvent.endedAt).toBe("string");
 });
@@ -537,6 +582,7 @@ test("F-013: exceeding MAX_BACKGROUND_OUTPUT_BYTES auto-kills exactly once (not 
 
   expect(handle.kills).toEqual(["SIGTERM"]); // exactly one SIGTERM; no SIGKILL needed, no duplicate
   expect(registry.get(started.jobId)?.status).toBe("killed"); // F-007 tie-in
+  expect(registry.get(started.jobId)?.killReason).toBe("output-cap"); // flow 263 AC4
 
   const tail = registry.readOutput(started.jobId);
   expect(tail.ok).toBe(true);
@@ -641,4 +687,497 @@ describe("C-09/C-10: background teardown dispositions", () => {
     expect(result.output).toContain("is not running");
     expect(handle.kills).toEqual([]);
   });
+});
+
+// ===========================================================================
+// flow 263 (P0: every shell_exec is a supervised task) — RED tests.
+// API pinned in the flow's dispatch brief; spec docs/requirements/
+// keryx-background-task-execution/specification.md §3, §4.1, §5; D-12/13/14.
+// ===========================================================================
+
+function delay(ms: number): Promise<void> {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+async function pollUntil(predicate: () => boolean, timeoutMs: number, stepMs = 25): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) return true;
+    await delay(stepMs);
+  }
+  return predicate();
+}
+
+describe("flow 263 AC3: idle-timeout configuration resolvers", () => {
+  test("constants: KERYX_SHELL_IDLE_MS, 120000 default, [1000, 1800000] per-task clamp", () => {
+    expect(ENV_SHELL_IDLE_MS).toBe("KERYX_SHELL_IDLE_MS");
+    expect(DEFAULT_SHELL_IDLE_MS).toBe(120_000);
+    expect(MIN_TASK_IDLE_TIMEOUT_MS).toBe(1_000);
+    expect(MAX_TASK_IDLE_TIMEOUT_MS).toBe(1_800_000);
+  });
+
+  test("resolveShellIdleMs: default when nothing is set", () => {
+    expect(resolveShellIdleMs({})).toBe(DEFAULT_SHELL_IDLE_MS);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "" })).toBe(DEFAULT_SHELL_IDLE_MS);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "   " })).toBe(DEFAULT_SHELL_IDLE_MS);
+  });
+
+  test("resolveShellIdleMs: explicit override, and explicit 0 disables", () => {
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "5000" })).toBe(5_000);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "0" })).toBe(0);
+  });
+
+  test("resolveShellIdleMs: malformed values fall back to the default, never to 'disabled'", () => {
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "nonsense" })).toBe(DEFAULT_SHELL_IDLE_MS);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "-5" })).toBe(DEFAULT_SHELL_IDLE_MS);
+  });
+
+  test("resolveShellIdleMs: unset/empty falls back to the deprecated KERYX_SHELL_TIMEOUT_MS with the same rules", () => {
+    expect(resolveShellIdleMs({ KERYX_SHELL_TIMEOUT_MS: "3000" })).toBe(3_000);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "", KERYX_SHELL_TIMEOUT_MS: "3000" })).toBe(3_000);
+    expect(resolveShellIdleMs({ KERYX_SHELL_TIMEOUT_MS: "0" })).toBe(0);
+    expect(resolveShellIdleMs({ KERYX_SHELL_TIMEOUT_MS: "junk" })).toBe(DEFAULT_SHELL_IDLE_MS);
+    expect(resolveShellIdleMs({ KERYX_SHELL_TIMEOUT_MS: "-1" })).toBe(DEFAULT_SHELL_IDLE_MS);
+  });
+
+  test("resolveShellIdleMs: KERYX_SHELL_IDLE_MS wins over KERYX_SHELL_TIMEOUT_MS; a malformed IDLE does not fall back", () => {
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "7000", KERYX_SHELL_TIMEOUT_MS: "3000" })).toBe(7_000);
+    expect(resolveShellIdleMs({ KERYX_SHELL_IDLE_MS: "junk", KERYX_SHELL_TIMEOUT_MS: "3000" })).toBe(
+      DEFAULT_SHELL_IDLE_MS,
+    );
+  });
+
+  test("clampTaskIdleTimeoutMs clamps into [1000, 1800000]; the model cannot disable the idle timeout", () => {
+    expect(clampTaskIdleTimeoutMs(5)).toBe(1_000);
+    expect(clampTaskIdleTimeoutMs(0)).toBe(1_000);
+    expect(clampTaskIdleTimeoutMs(-1)).toBe(1_000);
+    expect(clampTaskIdleTimeoutMs(1_000)).toBe(1_000);
+    expect(clampTaskIdleTimeoutMs(50_000)).toBe(50_000);
+    expect(clampTaskIdleTimeoutMs(1_800_000)).toBe(1_800_000);
+    expect(clampTaskIdleTimeoutMs(99_999_999)).toBe(1_800_000);
+  });
+});
+
+describe("flow 263: task ids, phase and start options", () => {
+  test("start() mints task-<n>-<pid> ids and defaults to the background phase", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const started = await registry.start("sleep 100");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    expect(started.jobId).toMatch(/^task-[0-9]+-[0-9]+$/);
+    expect(started.jobId.endsWith(`-${started.pid}`)).toBe(true);
+    expect(registry.get(started.jobId)?.phase).toBe("background");
+  });
+
+  test("start() records description, phase and the effective idleTimeoutMs; the start event carries the description", async () => {
+    const { spawn } = fakeSpawner();
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, idleMs: 90_000, onEvent: (e) => events.push(e) });
+
+    const fg = await registry.start("gh run watch", { phase: "foreground", description: "watch CI" });
+    expect(fg.ok).toBe(true);
+    if (!fg.ok) return;
+    const info = registry.get(fg.jobId);
+    expect(info?.phase).toBe("foreground");
+    expect(info?.description).toBe("watch CI");
+    expect(info?.idleTimeoutMs).toBe(90_000); // falls back to the registry idleMs
+
+    const custom = await registry.start("sleep 5", { phase: "foreground", idleTimeoutMs: 4_000 });
+    expect(custom.ok).toBe(true);
+    if (!custom.ok) return;
+    expect(registry.get(custom.jobId)?.idleTimeoutMs).toBe(4_000);
+
+    const startEvent = events.find((e) => e.type === "start" && e.jobId === fg.jobId);
+    if (startEvent?.type !== "start") throw new Error("expected a start event");
+    expect(startEvent.description).toBe("watch CI");
+  });
+
+  test("a foreground start does NOT emit a phase event; a background start emits exactly one", async () => {
+    const { spawn } = fakeSpawner();
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, onEvent: (e) => events.push(e) });
+
+    const fg = await registry.start("npm test", { phase: "foreground" });
+    const bg = await registry.start("npm run dev", { phase: "background" });
+    expect(fg.ok && bg.ok).toBe(true);
+    if (!fg.ok || !bg.ok) return;
+
+    expect(events.filter((e) => e.type === "phase" && e.jobId === fg.jobId)).toHaveLength(0);
+    expect(events.filter((e) => e.type === "phase" && e.jobId === bg.jobId)).toHaveLength(1);
+  });
+
+  test("the initial output buffer sleep applies only to background-phase starts", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 400 });
+
+    const fgStarted = performance.now();
+    const fg = await registry.start("npm test", { phase: "foreground" });
+    const fgElapsed = performance.now() - fgStarted;
+    expect(fg.ok).toBe(true);
+
+    const bgStarted = performance.now();
+    const bg = await registry.start("npm run dev", { phase: "background" });
+    const bgElapsed = performance.now() - bgStarted;
+    expect(bg.ok).toBe(true);
+
+    // Asserted as a RELATION, not as an absolute wall-clock bound on the
+    // foreground half: a loaded runner can make any single `await` chain take
+    // longer than a fixed threshold, but it cannot make the unbuffered start
+    // take as long as the buffered one.
+    expect(bgElapsed).toBeGreaterThanOrEqual(350); // background start still buffers early output
+    expect(fgElapsed).toBeLessThan(bgElapsed / 2); // foreground start does not
+  });
+});
+
+describe("flow 263: waitForExit", () => {
+  test('resolves "exited" as soon as the task exits within the wait', async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const started = await registry.start("echo hi", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    setTimeout(() => handle.emitExit(0), 30);
+    const t0 = performance.now();
+    const outcome = await registry.waitForExit(started.jobId, 5_000);
+    expect(outcome).toBe("exited");
+    expect(performance.now() - t0).toBeLessThan(2_000);
+  });
+
+  test('resolves "exited" immediately for an already-terminated task', async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const started = await registry.start("true", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    handles.get(started.pid)?.emitExit(0);
+    expect(await registry.waitForExit(started.jobId, 5_000)).toBe("exited");
+  });
+
+  test('resolves "timeout" for a task still running after the wait, and never kills it', async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const started = await registry.start("sleep 120", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    expect(await registry.waitForExit(started.jobId, 50)).toBe("timeout");
+    expect(handles.get(started.pid)?.kills).toEqual([]);
+    expect(registry.get(started.jobId)?.status).toBe("running");
+  });
+
+  test('resolves "unknown" for an id this registry never tracked', async () => {
+    const registry = createJobRegistry({ spawn: fakeSpawner().spawn, initialBufferMs: 0 });
+    expect(await registry.waitForExit("task-99-99999", 50)).toBe("unknown");
+  });
+});
+
+describe("flow 263 AC4: terminal statuses and kill reasons", () => {
+  test("exit 0 → completed (no killReason), exactly one exit event", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, onEvent: (e) => events.push(e) });
+    const started = await registry.start("true");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    handles.get(started.pid)?.emitExit(0);
+
+    const info = registry.get(started.jobId);
+    expect(info?.status).toBe("completed");
+    expect(info?.exitCode).toBe(0);
+    expect(info?.killReason).toBeUndefined();
+    const exits = events.filter((e) => e.type === "exit" && e.jobId === started.jobId);
+    expect(exits).toHaveLength(1);
+    const exit = exits[0];
+    if (exit?.type !== "exit") throw new Error("expected exit event");
+    expect(exit.status).toBe("completed");
+    expect(exit.killReason).toBeUndefined();
+  });
+
+  test("non-zero exit → failed, exactly one exit event carrying failed", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, onEvent: (e) => events.push(e) });
+    const started = await registry.start("exit 2");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    handles.get(started.pid)?.emitExit(2);
+
+    expect(registry.get(started.jobId)?.status).toBe("failed");
+    expect(registry.get(started.jobId)?.exitCode).toBe(2);
+    const exits = events.filter((e) => e.type === "exit" && e.jobId === started.jobId);
+    expect(exits).toHaveLength(1);
+    if (exits[0]?.type !== "exit") throw new Error("expected exit event");
+    expect(exits[0].status).toBe("failed");
+  });
+
+  test('kill(id) defaults to killReason "model"; kill(id, "operator") records operator', async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200, onEvent: (e) => events.push(e) });
+    const a = await registry.start("sleep 100");
+    const b = await registry.start("sleep 200");
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+
+    expect(await registry.kill(a.jobId)).toEqual({ ok: true });
+    expect(await registry.kill(b.jobId, "operator")).toEqual({ ok: true });
+
+    expect(registry.get(a.jobId)).toMatchObject({ status: "killed", killReason: "model" });
+    expect(registry.get(b.jobId)).toMatchObject({ status: "killed", killReason: "operator" });
+
+    for (const [id, reason] of [
+      [a.jobId, "model"],
+      [b.jobId, "operator"],
+    ] as const) {
+      const exits = events.filter((e) => e.type === "exit" && e.jobId === id);
+      expect(exits).toHaveLength(1);
+      if (exits[0]?.type !== "exit") throw new Error("expected exit event");
+      expect(exits[0].status).toBe("killed");
+      expect(exits[0].killReason).toBe(reason);
+    }
+  });
+
+  test('sweepAll() kills with killReason "session-exit"', async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200, onEvent: (e) => events.push(e) });
+    const bg = await registry.start("npm run dev");
+    const fg = await registry.start("npm test", { phase: "foreground" });
+    expect(bg.ok && fg.ok).toBe(true);
+    if (!bg.ok || !fg.ok) return;
+
+    await registry.sweepAll();
+
+    for (const id of [bg.jobId, fg.jobId]) {
+      expect(registry.get(id)).toMatchObject({ status: "killed", killReason: "session-exit" });
+      const exits = events.filter((e) => e.type === "exit" && e.jobId === id);
+      expect(exits).toHaveLength(1);
+      if (exits[0]?.type !== "exit") throw new Error("expected exit event");
+      expect(exits[0].killReason).toBe("session-exit");
+    }
+  });
+
+  test('the output-cap rail kills with killReason "output-cap", and the exit event carries it', async () => {
+    const { spawn, handles } = fakeSpawner({ exitOnKill: true });
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 200, onEvent: (e) => events.push(e) });
+    const started = await registry.start("yes");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    handles.get(started.pid)?.emitData("y".repeat(MAX_BACKGROUND_OUTPUT_BYTES + 10));
+    await pollUntil(() => registry.get(started.jobId)?.status !== "running", 2_000);
+
+    expect(registry.get(started.jobId)).toMatchObject({ status: "killed", killReason: "output-cap" });
+    const exits = events.filter((e) => e.type === "exit" && e.jobId === started.jobId);
+    expect(exits).toHaveLength(1);
+    if (exits[0]?.type !== "exit") throw new Error("expected exit event");
+    expect(exits[0].status).toBe("killed");
+    expect(exits[0].killReason).toBe("output-cap");
+  });
+});
+
+describe("flow 263 AC5: the concurrency cap counts background-phase tasks only", () => {
+  test("a foreground start is never refused by a full background cap", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1 });
+    const bg = await registry.start("npm run dev");
+    expect(bg.ok).toBe(true);
+
+    const fg = await registry.start("git status", { phase: "foreground" });
+    expect(fg.ok).toBe(true);
+  });
+
+  test("a background start over the cap is refused naming the running background commands", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1 });
+    expect((await registry.start("npm run dev")).ok).toBe(true);
+
+    const refused = await registry.start("tail -f app.log", { phase: "background" });
+    expect(refused.ok).toBe(false);
+    if (refused.ok) return;
+    expect(refused.error).toContain("npm run dev");
+  });
+
+  test("running foreground tasks do not count toward the background cap", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1 });
+    expect((await registry.start("bun test", { phase: "foreground" })).ok).toBe(true);
+
+    const bg = await registry.start("npm run dev", { phase: "background" });
+    expect(bg.ok).toBe(true);
+  });
+});
+
+describe("flow 263: promote (foreground → background)", () => {
+  test("promote flips the phase, emits the phase event once, and never kills", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, onEvent: (e) => events.push(e) });
+    const started = await registry.start("sleep 120 && gh run list", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const promoted = registry.promote(started.jobId);
+    expect(promoted.ok).toBe(true);
+    if (!promoted.ok) return;
+    expect(promoted.overCap).toBeUndefined();
+    expect(registry.get(started.jobId)?.phase).toBe("background");
+    expect(registry.get(started.jobId)?.status).toBe("running");
+    expect(handles.get(started.pid)?.kills).toEqual([]);
+
+    registry.promote(started.jobId); // a repeat promote must not re-emit
+    const phaseEvents = events.filter((e) => e.type === "phase" && e.jobId === started.jobId);
+    expect(phaseEvents).toHaveLength(1);
+    const phase = phaseEvents[0];
+    if (phase?.type !== "phase") throw new Error("expected phase event");
+    expect(phase.phase).toBe("background");
+  });
+
+  test("promote of an unknown id is an error", () => {
+    const registry = createJobRegistry({ spawn: fakeSpawner().spawn, initialBufferMs: 0 });
+    const result = registry.promote("task-1-424242");
+    expect(result.ok).toBe(false);
+  });
+
+  test("promote over a full cap is not refused and not killed; overCap names the running commands", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, maxConcurrent: 1 });
+    expect((await registry.start("npm run dev")).ok).toBe(true);
+    const fg = await registry.start("bun test --watch", { phase: "foreground" });
+    expect(fg.ok).toBe(true);
+    if (!fg.ok) return;
+
+    const promoted = registry.promote(fg.jobId);
+    expect(promoted.ok).toBe(true);
+    if (!promoted.ok) return;
+    expect(typeof promoted.overCap).toBe("string");
+    expect(promoted.overCap).toContain("npm run dev");
+    expect(handles.get(fg.pid)?.kills).toEqual([]);
+    expect(registry.get(fg.jobId)).toMatchObject({ status: "running", phase: "background" });
+
+    // Hard bound: running tasks never exceed maxConcurrent + 1.
+    const refused = await registry.start("another server", { phase: "background" });
+    expect(refused.ok).toBe(false);
+    expect(registry.list().filter((j) => j.status === "running").length).toBeLessThanOrEqual(2);
+  });
+});
+
+describe("flow 263 AC3: idle timer (fakes)", () => {
+  test('a task producing no output for its idle timeout is killed with killReason "idle"', async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const events: BackgroundJobEvent[] = [];
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 60, onEvent: (e) => events.push(e) });
+    const started = await registry.start("sleep 120");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 3_000);
+    expect(ended).toBe(true);
+    expect(registry.get(started.jobId)).toMatchObject({ status: "killed", killReason: "idle" });
+    const exits = events.filter((e) => e.type === "exit" && e.jobId === started.jobId);
+    expect(exits).toHaveLength(1);
+    if (exits[0]?.type !== "exit") throw new Error("expected exit event");
+    expect(exits[0].killReason).toBe("idle");
+  });
+
+  test("every output chunk resets the idle timer", async () => {
+    const { spawn, handles } = fakeSpawner({ exitOnKill: true });
+    // The idle window is an order of magnitude above the tick gap: the test
+    // still fails if the reset is removed (15 × 40 ms = 600 ms of ticks would
+    // never survive a 2 s window measured from START), but a GC pause or a
+    // loaded runner cannot push one gap past 2 s and fake a regression.
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 2_000 });
+    const started = await registry.start("chatty");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    // ~600 ms of output every 40 ms — never silent for a whole idle window.
+    for (let i = 0; i < 15; i += 1) {
+      handle.emitData(`tick ${i}\n`);
+      await delay(40);
+    }
+    expect(registry.get(started.jobId)?.status).toBe("running");
+    await registry.kill(started.jobId);
+  });
+
+  test("a per-task idleTimeoutMs overrides the registry idleMs", async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 60_000 });
+    const started = await registry.start("sleep 120", { phase: "foreground", idleTimeoutMs: 60 });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 3_000);
+    expect(ended).toBe(true);
+    expect(registry.get(started.jobId)?.killReason).toBe("idle");
+  });
+
+  test("idleMs 0 disables the idle timer", async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 100, idleMs: 0 });
+    const started = await registry.start("sleep 120");
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    await delay(300);
+    expect(registry.get(started.jobId)?.status).toBe("running");
+    await registry.kill(started.jobId);
+  });
+});
+
+describe.skipIf(process.platform === "win32")("flow 263 AC3: idle timer (REAL processes)", () => {
+  test(
+    "a real command printing every ~100 ms for ~1.5 s outlives several 400 ms idle periods and ends completed",
+    async () => {
+      // 2 s idle window against ~100 ms ticks: twenty times the gap, so real
+      // spawn and scheduler jitter cannot fake an idle kill, while removing the
+      // reset still kills this task long before its 1.5 s of ticks are done.
+      const registry = createJobRegistry({ cwd: tmpdir(), idleMs: 2_000, initialBufferMs: 0, killGraceMs: 500 });
+      const started = await registry.start(
+        "for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do echo tick $i; sleep 0.1; done",
+      );
+      expect(started.ok).toBe(true);
+      if (!started.ok) return;
+
+      try {
+        const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 15_000, 50);
+        expect(ended).toBe(true);
+        const info = registry.get(started.jobId);
+        expect(info?.status).toBe("completed");
+        expect(info?.killReason).toBeUndefined();
+      } finally {
+        await registry.sweepAll();
+      }
+    },
+    30_000,
+  );
+
+  test(
+    'a silent real `sleep 30` is killed with killReason "idle" within a few seconds',
+    async () => {
+      const idleMs = 2_000;
+      const registry = createJobRegistry({ cwd: tmpdir(), idleMs, initialBufferMs: 0, killGraceMs: 500 });
+      const t0 = performance.now();
+      const started = await registry.start("sleep 30");
+      expect(started.ok).toBe(true);
+      if (!started.ok) return;
+      try {
+        const ended = await pollUntil(() => registry.get(started.jobId)?.status !== "running", 15_000, 50);
+        expect(ended).toBe(true);
+        expect(registry.get(started.jobId)).toMatchObject({ status: "killed", killReason: "idle" });
+        // The kill waited for the silence — it is the idle rail firing, not
+        // something killing the task on sight. (The upper bound is already
+        // implied by `pollUntil` returning true.)
+        expect(performance.now() - t0).toBeGreaterThanOrEqual(idleMs);
+      } finally {
+        await registry.sweepAll();
+      }
+    },
+    30_000,
+  );
 });

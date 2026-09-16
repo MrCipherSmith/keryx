@@ -16,17 +16,27 @@
 // session-TEARDOWN sweep meant to be called from exactly one place (the real
 // session-exit path, alongside `JobRegistry.sweepAll()`).
 //
-// A naturally-`exited`/`killed` job's entry is NOT auto-removed on its own
-// exit event — it stays listed/inspectable (status flips, `exitCode`/
-// `endedAt` populate) until `removeAll()`. This is the flow's resolved design
-// decision: the human very likely wants to see a finished job's final
-// output/exit code in the inspector after it completes, not have it vanish
-// the instant it exits.
+// A finished (`completed`/`failed`/`killed`) job's entry is NOT auto-removed
+// on its own exit event — it stays listed/inspectable (status flips,
+// `exitCode`/`endedAt`/`killReason` populate) until `removeAll()`. This is the
+// flow's resolved design decision: the human very likely wants to see a
+// finished job's final output/exit code in the inspector after it completes,
+// not have it vanish the instant it exits.
+//
+// PHASE GATING (flow 263, AC8): every `shell_exec` is now a task, so most
+// tasks are short foreground commands the sidebar must never show. A `start`
+// event only records a hidden PENDING entry — not listed, not `get`-able, no
+// hint. Output for a pending entry is retained silently. The task becomes
+// visible on its `phase: "background"` event (a `background:true` start gets
+// one right after `start`; a foreground task only if it outlives its yield),
+// which emits the `start` hint exactly once. A task that exits while still
+// pending is dropped silently; with no pending entry left to promote, a stray
+// late `phase` for it is a no-op. Once visible, entries behave as before.
 
 import { SIDEBAR_TEXT_WIDTH } from "./shell-chrome";
-import type { BackgroundJobEvent } from "../harness/tool/builtin/background-job-registry";
+import type { BackgroundJobEvent, KillReason } from "../harness/tool/builtin/background-job-registry";
 
-export type BackgroundJobStatus = "running" | "exited" | "killed";
+export type BackgroundJobStatus = "running" | "completed" | "failed" | "killed";
 
 export type BackgroundJobEntry = {
   jobId: string;
@@ -36,6 +46,7 @@ export type BackgroundJobEntry = {
   startedAt: string;
   endedAt?: string;
   exitCode?: number;
+  killReason?: KillReason;
   output: string;
 };
 
@@ -46,9 +57,17 @@ export type BackgroundJobStoreHint = { id: string; kind: "start" | "output" | "e
 
 const STATUS_GLYPH: Record<BackgroundJobStatus, string> = {
   running: "◐",
-  exited: "●",
+  completed: "●",
+  failed: "▲",
   killed: "✗",
 };
+
+function appendBounded(output: string, chunk: string): string {
+  const combined = output + chunk;
+  return combined.length > MAX_BACKGROUND_JOB_OUTPUT_CHARS
+    ? combined.slice(-MAX_BACKGROUND_JOB_OUTPUT_CHARS)
+    : combined;
+}
 
 function clip(s: string, max: number): string {
   if (max <= 0) {
@@ -81,6 +100,9 @@ export function formatJobMeta(entry: BackgroundJobEntry, now = Date.now()): stri
     ["Ended", entry.endedAt ?? "—"],
     ["Exit code", entry.exitCode !== undefined ? String(entry.exitCode) : "—"],
   ];
+  if (entry.killReason !== undefined) {
+    rows.push(["Kill reason", entry.killReason]);
+  }
   void now;
   const width = rows.reduce((max, [label]) => Math.max(max, label.length), 0);
   return rows.map(([label, value]) => `${label.padEnd(width)}  ${value}`).join("\n");
@@ -91,43 +113,71 @@ export function formatJobOutput(entry: BackgroundJobEntry): string {
 }
 
 export class BackgroundJobStore {
+  /** Visible (promoted) entries — the only ones `get`/`list` expose. */
   private readonly jobs = new Map<string, BackgroundJobEntry>();
+  /** Started but not yet promoted by a `phase` event — hidden, no hints. */
+  private readonly pending = new Map<string, BackgroundJobEntry>();
   private readonly listeners = new Set<(hint: BackgroundJobStoreHint) => void>();
 
   apply(event: BackgroundJobEvent): void {
-    if (event.type === "start") {
-      this.jobs.set(event.jobId, {
-        jobId: event.jobId,
-        command: event.command,
-        pid: event.pid,
-        status: "running",
-        startedAt: event.startedAt,
-        output: "",
-      });
-      this.emit({ id: event.jobId, kind: "start" });
-      return;
+    switch (event.type) {
+      case "start":
+        this.pending.set(event.jobId, {
+          jobId: event.jobId,
+          command: event.command,
+          pid: event.pid,
+          status: "running",
+          startedAt: event.startedAt,
+          output: "",
+        });
+        return;
+      case "phase": {
+        const entry = this.pending.get(event.jobId);
+        if (entry === undefined) {
+          // Already visible (repeat), dropped (exited while pending, so no
+          // pending entry is left to promote), or unknown — safe no-op.
+          return;
+        }
+        this.pending.delete(event.jobId);
+        this.jobs.set(event.jobId, entry);
+        this.emit({ id: event.jobId, kind: "start" });
+        return;
+      }
+      case "output": {
+        const hidden = this.pending.get(event.jobId);
+        if (hidden !== undefined) {
+          hidden.output = appendBounded(hidden.output, event.chunk);
+          return;
+        }
+        const current = this.jobs.get(event.jobId);
+        if (current === undefined) {
+          return;
+        }
+        current.output = appendBounded(current.output, event.chunk);
+        this.emit({ id: event.jobId, kind: "output" });
+        return;
+      }
+      case "exit": {
+        if (this.pending.delete(event.jobId)) {
+          // Exited while still foreground: dropped silently, never listed.
+          return;
+        }
+        const current = this.jobs.get(event.jobId);
+        if (current === undefined) {
+          return;
+        }
+        current.status = event.status;
+        current.endedAt = event.endedAt;
+        if (event.exitCode !== undefined) {
+          current.exitCode = event.exitCode;
+        }
+        if (event.killReason !== undefined) {
+          current.killReason = event.killReason;
+        }
+        this.emit({ id: event.jobId, kind: "exit" });
+        return;
+      }
     }
-    const current = this.jobs.get(event.jobId);
-    if (current === undefined) {
-      // No prior start — safe no-op (a foreign/unknown job's stray event).
-      return;
-    }
-    if (event.type === "output") {
-      const combined = current.output + event.chunk;
-      current.output =
-        combined.length > MAX_BACKGROUND_JOB_OUTPUT_CHARS
-          ? combined.slice(-MAX_BACKGROUND_JOB_OUTPUT_CHARS)
-          : combined;
-      this.emit({ id: event.jobId, kind: "output" });
-      return;
-    }
-    // event.type === "exit"
-    current.status = event.status;
-    current.endedAt = event.endedAt;
-    if (event.exitCode !== undefined) {
-      current.exitCode = event.exitCode;
-    }
-    this.emit({ id: event.jobId, kind: "exit" });
   }
 
   get(jobId: string): BackgroundJobEntry | undefined {
@@ -152,6 +202,7 @@ export class BackgroundJobStore {
    * store's deliberate lack of `clear()` exists to prevent.
    */
   removeAll(): void {
+    this.pending.clear();
     if (this.jobs.size === 0) {
       return;
     }
