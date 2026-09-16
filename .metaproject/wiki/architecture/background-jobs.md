@@ -38,11 +38,20 @@ its turn open rather than exiting and leaving the result to nobody; an idle
 interactive session is woken by the completion, behind a cap that operator input
 resets.
 
-**The model can watch, wait and steer.** `shell_task_output` reads from an
-explicit cursor, `shell_task_wait` waits for `any`/`all` of a set under a clamped
-bound, and `shell_task_kill` stops a task's process group. An interrupt ends a
-WAIT and never the command. The operator can move a running command aside with
-`/demote <task_id>` in both shells, including while the turn is busy.
+**The model can read, wait for EXIT, and steer.** `shell_task_output` reads from
+an explicit cursor, `shell_task_wait` waits for `any`/`all` of a set to EXIT
+under a clamped bound, and `shell_task_kill` stops a task's process group. An
+interrupt ends a WAIT and never the command. The operator can move a running
+command aside with `/demote <task_id>` in both shells, including while the turn
+is busy.
+
+There is no wait on a CONDITION, and the distinction matters for the workload
+this page opens with: a dev server or a `tail -f` never exits, so every wait on
+one runs out its budget and returns statuses. To learn that such a task has
+reached some state — a port bound, a line logged — the model reads its output
+and looks, which costs a round each time. Whether that cost is worth a
+`until_output` predicate is specified and deliberately parked in
+[`docs/requirements/keryx-task-monitoring/`](../../../docs/requirements/keryx-task-monitoring/README.md).
 
 A TUI layer gives the human the same visibility without relying on the model to
 keep reporting back: a sidebar panel (still labelled "Background Jobs N" in the
