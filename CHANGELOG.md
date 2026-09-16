@@ -3,6 +3,52 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.110] — 2026-09-16
+A running command is now something you can watch, wait for, interrupt and set
+aside. 0.2.108 stopped a long command from freezing the session and 0.2.109 made
+a finished one report itself; this release fills in everything in between.
+
+### Added
+
+- **Three task tools.** `shell_task_output(task_id, since?)` reads from a cursor
+  YOU hold and tells you where to continue — unlike `shell_job_output`, whose
+  cursor is implicit shared state, so two readers of one task quietly consumed
+  each other's output. `shell_task_wait({task_ids, mode, timeout_ms?})` waits for
+  `any` or `all` of a set instead of polling in a loop, bounded by a timeout
+  clamped to at most five minutes. `shell_task_kill(task_id)` stops a task's
+  whole process group and is idempotent: asking again after it ended reports its
+  status rather than signalling anything, and a task that exited cleanly is not
+  relabelled as killed.
+
+- **A wait you can interrupt.** Tools now receive the turn's abort signal. The
+  agent loop used to check for an interrupt only BETWEEN tool calls, so a call
+  that was waiting could not be reached at all — the operator's stop did nothing
+  until the wait's own bound fired. Interrupting now ends the WAIT and never the
+  command: the task moves to the background, keeps running with its output
+  intact, and still reports itself when it finishes. Both the `shell_exec` yield
+  and `shell_task_wait` honour it.
+
+- **`/demote <task_id>`**, in the TUI and in `--no-tui`, moves a running command
+  to the background without stopping it and without ending the turn. It works
+  while the agent is busy, which is the case it exists for: a turn blocked on its
+  own long command is exactly when you want the command set aside rather than
+  killed.
+
+### Changed
+
+- **Side workers can no longer disturb the main session's tasks.** They are
+  denied kill, wait and the implicit-cursor read, and keep only the explicit
+  read. Their copy of it never marks a task as reported, so a side worker looking
+  at a finished task can no longer make the main session's completion notice
+  disappear — the failure that exactly-once delivery could not defend against on
+  its own.
+
+- **The old names are deprecated.** `shell_job_output` and `shell_job_kill` keep
+  working for one more release and now say so, each naming its replacement. An id
+  written as `job-…` still resolves for READS; the acting tools take the id
+  exactly as given, because a task id from an earlier session is a dead reference
+  and resolving one onto a live task would kill the wrong work.
+
 ## [0.2.109] — 2026-09-16
 A command that outlives the wait now reports itself. 0.2.108 stopped a long
 command from freezing the session; this release closes the other half — the
