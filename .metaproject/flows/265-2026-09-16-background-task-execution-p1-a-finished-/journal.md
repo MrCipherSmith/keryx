@@ -179,6 +179,29 @@ NOT describe — a task that finished a moment too early — had no test, and th
 live smoke happened to use a 2 s command against a 300 ms yield, which lands in
 the covered case every time.
 
+## T11 — two things the review ritual itself taught, worth keeping
+
+1. **Round ids collide across flows on the same day.** A round is named from the
+   date and the ref, so flow 263 (P0, shipped this morning against `main`) and
+   flow 265 (P1, same day, same ref) both hold rounds called
+   `2026-09-16-ingest-main`, `-r02`, `-r03`. `keryx review complete` resolved my
+   `-r03` to the P0 package and refused to overwrite ITS citation — the refusal
+   was right and the message said exactly what it was protecting. Address a
+   round by PATH when two flows share a day: `review complete <path>` works and
+   is unambiguous.
+2. **Verification claims key on the finding, not on the round.** The merge
+   matches `global_id === claim.finding || id === claim.finding`
+   (`src/review/verification.ts:214`). My first attempt keyed the claims to the
+   PREVIOUS round's global ids, which cannot match by construction — every
+   re-ingest mints a new round id, so a claim written against the round it was
+   produced from is stale before it is used. Keying on the bare `F-001` matches
+   in whatever round the re-ingest creates: `unverified=2` became `refuted=2`.
+
+Round `2026-09-16-ingest-main-r03` under flow 265: 2 findings in, 2 retained,
+`refuted=2` by execution, both dispositioned `acted-on` against
+50d12cfcc6e1999d1ccaa6421f7c4a9acad19307, 0 left `unknown`. `review floor`
+reported nothing lowered across 28 files and 2 458 changed lines.
+
 ## T12 — P1 deviations from the specification
 
 Three, all deliberate, now recorded in specification.md §Status:
