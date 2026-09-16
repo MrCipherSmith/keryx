@@ -1,0 +1,358 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "267",
+  "slug": "background-task-execution-p3-the-documen",
+  "title": "Background task execution P3: the documentation sweep",
+  "status": "in-progress",
+  "createdAt": "2026-09-16T15:01:29.386Z",
+  "updatedAt": "2026-09-16T15:24:41.818Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:d3c5632652dd2ddd8f266586b65cc6bfe18b0fe59f9a3055a23547aad87611c1",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected: the full text of .metaproject/wiki/architecture/background-jobs.md, the wiki index entry, and a repo-wide inventory of docs still asserting the flow-173 model; written up in description.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T10, which name the file and the claim each one corrects"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "no behaviour changes in this phase; verification is T11 (wiki validate, vocabulary grep, no src changes, health, full suite)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T12, which ingests a managed review round against the head that will merge"
+    },
+    {
+      "id": "T5",
+      "title": "Rewrite the wiki page around the supervised-task model, keeping what stayed true",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T15:05:01.489Z",
+            "outcome": "started",
+            "detail": "rewrite the wiki page around the supervised-task model, correcting claims rather than re-deriving surviving prose"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "page reframed around the supervised-task model: new summary, status accepted, version 2.0.0, H1 renamed; the P0-only banner removed rather than amended"
+    },
+    {
+      "id": "T6",
+      "title": "Correct Prior art and Out of scope: poll-not-push, push wakeup, the synchronous path",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Prior art 'Poll, not push' rewritten as the decision flow 265 reversed (D-02), the no-recurring-reminder half stated as what survived; Out of scope: push-on-output kept and distinguished from completion delivery, the 'synchronous path untouched' entry struck through as no longer true"
+    },
+    {
+      "id": "T7",
+      "title": "Document the task tools, the deprecated aliases, side-worker rules and the operator levers",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "added the task-tool table (explicit cursor, any/all wait with its clamp, idempotent kill), the deprecated aliases with the reads-only id rule, the operator's levers (/demote, interrupt releases the wait), a completion-delivery section with both env knobs and their defaults, and the updated side-worker + REPEATABLE_TOOL_NAMES paragraphs"
+    },
+    {
+      "id": "T8",
+      "title": "Refresh the wiki index entry for the page",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "index entry regenerated by keryx wiki index (the generator owns that file); it now carries the new title, accepted status and the supervised-task summary. keryx wiki validate: all checks passed"
+    },
+    {
+      "id": "T9",
+      "title": "Rewrite the test-catalogue rows TOOL-11 and BGJOB-01..03",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "TOOL-11 and section 11 rewritten; BGJOB-01..03 describe the yield handle, the explicit cursor and the idempotent kill; added BGJOB-05..09 for completion delivery, the --print hold, the capped wake, /demote and interrupt-does-not-kill. Statuses left as 'Not yet tested' because none of it was exercised live on a PTY"
+    },
+    {
+      "id": "T10",
+      "title": "Mark P3 in the requirements package (README, specification, PRD gap row)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "README, specification status and the PRD gap row now say the package is fully implemented, with the two deliberately-closed rows named rather than hidden"
+    },
+    {
+      "id": "T11",
+      "title": "Verify: wiki validate, retired-vocabulary grep, no src changes, health, full suite",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "keryx wiki validate: all checks passed; retired-vocabulary grep over the three files in scope returns only historical or negated mentions (no present-tense claim of the old model); the routed diff against origin/main restricted to src reports Changed files: 0, so the phase touched no source file; keryx health run PASS score 94; full suite 10425 pass / 20 skip / 0 fail across 769 files in 625s with --timeout 120000 — the first fully clean full run of the session, and confirmation that the 30s bound caused the earlier duration flakes"
+    },
+    {
+      "id": "T12",
+      "title": "Review round ingested against the head that will merge",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Journal deviations and close the flow",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T15:01:29.386Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T15:04:15.419Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T15:04:15.541Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T15:04:15.646Z",
+      "event": "task-added",
+      "detail": "T5: Rewrite the wiki page around the supervised-task model, keeping what stayed true"
+    },
+    {
+      "at": "2026-09-16T15:04:15.744Z",
+      "event": "task-added",
+      "detail": "T6: Correct Prior art and Out of scope: poll-not-push, push wakeup, the synchronous path"
+    },
+    {
+      "at": "2026-09-16T15:04:15.839Z",
+      "event": "task-added",
+      "detail": "T7: Document the task tools, the deprecated aliases, side-worker rules and the operator levers"
+    },
+    {
+      "at": "2026-09-16T15:04:15.931Z",
+      "event": "task-added",
+      "detail": "T8: Refresh the wiki index entry for the page"
+    },
+    {
+      "at": "2026-09-16T15:04:16.040Z",
+      "event": "task-added",
+      "detail": "T9: Rewrite the test-catalogue rows TOOL-11 and BGJOB-01..03"
+    },
+    {
+      "at": "2026-09-16T15:04:16.132Z",
+      "event": "task-added",
+      "detail": "T10: Mark P3 in the requirements package (README, specification, PRD gap row)"
+    },
+    {
+      "at": "2026-09-16T15:04:16.231Z",
+      "event": "task-added",
+      "detail": "T11: Verify: wiki validate, retired-vocabulary grep, no src changes, health, full suite"
+    },
+    {
+      "at": "2026-09-16T15:04:16.329Z",
+      "event": "task-added",
+      "detail": "T12: Review round ingested against the head that will merge"
+    },
+    {
+      "at": "2026-09-16T15:04:16.423Z",
+      "event": "task-added",
+      "detail": "T13: Journal deviations and close the flow"
+    },
+    {
+      "at": "2026-09-16T15:05:01.077Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T15:05:01.209Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T15:05:01.302Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T15:05:01.391Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T15:05:01.489Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — rewrite the wiki page around the supervised-task model, correcting claims rather than re-deriving surviving prose"
+    },
+    {
+      "at": "2026-09-16T15:09:42.956Z",
+      "event": "task-done",
+      "detail": "T5: Rewrite the wiki page around the supervised-task model, keeping what stayed true"
+    },
+    {
+      "at": "2026-09-16T15:09:43.077Z",
+      "event": "task-done",
+      "detail": "T6: Correct Prior art and Out of scope: poll-not-push, push wakeup, the synchronous path"
+    },
+    {
+      "at": "2026-09-16T15:09:43.178Z",
+      "event": "task-done",
+      "detail": "T7: Document the task tools, the deprecated aliases, side-worker rules and the operator levers"
+    },
+    {
+      "at": "2026-09-16T15:09:43.271Z",
+      "event": "task-done",
+      "detail": "T8: Refresh the wiki index entry for the page"
+    },
+    {
+      "at": "2026-09-16T15:09:43.379Z",
+      "event": "task-done",
+      "detail": "T9: Rewrite the test-catalogue rows TOOL-11 and BGJOB-01..03"
+    },
+    {
+      "at": "2026-09-16T15:09:43.491Z",
+      "event": "task-done",
+      "detail": "T10: Mark P3 in the requirements package (README, specification, PRD gap row)"
+    },
+    {
+      "at": "2026-09-16T15:24:41.818Z",
+      "event": "task-done",
+      "detail": "T11: Verify: wiki validate, retired-vocabulary grep, no src changes, health, full suite"
+    }
+  ]
+}

@@ -1,9 +1,10 @@
 # Keryx Background Task Execution — Specification
 Version: 1.1.0
 
-Status: **P0, P1 and P2 implemented** (2026-09-16, keryx flows 263, 265 and 266);
-P3 `spec ready` and not implemented. Sections describing P3 behaviour stay marked
-**planned**.
+Status: **fully implemented** — P0, P1 and P2 (2026-09-16, keryx flows 263, 265
+and 266, released in 0.2.108–0.2.110) and P3, the documentation sweep
+(keryx flow 267). No section of this document is `planned` any more; the one
+criterion the package deliberately does NOT meet is named in §7.
 
 What P0 shipped: the bounded yield and the supervised-task model (§4.1), the
 idle timeout and its config (§3, pulled forward from P1), the derived statuses

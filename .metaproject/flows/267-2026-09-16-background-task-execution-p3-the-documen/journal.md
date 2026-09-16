@@ -1,0 +1,26 @@
+# Flow Journal
+
+- 2026-09-16T15:01:29.386Z - flow created
+- 2026-09-16T15:04:15.419Z - frozen: 13 criteria; checksum recorded
+- 2026-09-16T15:04:15.541Z - started
+- 2026-09-16T15:04:15.646Z - task-added: T5: Rewrite the wiki page around the supervised-task model, keeping what stayed true
+- 2026-09-16T15:04:15.744Z - task-added: T6: Correct Prior art and Out of scope: poll-not-push, push wakeup, the synchronous path
+- 2026-09-16T15:04:15.839Z - task-added: T7: Document the task tools, the deprecated aliases, side-worker rules and the operator levers
+- 2026-09-16T15:04:15.931Z - task-added: T8: Refresh the wiki index entry for the page
+- 2026-09-16T15:04:16.040Z - task-added: T9: Rewrite the test-catalogue rows TOOL-11 and BGJOB-01..03
+- 2026-09-16T15:04:16.132Z - task-added: T10: Mark P3 in the requirements package (README, specification, PRD gap row)
+- 2026-09-16T15:04:16.231Z - task-added: T11: Verify: wiki validate, retired-vocabulary grep, no src changes, health, full suite
+- 2026-09-16T15:04:16.329Z - task-added: T12: Review round ingested against the head that will merge
+- 2026-09-16T15:04:16.423Z - task-added: T13: Journal deviations and close the flow
+- 2026-09-16T15:05:01.077Z - task-done: T1: Collect remaining context
+- 2026-09-16T15:05:01.209Z - task-done: T2: Implement per plan
+- 2026-09-16T15:05:01.302Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-16T15:05:01.391Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-16T15:05:01.489Z - task-attempt: T5: started (attempt 1) — rewrite the wiki page around the supervised-task model, correcting claims rather than re-deriving surviving prose
+- 2026-09-16T15:09:42.956Z - task-done: T5: Rewrite the wiki page around the supervised-task model, keeping what stayed true
+- 2026-09-16T15:09:43.077Z - task-done: T6: Correct Prior art and Out of scope: poll-not-push, push wakeup, the synchronous path
+- 2026-09-16T15:09:43.178Z - task-done: T7: Document the task tools, the deprecated aliases, side-worker rules and the operator levers
+- 2026-09-16T15:09:43.271Z - task-done: T8: Refresh the wiki index entry for the page
+- 2026-09-16T15:09:43.379Z - task-done: T9: Rewrite the test-catalogue rows TOOL-11 and BGJOB-01..03
+- 2026-09-16T15:09:43.491Z - task-done: T10: Mark P3 in the requirements package (README, specification, PRD gap row)
+- 2026-09-16T15:24:41.818Z - task-done: T11: Verify: wiki validate, retired-vocabulary grep, no src changes, health, full suite
