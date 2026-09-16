@@ -1576,6 +1576,24 @@ async function runAgentTurnCore(
       // the completion arrives, which is why the mode, not the loop, decides.
       const deliveryMode = deps.completionDelivery ?? (deps.unattended === true ? "hold" : "wake");
       const taskRegistry = deps.jobRegistry;
+      // T11 review findings F-001/F-002: a task that reached a terminal status
+      // BETWEEN the last round-boundary drain and this text-only finish is
+      // finished rather than running, so the hold below would not have waited
+      // for it and this return would have dropped it on the floor. Deliver what
+      // is already finished FIRST, in either mode: in `hold` because a --print
+      // session would otherwise have its command's result reported by nobody,
+      // and in `wake` because both shells promise the operator that a missed or
+      // capped wake "will be reported with your next message" — and a text-only
+      // answer has no tool batch for the round-boundary drain to ride on.
+      //
+      // An empty drain costs nothing: it does not take another round (proved by
+      // its own test), so a turn with no tasks still ends in one request.
+      const alreadyFinished = taskRegistry?.drainUndelivered() ?? [];
+      if (alreadyFinished.length > 0) {
+        history.push({ role: "user", content: buildTaskNotification(alreadyFinished), provenance: "tool" });
+        io.onHistoryChange?.("tool");
+        continue;
+      }
       const stillRunning =
         deliveryMode === "hold" && taskRegistry !== undefined
           ? taskRegistry.list().filter((t) => t.status === "running" && t.phase === "background")

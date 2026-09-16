@@ -578,6 +578,83 @@ describe("AC6: completionDelivery 'hold' does not end a turn while a task is run
 });
 
 // =======================================================================
+// T11 review findings — the text-only finish must deliver what ALREADY
+// finished, not only wait for what is still running.
+//
+// Both were found by review and confirmed by execution against real
+// subprocesses before being written down here. The shared defect: the hold
+// block was entered only when a task was STILL RUNNING, and the text-only
+// return below it drained nothing — so a completion that landed between the
+// last round-boundary drain and the text-only finish was never delivered.
+// =======================================================================
+describe("the text-only finish drains completions that are already terminal", () => {
+  test("F-001: a task that finished BEFORE the text-only round is still reported (hold)", async () => {
+    // Nothing is running any more — the task exited while the model was
+    // producing its text — but its completion has not been delivered. Before
+    // the fix this turn ended after one round and the result was lost, which
+    // in a real `--print` session means the command's output is reported by
+    // nobody.
+    const { provider, requests } = scriptedProvider([
+      [{ kind: "text_delta", text: "The compilation is under way." }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "The compilation is over." }, { kind: "model_end" }],
+    ]);
+    const fake = fakeRegistry({ running: [], pending: [completion({ jobId: "task-7-7000", output: "late result\n" })] });
+    const { io } = collectingIo();
+    const history: NormalizedMessage[] = [];
+
+    await runAgentTurn(
+      io,
+      makeDeps({ provider, tools: [], jobRegistry: fake.registry, completionDelivery: "hold", unattended: true }),
+      history,
+      "start the compilation",
+    );
+
+    expect(requests.length).toBe(2); // the turn continued so the model could react
+    const notifs = notificationMessages(history);
+    expect(notifs.length).toBe(1);
+    expect(notifs[0]?.content).toContain("late result");
+  });
+
+  test("F-002: AC10 — a pending completion reaches the next operator turn even with no tool call", async () => {
+    // The wake path's own promise to the operator: "it will be reported with
+    // your next message" (both shells print exactly that when the auto-wake cap
+    // is hit). A text-only answer has no tool batch, so the round-boundary
+    // drain never runs — the pending notification has to be delivered at the
+    // finish or that promise is false.
+    const { provider, requests } = scriptedProvider([
+      [{ kind: "text_delta", text: "Four." }, { kind: "model_end" }],
+      [{ kind: "text_delta", text: "And the task is done." }, { kind: "model_end" }],
+    ]);
+    const fake = fakeRegistry({ running: [], pending: [completion({ jobId: "task-8-8000", output: "pending result\n" })] });
+    const { io } = collectingIo();
+    const history: NormalizedMessage[] = [];
+
+    // Attended session: `wake` mode, which must NOT hold — but must still hand
+    // over what is already finished.
+    await runAgentTurn(io, makeDeps({ provider, tools: [], jobRegistry: fake.registry }), history, "what is 2 + 2?");
+
+    expect(requests.length).toBe(2);
+    const notifs = notificationMessages(history);
+    expect(notifs.length).toBe(1);
+    expect(notifs[0]?.content).toContain("pending result");
+  });
+
+  test("a text-only finish with nothing pending still ends the turn in ONE round", async () => {
+    // The guard against fixing the two above by always taking another round:
+    // an empty drain must cost no extra model call, in either mode.
+    const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "Nothing to do." }, { kind: "model_end" }]]);
+    const fake = fakeRegistry({ running: [], pending: [] });
+    const { io } = collectingIo();
+    const history: NormalizedMessage[] = [];
+
+    await runAgentTurn(io, makeDeps({ provider, tools: [], jobRegistry: fake.registry }), history, "say hello");
+
+    expect(requests.length).toBe(1);
+    expect(notificationMessages(history).length).toBe(0);
+  });
+});
+
+// =======================================================================
 // AC10 — the resolvers
 // =======================================================================
 describe("AC10: hold/auto-wake resolvers follow the project's fail-safe pattern", () => {

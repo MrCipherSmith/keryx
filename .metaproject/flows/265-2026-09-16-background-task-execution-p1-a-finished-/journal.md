@@ -137,6 +137,48 @@ committed): it needs a 2 s wall-clock wait and a real subprocess, which is the
 wrong shape for the suite, but the right shape for a one-off gate on the
 behaviour the whole phase exists for.
 
+## T11 — two real findings, both mine, both found by review
+
+Both dispatched reviewers (code-boss-reviewer, review-regression) stalled at the
+first step again: 179-byte transcripts, no output in 29 minutes, last lines "I'll
+start with the project hard gate". Stopped them and reviewed the diff myself —
+the fifth stall of this session and the fourth time taking the work over.
+
+The review found ONE defect with two faces, at the text-only finish
+(`agent.ts:1570-1635`). The hold block was entered only when a task was STILL
+RUNNING, and the `return {}` under it drained nothing. So a task that reached a
+terminal status BETWEEN the last round-boundary drain and the text-only finish
+was delivered by nobody:
+
+- **F-001 (blocker), `hold`.** A `--print` session starts a command, the model
+  answers with text, the command exits while that text is being produced. The
+  hold does not engage (nothing is running), the turn returns, the session exits
+  and the sweep kills what is left. The command's result is reported to nobody —
+  which is the exact failure the whole phase exists to prevent.
+- **F-002 (major), `wake`, AC10.** A completion left undelivered must reach the
+  next operator turn; both shells literally promise the operator "it will be
+  reported with your next message" when the auto-wake cap is hit. A text-only
+  answer has no tool batch, so the round-boundary drain never runs, and the
+  promise was false.
+
+Confirmed by EXECUTION before being written down, not by reading: a probe
+driving the real loop, the real registry and real subprocesses
+(`scratchpad/p1-review-probe.ts`) reported `A: rounds=2 notifications=0
+undrained=1` and `B: notifications_after_turn2=0`. After the fix, `A=pass`
+(3 rounds, 1 notification) and `B=pass`.
+
+Fix: drain what is ALREADY finished first, in either mode, and only then decide
+whether to hold for something still running. Three tests were added first and
+seen red against the unfixed code (2 fail / 1 pass): the third is the guard that
+the fix must not buy delivery with an extra round — an empty drain still ends the
+turn in one request.
+
+Why the P1 suites missed it: every hold test set up a task that was still
+running, because that is the case the criteria describe. The case the criteria do
+NOT describe — a task that finished a moment too early — had no test, and the
+live smoke happened to use a 2 s command against a 300 ms yield, which lands in
+the covered case every time.
+
 ## T12 — P1 deviations from the specification
 
 Three, all deliberate, now recorded in specification.md §Status:
@@ -192,3 +234,5 @@ for its wiring pin.
 - 2026-09-16T11:18:17.603Z - task-attempt: T10: started (attempt 1) — verify: typecheck, P0+P1 suites, real --print hold smoke
 - 2026-09-16T11:33:48.993Z - task-done: T10: Verify: typecheck, P0 regression suites, real --print hold smoke
 - 2026-09-16T11:33:50.890Z - task-attempt: T11: started (attempt 1) — review round: boss-style correctness reviewer + blast-radius reviewer dispatched over the P1 diff
+- 2026-09-16T11:39:42.078Z - task-done: T12: Journal deviations and mark P1 in the requirements package
+- 2026-09-16T12:03:11.063Z - task-attempt: T11: blocked (attempt 2) — both dispatched reviewers (code-boss-reviewer, review-regression) stalled: 179-byte transcripts, no output in 29 minutes; stopping them and reviewing the diff myself
