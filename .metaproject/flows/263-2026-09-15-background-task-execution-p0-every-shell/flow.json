@@ -9,13 +9,50 @@
   "title": "Background task execution P0: every shell_exec is a supervised task with a bounded yield",
   "status": "in-progress",
   "createdAt": "2026-09-15T18:39:16.109Z",
-  "updatedAt": "2026-09-16T07:12:44.252Z",
+  "updatedAt": "2026-09-16T07:15:18.431Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:c38efd814221baa9af968248cee0e4767697d5fd7cf0943726cf522f78c7bb8e",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T07:14:54.659Z",
+      "note": "shell-exec-background.test.ts flow-263 AC1: incident command with no flag returns a task-<n>-<pid> handle under a 50ms yield, readable via shell_job_output and killed via shell_job_kill with killReason model; live run returned in 3006ms"
+    },
+    "AC2": {
+      "at": "2026-09-16T07:14:54.768Z",
+      "note": "shell-exec-background.test.ts flow-263 AC2: trimmed output, (no output; exit N), isError on non-zero, 20000-byte head cap with truncated marker, no handle"
+    },
+    "AC3": {
+      "at": "2026-09-16T07:14:54.872Z",
+      "note": "background-job-registry.test.ts flow-263 AC3: resolver units plus paired fakes and paired real processes (2s idle window, 100ms ticks); scripted fake covers the KERYX_SHELL_IDLE_MS and idle_timeout_ms message on every platform"
+    },
+    "AC4": {
+      "at": "2026-09-16T07:15:14.404Z",
+      "note": "background-job-registry.test.ts flow-263 AC4: exit 0 completed, non-zero failed, kill defaults to model, operator/session-exit/output-cap reasons each asserted, exactly one exit event per task"
+    },
+    "AC5": {
+      "at": "2026-09-16T07:15:14.494Z",
+      "note": "flow-263 AC5 in registry and shell_exec tests: foreground start never refused by the cap, background:true refused naming the running command, promoted task not killed and handle carries over_cap, running tasks stay at or below maxConcurrent+1"
+    },
+    "AC6": {
+      "at": "2026-09-16T07:15:14.586Z",
+      "note": "shell-exec-background.test.ts AC6 and background-job-registry.test.ts AC3: grandchild alive and pgid==pid before the kill, then polled until its pid is gone; verified live (process gone after shell_job_kill)"
+    },
+    "AC7": {
+      "at": "2026-09-16T07:15:18.179Z",
+      "note": "shell-exec-tool.test.ts AC7 pin plus interactive-agent-tools.test.ts behaviour test: the built roster's shell_exec yields a task handle through the session registry; shell-task-registry-wiring.test.ts pins both shell.ts call sites"
+    },
+    "AC8": {
+      "at": "2026-09-16T07:15:18.298Z",
+      "note": "background-job-session.test.ts: start alone is not listed, phase lists it, output before phase is kept, a task exiting while foreground is dropped and stays dropped, distinct glyphs for running/completed/failed/killed, killReason on the entry and in the Meta view"
+    },
+    "AC9": {
+      "at": "2026-09-16T07:15:18.431Z",
+      "note": "bun run typecheck clean; nine registry/shell_exec/TUI files 143 pass; AC9 suites 276 pass; full suite 10297 pass 0 fail; keryx health run PASS score 94"
+    }
+  },
   "pr": {
     "url": null
   },
@@ -237,7 +274,7 @@
       "id": "T11",
       "title": "Journal deviations and update prompt/comment text",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -245,7 +282,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -396,6 +434,56 @@
       "at": "2026-09-16T07:12:44.252Z",
       "event": "task-done",
       "detail": "T10: Review the P0 diff and fix findings"
+    },
+    {
+      "at": "2026-09-16T07:14:07.063Z",
+      "event": "task-done",
+      "detail": "T11: Journal deviations and update prompt/comment text"
+    },
+    {
+      "at": "2026-09-16T07:14:54.660Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-exec-background.test.ts flow-263 AC1: incident command with no flag returns a task-<n>-<pid> handle under a 50ms yield, readable via shell_job_output and killed via shell_job_kill with killReason model; live run returned in 3006ms"
+    },
+    {
+      "at": "2026-09-16T07:14:54.768Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shell-exec-background.test.ts flow-263 AC2: trimmed output, (no output; exit N), isError on non-zero, 20000-byte head cap with truncated marker, no handle"
+    },
+    {
+      "at": "2026-09-16T07:14:54.872Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: background-job-registry.test.ts flow-263 AC3: resolver units plus paired fakes and paired real processes (2s idle window, 100ms ticks); scripted fake covers the KERYX_SHELL_IDLE_MS and idle_timeout_ms message on every platform"
+    },
+    {
+      "at": "2026-09-16T07:15:14.404Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: background-job-registry.test.ts flow-263 AC4: exit 0 completed, non-zero failed, kill defaults to model, operator/session-exit/output-cap reasons each asserted, exactly one exit event per task"
+    },
+    {
+      "at": "2026-09-16T07:15:14.494Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: flow-263 AC5 in registry and shell_exec tests: foreground start never refused by the cap, background:true refused naming the running command, promoted task not killed and handle carries over_cap, running tasks stay at or below maxConcurrent+1"
+    },
+    {
+      "at": "2026-09-16T07:15:14.586Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: shell-exec-background.test.ts AC6 and background-job-registry.test.ts AC3: grandchild alive and pgid==pid before the kill, then polled until its pid is gone; verified live (process gone after shell_job_kill)"
+    },
+    {
+      "at": "2026-09-16T07:15:18.180Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-exec-tool.test.ts AC7 pin plus interactive-agent-tools.test.ts behaviour test: the built roster's shell_exec yields a task handle through the session registry; shell-task-registry-wiring.test.ts pins both shell.ts call sites"
+    },
+    {
+      "at": "2026-09-16T07:15:18.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: background-job-session.test.ts: start alone is not listed, phase lists it, output before phase is kept, a task exiting while foreground is dropped and stays dropped, distinct glyphs for running/completed/failed/killed, killReason on the entry and in the Meta view"
+    },
+    {
+      "at": "2026-09-16T07:15:18.431Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bun run typecheck clean; nine registry/shell_exec/TUI files 143 pass; AC9 suites 276 pass; full suite 10297 pass 0 fail; keryx health run PASS score 94"
     }
   ]
 }
