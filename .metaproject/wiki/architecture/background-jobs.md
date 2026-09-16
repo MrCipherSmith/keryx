@@ -2,7 +2,7 @@
 
 Version: 1.0.0
 Type: architecture
-Status: accepted
+Status: superseded-in-part
 Describes:
   - src/harness/tool/builtin/background-job-registry.ts
   - src/harness/tool/builtin/shell-exec-tool.ts
@@ -11,6 +11,18 @@ Describes:
   - src/tui/job-bridge.ts
 
 ## Summary
+
+> **Superseded in part by flow 263 (2026-09-16).** Backgrounding is no longer
+> opt-in: every `shell_exec` call is a supervised task that returns within a
+> bounded yield (`KERYX_SHELL_YIELD_MS`, 10 s), and a command still running when
+> the yield elapses keeps running as a background task instead of blocking the
+> turn. The wall-clock `KERYX_SHELL_TIMEOUT_MS` deadline is replaced by an idle
+> timeout (`KERYX_SHELL_IDLE_MS`), job ids are now `task-<n>-<pid>`, the
+> terminal status `exited` split into `completed`/`failed`, and every kill
+> carries a `killReason`. What this page says about the approval gate, the OS
+> sandbox, process-group ownership, the bounded-resource rails and the
+> session-scoped lifetime is unchanged and still accurate. Full rewrite is
+> scheduled for phase P3 of `docs/requirements/keryx-background-task-execution/`.
 
 `shell_exec` gained an optional `background: true` input (flow 173): instead
 of blocking the agent turn until the command exits (the existing
