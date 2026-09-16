@@ -1,14 +1,13 @@
 # Review pipeline: derive the finding's line from a quoted snippet, repair mechanical malformation, price the round
 
 Status: draft
-Source: `docs/analysis/open-code-review-comparison/2026-09-15/report.md` §5a —
-four changes read out of `alibaba/open-code-review`'s Go source and checked
-against ours.
+Source: `docs/analysis/review-pipeline/2026-09-15/report.md` — four gaps in the
+review pipeline, each confirmed against our own code and our own records.
 
 ## Problem
 
 Four gaps in the review pipeline, each confirmed against our own code rather
-than inferred from theirs.
+than inferred.
 
 ### A — `line` is a claim nobody checks
 
@@ -24,13 +23,12 @@ verifies neither against the tree at the round's head. On a fix round the file
 has moved under the finding **by construction** — which is exactly when the
 anchor is least trustworthy and most consequential.
 
-`open-code-review` does not ask the model for a line number at all. The model
-must quote the code it is talking about (`existing_code`); `ResolveComment`
-locates that quote by text match and the line is **derived**. A second model
-call (`internal/diff/relocation.go`) is spent only when the match fails, and it
-reverts when the retry does not resolve either. They carry
-`relocate_across_files_test.go`, so drift across file boundaries is a case they
-hit often enough to name.
+The shape to copy is a pipeline that never asks the model for a line number at
+all. The model quotes the code it is talking about; the pipeline locates that
+quote by text match and the line is **derived**. A second, more expensive
+resolution pass is worth spending only when the match fails, and it reverts when
+the retry does not resolve either. Drift across file boundaries is a case common
+enough to be worth naming in its own test.
 
 ### B — a mechanical omission kills the round
 
@@ -41,13 +39,11 @@ missing `id`, then missing `problem`, then missing `class_scope`. The first read
 > Refusing to record two findings under one key: …#undefined claimed by 5 findings.
 
 The first two are mechanical: the pipeline had everything it needed to fill them
-in. `open-code-review` spends 9.6 KB of code against 25.6 KB of tests
-(`internal/tool/comment_args_repair.go`) repairing exactly this class, and gates
-the repair — the result must introduce no field the schema does not define, and
-the object count must match. They also derive a stable identity
-(`internal/agent/identity.go`, `retry_identity_test.go` in three packages) so a
-retry does not duplicate findings. We derive nothing, which is why the key was
-`#undefined`.
+in. The shape worth copying is a repair with an ACCEPTANCE CHECK: the result
+must introduce no field the schema does not define and must preserve the object
+count, so a repair that overreaches is refused rather than recorded. A stable
+identity derived from the report's own ordering is the other half — we derive
+nothing today, which is why the key was `#undefined`.
 
 ### C — the round has no price
 
@@ -69,9 +65,9 @@ demonstrate, because the number lives nowhere.
 
 ### D — related files are never grouped
 
-`internal/agent/grouping.go` (14 KB against 26.8 KB of tests) bundles related
-files into one review unit, so a paired change is seen whole by one reviewer.
-`keryx review scope` bounds and drops but never groups.
+A file-sharded pipeline has to bundle related files into one review unit, so a
+paired change is seen whole by one reviewer. `keryx review scope` bounds and
+drops but never groups.
 
 This one fits us least: we fan out by **domain**, not by file, so a paired change
 already reaches every reviewer. It is in scope here to be **decided and

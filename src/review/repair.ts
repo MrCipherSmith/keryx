@@ -29,10 +29,9 @@
 // `coerceStructured` already documents, and this module is deliberately its
 // narrow exception rather than a hole in it.
 //
-// The acceptance check below is copied in spirit from
-// `internal/tool/comment_args_repair.go` in alibaba/open-code-review, where a
-// repaired batch is accepted only if it introduces no field the schema does not
-// define and preserves the object count. A repair that cannot be checked is a
+// The acceptance check below is the part that makes this safe: a repaired batch
+// is accepted only if it introduces no field the schema does not define, removes
+// none, and preserves the object count. A repair that cannot be checked is a
 // corruption nobody notices.
 
 import type { StructuredReviewFinding } from "./types";

@@ -89,13 +89,13 @@ Audit script: `/tmp/.../anchor-audit.ts`, re-runnable against
 ## D1 — Related-file grouping (item D, AC6): DECLINED, with the measurement
 
 **Decision.** `keryx review scope` will not group related files into review
-units. `internal/agent/grouping.go` in `alibaba/open-code-review` is not copied.
+units. Grouping is not implemented.
 
-**What it would have bought them, and why that does not transfer.** Their
+**What it buys a file-sharded pipeline, and why that does not transfer.** Such a
 pipeline reviews file by file: a change to `message_en.properties` and one to
 `message_zh.properties` are two units unless something bundles them, and a
 reviewer holding one half cannot see that the other half was not updated.
-Grouping exists to repair a boxing that their sharding creates. Ours shards by
+Grouping exists to repair a boxing that that sharding creates. Ours shards by
 **domain** — `review-logic`, `review-security-code`, `review-testing-practices`
 and the rest each receive the whole scoped diff — so no reviewer is ever handed
 one half of a paired change.
@@ -123,7 +123,7 @@ known misses, which is the benchmark this flow explicitly leaves out of scope.
 is falsifiable rather than permanent: if the dispatch ever shards the scoped
 diff **by file** — to fit a context window, to parallelise a large change, or
 because a reviewer starts receiving a subset — grouping becomes necessary the
-same day, because at that moment we acquire the boxing theirs was built to
+same day, because at that moment we acquire the boxing grouping exists to
 repair. Nothing in the pipeline does that today.
 
 **Cost of being wrong.** Low and visible. If a paired change is ever missed for

@@ -22,11 +22,10 @@
 //     first one". Ambiguity is a fact about the quote, and resolving it by
 //     position would be a guess wearing a line number.
 //
-// Deliberately NOT implemented: the second model call that regenerates a more
-// precise snippet when the match fails (`internal/diff/relocation.go` in
-// alibaba/open-code-review). It buys accuracy for tokens on a path we can
-// simply label. Revisit if `unlocatable` turns out to be common — the re-ingest
-// of an existing round is how that number gets measured, not guessed.
+// Deliberately NOT implemented: a second model call that regenerates a more
+// precise snippet when the match fails. It buys accuracy for tokens on a path
+// we can simply label. Revisit if `unlocatable` turns out to be common — the
+// re-ingest of an existing round is how that number gets measured, not guessed.
 
 /**
  * Bounds, because matching is O(file lines x quote lines) and neither side had

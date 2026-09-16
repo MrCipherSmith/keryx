@@ -16,18 +16,18 @@ behaviour.
 
 ### A — the quote is the anchor
 
-The shape to copy is theirs, and the reason to copy it is that it removes a
-model judgement rather than adding one: a model is bad at counting lines and
+The shape is worth adopting because it removes a model judgement rather than
+adding one: a model is bad at counting lines and
 good at quoting the thing it just read.
 
 1. Schema: add the quote to `review-finding.schema.json`. Required where `line`
    is meaningful; `line` becomes OUTPUT of ingest, not input.
 2. `ingest`: locate the quote in `file` at the round's head. Exact match first;
    whitespace-normalised second. Derive `line`. No match → `unlocatable`.
-3. Deliberately NOT copied: their second LLM call to regenerate a better snippet
-   (`relocation.go`). It buys accuracy for a token cost on a path we can simply
-   mark honestly. Revisit only if `unlocatable` turns out to be common — AC8
-   gives the number to decide on.
+3. Deliberately NOT implemented: a second LLM call to regenerate a better
+   snippet when the match fails. It buys accuracy for a token cost on a path we
+   can simply mark honestly. Revisit only if `unlocatable` turns out to be
+   common — AC8 gives the number to decide on.
 
 Open question for the round that implements this: what to do with a finding
 about code that was DELETED by the change, which by definition cannot be quoted
@@ -36,10 +36,10 @@ the anchor came from.
 
 ### B — repair the mechanical, refuse the judged
 
-Their repair is worth copying mainly for its **acceptance test**: a repair is
-accepted only if the result introduces no unknown property and preserves the
-object count. Copy that discipline exactly; the specific string-escaping fix
-they carry is for a failure our JSON path does not have.
+A repair is worth having mainly for its **acceptance test**: it is accepted only
+if the result introduces no unknown property and preserves the object count.
+Adopt that discipline exactly. String-escaping repair is out of scope — that is
+a failure our JSON path does not have.
 
 Scope the repair to two fields and stop: `id` (report order), `problem` (from
 `title`). Anything requiring a claim stays refused — AC4 exists to make widening
