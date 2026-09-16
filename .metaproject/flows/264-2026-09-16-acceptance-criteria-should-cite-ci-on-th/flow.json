@@ -4,12 +4,12 @@
     "tasks": true,
     "review": true
   },
-  "id": "263",
+  "id": "264",
   "slug": "acceptance-criteria-should-cite-ci-on-th",
   "title": "Acceptance criteria should cite CI on the PR head, not a local full test run",
   "status": "initializing",
   "createdAt": "2026-09-16T06:40:57.895Z",
-  "updatedAt": "2026-09-16T06:41:56.139Z",
+  "updatedAt": "2026-09-16T10:26:03.529Z",
   "source": {
     "type": "description",
     "ref": null
@@ -187,6 +187,11 @@
       "at": "2026-09-16T06:41:56.139Z",
       "event": "task-added",
       "detail": "T9: Say which is which: the slice you run while working vs the gate that closes a flow"
+    },
+    {
+      "at": "2026-09-16T10:26:03.529Z",
+      "event": "renumbered",
+      "detail": "263 -> 264: main carries two flows with id 263: the closed background-task-execution P0 flow (created 2026-09-15, merged in PR 563) and this one, allocated later the same day by another session. The not-yet-started flow moves, per the precedent already recorded in id-map.json; this one is still initializing, with no frozen criteria, no confirmations and no PR, so the move costs nothing."
     }
   ]
 }
