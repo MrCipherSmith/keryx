@@ -1,0 +1,385 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "263",
+  "slug": "background-task-execution-p0-every-shell",
+  "title": "Background task execution P0: every shell_exec is a supervised task with a bounded yield",
+  "status": "in-progress",
+  "createdAt": "2026-09-15T18:39:16.109Z",
+  "updatedAt": "2026-09-16T06:25:11.327Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:c38efd814221baa9af968248cee0e4767697d5fd7cf0943726cf522f78c7bb8e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the specific P0 tasks T5-T11"
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for AC1-AC8",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-15T19:32:16.356Z",
+            "outcome": "started",
+            "detail": "263-T5 tests-creator dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.557Z",
+            "outcome": "started",
+            "detail": "263-T6T7 task-implementer dispatch (registry + shell_exec, coupled tests)"
+          },
+          {
+            "at": "2026-09-16T05:44:06.596Z",
+            "outcome": "blocked",
+            "detail": "implementer hung: no transcript activity for ~10h, no code changes landed; stopped and re-dispatched"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "shell_exec: bounded yield path, schema and description",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.654Z",
+            "outcome": "started",
+            "detail": "263-T6T7 task-implementer dispatch"
+          },
+          {
+            "at": "2026-09-16T05:44:07.007Z",
+            "outcome": "blocked",
+            "detail": "same dispatch hung (263-T6T7)"
+          },
+          {
+            "at": "2026-09-16T05:52:58.470Z",
+            "outcome": "started",
+            "detail": "263-T7-retry task-implementer dispatch (shell_exec only, narrowed)"
+          },
+          {
+            "at": "2026-09-16T06:06:35.294Z",
+            "outcome": "blocked",
+            "detail": "second stall: transcript idle 758s with the implementation already on disk; orchestrator verifies and finishes it"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "TUI BackgroundJobStore: phase gating and new statuses",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-15T19:42:57.749Z",
+            "outcome": "started",
+            "detail": "263-T8 task-implementer dispatch"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verify: typecheck, AC9 suites, real-process incident smoke",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Review the P0 diff and fix findings",
+      "kind": "review",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T06:25:11.327Z",
+            "outcome": "started",
+            "detail": "review wave: review-logic, review-regression, review-testing-practices"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Journal deviations and update prompt/comment text",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-15T18:39:16.109Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-15T19:31:21.138Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-15T19:31:21.301Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-15T19:31:21.547Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-15T19:31:21.845Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-15T19:31:29.109Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for AC1-AC8"
+    },
+    {
+      "at": "2026-09-15T19:31:29.253Z",
+      "event": "task-added",
+      "detail": "T6: Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers"
+    },
+    {
+      "at": "2026-09-15T19:31:29.410Z",
+      "event": "task-added",
+      "detail": "T7: shell_exec: bounded yield path, schema and description"
+    },
+    {
+      "at": "2026-09-15T19:31:29.531Z",
+      "event": "task-added",
+      "detail": "T8: TUI BackgroundJobStore: phase gating and new statuses"
+    },
+    {
+      "at": "2026-09-15T19:31:29.649Z",
+      "event": "task-added",
+      "detail": "T9: Verify: typecheck, AC9 suites, real-process incident smoke"
+    },
+    {
+      "at": "2026-09-15T19:31:29.769Z",
+      "event": "task-added",
+      "detail": "T10: Review the P0 diff and fix findings"
+    },
+    {
+      "at": "2026-09-15T19:31:29.913Z",
+      "event": "task-added",
+      "detail": "T11: Journal deviations and update prompt/comment text"
+    },
+    {
+      "at": "2026-09-15T19:31:40.391Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-15T19:31:40.577Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-15T19:32:16.356Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 263-T5 tests-creator dispatch"
+    },
+    {
+      "at": "2026-09-15T19:42:57.423Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for AC1-AC8"
+    },
+    {
+      "at": "2026-09-15T19:42:57.557Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 263-T6T7 task-implementer dispatch (registry + shell_exec, coupled tests)"
+    },
+    {
+      "at": "2026-09-15T19:42:57.654Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 263-T6T7 task-implementer dispatch"
+    },
+    {
+      "at": "2026-09-15T19:42:57.749Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 263-T8 task-implementer dispatch"
+    },
+    {
+      "at": "2026-09-15T19:47:27.877Z",
+      "event": "task-done",
+      "detail": "T8: TUI BackgroundJobStore: phase gating and new statuses"
+    },
+    {
+      "at": "2026-09-16T05:44:06.597Z",
+      "event": "task-attempt",
+      "detail": "T6: blocked (attempt 2) — implementer hung: no transcript activity for ~10h, no code changes landed; stopped and re-dispatched"
+    },
+    {
+      "at": "2026-09-16T05:44:07.007Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 2) — same dispatch hung (263-T6T7)"
+    },
+    {
+      "at": "2026-09-16T05:52:58.282Z",
+      "event": "task-done",
+      "detail": "T6: Registry: task ids, phase, statuses, killReason, waitForExit, promote, idle timer, config resolvers"
+    },
+    {
+      "at": "2026-09-16T05:52:58.470Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 3) — 263-T7-retry task-implementer dispatch (shell_exec only, narrowed)"
+    },
+    {
+      "at": "2026-09-16T06:06:35.294Z",
+      "event": "task-attempt",
+      "detail": "T7: blocked (attempt 4) — second stall: transcript idle 758s with the implementation already on disk; orchestrator verifies and finishes it"
+    },
+    {
+      "at": "2026-09-16T06:11:40.555Z",
+      "event": "task-done",
+      "detail": "T7: shell_exec: bounded yield path, schema and description"
+    },
+    {
+      "at": "2026-09-16T06:24:50.871Z",
+      "event": "task-done",
+      "detail": "T9: Verify: typecheck, AC9 suites, real-process incident smoke"
+    },
+    {
+      "at": "2026-09-16T06:25:11.327Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — review wave: review-logic, review-regression, review-testing-practices"
+    }
+  ]
+}

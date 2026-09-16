@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-07T06:57:28.626Z
+generatedAt: 2026-09-16T06:24:41.815Z
 status: complete
 
 ## Frameworks
@@ -10,7 +10,14 @@ status: complete
 ## Scripts
 
 - `check`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun test`
+- `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
 - `test`: `bun test`
+- `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
+- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/commands/sessions`
+- `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers`
+- `test:client:streaming`: `bun test src/harness/provider/`
+- `test:client:terminal`: `bun test src/tui/ src/commands/shell`
+- `test:core`: `bun test src/cli src/core src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/`
 - `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
@@ -26,8 +33,17 @@ status: complete
 - fixtures/change-impacted-test/src/alpha.test.ts
 - fixtures/change-impacted-test/src/beta.test.ts
 - fixtures/change-impacted-test/src/gamma.test.ts
+- scripts/benchmark/ablation-emission-gating.test.ts
+- scripts/benchmark/build-comparative-report.test.ts
+- scripts/benchmark/oracle-emission-gating.test.ts
+- scripts/benchmark/run-ablation-raw.test.ts
 - scripts/benchmark/run-containment.test.ts
+- scripts/benchmark/run-express-oracle.test.ts
+- scripts/benchmark/run-safety.test.ts
+- scripts/benchmark/run-wiki-freshness-scale.test.ts
+- scripts/benchmark/wiki-freshness-scale-fixture.test.ts
 - scripts/check-doc-links.test.ts
+- scripts/check-retired-cli-spellings.test.ts
 - scripts/install-global.test.ts
 - scripts/sandbox-deep-probe-redaction.test.ts
 - scripts/stress/keryx-shell-stress.test.ts
@@ -48,16 +64,21 @@ status: complete
 - src/commands/agent-approval-binding.test.ts
 - src/commands/agent-approval-context-p0.test.ts
 - src/commands/agent-approval-context.test.ts
+- src/commands/agent-commands.confusable.test.ts
 - src/commands/agent-commands.test.ts
 - src/commands/agent-destructive-gate.test.ts
+- src/commands/agent-instruction-roster.test.ts
 - src/commands/agent-permission-mode.test.ts
 - src/commands/agent-tool-call-budget.test.ts
 - src/commands/agent.test.ts
 - src/commands/agents-external.test.ts
 - src/commands/agents.monitor.test.ts
+- src/commands/auth.test.ts
 - src/commands/ctx.rg-argv.test.ts
 - src/commands/ctx.test.ts
 - src/commands/dashboard.test.ts
+- src/commands/forgetting.test.ts
+- src/commands/gdgraph-display-truth.test.ts
 - src/commands/gdgraph.test.ts
 - src/commands/goal-command.test.ts
 - src/commands/harness-exec-extension-wave.test.ts
@@ -74,36 +95,22 @@ status: complete
 - src/commands/init.escape.test.ts
 - src/commands/init.no-git.test.ts
 - src/commands/init.test.ts
+- src/commands/install-lifecycle.test.ts
 - src/commands/interactive-agent-tools.test.ts
+- src/commands/mcp-auth-decisions.test.ts
+- src/commands/mcp-auth-flow.test.ts
+- src/commands/mcp-auth-secrecy.test.ts
+- src/commands/mcp-help.test.ts
 - src/commands/mcp-install.test.ts
+- src/commands/mcp-naming.test.ts
 - src/commands/mcp-serve-root.test.ts
+- src/commands/mcp-servers.argv.test.ts
+- src/commands/mcp-servers.test.ts
+- src/commands/mcp-tool-surface.test.ts
+- src/commands/mcp-untrusted.test.ts
 - src/commands/memory-p0.test.ts
-- src/commands/memory-report.test.ts
-- src/commands/metrics.test.ts
-- src/commands/module-commands.test.ts
-- src/commands/modules.test.ts
-- src/commands/orient.dry-run.test.ts
-- src/commands/permission-mode.test.ts
-- src/commands/projects.escape.test.ts
-- src/commands/providers.balance.test.ts
-- src/commands/providers.cross-family.test.ts
-- src/commands/providers.custom.test.ts
-- src/commands/providers.test.ts
-- src/commands/review-comments-cli.test.ts
-- src/commands/review-learn-cli.test.ts
-- src/commands/review.test.ts
-- src/commands/route-synonyms.test.ts
-- src/commands/routing-baseline.test.ts
-- src/commands/routing-entrypoint-lifecycle.test.ts
-- src/commands/rules.test.ts
-- src/commands/sandbox.test.ts
-- src/commands/security-gate-exit.test.ts
-- src/commands/security-hooks-init.test.ts
-- src/commands/security-recursive-scan.test.ts
-- src/commands/security-scan-mcp.test.ts
-- src/commands/security.check-input.test.ts
 
-- ... 509 more
+- ... 681 more
 
 ## CI
 
