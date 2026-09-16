@@ -9,7 +9,7 @@
   "title": "Background task execution P1: a finished task wakes the agent without polling",
   "status": "in-progress",
   "createdAt": "2026-09-16T10:47:30.558Z",
-  "updatedAt": "2026-09-16T10:50:45.864Z",
+  "updatedAt": "2026-09-16T10:51:08.878Z",
   "source": {
     "type": "description",
     "ref": null
@@ -95,8 +95,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T10:51:08.878Z",
+            "outcome": "started",
+            "detail": "265-T5 tests-creator dispatch (RED tests for AC1-AC10)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -274,6 +280,11 @@
     {
       "at": "2026-09-16T10:50:45.864Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-16T10:51:08.878Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 265-T5 tests-creator dispatch (RED tests for AC1-AC10)"
     }
   ]
 }

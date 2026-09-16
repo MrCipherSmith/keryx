@@ -2982,3 +2982,53 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
   });
 });
+
+// --- flow 265 AC7/AC8 — TUI completion wake (source-text audit) ----------
+//
+// RED: none of this wiring exists yet. The complete OpenTUI REPL is not
+// mountable under the unit harness (see the foreground-operation audit block
+// directly above, which states the same limitation), so the wake GUARD and the
+// operator-first ordering are pinned here as source text. The behaviour that
+// does have a seam — exactly-once draining, the message shape, the round
+// boundary and `hold` — is proven by execution in
+// `background-job-registry.test.ts` and `agent-task-notification.test.ts`.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. The registry's `.onCompletion(...)` starts a turn ONLY when the shell is
+//      idle: no foreground operation active and the operator queue empty.
+//   2. That turn carries `origin: "task-notification"`.
+//   3. The settle handlers keep draining the operator queue FIRST — a queued
+//      operator message always beats a pending notification.
+//   4. Consecutive auto-wakes are capped via `resolveMaxAutoWake`, reset to 0
+//      by any operator line.
+describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (source-text audit)", () => {
+  const wakeSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("the TUI subscribes to registry completions", () => {
+    expect(wakeSource).toContain(".onCompletion(");
+  });
+
+  test("the wake is guarded by no foreground operation AND an empty operator queue", () => {
+    const start = wakeSource.indexOf(".onCompletion(");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = wakeSource.slice(start, start + 1_600);
+    // Idle means both: nothing running in the foreground, nothing queued.
+    expect(block).toMatch(/chrome\.isBusy\(\)|foregroundOperation/);
+    expect(block).toContain("mainQueue.length === 0");
+  });
+
+  test("a notification-started turn is marked with origin: 'task-notification'", () => {
+    expect(wakeSource).toMatch(/origin:\s*"task-notification"/);
+  });
+
+  test("the settle handler still drains a queued operator item before anything else", () => {
+    // The existing operator-first drain must survive: a queued message is the
+    // real next step and beats a pending notification.
+    expect(wakeSource).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+  });
+
+  test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
+    expect(wakeSource).toContain("resolveMaxAutoWake");
+    expect(wakeSource).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
+  });
+});

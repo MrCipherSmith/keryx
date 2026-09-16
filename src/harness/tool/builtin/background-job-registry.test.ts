@@ -1181,3 +1181,248 @@ describe.skipIf(process.platform === "win32")("flow 263 AC3: idle timer (REAL pr
     30_000,
   );
 });
+
+// =======================================================================
+// flow 265 P1 — delivery bookkeeping (AC1/AC2)
+//
+// RED: `drainUndelivered()`, `onCompletion()` and `BackgroundJobInfo.observed`
+// do not exist yet. They are read off the registry OBJECT through a widened
+// local type rather than the `JobRegistry` interface, so a missing method is a
+// readable per-test failure instead of a compile error for the whole file.
+// =======================================================================
+
+/** The record `drainUndelivered()` hands back, pinned by this flow's plan. */
+interface DrainedCompletion {
+  jobId: string;
+  status: "completed" | "failed" | "killed";
+  killReason?: string;
+  exitCode?: number;
+  startedAt: string;
+  endedAt: string;
+  durationMs: number;
+  output: string;
+}
+
+type DeliveryRegistry = ReturnType<typeof createJobRegistry> & {
+  drainUndelivered?: () => DrainedCompletion[];
+  onCompletion?: (listener: (jobId: string) => void) => () => void;
+};
+
+function drainerOf(registry: ReturnType<typeof createJobRegistry>): () => DrainedCompletion[] {
+  const widened = registry as DeliveryRegistry;
+  expect(typeof widened.drainUndelivered).toBe("function");
+  const fn = widened.drainUndelivered as () => DrainedCompletion[];
+  return () => fn.call(widened);
+}
+
+function onCompletionOf(
+  registry: ReturnType<typeof createJobRegistry>,
+): (listener: (jobId: string) => void) => () => void {
+  const widened = registry as DeliveryRegistry;
+  expect(typeof widened.onCompletion).toBe("function");
+  const fn = widened.onCompletion as (listener: (jobId: string) => void) => () => void;
+  return (listener) => fn.call(widened, listener);
+}
+
+function observedFlag(registry: ReturnType<typeof createJobRegistry>, jobId: string): boolean | undefined {
+  return (registry.get(jobId) as unknown as { observed?: boolean } | undefined)?.observed;
+}
+
+describe("flow 265 AC1: drainUndelivered returns a finished background task exactly once", () => {
+  test("a background-phase task that exits is drained once, with its full completion record", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("make build", { phase: "background" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    handle.emitData("compiled ok\n");
+    handle.emitExit(0);
+
+    const first = drain();
+    expect(first.length).toBe(1);
+    expect(first[0]?.jobId).toBe(started.jobId);
+    expect(first[0]?.status).toBe("completed");
+    expect(first[0]?.exitCode).toBe(0);
+    expect(first[0]?.output).toContain("compiled ok");
+    expect(typeof first[0]?.startedAt).toBe("string");
+    expect(typeof first[0]?.endedAt).toBe("string");
+    expect(typeof first[0]?.durationMs).toBe("number");
+
+    // The SAME call marked it observed — an immediate second drain has nothing.
+    expect(drain()).toEqual([]);
+    expect(observedFlag(registry, started.jobId)).toBe(true);
+  });
+
+  test("two drains in the SAME synchronous tick never both return the task", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("make build", { phase: "background" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    handles.get(started.pid)?.emitExit(1);
+
+    // No `await` between them: marking must happen in the same synchronous
+    // step as the read, or a replayed/racing drain double-delivers (N5).
+    const a = drain();
+    const b = drain();
+
+    expect(a.length + b.length).toBe(1);
+    expect(a[0]?.status).toBe("failed");
+    expect(a[0]?.exitCode).toBe(1);
+  });
+
+  test("a still-running background task is not drained at all", async () => {
+    const { spawn } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("tail -f /dev/null", { phase: "background" });
+    expect(started.ok).toBe(true);
+    expect(drain()).toEqual([]);
+  });
+
+  test("a foreground task that exited inside its caller's yield is never drained", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    // `shell_exec` awaited this one itself and already returned its output —
+    // nobody needs to be told about it.
+    const started = await registry.start("echo hi", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    handles.get(started.pid)?.emitExit(0);
+
+    expect(drain()).toEqual([]);
+  });
+
+  test("a promoted task (foreground → background) IS drained once it exits", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("slow-build", { phase: "foreground" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    // It outlived the yield and was handed back as a handle.
+    expect(registry.promote(started.jobId).ok).toBe(true);
+    handles.get(started.pid)?.emitExit(0);
+
+    const drained = drain();
+    expect(drained.length).toBe(1);
+    expect(drained[0]?.jobId).toBe(started.jobId);
+  });
+});
+
+describe("flow 265 AC2: a terminal status the agent already saw is never drained", () => {
+  test("a task whose terminal status came back from shell_job_output is never drained", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("make build", { phase: "background" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    handle.emitData("done\n");
+    handle.emitExit(0);
+
+    // The model polled and was told the task is over — that IS the delivery.
+    const polled = await shellJobOutputTool(registry).invoke({ job_id: started.jobId });
+    expect(polled.isError).toBe(false);
+
+    expect(observedFlag(registry, started.jobId)).toBe(true);
+    expect(drain()).toEqual([]);
+  });
+
+  test("a task the model killed via shell_job_kill is never drained", async () => {
+    const { spawn } = fakeSpawner({ exitOnKill: true });
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0, killGraceMs: 50 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("tail -f /dev/null", { phase: "background" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+
+    const killed = await shellJobKillTool(registry).invoke({ job_id: started.jobId });
+    expect(killed.isError).toBe(false);
+    expect(registry.get(started.jobId)?.status).toBe("killed");
+
+    expect(observedFlag(registry, started.jobId)).toBe(true);
+    expect(drain()).toEqual([]);
+  });
+
+  test("polling a task while it is STILL RUNNING does not mark it observed", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const drain = drainerOf(registry);
+
+    const started = await registry.start("make build", { phase: "background" });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const handle = handles.get(started.pid);
+    if (handle === undefined) throw new Error("test setup: fake handle missing");
+
+    handle.emitData("still working\n");
+    // Only a TERMINAL status counts as seen; this read returned neither.
+    await shellJobOutputTool(registry).invoke({ job_id: started.jobId });
+    handle.emitExit(0);
+
+    const drained = drain();
+    expect(drained.length).toBe(1);
+    expect(drained[0]?.jobId).toBe(started.jobId);
+  });
+});
+
+describe("flow 265 AC1: onCompletion fires once per terminal task", () => {
+  test("each terminal task notifies the listener exactly once", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const seen: string[] = [];
+    onCompletionOf(registry)((jobId) => seen.push(jobId));
+
+    const a = await registry.start("job a", { phase: "background" });
+    const b = await registry.start("job b", { phase: "background" });
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+
+    handles.get(a.pid)?.emitExit(0);
+    handles.get(b.pid)?.emitExit(3);
+    // A repeat exit from the process must not produce a second callback.
+    handles.get(a.pid)?.emitExit(0);
+
+    expect(seen).toEqual([a.jobId, b.jobId]);
+  });
+
+  test("the returned unsubscribe stops further notifications", async () => {
+    const { spawn, handles } = fakeSpawner();
+    const registry = createJobRegistry({ spawn, initialBufferMs: 0 });
+    const seen: string[] = [];
+    const unsubscribe = onCompletionOf(registry)((jobId) => seen.push(jobId));
+
+    const first = await registry.start("job a", { phase: "background" });
+    expect(first.ok).toBe(true);
+    if (!first.ok) return;
+    handles.get(first.pid)?.emitExit(0);
+    expect(seen.length).toBe(1);
+
+    expect(typeof unsubscribe).toBe("function");
+    unsubscribe();
+
+    const second = await registry.start("job b", { phase: "background" });
+    expect(second.ok).toBe(true);
+    if (!second.ok) return;
+    handles.get(second.pid)?.emitExit(0);
+
+    expect(seen.length).toBe(1); // unchanged
+  });
+});
