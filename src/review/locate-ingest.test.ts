@@ -6,6 +6,7 @@
 // stayed green through a release in which nothing called it — the same shape of
 // defect this pipeline keeps recording about itself.
 
+import { $ } from "bun";
 import { afterEach, beforeEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -172,6 +173,27 @@ test("a file past the read bound is not located against", async () => {
   });
   expect(recorded?.line).toBeNull();
   expect(recorded?.locator?.state).toBe("unlocatable");
+});
+
+test("REGRESSION — a round is located at the commit it records, not at the current tree", async () => {
+  // The mechanism's own first use found this. A round ingested after its fix
+  // commit had rewritten the quoted lines reported five of six findings
+  // `unlocatable` — true of the working tree, useless about the round. Six of
+  // six located once the recorded head was used.
+  await $`git init -q`.cwd(ROOT).quiet();
+  await $`git -c user.email=t@t -c user.name=t add -A`.cwd(ROOT).quiet();
+  await $`git -c user.email=t@t -c user.name=t commit -q -m first`.cwd(ROOT).quiet();
+  const head = (await $`git rev-parse HEAD`.cwd(ROOT).quiet().text()).trim();
+
+  // The tree moves on, exactly as a fix commit moves it.
+  await writeFile(path.join(ROOT, "src", "greet.ts"), "export function greet() {\n  return 'rewritten';\n}\n", "utf8");
+
+  const [recorded] = await ingest({
+    target: { kind: "report", ref: "review.md", head },
+    findings: [finding({ line: 1, quote: "  return `hello ${trimmed}`;" })],
+  });
+  expect(recorded?.locator?.state).toBe("derived");
+  expect(recorded?.line).toBe(3); // where it was at `head`, not where the tree is now
 });
 
 test("the tree reader is injectable, and what it returns is what gets located", async () => {

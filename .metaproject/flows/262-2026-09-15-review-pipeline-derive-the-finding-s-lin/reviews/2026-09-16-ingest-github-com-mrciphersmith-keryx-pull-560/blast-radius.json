@@ -1,0 +1,553 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    "src/commands/review.ts",
+    "src/review/cost.ts",
+    "src/review/locate.ts",
+    "src/review/managed.ts",
+    "src/review/repair.ts",
+    "src/review/types.ts"
+  ],
+  "files": [
+    {
+      "file": "src/review/pr-comments.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/pr-comments.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/verification.ts",
+      "hop": 1,
+      "fanIn": 7,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/verification.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli.ts",
+      "hop": 1,
+      "fanIn": 6,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/caps.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/caps.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-notes.ts",
+      "hop": 1,
+      "fanIn": 5,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/review-notes.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/blast-radius.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/blast-radius.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/filter-stats.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/filter-stats.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/loop.ts",
+      "hop": 1,
+      "fanIn": 4,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/commands/review-comments-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-comments-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-floor-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-floor-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review-learn-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review-learn-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/review.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/review.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/renumber-reviews.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/flow/renumber-reviews.e2e.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/review-gate.e2e.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/flow/review-gate.e2e.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/gdskills/review-pr-feedback-wiring.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/gdskills/review-pr-feedback-wiring.test.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/blast-radius.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/blast-radius.test.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/caps.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/caps.test.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cost-cli.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/cost-cli.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cost.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/cost.ts",
+      "path": [
+        "src/review/cost.test.ts",
+        "src/review/cost.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/cross-family.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/cross-family.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/filter-stats.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/filter-stats.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/locate-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/locate-ingest.test.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/locate.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/locate.ts",
+      "path": [
+        "src/review/locate.test.ts",
+        "src/review/locate.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/loop-real-path.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/loop-real-path.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/loop.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/loop.test.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/managed.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/managed.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/pr-comments.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/pr-comments.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/repair-ingest.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/repair-ingest.test.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/repair.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/repair.ts",
+      "path": [
+        "src/review/repair.test.ts",
+        "src/review/repair.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/review-notes.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/review/review-notes.test.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/round-trip.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/round-trip.test.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/review/verification.test.ts",
+      "hop": 1,
+      "fanIn": 0,
+      "via": "src/review/managed.ts",
+      "path": [
+        "src/review/verification.test.ts",
+        "src/review/managed.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/flow/review-gate.ts",
+      "hop": 2,
+      "fanIn": 8,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/flow/review-gate.ts",
+        "src/review/loop.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/flow-move.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/flow-move.ts",
+        "src/review/review-notes.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/review/review-learning.ts",
+      "hop": 2,
+      "fanIn": 2,
+      "via": "src/review/types.ts",
+      "path": [
+        "src/review/review-learning.ts",
+        "src/review/pr-comments.ts",
+        "src/review/types.ts"
+      ],
+      "source": "graph",
+      "isTest": false
+    },
+    {
+      "file": "src/cli-reference-coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/cli-reference-coverage.test.ts",
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/cli.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/cli.test.ts",
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/mcp-naming.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/mcp-naming.test.ts",
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/providers.cross-family.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/providers.cross-family.test.ts",
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    },
+    {
+      "file": "src/commands/version.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "path": [
+        "src/commands/version.test.ts",
+        "src/cli.ts",
+        "src/commands/review.ts"
+      ],
+      "source": "graph",
+      "isTest": true
+    }
+  ],
+  "dropped": [
+    {
+      "file": "src/review/review-learning.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/review/types.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 41 of 43 at hop 2, fan-in 0, reached via src/review/types.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/standard/command-registry.coverage.test.ts",
+      "hop": 2,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "graph",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 42 of 43 at hop 2, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    },
+    {
+      "file": "src/commands/review-result-contract.test.ts",
+      "hop": 3,
+      "fanIn": 0,
+      "via": "src/commands/review.ts",
+      "source": "related-test",
+      "reason": "cap",
+      "detail": "cut by blast_radius_max_files=40: ranked 43 of 43 at hop 3, fan-in 0, reached via src/commands/review.ts. It was NOT reviewed."
+    }
+  ],
+  "unresolved": [],
+  "counts": {
+    "changedFilesSeen": 6,
+    "changedFilesResolved": 6,
+    "changedFilesUnresolved": 0,
+    "candidates": 43,
+    "retained": 40,
+    "droppedByCap": 3,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 1,
+    "testsRetained": 29,
+    "hopHistogram": {
+      "1": 32,
+      "2": 8
+    }
+  },
+  "graph": {
+    "nodes": 1471,
+    "edges": 4386
+  }
+}
