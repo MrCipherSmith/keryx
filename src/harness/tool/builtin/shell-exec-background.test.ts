@@ -29,16 +29,14 @@ import {
   shellExecTool,
 } from "./shell-exec-tool";
 import type { CommandRunner } from "./shell-exec-tool";
-import * as registryModule from "./background-job-registry";
-import { createJobRegistry, shellJobKillTool, shellJobOutputTool } from "./background-job-registry";
+import {
+  createJobRegistry,
+  MAX_TASK_IDLE_TIMEOUT_MS,
+  MIN_TASK_IDLE_TIMEOUT_MS,
+  shellJobKillTool,
+  shellJobOutputTool,
+} from "./background-job-registry";
 import type { BackgroundProcessHandle, BackgroundSpawner } from "./background-job-registry";
-
-// flow 263 (RED): new exports, read off the namespace so the file loads before
-// they exist (a missing named import fails the whole file at link time).
-const { MAX_TASK_IDLE_TIMEOUT_MS, MIN_TASK_IDLE_TIMEOUT_MS } = registryModule as unknown as {
-  MAX_TASK_IDLE_TIMEOUT_MS: number;
-  MIN_TASK_IDLE_TIMEOUT_MS: number;
-};
 
 const TASK_ID_RE = /^task-[0-9]+-[0-9]+$/;
 

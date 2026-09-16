@@ -74,6 +74,14 @@ export interface BackgroundJobInfo {
   idleTimeoutMs: number;
   /** Set only when `status` is `killed`. */
   killReason?: KillReason;
+  /**
+   * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, kept from the
+   * START and never shrunk — what `shell_exec` builds the synchronous-shaped
+   * result of a short command from (the ring buffer keeps the tail instead,
+   * and is already drained/shrunk by the time the awaiting caller returns).
+   * Absent until the task produces output.
+   */
+  outputHead?: string;
   startedAt: string;
   endedAt?: string;
   exitCode?: number;
@@ -140,6 +148,22 @@ export const MAX_TRACKED_JOBS = 50;
  * MAX_TRACKED_JOBS eviction above).
  */
 export const TERMINATED_OUTPUT_TAIL_BYTES = 4_000;
+
+/**
+ * How much of a task's transcript is kept from the START, separately from the
+ * ring buffer and never shrunk (flow 263).
+ *
+ * `shell_exec` returns the synchronous-shaped result for a command that exits
+ * within its yield, and that result is capped FROM THE START (the model must
+ * see a compiler's first errors, not the last lines of a 30 KB dump). The ring
+ * buffer cannot serve it: `shrinkTerminatedOutput` keeps the TAIL, and it runs
+ * inside `onExit`, before the caller that was awaiting the task can read
+ * anything. So the head is snapshotted as output arrives.
+ *
+ * Sized a little above the tool's own 20 KB cap so `shell_exec` can still tell
+ * a truncated transcript from one that merely fills the cap exactly.
+ */
+export const TASK_OUTPUT_HEAD_BYTES = 24_000;
 
 /**
  * Lifecycle/output events the TUI bridge subscribes to.
@@ -275,6 +299,13 @@ interface InternalJob {
   outputBuffer: string;
   readCursor: number;
   exited: boolean;
+  /**
+   * First {@link TASK_OUTPUT_HEAD_BYTES} of the transcript, mirrored into
+   * `info.outputHead`. Append-only: never rebased by the ring's truncation and
+   * never shrunk on exit, because it is what the synchronous-shaped result of
+   * a short command is built from.
+   */
+  outputHead: string;
   /**
    * Set the moment a kill is requested for this task (flow 173 F-007). The
    * real `onExit` handler consults this to report status `"killed"` whenever
@@ -504,6 +535,10 @@ export function createJobRegistry(options?: {
 
   function appendOutput(job: InternalJob, chunk: string, stream: "stdout" | "stderr"): void {
     job.outputBuffer += chunk;
+    if (job.outputHead.length < TASK_OUTPUT_HEAD_BYTES) {
+      job.outputHead = (job.outputHead + chunk).slice(0, TASK_OUTPUT_HEAD_BYTES);
+      job.info.outputHead = job.outputHead;
+    }
     armIdleTimer(job); // any output proves the task is alive
     onEvent?.({ type: "output", jobId: job.info.jobId, chunk, stream });
     if (job.outputBuffer.length > MAX_BACKGROUND_OUTPUT_BYTES) {
@@ -613,6 +648,7 @@ export function createJobRegistry(options?: {
         },
         handle,
         outputBuffer: "",
+        outputHead: "",
         readCursor: 0,
         exited: false,
         killRequested: false,
@@ -777,9 +813,9 @@ export function shellJobOutputTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_output",
       description:
-        "Return output produced by a background job (started via shell_exec with background:true) SINCE the " +
-        "previous call for that job_id — never the full transcript again. Input: { job_id: string }. Poll this " +
-        "instead of re-running shell_exec to check on a long-running job.",
+        "Return output produced by a shell task SINCE the previous call for that id — never the full transcript " +
+        "again. Input: { job_id: string } — pass the task_id shell_exec returned for a command that outlived its " +
+        "yield (or a background:true job). Poll this instead of re-running shell_exec to check on a long command.",
       inputSchema: {
         type: "object",
         properties: { job_id: { type: "string" } },
@@ -813,9 +849,9 @@ export function shellJobKillTool(registry: JobRegistry): InteractiveTool {
     definition: {
       name: "shell_job_kill",
       description:
-        "Kill a background job started via shell_exec with background:true (its entire process group, including " +
-        "any descendant it backgrounded). Input: { job_id: string }. Only jobs in this session's own registry can " +
-        "be targeted.",
+        "Stop a running shell task — its entire process group, including any descendant it backgrounded. Input: " +
+        "{ job_id: string } — the task_id shell_exec returned for a command still running after its yield (or a " +
+        "background:true job). Only tasks in this session's own registry can be targeted.",
       inputSchema: {
         type: "object",
         properties: { job_id: { type: "string" } },

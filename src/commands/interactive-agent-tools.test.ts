@@ -25,6 +25,8 @@ function stubJobRegistry(): JobRegistry {
     get: () => undefined,
     list: () => [],
     readOutput: () => ({ ok: false, error: "unknown job_id" }),
+    waitForExit: async () => "unknown",
+    promote: () => ({ ok: true }),
     kill: async () => ({ ok: false, error: "unknown job_id" }),
     sweepAll: async () => {},
   };

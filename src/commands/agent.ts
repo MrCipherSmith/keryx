@@ -254,25 +254,26 @@ export interface AgentDeps {
    */
   askUser?: AskUserFn;
   /**
-   * Flow 173: session-teardown hook that SIGTERM→SIGKILLs every background
-   * job still tracked in this session's `JobRegistry` (by process group —
-   * see `background-job-registry.ts`'s `sweepAll`). Optional and a no-op
-   * when absent — every call site that predates this (tests, any driver that
-   * never wires a session-scoped `JobRegistry`) is unaffected. Called ONLY
-   * from a real session-exit path (`shell.ts`'s readline EOF/`/exit`/`/quit`,
-   * `tui-shell.ts`'s `/exit`) — deliberately NOT from `/new`/`/clear`, since a
-   * background job is meant to outlive those (AC9).
+   * Flow 173: session-teardown hook that SIGTERM→SIGKILLs every task still
+   * tracked in this session's registry (by process group — see
+   * `background-job-registry.ts`'s `sweepAll`, which since flow 263 reports
+   * `killReason: "session-exit"` and reaches foreground tasks too). Optional
+   * and a no-op when absent — every call site that predates this (tests, any
+   * driver that never wires a session-scoped registry) is unaffected. Called
+   * ONLY from a real session-exit path (`shell.ts`'s readline EOF/`/exit`/
+   * `/quit`, `tui-shell.ts`'s `/exit`) — deliberately NOT from `/new`/`/clear`,
+   * since a background task is meant to outlive those (AC9).
    */
   sweepBackgroundJobs?: () => Promise<void>;
   /**
-   * Flow 173 (AC8): the SAME session-scoped `JobRegistry` instance backing
-   * `shell_exec`'s `background:true` path and `shell_job_output`/
-   * `shell_job_kill` (never a second, private registry) — exposed so a
-   * mounted TUI's job-inspector modal can call `.kill(jobId)` through the
-   * identical path the model-facing `shell_job_kill` tool itself uses.
-   * Optional and unused when absent (readline has no visual inspector to
-   * need it); `tui-shell.ts` reads it once per `makeAgentDeps` call, same as
-   * `sweepBackgroundJobs`.
+   * Flow 173 (AC8): the SAME session-scoped registry backing every
+   * `shell_exec` call (flow 263: a command that outlives its yield becomes a
+   * background task) and `shell_job_output`/`shell_job_kill` — never a second,
+   * private registry — exposed so a mounted TUI's job-inspector modal can call
+   * `.kill(jobId)` through the identical path the model-facing
+   * `shell_job_kill` tool itself uses. Optional and unused when absent
+   * (readline has no visual inspector to need it); `tui-shell.ts` reads it
+   * once per `makeAgentDeps` call, same as `sweepBackgroundJobs`.
    */
   jobRegistry?: JobRegistry;
 }
