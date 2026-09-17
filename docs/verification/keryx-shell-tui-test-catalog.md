@@ -199,7 +199,7 @@ turn, produce the documented shape").
 | TOOL-08 | `flow_status` | Ask about current work state | Matches `keryx flow status <id>` CLI |
 | TOOL-09 | `repomap` | Ask for a repo overview | Matches `keryx gdgraph query`-style repomap artifact |
 | TOOL-10 | `skills_catalog`, `skill_load` | Ask what skills are available | *(confirmed live via MCP — §2 of prior report; not yet confirmed via the shell's OWN agent loop specifically, only via a standalone MCP client)* |
-| TOOL-11 | `shell_exec` (+ `shell_job_output`/`shell_job_kill`) | A long-running background command | `background: true` input returns a `job_id` immediately; `shell_job_output` polls incrementally; `shell_job_kill` stops it — TUI sidebar "Background Jobs N" panel (TUI-only visual, see §11) |
+| TOOL-11 | `shell_exec` (+ `shell_task_output`/`shell_task_wait`/`shell_task_kill`) | A long-running command | The call returns within the bounded yield with `{task_id, pid, status, output}` and the turn continues; `shell_task_output` reads from an explicit cursor; `shell_task_wait` waits for `any`/`all`; `shell_task_kill` stops the process group. When the task ends its outcome arrives on its own, with no read call — TUI sidebar "Background Jobs N" panel (TUI-only visual, see §11) |
 | TOOL-12 | `apply_patch` | A real, approved (via `/mode trust`) file edit | File on disk actually changes; classifier (`classifyPatchRisk`) escalates correctly for a destructive-looking target |
 | TOOL-13 | `spawn_subagent` | Single + parallel-batch dispatch | *(confirmed live both ways — denied under `ask`/headless, real parallel execution under `trust`)* |
 | TOOL-14 | `web_fetch`, `web_search` | A real external question (needs `/search-provider`/`/search-connect` configured first) | Real result, or a clear "no provider configured" refusal |
@@ -273,13 +273,18 @@ client against a freshly-spawned `keryx serve-mcp`.)*
 | PROV-04 | Missing API key for a chosen provider fails closed with a named message | *(confirmed live for `openai`/`gemini` via `harness run`; not yet confirmed via `keryx shell` itself choosing an unconfigured provider)* | No network attempt, clear message |
 | PROV-05 | `keryx shell --model <m>` overrides the provider's default model | **Not yet tested** | Header shows the requested model, not the provider default |
 
-## 11. Background shell jobs
+## 11. Supervised shell tasks
 
 | ID | Test | Command(s) | Expected |
 |---|---|---|---|
-| BGJOB-01 | `shell_exec` with `background: true` returns immediately with a `job_id` | **Not yet tested** | Turn continues without blocking on the command's exit |
-| BGJOB-02 | `shell_job_output(job_id)` returns only new output since the last poll | **Not yet tested** | Cursor-based incremental read, no duplication |
-| BGJOB-03 | `shell_job_kill(job_id)` stops a running background job | **Not yet tested** | Process actually terminates; subsequent `shell_job_output` reflects it |
+| BGJOB-01 | A command that outlives the yield returns a `task_id` handle — no flag needed (`background: true` now only SKIPS the wait) | **Not yet tested** | Turn continues without blocking on the command's exit; a command that finishes inside the yield still returns its output directly |
+| BGJOB-02 | `shell_task_output(task_id, since)` reads from an explicit cursor | **Not yet tested** | Two calls with the same `since` return the same bytes; the result states the status and the next cursor, and says when older output was dropped |
+| BGJOB-03 | `shell_task_kill(task_id)` stops a running task | **Not yet tested** | The whole process group terminates; asking again after it ended is an ordinary refusal naming the status, never a second signal |
+| BGJOB-05 | A finished task reports itself with no read call | **Not yet tested** | Exactly one `<task-notification>` per task, at a round boundary, carrying status/exit code/duration and the output tail; a still-running task produces no message at all |
+| BGJOB-06 | `keryx shell --print` holds the turn for its own task | **Not yet tested** | The turn does not end while a task it started is running; it reports the result and continues. Past `KERYX_SHELL_HOLD_MS` the task is killed with `hold-timeout` and still reported |
+| BGJOB-07 | An idle interactive session is woken by a completion | **Not yet tested** | A typed line always beats a pending notification; consecutive auto-wakes stop at `KERYX_SHELL_MAX_AUTO_WAKE` and any operator input resets the count |
+| BGJOB-08 | `/demote <task_id>` in both shells, including while the turn is busy | **Not yet tested** | The command keeps running in the background, the turn is not aborted, and the task appears in the TUI list |
+| BGJOB-09 | Interrupting a turn releases a wait without killing the task | **Not yet tested** | `shell_exec`'s yield and `shell_task_wait` return promptly saying they were interrupted; the task stays `running` and its completion is delivered afterwards |
 | BGJOB-04 | TUI sidebar "Background Jobs N" panel + live Output/Meta modal | **TUI-only**, not testable via readline | Visual — needs real PTY |
 
 ## 12. Queue and interrupt

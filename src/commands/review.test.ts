@@ -32,6 +32,10 @@ beforeEach(async () => {
   // under the per-user config directory rather than under the cwd. Without this
   // the developer's own `auth.json` would decide what these tests assert.
   process.env.XDG_DATA_HOME = path.join(ROOT, "xdg");
+  // Same reason: a host that exports its session model would otherwise decide
+  // what the tier tests below assert.
+  delete process.env.KERYX_SESSION_PROVIDER;
+  delete process.env.KERYX_SESSION_MODEL;
   errors = [];
   logs = [];
   console.error = (...args: unknown[]) => {
@@ -794,9 +798,57 @@ test("`review tier` never runs a security finding below standard, even when veri
   expect(model.tier).toBe("standard");
   expect(model.tier_reasons).toEqual(["base:standard", "light:verifier-execution", "floor:security"]);
   // `standard` IS the session's model, and ranking worked — which is a different
-  // fact from having fallen back to it.
-  expect(model.model).toBe("demo-medium");
+  // fact from having fallen back to it. Neither pins the id: the session's own
+  // model is what `inherit` already means, and a literal only goes stale.
+  expect(model.inherit).toBe(true);
+  expect(model.model).toBeUndefined();
   expect(model.tier_resolution).toBe("session-ranked");
+  expect((model.model_discovery as { session_rank: number | null }).session_rank).not.toBeNull();
+});
+
+async function persistShellSelection(provider: string, model: string): Promise<void> {
+  const dir = path.join(ROOT, "xdg", "keryx");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "auth.json"), JSON.stringify({ provider, model }), "utf8");
+}
+
+test("`review tier` does not pin the model `keryx shell` last persisted — that is not the caller's session", async () => {
+  // Observed: an orchestrator in Claude Code got `provider: deepseek`,
+  // `model: deepseek-flash` because auth.json still held a `keryx shell` choice.
+  await persistShellSelection("demo", "demo-medium");
+  await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
+  await reviewCommand(["tier", "--findings", "1", "--diff-lines", "5", "--catalog", "catalog.json"]);
+
+  expect(process.exitCode).toBe(0);
+  const out = logs.join("\n");
+  expect(out).toContain("session_source: none");
+  expect(out).toContain("model: inherit — dispatch on a lighter model your own runtime offers");
+  expect(out).not.toContain("demo-mini");
+});
+
+test("`review tier --from-shell-config` opts back into the persisted selection", async () => {
+  await persistShellSelection("demo", "demo-medium");
+  await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
+  await reviewCommand(["tier", "--from-shell-config", "--scope", "blast-radius", "--catalog", "catalog.json", "--json"]);
+
+  const model = modelBlock();
+  expect(model.model).toBe("demo-large");
+  expect(model.tier_resolution).toBe("discovered");
+});
+
+test("`review tier` takes the session from KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL a host exports", async () => {
+  process.env.KERYX_SESSION_PROVIDER = "demo";
+  process.env.KERYX_SESSION_MODEL = "demo-medium";
+  try {
+    await writeFile(path.join(ROOT, "catalog.json"), CATALOG, "utf8");
+    await reviewCommand(["tier", "--scope", "blast-radius", "--catalog", "catalog.json"]);
+    const out = logs.join("\n");
+    expect(out).toContain("session_source: environment");
+    expect(out).toContain("model: demo-large");
+  } finally {
+    delete process.env.KERYX_SESSION_PROVIDER;
+    delete process.env.KERYX_SESSION_MODEL;
+  }
 });
 
 test("`review tier` discovers the catalogue at runtime when none is supplied", async () => {

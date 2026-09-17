@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "265",
+  "slug": "read-only-plan-toggle-for-the-interactiv",
+  "title": "Read-only /plan toggle for the interactive agent session",
+  "status": "in-progress",
+  "createdAt": "2026-09-16T18:47:22.466Z",
+  "updatedAt": "2026-09-16T19:45:50.552Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:04e8f5da2a7dae4771643c304c0ad86a9cf2b680dbc14db89326b3a285c1f2d3",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T19:40:56.655Z",
+      "note": "resolveApprovalDecision (permission-mode.ts) returns deny iff readOnly && risk!=='read', checked before mode branches; ApprovalGateInput.readOnly is a sibling field to mode, not a variant. Verified by permission-mode.test.ts new readOnly x 3-modes x 5-risks matrix (code-verifier: 281 tests pass) and by review-logic/review-architecture confirming PermissionMode type unchanged."
+    },
+    "AC2": {
+      "at": "2026-09-16T19:41:03.458Z",
+      "note": "/plan registered in agent-commands.ts with modes: AGENT_ONLY, description '/plan [on|off]'; agent-commands.test.ts asserts presence in agent-mode list and absence from chat-mode list; agent-commands.confusable.test.ts ran clean (code-verifier)."
+    },
+    "AC3": {
+      "at": "2026-09-16T19:41:10.389Z",
+      "note": "shell.ts:1255 and tui-shell.ts:3358 each declare their own let readOnly=false closure, wired via agentIo.readOnly/io.readOnly; /plan [on|off] handlers added as siblings to /mode, no-arg reports state. Covered by shell.test.ts/tui-shell.test.ts source-text-audit blocks (same convention as /mode, since runAgentRepl/launchTuiAgentShell have no headless injection seam) - code-verifier confirmed 281 tests pass."
+    },
+    "AC4": {
+      "at": "2026-09-16T19:41:16.880Z",
+      "note": "busy-dispatch.ts:65-66 classifies /plan -> 'plan' right after /mode -> 'mode'; tui-shell.ts's busy-branch switch has a matching case 'plan'. busy-dispatch.test.ts asserts the classification (code-verifier: pass)."
+    },
+    "AC5": {
+      "at": "2026-09-16T19:41:25.991Z",
+      "note": "AgentIO.readOnly?: () => boolean added (agent.ts), threaded into all 3 executeCall gate branches and both executeCall call sites (main loop + runConcurrentSpawnBatch); deny returns immediate isError refusal before requestApproval. agent-permission-mode.test.ts end-to-end test asserts requestApproval called 0 times under readOnly:true + trust mode, and denies even under auto mode. Independently verified by code-verifier (audit 4: deny-short-circuits, PASS) and review-logic (no path reaches requestApproval after deny)."
+    },
+    "AC6": {
+      "at": "2026-09-16T19:41:33.851Z",
+      "note": "permission-mode-config.ts has zero diff across the whole flow (confirmed by code-verifier's no-persistence audit: git diff --stat on that path is empty); readOnly lives only in shell.ts/tui-shell.ts's in-memory let, always starting false, no new config file or registry anywhere in the diff."
+    },
+    "AC7": {
+      "at": "2026-09-16T19:41:41.410Z",
+      "note": "code-verifier (T3): bun run typecheck clean, bun run lint clean, targeted 7-file test run 281 pass/0 fail. T5 fix verified separately: bun run typecheck clean, bun test quarantine.test.ts + permission-mode.test.ts 26 pass/0 fail."
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "feature/interactive-shell-enhancements",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Context collected directly by flow-orchestrator in Phase 1: keryx gdgraph affected on permission-mode.ts, keryx ctx rg confirming every design-doc file/line target (agent-commands.ts:190, shell.ts:1482/1251/1253, tui-shell.ts:4881/3358/3360/3819/4531, busy-dispatch.ts:64) and every resolveApprovalDecision call site (agent.ts x3, supervise-mcp.ts x1)."
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T18:52:35.938Z",
+            "outcome": "started",
+            "detail": "265-T2-attempt1: dispatching task-implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T19:09:59.541Z",
+            "outcome": "started",
+            "detail": "265-T3-attempt1: dispatching code-verifier"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T19:14:34.383Z",
+            "outcome": "started",
+            "detail": "265-T4-attempt1: dispatching review-orchestrator over commit 0138c58"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "review-logic: 0 findings clean. review-security-code: 1 minor (F-001 quarantine.ts vocabulary gap, fix tracked as T5), 1 info (F-002 supervise-mcp.ts exhaustiveness, accepted no-action). review-architecture: 0 blocker/major/minor, 1 info (same supervise-mcp.ts topic as F-002, accepted). Zero blockers/majors; one minor tracked as follow-up task T5 per the minor threshold."
+    },
+    {
+      "id": "T5",
+      "title": "Fix review finding F-001: extend quarantine.ts injection-marker vocabulary to cover readOnly/plan mentions",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T4"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T19:32:33.114Z",
+            "outcome": "started",
+            "detail": "265-T5-attempt1: dispatching task-implementer for the F-001 fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T18:47:22.466Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T18:52:23.376Z",
+      "event": "frozen",
+      "detail": "7 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T18:52:23.485Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T18:52:30.181Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T18:52:35.938Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 265-T2-attempt1: dispatching task-implementer"
+    },
+    {
+      "at": "2026-09-16T19:09:53.650Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T19:09:59.541Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 265-T3-attempt1: dispatching code-verifier"
+    },
+    {
+      "at": "2026-09-16T19:14:16.447Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T19:14:34.383Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 265-T4-attempt1: dispatching review-orchestrator over commit 0138c58"
+    },
+    {
+      "at": "2026-09-16T19:32:25.142Z",
+      "event": "task-added",
+      "detail": "T5: Fix review finding F-001: extend quarantine.ts injection-marker vocabulary to cover readOnly/plan mentions"
+    },
+    {
+      "at": "2026-09-16T19:32:32.964Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T19:32:33.114Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 265-T5-attempt1: dispatching task-implementer for the F-001 fix"
+    },
+    {
+      "at": "2026-09-16T19:36:22.938Z",
+      "event": "task-done",
+      "detail": "T5: Fix review finding F-001: extend quarantine.ts injection-marker vocabulary to cover readOnly/plan mentions"
+    },
+    {
+      "at": "2026-09-16T19:40:56.655Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: resolveApprovalDecision (permission-mode.ts) returns deny iff readOnly && risk!=='read', checked before mode branches; ApprovalGateInput.readOnly is a sibling field to mode, not a variant. Verified by permission-mode.test.ts new readOnly x 3-modes x 5-risks matrix (code-verifier: 281 tests pass) and by review-logic/review-architecture confirming PermissionMode type unchanged."
+    },
+    {
+      "at": "2026-09-16T19:41:03.459Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: /plan registered in agent-commands.ts with modes: AGENT_ONLY, description '/plan [on|off]'; agent-commands.test.ts asserts presence in agent-mode list and absence from chat-mode list; agent-commands.confusable.test.ts ran clean (code-verifier)."
+    },
+    {
+      "at": "2026-09-16T19:41:10.389Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell.ts:1255 and tui-shell.ts:3358 each declare their own let readOnly=false closure, wired via agentIo.readOnly/io.readOnly; /plan [on|off] handlers added as siblings to /mode, no-arg reports state. Covered by shell.test.ts/tui-shell.test.ts source-text-audit blocks (same convention as /mode, since runAgentRepl/launchTuiAgentShell have no headless injection seam) - code-verifier confirmed 281 tests pass."
+    },
+    {
+      "at": "2026-09-16T19:41:16.880Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: busy-dispatch.ts:65-66 classifies /plan -> 'plan' right after /mode -> 'mode'; tui-shell.ts's busy-branch switch has a matching case 'plan'. busy-dispatch.test.ts asserts the classification (code-verifier: pass)."
+    },
+    {
+      "at": "2026-09-16T19:41:25.991Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: AgentIO.readOnly?: () => boolean added (agent.ts), threaded into all 3 executeCall gate branches and both executeCall call sites (main loop + runConcurrentSpawnBatch); deny returns immediate isError refusal before requestApproval. agent-permission-mode.test.ts end-to-end test asserts requestApproval called 0 times under readOnly:true + trust mode, and denies even under auto mode. Independently verified by code-verifier (audit 4: deny-short-circuits, PASS) and review-logic (no path reaches requestApproval after deny)."
+    },
+    {
+      "at": "2026-09-16T19:41:33.852Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: permission-mode-config.ts has zero diff across the whole flow (confirmed by code-verifier's no-persistence audit: git diff --stat on that path is empty); readOnly lives only in shell.ts/tui-shell.ts's in-memory let, always starting false, no new config file or registry anywhere in the diff."
+    },
+    {
+      "at": "2026-09-16T19:41:41.411Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: code-verifier (T3): bun run typecheck clean, bun run lint clean, targeted 7-file test run 281 pass/0 fail. T5 fix verified separately: bun run typecheck clean, bun test quarantine.test.ts + permission-mode.test.ts 26 pass/0 fail."
+    },
+    {
+      "at": "2026-09-16T19:42:20.461Z",
+      "event": "completing",
+      "detail": "merged commit: e4ccc9023f97d6cdad6746645ca34fd584c2fc11"
+    },
+    {
+      "at": "2026-09-16T19:42:20.579Z",
+      "event": "completion-failed",
+      "detail": "main-merge: e4ccc9023f97d6cdad6746645ca34fd584c2fc11 is not contained in origin/main | base-branch: unobserved: origin/feature/interactive-shell-enhancements could not be resolved, so whether e4ccc9023f97d6cdad6746645ca34fd584c2fc11 landed there is unknown. Fetch the remote (`git fetch origin feature/interactive-shell-enhancements`) and re-run; an unresolvable base is not a passing one. | review: 2 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-16-branch-feature-plan-mode-toggle#F-001 (minor, round 2026-09-16-branch-feature-plan-mode-toggle): marked fixed (`acted-on`) with no verifier verdict of `refuted` — a finding that is not re-checked after the fix is a finding nobody showed had stopped reproducing | verifier-stats (violated): round `2026-09-16-branch-feature-plan-mode-toggle` ran with `verification_mode: annotate` and received 0 claims while retaining 1 finding(s) at or above `minor` (2026-09-16-branch-feature-plan-mode-toggle#F-001). The mode says a verifier was meant to run; the claim count says nothing was checked. Pass the verifier's output with `keryx review ingest --verifications <file|->`. | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-16T19:45:50.463Z",
+      "event": "completing",
+      "detail": "merged commit: aa7313b9a2b1184273f2ddcd73d6961f995a4132"
+    },
+    {
+      "at": "2026-09-16T19:45:50.552Z",
+      "event": "completion-failed",
+      "detail": "main-merge: aa7313b9a2b1184273f2ddcd73d6961f995a4132 is not contained in origin/main | base-branch: unobserved: origin/feature/interactive-shell-enhancements could not be resolved, so whether aa7313b9a2b1184273f2ddcd73d6961f995a4132 landed there is unknown. Fetch the remote (`git fetch origin feature/interactive-shell-enhancements`) and re-run; an unresolvable base is not a passing one. | health: INCOMPLETE: required source unavailable: eslint; INCOMPLETE: required source unavailable: typescript; OPTIONAL: sonarqube source skipped; OPTIONAL: tests source missing; OPTIONAL: coverage source missing"
+    }
+  ]
+}

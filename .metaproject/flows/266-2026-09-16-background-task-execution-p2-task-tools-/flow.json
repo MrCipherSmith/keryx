@@ -1,0 +1,623 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "266",
+  "slug": "background-task-execution-p2-task-tools-",
+  "title": "Background task execution P2: task tools, cancellation, operator demote and side-worker rules",
+  "status": "done",
+  "createdAt": "2026-09-16T13:03:29.197Z",
+  "updatedAt": "2026-09-16T14:33:32.903Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:b04923787581a2eb324f174f8d35f5469536498e1f857a9132b74291b0b85529",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-16T14:20:15.920Z",
+      "note": "shell-task-tools.test.ts: two calls with the same since return the same bytes; the status is reported alongside; an unknown task_id is a tool error naming the id"
+    },
+    "AC2": {
+      "at": "2026-09-16T14:20:16.015Z",
+      "note": "shell-task-tools.test.ts: mode any returns as soon as one named task is terminal (without waiting out the slow one); mode all reaching its bound reports the still-running task; an unknown id is named, not dropped"
+    },
+    "AC3": {
+      "at": "2026-09-16T14:20:16.108Z",
+      "note": "shell-task-tools.test.ts: clampTaskWaitMs pins [0,300000] against negative, zero, in-range, over-range, MAX_SAFE_INTEGER and NaN; the timeout path returns statuses with isError false and the task still running — the wait never kills"
+    },
+    "AC4": {
+      "at": "2026-09-16T14:20:16.193Z",
+      "note": "shell-task-tools.test.ts: killing an already-exited task is an ordinary tool error and the task keeps its completed status — no second signal, no status rewrite"
+    },
+    "AC5": {
+      "at": "2026-09-16T14:20:16.284Z",
+      "note": "shell-task-tools.test.ts: both aliases carry a deprecation note naming their replacement in the built definition; the read alias accepts both id spellings; a kill with the old spelling is REFUSED and the task stays running. Criterion narrowed to reads-only by the owner after the review finding, then re-sealed"
+    },
+    "AC6": {
+      "at": "2026-09-16T14:20:16.376Z",
+      "note": "shell-task-tools.test.ts: a recorder tool driven through the real runAgentTurn receives an AbortSignal as invoke's second argument; every existing tool ignores ctx and is unaffected — typecheck clean, agent suites 114/0"
+    },
+    "AC7": {
+      "at": "2026-09-16T14:21:14.179Z",
+      "note": "shell-task-tools.test.ts plus a LIVE smoke on real processes: shell_exec's yield returned 402ms after an abort against a 60000ms yield and the command was PROMOTED not killed; shell_task_wait returned 401ms after an abort against a 300000ms timeout with the task still running; in both cases the completion was delivered afterwards by the flow-265 drain carrying the command's own output"
+    },
+    "AC8": {
+      "at": "2026-09-16T14:21:14.292Z",
+      "note": "shell-task-tools.test.ts executes both halves: parseDemoteCommand (empty, whitespace, padded, extra-token refusal) and demoteTask against a real registry — a running foreground task is promoted and stays running, a second call is refused as already-background, an unknown id is refused naming it. Wired into the readline chain, the TUI dispatch AND the busy-dispatch allow-list, so it works while the turn is blocked"
+    },
+    "AC9": {
+      "at": "2026-09-16T14:21:14.383Z",
+      "note": "shell-task-tools.test.ts reads the EXPORTED SIDE_WORKER_DENIED_TOOL_NAMES: it contains shell_task_kill, shell_job_kill, shell_task_wait and shell_job_output, and deliberately not shell_task_output; the flow-173 TUI audit was rewritten to assert the property plus this membership instead of a literal one-element Set"
+    },
+    "AC10": {
+      "at": "2026-09-16T14:21:14.475Z",
+      "note": "shell-task-tools.test.ts: a side worker's read of a FINISHED task leaves the main session's notification pending, while the main session's read of the same task marks it observed. Proved again on REAL processes by the abort smoke: after a side-worker read, one completion was still drained"
+    },
+    "AC11": {
+      "at": "2026-09-16T14:21:14.577Z",
+      "note": "shell-task-tools.test.ts reads the EXPORTED REPEATABLE_TOOL_NAMES: shell_task_output, shell_task_wait and shell_job_output are all repeatable, so following a running command is not mistaken for a loop while the per-signature attempt rail still stops a genuine one"
+    },
+    "AC12": {
+      "at": "2026-09-16T14:21:14.686Z",
+      "note": "tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94"
+    }
+  },
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/571"
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context collected from docs/requirements/keryx-background-task-execution (spec 4.2/4.3/5/6, decisions D-15..D-18, criteria AC5/AC11/AC13) and the P1 flow journal; written up in description.md and plan.md"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by the explicit task list T6-T11, which name what is implemented and in what order"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5 (RED tests first) and T12 (verification); tests are not a trailing step in this flow"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T13, which ingests a managed review round against the head that will merge"
+    },
+    {
+      "id": "T5",
+      "title": "RED tests for AC1-AC12 across registry, tool surface, agent loop and both shells",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:17:11.200Z",
+            "outcome": "started",
+            "detail": "RED tests for AC1-AC12: behaviour proven by execution wherever a seam exists; source audits only for the two REPL loops that have none"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "19 RED tests across AC1-AC11 in src/commands/shell-task-tools.test.ts: 0 pass / 19 fail, every failure a missing export or missing behaviour, none a parse error"
+    },
+    {
+      "id": "T6",
+      "title": "Tool contract: invoke(input, ctx) and executeCall passes the turn's abort signal",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:23:16.547Z",
+            "outcome": "started",
+            "detail": "tool contract: invoke(input, ctx) and executeCall passing the turn's abort signal"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "invoke(input, ctx?: InteractiveToolContext) and executeCall passes the turn's signal; shell_exec's yield now races the abort and promotes instead of killing. Typecheck clean; the AC6 test flipped to pass; shell-exec-tool, shell-exec-background, agent and agent-task-notification: 145 pass / 2 skip / 0 fail"
+    },
+    {
+      "id": "T7",
+      "title": "shell_task_output with an explicit cursor, plus the observer split on the tool factory",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:26:59.555Z",
+            "outcome": "started",
+            "detail": "shell_task_output with an explicit cursor, plus the observer split (main marks observed, side never does)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "shell_task_output with an absolute explicit cursor (droppedBytes + readOutputSince, reporting missed bytes) and the observer split via markObserved; typecheck clean, AC1 group and both observer tests green (6 pass / 13 fail overall, the rest awaiting T8-T11), registry+delivery suites 100 pass / 0 fail, stub suites 28 pass / 0 fail"
+    },
+    {
+      "id": "T8",
+      "title": "shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:31:20.454Z",
+            "outcome": "started",
+            "detail": "shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "shell_task_wait with any/all over waitForExit, clampTaskWaitMs [0,300000] (malformed takes the MAX, not the min), unknown ids named rather than dropped, abort ends the wait and never the task; typecheck clean, P2 file 11 pass / 8 fail (remaining: T9 kill+aliases, T10 demote, T11 the two name sets), registry suite 60 pass / 0 fail"
+    },
+    {
+      "id": "T9",
+      "title": "shell_task_kill, the two aliases with both id shapes, and their deprecation notes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:33:25.532Z",
+            "outcome": "started",
+            "detail": "shell_task_kill, both aliases accepting task-* and job-* ids, and their deprecation notes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "shell_task_kill (idempotent: killing a finished task refuses with its status and never re-signals), resolveTaskId so both aliases accept task-* and job-* spellings, and a deprecation note naming the replacement in each alias description; typecheck clean, P2 file 14 pass / 5 fail, registry+background suites 81 pass / 0 fail"
+    },
+    {
+      "id": "T10",
+      "title": "/demote <task_id> in both shells through the shared command registry",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:35:56.982Z",
+            "outcome": "started",
+            "detail": "/demote <task_id>: registry entry, pure parser, and the promote() effect helper both shells call"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "/demote <task_id>: registry entry, pure parseDemoteCommand, demoteTask effect (refuses an already-background task, which promote() deliberately does not), wired into the readline chain, the TUI dispatch AND the busy-dispatch allow-list"
+    },
+    {
+      "id": "T11",
+      "title": "Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "side-worker deny set exported and widened to kill/wait/shell_job_output while keeping shell_task_output; REPEATABLE_TOOL_NAMES exported and widened; the three task tools now built into the real roster. P2 file 19/19, shells 182/0, agent suites 114/0, typecheck clean"
+    },
+    {
+      "id": "T12",
+      "title": "Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T13:44:37.438Z",
+            "outcome": "started",
+            "detail": "verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "typecheck clean; P2 file 19/19; shells 182/0; agent suites 114/0; registry+background 81/0; full suite 10423 pass / 20 skip / 1 duration flake (searchable-sources.test.ts cut off by the 30s bound under load; 6 pass / 0 fail in 24.9s alone); live abort smoke 10/10 on real processes — yield returned 402ms against a 60s yield, task promoted not killed, completion delivered afterwards carrying its output, and a side-worker read left the notification pending; health PASS 94"
+    },
+    {
+      "id": "T13",
+      "title": "Review round ingested against the head that will merge",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T14:09:50.413Z",
+            "outcome": "started",
+            "detail": "review round, ingested LAST against the head that will merge (flow 265's gate refused a round run against a stale SHA)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "round 2026-09-16-ingest-origin-main ingested against the head that merged (c8f73420), one major finding (resolveTaskId resolved dead ids on ACTING paths, weakening D-14), fixed in 078855b0, verified by execution at that head, disposition acted-on recorded, 0 unknown. The finding also forced a narrowing of this flow's own frozen AC5, decided by the owner and re-sealed"
+    },
+    {
+      "id": "T14",
+      "title": "Journal deviations and mark P2 in the requirements package",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "README/specification/PRD marked P0+P1+P2 implemented; metrics M13 and M15 -> met (P2) with the executed tests and the live smoke; M10 re-proved at 10423 pass with the duration flake disclosed; M7 and S4 deliberately left open with a written reason, because a queued message pre-empting a wait is a mechanism P2 did not build; deviations journaled (absolute cursor, busy-dispatch allow-list, the audit that pinned a literal)"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T13:03:29.197Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T13:16:03.424Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T13:16:03.525Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T13:16:45.648Z",
+      "event": "task-added",
+      "detail": "T5: RED tests for AC1-AC12 across registry, tool surface, agent loop and both shells"
+    },
+    {
+      "at": "2026-09-16T13:16:45.751Z",
+      "event": "task-added",
+      "detail": "T6: Tool contract: invoke(input, ctx) and executeCall passes the turn's abort signal"
+    },
+    {
+      "at": "2026-09-16T13:16:45.848Z",
+      "event": "task-added",
+      "detail": "T7: shell_task_output with an explicit cursor, plus the observer split on the tool factory"
+    },
+    {
+      "at": "2026-09-16T13:16:45.943Z",
+      "event": "task-added",
+      "detail": "T8: shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills"
+    },
+    {
+      "at": "2026-09-16T13:16:46.101Z",
+      "event": "task-added",
+      "detail": "T9: shell_task_kill, the two aliases with both id shapes, and their deprecation notes"
+    },
+    {
+      "at": "2026-09-16T13:16:46.386Z",
+      "event": "task-added",
+      "detail": "T10: /demote <task_id> in both shells through the shared command registry"
+    },
+    {
+      "at": "2026-09-16T13:16:46.628Z",
+      "event": "task-added",
+      "detail": "T11: Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES"
+    },
+    {
+      "at": "2026-09-16T13:16:46.751Z",
+      "event": "task-added",
+      "detail": "T12: Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health"
+    },
+    {
+      "at": "2026-09-16T13:16:46.869Z",
+      "event": "task-added",
+      "detail": "T13: Review round ingested against the head that will merge"
+    },
+    {
+      "at": "2026-09-16T13:16:47.132Z",
+      "event": "task-added",
+      "detail": "T14: Journal deviations and mark P2 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T13:17:10.791Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T13:17:10.890Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T13:17:10.994Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T13:17:11.104Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T13:17:11.200Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — RED tests for AC1-AC12: behaviour proven by execution wherever a seam exists; source audits only for the two REPL loops that have none"
+    },
+    {
+      "at": "2026-09-16T13:23:16.347Z",
+      "event": "task-done",
+      "detail": "T5: RED tests for AC1-AC12 across registry, tool surface, agent loop and both shells"
+    },
+    {
+      "at": "2026-09-16T13:23:16.547Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — tool contract: invoke(input, ctx) and executeCall passing the turn's abort signal"
+    },
+    {
+      "at": "2026-09-16T13:26:59.393Z",
+      "event": "task-done",
+      "detail": "T6: Tool contract: invoke(input, ctx) and executeCall passes the turn's abort signal"
+    },
+    {
+      "at": "2026-09-16T13:26:59.555Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — shell_task_output with an explicit cursor, plus the observer split (main marks observed, side never does)"
+    },
+    {
+      "at": "2026-09-16T13:31:20.360Z",
+      "event": "task-done",
+      "detail": "T7: shell_task_output with an explicit cursor, plus the observer split on the tool factory"
+    },
+    {
+      "at": "2026-09-16T13:31:20.454Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills"
+    },
+    {
+      "at": "2026-09-16T13:33:25.432Z",
+      "event": "task-done",
+      "detail": "T8: shell_task_wait: any/all, the [0,300000] clamp, abort via ctx.signal, never kills"
+    },
+    {
+      "at": "2026-09-16T13:33:25.532Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — shell_task_kill, both aliases accepting task-* and job-* ids, and their deprecation notes"
+    },
+    {
+      "at": "2026-09-16T13:35:56.857Z",
+      "event": "task-done",
+      "detail": "T9: shell_task_kill, the two aliases with both id shapes, and their deprecation notes"
+    },
+    {
+      "at": "2026-09-16T13:35:56.982Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — /demote <task_id>: registry entry, pure parser, and the promote() effect helper both shells call"
+    },
+    {
+      "at": "2026-09-16T13:44:37.252Z",
+      "event": "task-done",
+      "detail": "T10: /demote <task_id> in both shells through the shared command registry"
+    },
+    {
+      "at": "2026-09-16T13:44:37.342Z",
+      "event": "task-done",
+      "detail": "T11: Side-worker denial over the real roster, and REPEATABLE_TOOL_NAMES"
+    },
+    {
+      "at": "2026-09-16T13:44:37.438Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health"
+    },
+    {
+      "at": "2026-09-16T14:09:50.308Z",
+      "event": "task-done",
+      "detail": "T12: Verify: typecheck, named suites, full suite, live abort-does-not-kill smoke, health"
+    },
+    {
+      "at": "2026-09-16T14:09:50.413Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — review round, ingested LAST against the head that will merge (flow 265's gate refused a round run against a stale SHA)"
+    },
+    {
+      "at": "2026-09-16T14:11:00.862Z",
+      "event": "task-done",
+      "detail": "T14: Journal deviations and mark P2 in the requirements package"
+    },
+    {
+      "at": "2026-09-16T14:16:48.391Z",
+      "event": "ac-updated",
+      "detail": "review finding: AC5 as frozen required both id spellings on BOTH aliases, which conflicts with D-14 (tasks do not survive a session, so a stale handle must resolve to unknown task_id). Resolving spellings on a KILL can land on a live task when the pid is recycled. Narrowed to reads only, by the owner's decision."
+    },
+    {
+      "at": "2026-09-16T14:18:18.953Z",
+      "event": "ac-updated",
+      "detail": "AC5 narrowed to reads-only id resolution after the review finding; re-sealing against the corrected text (the previous re-seal captured the old wording, because the command re-freezes current content rather than editing a criterion)"
+    },
+    {
+      "at": "2026-09-16T14:20:15.920Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-task-tools.test.ts: two calls with the same since return the same bytes; the status is reported alongside; an unknown task_id is a tool error naming the id"
+    },
+    {
+      "at": "2026-09-16T14:20:16.015Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shell-task-tools.test.ts: mode any returns as soon as one named task is terminal (without waiting out the slow one); mode all reaching its bound reports the still-running task; an unknown id is named, not dropped"
+    },
+    {
+      "at": "2026-09-16T14:20:16.108Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: shell-task-tools.test.ts: clampTaskWaitMs pins [0,300000] against negative, zero, in-range, over-range, MAX_SAFE_INTEGER and NaN; the timeout path returns statuses with isError false and the task still running — the wait never kills"
+    },
+    {
+      "at": "2026-09-16T14:20:16.194Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: shell-task-tools.test.ts: killing an already-exited task is an ordinary tool error and the task keeps its completed status — no second signal, no status rewrite"
+    },
+    {
+      "at": "2026-09-16T14:20:16.284Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shell-task-tools.test.ts: both aliases carry a deprecation note naming their replacement in the built definition; the read alias accepts both id spellings; a kill with the old spelling is REFUSED and the task stays running. Criterion narrowed to reads-only by the owner after the review finding, then re-sealed"
+    },
+    {
+      "at": "2026-09-16T14:20:16.377Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: shell-task-tools.test.ts: a recorder tool driven through the real runAgentTurn receives an AbortSignal as invoke's second argument; every existing tool ignores ctx and is unaffected — typecheck clean, agent suites 114/0"
+    },
+    {
+      "at": "2026-09-16T14:21:14.179Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-task-tools.test.ts plus a LIVE smoke on real processes: shell_exec's yield returned 402ms after an abort against a 60000ms yield and the command was PROMOTED not killed; shell_task_wait returned 401ms after an abort against a 300000ms timeout with the task still running; in both cases the completion was delivered afterwards by the flow-265 drain carrying the command's own output"
+    },
+    {
+      "at": "2026-09-16T14:21:14.292Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: shell-task-tools.test.ts executes both halves: parseDemoteCommand (empty, whitespace, padded, extra-token refusal) and demoteTask against a real registry — a running foreground task is promoted and stays running, a second call is refused as already-background, an unknown id is refused naming it. Wired into the readline chain, the TUI dispatch AND the busy-dispatch allow-list, so it works while the turn is blocked"
+    },
+    {
+      "at": "2026-09-16T14:21:14.383Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: shell-task-tools.test.ts reads the EXPORTED SIDE_WORKER_DENIED_TOOL_NAMES: it contains shell_task_kill, shell_job_kill, shell_task_wait and shell_job_output, and deliberately not shell_task_output; the flow-173 TUI audit was rewritten to assert the property plus this membership instead of a literal one-element Set"
+    },
+    {
+      "at": "2026-09-16T14:21:14.475Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: shell-task-tools.test.ts: a side worker's read of a FINISHED task leaves the main session's notification pending, while the main session's read of the same task marks it observed. Proved again on REAL processes by the abort smoke: after a side-worker read, one completion was still drained"
+    },
+    {
+      "at": "2026-09-16T14:21:14.577Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: shell-task-tools.test.ts reads the EXPORTED REPEATABLE_TOOL_NAMES: shell_task_output, shell_task_wait and shell_job_output are all repeatable, so following a running command is not mistaken for a loop while the per-signature attempt rail still stops a genuine one"
+    },
+    {
+      "at": "2026-09-16T14:21:14.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: tsc --noEmit clean; the named suites pass (shell-task-tools 20/20, registry+background 101/0 with it, shells 182/0, agent suites 114/0, tool factory 17/0, command registry 70/0); full suite 10423 pass / 20 skip across 769 files with one DURATION flake disclosed (searchable-sources.test.ts cut off by the 30s bound under load, 6 pass / 0 fail in 24.9s alone); health PASS score 94"
+    },
+    {
+      "at": "2026-09-16T14:24:08.136Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (base: main)"
+    },
+    {
+      "at": "2026-09-16T14:31:37.575Z",
+      "event": "task-done",
+      "detail": "T13: Review round ingested against the head that will merge"
+    },
+    {
+      "at": "2026-09-16T14:31:37.780Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T14:31:47.862Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 1 finding(s) at or above `minor` are not terminal: 2026-09-16-ingest-origin-main#F-001 (major, round 2026-09-16-ingest-origin-main): marked fixed at 078855b0, c8f73420e61d37a08e6bbfddef68f692aaa1a3d1 but the verifier's `refuted` evidence does not cite that commit — a refutation against some other tree says nothing about what will merge"
+    },
+    {
+      "at": "2026-09-16T14:32:21.829Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/571 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-16T14:33:21.148Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-16T14:33:32.903Z",
+      "event": "done",
+      "detail": "all gates passed"
+    }
+  ],
+  "baseBranch": "main"
+}

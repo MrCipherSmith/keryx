@@ -109,8 +109,8 @@ decision:
 |---|---|---|
 | S1 | The exact incident does not recur: `shell_exec("sleep 120 && …")` with no flag returns within `yield_ms` and the turn continues; the task is then observable and killable. | met (P0) |
 | S2 | A command that keeps producing output past 120 s is not killed; a command silent for `idle_ms` is. | met (P0) |
-| S3 | On task exit the agent is notified without a poll and without a `sleep`-based wait. | planned (P1) |
-| S4 | The operator can send a message while a task is awaited and it takes over immediately. | planned (P2) |
+| S3 | On task exit the agent is notified without a poll and without a `sleep`-based wait. | met (P1) |
+| S4 | The operator can send a message while a task is awaited and it takes over immediately. | closed (out of scope) — decided by the package owner on 2026-09-16, after P2. The underlying need is met by the turn's abort, which releases a wait and leaves the task running, plus `/demote` while the turn is busy; a second interrupt mechanism would be two paths to one outcome and a new source of races in the turn queue. See metrics M7. |
 | S5 | A process-group kill reaches a grandchild backgrounded by the command. | met (P0) |
 | S6 | No implementation claim in this package is unsupported by a `file:line`. | documentation check, not a runtime claim |
 
@@ -145,8 +145,9 @@ Adopt the supervised-task model and keep everything else. Specifically:
 
 | Gap | Impact | Tracked |
 |---|---|---|
-| No implementation exists. | The defect remains live until the phases ship. | This package, specification §Acceptance criteria. |
-| The completion-wake channel does not exist in the agent loop today; the flow-173 wiki records it as "not shipped anywhere surveyed". | It is the largest new mechanism in this package. | brainstorm.md D-02; specification §Integration points. |
+| ~~P3 is not implemented: the documentation sweep.~~ Closed in flow 267: the wiki page, the wiki index entry and the test catalogue now describe the supervised-task model. | — | P0 shipped in flow 263, P1 in flow 265, P2 in flow 266, P3 in flow 267. |
+| S4 / M7 closed as out of scope (owner's decision, 2026-09-16). | An operator who types while a turn is blocked in `shell_task_wait` is still queued behind it. The levers that work are the turn's abort — which releases the wait and leaves the task running — and `/demote`. Not a gap left by accident: a second interrupt mechanism was judged to buy one keystroke at the cost of two paths to one outcome. | metrics M7 and M15. |
+| Closed in P1: the completion-wake channel now exists — `drainUndelivered`/`onCompletion` on the registry, a round-boundary drain and a hold in `src/commands/agent.ts`, and a subscription in both REPLs. | It was the largest new mechanism in this package; it is now the one with the most test weight behind it. | brainstorm.md D-02; metrics M5, M6, M11, M16. |
 | Streaming `monitor` and recurring scheduling are not specified here. | Long-lived event streams and periodic checks stay manual. | brainstorm.md D-08; follow-on packages. |
 | No on-disk full output. | Output beyond the 2 MiB ring (or the 4 KB post-delivery tail) is gone. | brainstorm.md D-18; follow-on package. |
-| Consecutive `user`-role messages are unverified per provider. | A notification followed by an operator message may be rejected by a strict adapter. | brainstorm.md D-10; P1 verification task. |
+| Consecutive `user`-role messages remain unverified against a live strict adapter. | A notification followed by an operator message may be rejected by a provider that requires strict alternation. | brainstorm.md D-10. Checked in P1: no adapter in `src/harness/provider/` merges, splits or rejects consecutive `user` turns, so nothing in keryx normalizes this away; the P1 suites exercise the shape with a scripted provider only. |

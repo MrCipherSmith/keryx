@@ -29,6 +29,15 @@ function stubJobRegistry(): JobRegistry {
     promote: () => ({ ok: true }),
     kill: async () => ({ ok: false, error: "unknown job_id" }),
     sweepAll: async () => {},
+    // flow 265: delivery bookkeeping. This stub proves the tool-list SHAPE
+    // only, so both are inert — the behaviour lives in the registry's own tests.
+    drainUndelivered: () => [],
+    onCompletion: () => () => {},
+    // flow 266: the explicit-cursor read and the delivery mark it deliberately
+    // does NOT perform. Inert for the same reason as the two above — what this
+    // stub is asked is which tools exist, never what they return.
+    readOutputSince: () => ({ ok: false, error: "unknown job_id" }),
+    markObserved: () => {},
   };
 }
 
@@ -138,6 +147,11 @@ test("TUI and readline share one factory that includes web_fetch", async () => {
     "shell_exec",
     "shell_job_kill",
     "shell_job_output",
+    // Flow 266: the task tools proper. The two `shell_job_*` names above stay
+    // for one release as deprecated aliases, so a session offers both spellings.
+    "shell_task_kill",
+    "shell_task_output",
+    "shell_task_wait",
     "skill_load",
     "skills_catalog",
     "slate_read",
@@ -290,6 +304,7 @@ test("AC7: the registry is actually threaded into shell_exec — a long command 
       status: "running",
       phase: "background",
       idleTimeoutMs: 120_000,
+      observed: false,
       startedAt: "2026-09-16T00:00:00.000Z",
     }),
   };

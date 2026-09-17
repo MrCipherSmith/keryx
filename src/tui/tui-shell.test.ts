@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
   createShellChrome,
@@ -26,6 +27,7 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  mountTitlePanel,
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
@@ -478,6 +480,27 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   // inside the text budget.
   const cell = rows[0]?.slice((rows[0]?.lastIndexOf("│") ?? -1) + 1) ?? "";
   expect(cell.trim().length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+
+  chrome.destroy();
+  setup.renderer.destroy();
+});
+
+otuiTest("flow 266 AC11/AC12: the shipped sidebar title shows keryx + the running version", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "s/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  mountTitlePanel(otui.core, setup.renderer, chrome.sidebarTop);
+  await setup.flush();
+  const frame = setup.captureCharFrame();
+
+  expect(frame).toContain("keryx");
+  expect(frame).toContain(`v${packageJson.version}`);
 
   chrome.destroy();
   setup.renderer.destroy();
@@ -2187,6 +2210,61 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
   });
 });
 
+// --- flow 265 T2: /plan (read-only toggle) in the TUI ----------------------
+//
+// `launchTuiAgentShell` has no headless injection seam (same precedent as
+// every audit in this file) — source-text audit. `runPlanCommand`'s shape
+// (no confirmation dialog, no picker overlay — those are TUI cosmetics,
+// explicitly out of scope for this pass) is proven by reading the real
+// source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
+  const tuiSourcePlan = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartPlan = tuiSourcePlan.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyPlan = tuiSourcePlan.slice(fnStartPlan);
+
+  test("declares its own `readOnly` let, independent of `permissionMode`", () => {
+    expect(fnBodyPlan).toMatch(/let\s+readOnly\s*=\s*false;/);
+  });
+
+  test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
+    expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
+    expect(fnBodyPlan).toContain("io.permissionMode = () => permissionMode;");
+  });
+
+  test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    expect(fnIndex).toBeGreaterThanOrEqual(0);
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).not.toContain("withOverlay");
+    expect(fnBlock).not.toContain("showComposerChoice");
+  });
+
+  test("no-arg reports current state via chrome.showToast; on/off toggle readOnly + toast; anything else is a usage message", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).toContain("chrome.showToast(`Read-only mode: ${readOnly ? \"on\" : \"off\"}`)");
+    expect(fnBlock).toContain('"on"');
+    expect(fnBlock).toContain("readOnly = true;");
+    expect(fnBlock).toContain('"off"');
+    expect(fnBlock).toContain("readOnly = false;");
+    expect(fnBlock).toContain("Usage: /plan [on|off]");
+  });
+
+  test("the command switch has a /plan branch calling runPlanCommand, and the busy-branch switch has a matching case", () => {
+    const branchIndex = fnBodyPlan.indexOf('command.name === "/plan"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+    const branchBlock = fnBodyPlan.slice(branchIndex, branchIndex + 200);
+    expect(branchBlock).toContain("runPlanCommand(line);");
+
+    const caseIndex = fnBodyPlan.indexOf('case "plan": {');
+    expect(caseIndex).toBeGreaterThanOrEqual(0);
+    const caseBlock = fnBodyPlan.slice(caseIndex, caseIndex + 100);
+    expect(caseBlock).toContain("runPlanCommand(line);");
+  });
+});
+
 // --- flow 163 AC8: the TUI's OpenTUI REPL never triggers the Track B
 // wrap-up composer this way either — the same invariant shell.test.ts's own
 // "flow 163 AC8" source-text audit proves for the readline REPL, mirrored
@@ -2363,7 +2441,28 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
   const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test("a module-level deny-list constant names shell_job_kill (not a risk-level change — AC6 is frozen)", () => {
-    expect(tuiSourceF003).toContain('const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);');
+    // Flow 266 widened this list, so the audit can no longer pin the literal
+    // one-element Set it was written against. What it protects is unchanged and
+    // is what is asserted here: a MODULE-LEVEL constant that denies tools BY
+    // NAME — not a risk-level change, which AC6 freezes.
+    expect(tuiSourceF003).toContain("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(tuiSourceF003).toContain('"shell_job_kill"');
+  });
+
+  test("flow 266: the deny-list also covers kill/wait and the implicit-cursor read, but NOT shell_task_output", () => {
+    // The executed proof lives in `shell-task-tools.test.ts`, which reads the
+    // exported Set. This audit exists for the file itself: the three additions
+    // are the reason a side worker cannot end a main-session task, block on one,
+    // or consume output the main session has not seen — and the one omission is
+    // deliberate, because `shell_task_output` takes an explicit cursor and its
+    // side-worker copy never marks a task delivered.
+    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(declIdx).toBeGreaterThanOrEqual(0);
+    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
+    for (const name of ["shell_job_kill", "shell_task_kill", "shell_task_wait", "shell_job_output"]) {
+      expect(declBlock).toContain(`"${name}"`);
+    }
+    expect(declBlock).not.toContain('"shell_task_output"');
   });
 
   test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
@@ -2983,5 +3082,55 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     );
     expect(onDestroy).toMatch(/foregroundOperation\.cancel\(/);
     expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
+  });
+});
+
+// --- flow 265 AC7/AC8 — TUI completion wake (source-text audit) ----------
+//
+// RED: none of this wiring exists yet. The complete OpenTUI REPL is not
+// mountable under the unit harness (see the foreground-operation audit block
+// directly above, which states the same limitation), so the wake GUARD and the
+// operator-first ordering are pinned here as source text. The behaviour that
+// does have a seam — exactly-once draining, the message shape, the round
+// boundary and `hold` — is proven by execution in
+// `background-job-registry.test.ts` and `agent-task-notification.test.ts`.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. The registry's `.onCompletion(...)` starts a turn ONLY when the shell is
+//      idle: no foreground operation active and the operator queue empty.
+//   2. That turn carries `origin: "task-notification"`.
+//   3. The settle handlers keep draining the operator queue FIRST — a queued
+//      operator message always beats a pending notification.
+//   4. Consecutive auto-wakes are capped via `resolveMaxAutoWake`, reset to 0
+//      by any operator line.
+describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (source-text audit)", () => {
+  const wakeSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("the TUI subscribes to registry completions", () => {
+    expect(wakeSource).toContain(".onCompletion(");
+  });
+
+  test("the wake is guarded by no foreground operation AND an empty operator queue", () => {
+    const start = wakeSource.indexOf(".onCompletion(");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = wakeSource.slice(start, start + 1_600);
+    // Idle means both: nothing running in the foreground, nothing queued.
+    expect(block).toMatch(/chrome\.isBusy\(\)|foregroundOperation/);
+    expect(block).toContain("mainQueue.length === 0");
+  });
+
+  test("a notification-started turn is marked with origin: 'task-notification'", () => {
+    expect(wakeSource).toMatch(/origin:\s*"task-notification"/);
+  });
+
+  test("the settle handler still drains a queued operator item before anything else", () => {
+    // The existing operator-first drain must survive: a queued message is the
+    // real next step and beats a pending notification.
+    expect(wakeSource).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+  });
+
+  test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
+    expect(wakeSource).toContain("resolveMaxAutoWake");
+    expect(wakeSource).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
   });
 });
