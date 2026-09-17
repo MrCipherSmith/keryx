@@ -1758,6 +1758,45 @@ otuiTest("flow 268 T17: onReasoningPreview receives the last non-empty lines whi
   h.destroy();
 });
 
+// flow 268 T26: a missed `onReasoningEnd` (e.g. the shell's own abort path,
+// fixed at its source in `commands/agent.ts`) used to leak the previous
+// round's `liveText`/`hasStarted` state into the next round — the next
+// round's preview kept appending to stale text and `onReasoningStart` never
+// re-fired since `hasStarted` was still `true`. `resetReasoningLiveState()`
+// (called by the shell at the start of every new turn) is the defensive
+// fix, proven directly here without going through `onReasoningEnd` at all.
+otuiTest("flow 268 T26: resetReasoningLiveState clears stale preview state left by a missed onReasoningEnd", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  const previews: (string[] | undefined)[] = [];
+  let starts = 0;
+  const blockIo = attachBlockIo(io, h.addBlock, {
+    onReasoningStart: () => {
+      starts += 1;
+    },
+    onReasoningPreview: (lines) => previews.push(lines),
+  });
+
+  // Round 1: reasoning starts, streams a delta, but NEVER reaches
+  // `onReasoningEnd` (simulating the abort/error path that used to skip it).
+  io.onReasoningDelta?.({ text: "round one thinking" });
+  expect(starts).toBe(1);
+  expect(previews.at(-1)).toEqual(["round one thinking"]);
+
+  // The shell calls this at the start of every new turn, defensively.
+  blockIo.resetReasoningLiveState();
+
+  // Round 2: a fresh delta must start a CLEAN preview (no leftover "round
+  // one thinking") and must re-fire onReasoningStart (hasStarted was reset).
+  io.onReasoningDelta?.({ text: "round two thinking" });
+  expect(starts).toBe(2);
+  const latestPreview = previews.at(-1);
+  expect(latestPreview).toEqual(["round two thinking"]);
+  expect(latestPreview?.join(" ")).not.toContain("round one");
+  h.destroy();
+});
+
 // ===========================================================================
 // The flow-041 advisory approval context on the TUI approval surface
 // ===========================================================================

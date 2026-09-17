@@ -1592,7 +1592,10 @@ describe("flow 268 T16 — shell.ts readline /reasoning wiring (source-text audi
   });
 
   test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
-    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted })");
+    // flow 268 T26: persisted against the SAME configDir this session's
+    // other ShellConfig reads use (see the T26 describe block below), not
+    // the bare default-dir overload.
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted }, configDir)");
   });
 
   test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {
@@ -1606,5 +1609,63 @@ describe("flow 268 T16 — shell.ts readline /reasoning wiring (source-text audi
     const listStart = reasoningShellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
     const listEnd = reasoningShellSource.indexOf("];", listStart);
     expect(reasoningShellSource.slice(listStart, listEnd)).toContain('"/reasoning"');
+  });
+});
+
+// --- flow 268 T26: readline /reasoning + /think must read/write the SAME
+// ShellConfig dir as `agentDepsBase` (`loadShellConfig(runtime.cacheDir)`),
+// not the bare default-dir overload — otherwise a session started with a
+// non-default cache dir (tests, `--cache-dir`, a sandboxed run) resolves and
+// persists reasoning effort against a DIFFERENT file than the rest of the
+// session already reads, so `/reasoning` silently "does nothing" from the
+// operator's point of view, and `/think`'s display mode (persisted by the
+// TUI, only READ here) is checked against the wrong file too.
+describe("flow 268 T26 — runAgentRepl threads configDir into every loadShellConfig/saveShellConfig call (source-text audit)", () => {
+  const dirSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = dirSource.indexOf("async function runAgentRepl(");
+  // Bounded by `resolveTuiStartup`'s own doc comment, the next thing in the
+  // file after `runAgentRepl`'s closing brace — the next FUNCTION
+  // DECLARATION (`export async function resolveTuiStartup`) is not a safe
+  // boundary, since a doc comment for it (mentioning `loadShellConfig()`,
+  // literally, describing PRE-flow-112 history) sits between the brace and
+  // that declaration and would otherwise be counted as still inside
+  // `runAgentRepl`.
+  const replEndAnchor = "\n/** Persisted defaults + provider detection resolved once for a TUI launch. */";
+  const replEnd = dirSource.indexOf(replEndAnchor, replStart);
+  const replBody = dirSource.slice(replStart, replEnd >= 0 ? replEnd : dirSource.length);
+
+  test("runAgentRepl accepts a configDir parameter", () => {
+    const signatureEnd = dirSource.indexOf("): Promise<void> {", replStart);
+    const signature = dirSource.slice(replStart, signatureEnd);
+    expect(signature).toContain("configDir?: string");
+  });
+
+  test("the onReasoningEnd /think-display check reads loadShellConfig(configDir), not the bare default-dir overload", () => {
+    expect(replBody).toContain("loadShellConfig(configDir).thinkDisplay");
+    expect(replBody).not.toContain("loadShellConfig().thinkDisplay");
+  });
+
+  test("the /reasoning branch's no-arg display reads loadShellConfig(configDir)", () => {
+    const branchIndex = replBody.indexOf('command === "/reasoning"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 2_400);
+    expect(branchBlock).toContain("loadShellConfig(configDir).reasoningEffort");
+  });
+
+  test("the /reasoning branch's set path persists via saveShellConfig(..., configDir)", () => {
+    const branchIndex = replBody.indexOf('command === "/reasoning"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 2_400);
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted }, configDir)");
+  });
+
+  test("no bare loadShellConfig()/saveShellConfig() call (no dir argument at all) remains inside runAgentRepl", () => {
+    expect(replBody).not.toMatch(/loadShellConfig\(\)/);
+    expect(replBody).not.toMatch(/saveShellConfig\(\{[^}]*\}\)(?!,)/);
+  });
+
+  test("shellCommand's runAgentRepl call site passes runtime.cacheDir as the configDir argument", () => {
+    const callIndex = dirSource.indexOf("await runAgentRepl(sharedLines,");
+    expect(callIndex).toBeGreaterThanOrEqual(0);
+    const callBlock = dirSource.slice(callIndex, dirSource.indexOf(";", callIndex));
+    expect(callBlock).toContain("runtime.cacheDir");
   });
 });

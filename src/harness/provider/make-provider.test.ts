@@ -467,3 +467,100 @@ describe("reasoning config threads from a custom file provider onto the compat g
     expect(body.reasoning_split).toBeUndefined();
   });
 });
+
+// --- flow 268 T26: the built-in `deepseek` registry entry, which carries no
+// explicit `reasoning` config, must get the `{ format: "field", replay:
+// "deepseek" }` preset from `resolveCompatReasoningPreset` purely off its
+// `baseUrl` host (`api.deepseek.com`) — otherwise `grant.reasoning.replay`
+// stays undefined and `openai-compat-provider.ts` never re-attaches a prior
+// round's `reasoning_content` on a tool-bearing request, which is exactly
+// the shape DeepSeek's thinking mode 400s on.
+describe("the built-in deepseek provider gets the reasoning_content replay preset (flow 268 T26)", () => {
+  const COMPAT_REPLAY_PROVIDER_ID = "openai-compat";
+
+  test("with tools: a prior assistant message's owned reasoning_content item is sent as reasoning_content", async () => {
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("deepseek", "deepseek-reasoner", makeOpts({ env: { DEEPSEEK_API_KEY: "sk-ds" }, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(true);
+
+    const request: NormalizedRequest = {
+      providerId: "deepseek",
+      modelId: "deepseek-reasoner",
+      systemInstruction: "",
+      messages: [
+        { role: "user", content: "call the tool" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call-1", name: "lookup", arguments: "{}" }],
+          reasoning: {
+            replay: [{ providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_content", data: "earlier reasoning" }],
+          },
+        },
+        { role: "tool", content: "42", toolCallId: "call-1" },
+      ],
+      tools: [{ name: "lookup", inputSchema: { type: "object" } }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-deepseek-preset-replay",
+      parentRunId: "make-provider-deepseek-preset-replay",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-deepseek-preset-replay-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as { messages: Array<Record<string, unknown>> };
+    const assistantMsg = body.messages.find((m) => m.role === "assistant");
+    expect(assistantMsg?.reasoning_content).toBe("earlier reasoning");
+  });
+
+  test("deepseek-chat turns without reasoning emit no replay and send nothing extra", async () => {
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("deepseek", "deepseek-chat", makeOpts({ env: { DEEPSEEK_API_KEY: "sk-ds" }, fetch: fetchMock }));
+
+    const request: NormalizedRequest = {
+      providerId: "deepseek",
+      modelId: "deepseek-chat",
+      systemInstruction: "",
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "plain reply, no reasoning" },
+      ],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-deepseek-preset-no-reasoning",
+      parentRunId: "make-provider-deepseek-preset-no-reasoning",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-deepseek-preset-no-reasoning-attempt" };
+    const events = [];
+    for await (const event of provider.stream(request, opts)) {
+      events.push(event);
+    }
+
+    expect(events.some((e) => e.kind === "reasoning_replay")).toBe(false);
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as { messages: Array<Record<string, unknown>> };
+    const assistantMsg = body.messages.find((m) => m.role === "assistant");
+    expect(assistantMsg?.reasoning_content).toBeUndefined();
+    expect(assistantMsg?.content).toBe("plain reply, no reasoning");
+  });
+});

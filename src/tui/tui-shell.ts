@@ -730,13 +730,24 @@ const REASONING_PREVIEW_THROTTLE_MS = 100;
  * owns for reasoning; `thinkDisplay` (default `"auto"`, matching today's
  * behaviour) is a live getter — like `AgentIO.permissionMode` — so a `/think`
  * mode change takes effect on the very next round without re-wiring `io`.
+ *
+ * flow 268 T26: the per-round `liveText`/`hasStarted`/`lastPreviewAt`
+ * closure state below is normally reset by `onReasoningEnd` alone. An
+ * abort/error path that skips `onReasoningEnd` (fixed at its source in
+ * `commands/agent.ts`'s `flushReasoning` call sites) used to leak it into
+ * the NEXT round: stale `liveText` got appended to instead of replaced, and
+ * `onReasoningStart` never re-fired since `hasStarted` was still `true`.
+ * The returned `resetReasoningLiveState()` is a defensive second line: the
+ * shell calls it at the START of every new turn (before `startBusy`/
+ * `runAgentTurn`), so a missed `onReasoningEnd` from ANY cause can never
+ * leak past the turn boundary.
  */
 export function attachBlockIo(
   io: AgentIO,
   addBlock: BlockSink,
   chrome: BlockIoChrome = {},
   thinkDisplay: () => ThinkDisplayMode = () => "auto",
-): AgentIO {
+): AgentIO & { resetReasoningLiveState: () => void } {
   // Per-round streaming state. Reset in `onReasoningEnd` so a later round
   // starts clean; `hasStarted` distinguishes "no deltas yet this round" from
   // "deltas arrived but were all empty" (a redacted delta has no `text`).
@@ -833,7 +844,12 @@ export function attachBlockIo(
       { hint: "/expand · ctrl+o", ...(result.isError ? { tone: "red" as const } : {}) },
     );
   };
-  return io;
+  const resetReasoningLiveState = (): void => {
+    hasStarted = false;
+    liveText = "";
+    lastPreviewAt = 0;
+  };
+  return Object.assign(io, { resetReasoningLiveState });
 }
 
 /**
@@ -3059,7 +3075,7 @@ export async function launchTuiAgentShell(opts: {
     // full text is retained (AC1). The event → block mapping itself lives in the
     // exported `attachBlockIo` (headlessly testable); the closure contributes
     // only the busy-phase / fleet chrome that needs these locals.
-    attachBlockIo(
+    const blockIo = attachBlockIo(
       io,
       addBlock,
       {
@@ -5486,6 +5502,12 @@ export async function launchTuiAgentShell(opts: {
       sessions.clear();
       deps.resetSubagentBudget?.();
       const operation = foregroundOperation.begin();
+      // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
+      // PRIOR turn (abort/error path; the root cause is fixed in
+      // `commands/agent.ts`) must never leak stale live-preview text or
+      // suppress this turn's own `onReasoningStart`. See `attachBlockIo`'s
+      // doc comment.
+      blockIo.resetReasoningLiveState();
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();

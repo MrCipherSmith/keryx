@@ -42,8 +42,37 @@ describe("resolveCompatReasoningPreset", () => {
   });
 
   test("no explicit config, any other host: stays undefined (pre-existing behaviour)", () => {
-    expect(resolveCompatReasoningPreset(undefined, "https://api.deepseek.com")).toBeUndefined();
     expect(resolveCompatReasoningPreset(undefined, "http://127.0.0.1:8080")).toBeUndefined();
+  });
+
+  // flow 268 T26: DeepSeek's thinking mode 400s on a tool-bearing request
+  // whose prior assistant turns omit `reasoning_content` — without a
+  // `reasoning` config, `grant.reasoning.replay` stays undefined and
+  // `openai-compat-provider.ts` never re-attaches it. The built-in
+  // `deepseek` provider carries no explicit `reasoning` config, so it must
+  // get this preset from its `baseUrl` host alone.
+  test("no explicit config, host api.deepseek.com: returns the field preset with deepseek replay", () => {
+    expect(resolveCompatReasoningPreset(undefined, "https://api.deepseek.com")).toEqual({
+      format: "field",
+      replay: "deepseek",
+    });
+  });
+
+  test("the deepseek preset applies regardless of path", () => {
+    expect(resolveCompatReasoningPreset(undefined, "https://api.deepseek.com/v1")).toEqual({
+      format: "field",
+      replay: "deepseek",
+    });
+  });
+
+  test("a deepseek host match must be exact — a subdomain or lookalike host is NOT preset", () => {
+    expect(resolveCompatReasoningPreset(undefined, "https://sub.api.deepseek.com")).toBeUndefined();
+    expect(resolveCompatReasoningPreset(undefined, "https://api.deepseek.com.evil.com")).toBeUndefined();
+  });
+
+  test("an explicit config on a DeepSeek host wins, verbatim, over the preset", () => {
+    const explicit = { format: "inline-tags" as const };
+    expect(resolveCompatReasoningPreset(explicit, "https://api.deepseek.com")).toBe(explicit);
   });
 
   test("an explicit config on a MiniMax host wins, verbatim, over the preset", () => {

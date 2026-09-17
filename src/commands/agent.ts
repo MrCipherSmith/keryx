@@ -1830,6 +1830,14 @@ async function runAgentTurnCore(
       const streamOptions = signal === undefined ? { attemptId: deps.idSeq() } : { attemptId: deps.idSeq(), signal };
       for await (const event of deps.provider.stream(request, streamOptions)) {
         if (isAborted()) {
+          // flow 268 T26: fire `onReasoningEnd` for a round that started
+          // reasoning before the abort landed — otherwise a live TUI preview
+          // (`attachBlockIo`) never sees its end-of-round reset and the next
+          // turn's `reasoning_delta`s land appended to this round's stale
+          // text. Never attaches `roundReasoning` to `history` here (the
+          // early `return {}` still skips that, same as before this fix) —
+          // only the display/durable-summary forwarding callbacks fire.
+          flushReasoning();
           system("\n[stopped] Model turn interrupted by user.\n");
           return {};
         }
@@ -1888,6 +1896,10 @@ async function runAgentTurnCore(
       }
     } catch (cause) {
       if (isAborted()) {
+        // Same flush-before-abort-return fix as the in-loop check above —
+        // an abort caught here (e.g. mid-read) must still close the round's
+        // reasoning span exactly once.
+        flushReasoning();
         system("\n[stopped] Model turn interrupted by user.\n");
         return {};
       }

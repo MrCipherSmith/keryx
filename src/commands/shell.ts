@@ -940,6 +940,19 @@ async function runAgentRepl(
    * is a different code path, and then what is measured is not what people run.
    */
   events?: ShellEventSink,
+  /**
+   * flow 268 T26: the SAME `ShellConfig` directory `agentDepsBase` already
+   * resolves this session's `reasoningEffort`/`maxOutputTokens` from
+   * (`loadShellConfig(runtime.cacheDir)`, at this function's own call site in
+   * `shellCommand`) — every `loadShellConfig`/`saveShellConfig` call
+   * INSIDE this function (the `/reasoning` handler, and the read-only
+   * `onReasoningEnd` `/think`-display check) must resolve/persist against
+   * that SAME directory, not silently fall back to the default config dir
+   * (`undefined` here) and disagree with what `agentDepsBase` already read.
+   * `undefined` preserves the pre-existing default-dir behaviour for any
+   * caller (tests) that does not pass one.
+   */
+  configDir?: string,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -1094,7 +1107,7 @@ async function runAgentRepl(
     onReasoningEnd: (info) => {
       stopSpinner();
       endBlock(); // reasoning precedes the answer block
-      if (resolveThinkDisplayMode(loadShellConfig().thinkDisplay) === "hide") {
+      if (resolveThinkDisplayMode(loadShellConfig(configDir).thinkDisplay) === "hide") {
         return;
       }
       const lineCount = info.text.trim().split("\n").filter((l) => l.trim().length > 0).length;
@@ -1659,7 +1672,7 @@ async function runAgentRepl(
         if (wanted.length === 0) {
           const described = describeReasoningEffortSource({
             sessionOverride: reasoningSessionOverride,
-            globalEffort: loadShellConfig().reasoningEffort,
+            globalEffort: loadShellConfig(configDir).reasoningEffort,
           });
           agentIo.onSystem?.(
             `Reasoning effort: ${described.effort} (${described.source})\n` +
@@ -1676,7 +1689,7 @@ async function runAgentRepl(
           // rebuilds it (no `/model`-style deps swap), so mutating this one
           // field takes effect starting with the very next turn.
           deps.reasoningEffort = wanted;
-          saveShellConfig({ reasoningEffort: wanted });
+          saveShellConfig({ reasoningEffort: wanted }, configDir);
           agentIo.onSystem?.(`Reasoning effort: ${wanted}\n`);
           const compatProvider = providerByName(deps.providerId);
           if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
@@ -2766,7 +2779,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           cwd: process.cwd(),
           ...(flags.continueLast === true ? { continueLast: true } : {}),
           ...(resumeId !== undefined ? { resumeId } : {}),
-        }, flags.permissionModeFlag, slateSessionBox, events);
+        }, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir);
       } finally {
         // Each connected server is a child process holding a pipe. Exiting
         // without closing them leaks one per session — and `closeServers`

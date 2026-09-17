@@ -344,13 +344,17 @@ bare exit code.
 An entry in `llm-providers.json` (see above) may carry a `reasoning` block
 that tells the OpenAI-compatible adapter how to read — and later replay — a
 gateway's reasoning output. Absent, reasoning is read the default way — with
-one exception: a provider whose `baseUrl` host is `api.minimax.io` or
+two exceptions: a provider whose `baseUrl` host is `api.minimax.io` or
 `api.minimaxi.com` (any path) with no `reasoning` block of its own gets
 `{ "format": "split", "requestParams": { "reasoning_split": true }, "replay":
-"minimax" }` automatically. MiniMax's own default mode sends every reasoning
-phrase twice (inline in `content` as `<think>…</think>` AND again in a
-`reasoning` field), so the preset asks it for out-of-band reasoning instead.
-An explicit `reasoning` block on a MiniMax entry always overrides the preset.
+"minimax" }` automatically, and one whose host is `api.deepseek.com` — the
+built-in `deepseek` provider included — gets `{ "format": "field", "replay":
+"deepseek" }` automatically, so a tool-using round always replays its prior
+`reasoning_content` back and thinking mode never 400s on the follow-up
+request. MiniMax's own default mode sends every reasoning phrase twice
+(inline in `content` as `<think>…</think>` AND again in a `reasoning`
+field), so its preset asks it for out-of-band reasoning instead. An explicit
+`reasoning` block on a MiniMax or DeepSeek entry always overrides its preset.
 
 ```json
 {
@@ -896,7 +900,7 @@ keryx wiki sections migrate [--dry-run]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state, and any pages carrying a leaked `<think>`/`<thinking>` tag (with a hint to re-run `enrich --force` on each). |
+| `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state, and any pages carrying a leaked `<think>`/`<thinking>` tag outside a fenced code block or inline code span — one shown as documentation (e.g. a fenced example) is never flagged (with a hint to re-run `enrich --force` on each). |
 | `sections list` | `--json` | List every indexed section with its identity, its stability, and the page it belongs to. |
 | `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, reoccupied, pending-tombstone, stale-locator, registry-unreadable or unknown, and never redirects a deleted identity to a same-named section elsewhere. A `found` identity that was once removed also prints its removal history and the basis on which its tombstone was lifted — `byte-identical` (a genuine restoration) or `accepted-substitution` (an operator accepted a different document at that address). Exits `0` when live, `1` for any answer about a dead identity, `2` when the registry cannot be read. |
 | `sections sync` | `--dry-run`, `--accept-reoccupation <ref>[,<ref>...]`, `--json` | Rebuild the section index from the pages on disk: register the current stable identities and tombstone the ones that disappeared. The only command in this area that writes. Exits `1` when any identity is *reoccupied* — removed, then re-minted at the same address by a different document — because a tombstone and a live document claiming one address is a contradiction, not a completed sync. `--accept-reoccupation` is the only exit from that state: it lifts the named tombstones and records permanently that the content was substituted rather than restored, which `sections resolve` then reports on every read. Accepting a page ref also accepts the sections inside that page. |
@@ -907,7 +911,7 @@ keryx wiki sections migrate [--dry-run]
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
-| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Strips a complete `<think>`/`<thinking>` block out of model output before it reaches a page, and rejects (does not write) content that still carries a stray, unclosed tag. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
+| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Strips a complete `<think>`/`<thinking>` block out of model output before it reaches a page, and rejects (does not write) content that still carries a stray, unclosed tag — both checks ignore a tag shown inside a fenced code block or inline code span, so a page documenting this guard with a `<think>` example keeps it intact instead of having it stripped or the whole page rejected. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
 | `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 | `freshness` | — | Read-only backlog: which pages the code has moved under since each was last verified, classified and ordered by how far behind. Writes only its own report, never a page. Always exits `0` — a report, not a gate. |

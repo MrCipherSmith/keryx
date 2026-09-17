@@ -28,7 +28,7 @@ import { enrichPageDeep } from "./deep-enrich";
 import type { ResumeState } from "./resume-state";
 import { wikiValidate } from "./service";
 import { computePageNodeHash, isPageUnchangedSinceLastEnrich } from "./staleness";
-import { stripThinkBlocks } from "./think-tags";
+import { containsThinkTags, stripThinkBlocks } from "./think-tags";
 import type { WikiPage } from "./types";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -580,7 +580,10 @@ export function validateEnrichedMarkdown(original: string, enriched: string): st
   // before it reaches here (see `stripThinkBlocks` calls in `wikiEnrich` and
   // `finalizeEnrichedText`). This catches anything that somehow still slips
   // through — `wiki enrich` must never persist a page containing these tags.
-  if (/<\/?think(?:ing)?>/i.test(text)) {
+  // `containsThinkTags` (flow 268 T26) is fence/inline-code-aware, same
+  // backstop rule as `stripThinkBlocks`/`wiki status`'s detector: a tag
+  // legitimately documented inside code is never rejected, only a bare one.
+  if (containsThinkTags(text)) {
     return "content contains a <think>/<thinking> reasoning tag";
   }
   if (!text.startsWith("---")) {

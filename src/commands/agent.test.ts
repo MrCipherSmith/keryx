@@ -1575,6 +1575,55 @@ test("flow 268 T17: onReasoningEnd fires for a redacted-only span with no visibl
   expect(ends[0]?.tokens).toBeUndefined();
 });
 
+// flow 268 T26: an abort landing mid-reasoning (before any text_delta) used
+// to `return {}` from inside the `for await` loop's `isAborted()` check
+// BEFORE `flushReasoning()` ran — `onReasoningEnd` never fired, and (in the
+// real TUI) `attachBlockIo`'s live-preview state never got reset, so the
+// NEXT turn's `reasoning_delta`s appended onto this round's stale text.
+test("flow 268 T26: onReasoningEnd fires exactly once when the abort lands mid-reasoning", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking" },
+      { kind: "reasoning_delta", text: " more" },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const controller = new AbortController();
+  const ends: Array<{ text: string; redacted: boolean }> = [];
+  const system: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoningDelta: () => {
+      // Abort right after the FIRST reasoning delta is observed — the agent
+      // loop's `isAborted()` check runs at the top of the NEXT iteration
+      // (processing the second reasoning_delta), before that event is
+      // applied, mirroring "runAgentTurn keeps an interrupted streamed
+      // assistant draft in history" above.
+      controller.abort();
+    },
+    onReasoningEnd: (info) => ends.push({ text: info.text, redacted: info.redacted }),
+    onSystem: (text) => system.push(text),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, deps, history, "go", { signal: controller.signal });
+
+  expect(ends).toHaveLength(1);
+  expect(ends[0]?.text).toBe("thinking");
+  expect(system.join("")).toContain("[stopped]");
+  // The early abort return still never attaches reasoning to history —
+  // unchanged abort semantics, only the callback firing was fixed.
+  expect(history.some((m) => m.role === "assistant")).toBe(false);
+});
+
 test("flow 268 T17: an AgentIO without onReasoningDelta/onReasoningEnd keeps working exactly as before", async () => {
   const { provider } = scriptedProvider([
     [

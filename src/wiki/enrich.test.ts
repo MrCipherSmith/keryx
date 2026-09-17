@@ -500,6 +500,48 @@ test("validateEnrichedMarkdown rejects content containing a <think>/<thinking> t
   expect(validateEnrichedMarkdown("x".repeat(100), PAGE_WITH_THINK_BLOCK)).toMatch(/think/i);
 });
 
+// flow 268 T26: the last-line-of-defense check above now shares
+// `think-tags.ts`'s fence/inline-code-aware `containsThinkTags`, same as
+// `stripThinkBlocks` earlier in the pipeline — a page that documents this
+// guard with a fenced or inline-code `<think>` example must not be rejected.
+test("validateEnrichedMarkdown accepts a <think> tag documented inside a fenced code block", () => {
+  const pageWithFencedExample = `---
+Title: Reasoning-leak guard
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Documents the think-tag guard
+---
+
+# Reasoning-leak guard
+
+Example of a block this guard removes:
+
+\`\`\`
+<think>example reasoning</think>
+\`\`\`
+
+Full prose body with enough text for validation checks to pass cleanly.
+`;
+  expect(validateEnrichedMarkdown("x".repeat(100), pageWithFencedExample)).toBeNull();
+});
+
+test("validateEnrichedMarkdown accepts a <think> tag mentioned as inline code", () => {
+  const pageWithInlineMention = `---
+Title: Reasoning-leak guard
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Documents the think-tag guard
+---
+
+# Reasoning-leak guard
+
+This guard strips a bare \`<think>\` tag from model output before it is written.
+`;
+  expect(validateEnrichedMarkdown("x".repeat(100), pageWithInlineMention)).toBeNull();
+});
+
 test("validateEnrichedMarkdown rejects missing frontmatter", () => {
   expect(validateEnrichedMarkdown("x".repeat(100), "no frontmatter here")).toMatch(/frontmatter/i);
   expect(validateEnrichedMarkdown("x".repeat(100), GOOD_PAGE)).toBeNull();

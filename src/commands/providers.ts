@@ -146,26 +146,43 @@ export function resolveProviderBaseUrl(
 /** Hosts MiniMax's OpenAI-compatible gateway is reachable at (flow 268 T24). */
 const MINIMAX_REASONING_PRESET_HOSTS = new Set(["api.minimax.io", "api.minimaxi.com"]);
 
+/** Host DeepSeek's OpenAI-compatible gateway is reachable at (flow 268 T26). */
+const DEEPSEEK_REASONING_PRESET_HOSTS = new Set(["api.deepseek.com"]);
+
 /**
  * Resolve the `reasoning` config a compat provider actually sends (flow 268
- * T24): an EXPLICIT `reasoning` config on the provider always wins,
+ * T24/T26): an EXPLICIT `reasoning` config on the provider always wins,
  * verbatim — this never overrides an operator's own choice, including one
  * that reintroduces a known issue. Absent, a provider whose `baseUrl` host
- * is an EXACT match (any path) for a known MiniMax host gets a default
+ * is an EXACT match (any path) for a known preset host gets a default
  * preset instead of "no reasoning config" (the pre-existing behaviour for
  * every other absent-config host).
  *
- * Why a preset, and why this one: MiniMax's un-configured default mode
- * duplicates every reasoning phrase — once inline in `delta.content` as
- * `<think>…</think>`, once again plain in `delta.reasoning` — and the
- * `reasoning` field is not trustworthy at the stream boundary (live smoke
- * evidence against MiniMax-M3, 2026-09-17: the last `reasoning` chunk bled
- * answer text across the boundary). `{ format: "split", requestParams: {
- * reasoning_split: true }, replay: "minimax" }` asks MiniMax for out-of-band
- * reasoning instead, which the same smoke run confirmed keryx renders and
- * replays cleanly (`openai-compat-provider.ts`'s field-sourced tag strip,
- * flow 268 T24, handles the one remaining rough edge: split mode's
- * reasoning stream ending in a literal `</think>` line).
+ * Why a preset, and why these:
+ * - MiniMax's un-configured default mode duplicates every reasoning
+ *   phrase — once inline in `delta.content` as `<think>…</think>`, once
+ *   again plain in `delta.reasoning` — and the `reasoning` field is not
+ *   trustworthy at the stream boundary (live smoke evidence against
+ *   MiniMax-M3, 2026-09-17: the last `reasoning` chunk bled answer text
+ *   across the boundary). `{ format: "split", requestParams: {
+ *   reasoning_split: true }, replay: "minimax" }` asks MiniMax for
+ *   out-of-band reasoning instead, which the same smoke run confirmed
+ *   keryx renders and replays cleanly (`openai-compat-provider.ts`'s
+ *   field-sourced tag strip, flow 268 T24, handles the one remaining rough
+ *   edge: split mode's reasoning stream ending in a literal `</think>`
+ *   line).
+ * - DeepSeek's thinking mode returns HTTP 400 on a tool-bearing request
+ *   whose prior assistant turns omit the `reasoning_content` field it sent
+ *   (https://api-docs.deepseek.com/guides/thinking_mode/). Without a
+ *   `reasoning` config at all, `grant.reasoning.replay` stays undefined and
+ *   `openai-compat-provider.ts` never accumulates or re-attaches
+ *   `reasoning_content` (gated on `replayMode === "deepseek"`), so the
+ *   built-in `deepseek` provider 400s the moment a multi-turn tool call
+ *   follows a thinking-mode reply. `{ format: "field", replay: "deepseek" }`
+ *   asks for nothing extra on the wire (DeepSeek's reasoning already streams
+ *   as a plain `reasoning_content` delta field) but turns on the replay
+ *   accumulation/re-attachment `openai-compat-provider.ts` already
+ *   implements for `replay: "deepseek"`.
  *
  * Pure: no network, no clock — string comparison against `baseUrl`'s parsed
  * hostname. An unparsable `baseUrl` resolves to "no preset" rather than
@@ -182,8 +199,13 @@ export function resolveCompatReasoningPreset(
   } catch {
     return undefined;
   }
-  if (!MINIMAX_REASONING_PRESET_HOSTS.has(host)) return undefined;
-  return { format: "split", requestParams: { reasoning_split: true }, replay: "minimax" };
+  if (MINIMAX_REASONING_PRESET_HOSTS.has(host)) {
+    return { format: "split", requestParams: { reasoning_split: true }, replay: "minimax" };
+  }
+  if (DEEPSEEK_REASONING_PRESET_HOSTS.has(host)) {
+    return { format: "field", replay: "deepseek" };
+  }
+  return undefined;
 }
 
 /**
