@@ -46,6 +46,7 @@ import { ThinkTagParser } from "./think-tag-parser";
 import type {
   NormalizedError,
   NormalizedEvent,
+  NormalizedMessage,
   NormalizedRequest,
   NormalizedUsage,
   ProviderCapabilities,
@@ -284,6 +285,80 @@ const MAX_ERROR_REASON_CHARS = 300;
 /** Default first-byte / idle stream deadline (flow 268 T5), overridable via {@link OpenAiCompatProviderDeps}. */
 const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
 
+/**
+ * Stable providerId stamped on every `reasoning_replay` item this engine
+ * emits (flow 268 T12 / AC7), and the ONLY providerId this engine reads back
+ * off `NormalizedMessage.reasoning.replay` when building a later request — an
+ * item stamped by a different adapter (Anthropic's `thinking_signature`,
+ * Gemini's `thought_signature`, …) is ignored rather than guessed at. Shared
+ * across every OpenAI-compat identity (DeepSeek, MiniMax, OpenRouter, …)
+ * because the replay SHAPE (deepseek `reasoning_content` echo, minimax
+ * `reasoning_details`/raw `<think>` content) is a property of the wire
+ * protocol this engine speaks, not of any one gateway's identity.
+ */
+const COMPAT_REPLAY_PROVIDER_ID = "openai-compat";
+
+/** One MiniMax `reasoning_details` item accumulated across streamed fragments. */
+interface ReasoningDetailSlot {
+  /** Grouping key: `idx:<index>`, `id:<id>`, or `"none"` when the item carries neither. */
+  key: string;
+  /** Every field from the FIRST fragment holding this key, except `text`. */
+  fields: Record<string, unknown>;
+  /** `text` concatenated across every fragment sharing this key, in arrival order. */
+  text: string;
+}
+
+/**
+ * Resolve what an assistant {@link NormalizedMessage} sends on a LATER
+ * request under `grant.reasoning.replay` (flow 268 T12 / AC7):
+ *
+ * - `"deepseek"`, request carries tools: an owned `reasoning_content` replay
+ *   item becomes the message's `reasoning_content` field — DeepSeek's
+ *   thinking mode 400s on a tool-bearing request whose prior assistant turns
+ *   omit it. Without tools the field is never added (DeepSeek ignores it
+ *   there, and an unconditional echo would just be dead weight on the wire).
+ * - `"minimax"`: an owned `raw_content` replay item REPLACES `content`
+ *   verbatim (the original `<think>…</think>` text must round-trip
+ *   unedited); an owned `reasoning_details` replay item is attached as the
+ *   message's `reasoning_details` field. Either, both, or neither may be
+ *   present on one message.
+ * - `"none"`/absent, or a message with no OWNED replay item (wrong
+ *   `providerId`, or none at all): `content` passes through unchanged and no
+ *   extra field is added — the pre-replay behavior.
+ */
+function resolveAssistantReplay(
+  message: NormalizedMessage,
+  replay: "none" | "deepseek" | "minimax" | undefined,
+  requestHasTools: boolean,
+): { content: string; extra: Record<string, unknown> } {
+  if (replay === undefined || replay === "none") {
+    return { content: message.content, extra: {} };
+  }
+  const owned = (message.reasoning?.replay ?? []).filter((item) => item.providerId === COMPAT_REPLAY_PROVIDER_ID);
+  if (replay === "deepseek") {
+    const extra: Record<string, unknown> = {};
+    if (requestHasTools) {
+      const item = owned.find((candidate) => candidate.kind === "reasoning_content");
+      if (item !== undefined && typeof item.data === "string" && item.data.length > 0) {
+        extra.reasoning_content = item.data;
+      }
+    }
+    return { content: message.content, extra };
+  }
+  // replay === "minimax"
+  let content = message.content;
+  const rawContent = owned.find((candidate) => candidate.kind === "raw_content");
+  if (rawContent !== undefined && typeof rawContent.data === "string") {
+    content = rawContent.data;
+  }
+  const extra: Record<string, unknown> = {};
+  const details = owned.find((candidate) => candidate.kind === "reasoning_details");
+  if (details !== undefined) {
+    extra.reasoning_details = details.data;
+  }
+  return { content, extra };
+}
+
 /** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
 const READ_TIMED_OUT = Symbol("compat-read-timed-out");
 
@@ -476,6 +551,10 @@ export class OpenAiCompatEngine implements ProviderPort {
     }
 
     const url = `${baseUrl.replace(/\/+$/, "")}${grant.chatPath ?? "/v1/chat/completions"}`;
+    // DeepSeek's thinking-mode `reasoning_content` echo (flow 268 T12 / AC7)
+    // only applies "when the request carries tools" (protocol fact) — an
+    // empty/absent `tools` array is "no tools" for this purpose.
+    const requestHasTools = Array.isArray(request.tools) && request.tools.length > 0;
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemInstruction.length > 0) {
       messages.push({ role: "system", content: request.systemInstruction });
@@ -505,15 +584,22 @@ export class OpenAiCompatEngine implements ProviderPort {
         continue;
       }
       if (message.role === "assistant" && linked.linkedCalls.length > 0) {
+        const { content, extra } = resolveAssistantReplay(message, grant.reasoning?.replay, requestHasTools);
         messages.push({
           role: "assistant",
-          content: message.content,
+          content,
           tool_calls: linked.linkedCalls.map((call) => ({
             id: call.id,
             type: "function",
             function: { name: call.name, arguments: call.arguments },
           })),
+          ...extra,
         });
+        continue;
+      }
+      if (message.role === "assistant") {
+        const { content, extra } = resolveAssistantReplay(message, grant.reasoning?.replay, requestHasTools);
+        messages.push({ role: "assistant", content, ...extra });
         continue;
       }
       messages.push({ role: message.role, content: message.content });
@@ -652,6 +738,74 @@ export class OpenAiCompatEngine implements ProviderPort {
       if (thinkTagParser === undefined) return;
       pushThinkSegments(thinkTagParser.flush());
     };
+
+    // Compat replay accumulation (flow 268 T12 / AC7): populated ONLY for the
+    // mode that needs it, across the whole round, and reported ONCE via
+    // `emitReplayEvents()` at the same normal-termination points
+    // `flushThinkTagParser()` is called — never on abort/timeout/error paths.
+    const replayMode = grant.reasoning?.replay;
+    let reasoningFieldRaw = ""; // deepseek: raw `reasoning`/`reasoning_content` delta text, concatenated verbatim.
+    let rawContentRaw = ""; // minimax: raw `delta.content`, concatenated verbatim, BEFORE any think-tag parsing.
+    const reasoningDetailSlots: ReasoningDetailSlot[] = []; // minimax split: merged `reasoning_details` fragments, first-seen order.
+    const reasoningDetailSlotIndex = new Map<string, number>();
+    /**
+     * Merge one streamed `reasoning_details` item into its slot: grouped by
+     * `index` (preferred, stable across fragments), then `id`, else the
+     * single `"none"` slot shared by every index/id-less item — mirrors the
+     * tool-call accumulator's key precedence above.
+     */
+    const accumulateReasoningDetail = (item: Record<string, unknown>): void => {
+      const index = asNumber(item.index);
+      const id = asString(item.id);
+      const key = index !== undefined ? `idx:${index}` : id !== undefined && id.length > 0 ? `id:${id}` : "none";
+      let slotIndex = reasoningDetailSlotIndex.get(key);
+      if (slotIndex === undefined) {
+        const { text: _text, ...fields } = item;
+        slotIndex = reasoningDetailSlots.length;
+        reasoningDetailSlots.push({ key, fields, text: "" });
+        reasoningDetailSlotIndex.set(key, slotIndex);
+      }
+      const slot = reasoningDetailSlots[slotIndex];
+      if (slot !== undefined) {
+        slot.text += asString(item.text) ?? "";
+      }
+    };
+    /**
+     * Emit this round's replay payload(s) once, at a NORMAL termination
+     * point. `"deepseek"` emits `reasoning_content` when the round produced
+     * field reasoning text; `"minimax"` prefers merged `reasoning_details`
+     * (split mode) and otherwise falls back to `raw_content` when the raw
+     * stream carried inline `<think>` tags (or the engine was explicitly
+     * configured to parse them via `format: "inline-tags"`).
+     */
+    const emitReplayEvents = (): void => {
+      if (replayMode === "deepseek") {
+        if (reasoningFieldRaw.length > 0) {
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_content", data: reasoningFieldRaw },
+          });
+        }
+        return;
+      }
+      if (replayMode === "minimax") {
+        if (reasoningDetailSlots.length > 0) {
+          const data = reasoningDetailSlots.map((slot) => ({ ...slot.fields, text: slot.text }));
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_details", data },
+          });
+          return;
+        }
+        if (rawContentRaw.length > 0 && (thinkTagParser !== undefined || rawContentRaw.includes("<think>"))) {
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "raw_content", data: rawContentRaw },
+          });
+        }
+      }
+    };
+
     const cancelReader = (): void => {
       // Best-effort cleanup: the socket may already be closed/errored, and a
       // cancel() rejection here is never a second failure mode.
@@ -661,7 +815,6 @@ export class OpenAiCompatEngine implements ProviderPort {
     const bodies: EventBody[] = [];
     let sawStart = false;
     let sawFinish = false;
-    let sawDone = false;
     let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
 
@@ -766,8 +919,8 @@ export class OpenAiCompatEngine implements ProviderPort {
         // reading immediately (AC1): a permissive gateway may keep the socket
         // open past `[DONE]`, and this adapter must not wait for it to close.
         if (trimmed === "[DONE]") {
-          sawDone = true;
           flushThinkTagParser();
+          emitReplayEvents();
           flushPendingToolEnds();
           if (sawStart) {
             bodies.push({ kind: "model_end" });
@@ -826,6 +979,9 @@ export class OpenAiCompatEngine implements ProviderPort {
         const reasoningField = asString(delta.reasoning) ?? asString(delta.reasoning_content);
         if (reasoningField !== undefined && reasoningField.length > 0) {
           bodies.push({ kind: "reasoning_delta", text: reasoningField });
+          if (replayMode === "deepseek") {
+            reasoningFieldRaw += reasoningField;
+          }
         } else {
           // MiniMax's `reasoning_details` (OpenRouter-shaped): an array of
           // `{ text: "…", … }` objects; concatenate every item's `text` in
@@ -841,11 +997,19 @@ export class OpenAiCompatEngine implements ProviderPort {
             if (concatenated.length > 0) {
               bodies.push({ kind: "reasoning_delta", text: concatenated });
             }
+            if (replayMode === "minimax") {
+              for (const item of reasoningDetails) {
+                accumulateReasoningDetail(asRecord(item));
+              }
+            }
           }
         }
 
         const content = asString(delta.content);
         if (content !== undefined && content.length > 0) {
+          if (replayMode === "minimax") {
+            rawContentRaw += content;
+          }
           if (thinkTagParser !== undefined) {
             // `format: "inline-tags"`: MiniMax's default shape puts reasoning
             // INSIDE `delta.content` as `<think>…</think>` — route it through
@@ -958,9 +1122,13 @@ export class OpenAiCompatEngine implements ProviderPort {
         flushPendingToolEnds();
         // A clean stream that reached `[DONE]` or a `finish_reason` completes
         // with a terminal `model_end` (emitted after any usage_update). `[DONE]`
-        // always exits above, so only the bare-`finish_reason` case reaches here.
-        if (sawStart && (sawDone || sawFinish)) {
+        // always exits above, so only the bare-`finish_reason` case reaches
+        // here — the (former) `sawDone` flag was always false by the time
+        // this ran, since its only assignment sat on the `[DONE]` path,
+        // which always returns before reaching this code.
+        if (sawStart && sawFinish) {
           flushThinkTagParser();
+          emitReplayEvents();
           bodies.push({ kind: "model_end" });
         }
       }
