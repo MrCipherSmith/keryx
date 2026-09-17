@@ -37,8 +37,14 @@ const PATTERNS: readonly QuarantinePattern[] = [
   {
     // Permission / capability configuration mentions.
     name: "permission-config",
+    // `readonly`/`readOnly` (a compact identifier, as specific as `permissionMode`)
+    // always matches; the spaced/hyphenated "read only"/"read-only" form is common
+    // in ordinary English (e.g. "this field is read-only"), so it only matches
+    // paired with "mode" to avoid flagging innocuous text.
     test: (t) =>
-      /\b(allowed[- ]?tools|disallowed[- ]?tools|permission[- ]?mode|bypass[- ]?permissions|dangerously[- ]?skip)\b/i.test(t),
+      /\b(allowed[- ]?tools|disallowed[- ]?tools|permission[- ]?mode|bypass[- ]?permissions|dangerously[- ]?skip|readonly|read[- ]only[- ]?mode)\b|\/plan\b/i.test(
+        t,
+      ),
   },
 ];
 
