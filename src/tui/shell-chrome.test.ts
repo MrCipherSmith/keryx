@@ -999,7 +999,7 @@ otuiTest("next-step suggestion: shows in the composer placeholder while empty, a
   h.destroy();
 });
 
-otuiTest("next-step suggestion: Tab inserts it without submitting; Enter submits it directly", async () => {
+otuiTest("next-step suggestion: Tab inserts it without submitting", async () => {
   const otui = requireOtui();
   const h = await mountChrome(otui, { width: 90, height: 20 });
   const submitted: string[] = [];
@@ -1013,17 +1013,63 @@ otuiTest("next-step suggestion: Tab inserts it without submitting; Enter submits
   expect(h.chrome.input.value).toBe("run the tests");
   expect(h.chrome.suggestionActive()).toBe(false);
   expect(submitted).toEqual([]);
+  h.destroy();
+});
 
-  // Enter on an EMPTY composer with an active suggestion submits it. (The
-  // composer was filled by Tab above, so it must be emptied first — Enter
-  // deliberately only accepts the hint when nothing is typed.)
-  h.chrome.input.value = "";
+// AC14 (flow 268): a bare Enter on an empty composer must NOT submit an
+// active placeholder suggestion — it behaves exactly like Enter on an empty
+// composer with no suggestion at all (a no-op `emitSubmit("")`; the actual
+// no-op behavior for an empty line lives in tui-shell.ts's `runLine`, out of
+// this file's reach, so this test only proves shell-chrome itself never
+// special-cases Enter+suggestion into an implicit accept). Only Tab/Right
+// (tested above / below) accept a suggestion into the composer.
+otuiTest("next-step suggestion: bare Enter on an empty composer does not submit it, and the hint stays active", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const submitted: string[] = [];
+  h.chrome.onSubmit((line) => submitted.push(line));
+
   h.chrome.showSuggestion("commit the fix");
   await h.flush();
+  expect(h.chrome.input.value).toBe("");
   h.mockInput.pressEnter();
   await h.flush();
-  expect(submitted).toEqual(["commit the fix"]);
+  // `emitSubmit("")` still fires (mirrors Enter-on-empty-composer with no
+  // hint) — it is `runLine`'s job upstream to no-op on an empty line, not
+  // shell-chrome's job to swallow the submit.
+  expect(submitted).toEqual([""]);
+  expect(h.chrome.suggestionActive()).toBe(true);
+  expect(h.chrome.input.value).toBe("");
+
+  // Tab/Right still accepts it after the no-op Enter.
+  h.mockInput.pressTab();
+  await h.flush();
+  expect(h.chrome.input.value).toBe("commit the fix");
   expect(h.chrome.suggestionActive()).toBe(false);
+  h.destroy();
+});
+
+otuiTest("onComposerActivity fires on typing even with no suggestion shown, and stops after unsubscribe", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  let calls = 0;
+  const unsubscribe = h.chrome.onComposerActivity(() => {
+    calls += 1;
+  });
+
+  // No suggestion is active at all — this is the seam a caller uses to
+  // invalidate an in-flight suggestion REQUEST before any text exists to
+  // dismiss (AC14).
+  expect(h.chrome.suggestionActive()).toBe(false);
+  await h.mockInput.pressKeys(["h"]);
+  await h.flush();
+  expect(calls).toBeGreaterThan(0);
+
+  const callsAfterFirstKey = calls;
+  unsubscribe();
+  await h.mockInput.pressKeys(["i"]);
+  await h.flush();
+  expect(calls).toBe(callsAfterFirstKey);
   h.destroy();
 });
 

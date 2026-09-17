@@ -41,6 +41,7 @@
 import type { AgentDeps, AgentIO } from "../commands/agent";
 import { resolveMaxAutoWake, runAgentTurn } from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
+import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
@@ -2406,6 +2407,12 @@ export async function launchTuiAgentShell(opts: {
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
+    // AC14 (flow 268): the next-step suggestion's in-flight request gate.
+    // `runLine` cancels it the moment a new turn starts, and the composer
+    // activity subscription below cancels it the moment the user types —
+    // either way a late reply can never reach `chrome.showSuggestion`. See
+    // `suggestNextStep` and `next-step-suggestion.ts`.
+    const suggestionGate = new NextStepSuggestionGate();
     // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
     // reads is declared further down in this same function body. The getter
     // only runs once a turn actually executes a tool call, well after that
@@ -2461,6 +2468,10 @@ export async function launchTuiAgentShell(opts: {
     chrome.input.focus();
     const transcript = chrome.transcript;
     const input = chrome.input;
+    // AC14 (flow 268): typing (or pasting) into the composer invalidates any
+    // in-flight next-step suggestion request, whether or not a suggestion is
+    // currently shown — see `suggestionGate` above.
+    chrome.onComposerActivity(() => suggestionGate.cancel("composer activity"));
 
     // The chrome owns the spinner; the closure mirrors only the phase and the
     // start time, which it still needs for the side-worker context snapshot and
@@ -4450,6 +4461,10 @@ export async function launchTuiAgentShell(opts: {
       if (line.length === 0 && origin === "operator") {
         return;
       }
+      // AC14 (flow 268): a new turn — of any kind this function dispatches,
+      // not only the main agent turn — supersedes whatever next-step
+      // suggestion request was still in flight from the PREVIOUS one.
+      suggestionGate.cancel("new turn started");
       if (origin === "operator") {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
@@ -5258,29 +5273,40 @@ export async function launchTuiAgentShell(opts: {
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
       // short follow-up and show it as the composer placeholder. Fail-closed:
-      // no credential, a timeout, an error, or a "." reply simply shows
-      // nothing — never blocks the shell, never throws into the turn's
+      // no credential, a timeout, an error, a superseded/cancelled request
+      // (AC14 — see `suggestionGate`), or a sanitizer-discarded reply simply
+      // shows nothing — never blocks the shell, never throws into the turn's
       // finally chain.
       const suggestNextStep = async (): Promise<void> => {
+        const { signal, isCurrent } = suggestionGate.start();
         try {
           const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
           const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
           const tail = lastAssistant.slice(-3000);
           const result = await runModelTurn({
-            provider: sel.provider,
-            model: sel.model,
+            // AC14: the CURRENT selection — `/connect`/`/model` may have
+            // rebuilt `currentSel` since this turn started.
+            provider: currentSel.provider,
+            model: currentSel.model,
             system:
               "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .",
             user: `User: ${lastUser.slice(-800)}\n\nAssistant reply (tail):\n${tail}`,
             maxOutputTokens: 40,
             requestId: `suggest-next-step-${Date.now()}`,
+            signal,
           });
-          if (!result.credentialAvailable || result.text.trim().length === 0 || result.text.trim() === ".") {
+          // A new turn, a new suggestion request, or composer activity may
+          // have superseded/cancelled this one while it was in flight — a
+          // late reply must never reach the composer (AC14).
+          if (!isCurrent() || !result.credentialAvailable) {
             return;
           }
-          chrome.showSuggestion(result.text.trim().split(/\s+/).slice(0, 20).join(" "));
+          const next = sanitizeNextStepSuggestion(result.text);
+          if (next === undefined) return;
+          chrome.showSuggestion(next);
         } catch {
           // fail-closed: never surface an error for an optional hint
+          // (including an aborted request — AbortError lands here too)
         }
       };
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);

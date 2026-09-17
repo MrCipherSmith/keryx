@@ -3053,3 +3053,79 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
     expect(wakeSource).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
   });
 });
+
+// --- flow 268 T8/AC14: next-step suggestion abort/cancel/sanitize wiring
+// (source-text audit) --------------------------------------------------------
+//
+// `suggestNextStep` lives inside `launchTuiAgentShell`'s closure with no
+// headless injection seam (same limitation the SLATE-2a/SLATE-3a/flow 265
+// audits above document for this same function) — there is no way to drive a
+// real `runModelTurn` call and assert on `chrome.showSuggestion` from this
+// file. The behavior that CAN be driven directly is covered elsewhere:
+//   - `next-step-suggestion.test.ts` exercises `sanitizeNextStepSuggestion`
+//     and `NextStepSuggestionGate` (the abort-controller helper) in
+//     isolation — supersede-on-start, cancel-aborts-the-signal,
+//     isCurrent()-goes-false, and the combined timeout signal.
+//   - `shell-chrome.test.ts` exercises the composer-side behavior directly
+//     against a real mounted chrome: bare Enter on an empty composer no
+//     longer submits an active suggestion, Tab/Right still accepts it, and
+//     `onComposerActivity` fires on typing (including while no suggestion is
+//     shown, which is the seam a caller uses to cancel a request still in
+//     flight).
+// This block only proves tui-shell.ts actually WIRES those two pieces
+// together the way the AC requires, following the same "verify both sides by
+// grep, don't assume symmetry" precedent as every audit above.
+describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring (source-text audit)", () => {
+  const nextStepSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("suggestNextStep uses currentSel, not the start-time sel", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(start, start + 1_200);
+    expect(block).toContain("provider: currentSel.provider");
+    expect(block).toContain("model: currentSel.model");
+    expect(block).not.toMatch(/provider:\s*sel\.provider/);
+    expect(block).not.toMatch(/model:\s*sel\.model/);
+  });
+
+  test("suggestNextStep starts a suggestionGate request and passes its combined signal", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(start, start + 1_200);
+    expect(block).toContain("suggestionGate.start()");
+    expect(block).toContain("signal,");
+  });
+
+  test("a late/superseded reply is never shown: isCurrent() and credentialAvailable are both checked before showSuggestion", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    const showIndex = nextStepSource.indexOf("chrome.showSuggestion(", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(showIndex).toBeGreaterThan(start);
+    const guardBlock = nextStepSource.slice(start, showIndex);
+    expect(guardBlock).toContain("!isCurrent()");
+    expect(guardBlock).toContain("result.credentialAvailable");
+  });
+
+  test("the reply is sanitized through the exported pure helper before it can reach showSuggestion", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    const showIndex = nextStepSource.indexOf("chrome.showSuggestion(", start);
+    const guardBlock = nextStepSource.slice(start, showIndex);
+    expect(guardBlock).toContain("sanitizeNextStepSuggestion(result.text)");
+    expect(nextStepSource).toContain(
+      'import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";',
+    );
+  });
+
+  test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
+    const runLineStart = nextStepSource.indexOf('const runLine = (line: string, origin: "operator"');
+    expect(runLineStart).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(runLineStart, runLineStart + 700);
+    expect(block).toContain('suggestionGate.cancel("new turn started")');
+  });
+
+  test("composer activity (typing) is wired to cancel the suggestion gate", () => {
+    expect(nextStepSource).toContain(
+      'chrome.onComposerActivity(() => suggestionGate.cancel("composer activity"));',
+    );
+  });
+});
