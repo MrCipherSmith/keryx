@@ -3,6 +3,43 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.114] — 2026-09-17
+An auto-compaction guard that keeps a long tool loop from overflowing the
+provider's context window, and per-provider `temperature`/`maxOutputTokens`/
+`timeoutMs` configuration for OpenAI-compatible gateways.
+
+### Added
+
+- **Auto-compaction before a request overflows the context window.** Nothing
+  in the round loop ever shrank `history` before sending a request — the only
+  shrink mechanism, `/compact`, ran solely on manual invocation. A single
+  user turn's tool loop could grow past a self-hosted gateway's real context
+  window and 400 with an input-token overflow the operator had no warning
+  of. `estimateRequestTokens` now sizes the next request (message content,
+  tool-call arguments, the system instruction, and the serialized
+  tool-definition schemas — not just message content, which undercounted a
+  request carrying a large tool-call payload) before every round-trip; once
+  the estimate crosses 85% of the provider's known context window (never a
+  guessed one — an unreported window disables the guard entirely, matching
+  `/status`'s own "never invent 128k" rule), the driver compacts `history` in
+  place with the same defaults the manual `/compact` command already uses.
+  An OpenAI-compatible gateway's `context_length_exceeded` now also
+  classifies as the existing `context_overflow` error kind — previously only
+  the native OpenAI adapter recognized it — and either provider path now
+  suggests `/compact` instead of a raw, unclassified error.
+- **`temperature`, `maxOutputTokens`, and `timeoutMs` are configurable per
+  OpenAI-compatible provider.** A custom gateway (`llm-providers.json`) can
+  set its own defaults for all three; a built-in provider can be overridden
+  the same way `baseUrl` already is. Resolved fresh on every `/model`,
+  `/provider`, `/connect`, or `/models` switch. This also closes the wire gap
+  underneath: both the OpenAI-compatible and native OpenAI adapters silently
+  dropped `maxOutputTokens`/`temperature` regardless of configuration —
+  only Anthropic and Gemini ever actually sent them — so a configured value
+  now reaches the request either way. A configured `timeoutMs` bounds the
+  chat call itself, not only the `/models` discovery probe. Nothing
+  configured reproduces today's behavior exactly: `maxOutputTokens` still
+  defaults to `1024`, no `temperature` is sent, no extra timeout applies.
+
 ## [0.2.113] — 2026-09-17
 A read-only posture for the interactive agent session, and three small fixes
 to the OpenTUI shell.
