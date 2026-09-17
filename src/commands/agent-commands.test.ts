@@ -46,6 +46,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/game",
     "/mode",
     "/reasoning",
+    "/plan",
     "/clear",
     "/interrupt",
     "/queue",
@@ -132,6 +133,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/game",
     "/mode",
     "/reasoning",
+    "/plan",
     "/clear",
     "/interrupt",
     "/queue",
@@ -240,6 +242,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/game",
     "/mode",
     "/reasoning",
+    "/plan",
     "/clear",
     "/interrupt",
     "/queue",
@@ -306,7 +309,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
 test("filterCommands: prefix narrows the set (chat)", () => {
   expect(filterCommands("/m", "chat").map((c) => c.name)).toEqual(["/model", "/models"]);
   expect(filterCommands("/p", "chat").map((c) => c.name)).toEqual(["/provider"]);
-  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider"]);
+  expect(filterCommands("/p", "agent").map((c) => c.name)).toEqual(["/provider", "/plan"]);
   expect(filterCommands("/e", "chat").map((c) => c.name)).toEqual(["/exit"]);
   expect(filterCommands("/c", "chat").map((c) => c.name)).toEqual([
     "/connect",
@@ -431,4 +434,22 @@ test("/delegate is agent-mode only and its help text names both arguments", () =
   expect(findAgentCommand("/delegate codex-cli hi", "agent")?.name).toBe("/delegate");
   expect(findAgentCommand("/delegate codex-cli hi", "chat")).toBeUndefined();
   expect(describeUnavailableCommand("/delegate codex-cli hi", "chat")).toContain("agent mode");
+});
+
+// --- /plan (flow 265: read-only toggle) -------------------------------------
+
+test("/plan is agent-only (mirrors /mode: chat has no tools for read-only to gate)", () => {
+  const plan = AGENT_SLASH_COMMANDS.find((c) => c.name === "/plan");
+  expect(plan).toBeDefined();
+  expect(plan?.modes).toEqual(["agent"]);
+  expect(plan && plan.description.length).toBeGreaterThan(0);
+  expect(describeCommand(plan!, "agent")).toContain("/plan [on|off]");
+});
+
+test("/plan is present in the agent-mode command list, absent from chat-mode", () => {
+  expect(commandsForMode("agent").map((c) => c.name)).toContain("/plan");
+  expect(commandsForMode("chat").map((c) => c.name)).not.toContain("/plan");
+  expect(findAgentCommand("/plan on", "agent")?.name).toBe("/plan");
+  expect(findAgentCommand("/plan", "chat")).toBeUndefined();
+  expect(describeUnavailableCommand("/plan", "chat")).toContain("agent mode");
 });

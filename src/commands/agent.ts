@@ -25,6 +25,7 @@ import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type {
   MessageReasoning,
+  NormalizedError,
   NormalizedMessage,
   NormalizedRequest,
   NormalizedToolCall,
@@ -32,6 +33,8 @@ import type {
   ProviderPort,
   ProviderReplayItem,
 } from "../harness/provider/types";
+import { estimateRequestTokens, needsCompaction } from "../harness/provider/context-guard";
+import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
@@ -178,6 +181,16 @@ export interface AgentIO {
    * getter, never a missing `requestApproval`.
    */
   permissionMode?: () => PermissionMode;
+  /**
+   * The session's current read-only ("plan") posture (see
+   * `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring for the
+   * full orthogonality rationale). Read fresh on every gated call, never
+   * cached — this is how a live `/plan` toggle takes effect on the very next
+   * tool call. Absent (or `undefined`) behaves exactly as `false`: today's
+   * unchanged behavior for every caller that doesn't wire it. When `true`,
+   * every non-`read`-risk call is denied regardless of `permissionMode`.
+   */
+  readOnly?: () => boolean;
 }
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
@@ -344,6 +357,41 @@ export interface AgentDeps {
    * Defaults to `"hold"` when `unattended` is set, `"wake"` otherwise.
    */
   completionDelivery?: "wake" | "hold";
+  /**
+   * Flow 267: the provider's real context-window size in tokens, when known
+   * (`model-limits.ts`'s `loadSessionLimits` — NEVER a guessed/hardcoded
+   * default, per that module's own "never invent a window" contract).
+   * Consulted immediately before every provider request the round loop and
+   * `finishWithBudgetSummary`'s wrap-up build: once the request-size estimate
+   * (`estimateRequestTokens`, `../harness/provider/context-guard.ts`) reaches
+   * 85% of this figure, the driver compacts `history` IN PLACE
+   * (`compactMessages`, `{ keepLastUserTurns: 3 }` — the same default the
+   * manual `/compact` command uses) before sending the request, so a long
+   * tool loop within a single turn can no longer 400 on input-token overflow.
+   * `undefined` (the default) means the guard never compacts — every existing
+   * call site that omits this field builds requests exactly as it did before
+   * this field existed.
+   */
+  contextWindow?: number;
+  /**
+   * Flow 267: called immediately after the guard above splices a shrunk
+   * context into `history` (same array reference — see `runAgentTurn`'s own
+   * doc comment on why callers must keep it across the whole turn), so a host
+   * with a persisted session (`shell.ts`, `tui-shell.ts`) can record the SAME
+   * bookkeeping a manual `/compact` already performs (`compactCount`,
+   * `archive.jsonl`, `context.jsonl` — see `session/store.ts`'s
+   * `persistCompacted`) instead of the shrink existing only in memory until
+   * the next explicit save. `removed` is the message count dropped from the
+   * model's context (still recoverable from the archive); `context` is the
+   * `compactMessages` result array — content-equal to `history` at that
+   * moment (its elements were just spliced into `history`), but a DISTINCT
+   * array object, never `=== history`; `estimate`
+   * is the request-size estimate that tripped the guard. Optional; every
+   * existing call site (every test, every driver written before this flow)
+   * omits it and is unaffected — the guard still compacts `history` in place
+   * regardless, only the persistence/UX side-effect is skipped.
+   */
+  onContextCompaction?: (r: { removed: number; context: NormalizedMessage[]; estimate: number }) => void;
 }
 
 export interface RunAgentTurnOptions {
@@ -833,6 +881,21 @@ export function resolveAgentMaxAttemptsPerHash(
  * second identical failure signals an unavailable/misconfigured tool.
  */
 export const REPEAT_FAILURE_HINT_THRESHOLD = 2;
+
+/**
+ * Flow 267 (AC4): render a `provider_error` event's `[error] ...` text, adding
+ * a `/compact` suggestion when the normalized kind is `context_overflow`.
+ * ONE shared function for both `provider_error` sites below (the round loop
+ * and `finishWithBudgetSummary`'s own wrap-up attempt) so a native-OpenAI and
+ * an OpenAI-compat-gateway overflow surface the IDENTICAL hint — neither
+ * adapter path gave this hint before this flow, and duplicating the check
+ * per call site risked exactly the drift this centralizes away.
+ */
+function formatProviderErrorMessage(error: NormalizedError | undefined): string {
+  const base = error?.message ?? error?.kind ?? "provider error";
+  const hint = error?.kind === "context_overflow" ? " Run /compact to shrink the context and try again." : "";
+  return `\n[error] ${base}${hint}\n`;
+}
 
 /** Collapse whitespace so "same text" comparisons ignore incidental formatting. */
 function collapseWhitespace(text: string): string {
@@ -1763,6 +1826,26 @@ async function runAgentTurnCore(
       return { finishReason: "budget" };
     }
     roundState.round += 1;
+    // Flow 267: compact BEFORE building the request, not after — once the
+    // estimate crosses 85% of a KNOWN window (`deps.contextWindow`), splice a
+    // shrunk `history` in place so this round's own request cannot 400 on
+    // input-token overflow. `deps.contextWindow === undefined` (the default)
+    // makes `needsCompaction` always `false` (AC2): byte-identical behavior.
+    const preRequestEstimate = estimateRequestTokens(history, deps.systemInstruction, toolDefs);
+    if (needsCompaction(preRequestEstimate, deps.contextWindow)) {
+      const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+      if (!compacted.noop) {
+        // Splice, never reassign — `runAgentTurn`'s own contract (see its doc
+        // comment) means every caller holds this exact array reference across
+        // the whole turn.
+        history.splice(0, history.length, ...compacted.context);
+        deps.onContextCompaction?.({
+          removed: compacted.removed,
+          context: compacted.context,
+          estimate: preRequestEstimate,
+        });
+      }
+    }
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
@@ -1887,7 +1970,7 @@ async function runAgentTurnCore(
             reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
           }
         } else if (event.kind === "provider_error") {
-          system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
+          system(formatProviderErrorMessage(event.error));
           errored = true;
           break;
         } else if (event.kind === "model_end") {
@@ -2261,6 +2344,7 @@ async function runAgentTurnCore(
           toolByName,
           io.requestApproval,
           io.permissionMode,
+          io.readOnly,
           io.onAutoApproved,
           hasInvocationCapacity,
           reserveInvocation,
@@ -2526,6 +2610,22 @@ async function finishWithBudgetSummary(
     ts: now(),
   });
 
+  // Flow 267: same guard as the round loop, before the wrap-up request. No
+  // `tools` are sent on this path, so the estimate carries an empty tool-def
+  // list — matching what actually goes over the wire here.
+  const wrapUpEstimate = estimateRequestTokens(history, deps.systemInstruction, []);
+  if (needsCompaction(wrapUpEstimate, deps.contextWindow)) {
+    const compacted = compactMessages(history, { keepLastUserTurns: 3 });
+    if (!compacted.noop) {
+      history.splice(0, history.length, ...compacted.context);
+      deps.onContextCompaction?.({
+        removed: compacted.removed,
+        context: compacted.context,
+        estimate: wrapUpEstimate,
+      });
+    }
+  }
+
   const request: NormalizedRequest = {
     providerId: deps.providerId,
     modelId: deps.modelId,
@@ -2597,7 +2697,7 @@ async function finishWithBudgetSummary(
           reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
         }
       } else if (event.kind === "provider_error") {
-        system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
+        system(formatProviderErrorMessage(event.error));
         break;
       } else if (event.kind === "model_end") {
         break;
@@ -2714,6 +2814,7 @@ async function runConcurrentSpawnBatch(
       toolByName,
       io.requestApproval,
       io.permissionMode,
+      io.readOnly,
       io.onAutoApproved,
       hasInvocationCapacity,
       reserveInvocation,
@@ -2820,6 +2921,7 @@ async function executeCall(
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
   permissionMode: AgentIO["permissionMode"],
+  readOnly: AgentIO["readOnly"],
   onAutoApproved: AgentIO["onAutoApproved"],
   hasInvocationCapacity: () => boolean,
   reserveInvocation: () => boolean,
@@ -2866,6 +2968,7 @@ async function executeCall(
   // - anything else is denied
   const risk = tool.definition.risk;
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+  const isReadOnly = readOnly?.() ?? false;
   if (risk === "shell" || risk === "destructive") {
     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
@@ -2875,7 +2978,17 @@ async function executeCall(
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
     const sacReviewConfirmation = touchesSacConfirmReview(command);
-    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive,
+      credentials,
+      sacReviewConfirmation,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
@@ -2897,7 +3010,17 @@ async function executeCall(
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
-    const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false, sacReviewConfirmation: false });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
@@ -2917,7 +3040,17 @@ async function executeCall(
     // escalation only, per ADR-0009's posture; it never denies on its own.
     const patch = typeof input.patch === "string" ? input.patch : "";
     const { destructive, credentials } = classifyPatchRisk(patch);
-    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation: false });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive,
+      credentials,
+      sacReviewConfirmation: false,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {

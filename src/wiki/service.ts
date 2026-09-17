@@ -695,6 +695,9 @@ export async function collectGraphWikiCandidates(
   const fileOut = new Map<string, number>();
   const moduleDeps = new Map<string, Map<string, number>>();
   const moduleDependents = new Map<string, Map<string, number>>();
+  // Module name -> how many of its cross-module edges were dropped as
+  // test-file imports, plus one example for the page's own caveat line.
+  const excludedTestEdges = new Map<string, { count: number; example: string }>();
   let edges = 0;
   let imports = 0;
   let unresolved = 0;
@@ -715,6 +718,13 @@ export async function collectGraphWikiCandidates(
     const fromModule = fileToModule.get(from) ?? moduleNameFromProjectPath(from);
     const toModule = fileToModule.get(to) ?? moduleNameFromProjectPath(to);
     if (fromModule && toModule && fromModule !== toModule) {
+      if (isTestSourceFile(from)) {
+        // A test file importing a module is not that module reaching anything,
+        // so the edge is dropped in BOTH directions — see TEST_SOURCE_FILE.
+        recordExcludedTestEdge(excludedTestEdges, fromModule, from);
+        recordExcludedTestEdge(excludedTestEdges, toModule, from);
+        continue;
+      }
       bumpNestedCount(moduleDeps, fromModule, toModule);
       bumpNestedCount(moduleDependents, toModule, fromModule);
     }
@@ -799,6 +809,19 @@ export async function collectGraphWikiCandidates(
     );
     pushRef("Depends on", deps.map(([target, count]) => "- `" + target + "` - " + count + " import(s)"));
     pushRef("Depended on by", dependents.map(([source, count]) => "- `" + source + "` - " + count + " import(s)"));
+    // The exclusion is stated ON THE PAGE: without this note, an empty "Depends
+    // on" is indistinguishable from "nothing imports this module", and a reader
+    // who knows the module has test importers cannot tell the two apart — the
+    // exclusion itself would become a new false claim. The two sections above
+    // stay the production fact; this note says what was left out of them.
+    const dropped = excludedTestEdges.get(moduleName);
+    if (dropped) {
+      pushRef("Dependency basis", [
+        "- Production imports only: " + dropped.count + " import(s) from test "
+          + "file(s) (e.g. `" + dropped.example + "`) excluded from the two "
+          + "sections above in both directions.",
+      ]);
+    }
     pushRef("Entry points", entryFiles.map((file) => "- `" + file + "`"));
     if (readme) {
       pushRef("Module README", [readme]);
@@ -847,6 +870,40 @@ function bumpNestedCount(map: Map<string, Map<string, number>>, key: string, inn
   const bucket = map.get(key) ?? new Map<string, number>();
   bucket.set(inner, (bucket.get(inner) ?? 0) + 1);
   map.set(key, bucket);
+}
+
+/**
+ * Module-level dependency counts answer "what does this module import to work",
+ * not "what touches it during tests". A test file importing a module is a real
+ * graph edge and the wrong fact for that list: `wiki enrich` reads "Depends on"
+ * / "Depended on by" as production couplings and narrates them, so a test-only
+ * edge became published false claims — a `*.test.ts` importing
+ * `src/contracts/validator` turned into "validation consults security
+ * detection", and one test-only pin made `src/retention` look consumed by
+ * `src/forgetting` (10+ pages; the 2026-09-16 draft review,
+ * .metaproject/reviews/2026-09-16-wiki-draft-review.md).
+ *
+ * Only the SOURCE side is filtered: a production file importing something is a
+ * production fact about the importer whatever it points at, and a directory
+ * rule ("anything under a test-ish path") would wrongly silence `src/testing`,
+ * which is product code. The predicate is the repo's own naming convention —
+ * the one `src/mcp-servers/invariants.test.ts` and `src/core-package.test.ts`
+ * use to tell product files from tests — colocated `*.test.ts` included, which
+ * is what this project has.
+ */
+const TEST_SOURCE_FILE = /(?:^|\/)[^/]*\.(?:test|spec)\.[cm]?[jt]sx?$/;
+
+export function isTestSourceFile(filePath: string): boolean {
+  return TEST_SOURCE_FILE.test(filePath);
+}
+
+function recordExcludedTestEdge(
+  map: Map<string, { count: number; example: string }>,
+  moduleName: string,
+  testFile: string,
+): void {
+  const current = map.get(moduleName);
+  map.set(moduleName, { count: (current?.count ?? 0) + 1, example: current?.example ?? testFile });
 }
 
 function sumCounts(bucket: Map<string, number> | undefined): number {

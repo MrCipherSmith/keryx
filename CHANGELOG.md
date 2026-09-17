@@ -3,6 +3,37 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.113] — 2026-09-17
+A read-only posture for the interactive agent session, and three small fixes
+to the OpenTUI shell.
+
+### Added
+
+- **`/plan` — a read-only toggle for `keryx shell`.** Orthogonal to the
+  existing `/mode ask|trust|auto`: where `/mode` decides how much
+  confirmation a mutating call needs, `/plan` decides whether mutating tools
+  are reachable at all. `/plan on` denies every non-`read` tool call
+  unconditionally — a hard floor no mode lifts, not even `auto`. In-memory
+  only, always starts off; there is no persisted default. See
+  [Read-only mode: `/plan`](docs/docs/guides/permission-modes.md) in the
+  permission-modes guide. `shell_exec` is denied entirely under `/plan` in
+  this release — there is no read-only git surface (`git diff`/`log`/`status`)
+  yet.
+- **A one-time boot animation on `keryx shell --tui` launch.** Shown once
+  before the provider/model picker; any keypress skips it. Set
+  `KERYX_SKIP_BOOT=1` to disable it entirely (already applied automatically
+  for automated/CI launches).
+
+### Fixed
+
+- **The sidebar silently clipped content instead of scrolling.** Anything
+  mounted past what fit the terminal height — Workspace, Review, Tools,
+  Status, Subagents, Background Jobs — was simply unreachable on a short
+  terminal. The sidebar's content area is now a real scrollbox, the same
+  primitive the main transcript already uses.
+- **The sidebar's title didn't show which version was running.** The
+  "keryx" title now carries the running version next to it, dim.
+
 ## [0.2.112] — 2026-09-16
 Output from a background task reached the model provider unredacted. Releases
 0.2.109, 0.2.110 and 0.2.111 carry the defect; this release is the fix and

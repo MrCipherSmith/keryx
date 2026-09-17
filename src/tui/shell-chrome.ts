@@ -325,6 +325,12 @@ export interface ShellChrome {
    * beside the toast, instead of at the top.
    */
   readonly sidebarTop: Box;
+  /**
+   * The scrollbox `sidebarTop` is `.content` of (mirrors `scroll`/`transcript`
+   * below). Exposed so callers/tests can read `scrollHeight`/`scrollTop` to
+   * confirm sidebar overflow is actually scrollable, not merely clipped.
+   */
+  readonly sidebarScroll: ScrollBox;
   readonly header: Box;
   readonly scroll: ScrollBox;
   /** The scrollbox content the IO renders into. */
@@ -503,8 +509,22 @@ export async function createShellChrome(
   // `sidebarTop` above it for the caller's panels (model, context, tools,
   // workers). Both slots exist from mount so the caller never has to insert
   // renderables around a spacer it does not own.
-  const sidebarTop = new otui.BoxRenderable(r, { id: "sb-top", flexShrink: 0, flexDirection: "column" });
-  sidebar.add(sidebarTop);
+  // `flexShrink: 1` + `minHeight: 0` (not `flexGrow`) keeps `sidebarSpacer`
+  // below the only growing sibling, so the toast stays pinned to the bottom
+  // when content is short; when sidebar content overflows the terminal
+  // height, standard flexbox shrink math puts nearly all the negative space
+  // on this large-flex-basis box rather than the ~0-basis spacer, bounding
+  // its rendered height so the scrollbox actually scrolls instead of merely
+  // clipping (mirrors the transcript's own `scroll`/`.content` below).
+  const sidebarTopScroll = new otui.ScrollBoxRenderable(r, {
+    id: "sb-top",
+    flexShrink: 1,
+    minHeight: 0,
+    scrollY: true,
+    contentOptions: { flexDirection: "column" },
+  });
+  sidebar.add(sidebarTopScroll);
+  const sidebarTop = sidebarTopScroll.content;
   if (opts.versionCheck !== undefined) {
     // Reserve the notice's position before callers append model/context/worker
     // panels. Late settlement then changes content in place instead of appending
@@ -1206,6 +1226,7 @@ export async function createShellChrome(
     main,
     sidebar,
     sidebarTop,
+    sidebarScroll: sidebarTopScroll,
     header,
     scroll,
     transcript,

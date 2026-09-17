@@ -61,9 +61,11 @@ import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
+import { playBootAnimation } from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -181,6 +183,7 @@ import {
   type SessionSummary,
   listSessions,
   openSession,
+  persistCompacted,
   persistHistory,
   shortSessionId,
   type SessionHandle,
@@ -853,6 +856,23 @@ export function attachBlockIo(
 }
 
 /**
+ * Mount the sidebar's title row: bold "keryx" + the running `packageJson.version`
+ * in dim/secondary style (flow 266 P3, AC11/AC12).
+ *
+ * Exported — same reason as {@link mountCwdPanel} just below: a headless test
+ * mounts the SHIPPED panel instead of a replica, so a future edit to the id or
+ * the wording is caught here rather than in a test that re-typed it.
+ */
+export function mountTitlePanel(otui: OpenTui, r: Renderer, sidebarTop: Box): void {
+  sidebarTop.add(
+    new otui.TextRenderable(r, {
+      id: "sb-title",
+      content: otui.t`${otui.bold("keryx")} ${otui.dim(`v${packageJson.version}`)}`,
+    }),
+  );
+}
+
+/**
  * Mount the sidebar's `Directory` panel — the working directory the agent's
  * `shell_exec` and write tools actually act on (gap G-2).
  *
@@ -1233,10 +1253,18 @@ export function shortenCwd(cwd: string, max: number): string {
  * Rough token estimate of the conversation (≈ 4 chars/token) — a fallback for the
  * context counter when the provider does not report exact `usage` (e.g. local
  * Ollama models). Pure.
+ *
+ * Flow 267: delegates to `estimateRequestTokens` (`harness/provider/
+ * context-guard.ts`) with no system instruction / tool defs, rather than
+ * summing `content` itself — ONE estimator for the codebase instead of two
+ * divergent ones. `/status`'s callers all pass bare `{ content }` history
+ * (never `systemInstruction`/tool defs), and threading those through every
+ * `/status` call site would be invasive for a display-only estimate that
+ * already carries a "rough"/"≈" disclaimer; the real guard in `agent.ts`
+ * calls `estimateRequestTokens` directly with the full request shape.
  */
 export function estimateContextTokens(history: readonly { content: string }[]): number {
-  const chars = history.reduce((n, m) => n + m.content.length, 0);
-  return Math.round(chars / 4);
+  return estimateRequestTokens(history, "", []);
 }
 
 /**
@@ -2541,6 +2569,11 @@ export async function launchTuiAgentShell(opts: {
     };
     r.on("theme_mode", onThemeMode);
 
+    // Branded intro (flow 266 P1) — before the picker so it is the FIRST thing
+    // shown, matching a launch sequence rather than interrupting one already in
+    // progress. `KERYX_SKIP_BOOT=1` bypasses it entirely (see boot-animation.ts).
+    await playBootAnimation(otui, r, { onKeypress: (handler) => onKeypress(r, handler) });
+
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
     if (sel === undefined) {
@@ -2650,7 +2683,7 @@ export async function launchTuiAgentShell(opts: {
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
     // so anything added to `sidebar` itself would land beside the toast.
     const sidebar = chrome.sidebarTop;
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
+    mountTitlePanel(otui, r, sidebar);
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
@@ -3573,6 +3606,11 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
+    // Read-only ("plan") posture — orthogonal to `permissionMode` (see
+    // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
+    // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
+    let readOnly = false;
+    io.readOnly = () => readOnly;
     io.onAutoApproved = (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -3608,6 +3646,35 @@ export async function launchTuiAgentShell(opts: {
      * once `liveSession` is set below.
      */
     let slateSession: SlateSessionRef | undefined;
+
+    /**
+     * Flow 267: `agent.ts`'s round-loop guard already ran `compactMessages`
+     * itself and spliced the result into `history` IN PLACE before this
+     * fires (see `AgentDeps.onContextCompaction`'s doc comment) — this
+     * mirrors the `/compact` command handler further below: persist the SAME
+     * bookkeeping (`compactCount`, `archive.jsonl`, `context.jsonl`) via
+     * `persistCompacted` (the extracted core `compactSession` itself now
+     * calls) rather than running compaction a second time, then reset
+     * `nextArchiveIndex` so later turns keep syncing `archive` from the new,
+     * shorter `history`. A system-stream line replaces a silent swap so the
+     * operator sees WHY the transcript just shrank.
+     */
+    const onContextCompaction = (r: { removed: number; context: NormalizedMessage[]; estimate: number }): void => {
+      const persisted = persistCompacted(liveSession, r.context, archive, {
+        provider: currentSel.provider,
+        model: currentSel.model,
+      });
+      liveSession = persisted.handle;
+      nextArchiveIndex = history.length;
+      paintSessionHeader();
+      io.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
+    };
+    // Flow 267: attach the callback above to the deps this session already
+    // built (`onContextCompaction` needs `history`/`archive`/`liveSession`,
+    // declared above it — a plain reassignment here, not a merge at the
+    // original `makeAgentDeps` call site, which runs before those exist).
+    deps = { ...deps, onContextCompaction };
+    liveDeps = deps;
 
     const applyOpened = (
       opened: {
@@ -4123,6 +4190,31 @@ export async function launchTuiAgentShell(opts: {
       })();
     };
 
+    // Read-only ("plan") toggle — mirrors `runModeCommand`'s shape but
+    // simpler: no confirmation dialog, no picker overlay (TUI cosmetics are
+    // out of scope for this pass). Going read-only is the safe direction, so
+    // `on` needs no confirm step, unlike `/mode auto`.
+    const runPlanCommand = (line: string): void => {
+      const planArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
+      const wanted = planArgs[0] ?? "";
+
+      if (wanted.length === 0) {
+        chrome.showToast(`Read-only mode: ${readOnly ? "on" : "off"}`);
+        return;
+      }
+      if (wanted === "on") {
+        readOnly = true;
+        chrome.showToast("Read-only mode: on");
+        return;
+      }
+      if (wanted === "off") {
+        readOnly = false;
+        chrome.showToast(`Read-only mode: off (permission mode stays: ${permissionMode})`);
+        return;
+      }
+      io.onSystem?.("Usage: /plan [on|off]\n");
+    };
+
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
     const updateModelLabels = (): void => {
       paintSessionHeader();
@@ -4134,7 +4226,7 @@ export async function launchTuiAgentShell(opts: {
       currentSel = ns;
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
-      deps = await opts.makeAgentDeps(ns, () => slateSession);
+      deps = { ...(await opts.makeAgentDeps(ns, () => slateSession)), onContextCompaction };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
@@ -4779,6 +4871,10 @@ export async function launchTuiAgentShell(opts: {
             runModeCommand(line);
             return;
           }
+          case "plan": {
+            runPlanCommand(line);
+            return;
+          }
           case "session-info": {
             showSessionInfo();
             return;
@@ -5204,6 +5300,10 @@ export async function launchTuiAgentShell(opts: {
               );
             }
           }
+          return;
+        }
+        if (command.name === "/plan") {
+          runPlanCommand(line);
           return;
         }
         if (command.name === "/model") {
