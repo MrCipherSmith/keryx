@@ -6,18 +6,22 @@ import {
   buildAgentSystemInstruction,
   buildToollessReprompt,
   DEFAULT_MAX_OUTPUT_TOKENS,
+  describeReasoningEffortSource,
   DEFAULT_MAX_ROUNDS,
   DEFAULT_MAX_SUBAGENT_CONCURRENCY,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
   ENV_AGENT_MAX_OUTPUT_TOKENS,
   ENV_AGENT_MAX_ROUNDS,
+  ENV_REASONING_EFFORT,
   MAX_AGENT_MAX_ATTEMPTS_PER_HASH,
   MAX_AGENT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
+  REASONING_EFFORT_LEVELS,
   reserveToolAttempt,
   resolveAgentMaxAttemptsPerHash,
   resolveAgentMaxOutputTokens,
   resolveAgentMaxRounds,
+  resolveReasoningEffort,
   runAgentTurn,
   toolCallHash,
 } from "./agent";
@@ -98,6 +102,73 @@ test("resolveAgentMaxOutputTokens: precedence is env > provider config > global 
   expect(
     resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: 0, globalMaxOutputTokens: 1.5 }),
   ).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+});
+
+test("resolveReasoningEffort: unset/empty/invalid falls back to \"off\"", () => {
+  expect(resolveReasoningEffort()).toBe("off");
+  expect(resolveReasoningEffort({ env: {} })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "" } })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "  " } })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "nope" } })).toBe("off");
+  expect(resolveReasoningEffort({ sessionOverride: "nope" })).toBe("off");
+  expect(resolveReasoningEffort({ globalEffort: "nope" })).toBe("off");
+});
+
+test("resolveReasoningEffort: precedence is session override > env > global config > \"off\"", () => {
+  // global alone beats "off"
+  expect(resolveReasoningEffort({ env: {}, globalEffort: "medium" })).toBe("medium");
+  // env beats global
+  expect(
+    resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "high" }, globalEffort: "medium" }),
+  ).toBe("high");
+  // session override beats both env and global
+  expect(
+    resolveReasoningEffort({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "low",
+      globalEffort: "medium",
+    }),
+  ).toBe("low");
+  // an invalid session override falls through to env
+  expect(
+    resolveReasoningEffort({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "nope",
+      globalEffort: "medium",
+    }),
+  ).toBe("high");
+  // an invalid session override AND env falls through to global
+  expect(
+    resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "nope" }, sessionOverride: "nope", globalEffort: "medium" }),
+  ).toBe("medium");
+});
+
+test("resolveReasoningEffort: accepts every REASONING_EFFORT_LEVELS value", () => {
+  for (const level of REASONING_EFFORT_LEVELS) {
+    expect(resolveReasoningEffort({ env: {}, globalEffort: level })).toBe(level);
+  }
+});
+
+test("describeReasoningEffortSource: labels which precedence tier resolved, matching resolveReasoningEffort's own value", () => {
+  expect(describeReasoningEffortSource()).toEqual({ effort: "off", source: "default" });
+  expect(describeReasoningEffortSource({ env: {}, globalEffort: "medium" })).toEqual({
+    effort: "medium",
+    source: "global",
+  });
+  expect(
+    describeReasoningEffortSource({ env: { [ENV_REASONING_EFFORT]: "high" }, globalEffort: "medium" }),
+  ).toEqual({ effort: "high", source: "env" });
+  expect(
+    describeReasoningEffortSource({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "low",
+      globalEffort: "medium",
+    }),
+  ).toEqual({ effort: "low", source: "session" });
+  // An invalid session override falls through, same as resolveReasoningEffort.
+  expect(
+    describeReasoningEffortSource({ env: {}, sessionOverride: "nope", globalEffort: "medium" }),
+  ).toEqual({ effort: "medium", source: "global" });
 });
 
 test("resolveAgentMaxAttemptsPerHash: unset/empty/invalid falls back to the default", () => {
@@ -273,6 +344,89 @@ test("runAgentTurn: deps.maxOutputTokens rejects a non-positive value", async ()
   await expect(runAgentTurn(collectingIo().io, deps, [], "hello")).rejects.toThrow(
     "maxOutputTokens must be a positive safe integer",
   );
+});
+
+test("runAgentTurn: deps.reasoningEffort set (not \"off\") -> request.options.reasoning carries it", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "high",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toEqual({ reasoning: "high" });
+});
+
+test("runAgentTurn: deps.reasoningEffort absent -> request has no options key at all", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toBeUndefined();
+  expect(Object.prototype.hasOwnProperty.call(requests[0] ?? {}, "options")).toBe(false);
+});
+
+test('runAgentTurn: deps.reasoningEffort "off" -> request has no options key (explicit opt-out, identical to absent)', async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "off",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toBeUndefined();
+  expect(Object.prototype.hasOwnProperty.call(requests[0] ?? {}, "options")).toBe(false);
+});
+
+test("finishWithBudgetSummary's wrap-up request also carries deps.reasoningEffort when set", async () => {
+  // Force the budget-exhausted wrap-up path: 0 tool calls allowed, and the
+  // model insists on calling a tool every round, exhausting the per-signature
+  // attempt budget so the driver falls through to `finishWithBudgetSummary`.
+  // Same name + same input ("{}") every round -> same `toolCallHash`. The
+  // first `MAX_ATTEMPTS_PER_HASH` (3) attempts execute; the 4th round's call
+  // is refused by `reserveToolAttempt` (exceeds the per-signature cap) and
+  // NOTHING in that round executes, which is exactly `noProgress`'s trigger
+  // (`!executedAny && calls.length > 0`) — see `runAgentTurnCore`.
+  const toolRound = [
+    { kind: "tool_call_start" as const, toolCallId: "c1", toolName: "get_cwd" },
+    { kind: "tool_call_end" as const, toolCallId: "c1", input: "{}" },
+    { kind: "model_end" as const },
+  ];
+  const { provider, requests } = scriptedProvider([
+    toolRound,
+    toolRound,
+    toolRound,
+    toolRound,
+    [{ kind: "text_delta", text: "wrap-up" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "medium",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "loop forever");
+  // The LAST request is the no-tools wrap-up request `finishWithBudgetSummary` sends.
+  const wrapUpRequest = requests[requests.length - 1];
+  expect(wrapUpRequest?.tools).toBeUndefined();
+  expect(wrapUpRequest?.options).toEqual({ reasoning: "medium" });
 });
 
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {

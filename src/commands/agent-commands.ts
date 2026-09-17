@@ -192,6 +192,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
     modes: AGENT_ONLY,
   },
+  {
+    name: "/reasoning",
+    description:
+      "Show or set reasoning effort — /reasoning [off|minimal|low|medium|high|xhigh|max]",
+    // Flow 268 T16 (AC11): reasoning effort feeds `request.options.reasoning`
+    // on the main agent turn (`commands/agent.ts`) — chat mode never builds
+    // that request shape (its own `runShell` core is untouched), so this
+    // command has nothing to configure there, same reasoning as `/mode`.
+    modes: AGENT_ONLY,
+  },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {

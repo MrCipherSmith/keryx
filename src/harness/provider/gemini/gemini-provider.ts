@@ -248,6 +248,28 @@ function geminiThoughtSignatureItems(message: NormalizedMessage): GeminiThoughtS
 const THINKING_BUDGET_BY_EFFORT: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
 
 /**
+ * Gemini only confirms low/medium/high (flow 268 T16): "minimal" (below its
+ * lowest confirmed level), "xhigh" and "max" (above its highest) are clamped
+ * to the nearest one it supports rather than sent as an unconfirmed string.
+ * Applied BEFORE either depth-control mapping below, so both the
+ * `thinkingLevel` (gemini-3*) and `thinkingBudget` (gemini-2.5* / generic)
+ * branches see only low/medium/high.
+ */
+const GEMINI_EFFORT_CLAMP: Readonly<Record<string, "low" | "medium" | "high">> = {
+  minimal: "low",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "high",
+  max: "high",
+};
+
+/** Clamp an arbitrary requested effort string to Gemini's own low/medium/high vocabulary. */
+function clampGeminiEffort(effort: string): "low" | "medium" | "high" {
+  return GEMINI_EFFORT_CLAMP[effort] ?? "medium";
+}
+
+/**
  * `gemini-3*` model ids use the newer `thinkingLevel` depth control;
  * everything else (the `gemini-2.5*` family, and the generic fallback for an
  * unrecognized id) uses the older token-budget `thinkingBudget` control. See
@@ -269,14 +291,15 @@ function buildThinkingConfig(modelId: string, effort: string | undefined): Recor
   if (effort === undefined || effort === "off") {
     return undefined;
   }
+  const clampedEffort = clampGeminiEffort(effort);
   if (usesThinkingLevel(modelId)) {
     // Only "low"/"high" are confirmed for `thinkingLevel` — "medium" (and any
     // unrecognized value) maps to "high" rather than sending an unconfirmed
     // "medium" the API might reject.
-    const level = effort === "low" ? "low" : "high";
+    const level = clampedEffort === "low" ? "low" : "high";
     return { includeThoughts: true, thinkingLevel: level };
   }
-  const budget = THINKING_BUDGET_BY_EFFORT[effort] ?? THINKING_BUDGET_BY_EFFORT.medium;
+  const budget = THINKING_BUDGET_BY_EFFORT[clampedEffort] ?? THINKING_BUDGET_BY_EFFORT.medium;
   return { includeThoughts: true, thinkingBudget: budget };
 }
 

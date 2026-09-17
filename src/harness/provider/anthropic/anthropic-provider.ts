@@ -166,6 +166,19 @@ interface ThinkingRequestParams {
 }
 
 /**
+ * Anthropic has no "minimal" effort level (flow 268 T16): the nearest level
+ * it DOES support is "low", so a caller-requested "minimal" is clamped up
+ * before either family's mapping runs. Every other level ("low" through
+ * "max") is Anthropic's own documented vocabulary and passes through
+ * unclamped here — `xhigh`'s own further per-model clamp (Opus/Sonnet 4.6
+ * have no `xhigh`) stays a SEPARATE, later step (see `NO_XHIGH_PATTERN`
+ * below), not folded into this one.
+ */
+function clampAnthropicEffort(effort: string): string {
+  return effort === "minimal" ? "low" : effort;
+}
+
+/**
  * Resolve the `thinking`/`output_config`/`max_tokens` request fields for a
  * given model + reasoning effort. `effort` absent or `"off"` means the user
  * did not ask for reasoning: no `thinking` param is sent at all (an
@@ -180,9 +193,11 @@ function buildThinkingParams(
   if (effort === undefined || effort === "off") {
     return { maxTokens: maxOutputTokens };
   }
+  const clampedEffort = clampAnthropicEffort(effort);
   const family = anthropicModelFamily(modelId);
   if (family === "adaptive") {
-    const resolvedEffort = effort === "xhigh" && NO_XHIGH_PATTERN.test(modelId.toLowerCase()) ? "high" : effort;
+    const resolvedEffort =
+      clampedEffort === "xhigh" && NO_XHIGH_PATTERN.test(modelId.toLowerCase()) ? "high" : clampedEffort;
     return {
       // "summarized" display is REQUIRED: these models default to "omitted",
       // which arrives with an EMPTY thinking text (the round is still valid
@@ -192,7 +207,7 @@ function buildThinkingParams(
       maxTokens: maxOutputTokens,
     };
   }
-  const budgetTokens = BUDGET_TOKENS_BY_EFFORT[effort] ?? DEFAULT_BUDGET_TOKENS;
+  const budgetTokens = BUDGET_TOKENS_BY_EFFORT[clampedEffort] ?? DEFAULT_BUDGET_TOKENS;
   return {
     thinking: { type: "enabled", budget_tokens: budgetTokens },
     // budget_tokens must be < max_tokens; raise max_tokens to make room for

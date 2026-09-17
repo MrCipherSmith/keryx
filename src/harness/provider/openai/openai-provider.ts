@@ -128,6 +128,18 @@ function asNumber(value: unknown): number | undefined {
 }
 
 /**
+ * The OpenAI Responses API's own documented `reasoning.effort` vocabulary is
+ * `minimal|low|medium|high` (flow 268 T16) — it has no `xhigh`/`max` level.
+ * Those two are clamped to `"high"`, its own highest, rather than sent
+ * verbatim and risking a 400 on an unrecognized value; every other
+ * caller-requested level (`minimal`/`low`/`medium`/`high`) is already
+ * OpenAI's own vocabulary and passes through unclamped.
+ */
+function clampOpenAiReasoningEffort(effort: string): string {
+  return effort === "xhigh" || effort === "max" ? "high" : effort;
+}
+
+/**
  * This turn's captured reasoning items owned by THIS provider adapter, in
  * original (event) order, as plain `Record<string, unknown>` items ready to
  * splice into `input` verbatim (flow 268 T14, AC9). `MessageReasoning.replay`
@@ -507,8 +519,14 @@ export class OpenAiProvider implements ProviderPort {
     // model (gpt-4.1/gpt-4o) given a `reasoning` field at all (confirmed:
     // reasoning is accepted only by o-series/gpt-5* reasoning models), so
     // this must stay opt-in rather than always-on.
-    const reasoningEffort = request.options?.reasoning;
-    const reasoningRequested = typeof reasoningEffort === "string" && reasoningEffort.length > 0 && reasoningEffort !== "off";
+    const requestedReasoningEffort = request.options?.reasoning;
+    const reasoningRequested =
+      typeof requestedReasoningEffort === "string" && requestedReasoningEffort.length > 0 && requestedReasoningEffort !== "off";
+    // flow 268 T16: clamp a level OpenAI does not document ("xhigh"/"max") to
+    // its nearest supported one BEFORE it reaches the wire — see
+    // `clampOpenAiReasoningEffort`'s doc comment. Only meaningful when
+    // `reasoningRequested`; left unclamped (but unused) otherwise.
+    const reasoningEffort = reasoningRequested ? clampOpenAiReasoningEffort(requestedReasoningEffort) : requestedReasoningEffort;
     const payload: Record<string, unknown> = {
       model: request.modelId,
       instructions: request.systemInstruction,

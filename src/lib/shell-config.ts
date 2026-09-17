@@ -62,6 +62,19 @@ export interface ShellConfig {
    * hand-edited value is simply ignored by the resolver's own guard.
    */
   maxOutputTokens?: number;
+  /**
+   * Operator-set global reasoning effort for the main agent turn
+   * (`request.options.reasoning`), persisted by the `/reasoning <level>`
+   * shell command (flow 268 T16). One of `AgentDeps`'s
+   * `REASONING_EFFORT_LEVELS` (`src/commands/agent.ts`) when valid. Consulted
+   * by `resolveReasoningEffort` BELOW the `KERYX_REASONING_EFFORT` env
+   * override and the session's own in-memory override, and ABOVE the
+   * built-in default (`"off"`) — see that function's precedence doc. Not
+   * validated here (this file is a raw best-effort reader/writer, like every
+   * other field above); an invalid hand-edited value is simply ignored by the
+   * resolver's own guard.
+   */
+  reasoningEffort?: string;
 }
 
 /**

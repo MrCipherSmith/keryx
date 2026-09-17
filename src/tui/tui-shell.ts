@@ -39,7 +39,13 @@
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
-import { resolveMaxAutoWake, runAgentTurn } from "../commands/agent";
+import {
+  describeReasoningEffortSource,
+  isReasoningEffortLevel,
+  REASONING_EFFORT_LEVELS,
+  resolveMaxAutoWake,
+  runAgentTurn,
+} from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
 import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
@@ -2269,6 +2275,19 @@ export async function launchTuiAgentShell(opts: {
    * through instead of narrowing it to `.dir` first.
    */
   makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;
+  /**
+   * Flow 268 T16 (AC11): update the CALLER's `/reasoning` session-override
+   * state (`commands/shell.ts`'s `reasoningSessionOverride`) so the NEXT
+   * `makeAgentDeps` rebuild (`/model`/`/connect`) — and a fresh `keryx shell`
+   * process, via the `ShellConfig.reasoningEffort` the `/reasoning` handler
+   * ALSO persists — resolve the same level this session just chose. Optional
+   * so every existing caller (only `commands/shell.ts`'s real one exists
+   * today) that predates this stays unaffected; when absent, `/reasoning`
+   * still mutates the live `deps.reasoningEffort` in this file directly (see
+   * the `/reasoning` command handler below), which is enough for the CURRENT
+   * session even without this callback.
+   */
+  setReasoningOverride?: (level: string | undefined) => void;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
@@ -2426,6 +2445,10 @@ export async function launchTuiAgentShell(opts: {
     // fold into this session's slate once it opens.
     let deps = await opts.makeAgentDeps(sel, () => slateSession);
     liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+    // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
+    // target, so the `/reasoning` no-arg status line can name the source
+    // ("this session") without needing a getter back from `commands/shell.ts`.
+    let reasoningOverride: string | undefined;
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -4961,6 +4984,45 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/mode") {
           runModeCommand(line);
+          return;
+        }
+        if (command.name === "/reasoning") {
+          // Flow 268 T16 (AC11). No arg: show the effective level and its
+          // precedence source. With an arg: set THIS session's override
+          // (mutating the live `deps` directly so the very next turn picks
+          // it up — see `AgentDeps.reasoningEffort`'s doc comment on why a
+          // plain mutable field, not a getter, is enough here), thread it to
+          // `commands/shell.ts` via `opts.setReasoningOverride` so a later
+          // `/model`/`/connect` rebuild keeps it, and persist it to
+          // `ShellConfig` so a fresh `keryx shell` process keeps it too.
+          const wanted = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          if (wanted.length === 0) {
+            const described = describeReasoningEffortSource({
+              sessionOverride: reasoningOverride,
+              globalEffort: loadShellConfig().reasoningEffort,
+            });
+            io.onSystem?.(
+              `Reasoning effort: ${described.effort} (${described.source})\n` +
+                `Usage: /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>\n`,
+            );
+          } else if (!isReasoningEffortLevel(wanted)) {
+            io.onSystem?.(
+              `Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`,
+            );
+          } else {
+            reasoningOverride = wanted;
+            opts.setReasoningOverride?.(wanted);
+            deps.reasoningEffort = wanted;
+            saveShellConfig({ reasoningEffort: wanted });
+            io.onSystem?.(`Reasoning effort: ${wanted}\n`);
+            const compatProvider = providerByName(currentSel.provider);
+            if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
+              io.onSystem?.(
+                `Note: ${currentSel.provider} is OpenAI-compatible with no "reasoning" entry — its reasoning ` +
+                  "is configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
+              );
+            }
+          }
           return;
         }
         if (command.name === "/model") {

@@ -3129,3 +3129,59 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
     );
   });
 });
+
+// --- flow 268 T16 (AC11): tui-shell.ts /reasoning wiring -------------------
+//
+// `launchTuiAgentShell` has no headless injection seam for its command
+// switch (see the SLATE-2a/SLATE-3a/SLATE-15 audits above — same file, same
+// reasoning: "a giant closure inline ... with no headless test harness"), so
+// this is a source-text audit following that exact precedent. The RESOLVER
+// (`resolveReasoningEffort`/`describeReasoningEffortSource`) and each
+// adapter's clamp are proven directly in `commands/agent.test.ts` and the
+// per-provider `*-reasoning.test.ts` files; this block only proves the TUI
+// surface actually wires a `/reasoning` command in.
+describe("flow 268 T16 — tui-shell.ts /reasoning wiring (source-text audit)", () => {
+  const reasoningSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartReasoning = reasoningSource.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyReasoning = reasoningSource.slice(fnStartReasoning);
+  const branchIndex = fnBodyReasoning.indexOf('command.name === "/reasoning"');
+  const branchBlock = fnBodyReasoning.slice(branchIndex, branchIndex + 2_400);
+
+  test("the command switch has a /reasoning branch", () => {
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("no arg shows the resolved effort and its source via describeReasoningEffortSource", () => {
+    expect(branchBlock).toContain("describeReasoningEffortSource(");
+    expect(branchBlock).toContain("sessionOverride: reasoningOverride");
+  });
+
+  test("an invalid level is rejected via isReasoningEffortLevel before anything is mutated", () => {
+    expect(branchBlock).toContain("isReasoningEffortLevel(wanted)");
+  });
+
+  test("a valid level mutates the live deps immediately (no rebuild needed for the next turn)", () => {
+    expect(branchBlock).toContain("deps.reasoningEffort = wanted");
+  });
+
+  test("a valid level is threaded to commands/shell.ts via opts.setReasoningOverride, for a later /model rebuild", () => {
+    expect(branchBlock).toContain("opts.setReasoningOverride?.(wanted)");
+  });
+
+  test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted })");
+  });
+
+  test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {
+    expect(branchBlock).toContain("providerByName(currentSel.provider)");
+    expect(branchBlock).toContain("compatProvider.reasoning === undefined");
+    expect(branchBlock).toMatch(/no effect for it/);
+  });
+
+  test("/reasoning is registered AGENT_ONLY in the shared slash-command registry", () => {
+    const chatCommands = commandsForMode("chat").map((c) => c.name);
+    const agentCommands = commandsForMode("agent").map((c) => c.name);
+    expect(agentCommands).toContain("/reasoning");
+    expect(chatCommands).not.toContain("/reasoning");
+  });
+});

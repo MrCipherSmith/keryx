@@ -140,6 +140,34 @@ describe("AC9 — request body only carries reasoning/include/store when effort 
     expect(body.stream).toBe(true);
     expect(body.max_output_tokens).toBe(1024);
   });
+
+  test('flow 268 T16: options.reasoning "xhigh"/"max" -> reasoning.effort clamps to "high" (OpenAI has no xhigh/max)', async () => {
+    const { fetch: fetchXhigh, calls: callsXhigh } = makeFixtureFetchMock(REASONING_TOOL_FIXTURE_PATH);
+    const providerXhigh = new OpenAiProvider({ fetch: fetchXhigh, grant: validGrant() });
+    await collectEvents(
+      providerXhigh.stream(buildRequest("req-xhigh", { options: { reasoning: "xhigh" } }), { attemptId: "att-xhigh" }),
+    );
+    const bodyXhigh = JSON.parse(String(callsXhigh[0]?.init?.body)) as Record<string, unknown>;
+    expect(bodyXhigh.reasoning).toEqual({ effort: "high", summary: "auto" });
+
+    const { fetch: fetchMax, calls: callsMax } = makeFixtureFetchMock(REASONING_TOOL_FIXTURE_PATH);
+    const providerMax = new OpenAiProvider({ fetch: fetchMax, grant: validGrant() });
+    await collectEvents(
+      providerMax.stream(buildRequest("req-max", { options: { reasoning: "max" } }), { attemptId: "att-max" }),
+    );
+    const bodyMax = JSON.parse(String(callsMax[0]?.init?.body)) as Record<string, unknown>;
+    expect(bodyMax.reasoning).toEqual({ effort: "high", summary: "auto" });
+  });
+
+  test('flow 268 T16: options.reasoning "minimal" passes through unclamped (OpenAI\'s own lowest documented level)', async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(REASONING_TOOL_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+    await collectEvents(
+      provider.stream(buildRequest("req-minimal", { options: { reasoning: "minimal" } }), { attemptId: "att-minimal" }),
+    );
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.reasoning).toEqual({ effort: "minimal", summary: "auto" });
+  });
 });
 
 // --- capture: reasoning summary deltas + output_item.done + tool call --------

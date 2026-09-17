@@ -161,6 +161,16 @@ describe("AC8 — request body: thinking params per model family and effort", ()
     ).toBe(16000);
   });
 
+  test("flow 268 T16: Anthropic has no \"minimal\" effort — adaptive model clamps it up to \"low\"", async () => {
+    const body = await requestBodyFor("claude-opus-5-20260101", "minimal");
+    expect(body.output_config).toEqual({ effort: "low" });
+  });
+
+  test("flow 268 T16: \"minimal\" clamps to \"low\" on a budget-family model too (budget_tokens: 2048)", async () => {
+    const body = await requestBodyFor("claude-haiku-4-5-20250929", "minimal");
+    expect((body.thinking as Record<string, unknown>).budget_tokens).toBe(2048);
+  });
+
   test("no thinking param when effort is absent (an adaptive model may still think by default — that's fine, untouched here)", async () => {
     const body = await requestBodyFor("claude-opus-5-20260101", undefined);
     expect(body.thinking).toBeUndefined();

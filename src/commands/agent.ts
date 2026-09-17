@@ -203,6 +203,23 @@ export interface AgentDeps {
    */
   maxOutputTokens?: number;
   /**
+   * Reasoning effort requested for the main agent turn round and its
+   * budget-exhausted wrap-up (flow 268 T16). One of
+   * {@link REASONING_EFFORT_LEVELS} (`"off"` or absent means not requested);
+   * an unrecognized string is treated the same as absent — no `options` key
+   * reaches the request at all, so a stale/invalid value here can never
+   * corrupt a request. A caller resolves this itself (see
+   * {@link resolveReasoningEffort}'s precedence doc: session override > env
+   * `KERYX_REASONING_EFFORT` > the operator's persisted global setting >
+   * `"off"`) before building `AgentDeps`, mirroring how {@link maxOutputTokens}
+   * above is resolved — this deterministic core never reads config files or
+   * env itself. Threaded onto `NormalizedRequest.options.reasoning`; each
+   * provider adapter maps/clamps the string to its own wire shape (and clamps
+   * an effort level it does not support to the nearest one it does) — this
+   * field carries the REQUESTED level, not a provider-specific one.
+   */
+  reasoningEffort?: string;
+  /**
    * Optional independent ceiling on real tool invocations in this turn.
    * Unlike `maxRounds`, this counts only calls that pass lookup, schema
    * validation, policy/approval gates, and reach `tool.invoke`. `undefined`
@@ -517,6 +534,113 @@ export function resolveAgentMaxOutputTokens(
     return options.globalMaxOutputTokens as number;
   }
   return DEFAULT_MAX_OUTPUT_TOKENS;
+}
+
+/**
+ * Valid `AgentDeps.reasoningEffort` / `ShellConfig.reasoningEffort` values,
+ * in ascending order. `"off"` means "not requested" — the same as the field
+ * being absent (see {@link AgentDeps.reasoningEffort}'s doc comment). The
+ * remaining six are the union of every adapter's OWN accepted vocabulary
+ * (Anthropic: low/medium/high/xhigh/max; OpenAI Responses: minimal/low/
+ * medium/high; Gemini: low/medium/high) — a caller may request any of them
+ * against any provider, and the adapter that cannot honor a level clamps it
+ * to the nearest one it supports (see each adapter's own clamp, e.g.
+ * `anthropic-provider.ts`'s `buildThinkingParams`, `openai-provider.ts`'s
+ * `clampOpenAiReasoningEffort`, `gemini-provider.ts`'s `buildThinkingConfig`)
+ * rather than sending an unsupported string over the wire.
+ */
+export const REASONING_EFFORT_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/** One of {@link REASONING_EFFORT_LEVELS}. */
+export type ReasoningEffortLevel = (typeof REASONING_EFFORT_LEVELS)[number];
+
+/** True when `value` is exactly one of {@link REASONING_EFFORT_LEVELS} (case-sensitive, no trimming). */
+export function isReasoningEffortLevel(value: string): value is ReasoningEffortLevel {
+  return (REASONING_EFFORT_LEVELS as readonly string[]).includes(value);
+}
+
+/** Env override for {@link resolveReasoningEffort} (2nd-highest precedence, below a session override). */
+export const ENV_REASONING_EFFORT = "KERYX_REASONING_EFFORT";
+
+/**
+ * Resolve the reasoning effort level for the main agent turn (and its
+ * budget-exhausted wrap-up — see `AgentDeps.reasoningEffort`'s doc comment).
+ * Precedence, highest first:
+ *   1. `sessionOverride` — set by the `/reasoning <level>` shell command for
+ *      THIS session (see `resolveReasoningEffort`'s callers in
+ *      `commands/shell.ts`/`tui/tui-shell.ts`); an unrecognized value falls
+ *      through to the next source, exactly like an unset one.
+ *   2. `env[ENV_REASONING_EFFORT]` (`KERYX_REASONING_EFFORT`); unset, empty,
+ *      or unrecognized falls through.
+ *   3. `globalEffort` — the operator's persisted global setting
+ *      (`ShellConfig.reasoningEffort`); unrecognized falls through.
+ *   4. `"off"` (default: no reasoning requested — matches every existing
+ *      caller that never set anything here).
+ *
+ * Pure and side-effect-free, mirroring {@link resolveAgentMaxOutputTokens}:
+ * no config file or env is read by THIS function — callers pass
+ * `process.env` in production and already-resolved session/global values,
+ * which keeps this unit-testable without touching disk.
+ */
+export function resolveReasoningEffort(
+  options: {
+    env?: Record<string, string | undefined>;
+    /** Set by the `/reasoning <level>` command for this session; `undefined` when never set. */
+    sessionOverride?: string | undefined;
+    /** A lookup that found nothing (no persisted setting) is `undefined`, same as an absent field. */
+    globalEffort?: string | undefined;
+  } = {},
+): ReasoningEffortLevel {
+  const env = options.env ?? process.env;
+  if (options.sessionOverride !== undefined && isReasoningEffortLevel(options.sessionOverride)) {
+    return options.sessionOverride;
+  }
+  const raw = env[ENV_REASONING_EFFORT];
+  if (raw !== undefined) {
+    const trimmed = raw.trim();
+    if (trimmed.length > 0 && isReasoningEffortLevel(trimmed)) {
+      return trimmed;
+    }
+  }
+  if (options.globalEffort !== undefined && isReasoningEffortLevel(options.globalEffort)) {
+    return options.globalEffort;
+  }
+  return "off";
+}
+
+/** Which precedence tier {@link resolveReasoningEffort} actually resolved from. */
+export type ReasoningEffortSource = "session" | "env" | "global" | "default";
+
+/**
+ * Labeled version of {@link resolveReasoningEffort} for a human-readable
+ * `/reasoning` status line (no argument): same precedence/validation, but
+ * also names WHICH tier won, so "off (default)" reads differently from
+ * "off (saved config)". Not a second source of truth — every branch mirrors
+ * `resolveReasoningEffort`'s own, so the two can never disagree on the
+ * resolved value, only on whether the caller also wants to know why.
+ */
+export function describeReasoningEffortSource(
+  options: {
+    env?: Record<string, string | undefined>;
+    sessionOverride?: string | undefined;
+    globalEffort?: string | undefined;
+  } = {},
+): { effort: ReasoningEffortLevel; source: ReasoningEffortSource } {
+  const env = options.env ?? process.env;
+  if (options.sessionOverride !== undefined && isReasoningEffortLevel(options.sessionOverride)) {
+    return { effort: options.sessionOverride, source: "session" };
+  }
+  const raw = env[ENV_REASONING_EFFORT];
+  if (raw !== undefined) {
+    const trimmed = raw.trim();
+    if (trimmed.length > 0 && isReasoningEffortLevel(trimmed)) {
+      return { effort: trimmed, source: "env" };
+    }
+  }
+  if (options.globalEffort !== undefined && isReasoningEffortLevel(options.globalEffort)) {
+    return { effort: options.globalEffort, source: "global" };
+  }
+  return { effort: "off", source: "default" };
 }
 
 /**
@@ -1374,6 +1498,11 @@ async function runAgentTurnCore(
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   const maxOutputTokens =
     validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
+  // flow 268 T16: `deps.reasoningEffort` is already fully resolved by the
+  // caller (see its doc comment) — "off"/absent both mean "not requested",
+  // and only then is `request.options` omitted entirely (see `baseRequest`/
+  // `finishWithBudgetSummary`'s request below).
+  const reasoningEffort = deps.reasoningEffort;
   // Flow 265 (AC7): a turn the shell started because a task finished has no
   // operator line — its INPUT is the notification itself. Pushing `userLine`
   // here would put an empty `user` message in history, which is both a lie
@@ -1567,6 +1696,9 @@ async function runAgentTurnCore(
       systemInstruction: deps.systemInstruction,
       messages: [...history],
       tools: toolDefs,
+      ...(reasoningEffort !== undefined && reasoningEffort !== "off"
+        ? { options: { reasoning: reasoningEffort } }
+        : {}),
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
       stream: true,
       requestId: deps.idSeq(),
@@ -2260,6 +2392,8 @@ async function finishWithBudgetSummary(
   const now = deps.now ?? (() => new Date().toISOString());
   const maxOutputTokens =
     validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
+  // flow 268 T16: same already-resolved field `runAgentTurnCore` reads — see its comment.
+  const reasoningEffort = deps.reasoningEffort;
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const why = `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
@@ -2292,6 +2426,9 @@ async function finishWithBudgetSummary(
     systemInstruction: deps.systemInstruction,
     messages: [...history],
     // No tools — force a text wrap-up.
+    ...(reasoningEffort !== undefined && reasoningEffort !== "off"
+      ? { options: { reasoning: reasoningEffort } }
+      : {}),
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
     stream: true,
     requestId: deps.idSeq(),

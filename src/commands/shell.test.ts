@@ -1319,10 +1319,11 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
 describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sweep wiring (source-text audit)", () => {
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
-  // Widened from 4200 (flow 173) to fit T23's `maxOutputTokens` resolution
-  // added ahead of `sweepBackgroundJobs` in the same `agentDepsBase` object —
-  // still just past that field, well short of the next declaration.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 4600);
+  // Widened from 4200 (flow 173) to 4600 to fit T23's `maxOutputTokens`
+  // resolution, then to 5300 to fit T16's `reasoningEffort` resolution —
+  // both added ahead of `sweepBackgroundJobs` in the same `agentDepsBase`
+  // object — still just past that field, well short of the next declaration.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 5300);
   const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
   const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
 
@@ -1553,5 +1554,57 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (source-text 
     expect(shellSourceAc7Wake).toContain("resolveMaxAutoWake");
     // A counter that is only ever incremented is not a cap: pin the reset too.
     expect(shellSourceAc7Wake).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
+  });
+});
+
+// --- flow 268 T16 (AC11): shell.ts readline /reasoning wiring -------------
+//
+// `runAgentRepl` is explicitly "NOT unit-tested" (its own doc comment, see
+// the SLATE-3a/flow-265-AC7 audits above) and has no injection seam for its
+// command dispatch loop, so this follows the exact precedent already set in
+// this file: `readFileSync` the real source and assert on literals. The
+// RESOLVER (`resolveReasoningEffort`/`describeReasoningEffortSource`) and
+// each adapter's clamp are proven directly in `agent.test.ts` and the
+// per-provider `*-reasoning.test.ts` files; this block only proves the
+// readline surface actually wires a `/reasoning` command in.
+describe("flow 268 T16 — shell.ts readline /reasoning wiring (source-text audit)", () => {
+  const reasoningShellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = reasoningShellSource.indexOf("async function runAgentRepl(");
+  const replBodyReasoning = reasoningShellSource.slice(replStart);
+  const branchIndex = replBodyReasoning.indexOf('command === "/reasoning"');
+  const branchBlock = replBodyReasoning.slice(branchIndex, branchIndex + 2_400);
+
+  test("the command dispatch loop has a /reasoning branch", () => {
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("no arg shows the resolved effort and its source via describeReasoningEffortSource", () => {
+    expect(branchBlock).toContain("describeReasoningEffortSource(");
+    expect(branchBlock).toContain("sessionOverride: reasoningSessionOverride");
+  });
+
+  test("an invalid level is rejected via isReasoningEffortLevel before anything is mutated", () => {
+    expect(branchBlock).toContain("isReasoningEffortLevel(wanted)");
+  });
+
+  test("a valid level mutates the live deps.reasoningEffort directly (no rebuild exists for readline agent mode)", () => {
+    expect(branchBlock).toContain("deps.reasoningEffort = wanted");
+  });
+
+  test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted })");
+  });
+
+  test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {
+    expect(branchBlock).toContain("providerByName(deps.providerId)");
+    expect(branchBlock).toContain("compatProvider.reasoning === undefined");
+    expect(branchBlock).toMatch(/no effect for it/);
+  });
+
+  test("/reasoning is advertised in the readline agent REPL's own help subset", () => {
+    expect(reasoningShellSource).toContain("READLINE_AGENT_COMMANDS");
+    const listStart = reasoningShellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
+    const listEnd = reasoningShellSource.indexOf("];", listStart);
+    expect(reasoningShellSource.slice(listStart, listEnd)).toContain('"/reasoning"');
   });
 });

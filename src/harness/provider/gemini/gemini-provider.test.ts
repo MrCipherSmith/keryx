@@ -563,6 +563,30 @@ describe("AC10 — generationConfig.thinkingConfig is set per model family and r
     expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
   });
 
+  test('flow 268 T16: gemini-3* model + effort "minimal" -> thinkingLevel "low" (nearest supported)', async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "minimal" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "low" });
+  });
+
+  test('flow 268 T16: gemini-3* model + effort "xhigh"/"max" -> thinkingLevel "high" (nearest supported)', async () => {
+    const xhigh = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "xhigh" } });
+    expect(xhigh.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+    const max = await generationConfigFor({ modelId: "gemini-3-flash", options: { reasoning: "max" } });
+    expect(max.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+  });
+
+  test('flow 268 T16: gemini-2.5* model + effort "minimal" -> thinkingBudget 1024 (nearest supported: low)', async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "minimal" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 1024 });
+  });
+
+  test('flow 268 T16: gemini-2.5* model + effort "xhigh"/"max" -> thinkingBudget 24576 (nearest supported: high)', async () => {
+    const xhigh = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "xhigh" } });
+    expect(xhigh.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+    const max = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "max" } });
+    expect(max.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+  });
+
   test("a model id outside both known families falls back to the thinkingBudget family", async () => {
     const generationConfig = await generationConfigFor({ modelId: "gemini-1.5-pro", options: { reasoning: "high" } });
     expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });

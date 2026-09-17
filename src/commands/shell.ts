@@ -78,7 +78,7 @@ import {
   isSessionInfoCommand,
 } from "../tui/session-info";
 import { loadSessionLimits } from "./model-limits";
-import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
@@ -113,9 +113,13 @@ import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
+  describeReasoningEffortSource,
+  isReasoningEffortLevel,
+  REASONING_EFFORT_LEVELS,
   resolveAgentMaxOutputTokens,
   resolveAgentMaxRounds,
   resolveMaxAutoWake,
+  resolveReasoningEffort,
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
@@ -184,6 +188,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/flows",
   "/theme",
   "/mode",
+  "/reasoning",
   "/exit",
 ];
 
@@ -1291,6 +1296,12 @@ async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  // Flow 268 T16 (AC11): this readline session's own `/reasoning` override —
+  // local to THIS function (unlike the TUI, readline agent mode has no
+  // `/model`-style deps rebuild, so there is no second `AgentDeps` build that
+  // would need to see it; the `/reasoning` handler below mutates `deps.
+  // reasoningEffort` directly for the live object instead).
+  let reasoningSessionOverride: string | undefined;
   agentIo.onAutoApproved = (tool, input, meta) => {
     stopSpinner();
     // NOT dimmed (see `AgentIO.onAutoApproved`'s docstring): unlike the shell
@@ -1613,6 +1624,44 @@ async function runAgentRepl(
               const saved = setProjectPermissionMode(sessionCwd, permissionMode);
               agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
             }
+          }
+        }
+      } else if (command === "/reasoning") {
+        // Flow 268 T16 (AC11). No arg: show the effective level and which
+        // precedence tier it came from. With an arg: set the SESSION
+        // override (outranks env/global for the rest of this process) and
+        // persist it to `ShellConfig` so it survives a restart too — same
+        // "session + persisted" shape as `/mode ... save`, minus the opt-in
+        // flag, since there is no per-project default to distinguish here.
+        const wanted = rest.trim();
+        if (wanted.length === 0) {
+          const described = describeReasoningEffortSource({
+            sessionOverride: reasoningSessionOverride,
+            globalEffort: loadShellConfig().reasoningEffort,
+          });
+          agentIo.onSystem?.(
+            `Reasoning effort: ${described.effort} (${described.source})\n` +
+              `Usage: /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>\n`,
+          );
+        } else if (!isReasoningEffortLevel(wanted)) {
+          agentIo.onSystem?.(
+            `Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`,
+          );
+        } else {
+          reasoningSessionOverride = wanted;
+          // `deps` (this function's own `AgentDeps` parameter) is the SAME
+          // object every turn below reads — readline agent mode never
+          // rebuilds it (no `/model`-style deps swap), so mutating this one
+          // field takes effect starting with the very next turn.
+          deps.reasoningEffort = wanted;
+          saveShellConfig({ reasoningEffort: wanted });
+          agentIo.onSystem?.(`Reasoning effort: ${wanted}\n`);
+          const compatProvider = providerByName(deps.providerId);
+          if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
+            agentIo.onSystem?.(
+              `Note: ${deps.providerId} is OpenAI-compatible with no "reasoning" entry — its reasoning is ` +
+                "configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
+            );
           }
         }
       } else if (command === "/search-provider") {
@@ -2158,6 +2207,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     const warnings = await refreshSavedGrants(http, runtime.cacheDir, providerArg === undefined ? undefined : [providerArg]);
     for (const warning of warnings) process.stderr.write(`keryx: ${warning}\n`);
   }
+  // flow 268 T16 (AC11): the `/reasoning <level>` shell command's session
+  // override — shared between the TUI (`makeAgentDeps` below, and the
+  // `setReasoningOverride` threaded through `opts` to `tui-shell.ts`) and the
+  // readline agent REPL (`agentDepsBase` below), since both branches are
+  // sequential code in THIS function, not two separate closures. Outranks
+  // `KERYX_REASONING_EFFORT` and the persisted global setting (see
+  // `resolveReasoningEffort`'s precedence doc) for as long as THIS process
+  // runs; a fresh process instead reads the persisted
+  // `ShellConfig.reasoningEffort` the command also writes, so the choice
+  // survives a restart even though this in-memory override does not.
+  let reasoningSessionOverride: string | undefined;
   const surface = chooseShellSurface(flags, runtime.isTty ?? process.stdout.isTTY === true);
   if (surface !== "readline") {
     const cwd = process.cwd();
@@ -2324,6 +2384,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerMaxOutputTokens: providerByName(sel.provider)?.maxOutputTokens,
           globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
         }),
+        // Precedence: this session's `/reasoning` override (set below, via
+        // `setReasoningOverride`) > KERYX_REASONING_EFFORT env > the
+        // operator's persisted global setting > "off". See
+        // `resolveReasoningEffort`'s doc comment.
+        reasoningEffort: resolveReasoningEffort({
+          sessionOverride: reasoningSessionOverride,
+          globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
+        }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
@@ -2397,6 +2465,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       await (runtime.launchAgent ?? launchTuiAgentShell)({
         detected: tuiDetected,
         makeAgentDeps,
+        // Flow 268 T16 (AC11): the TUI's `/reasoning` command updates THIS
+        // session's override through here, so a later `/model`/`/connect`
+        // rebuild (a fresh `makeAgentDeps` call) resolves the same level.
+        setReasoningOverride: (level) => {
+          reasoningSessionOverride = level;
+        },
         // `/connect` and `/model` re-probe providers fresh.
         redetect,
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
@@ -2620,6 +2694,17 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         maxOutputTokens: resolveAgentMaxOutputTokens({
           providerMaxOutputTokens: providerByName(provider)?.maxOutputTokens,
           globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
+        }),
+        // Same precedence as the TUI's `makeAgentDeps` above. The readline
+        // `/reasoning` handler (inside `runAgentRepl`) mutates `agentDeps.
+        // reasoningEffort` directly for the CURRENT session (this object is
+        // built once and never rebuilt — readline agent mode has no
+        // `/model`-style deps-rebuild path), and also updates
+        // `reasoningSessionOverride` so a value stays consistent if anything
+        // else in this scope ever reads it, plus persists to `ShellConfig`.
+        reasoningEffort: resolveReasoningEffort({
+          sessionOverride: reasoningSessionOverride,
+          globalEffort: loadShellConfig(runtime.cacheDir).reasoningEffort,
         }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
