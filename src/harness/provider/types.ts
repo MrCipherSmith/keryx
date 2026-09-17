@@ -221,6 +221,16 @@ export interface StreamOptions {
   attemptId: string;
   /** Cancellation signal for the attempt. */
   signal?: AbortSignal;
+  /**
+   * Optional per-provider chat-call abort timeout in ms (flow 268), resolved
+   * from `resolveProviderModelParams`. An adapter that honors this races its
+   * own internal timer against `signal` — whichever fires first aborts —
+   * without weakening `signal`'s own independent cancellation. Absent (the
+   * default, unconfigured case) preserves exactly today's caller-signal-only
+   * behavior; not every adapter implements this yet (see
+   * `OpenAiCompatEngine.stream()`).
+   */
+  timeoutMs?: number;
 }
 
 /**

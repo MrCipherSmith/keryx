@@ -31,6 +31,24 @@ export interface CustomCompatProvider {
   models: string[];
   /** Short picker note. */
   note?: string;
+  /**
+   * Default sampling temperature sent on every request to this provider
+   * (flow 268). Absent means no `temperature` is sent — unchanged behavior.
+   */
+  temperature?: number;
+  /**
+   * Default output token cap sent as `budget.maxOutputTokens` for this
+   * provider (flow 268). Absent falls back to the harness-wide default
+   * (`1024`) every call site already uses.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Default abort timeout (ms) for the actual chat/completions call to this
+   * provider (flow 268), independent of the `/models` discovery probe's own
+   * `MODELS_FETCH_TIMEOUT_MS`. Absent means no engine-internal timer — the
+   * caller's own `AbortSignal` is still respected either way.
+   */
+  timeoutMs?: number;
 }
 
 interface LlmProvidersConfig {
@@ -53,18 +71,50 @@ function readJson(file: string): unknown | undefined {
   }
 }
 
+/** Fields validated as finite numbers ONLY when present (never required). `0` is a meaningful temperature. */
+const OPTIONAL_FINITE_NUMBER_FIELDS = ["temperature"] as const;
+/**
+ * Fields validated as finite AND strictly positive when present. Unlike
+ * `temperature`, `0` here is not a real setting: it would request a budget of
+ * zero output tokens (the `?? 1024` request-construction fallback only
+ * triggers on `undefined`, not `0`) or abort every stream instantly.
+ */
+const OPTIONAL_POSITIVE_NUMBER_FIELDS = ["maxOutputTokens", "timeoutMs"] as const;
+
 /** Loose runtime shape guard for hand-edited files (never throws). */
 export function isCustomCompatProvider(value: unknown): value is CustomCompatProvider {
   if (value === null || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
-  return (
-    typeof p.name === "string" &&
-    p.name.length > 0 &&
-    typeof p.baseUrl === "string" &&
-    p.baseUrl.length > 0 &&
-    Array.isArray(p.models) &&
-    p.models.every((m) => typeof m === "string")
-  );
+  if (
+    !(
+      typeof p.name === "string" &&
+      p.name.length > 0 &&
+      typeof p.baseUrl === "string" &&
+      p.baseUrl.length > 0 &&
+      Array.isArray(p.models) &&
+      p.models.every((m) => typeof m === "string")
+    )
+  ) {
+    return false;
+  }
+  // flow 268: `temperature`/`maxOutputTokens`/`timeoutMs` are never required —
+  // a file missing them still validates (AC1) — but a PRESENT value that is
+  // not a finite number silently rejects the whole entry, matching this
+  // guard's existing "never throw on a hand-edited file" contract rather than
+  // accepting a garbage value that would later reach the wire.
+  for (const field of OPTIONAL_FINITE_NUMBER_FIELDS) {
+    const raw = p[field];
+    if (raw !== undefined && !(typeof raw === "number" && Number.isFinite(raw))) {
+      return false;
+    }
+  }
+  for (const field of OPTIONAL_POSITIVE_NUMBER_FIELDS) {
+    const raw = p[field];
+    if (raw !== undefined && !(typeof raw === "number" && Number.isFinite(raw) && raw > 0)) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**

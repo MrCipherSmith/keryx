@@ -9,6 +9,7 @@ import {
   loadShellConfig,
   saveApiKey,
   saveProviderBaseUrl,
+  saveProviderModelParams,
   saveShellConfig,
   shellConfigPath,
 } from "./shell-config";
@@ -87,6 +88,28 @@ test("saveProviderBaseUrl merges endpoint overrides per provider", () => {
   expect(loadShellConfig(dir).baseUrls).toEqual({
     "rapid-mlx": "http://127.0.0.1:8010",
     openrouter: "https://openrouter.ai/api/v1",
+  });
+});
+
+// flow 268 (AC2)
+test("saveProviderModelParams merges per-provider without clobbering other providers' entries", () => {
+  const dir = tempDir();
+  saveProviderModelParams("openrouter", { temperature: 0.2, maxOutputTokens: 4096 }, dir);
+  saveProviderModelParams("deepseek", { timeoutMs: 60_000 }, dir);
+
+  expect(loadShellConfig(dir).modelParams).toEqual({
+    openrouter: { temperature: 0.2, maxOutputTokens: 4096 },
+    deepseek: { timeoutMs: 60_000 },
+  });
+});
+
+test("saveProviderModelParams merges a second patch into the SAME provider's existing entry", () => {
+  const dir = tempDir();
+  saveProviderModelParams("openrouter", { temperature: 0.2 }, dir);
+  saveProviderModelParams("openrouter", { maxOutputTokens: 4096 }, dir);
+
+  expect(loadShellConfig(dir).modelParams).toEqual({
+    openrouter: { temperature: 0.2, maxOutputTokens: 4096 },
   });
 });
 

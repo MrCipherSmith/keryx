@@ -25,12 +25,19 @@ export interface ShellSessionOpts {
   enabled?: boolean;
 }
 
+/** Resolved per-provider sampling/budget/timeout overrides (flow 268). */
+export interface ShellModelParams {
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}
+
 /** Injected dependencies keeping `runShell` deterministic + offline. */
 export interface ShellDeps {
   makeProvider: (name: string, model: string, baseUrl?: string) => ProviderPort;
   clock: () => string;
   idSeq: () => string;
-  initial: { provider: string; model: string; baseUrl?: string };
+  initial: { provider: string; model: string; baseUrl?: string; modelParams?: ShellModelParams };
   /**
    * Bundled detect+pick selector for `/models`, `/provider`, and `/connect`.
    * `/models` passes `{ onlyProvider }`; `/provider` passes no opts (configure);
@@ -41,7 +48,7 @@ export interface ShellDeps {
   selectProviderModel?: (
     io: ShellIO,
     opts?: { onlyProvider?: string; onlyConnected?: boolean },
-  ) => Promise<{ provider: string; model: string; baseUrl?: string }>;
+  ) => Promise<{ provider: string; model: string; baseUrl?: string; modelParams?: ShellModelParams }>;
   /** When set, persist chat turns to a per-project session. */
   session?: ShellSessionOpts;
 }

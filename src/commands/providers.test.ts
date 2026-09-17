@@ -1,4 +1,8 @@
 import { expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { saveCustomCompatProvider, type CustomCompatProvider } from "../lib/provider-config";
 import {
   OPENAI_COMPAT_PROVIDERS,
   fetchOpenAiCompatModels,
@@ -8,6 +12,8 @@ import {
   providerBaseUrlEnvKey,
   resolveProviderBaseUrl,
   resolveModelsForPicker,
+  resolveProviderModelParams,
+  resolveProviderModelParamsByName,
 } from "./providers";
 
 test("registry lists the flow-085 providers with sensible metadata", () => {
@@ -62,6 +68,77 @@ test("provider endpoint override rejects malformed and credential-bearing URLs",
   expect(resolveProviderBaseUrl(rapid!, { KERYX_RAPID_MLX_BASE_URL: "https://user:secret@example.test" })).toBe(
     rapid!.baseUrl,
   );
+});
+
+// flow 268 (AC3, AC4 precedence)
+test("resolveProviderModelParams: absent config -> every field undefined", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(resolveProviderModelParams(rapid!, {})).toEqual({});
+});
+
+test("resolveProviderModelParams: a built-in provider's ShellConfig.modelParams override flows through", () => {
+  const rapid = providerByName("rapid-mlx");
+  expect(rapid).toBeDefined();
+  expect(
+    resolveProviderModelParams(rapid!, { modelParams: { "rapid-mlx": { temperature: 0.2, maxOutputTokens: 4096 } } }),
+  ).toEqual({ temperature: 0.2, maxOutputTokens: 4096 });
+});
+
+test("resolveProviderModelParams: a custom provider's own fields flow through when unconfigured in ShellConfig", () => {
+  const custom: CustomCompatProvider & { name: string } = {
+    name: "internal-qwen",
+    baseUrl: "http://10.110.43.19:8080",
+    models: ["Qwen/Qwen3.5-122B-A10B-FP8"],
+    temperature: 0.3,
+    maxOutputTokens: 2048,
+    timeoutMs: 90_000,
+  };
+  expect(resolveProviderModelParams(custom, {})).toEqual({
+    temperature: 0.3,
+    maxOutputTokens: 2048,
+    timeoutMs: 90_000,
+  });
+});
+
+test("resolveProviderModelParams: a ShellConfig override wins over the custom provider's own fields", () => {
+  const custom: CustomCompatProvider = {
+    name: "internal-qwen",
+    baseUrl: "http://10.110.43.19:8080",
+    models: [],
+    temperature: 0.3,
+  };
+  expect(
+    resolveProviderModelParams(custom, { modelParams: { "internal-qwen": { temperature: 0.9 } } }),
+  ).toEqual({ temperature: 0.9 });
+});
+
+test("resolveProviderModelParamsByName: a name with no OpenAI-compatible registry entry resolves to {} (scope discipline)", () => {
+  expect(resolveProviderModelParamsByName("anthropic", {})).toEqual({});
+  expect(resolveProviderModelParamsByName("fake", {})).toEqual({});
+});
+
+test("resolveProviderModelParamsByName: resolves through for a registered provider name", () => {
+  expect(
+    resolveProviderModelParamsByName("rapid-mlx", { modelParams: { "rapid-mlx": { timeoutMs: 30_000 } } }),
+  ).toEqual({ timeoutMs: 30_000 });
+});
+
+test("resolveProviderModelParamsByName: finds a custom provider's own params under a non-default dir", () => {
+  // Regression: providerByName had no `dir` param at all, so a custom
+  // provider saved under a scoped cache dir (e.g. --config-dir / a sandboxed
+  // run) was never found here — its own temperature/maxOutputTokens/timeoutMs
+  // silently resolved to {} instead of the configured values.
+  const dir = mkdtempSync(path.join(tmpdir(), "keryx-providers-modelparams-"));
+  saveCustomCompatProvider(
+    { name: "internal-qwen", baseUrl: "http://10.110.43.19:8080", models: [], temperature: 0.2, maxOutputTokens: 4096 },
+    dir,
+  );
+  expect(resolveProviderModelParamsByName("internal-qwen", {})).toEqual({});
+  expect(resolveProviderModelParamsByName("internal-qwen", {}, dir)).toEqual({
+    temperature: 0.2,
+    maxOutputTokens: 4096,
+  });
 });
 
 test("rapid-mlx is only available on darwin when platform filtering is applied", () => {

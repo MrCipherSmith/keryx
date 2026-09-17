@@ -398,6 +398,37 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
+    // flow 268 (AC5): an internal timer races the caller's own `opts.signal` —
+    // whichever fires first aborts the in-flight request — mirroring
+    // `timedFetch` (`commands/model-limits.ts`) but ALSO forwarding an
+    // external signal into the combined one, which that helper never
+    // receives. Absent `opts.timeoutMs` (the default, unconfigured case),
+    // `signal` is `opts.signal` verbatim and behavior is byte-identical to
+    // before this flow.
+    let signal = opts.signal;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    let timeoutController: AbortController | undefined;
+    const onExternalAbort = (): void => timeoutController?.abort();
+    if (opts.timeoutMs !== undefined) {
+      timeoutController = new AbortController();
+      if (opts.signal !== undefined) {
+        if (opts.signal.aborted) {
+          timeoutController.abort();
+        } else {
+          opts.signal.addEventListener("abort", onExternalAbort);
+        }
+      }
+      timeoutTimer = setTimeout(() => timeoutController?.abort(), opts.timeoutMs);
+      signal = timeoutController.signal;
+    }
+    const cleanupTimeout = (): void => {
+      if (timeoutTimer !== undefined) {
+        clearTimeout(timeoutTimer);
+      }
+      opts.signal?.removeEventListener("abort", onExternalAbort);
+    };
+
+    try {
     const url = `${baseUrl.replace(/\/+$/, "")}${grant.chatPath ?? "/v1/chat/completions"}`;
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemInstruction.length > 0) {
@@ -448,6 +479,15 @@ export class OpenAiCompatEngine implements ProviderPort {
       // reports no token usage whatsoever.
       ...(this.deps.grant?.streamUsage === true ? { stream_options: { include_usage: true } } : {}),
       messages,
+      // flow 268: `budget.maxOutputTokens` is a required, always-populated
+      // field on every `NormalizedRequest` (every call site defaults it to
+      // `1024`), but this engine used to silently drop it rather than
+      // serialize it — always send it, unconditionally, so a configured
+      // override actually reaches the wire. `temperature` stays
+      // conditional: it is genuinely absent (not merely defaulted) on every
+      // request until an operator configures one (AC3).
+      max_tokens: request.budget.maxOutputTokens,
+      ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({
@@ -474,14 +514,14 @@ export class OpenAiCompatEngine implements ProviderPort {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
-      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      ...(signal !== undefined ? { signal } : {}),
     };
 
     let response: Response;
     try {
       response = await this.deps.fetch(url, init);
     } catch (cause) {
-      if (opts.signal?.aborted === true) {
+      if (signal?.aborted === true) {
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
         return;
       }
@@ -522,7 +562,7 @@ export class OpenAiCompatEngine implements ProviderPort {
       bodyText = await response.text();
     } catch (cause) {
       const aborted =
-        opts.signal?.aborted === true ||
+        signal?.aborted === true ||
         (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
       if (aborted) {
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
@@ -745,18 +785,21 @@ export class OpenAiCompatEngine implements ProviderPort {
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output (AC1).
     for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
+      if (signal?.aborted === true) {
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
         return;
       }
       yield stamp(body);
     }
-    if (opts.signal?.aborted === true) {
+    if (signal?.aborted === true) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }
     if (malformed !== undefined) {
       yield stamp({ kind: "provider_error", error: malformed });
+    }
+    } finally {
+      cleanupTimeout();
     }
   }
 }
