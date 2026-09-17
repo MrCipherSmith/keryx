@@ -757,6 +757,25 @@ export class OpenAiCompatEngine implements ProviderPort {
       }
     };
 
+    // `format: "split"`: MiniMax's split-mode stream was observed (live smoke
+    // test, 2026-09-17, flow 268 T25) to send a literal `{"content":"</think>"}`
+    // delta right before the `tool_calls` deltas even though reasoning already
+    // arrived out-of-band via `reasoning_content`/`reasoning_details` — that
+    // stray close tag was leaking into the answer as a visible `</think>`
+    // `text_delta`. Strip it the same way `fieldTagStripper` strips a stray
+    // tag out of the reasoning field, but with its OWN instance: this one is
+    // fed `delta.content` (the text stream), never the reasoning field, and
+    // the two must not share hold-back state. NEVER applied to `rawContentRaw`
+    // below, which stays the byte-exact T12 replay source.
+    const contentTagStripper = grant.reasoning?.format === "split" ? new FieldThinkTagStripper() : undefined;
+    const flushContentTagStripper = (): void => {
+      if (contentTagStripper === undefined) return;
+      const rest = contentTagStripper.flush();
+      if (rest.length > 0) {
+        bodies.push({ kind: "text_delta", text: rest });
+      }
+    };
+
     // Compat replay accumulation (flow 268 T12 / AC7): populated ONLY for the
     // mode that needs it, across the whole round, and reported ONCE via
     // `emitReplayEvents()` at the same normal-termination points
@@ -939,6 +958,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         if (trimmed === "[DONE]") {
           flushThinkTagParser();
           flushFieldTagStripper();
+          flushContentTagStripper();
           emitReplayEvents();
           flushPendingToolEnds();
           if (sawStart) {
@@ -1055,6 +1075,15 @@ export class OpenAiCompatEngine implements ProviderPort {
             // INSIDE `delta.content` as `<think>…</think>` — route it through
             // the parser instead of yielding it as `text_delta` verbatim.
             pushThinkSegments(thinkTagParser.push(content));
+          } else if (contentTagStripper !== undefined) {
+            // `format: "split"`: strip a stray literal `<think>`/`</think>`
+            // tag out of the content stream (T25) before it reaches the
+            // caller as answer text; an all-tag chunk strips down to nothing
+            // and must not surface as an empty `text_delta`.
+            const stripped = contentTagStripper.push(content);
+            if (stripped.length > 0) {
+              bodies.push({ kind: "text_delta", text: stripped });
+            }
           } else {
             bodies.push({ kind: "text_delta", text: content });
           }
@@ -1169,6 +1198,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         if (sawStart && sawFinish) {
           flushThinkTagParser();
           flushFieldTagStripper();
+          flushContentTagStripper();
           emitReplayEvents();
           bodies.push({ kind: "model_end" });
         }

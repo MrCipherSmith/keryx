@@ -155,7 +155,9 @@ describe("T24 — format: inline-tags ignores reasoning/reasoning_content/reason
 
     const reasoning = textOf(events, "reasoning_delta");
     const text = textOf(events, "text_delta");
-    expect(reasoning).toBe("\nThe user just manner.Hi\n");
+    // The leading "\n" right after "<think>" is trimmed (flow 268 T25): only
+    // the trailing "\n" immediately before "</think>" survives here.
+    expect(reasoning).toBe("The user just manner.Hi\n");
     expect(text).toBe("there! \u{1F44B}");
     // The bug: the "reasoning" field's raw text used to surface a SECOND time
     // alongside the inline-tags segments. Every occurrence of each phrase is
@@ -221,6 +223,110 @@ describe("T24 — field-sourced reasoning strips a leaked <think>/</think> tag",
     const events = await collectEvents(provider, "field-strip-empty-after-strip");
 
     expect(events.some((e) => e.kind === "reasoning_delta")).toBe(false);
+  });
+});
+
+// --- T25: MiniMax split-mode stray </think> leaking into text_delta -----
+//
+// Live smoke evidence (2026-09-17, MiniMax-M3, `reasoning_split: true`,
+// request with `tools`): the stream sends reasoning via
+// `reasoning_content`/`reasoning_details`, then a SEPARATE delta
+// `{"content":"</think>"}` right before the `tool_calls` deltas, then
+// `finish_reason: "tool_calls"`. Under `format: "split"`, `delta.content`
+// must be stripped of a leaked `<think>`/`</think>` tag the same way the
+// reasoning field already is (T24) — via its OWN `FieldThinkTagStripper`
+// instance, so a stray `</think>` never surfaces as `text_delta`.
+describe("T25 — format: split strips a leaked <think>/</think> tag out of delta.content", () => {
+  test("a lone </think> content delta right before tool_calls yields no text_delta and leaves tool calls intact", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"Thinking it through."}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"</think>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":""}}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\"city\\":\\"NYC\\"}"}}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      ...baseGrant,
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "split-stray-close-before-tool-calls");
+
+    expect(textOf(events, "reasoning_delta")).toBe("Thinking it through.");
+    expect(events.some((e) => e.kind === "text_delta")).toBe(false);
+
+    const start = events.find((e) => e.kind === "tool_call_start");
+    expect(start?.toolCallId).toBe("call_1");
+    expect(start?.toolName).toBe("get_weather");
+    const end = events.find((e) => e.kind === "tool_call_end");
+    expect(end?.toolCallId).toBe("call_1");
+    expect(end?.input).toBe('{"city":"NYC"}');
+    expect(events[events.length - 1]?.kind).toBe("model_end");
+  });
+
+  test("the same </think> split across two content deltas is still fully stripped", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"Thinking it through."}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"</thi"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"nk>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"get_weather","arguments":""}}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      ...baseGrant,
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "split-stray-close-split-across-chunks");
+
+    expect(events.some((e) => e.kind === "text_delta")).toBe(false);
+    expect(events.find((e) => e.kind === "tool_call_start")?.toolCallId).toBe("call_1");
+  });
+
+  test("answer text after the tag is unaffected in a non-tool split stream", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"Thinking it through."}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"</think>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Hello there!"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      ...baseGrant,
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "split-answer-after-tag");
+
+    expect(textOf(events, "reasoning_delta")).toBe("Thinking it through.");
+    expect(textOf(events, "text_delta")).toBe("Hello there!");
+    expect(events[events.length - 1]?.kind).toBe("model_end");
+  });
+
+  test("rawContentRaw replay accumulation still sees the raw, unstripped content", async () => {
+    // `emitReplayEvents()`'s minimax `raw_content` fallback only fires when
+    // the raw stream literally contains "<think>" (T12 gate); a lone
+    // "</think>" doesn't, so this uses a full tag pair in one content delta
+    // to exercise the gate while proving accumulation happens BEFORE the
+    // stripper runs (T25 constraint: `rawContentRaw` must stay byte-exact).
+    const sse =
+      'data: {"choices":[{"delta":{"content":"<think>garbage</think>Answer"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      ...baseGrant,
+      reasoning: { format: "split", requestParams: { reasoning_split: true }, replay: "minimax" },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "split-replay-raw-content-unstripped");
+
+    expect(textOf(events, "text_delta")).toBe("garbageAnswer");
+    const replay = events.find((e) => e.kind === "reasoning_replay");
+    expect(replay?.replay?.kind).toBe("raw_content");
+    expect(replay?.replay?.data).toBe("<think>garbage</think>Answer");
   });
 });
 

@@ -99,6 +99,48 @@ describe("ThinkTagParser — trim after close", () => {
   });
 });
 
+describe("ThinkTagParser — trim after open (flow 268 T25)", () => {
+  test("leading newline right after <think> is trimmed from the first reasoning segment only", () => {
+    // Live evidence: MiniMax-M3 opens content with "<think>\nThe user …" — the
+    // newline separating the tag from the first thought line must not survive
+    // into the reasoning text.
+    expect(drive(["<think>\nThe user asked something.</think>Answer"])).toEqual([
+      { kind: "reasoning", text: "The user asked something." },
+      { kind: "text", text: "Answer" },
+    ]);
+  });
+
+  test("the open tag and its newline arriving in separate chunks are still trimmed together", () => {
+    expect(drive(["<think>", "\nText</think>Answer"])).toEqual([
+      { kind: "reasoning", text: "Text" },
+      { kind: "text", text: "Answer" },
+    ]);
+  });
+
+  test("nothing but newlines after the open tag across several pushes keeps waiting, then trims", () => {
+    expect(drive(["<think>", "\n", "\n", "Text</think>Answer"])).toEqual([
+      { kind: "reasoning", text: "Text" },
+      { kind: "text", text: "Answer" },
+    ]);
+  });
+
+  test("a second open tag re-arms the trim independently of the first block's trim", () => {
+    expect(drive(["<think>\nA</think>B<think>\nC</think>D"])).toEqual([
+      { kind: "reasoning", text: "A" },
+      { kind: "text", text: "B" },
+      { kind: "reasoning", text: "C" },
+      { kind: "text", text: "D" },
+    ]);
+  });
+
+  test("no newline after <think>: reasoning text is emitted unchanged", () => {
+    expect(drive(["<think>NoNewline</think>Answer"])).toEqual([
+      { kind: "reasoning", text: "NoNewline" },
+      { kind: "text", text: "Answer" },
+    ]);
+  });
+});
+
 describe("ThinkTagParser — tag split across chunks", () => {
   test("<think> split at every position yields the same result as one push", () => {
     const whole = "<think>A</think>B";

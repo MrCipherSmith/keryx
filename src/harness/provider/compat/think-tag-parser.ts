@@ -33,7 +33,11 @@
 //    parser tries to model; MiniMax does not emit them.
 //  - The first text segment immediately after a `</think>` close has its
 //    leading newlines trimmed (answers commonly start with a blank line
-//    right after the model's closing tag); nothing else is ever trimmed.
+//    right after the model's closing tag). Symmetrically, the first
+//    reasoning segment immediately after a `<think>` open has its leading
+//    newlines trimmed too (flow 268 T25 live evidence: MiniMax-M3 opens
+//    `"<think>\nThe user …"`, which otherwise leaves the thought block's
+//    first line blank). Nothing else is ever trimmed.
 export type ThinkTagSegmentKind = "reasoning" | "text";
 
 export interface ThinkTagSegment {
@@ -67,6 +71,7 @@ export class ThinkTagParser {
   private mode: ThinkTagSegmentKind = "text";
   private pending = "";
   private trimNextText = false;
+  private trimNextReasoning = false;
 
   /** Feed the next content chunk; returns the segments it resolves, in order. */
   push(chunk: string): ThinkTagSegment[] {
@@ -101,6 +106,12 @@ export class ThinkTagParser {
 
       if (tag === OPEN_TAG) {
         this.mode = "reasoning";
+        // Live evidence (MiniMax-M3, 2026-09-17, flow 268 T25): content opens
+        // `"<think>\nThe user …"` — the leading newline right after the open
+        // tag is not part of the thought, it just separates the tag from the
+        // text. Mirror the post-close trim below so the reasoning block's
+        // first line isn't blank.
+        this.trimNextReasoning = true;
         continue;
       }
       // tag === CLOSE_TAG: a real close (reasoning -> text) re-enters text
@@ -133,6 +144,18 @@ export class ThinkTagParser {
       }
       this.trimNextText = false;
       segments.push({ kind: "text", text: trimmed });
+      return;
+    }
+    if (this.mode === "reasoning" && this.trimNextReasoning) {
+      const trimmed = content.replace(/^(?:\r\n|\n)+/, "");
+      if (trimmed.length === 0) {
+        // Still nothing but newlines since the open tag — keep waiting for
+        // the first real thought text so it gets trimmed too (the newline
+        // may arrive in a later chunk than the tag itself).
+        return;
+      }
+      this.trimNextReasoning = false;
+      segments.push({ kind: "reasoning", text: trimmed });
       return;
     }
     segments.push({ kind: this.mode, text: content });
