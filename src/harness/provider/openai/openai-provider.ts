@@ -49,6 +49,18 @@ export interface OpenAiProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: OpenAiCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the API accepted but never started
+   * answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link OpenAiProvider.descriptorDocument}. */
@@ -268,6 +280,64 @@ interface PendingToolCall {
   arguments: string;
 }
 
+/** Default first-byte / idle stream deadline (flow 268 T5), overridable via {@link OpenAiProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("openai-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
+}
+
 /**
  * Thin OpenAI Responses-API {@link ProviderPort}. Constructed with an
  * injected `fetch` and an optional explicit capability `grant`; `stream()`
@@ -435,34 +505,20 @@ export class OpenAiProvider implements ProviderPort {
       return;
     }
 
-    // Happy path: read the SSE body (offline, fully in-memory) and normalize.
-    //
-    // Guarded body read (mirrors the AnthropicProvider/compat-engine fix): an
-    // abort mid-read yields the SAME terminal `cancelled` error the fetch-level
-    // abort path yields; any other read-time failure fails closed as
-    // `malformed`. No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        opts.signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: redact(`OpenAI SSE body read failed: ${String(cause)}`),
-      });
-      return;
-    }
-
-    // Zero-byte body: a 200 with no SSE bytes never sets `sawStart` and would
-    // otherwise yield nothing — fail closed with a terminal `malformed`.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T5): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta`/`reasoning_delta`
+    // while the model is still generating rather than only once the
+    // connection closes. Two independent deadlines guard a stalled
+    // connection: `firstByteTimeoutMs` (no byte at all since the response
+    // headers arrived) and `idleTimeoutMs` (no further chunk since the last
+    // one) — both default to 120s, configurable via `deps`. A timeout cancels
+    // the reader and yields exactly one retryable `unavailable`
+    // provider_error, never a model_end. An abort mid-read still fails closed
+    // to the SAME terminal `cancelled` error the fetch()-level abort path
+    // yields (flow-019 contract).
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -471,233 +527,325 @@ export class OpenAiProvider implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     const pendingTools = new Map<string, PendingToolCall>();
     let sawStart = false;
     let sawCompleted = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
     let terminalError: NormalizedError | undefined;
 
-    for (const record of records) {
-      let parsed: unknown;
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
       try {
-        parsed = JSON.parse(record.data);
-      } catch {
-        malformed = {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          opts.signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
           kind: "malformed",
           retryable: retryableFor("malformed", false),
-          message: redact("OpenAI SSE data line was not valid JSON"),
-        };
-        break;
+          message: redact(`OpenAI SSE body read failed: ${String(cause)}`),
+        });
+        return;
       }
-      const data = asRecord(parsed);
-      const eventType = asString(data.type) ?? asString(record.event);
 
-      switch (eventType) {
-        case "response.created": {
-          // Bookkeeping only — `model_start` is emitted on the first REAL
-          // content/tool event below, mirroring the compat engine's "first
-          // chunk seen" convention rather than firing on this event, which
-          // can precede a request that ultimately yields nothing.
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `OpenAI stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const chunkText = decoder.decode(value, { stream: true });
+      for (const record of parser.push(chunkText)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: redact("OpenAI SSE data line was not valid JSON"),
+          };
           break;
         }
-        case "response.output_item.added": {
-          const item = asRecord(data.item);
-          if (asString(item.type) === "function_call") {
+        const data = asRecord(parsed);
+        const eventType = asString(data.type) ?? asString(record.event);
+
+        switch (eventType) {
+          case "response.created": {
+            // Bookkeeping only — `model_start` is emitted on the first REAL
+            // content/tool event below, mirroring the compat engine's "first
+            // chunk seen" convention rather than firing on this event, which
+            // can precede a request that ultimately yields nothing.
+            break;
+          }
+          case "response.output_item.added": {
+            const item = asRecord(data.item);
+            if (asString(item.type) === "function_call") {
+              if (!sawStart) {
+                sawStart = true;
+                bodies.push({ kind: "model_start" });
+              }
+              const itemId = asString(data.item_id) ?? asString(item.id) ?? "";
+              // `call_id`, NOT `id`, is the correlation key OpenAI actually uses
+              // (confirmed via research, flow 183 T6) — `id` is the item's own
+              // identity, `call_id` is what a later `function_call_output` item
+              // must reference to answer this call.
+              const callId = asString(item.call_id) ?? itemId;
+              const toolName = asString(item.name);
+              pendingTools.set(itemId, { callId, name: toolName ?? "", arguments: asString(item.arguments) ?? "" });
+              const startBody: EventBody = { kind: "tool_call_start", toolCallId: callId };
+              if (toolName !== undefined) {
+                startBody.toolName = toolName;
+              }
+              bodies.push(startBody);
+            }
+            break;
+          }
+          case "response.output_text.delta": {
             if (!sawStart) {
               sawStart = true;
               bodies.push({ kind: "model_start" });
             }
-            const itemId = asString(data.item_id) ?? asString(item.id) ?? "";
-            // `call_id`, NOT `id`, is the correlation key OpenAI actually uses
-            // (confirmed via research, flow 183 T6) — `id` is the item's own
-            // identity, `call_id` is what a later `function_call_output` item
-            // must reference to answer this call.
-            const callId = asString(item.call_id) ?? itemId;
-            const toolName = asString(item.name);
-            pendingTools.set(itemId, { callId, name: toolName ?? "", arguments: asString(item.arguments) ?? "" });
-            const startBody: EventBody = { kind: "tool_call_start", toolCallId: callId };
-            if (toolName !== undefined) {
-              startBody.toolName = toolName;
+            const text = asString(data.delta);
+            const body: EventBody = { kind: "text_delta" };
+            if (text !== undefined) {
+              body.text = text;
             }
-            bodies.push(startBody);
+            bodies.push(body);
+            break;
           }
-          break;
-        }
-        case "response.output_text.delta": {
-          if (!sawStart) {
-            sawStart = true;
-            bodies.push({ kind: "model_start" });
+          case "response.reasoning_summary_text.delta": {
+            if (!sawStart) {
+              sawStart = true;
+              bodies.push({ kind: "model_start" });
+            }
+            const text = asString(data.delta);
+            if (text !== undefined && text.length > 0) {
+              bodies.push({ kind: "reasoning_delta", text });
+            }
+            break;
           }
-          const text = asString(data.delta);
-          const body: EventBody = { kind: "text_delta" };
-          if (text !== undefined) {
-            body.text = text;
-          }
-          bodies.push(body);
-          break;
-        }
-        case "response.reasoning_summary_text.delta": {
-          if (!sawStart) {
-            sawStart = true;
-            bodies.push({ kind: "model_start" });
-          }
-          const text = asString(data.delta);
-          if (text !== undefined && text.length > 0) {
-            bodies.push({ kind: "reasoning_delta", text });
-          }
-          break;
-        }
-        case "response.function_call_arguments.delta": {
-          const itemId = asString(data.item_id) ?? "";
-          const fragment = asString(data.delta) ?? "";
-          const pending = pendingTools.get(itemId);
-          const toolCallId = pending?.callId ?? itemId;
-          if (pending !== undefined) {
-            pending.arguments += fragment;
-          }
-          if (fragment.length > 0) {
-            bodies.push({ kind: "tool_call_delta", toolCallId, inputDelta: fragment });
-          }
-          break;
-        }
-        case "response.function_call_arguments.done": {
-          const itemId = asString(data.item_id) ?? "";
-          const pending = pendingTools.get(itemId);
-          const fullArguments = asString(data.arguments) ?? pending?.arguments ?? "";
-          const toolCallId = pending?.callId ?? itemId;
-          bodies.push({ kind: "tool_call_end", toolCallId, input: fullArguments });
-          pendingTools.delete(itemId);
-          break;
-        }
-        case "response.output_item.done": {
-          // A `function_call` item's completion is already handled by
-          // `response.function_call_arguments.done` above; this event is a
-          // defensive fallback for a call whose `arguments.done` never
-          // arrived (e.g. a zero-argument call some models skip the delta
-          // for) so `tool_call_end` is still guaranteed.
-          const item = asRecord(data.item);
-          if (asString(item.type) === "function_call") {
-            const itemId = asString(data.item_id) ?? asString(item.id) ?? "";
+          case "response.function_call_arguments.delta": {
+            const itemId = asString(data.item_id) ?? "";
+            const fragment = asString(data.delta) ?? "";
             const pending = pendingTools.get(itemId);
+            const toolCallId = pending?.callId ?? itemId;
             if (pending !== undefined) {
-              const fullArguments = asString(item.arguments) ?? pending.arguments;
-              bodies.push({ kind: "tool_call_end", toolCallId: pending.callId, input: fullArguments });
-              pendingTools.delete(itemId);
+              pending.arguments += fragment;
             }
+            if (fragment.length > 0) {
+              bodies.push({ kind: "tool_call_delta", toolCallId, inputDelta: fragment });
+            }
+            break;
           }
+          case "response.function_call_arguments.done": {
+            const itemId = asString(data.item_id) ?? "";
+            const pending = pendingTools.get(itemId);
+            const fullArguments = asString(data.arguments) ?? pending?.arguments ?? "";
+            const toolCallId = pending?.callId ?? itemId;
+            bodies.push({ kind: "tool_call_end", toolCallId, input: fullArguments });
+            pendingTools.delete(itemId);
+            break;
+          }
+          case "response.output_item.done": {
+            // A `function_call` item's completion is already handled by
+            // `response.function_call_arguments.done` above; this event is a
+            // defensive fallback for a call whose `arguments.done` never
+            // arrived (e.g. a zero-argument call some models skip the delta
+            // for) so `tool_call_end` is still guaranteed.
+            const item = asRecord(data.item);
+            if (asString(item.type) === "function_call") {
+              const itemId = asString(data.item_id) ?? asString(item.id) ?? "";
+              const pending = pendingTools.get(itemId);
+              if (pending !== undefined) {
+                const fullArguments = asString(item.arguments) ?? pending.arguments;
+                bodies.push({ kind: "tool_call_end", toolCallId: pending.callId, input: fullArguments });
+                pendingTools.delete(itemId);
+              }
+            }
+            break;
+          }
+          case "response.completed": {
+            sawCompleted = true;
+            const usage = asRecord(asRecord(data.response).usage);
+            const inputTokens = asNumber(usage.input_tokens);
+            const outputTokens = asNumber(usage.output_tokens);
+            const totalTokens = asNumber(usage.total_tokens);
+            const reasoningTokens = asNumber(asRecord(usage.output_tokens_details).reasoning_tokens);
+            const usageBody: EventBody = {
+              kind: "usage_update",
+              usage: mergeUsage(inputTokens, outputTokens, totalTokens),
+            };
+            if (reasoningTokens !== undefined) {
+              usageBody.unknownExtensions = { "openai.reasoning_tokens": reasoningTokens };
+            }
+            bodies.push(usageBody);
+            bodies.push({ kind: "model_end" });
+            break;
+          }
+          case "response.failed":
+          case "response.incomplete": {
+            const fields = extractErrorFields(asRecord(data.response));
+            const code = fields.code;
+            let kind: ProviderErrorKind = "unknown";
+            if (code === "context_length_exceeded") {
+              kind = "context_overflow";
+            } else if (code !== undefined && code.length > 0) {
+              kind = "invalid_request";
+            }
+            let message = fields.message;
+            if (message === undefined || message.length === 0) {
+              // Defensive, per research: a documented bug means context-overflow
+              // on this streaming path can produce a terminal error with an
+              // EMPTY message. Never surface an empty string.
+              message =
+                kind === "context_overflow"
+                  ? "OpenAI Responses API returned an error with no message; likely context-length overflow"
+                  : "OpenAI Responses API returned an error with no message";
+            }
+            terminalError = { kind, retryable: retryableFor(kind, false), message: redact(message) };
+            break;
+          }
+          case "error": {
+            const fields = extractErrorFields(data);
+            const code = fields.code;
+            let kind: ProviderErrorKind = "unknown";
+            if (code === "context_length_exceeded") {
+              kind = "context_overflow";
+            } else if (code !== undefined && code.length > 0) {
+              kind = "invalid_request";
+            }
+            let message = fields.message;
+            if (message === undefined || message.length === 0) {
+              // Defensive, per research: the documented empty-`message` bug on
+              // this terminal `error` event, most commonly triggered by
+              // context-length overflow. Never surface an empty string.
+              message =
+                kind === "context_overflow"
+                  ? "OpenAI Responses API returned an error with no message; likely context-length overflow"
+                  : "OpenAI Responses API returned an error with no message; likely context-length overflow (unconfirmed cause)";
+            }
+            terminalError = { kind, retryable: retryableFor(kind, false), message: redact(message) };
+            break;
+          }
+          default:
+            // `response.in_progress`, `response.content_part.added`/`.done`,
+            // and any other unrecognized event type carry no neutral mapping.
+            break;
+        }
+        if (terminalError !== undefined) {
           break;
         }
-        case "response.completed": {
-          sawCompleted = true;
-          const usage = asRecord(asRecord(data.response).usage);
-          const inputTokens = asNumber(usage.input_tokens);
-          const outputTokens = asNumber(usage.output_tokens);
-          const totalTokens = asNumber(usage.total_tokens);
-          const reasoningTokens = asNumber(asRecord(usage.output_tokens_details).reasoning_tokens);
-          const usageBody: EventBody = {
-            kind: "usage_update",
-            usage: mergeUsage(inputTokens, outputTokens, totalTokens),
-          };
-          if (reasoningTokens !== undefined) {
-            usageBody.unknownExtensions = { "openai.reasoning_tokens": reasoningTokens };
-          }
-          bodies.push(usageBody);
-          bodies.push({ kind: "model_end" });
-          break;
-        }
-        case "response.failed":
-        case "response.incomplete": {
-          const fields = extractErrorFields(asRecord(data.response));
-          const code = fields.code;
-          let kind: ProviderErrorKind = "unknown";
-          if (code === "context_length_exceeded") {
-            kind = "context_overflow";
-          } else if (code !== undefined && code.length > 0) {
-            kind = "invalid_request";
-          }
-          let message = fields.message;
-          if (message === undefined || message.length === 0) {
-            // Defensive, per research: a documented bug means context-overflow
-            // on this streaming path can produce a terminal error with an
-            // EMPTY message. Never surface an empty string.
-            message =
-              kind === "context_overflow"
-                ? "OpenAI Responses API returned an error with no message; likely context-length overflow"
-                : "OpenAI Responses API returned an error with no message";
-          }
-          terminalError = { kind, retryable: retryableFor(kind, false), message: redact(message) };
-          break;
-        }
-        case "error": {
-          const fields = extractErrorFields(data);
-          const code = fields.code;
-          let kind: ProviderErrorKind = "unknown";
-          if (code === "context_length_exceeded") {
-            kind = "context_overflow";
-          } else if (code !== undefined && code.length > 0) {
-            kind = "invalid_request";
-          }
-          let message = fields.message;
-          if (message === undefined || message.length === 0) {
-            // Defensive, per research: the documented empty-`message` bug on
-            // this terminal `error` event, most commonly triggered by
-            // context-length overflow. Never surface an empty string.
-            message =
-              kind === "context_overflow"
-                ? "OpenAI Responses API returned an error with no message; likely context-length overflow"
-                : "OpenAI Responses API returned an error with no message; likely context-length overflow (unconfirmed cause)";
-          }
-          terminalError = { kind, retryable: retryableFor(kind, false), message: redact(message) };
-          break;
-        }
-        default:
-          // `response.in_progress`, `response.content_part.added`/`.done`,
-          // and any other unrecognized event type carry no neutral mapping.
-          break;
       }
-      if (terminalError !== undefined) {
-        break;
+
+      // A terminal event (`response.completed`, `response.failed`/
+      // `.incomplete`, `error`) or a malformed record ends the attempt right
+      // here (AC1): stop reading immediately rather than waiting for the
+      // socket to close — a permissive endpoint may keep it open past its
+      // own terminal event.
+      if (malformed !== undefined || terminalError !== undefined || sawCompleted) {
+        cancelReader();
+        const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        if (terminalError !== undefined) {
+          yield stamp({ kind: "provider_error", error: terminalError });
+          return;
+        }
+        if (malformed !== undefined) {
+          yield stamp({ kind: "provider_error", error: malformed });
+        }
+        return;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
       }
     }
 
+    // Reached only via a natural EOF (reader signalled `done`) — a terminal
+    // event or a malformed record always returns from inside the loop above.
+    const trailing = decoder.decode();
+    if (trailing.length > 0) {
+      parser.push(trailing);
+    }
+    const torn = parser.flush();
     // Torn trailing record or a stream that started but never reached a
     // terminal event is a truncated/malformed attempt: no model_end.
-    if (malformed === undefined && terminalError === undefined) {
-      if (torn.length > 0) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("OpenAI SSE stream ended mid-record (torn stream)"),
-        };
-      } else if (sawStart && !sawCompleted) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("OpenAI SSE stream ended before response.completed (truncated stream)"),
-        };
-      }
+    if (torn.length > 0) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("OpenAI SSE stream ended mid-record (torn stream)"),
+      };
+    } else if (!receivedAnyChunk) {
+      // A 200 with literally zero bytes never sets `sawStart` and would
+      // otherwise yield nothing — fail closed with a terminal `malformed`
+      // rather than a silent-success empty iterable.
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("empty response body"),
+      };
+    } else if (sawStart && !sawCompleted) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("OpenAI SSE stream ended before response.completed (truncated stream)"),
+      };
     }
 
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output.
-    for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (opts.signal?.aborted === true) {
+    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-      return;
-    }
-    if (terminalError !== undefined) {
-      yield stamp({ kind: "provider_error", error: terminalError });
       return;
     }
     if (malformed !== undefined) {

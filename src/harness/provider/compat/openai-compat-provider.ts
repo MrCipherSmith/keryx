@@ -103,6 +103,18 @@ export interface OpenAiCompatProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: OpenAiCompatCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the gateway accepted but never
+   * started answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link OpenAiCompatEngine.descriptorDocument}. */
@@ -238,6 +250,64 @@ function classifyHttpError(status: number, headers: Headers): NormalizedError {
 
 /** Longest server reason kept in an error message. */
 const MAX_ERROR_REASON_CHARS = 300;
+
+/** Default first-byte / idle stream deadline (flow 268 T5), overridable via {@link OpenAiCompatProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("compat-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
+}
 
 /**
  * The server's own reason for a refusal, from the JSON shapes gateways use.
@@ -480,31 +550,19 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
-    // Guarded body read (flow-019 fix): an abort mid-read yields the SAME terminal
-    // `cancelled` error the fetch-level abort path yields; any other read-time
-    // failure fails closed as `malformed`. No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        opts.signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: `${this.label} SSE body read failed: ${String(cause)}`,
-      });
-      return;
-    }
-
-    // Zero-byte body: a 200 with no SSE bytes never sets `sawStart` and would
-    // otherwise yield nothing — fail closed with a terminal `malformed`.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T5): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta` while the model
+    // is still generating rather than only once the connection closes. Two
+    // independent deadlines guard a stalled connection: `firstByteTimeoutMs`
+    // (no byte at all since the response headers arrived) and
+    // `idleTimeoutMs` (no further chunk since the last one) — both default to
+    // 120s, configurable via `deps`. A timeout cancels the reader and yields
+    // exactly one retryable `unavailable` provider_error, never a model_end.
+    // An abort mid-read still fails closed to the SAME terminal `cancelled`
+    // error the fetch()-level abort path yields (flow-019 contract).
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -513,14 +571,22 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     let sawStart = false;
     let sawFinish = false;
     let sawDone = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
 
     // OpenAI-compat streams tool calls across chunks: first delta often has
@@ -571,153 +637,235 @@ export class OpenAiCompatEngine implements ProviderPort {
       pendingTools.clear();
     };
 
-    for (const record of records) {
-      const trimmed = record.data.trim();
-      // `data: [DONE]` is the stream terminator, never a model chunk.
-      if (trimmed === "[DONE]") {
-        sawDone = true;
-        // Flush any tool calls that never saw finish_reason (defensive).
-        flushPendingToolEnds();
-        continue;
-      }
-
-      // The FIRST non-terminator chunk always yields `model_start` (keyed off
-      // "first chunk seen", not `delta.role` — the tool-call fixture's first
-      // chunk carries no role).
-      if (!sawStart) {
-        sawStart = true;
-        bodies.push({ kind: "model_start" });
-      }
-
-      let parsed: unknown;
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
       try {
-        parsed = JSON.parse(record.data);
-      } catch {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          opts.signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: `${this.label} SSE body read failed: ${String(cause)}`,
+        });
+        return;
+      }
+
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `${this.label} stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const text = decoder.decode(value, { stream: true });
+      for (const record of parser.push(text)) {
+        const trimmed = record.data.trim();
+        // `data: [DONE]` is the stream terminator, never a model chunk. Stop
+        // reading immediately (AC1): a permissive gateway may keep the socket
+        // open past `[DONE]`, and this adapter must not wait for it to close.
+        if (trimmed === "[DONE]") {
+          sawDone = true;
+          flushPendingToolEnds();
+          if (sawStart) {
+            bodies.push({ kind: "model_end" });
+          }
+          const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+          cancelReader();
+          if (aborted) {
+            yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          }
+          return;
+        }
+
+        // The FIRST non-terminator chunk always yields `model_start` (keyed off
+        // "first chunk seen", not `delta.role` — the tool-call fixture's first
+        // chunk carries no role).
+        if (!sawStart) {
+          sawStart = true;
+          bodies.push({ kind: "model_start" });
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: `${this.label} SSE data line was not valid JSON`,
+          };
+          break;
+        }
+        const data = asRecord(parsed);
+
+        // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
+        if (data.usage !== undefined) {
+          const usage = asRecord(data.usage);
+          bodies.push({
+            kind: "usage_update",
+            usage: mergeUsage(
+              asNumber(usage.prompt_tokens),
+              asNumber(usage.completion_tokens),
+              asNumber(usage.total_tokens),
+            ),
+          });
+        }
+
+        const choice0 = asRecord(asArray(data.choices)[0]);
+        const delta = asRecord(choice0.delta);
+
+        // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
+        // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
+        // answer content. Surface it as `reasoning_delta`; plain models omit it.
+        const reasoning = asString(delta.reasoning) ?? asString(delta.reasoning_content);
+        if (reasoning !== undefined && reasoning.length > 0) {
+          bodies.push({ kind: "reasoning_delta", text: reasoning });
+        }
+
+        const content = asString(delta.content);
+        if (content !== undefined && content.length > 0) {
+          bodies.push({ kind: "text_delta", text: content });
+        }
+
+        for (const rawToolCall of asArray(delta.tool_calls)) {
+          const toolCall = asRecord(rawToolCall);
+          const fn = asRecord(toolCall.function);
+          const toolCallId = asString(toolCall.id);
+          const toolName = asString(fn.name);
+          const argumentsFragment = asString(fn.arguments) ?? "";
+          const key = toolCallKey(toolCall);
+
+          let acc = pendingTools.get(key);
+          if (acc === undefined) {
+            acc = {
+              id: toolCallId ?? `call_${key.replace(/[^a-zA-Z0-9_:-]/g, "_")}`,
+              name: toolName ?? "",
+              arguments: "",
+              started: false,
+              ended: false,
+            };
+            pendingTools.set(key, acc);
+          }
+          if (toolCallId !== undefined && toolCallId.length > 0) {
+            acc.id = toolCallId;
+          }
+          if (toolName !== undefined && toolName.length > 0) {
+            acc.name = toolName;
+          }
+
+          if (!acc.started) {
+            const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
+            if (acc.name.length > 0) {
+              startBody.toolName = acc.name;
+            }
+            bodies.push(startBody);
+            acc.started = true;
+          }
+
+          // Fragments append (OpenAI/Z.AI streaming). One-shot providers (Ollama)
+          // send the whole JSON in a single fragment — still correct as append.
+          if (argumentsFragment.length > 0) {
+            acc.arguments += argumentsFragment;
+            bodies.push({
+              kind: "tool_call_delta",
+              toolCallId: acc.id,
+              inputDelta: argumentsFragment,
+            });
+          }
+        }
+
+        // `finish_reason` marks completion: flush accumulated tool calls so
+        // `tool_call_end.input` is the FULL concatenated arguments JSON.
+        // Trailing usage/`[DONE]` still follow on the wire (handled above/below).
+        const finishReason = asString(choice0.finish_reason);
+        if (finishReason !== undefined && finishReason.length > 0) {
+          sawFinish = true;
+          flushPendingToolEnds();
+        }
+      }
+
+      if (malformed !== undefined) {
+        cancelReader();
+        break readLoop;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
+    }
+
+    // Reached only via a natural EOF (reader signalled `done`) or a malformed
+    // record — `[DONE]` always returns from inside the loop above.
+    if (malformed === undefined) {
+      const trailing = decoder.decode();
+      if (trailing.length > 0) {
+        parser.push(trailing);
+      }
+      const torn = parser.flush();
+      // A torn trailing record is a truncated/malformed attempt (no model_end).
+      if (torn.length > 0) {
         malformed = {
           kind: "malformed",
           retryable: retryableFor("malformed", false),
-          message: `${this.label} SSE data line was not valid JSON`,
+          message: `${this.label} SSE stream ended mid-record (torn stream)`,
         };
-        break;
-      }
-      const data = asRecord(parsed);
-
-      // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
-      if (data.usage !== undefined) {
-        const usage = asRecord(data.usage);
-        bodies.push({
-          kind: "usage_update",
-          usage: mergeUsage(
-            asNumber(usage.prompt_tokens),
-            asNumber(usage.completion_tokens),
-            asNumber(usage.total_tokens),
-          ),
-        });
-      }
-
-      const choice0 = asRecord(asArray(data.choices)[0]);
-      const delta = asRecord(choice0.delta);
-
-      // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
-      // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
-      // answer content. Surface it as `reasoning_delta`; plain models omit it.
-      const reasoning = asString(delta.reasoning) ?? asString(delta.reasoning_content);
-      if (reasoning !== undefined && reasoning.length > 0) {
-        bodies.push({ kind: "reasoning_delta", text: reasoning });
-      }
-
-      const content = asString(delta.content);
-      if (content !== undefined && content.length > 0) {
-        bodies.push({ kind: "text_delta", text: content });
-      }
-
-      for (const rawToolCall of asArray(delta.tool_calls)) {
-        const toolCall = asRecord(rawToolCall);
-        const fn = asRecord(toolCall.function);
-        const toolCallId = asString(toolCall.id);
-        const toolName = asString(fn.name);
-        const argumentsFragment = asString(fn.arguments) ?? "";
-        const key = toolCallKey(toolCall);
-
-        let acc = pendingTools.get(key);
-        if (acc === undefined) {
-          acc = {
-            id: toolCallId ?? `call_${key.replace(/[^a-zA-Z0-9_:-]/g, "_")}`,
-            name: toolName ?? "",
-            arguments: "",
-            started: false,
-            ended: false,
-          };
-          pendingTools.set(key, acc);
-        }
-        if (toolCallId !== undefined && toolCallId.length > 0) {
-          acc.id = toolCallId;
-        }
-        if (toolName !== undefined && toolName.length > 0) {
-          acc.name = toolName;
-        }
-
-        if (!acc.started) {
-          const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
-          if (acc.name.length > 0) {
-            startBody.toolName = acc.name;
-          }
-          bodies.push(startBody);
-          acc.started = true;
-        }
-
-        // Fragments append (OpenAI/Z.AI streaming). One-shot providers (Ollama)
-        // send the whole JSON in a single fragment — still correct as append.
-        if (argumentsFragment.length > 0) {
-          acc.arguments += argumentsFragment;
-          bodies.push({
-            kind: "tool_call_delta",
-            toolCallId: acc.id,
-            inputDelta: argumentsFragment,
-          });
-        }
-      }
-
-      // `finish_reason` marks completion: flush accumulated tool calls so
-      // `tool_call_end.input` is the FULL concatenated arguments JSON.
-      // Trailing usage is still emitted before `model_end` (below).
-      const finishReason = asString(choice0.finish_reason);
-      if (finishReason !== undefined && finishReason.length > 0) {
-        sawFinish = true;
+      } else if (!receivedAnyChunk) {
+        // A 200 with literally zero bytes never sets `sawStart` and would
+        // otherwise yield nothing — fail closed with a terminal `malformed`
+        // rather than a silent-success empty iterable.
+        malformed = {
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: "empty response body",
+        };
+      } else {
+        // Defensive: stream ended without finish_reason but with pending tools.
         flushPendingToolEnds();
+        // A clean stream that reached `[DONE]` or a `finish_reason` completes
+        // with a terminal `model_end` (emitted after any usage_update). `[DONE]`
+        // always exits above, so only the bare-`finish_reason` case reaches here.
+        if (sawStart && (sawDone || sawFinish)) {
+          bodies.push({ kind: "model_end" });
+        }
       }
-    }
-
-    // A torn trailing record is a truncated/malformed attempt (no model_end).
-    if (malformed === undefined && torn.length > 0) {
-      malformed = {
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: `${this.label} SSE stream ended mid-record (torn stream)`,
-      };
-    }
-
-    // Defensive: stream ended without finish_reason but with pending tools.
-    if (malformed === undefined) {
-      flushPendingToolEnds();
-    }
-
-    // A clean stream that reached `[DONE]` or a `finish_reason` completes with a
-    // terminal `model_end` (emitted after any usage_update).
-    if (malformed === undefined && sawStart && (sawDone || sawFinish)) {
-      bodies.push({ kind: "model_end" });
     }
 
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output (AC1).
-    for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (opts.signal?.aborted === true) {
+    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }
