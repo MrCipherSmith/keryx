@@ -1,0 +1,144 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "code-reviewer (providers)",
+    "severity": "blocker",
+    "problem": "The built-in deepseek provider had no reasoning config and the preset covered only MiniMax hosts, so grant.reasoning.replay was undefined and reasoning_content was never sent back on prior assistant turns.",
+    "impact": "deepseek-reasoner in a tool loop gets HTTP 400 on the second request, because DeepSeek thinking mode requires reasoning_content to be passed back whenever tools are present; a custom entry named deepseek is dropped, so there was no workaround.",
+    "suggested_fix": "Default api.deepseek.com to { format: field, replay: deepseek } when no explicit reasoning config is given.",
+    "evidence": "make-provider.ts resolves the grant through resolveCompatReasoningPreset; openai-compat-provider.ts accumulates reasoningFieldRaw only when replayMode is deepseek.",
+    "confidence": "high",
+    "file": "src/commands/providers.ts",
+    "line": null,
+    "quote": "resolveCompatReasoningPreset",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/providers.ts resolveCompatReasoningPreset",
+        "src/harness/provider/make-provider.ts grant construction"
+      ],
+      "enumeration_method": "Listed every OPENAI_COMPAT_PROVIDERS entry whose protocol requires reasoning replay (DeepSeek thinking mode, MiniMax) and checked which of them reach a replay mode through the only grant path, make-provider.ts."
+    },
+    "global_id": "2026-09-17-ingest-origin-main-r03#F-001",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 3679a401 (fix: address review of the reasoning branch) adds the api.deepseek.com preset; merged to main in 12c3d8da via PR 587."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At fix commit 3679a401 (contained in merge 12c3d8da) providers.reasoning-preset.test.ts and make-provider.test.ts use the real built-in deepseek provider: with tools a prior assistant turn carries reasoning_content on the wire, deepseek-chat without reasoning sends nothing extra. Re-run on the merged tree: 427 pass, 0 fail.",
+      "verifier": "orchestrator re-run plus independent re-review of 3679a401"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "code-reviewer (agent/TUI)",
+    "severity": "major",
+    "problem": "runAgentTurnCore returned on abort, inside the stream loop and in the catch block, before flushReasoning, so onReasoningEnd never fired for a round aborted while reasoning.",
+    "impact": "attachBlockIo kept liveText and hasStarted from the aborted round: the next turn's live preview mixed old and new reasoning and the thinking phase was never re-entered.",
+    "suggested_fix": "Flush the reasoning span before both abort returns and reset the TUI live state at every turn start.",
+    "evidence": "Both isAborted() early returns in runAgentTurnCore preceded the only flushReasoning() call; attachBlockIo reset its state only in onReasoningEnd.",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "line": null,
+    "quote": "flushReasoning",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/commands/agent.ts runAgentTurnCore abort return in stream loop",
+        "src/commands/agent.ts runAgentTurnCore abort return in catch",
+        "src/commands/agent.ts finishWithBudgetSummary (checked, no early return before flush)",
+        "src/tui/tui-shell.ts attachBlockIo live state"
+      ],
+      "enumeration_method": "Enumerated every return statement between the first reasoning_delta handling and flushReasoning in both functions that build reasoning spans, and every consumer holding per-round reasoning state."
+    },
+    "global_id": "2026-09-17-ingest-origin-main-r03#F-002",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 3679a401 flushes before both abort returns and calls resetReasoningLiveState at turn start; merged to main in 12c3d8da via PR 587."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At fix commit 3679a401 (contained in merge 12c3d8da) agent.test.ts asserts onReasoningEnd fires exactly once when the abort lands mid-reasoning and nothing is attached to history; tui-shell.test.ts asserts resetReasoningLiveState drops stale preview text and re-fires onReasoningStart. Re-run on the merged tree: 427 pass, 0 fail.",
+      "verifier": "orchestrator re-run plus independent re-review of 3679a401"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "code-reviewer (agent/TUI)",
+    "severity": "major",
+    "problem": "stripThinkBlocks and validateEnrichedMarkdown matched think tags anywhere, including fenced code and inline code, while containsThinkTags already ignored fences.",
+    "impact": "wiki enrich stripped think examples out of code blocks or rejected whole pages that document the tag, including keryx's own pages about this feature.",
+    "suggested_fix": "Mask fenced blocks and inline code spans before stripping and detecting, and use one helper in enrich, validation and status.",
+    "evidence": "THINK_BLOCK_RE and STRAY_THINK_TAG_RE were applied to unmasked text in stripThinkBlocks; validateEnrichedMarkdown used its own bare regex.",
+    "confidence": "high",
+    "file": "src/wiki/think-tags.ts",
+    "line": null,
+    "quote": "stripThinkBlocks",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "class_scope": {
+      "sites": [
+        "src/wiki/think-tags.ts stripThinkBlocks",
+        "src/wiki/think-tags.ts containsThinkTags",
+        "src/wiki/enrich.ts validateEnrichedMarkdown",
+        "src/wiki/enrich.ts wikiEnrich and finalizeEnrichedText strip calls",
+        "src/wiki/service.ts wikiStatus"
+      ],
+      "enumeration_method": "Searched every use of think-tag regexes and helpers under src/wiki and listed each strip, detect and validate site."
+    },
+    "global_id": "2026-09-17-ingest-origin-main-r03#F-003",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 3679a401 introduces maskCodeRegions shared by strip, detect and validation; merged to main in 12c3d8da via PR 587."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At fix commit 3679a401 (contained in merge 12c3d8da) think-tags.test.ts preserves fenced and inline-code examples byte for byte while still stripping bare leaks and reporting bare stray tags; enrich.test.ts accepts pages with fenced and inline-code think examples. Re-run on the merged tree: 427 pass, 0 fail.",
+      "verifier": "orchestrator re-run plus independent re-review of 3679a401"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "code-reviewer (agent/TUI)",
+    "severity": "minor",
+    "problem": "The readline /reasoning handler and the /think display check called loadShellConfig and saveShellConfig without the config directory that agentDepsBase uses.",
+    "impact": "Under a non-default cache directory the readline shell read and wrote a different config file than the deps consuming the setting.",
+    "suggested_fix": "Thread runtime.cacheDir into runAgentRepl and pass it to every config read and write.",
+    "evidence": "agentDepsBase used loadShellConfig(runtime.cacheDir) while runAgentRepl used the no-argument overload.",
+    "confidence": "medium",
+    "file": "src/commands/shell.ts",
+    "line": null,
+    "quote": "runAgentRepl",
+    "locator": {
+      "state": "unlocatable",
+      "reason": "the quote does not appear in the file",
+      "reported_line": null
+    },
+    "global_id": "2026-09-17-ingest-origin-main-r03#F-004",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 3679a401 threads configDir through runAgentRepl; merged to main in 12c3d8da via PR 587."
+    },
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At fix commit 3679a401 (contained in merge 12c3d8da) runAgentRepl takes configDir, all three config calls pass it, and shell.test.ts asserts no dir-less call remains. Re-run on the merged tree: 427 pass, 0 fail.",
+      "verifier": "orchestrator re-run plus independent re-review of 3679a401"
+    }
+  }
+]
