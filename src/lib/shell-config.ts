@@ -49,6 +49,19 @@ export interface ShellConfig {
    * make a hand-edited, half-valid block look type-safe to every reader.
    */
   externalAgents?: unknown;
+  /**
+   * Operator-set global override of the main agent turn's output-token
+   * budget (`request.budget.maxOutputTokens`/`runReservation`). Must be a
+   * positive integer when present. Consulted by
+   * `resolveAgentMaxOutputTokens` (`src/commands/agent.ts`) BELOW the
+   * `KERYX_MAX_OUTPUT_TOKENS` env override and a custom compat provider's own
+   * `maxOutputTokens` (`CustomCompatProvider`,
+   * `src/lib/provider-config.ts`), and ABOVE the built-in default — see that
+   * function's precedence doc. Not validated here (this file is a raw
+   * best-effort reader/writer, like every other field above); an invalid
+   * hand-edited value is simply ignored by the resolver's own guard.
+   */
+  maxOutputTokens?: number;
 }
 
 /**

@@ -59,4 +59,39 @@ describe("llm-providers.json custom provider registry", () => {
     );
     expect(loadCustomCompatProviders(dir)).toEqual([]);
   });
+
+  test("maxOutputTokens: a positive integer round-trips", () => {
+    const dir = tempDir();
+    const provider: CustomCompatProvider = {
+      name: "internal-qwen",
+      baseUrl: "http://localhost:1",
+      models: [],
+      maxOutputTokens: 4096,
+    };
+    saveCustomCompatProvider(provider, dir);
+    expect(loadCustomCompatProviders(dir)).toHaveLength(1);
+    expect(loadCustomCompatProviders(dir)[0]?.maxOutputTokens).toBe(4096);
+  });
+
+  test("maxOutputTokens: absent is valid (undefined, not dropped)", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "no-override", baseUrl: "http://localhost:1", models: [] }, dir);
+    const loaded = loadCustomCompatProviders(dir);
+    expect(loaded).toHaveLength(1);
+    expect(loaded[0]?.maxOutputTokens).toBeUndefined();
+  });
+
+  test("maxOutputTokens: a non-positive-integer entry is dropped (whole provider invalid)", () => {
+    for (const bad of [0, -1, 1.5, "8192"]) {
+      const dir = tempDir();
+      writeFileSync(
+        llmProvidersConfigPath(dir),
+        JSON.stringify({
+          schemaVersion: 1,
+          providers: { bad: { name: "bad", baseUrl: "http://localhost:1", models: [], maxOutputTokens: bad } },
+        }),
+      );
+      expect(loadCustomCompatProviders(dir)).toEqual([]);
+    }
+  });
 });

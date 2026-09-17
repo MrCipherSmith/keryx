@@ -31,6 +31,16 @@ export interface CustomCompatProvider {
   models: string[];
   /** Short picker note. */
   note?: string;
+  /**
+   * Per-provider override of the main agent turn's output-token budget
+   * (`request.budget.maxOutputTokens`/`runReservation`). Must be a positive
+   * integer when present. Consulted by `resolveAgentMaxOutputTokens`
+   * (`src/commands/agent.ts`) BELOW the `KERYX_MAX_OUTPUT_TOKENS` env
+   * override and ABOVE the operator's global `ShellConfig.maxOutputTokens`
+   * setting — see that function's precedence doc. Absent leaves the global
+   * setting (or the built-in default) in effect for this provider.
+   */
+  maxOutputTokens?: number;
 }
 
 interface LlmProvidersConfig {
@@ -63,7 +73,9 @@ export function isCustomCompatProvider(value: unknown): value is CustomCompatPro
     typeof p.baseUrl === "string" &&
     p.baseUrl.length > 0 &&
     Array.isArray(p.models) &&
-    p.models.every((m) => typeof m === "string")
+    p.models.every((m) => typeof m === "string") &&
+    (p.maxOutputTokens === undefined ||
+      (typeof p.maxOutputTokens === "number" && Number.isSafeInteger(p.maxOutputTokens) && p.maxOutputTokens > 0))
   );
 }
 

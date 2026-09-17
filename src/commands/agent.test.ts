@@ -5,15 +5,18 @@ import path from "node:path";
 import {
   buildAgentSystemInstruction,
   buildToollessReprompt,
+  DEFAULT_MAX_OUTPUT_TOKENS,
   DEFAULT_MAX_ROUNDS,
   DEFAULT_MAX_SUBAGENT_CONCURRENCY,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
+  ENV_AGENT_MAX_OUTPUT_TOKENS,
   ENV_AGENT_MAX_ROUNDS,
   MAX_AGENT_MAX_ATTEMPTS_PER_HASH,
   MAX_AGENT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
   reserveToolAttempt,
   resolveAgentMaxAttemptsPerHash,
+  resolveAgentMaxOutputTokens,
   resolveAgentMaxRounds,
   runAgentTurn,
   toolCallHash,
@@ -55,6 +58,46 @@ test("resolveAgentMaxRounds: env override clamped to ceiling", () => {
   expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: String(MAX_AGENT_MAX_ROUNDS + 50) })).toBe(
     MAX_AGENT_MAX_ROUNDS,
   );
+});
+
+test("resolveAgentMaxOutputTokens: unset/empty/invalid falls back to the default", () => {
+  expect(DEFAULT_MAX_OUTPUT_TOKENS).toBe(8192);
+  expect(resolveAgentMaxOutputTokens()).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: {} })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "  " } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "nope" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "0" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "-3" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  // `Number.parseInt` truncates at the first non-digit char (matches
+  // `resolveAgentMaxRounds`'s own parsing) — "3.5" parses to the valid
+  // integer 3, not a rejected fractional value.
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "3.5" } })).toBe(3);
+});
+
+test("resolveAgentMaxOutputTokens: precedence is env > provider config > global config > default", () => {
+  // provider alone beats global and default
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: 4096, globalMaxOutputTokens: 2048 }),
+  ).toBe(4096);
+  // global alone (no provider override) beats default
+  expect(resolveAgentMaxOutputTokens({ env: {}, globalMaxOutputTokens: 2048 })).toBe(2048);
+  // env beats both provider and global
+  expect(
+    resolveAgentMaxOutputTokens({
+      env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "16000" },
+      providerMaxOutputTokens: 4096,
+      globalMaxOutputTokens: 2048,
+    }),
+  ).toBe(16000);
+  // an invalid provider value falls through to global
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: -1, globalMaxOutputTokens: 2048 }),
+  ).toBe(2048);
+  // an invalid provider AND global value falls through to the default
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: 0, globalMaxOutputTokens: 1.5 }),
+  ).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
 });
 
 test("resolveAgentMaxAttemptsPerHash: unset/empty/invalid falls back to the default", () => {
@@ -181,6 +224,55 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect((requests[0]?.tools ?? []).map((t) => t.name).sort()).toEqual(["get_cwd", "list_dir", "read_file"]);
   // History ends alternating with a tool message present.
   expect(history.some((m) => m.role === "tool")).toBe(true);
+});
+
+test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.budget).toEqual({
+    maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
+    runReservation: DEFAULT_MAX_OUTPUT_TOKENS,
+  });
+});
+
+test("runAgentTurn: deps.maxOutputTokens overrides the default for the main-turn round", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxOutputTokens: 4096,
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.budget).toEqual({ maxOutputTokens: 4096, runReservation: 4096 });
+});
+
+test("runAgentTurn: deps.maxOutputTokens rejects a non-positive value", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxOutputTokens: 0,
+  };
+  await expect(runAgentTurn(collectingIo().io, deps, [], "hello")).rejects.toThrow(
+    "maxOutputTokens must be a positive safe integer",
+  );
 });
 
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {

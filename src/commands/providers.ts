@@ -80,6 +80,14 @@ export interface OpenAiCompatProvider {
    */
   balancePath?: string;
   balanceKind?: "deepseek" | "openrouter";
+  /**
+   * Custom-provider-only override of the main agent turn's output-token
+   * budget; mirrors `CustomCompatProvider.maxOutputTokens`
+   * (`src/lib/provider-config.ts`), which is its sole source — a built-in
+   * entry never sets this. Read by `resolveAgentMaxOutputTokens`'s callers
+   * (e.g. `commands/shell.ts`'s `makeAgentDeps`) via `providerByName`.
+   */
+  maxOutputTokens?: number;
 }
 
 /** Normalize a provider registry entry's platform policy.
@@ -281,6 +289,7 @@ export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
       ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),
       models: p.models,
       ...(p.note !== undefined ? { note: p.note } : {}),
+      ...(p.maxOutputTokens !== undefined ? { maxOutputTokens: p.maxOutputTokens } : {}),
     }));
 }
 

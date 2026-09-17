@@ -1319,7 +1319,10 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
 describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sweep wiring (source-text audit)", () => {
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 4200);
+  // Widened from 4200 (flow 173) to fit T23's `maxOutputTokens` resolution
+  // added ahead of `sweepBackgroundJobs` in the same `agentDepsBase` object —
+  // still just past that field, well short of the next declaration.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 4600);
   const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
   const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
 

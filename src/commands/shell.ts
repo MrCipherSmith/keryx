@@ -113,6 +113,7 @@ import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
+  resolveAgentMaxOutputTokens,
   resolveAgentMaxRounds,
   resolveMaxAutoWake,
   runAgentTurn,
@@ -2315,6 +2316,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
         maxRounds: resolveAgentMaxRounds(),
+        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's custom
+        // compat provider's own `maxOutputTokens` (absent for a built-in) >
+        // the operator's persisted global setting > DEFAULT_MAX_OUTPUT_TOKENS.
+        // See `resolveAgentMaxOutputTokens`'s doc comment.
+        maxOutputTokens: resolveAgentMaxOutputTokens({
+          providerMaxOutputTokens: providerByName(sel.provider)?.maxOutputTokens,
+          globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
+        }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
@@ -2607,6 +2616,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         maxRounds: resolveAgentMaxRounds(),
+        // Same precedence as the TUI's `makeAgentDeps` above.
+        maxOutputTokens: resolveAgentMaxOutputTokens({
+          providerMaxOutputTokens: providerByName(provider)?.maxOutputTokens,
+          globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
+        }),
         idSeq: () => randomUUID(),
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),

@@ -190,6 +190,17 @@ export interface AgentDeps {
    */
   maxRounds?: number;
   /**
+   * Per-request output-token budget for the main agent turn round and its
+   * budget-exhausted wrap-up. Must be a positive safe integer when present.
+   * `undefined` falls back to {@link resolveAgentMaxOutputTokens} (env
+   * `KERYX_MAX_OUTPUT_TOKENS`, else {@link DEFAULT_MAX_OUTPUT_TOKENS}); a
+   * caller that already knows a custom provider's own override or the
+   * operator's global setting resolves those into this field itself (see
+   * {@link resolveAgentMaxOutputTokens}'s precedence doc) before building
+   * `AgentDeps`, since this deterministic core never reads config files.
+   */
+  maxOutputTokens?: number;
+  /**
    * Optional independent ceiling on real tool invocations in this turn.
    * Unlike `maxRounds`, this counts only calls that pass lookup, schema
    * validation, policy/approval gates, and reach `tool.invoke`. `undefined`
@@ -428,6 +439,82 @@ export function resolveAgentMaxRounds(
     return DEFAULT_MAX_ROUNDS;
   }
   return Math.min(n, MAX_AGENT_MAX_ROUNDS);
+}
+
+/**
+ * Default per-request output-token budget for the main agent turn round
+ * (`runAgentTurnCore`) and its budget-exhausted wrap-up
+ * (`finishWithBudgetSummary`). 8192 is the safe maximum accepted by every
+ * currently supported provider family: Anthropic (`max_tokens`), Gemini
+ * (`maxOutputTokens`), the OpenAI-compatible adapter (`max_tokens`), and
+ * OpenAI Responses (`max_output_tokens`) all enforce the budget as a HARD
+ * ceiling on the reply, and DeepSeek's OpenAI-compatible endpoint caps
+ * `max_tokens` at 8192 — the tightest limit among them, hence the default.
+ * The prior hardcoded 1024 truncated long code edits and large tool-call
+ * JSON, and starved reasoning models (MiniMax-M3, DeepSeek) that spend the
+ * budget on reasoning tokens before ever reaching the answer. Overridable via
+ * {@link resolveAgentMaxOutputTokens} / `KERYX_MAX_OUTPUT_TOKENS`, a custom
+ * compat provider's own `maxOutputTokens` (`CustomCompatProvider`,
+ * `src/lib/provider-config.ts`), or the operator's global `maxOutputTokens`
+ * setting (`ShellConfig`, `src/lib/shell-config.ts`).
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
+/** Env override for {@link DEFAULT_MAX_OUTPUT_TOKENS} (positive integer). */
+export const ENV_AGENT_MAX_OUTPUT_TOKENS = "KERYX_MAX_OUTPUT_TOKENS";
+
+/**
+ * Resolve the per-request output-token budget for a main agent turn round
+ * (and its wrap-up). Precedence, highest first:
+ *   1. `env[ENV_AGENT_MAX_OUTPUT_TOKENS]` — a positive integer; unset, empty,
+ *      or non-numeric falls through to the next source.
+ *   2. `providerMaxOutputTokens` — a custom compat provider's own override
+ *      (`CustomCompatProvider.maxOutputTokens`); not a positive integer falls
+ *      through.
+ *   3. `globalMaxOutputTokens` — the operator's persisted global setting
+ *      (`ShellConfig.maxOutputTokens`); not a positive integer falls through.
+ *   4. {@link DEFAULT_MAX_OUTPUT_TOKENS}.
+ *
+ * Pure and side-effect-free: it never reads a config file itself — callers
+ * pass `process.env` in production and already-resolved provider/global
+ * values, which keeps this unit-testable without touching disk (mirrors
+ * {@link resolveAgentMaxRounds}). No hard ceiling is applied to an override —
+ * unlike `maxRounds`, a larger reply budget is never itself a runaway-loop
+ * risk, and different providers accept different real maximums above 8192.
+ *
+ * `runReservation` on the request budget follows this same resolved value
+ * (see the call sites in `runAgentTurnCore`/`finishWithBudgetSummary`) — no
+ * separate override exists for it today; it is read by no adapter (see
+ * `NormalizedBudget.runReservation`'s doc comment), so there is nothing yet
+ * for a distinct value to change.
+ *
+ * A later reasoning task can raise this further when reasoning effort is
+ * enabled for the resolved model — this signature is the seam for that.
+ */
+export function resolveAgentMaxOutputTokens(
+  options: {
+    env?: Record<string, string | undefined>;
+    /** A lookup that found nothing (e.g. a built-in provider) is `undefined`, same as an absent field. */
+    providerMaxOutputTokens?: number | undefined;
+    /** A lookup that found nothing (no persisted setting) is `undefined`, same as an absent field. */
+    globalMaxOutputTokens?: number | undefined;
+  } = {},
+): number {
+  const env = options.env ?? process.env;
+  const raw = env[ENV_AGENT_MAX_OUTPUT_TOKENS];
+  if (raw !== undefined && raw.trim().length > 0) {
+    const n = Number.parseInt(raw.trim(), 10);
+    if (Number.isSafeInteger(n) && n > 0) {
+      return n;
+    }
+  }
+  if (Number.isSafeInteger(options.providerMaxOutputTokens) && (options.providerMaxOutputTokens as number) > 0) {
+    return options.providerMaxOutputTokens as number;
+  }
+  if (Number.isSafeInteger(options.globalMaxOutputTokens) && (options.globalMaxOutputTokens as number) > 0) {
+    return options.globalMaxOutputTokens as number;
+  }
+  return DEFAULT_MAX_OUTPUT_TOKENS;
 }
 
 /**
@@ -1283,6 +1370,8 @@ async function runAgentTurnCore(
   const now = deps.now ?? (() => new Date().toISOString());
   const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
+  const maxOutputTokens =
+    validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
   // Flow 265 (AC7): a turn the shell started because a task finished has no
   // operator line — its INPUT is the notification itself. Pushing `userLine`
   // here would put an empty `user` message in history, which is both a lie
@@ -1476,7 +1565,7 @@ async function runAgentTurnCore(
       systemInstruction: deps.systemInstruction,
       messages: [...history],
       tools: toolDefs,
-      budget: { maxOutputTokens: 1024, runReservation: 1024 },
+      budget: { maxOutputTokens, runReservation: maxOutputTokens },
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -2103,6 +2192,8 @@ async function finishWithBudgetSummary(
     }
   };
   const now = deps.now ?? (() => new Date().toISOString());
+  const maxOutputTokens =
+    validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const why = `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
@@ -2135,7 +2226,7 @@ async function finishWithBudgetSummary(
     systemInstruction: deps.systemInstruction,
     messages: [...history],
     // No tools — force a text wrap-up.
-    budget: { maxOutputTokens: 1024, runReservation: 1024 },
+    budget: { maxOutputTokens, runReservation: maxOutputTokens },
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -2493,10 +2584,16 @@ async function executeCall(
   return tool.invoke(input, { ...(signal !== undefined ? { signal } : {}) });
 }
 
-function validateDirectBudget(name: "maxRounds" | "maxToolCalls", value: number | undefined, min: number): number | undefined {
+function validateDirectBudget(
+  name: "maxRounds" | "maxToolCalls" | "maxOutputTokens",
+  value: number | undefined,
+  min: number,
+): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isSafeInteger(value) || value < min) {
-    throw new RangeError(`${name} must be a non-negative safe integer`);
+    throw new RangeError(
+      `${name} must be a ${min > 0 ? "positive" : "non-negative"} safe integer`,
+    );
   }
   return value;
 }
