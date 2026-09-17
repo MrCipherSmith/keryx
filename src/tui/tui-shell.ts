@@ -39,8 +39,15 @@
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
-import { resolveMaxAutoWake, runAgentTurn } from "../commands/agent";
+import {
+  describeReasoningEffortSource,
+  isReasoningEffortLevel,
+  REASONING_EFFORT_LEVELS,
+  resolveMaxAutoWake,
+  runAgentTurn,
+} from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
+import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
@@ -227,6 +234,15 @@ import {
   type BlockState,
   type BlockViewOptions,
 } from "./transcript-blocks";
+import {
+  formatReasoningBlockSummary,
+  formatReasoningOneLiner,
+  parseThinkDisplayMode,
+  reasoningLivePreviewLines,
+  resolveThinkDisplayMode,
+  THINK_DISPLAY_MODES,
+  type ThinkDisplayMode,
+} from "./reasoning-display";
 
 /** Result of a cheap git + gh lookup for sidebar metadata. */
 interface SidebarRepoMetadata {
@@ -676,9 +692,29 @@ export function createTuiAgentIo(otui: OpenTui, renderer: Renderer, transcript: 
     },
     // Reasoning is COLLAPSED to a one-line marker (grok/opencode style) instead of
     // dumping the whole chain-of-thought; `line count` hints at its length.
-    onReasoning: (text) => {
-      const lines = text.trim().split("\n").filter((l) => l.trim().length > 0).length;
-      append(otui.t`${otui.dim(`◆ thought (${lines} line${lines === 1 ? "" : "s"})`)}`);
+    //
+    // flow 268 T17 (AC16): built from `onReasoningEnd`, not the older
+    // `onReasoning`, so the line carries duration when the provider/clock
+    // made one available (`◆ thought for 12s (3 lines)`) — see
+    // `formatReasoningOneLiner`'s doc comment for the exact format, including
+    // the redacted-with-no-text variant. `attachBlockIo` REPLACES this with
+    // its own block-based `onReasoningEnd` in the shipped TUI wiring (same
+    // "replaced, not chained" rule as `onReasoning` always followed) — this
+    // default is reached only when a caller uses `createTuiAgentIo` without
+    // it (every current production call site DOES call `attachBlockIo`; this
+    // is what a headless test exercises directly).
+    onReasoningEnd: (info) => {
+      const lineCount = info.text.trim().split("\n").filter((l) => l.trim().length > 0).length;
+      append(
+        otui.t`${otui.dim(
+          formatReasoningOneLiner({
+            lineCount,
+            redacted: info.redacted,
+            hasText: info.text.length > 0,
+            ...(info.durationMs !== undefined ? { durationMs: info.durationMs } : {}),
+          }),
+        )}`,
+      );
     },
     onUsage: (usage) => {
       const parts: string[] = [];
@@ -719,10 +755,26 @@ export type BlockSink = (
 
 /** Shell chrome that runs BEFORE each block is registered (busy phase, fleet). */
 export interface BlockIoChrome {
-  onReasoning?: (text: string) => void;
+  /**
+   * flow 268 T17 (AC16): fires once per round, on the round's FIRST reasoning
+   * delta — replaces the old `onReasoning`-based trigger, which fired only
+   * once the whole reasoning span had already finished (see the module's
+   * flow-268-T17 doc note this replaces).
+   */
+  onReasoningStart?: () => void;
+  /**
+   * flow 268 T17 (AC16): a throttled (≤10 Hz, see `attachBlockIo`) live
+   * preview of the streaming reasoning — the last 1–3 non-empty lines seen so
+   * far, width-bounded (`reasoningLivePreviewLines`). `undefined` `lines`
+   * clears whatever preview is currently shown (the round ended).
+   */
+  onReasoningPreview?: (lines: string[] | undefined) => void;
   onToolCall?: (name: string, input: string) => void;
   onToolResult?: AgentIO["onToolResult"];
 }
+
+/** ≤10 Hz, per the AC16 spec's throttle bound. */
+const REASONING_PREVIEW_THROTTLE_MS = 100;
 
 /**
  * Upgrade the reasoning / tool-call / tool-result hooks of `io` so each one is
@@ -734,22 +786,98 @@ export interface BlockIoChrome {
  * The `createTuiAgentIo` defaults are REPLACED, not chained: they append their
  * own line and would double-print. `chrome` keeps the shell's per-event side
  * effects (busy phase, fleet status) out of this mapping.
+ *
+ * flow 268 T17 (AC16): reasoning block registration moved from `onReasoning`
+ * to `onReasoningEnd` — `onReasoning` is left UNTOUCHED here (not assigned at
+ * all) so `runAgentTurn`'s unconditional `io.onReasoning?.(text)` call stays a
+ * harmless no-op rather than a SECOND block registration for the same round.
+ * `onReasoningDelta`/`onReasoningEnd` are the two hooks this function now
+ * owns for reasoning; `thinkDisplay` (default `"auto"`, matching today's
+ * behaviour) is a live getter — like `AgentIO.permissionMode` — so a `/think`
+ * mode change takes effect on the very next round without re-wiring `io`.
+ *
+ * flow 268 T26: the per-round `liveText`/`hasStarted`/`lastPreviewAt`
+ * closure state below is normally reset by `onReasoningEnd` alone. An
+ * abort/error path that skips `onReasoningEnd` (fixed at its source in
+ * `commands/agent.ts`'s `flushReasoning` call sites) used to leak it into
+ * the NEXT round: stale `liveText` got appended to instead of replaced, and
+ * `onReasoningStart` never re-fired since `hasStarted` was still `true`.
+ * The returned `resetReasoningLiveState()` is a defensive second line: the
+ * shell calls it at the START of every new turn (before `startBusy`/
+ * `runAgentTurn`), so a missed `onReasoningEnd` from ANY cause can never
+ * leak past the turn boundary.
  */
-export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoChrome = {}): AgentIO {
-  io.onReasoning = (text) => {
-    chrome.onReasoning?.(text);
-    const body = text.trim();
+export function attachBlockIo(
+  io: AgentIO,
+  addBlock: BlockSink,
+  chrome: BlockIoChrome = {},
+  thinkDisplay: () => ThinkDisplayMode = () => "auto",
+): AgentIO & { resetReasoningLiveState: () => void } {
+  // Per-round streaming state. Reset in `onReasoningEnd` so a later round
+  // starts clean; `hasStarted` distinguishes "no deltas yet this round" from
+  // "deltas arrived but were all empty" (a redacted delta has no `text`).
+  let liveText = "";
+  let hasStarted = false;
+  let lastPreviewAt = 0;
+  io.onReasoningDelta = (delta) => {
+    if (!hasStarted) {
+      hasStarted = true;
+      chrome.onReasoningStart?.();
+    }
+    if (delta.text !== undefined) {
+      liveText += delta.text;
+    }
+    // `hide` mode shows no live preview at all (AC16) — still tracks
+    // `liveText` above so a later mode switch mid-round is not half-broken,
+    // but never paints it.
+    if (thinkDisplay() === "hide") {
+      return;
+    }
+    const nowMs = Date.now();
+    if (nowMs - lastPreviewAt < REASONING_PREVIEW_THROTTLE_MS) {
+      return;
+    }
+    lastPreviewAt = nowMs;
+    chrome.onReasoningPreview?.(reasoningLivePreviewLines(liveText));
+  };
+  io.onReasoningEnd = (info) => {
+    hasStarted = false;
+    liveText = "";
+    lastPreviewAt = 0;
+    chrome.onReasoningPreview?.(undefined); // clear the live preview unconditionally
+    const mode = thinkDisplay();
+    if (mode === "hide") {
+      // flow 268 T17 (AC16): deliberately NOT retained anywhere — no block,
+      // no live preview. Threading a hidden-but-copyable payload through the
+      // block registry (so `/copy` still worked right after a hidden round)
+      // would mean giving `hide` its own invisible block kind and teaching
+      // every `/think`/`ctrl+o`/nav-mode consumer to skip it — real cost for
+      // a mode whose whole point is "I do not want to see this", so the
+      // payload is simply dropped. Documented here per the spec's own
+      // "if cheap, otherwise just hidden" allowance.
+      return;
+    }
+    const body = info.text.trim();
     const lineCount = body.split("\n").filter((l) => l.trim().length > 0).length;
-    // Reasoning is SECONDARY: dim, bounded to a short preview, and reversible
-    // from the composer (flow 115). The registry still holds the whole payload,
-    // so `y` / `/copy` remain lossless.
+    const hasText = info.text.length > 0;
     addBlock(
-      { kind: "thought", summary: "", fullText: body, lineCount },
+      {
+        kind: "thought",
+        summary: formatReasoningBlockSummary({
+          hasText,
+          redacted: info.redacted,
+          ...(info.durationMs !== undefined ? { durationMs: info.durationMs } : {}),
+          ...(info.tokens !== undefined ? { tokens: info.tokens } : {}),
+        }),
+        fullText: hasText ? body : "(hidden by provider)",
+        lineCount,
+      },
       {
         hint: "/think · ctrl+o",
         expandedHint: "/think collapse · y copy",
         dim: true,
         maxLines: MAX_THOUGHT_LINES,
+        ...(mode === "expand" ? { startExpanded: true } : {}),
       },
     );
   };
@@ -781,7 +909,12 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
       { hint: "/expand · ctrl+o", ...(result.isError ? { tone: "red" as const } : {}) },
     );
   };
-  return io;
+  const resetReasoningLiveState = (): void => {
+    hasStarted = false;
+    liveText = "";
+    lastPreviewAt = 0;
+  };
+  return Object.assign(io, { resetReasoningLiveState });
 }
 
 /**
@@ -2361,6 +2494,19 @@ export async function launchTuiAgentShell(opts: {
    * through instead of narrowing it to `.dir` first.
    */
   makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;
+  /**
+   * Flow 268 T16 (AC11): update the CALLER's `/reasoning` session-override
+   * state (`commands/shell.ts`'s `reasoningSessionOverride`) so the NEXT
+   * `makeAgentDeps` rebuild (`/model`/`/connect`) — and a fresh `keryx shell`
+   * process, via the `ShellConfig.reasoningEffort` the `/reasoning` handler
+   * ALSO persists — resolve the same level this session just chose. Optional
+   * so every existing caller (only `commands/shell.ts`'s real one exists
+   * today) that predates this stays unaffected; when absent, `/reasoning`
+   * still mutates the live `deps.reasoningEffort` in this file directly (see
+   * the `/reasoning` command handler below), which is enough for the CURRENT
+   * session even without this callback.
+   */
+  setReasoningOverride?: (level: string | undefined) => void;
   /** Re-probe providers for `/connect` and `/model` (fresh detection). */
   redetect?: () => Promise<DetectedProvider[]>;
   versionCheck?: Promise<VersionCheckResult>;
@@ -2504,6 +2650,12 @@ export async function launchTuiAgentShell(opts: {
     saveShellConfig(sel.baseUrl === undefined ? { provider: sel.provider, model: sel.model } : { provider: sel.provider, model: sel.model, baseUrl: sel.baseUrl });
     // Mutable: `/connect` and `/model` rebuild these mid-session.
     let currentSel: TuiSelection = sel;
+    // AC14 (flow 268): the next-step suggestion's in-flight request gate.
+    // `runLine` cancels it the moment a new turn starts, and the composer
+    // activity subscription below cancels it the moment the user types —
+    // either way a late reply can never reach `chrome.showSuggestion`. See
+    // `suggestNextStep` and `next-step-suggestion.ts`.
+    const suggestionGate = new NextStepSuggestionGate();
     // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
     // reads is declared further down in this same function body. The getter
     // only runs once a turn actually executes a tool call, well after that
@@ -2517,6 +2669,16 @@ export async function launchTuiAgentShell(opts: {
     // fold into this session's slate once it opens.
     let deps = await opts.makeAgentDeps(sel, () => slateSession);
     liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+    // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
+    // target, so the `/reasoning` no-arg status line can name the source
+    // ("this session") without needing a getter back from `commands/shell.ts`.
+    let reasoningOverride: string | undefined;
+    // Flow 268 T17 (AC16): persisted reasoning-display mode, read fresh by
+    // `attachBlockIo` on every round (a live getter, same idiom as
+    // `AgentIO.permissionMode`) so `/think auto|expand|hide` takes effect on
+    // the NEXT round without re-wiring `io`. Loaded once at session start;
+    // `/think`'s handler below both updates this and persists it.
+    let thinkDisplayMode: ThinkDisplayMode = resolveThinkDisplayMode(loadShellConfig().thinkDisplay);
 
     const FOOTER_IDLE = "/ commands · Ctrl+O blocks · Ctrl+C to exit";
     const FOOTER_NAV = "blocks · ↑/↓ move · Enter toggle · y copy · Esc exit";
@@ -2559,6 +2721,10 @@ export async function launchTuiAgentShell(opts: {
     chrome.input.focus();
     const transcript = chrome.transcript;
     const input = chrome.input;
+    // AC14 (flow 268): typing (or pasting) into the composer invalidates any
+    // in-flight next-step suggestion request, whether or not a suggestion is
+    // currently shown — see `suggestionGate` above.
+    chrome.onComposerActivity(() => suggestionGate.cancel("composer activity"));
 
     // The chrome owns the spinner; the closure mirrors only the phase and the
     // start time, which it still needs for the side-worker context snapshot and
@@ -3007,24 +3173,51 @@ export async function launchTuiAgentShell(opts: {
     // full text is retained (AC1). The event → block mapping itself lives in the
     // exported `attachBlockIo` (headlessly testable); the closure contributes
     // only the busy-phase / fleet chrome that needs these locals.
-    attachBlockIo(io, addBlock, {
-      onReasoning: () => {
-        setBusyPhase("thinking");
-        setMainAgent("running", "thinking");
+    const blockIo = attachBlockIo(
+      io,
+      addBlock,
+      {
+        // flow 268 T17 (AC16): fires on the round's FIRST reasoning delta —
+        // the busy phase used to flip to "thinking" only once the whole
+        // reasoning span had already ended (via the old `onReasoning`), so
+        // the spinner/footer sat on a stale "waiting for model" phase for
+        // the entire duration of a long reasoning round.
+        onReasoningStart: () => {
+          setBusyPhase("thinking");
+          setMainAgent("running", "thinking");
+        },
+        // Reuses the EXISTING busy line (`startBusy`/`setBusyPhase` — see
+        // `shell-chrome.ts`), which already ticks elapsed seconds via its own
+        // timer and already renders in-transcript, rather than a second
+        // renderable/timer pair. That line is a single row shared with the
+        // footer, so the last-1-to-3-lines preview is joined onto ONE row
+        // (" / "-separated) instead of wrapping across several — the
+        // elapsed-seconds ticking and the "thinking…" phase are the part that
+        // must reuse the existing line; the exact line layout is not.
+        onReasoningPreview: (lines) => {
+          if (lines === undefined || lines.length === 0) {
+            setBusyPhase("thinking");
+            return;
+          }
+          const joined = lines.join(" / ");
+          const short = joined.length > 72 ? `${joined.slice(0, 69)}…` : joined;
+          setBusyPhase(`thinking… ${short}`);
+        },
+        onToolCall: (name, toolInput) => {
+          const args = summarizeToolArgs(toolInput);
+          const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
+          setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
+          // Keep tool names intact for humanFleetPhase ("tool: shell_exec").
+          setMainAgent("running", name.length > 20 ? `${name.slice(0, 18)}…` : name);
+        },
+        onToolResult: (name, result) => {
+          setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
+          // Stay "running" between tools (multi-step turn); only terminal on turn end.
+          setMainAgent("running", result.isError ? `err:${name.slice(0, 14)}` : "waiting");
+        },
       },
-      onToolCall: (name, toolInput) => {
-        const args = summarizeToolArgs(toolInput);
-        const short = args.length > 40 ? `${args.slice(0, 37)}…` : args;
-        setBusyPhase(short.length > 0 ? `running ${name}(${short})` : `running ${name}`);
-        // Keep tool names intact for humanFleetPhase ("tool: shell_exec").
-        setMainAgent("running", name.length > 20 ? `${name.slice(0, 18)}…` : name);
-      },
-      onToolResult: (name, result) => {
-        setBusyPhase(result.isError ? `tool error · waiting for model` : `waiting for model`);
-        // Stay "running" between tools (multi-step turn); only terminal on turn end.
-        setMainAgent("running", result.isError ? `err:${name.slice(0, 14)}` : "waiting");
-      },
-    });
+      () => thinkDisplayMode,
+    );
     io.onSystem = (text) => {
       // Surface budget/stop/errors on the main agent slot.
       if (/\[error\]|\[budget\]|\[stopped\]/i.test(text)) {
@@ -4607,6 +4800,10 @@ export async function launchTuiAgentShell(opts: {
       if (line.length === 0 && origin === "operator") {
         return;
       }
+      // AC14 (flow 268): a new turn — of any kind this function dispatches,
+      // not only the main agent turn — supersedes whatever next-step
+      // suggestion request was still in flight from the PREVIOUS one.
+      suggestionGate.cancel("new turn started");
       if (origin === "operator") {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
@@ -5028,7 +5225,29 @@ export async function launchTuiAgentShell(opts: {
         // (flow 109 expanded it; flow 115 made it reversible — a one-way expand
         // leaves a screenful of reasoning with no advertised way back). `/copy`
         // puts a block's retained payload on the clipboard (AC6).
+        //
+        // flow 268 T17 (AC16): `/think auto|expand|hide` is a SEPARATE
+        // concern layered on top — it sets the PERSISTED display mode for
+        // every FUTURE round, never touches the current block, and does not
+        // toggle anything. Bare `/think` and `/think collapse` (or any other
+        // unrecognized trailing word) fall through unchanged to the original
+        // toggle-the-newest-block behaviour below.
         if (command.name === "/think") {
+          const arg = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          const mode = parseThinkDisplayMode(arg);
+          if (arg.length > 0 && mode !== undefined) {
+            thinkDisplayMode = mode;
+            saveShellConfig({ thinkDisplay: mode });
+            io.onSystem?.(`Reasoning display: ${mode}\n`);
+            return;
+          }
+          if (arg.length > 0 && arg !== "collapse") {
+            io.onSystem?.(
+              `Unknown /think argument '${arg}'. Choose one of: ${THINK_DISPLAY_MODES.join(", ")} — ` +
+                "or run /think with no argument to expand/collapse the last reasoning block.\n",
+            );
+            return;
+          }
           if (toggleNewestBlock("thought") === undefined) {
             io.onSystem?.("No reasoning yet.\n");
           }
@@ -5107,6 +5326,45 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/mode") {
           runModeCommand(line);
+          return;
+        }
+        if (command.name === "/reasoning") {
+          // Flow 268 T16 (AC11). No arg: show the effective level and its
+          // precedence source. With an arg: set THIS session's override
+          // (mutating the live `deps` directly so the very next turn picks
+          // it up — see `AgentDeps.reasoningEffort`'s doc comment on why a
+          // plain mutable field, not a getter, is enough here), thread it to
+          // `commands/shell.ts` via `opts.setReasoningOverride` so a later
+          // `/model`/`/connect` rebuild keeps it, and persist it to
+          // `ShellConfig` so a fresh `keryx shell` process keeps it too.
+          const wanted = line.trim().split(/\s+/).slice(1).join(" ").trim();
+          if (wanted.length === 0) {
+            const described = describeReasoningEffortSource({
+              sessionOverride: reasoningOverride,
+              globalEffort: loadShellConfig().reasoningEffort,
+            });
+            io.onSystem?.(
+              `Reasoning effort: ${described.effort} (${described.source})\n` +
+                `Usage: /reasoning <${REASONING_EFFORT_LEVELS.join("|")}>\n`,
+            );
+          } else if (!isReasoningEffortLevel(wanted)) {
+            io.onSystem?.(
+              `Unknown reasoning effort '${wanted}'. Choose one of: ${REASONING_EFFORT_LEVELS.join(", ")}\n`,
+            );
+          } else {
+            reasoningOverride = wanted;
+            opts.setReasoningOverride?.(wanted);
+            deps.reasoningEffort = wanted;
+            saveShellConfig({ reasoningEffort: wanted });
+            io.onSystem?.(`Reasoning effort: ${wanted}\n`);
+            const compatProvider = providerByName(currentSel.provider);
+            if (compatProvider !== undefined && compatProvider.reasoning === undefined) {
+              io.onSystem?.(
+                `Note: ${currentSel.provider} is OpenAI-compatible with no "reasoning" entry — its reasoning ` +
+                  "is configured per-provider in llm-providers.json (reasoning.requestParams); this setting has no effect for it.\n",
+              );
+            }
+          }
           return;
         }
         if (command.name === "/plan") {
@@ -5409,6 +5667,12 @@ export async function launchTuiAgentShell(opts: {
       sessions.clear();
       deps.resetSubagentBudget?.();
       const operation = foregroundOperation.begin();
+      // flow 268 T26: defensive reset — a missed `onReasoningEnd` from a
+      // PRIOR turn (abort/error path; the root cause is fixed in
+      // `commands/agent.ts`) must never leak stale live-preview text or
+      // suppress this turn's own `onReasoningStart`. See `attachBlockIo`'s
+      // doc comment.
+      blockIo.resetReasoningLiveState();
       setMainAgent("running", "waiting");
       startBusy("waiting for model");
       const startedAt = Date.now();
@@ -5423,29 +5687,40 @@ export async function launchTuiAgentShell(opts: {
       // --- Claude-style "next step" suggestion (placeholder + Tab accept) ---
       // After a settled main turn with an empty queue, ask the model for ONE
       // short follow-up and show it as the composer placeholder. Fail-closed:
-      // no credential, a timeout, an error, or a "." reply simply shows
-      // nothing — never blocks the shell, never throws into the turn's
+      // no credential, a timeout, an error, a superseded/cancelled request
+      // (AC14 — see `suggestionGate`), or a sanitizer-discarded reply simply
+      // shows nothing — never blocks the shell, never throws into the turn's
       // finally chain.
       const suggestNextStep = async (): Promise<void> => {
+        const { signal, isCurrent } = suggestionGate.start();
         try {
           const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
           const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
           const tail = lastAssistant.slice(-3000);
           const result = await runModelTurn({
-            provider: sel.provider,
-            model: sel.model,
+            // AC14: the CURRENT selection — `/connect`/`/model` may have
+            // rebuilt `currentSel` since this turn started.
+            provider: currentSel.provider,
+            model: currentSel.model,
             system:
               "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .",
             user: `User: ${lastUser.slice(-800)}\n\nAssistant reply (tail):\n${tail}`,
             maxOutputTokens: 40,
             requestId: `suggest-next-step-${Date.now()}`,
+            signal,
           });
-          if (!result.credentialAvailable || result.text.trim().length === 0 || result.text.trim() === ".") {
+          // A new turn, a new suggestion request, or composer activity may
+          // have superseded/cancelled this one while it was in flight — a
+          // late reply must never reach the composer (AC14).
+          if (!isCurrent() || !result.credentialAvailable) {
             return;
           }
-          chrome.showSuggestion(result.text.trim().split(/\s+/).slice(0, 20).join(" "));
+          const next = sanitizeNextStepSuggestion(result.text);
+          if (next === undefined) return;
+          chrome.showSuggestion(next);
         } catch {
           // fail-closed: never surface an error for an optional hint
+          // (including an aborted request — AbortError lands here too)
         }
       };
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);

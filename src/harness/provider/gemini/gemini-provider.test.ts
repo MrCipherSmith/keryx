@@ -519,3 +519,312 @@ describe("AC2 — a stream that never reports finishReason is malformed (truncat
     expect(error.kind).toBe("malformed");
   });
 });
+
+// --- AC10 (flow 268, T15): thinkingConfig request shape ---------------------
+
+describe("AC10 — generationConfig.thinkingConfig is set per model family and requested effort", () => {
+  async function generationConfigFor(overrides: Partial<NormalizedRequest>): Promise<Record<string, unknown>> {
+    const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    await collectEvents(
+      provider.stream(buildRequest(`request-${JSON.stringify(overrides)}`, overrides), { attemptId: "attempt-thinking-config" }),
+    );
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    return body.generationConfig as Record<string, unknown>;
+  }
+
+  test("gemini-3* model + effort low -> thinkingLevel low", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "low" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "low" });
+  });
+
+  test("gemini-3* model + effort medium -> thinkingLevel high (no confirmed 'medium' thinkingLevel)", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "medium" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+  });
+
+  test("gemini-3* model + effort high -> thinkingLevel high", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-3-flash", options: { reasoning: "high" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+  });
+
+  test("gemini-2.5* model + effort low -> thinkingBudget 1024", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "low" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 1024 });
+  });
+
+  test("gemini-2.5* model + effort medium -> thinkingBudget 8192", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "medium" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 8192 });
+  });
+
+  test("gemini-2.5* model + effort high -> thinkingBudget 24576", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "high" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+  });
+
+  test('flow 268 T16: gemini-3* model + effort "minimal" -> thinkingLevel "low" (nearest supported)', async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "minimal" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "low" });
+  });
+
+  test('flow 268 T16: gemini-3* model + effort "xhigh"/"max" -> thinkingLevel "high" (nearest supported)', async () => {
+    const xhigh = await generationConfigFor({ modelId: "gemini-3-pro-preview", options: { reasoning: "xhigh" } });
+    expect(xhigh.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+    const max = await generationConfigFor({ modelId: "gemini-3-flash", options: { reasoning: "max" } });
+    expect(max.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "high" });
+  });
+
+  test('flow 268 T16: gemini-2.5* model + effort "minimal" -> thinkingBudget 1024 (nearest supported: low)', async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "minimal" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 1024 });
+  });
+
+  test('flow 268 T16: gemini-2.5* model + effort "xhigh"/"max" -> thinkingBudget 24576 (nearest supported: high)', async () => {
+    const xhigh = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "xhigh" } });
+    expect(xhigh.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+    const max = await generationConfigFor({ modelId: "gemini-2.5-flash", options: { reasoning: "max" } });
+    expect(max.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+  });
+
+  test("a model id outside both known families falls back to the thinkingBudget family", async () => {
+    const generationConfig = await generationConfigFor({ modelId: "gemini-1.5-pro", options: { reasoning: "high" } });
+    expect(generationConfig.thinkingConfig).toEqual({ includeThoughts: true, thinkingBudget: 24576 });
+  });
+
+  test("no effort requested (options undefined) -> no thinkingConfig key at all", async () => {
+    const generationConfig = await generationConfigFor({});
+    expect(Object.prototype.hasOwnProperty.call(generationConfig, "thinkingConfig")).toBe(false);
+  });
+
+  test("effort 'off' -> no thinkingConfig key at all", async () => {
+    const generationConfig = await generationConfigFor({ options: { reasoning: "off" } });
+    expect(Object.prototype.hasOwnProperty.call(generationConfig, "thinkingConfig")).toBe(false);
+  });
+});
+
+// --- AC10: thoughtSignature capture from the SSE stream ---------------------
+
+describe("AC10 — a thoughtSignature on any response part is captured as reasoning_replay, whether or not effort was requested", () => {
+  test("a thought part, a functionCall part WITH thoughtSignature, and a parallel functionCall part WITHOUT one", async () => {
+    const sse =
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"Reasoning about two cities...","thought":true}]},"index":0}]}\n\n' +
+      'data: {"candidates":[{"content":{"role":"model","parts":[' +
+      '{"functionCall":{"name":"get_weather","id":"call_ny","args":{"location":"New York, NY"}},"thoughtSignature":"sig-ny-base64"},' +
+      '{"functionCall":{"name":"get_weather","id":"call_sf","args":{"location":"San Francisco, CA"}}}' +
+      ']},"finishReason":"STOP","index":0}]}\n\n';
+    const { fetch: fetchMock, calls } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    // No `options.reasoning` set: proves the signature is captured even when
+    // `includeThoughts`/an effort was never requested on the wire.
+    const request = buildRequest("request-thought-signature");
+
+    const events = await collectEvents(provider.stream(request, { attemptId: "attempt-thought-signature" }));
+
+    const requestBody = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(Object.prototype.hasOwnProperty.call(requestBody.generationConfig as Record<string, unknown>, "thinkingConfig")).toBe(
+      false,
+    );
+
+    const reasoningDelta = events.find((evt) => evt.kind === "reasoning_delta");
+    expect(reasoningDelta?.text).toBe("Reasoning about two cities...");
+
+    const replayEvents = events.filter((evt) => evt.kind === "reasoning_replay");
+    expect(replayEvents).toHaveLength(1);
+    const replay = replayEvents[0]!.replay!;
+    expect(replay.providerId).toBe("gemini");
+    expect(replay.kind).toBe("thought_signature");
+    expect(replay.data).toEqual({
+      target: "functionCall",
+      functionCallIndex: 0,
+      toolCallId: "call_ny",
+      signature: "sig-ny-base64",
+    });
+
+    // Ordinary tool-call normalization is unaffected by signature capture.
+    const toolStarts = events.filter((evt) => evt.kind === "tool_call_start");
+    expect(toolStarts.map((evt) => evt.toolCallId)).toEqual(["call_ny", "call_sf"]);
+    expect(events.filter((evt) => evt.kind === "tool_call_end")).toHaveLength(2);
+  });
+
+  test("a thoughtSignature on a text part is captured with target \"text\"", async () => {
+    const sse =
+      'data: {"candidates":[{"content":{"role":"model","parts":[{"text":"The answer is 4.","thoughtSignature":"sig-text-base64"}]},"finishReason":"STOP","index":0}]}\n\n';
+    const { fetch: fetchMock } = makeFetchMock(
+      () => new Response(sse, { status: 200, headers: { "content-type": "text/event-stream" } }),
+    );
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+
+    const events = await collectEvents(
+      provider.stream(buildRequest("request-text-signature"), { attemptId: "attempt-text-signature" }),
+    );
+
+    const replayEvents = events.filter((evt) => evt.kind === "reasoning_replay");
+    expect(replayEvents).toHaveLength(1);
+    expect(replayEvents[0]!.replay!.data).toEqual({ target: "text", signature: "sig-text-base64" });
+  });
+
+  test("no thoughtSignature anywhere in the stream -> no reasoning_replay events at all", async () => {
+    const { fetch: fetchMock } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+
+    const events = await collectEvents(
+      provider.stream(buildRequest("request-no-signature"), { attemptId: "attempt-no-signature" }),
+    );
+
+    expect(events.some((evt) => evt.kind === "reasoning_replay")).toBe(false);
+  });
+});
+
+// --- AC10: toGeminiContents replays a captured thoughtSignature verbatim ----
+
+describe("AC10 — toGeminiContents reattaches a captured thoughtSignature to the exact part it arrived on", () => {
+  test("functionCall-target items match by toolCallId, or by functionCallIndex when toolCallId is absent; text-target attaches to the text part; a foreign providerId item is ignored", async () => {
+    const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request = buildRequest("request-replay-roundtrip", {
+      messages: [
+        { role: "user", content: "What is the weather in NY and SF?" },
+        {
+          role: "assistant",
+          content: "Let me check both.",
+          toolCalls: [
+            { id: "call_ny", name: "get_weather", arguments: '{"location":"New York, NY"}' },
+            { id: "call_sf", name: "get_weather", arguments: '{"location":"San Francisco, CA"}' },
+          ],
+          reasoning: {
+            text: "Reasoning...",
+            replay: [
+              { providerId: "gemini", kind: "thought_signature", data: { target: "text", signature: "sig-text" } },
+              {
+                providerId: "gemini",
+                kind: "thought_signature",
+                data: { target: "functionCall", toolCallId: "call_ny", signature: "sig-ny" },
+              },
+              // No toolCallId here — resolved via functionCallIndex against
+              // `message.toolCalls[1]` (call_sf).
+              {
+                providerId: "gemini",
+                kind: "thought_signature",
+                data: { target: "functionCall", functionCallIndex: 1, signature: "sig-sf" },
+              },
+              // A different provider's replay item — must never attach
+              // anywhere (the "ignore foreign providerId" contract).
+              { providerId: "openai", kind: "encrypted_content", data: { target: "text", signature: "should-be-ignored" } },
+            ],
+          },
+        },
+        { role: "tool", content: '{"tempF":72}', toolCallId: "call_ny" },
+        { role: "tool", content: '{"tempF":65}', toolCallId: "call_sf" },
+      ],
+    });
+
+    await collectEvents(provider.stream(request, { attemptId: "attempt-replay-roundtrip" }));
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as { contents: Record<string, unknown>[] };
+    const modelTurn = body.contents.find((c) => c.role === "model")!;
+    const parts = modelTurn.parts as Record<string, unknown>[];
+
+    const textParts = parts.filter((p) => typeof p.text === "string");
+    expect(textParts).toHaveLength(1);
+    expect(textParts[0]?.text).toBe("Let me check both.");
+    expect(textParts[0]?.thoughtSignature).toBe("sig-text");
+
+    const nyPart = parts.find((p) => (p.functionCall as Record<string, unknown> | undefined)?.id === "call_ny")!;
+    expect((nyPart.functionCall as Record<string, unknown>).thoughtSignature).toBe("sig-ny");
+
+    const sfPart = parts.find((p) => (p.functionCall as Record<string, unknown> | undefined)?.id === "call_sf")!;
+    expect((sfPart.functionCall as Record<string, unknown>).thoughtSignature).toBe("sig-sf");
+  });
+
+  test("a functionCall-target item whose call was dropped by linkToolCalls is silently omitted, never invents a part", async () => {
+    const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request = buildRequest("request-replay-unresolvable", {
+      messages: [
+        { role: "user", content: "What is the weather?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_ny", name: "get_weather", arguments: '{"location":"New York, NY"}' }],
+          reasoning: {
+            replay: [
+              {
+                providerId: "gemini",
+                kind: "thought_signature",
+                data: { target: "functionCall", toolCallId: "call_missing", signature: "sig-orphan" },
+              },
+            ],
+          },
+        },
+        { role: "tool", content: '{"tempF":72}', toolCallId: "call_ny" },
+      ],
+    });
+
+    await collectEvents(provider.stream(request, { attemptId: "attempt-replay-unresolvable" }));
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as { contents: Record<string, unknown>[] };
+    const modelTurn = body.contents.find((c) => c.role === "model")!;
+    const parts = modelTurn.parts as Record<string, unknown>[];
+    expect(parts).toHaveLength(1);
+    expect((parts[0]!.functionCall as Record<string, unknown>).thoughtSignature).toBeUndefined();
+  });
+
+  test("a text-target item on a tool-call round with no visible text is carried on a trailing empty text part", async () => {
+    const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request = buildRequest("request-replay-empty-text", {
+      messages: [
+        { role: "user", content: "What is the weather?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_ny", name: "get_weather", arguments: '{"location":"New York, NY"}' }],
+          reasoning: {
+            replay: [{ providerId: "gemini", kind: "thought_signature", data: { target: "text", signature: "sig-empty-text" } }],
+          },
+        },
+        { role: "tool", content: '{"tempF":72}', toolCallId: "call_ny" },
+      ],
+    });
+
+    await collectEvents(provider.stream(request, { attemptId: "attempt-replay-empty-text" }));
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as { contents: Record<string, unknown>[] };
+    const modelTurn = body.contents.find((c) => c.role === "model")!;
+    const parts = modelTurn.parts as Record<string, unknown>[];
+    const emptyTextPart = parts.find((p) => p.text === "");
+    expect(emptyTextPart).toBeDefined();
+    expect(emptyTextPart?.thoughtSignature).toBe("sig-empty-text");
+  });
+
+  test("a message with no reasoning.replay at all builds exactly as before (no thoughtSignature field anywhere)", async () => {
+    const { fetch: fetchMock, calls } = makeHappyPathFetchMock();
+    const provider = new GeminiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request = buildRequest("request-no-reasoning", {
+      messages: [
+        { role: "user", content: "What is the weather in New York?" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call_1", name: "get_weather", arguments: '{"location":"New York, NY"}' }],
+        },
+        { role: "tool", content: '{"tempF":72}', toolCallId: "call_1" },
+      ],
+    });
+
+    await collectEvents(provider.stream(request, { attemptId: "attempt-no-reasoning" }));
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as { contents: Record<string, unknown>[] };
+    for (const entry of body.contents) {
+      for (const part of entry.parts as Record<string, unknown>[]) {
+        expect(Object.prototype.hasOwnProperty.call(part, "thoughtSignature")).toBe(false);
+        if (typeof part.functionCall === "object" && part.functionCall !== null) {
+          expect(Object.prototype.hasOwnProperty.call(part.functionCall, "thoughtSignature")).toBe(false);
+        }
+      }
+    }
+  });
+});

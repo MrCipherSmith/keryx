@@ -20,7 +20,7 @@ import {
 import path from "node:path";
 import { ensureKeryxConfigDir, keryxConfigDir, readConfigFile, readTranscriptFile } from "../lib/config-dir";
 import { randomUUID } from "node:crypto";
-import type { NormalizedMessage, NormalizedToolCall } from "../harness/provider/types";
+import type { MessageReasoning, NormalizedMessage, NormalizedToolCall, ProviderReplayItem } from "../harness/provider/types";
 import {
   keryxDataDir,
   projectKeyFromPath,
@@ -81,6 +81,13 @@ interface TranscriptLine {
   toolCalls?: NormalizedToolCall[];
   /** The assistant call a tool result answers. */
   toolCallId?: string;
+  /**
+   * Assistant reasoning for the round (flow 268 T11, AC6): visible text,
+   * redacted flag, and opaque provider replay items. Round-tripped so a
+   * saved/resumed session keeps chain-of-thought support the later
+   * per-provider adapters (T12-T15) need. See `MessageReasoning`.
+   */
+  reasoning?: MessageReasoning;
 }
 
 /**
@@ -105,6 +112,70 @@ function readToolCalls(value: unknown): NormalizedToolCall[] | undefined {
     calls.push({ id, name, arguments: typeof args === "string" ? args : "" });
   }
   return calls.length > 0 ? calls : undefined;
+}
+
+/**
+ * Same defensive-drop policy as `readToolCalls`: a malformed replay entry is
+ * dropped, not handed to an adapter. `data` is kept byte-exact — it is never
+ * inspected or transformed, only checked for presence, since it may be a
+ * provider signature that would break if touched.
+ */
+function readReplayItems(value: unknown): ProviderReplayItem[] | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const items: ProviderReplayItem[] = [];
+  for (const entry of value) {
+    if (entry === null || typeof entry !== "object") {
+      continue;
+    }
+    const record = entry as Record<string, unknown>;
+    const { providerId, kind } = record;
+    if (typeof providerId !== "string" || providerId.length === 0) {
+      continue;
+    }
+    if (typeof kind !== "string" || kind.length === 0) {
+      continue;
+    }
+    if (!("data" in record)) {
+      continue;
+    }
+    items.push({ providerId, kind, data: record.data });
+  }
+  return items.length > 0 ? items : undefined;
+}
+
+/**
+ * Reconstruct `MessageReasoning` from a transcript row, dropping unrecognized
+ * or malformed sub-fields the way `readToolCalls` drops malformed calls,
+ * rather than failing the whole message load. Returns `undefined` (never an
+ * empty object) when nothing recognizable survives — a hand-edited or
+ * corrupted `reasoning` value degrades to "no reasoning" for this message,
+ * same as a message that never had one.
+ */
+function readReasoning(value: unknown): MessageReasoning | undefined {
+  if (value === null || typeof value !== "object") {
+    return undefined;
+  }
+  const record = value as Record<string, unknown>;
+  const out: MessageReasoning = {};
+  if (typeof record.text === "string" && record.text.length > 0) {
+    out.text = record.text;
+  }
+  if (record.redacted === true) {
+    out.redacted = true;
+  }
+  const replay = readReplayItems(record.replay);
+  if (replay !== undefined) {
+    out.replay = replay;
+  }
+  if (typeof record.durationMs === "number" && Number.isFinite(record.durationMs) && record.durationMs >= 0) {
+    out.durationMs = record.durationMs;
+  }
+  if (typeof record.tokens === "number" && Number.isFinite(record.tokens) && record.tokens >= 0) {
+    out.tokens = record.tokens;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function nowIso(): string {
@@ -270,17 +341,28 @@ export function shortSessionId(id: string): string {
   return clean.length >= 8 ? clean.slice(-8) : id.slice(0, 8);
 }
 
-function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: string): void {
+/**
+ * `checkpointTs` is the FALLBACK, not the value: each row gets `m.ts` when the
+ * message carries one (stamped at its `history.push(...)` call site — see
+ * `commands/agent.ts`) so messages appended across a whole turn keep their own
+ * distinct times instead of all landing on this flush's timestamp. A message
+ * with no `ts` (pushed by a call site this change did not touch, or loaded
+ * from a pre-this-change transcript that never carried the field) still gets
+ * `checkpointTs`, exactly as every row did before — so old and untouched
+ * producers are unaffected.
+ */
+function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpointTs: string): void {
   const lines: string[] = [];
   for (const m of history) {
     const row: TranscriptLine = {
       role: m.role,
       content: m.content,
-      ts,
+      ts: m.ts ?? checkpointTs,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
       ...(m.toolCallId !== undefined ? { toolCallId: m.toolCallId } : {}),
+      ...(m.reasoning !== undefined ? { reasoning: m.reasoning } : {}),
     };
     lines.push(JSON.stringify(row));
   }
@@ -304,6 +386,17 @@ function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: str
  * fixed-width literals, so the string stays valid JSON-ish text of the same
  * shape, and a reader that does parse it sees a masked value rather than a
  * secret.
+ *
+ * `reasoning.text` (flow 268 T11) is visible chain-of-thought — the same kind
+ * of model-authored prose as `content` — so it goes through the same
+ * `redactSensitiveText` pass. `reasoning.replay` is DELIBERATELY excluded: its
+ * `data` is an opaque provider payload (a `thinking` block's `signature`, an
+ * encrypted reasoning blob, …) that a later request must echo back
+ * BYTE-EXACT to keep the round valid; masking it would silently corrupt a
+ * value the model never showed the user and the redaction pass has no way to
+ * safely rewrite. It is also never user-visible text in the first place, so
+ * the credential-leak risk this function exists for does not apply to it the
+ * way it applies to `content`/`toolCalls[].arguments`.
  */
 function redactHistory(history: readonly NormalizedMessage[]): NormalizedMessage[] {
   return history.map((message) => ({
@@ -316,6 +409,16 @@ function redactHistory(history: readonly NormalizedMessage[]): NormalizedMessage
             ...call,
             arguments: redactSensitiveText(call.arguments),
           })),
+        }),
+    ...(message.reasoning === undefined
+      ? {}
+      : {
+          reasoning: {
+            ...message.reasoning,
+            ...(message.reasoning.text !== undefined
+              ? { text: redactSensitiveText(message.reasoning.text) }
+              : {}),
+          },
         }),
   }));
 }
@@ -372,6 +475,7 @@ function readJsonl(file: string): NormalizedMessage[] {
         continue;
       }
       const toolCalls = readToolCalls(o.toolCalls);
+      const reasoning = readReasoning(o.reasoning);
       out.push({
         role: o.role,
         content: o.content,
@@ -385,6 +489,17 @@ function readJsonl(file: string): NormalizedMessage[] {
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }
           : {}),
+        // Carried forward so a resumed session's next flush reuses the
+        // message's ORIGINAL append time instead of re-stamping it with the
+        // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`
+        // fallback only fires when this is absent). Every row on disk —
+        // old-format (one shared ts) or new (per-message) — already carries a
+        // `ts` string, so this is always present for a well-formed line.
+        ...(typeof o.ts === "string" && o.ts.length > 0 ? { ts: o.ts } : {}),
+        // Flow 268 T11 (AC6): malformed/legacy rows have no `reasoning` field
+        // at all, `readReasoning` returns `undefined`, and the key is simply
+        // omitted — identical to every pre-T11 transcript line.
+        ...(reasoning !== undefined ? { reasoning } : {}),
       });
     } catch {
       // skip corrupt line

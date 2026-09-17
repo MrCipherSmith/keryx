@@ -20,7 +20,7 @@
 // `describe().descriptor.providerId === "ollama"` for these registry
 // entries; giving each its own real provider id is a separate, out-of-scope
 // naming fix, not part of this pure-extraction task).
-import { providerByName, resolveProviderBaseUrl } from "../../commands/providers";
+import { providerByName, resolveCompatReasoningPreset, resolveProviderBaseUrl } from "../../commands/providers";
 import { extraRequestHeaders } from "../../lib/oauth/catalog";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
@@ -129,6 +129,11 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       return new FakeProvider([]);
     }
     const extraHeaders = extraRequestHeaders(name);
+    const resolvedBaseUrl = opts.baseUrl ?? resolveProviderBaseUrl(compat, env);
+    // MiniMax default preset (flow 268 T24): only when the provider carries
+    // no EXPLICIT `reasoning` config of its own — see
+    // `resolveCompatReasoningPreset`'s doc comment for why.
+    const reasoning = resolveCompatReasoningPreset(compat.reasoning, resolvedBaseUrl);
     const grant: {
       network: true;
       baseUrl: string;
@@ -138,6 +143,11 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       apiKey?: string;
       streamUsage?: true;
       headers?: Readonly<Record<string, string>>;
+      reasoning?: {
+        format?: "field" | "inline-tags" | "split";
+        requestParams?: Record<string, unknown>;
+        replay?: "none" | "deepseek" | "minimax";
+      };
     } = {
       network: true,
       // Only where the gateway is known to honour it. Without the field a stream
@@ -146,12 +156,13 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       // this is declared per provider in the registry and confirmed per provider.
       // Today that is grok alone; the rest are unchecked, not unsupported.
       ...(compat.streamUsage === true ? { streamUsage: true as const } : {}),
-      baseUrl: opts.baseUrl ?? resolveProviderBaseUrl(compat, env),
+      baseUrl: resolvedBaseUrl,
       ...(compat.allowLoopback === true ? { allowLoopback: true } : {}),
       ...(compat.allowPrivateLan === true ? { allowPrivateLan: true } : {}),
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
     };
     // The label is the registry's own, so an error names the gateway that sent it.
     // A grok session used to report `Ollama API returned HTTP 403` — and whoever

@@ -419,14 +419,24 @@ export interface ShellChrome {
 
   /**
    * Show a model-suggested "next step" in the composer placeholder while the
-   * composer is empty. Tab inserts it (without submitting); Enter submits it;
-   * any printable input dismisses it. No-op while the composer has text.
+   * composer is empty. Tab/Right inserts it into the composer (without
+   * submitting); any printable input dismisses it. A bare Enter on an empty
+   * composer does NOT submit it — it behaves exactly like Enter on an empty
+   * composer with no suggestion (a no-op upstream). No-op while the composer
+   * has text.
    */
   showSuggestion(text: string): void;
   /** Drop the active suggestion and restore the default placeholder. */
   clearSuggestion(): void;
   /** True while a suggestion is set (test seam / footer hint). */
   suggestionActive(): boolean;
+  /**
+   * Subscribe to composer content changes (typing/paste), regardless of
+   * whether a suggestion is currently shown — the seam a caller uses to
+   * invalidate a next-step suggestion REQUEST still in flight, before any
+   * suggestion text exists to dismiss. Returns an unsubscribe function.
+   */
+  onComposerActivity(handler: () => void): () => void;
 
   /** Clear timers and drop the chrome's own listeners. */
   destroy(): void;
@@ -1044,15 +1054,11 @@ export async function createShellChrome(
     input.value = "";
     hideMenu();
     syncComposerHeight();
-    // Enter on an empty composer with an active placeholder suggestion submits
-    // the suggestion itself (Claude-style accept). Handled HERE, in the
-    // textarea's own submit path, so it is independent of key-dispatch order.
-    if (line.length === 0 && suggestion !== null) {
-      const next = suggestion;
-      clearSuggestion();
-      emitSubmit(next);
-      return;
-    }
+    // AC14 (flow 268): a bare Enter on an empty composer does NOT accept an
+    // active placeholder suggestion — it behaves exactly like Enter on an
+    // empty composer with no suggestion at all (`emitSubmit("")`, which
+    // `runLine` in tui-shell.ts no-ops on for an operator-origin line). Only
+    // Tab/Right (below) accepts a suggestion into the composer.
     emitSubmit(line);
   };
 
@@ -1115,11 +1121,13 @@ export async function createShellChrome(
     }
   });
 
-  // --- next-step suggestion (Claude-style placeholder + Tab accept) ---------
+  // --- next-step suggestion (Claude-style placeholder + Tab/Right accept) ---
   // A model-generated "what to do next" shown as the composer placeholder while
-  // it is empty. Tab fills it in without submitting; Enter submits it directly;
-  // typing dismisses it. Mirrors qwen-code's InputForm followup mechanism
-  // (placeholder swap + tab/enter/right accept + dismiss on input).
+  // it is empty. Tab/Right fills it in without submitting; typing dismisses it.
+  // AC14 (flow 268): Enter does NOT accept it — a bare Enter on an empty
+  // composer is always a no-op upstream, suggestion or not. Mirrors
+  // qwen-code's InputForm followup mechanism (placeholder swap + tab/right
+  // accept + dismiss on input), minus the enter-accepts variant.
   const defaultPlaceholder = opts.placeholder;
   let suggestion: string | null = null;
   const syncPlaceholder = (): void => {
@@ -1135,12 +1143,18 @@ export async function createShellChrome(
     suggestion = null;
     syncPlaceholder();
   };
+  // Composer activity: fires on EVERY content change, not only while a
+  // suggestion is shown — the caller-facing seam a next-step suggestion
+  // REQUEST still in flight (no shown text yet) can key its own cancellation
+  // off of. See `onComposerActivity` below.
+  const composerActivityHandlers = new Set<() => void>();
   // Dismiss the suggestion the moment the composer gets text (typing or
   // paste), and restore it when the field is emptied again — a live
   // placeholder, not a one-shot swap.
   const prevContentChange = textarea.onContentChange;
   textarea.onContentChange = (event) => {
     if (suggestion !== null) syncPlaceholder();
+    for (const handler of [...composerActivityHandlers]) handler();
     prevContentChange?.(event);
   };
   const unsubscribeSuggestionKeys = onKeypress(r, (key) => {
@@ -1264,6 +1278,12 @@ export async function createShellChrome(
     showSuggestion,
     clearSuggestion,
     suggestionActive: () => suggestion !== null,
+    onComposerActivity: (handler) => {
+      composerActivityHandlers.add(handler);
+      return () => {
+        composerActivityHandlers.delete(handler);
+      };
+    },
 
     onSubmit: (handler) => {
       submitHandlers.add(handler);

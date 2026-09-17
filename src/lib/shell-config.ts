@@ -56,6 +56,44 @@ export interface ShellConfig {
    * make a hand-edited, half-valid block look type-safe to every reader.
    */
   externalAgents?: unknown;
+  /**
+   * Operator-set global override of the main agent turn's output-token
+   * budget (`request.budget.maxOutputTokens`/`runReservation`). Must be a
+   * positive integer when present. Consulted by
+   * `resolveAgentMaxOutputTokens` (`src/commands/agent.ts`) BELOW the
+   * `KERYX_MAX_OUTPUT_TOKENS` env override and a custom compat provider's own
+   * `maxOutputTokens` (`CustomCompatProvider`,
+   * `src/lib/provider-config.ts`), and ABOVE the built-in default — see that
+   * function's precedence doc. Not validated here (this file is a raw
+   * best-effort reader/writer, like every other field above); an invalid
+   * hand-edited value is simply ignored by the resolver's own guard.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Operator-set global reasoning effort for the main agent turn
+   * (`request.options.reasoning`), persisted by the `/reasoning <level>`
+   * shell command (flow 268 T16). One of `AgentDeps`'s
+   * `REASONING_EFFORT_LEVELS` (`src/commands/agent.ts`) when valid. Consulted
+   * by `resolveReasoningEffort` BELOW the `KERYX_REASONING_EFFORT` env
+   * override and the session's own in-memory override, and ABOVE the
+   * built-in default (`"off"`) — see that function's precedence doc. Not
+   * validated here (this file is a raw best-effort reader/writer, like every
+   * other field above); an invalid hand-edited value is simply ignored by the
+   * resolver's own guard.
+   */
+  reasoningEffort?: string;
+  /**
+   * Operator-set display mode for reasoning blocks in the TUI (flow 268 T17,
+   * AC16), persisted by `/think auto|expand|hide`. One of `"auto"` (default:
+   * a collapsed block, expandable with bare `/think`/ctrl+o — today's
+   * behaviour), `"expand"` (render the finished block already expanded), or
+   * `"hide"` (no live "thinking…" preview and no retained block; see
+   * `tui-shell.ts`'s `/think` handler for the exact contract). Not validated
+   * here (this file is a raw best-effort reader/writer, like every other
+   * field above); an invalid hand-edited value falls back to `"auto"` at the
+   * read site.
+   */
+  thinkDisplay?: string;
 }
 
 /**

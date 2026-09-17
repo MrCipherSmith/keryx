@@ -45,6 +45,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/theme",
     "/game",
     "/mode",
+    "/reasoning",
     "/plan",
     "/clear",
     "/interrupt",
@@ -131,6 +132,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/theme",
     "/game",
     "/mode",
+    "/reasoning",
     "/plan",
     "/clear",
     "/interrupt",
@@ -239,6 +241,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/theme",
     "/game",
     "/mode",
+    "/reasoning",
     "/plan",
     "/clear",
     "/interrupt",
@@ -278,7 +281,7 @@ test("filterCommands: prefix narrows the set (agent)", () => {
     "/compact",
   ]);
   expect(filterCommands("/m", "agent").map((c) => c.name)).toEqual(["/model", "/mcp", "/mode"]);
-  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review"]);
+  expect(filterCommands("/re", "agent").map((c) => c.name)).toEqual(["/resume", "/review", "/reasoning"]);
   // `/integrations` shares this prefix with `/interrupt` — a cost of the name
   // chosen for the MCP publisher view. Unlike `/mcp` vs `/mcps` the two are
   // plainly different words and the completion menu shows both, so the prefix

@@ -140,6 +140,101 @@ test("a transcript line with malformed tool-call fields drops them instead of re
   }
 });
 
+// --- T7 / AC15: per-message append ts, not a shared checkpoint-flush ts ---
+
+test("AC15: each message keeps the ts it was appended with; messages of one turn no longer share the checkpoint time", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-append-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    // Two messages "appended" at distinct, injected times (as agent.ts's
+    // push sites do via `deps.now`), and a third with no ts at all — as a
+    // push site this change did not touch would still produce.
+    persistHistory(handle, [
+      { role: "user", content: "first", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+      { role: "assistant", content: "second", provenance: "model", ts: "2020-01-01T00:00:05.000Z" },
+      { role: "tool", content: "third", provenance: "tool" },
+    ]);
+
+    const raw = readFileSync(path.join(handle.dir, "context.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { ts: string });
+    expect(raw).toHaveLength(3);
+    expect(raw[0]!.ts).toBe("2020-01-01T00:00:00.000Z");
+    expect(raw[1]!.ts).toBe("2020-01-01T00:00:05.000Z");
+    // Distinct from both explicit times above — messages of the same
+    // checkpoint no longer collapse onto a single shared ts.
+    expect(raw[2]!.ts).not.toBe(raw[0]!.ts);
+    expect(raw[2]!.ts).not.toBe(raw[1]!.ts);
+    // The no-ts message still falls back to a real ISO timestamp (the
+    // checkpoint flush time), rather than being left blank.
+    expect(() => new Date(raw[2]!.ts).toISOString()).not.toThrow();
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("AC15: re-persisting an already-seen message keeps its original ts, even across a resumed session", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-reflush-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(
+      created.handle,
+      [{ role: "user", content: "hi", provenance: "project", ts: "2020-06-01T00:00:00.000Z" }],
+      { provider: "p", model: "m" },
+    );
+
+    // Resume in a fresh load: readJsonl must carry the original ts back onto
+    // the reconstructed NormalizedMessage, not drop it.
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history[0]?.ts).toBe("2020-06-01T00:00:00.000Z");
+
+    // Flush again (a later checkpoint, e.g. after an assistant reply is
+    // appended) — the original message's ts on disk must be UNCHANGED, not
+    // bumped to this second flush's time.
+    persistHistory(resumed.handle, [
+      ...resumed.history,
+      { role: "assistant", content: "reply", provenance: "model", ts: "2020-06-01T00:05:00.000Z" },
+    ]);
+    const raw = readFileSync(path.join(resumed.handle.dir, "context.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { ts: string });
+    expect(raw[0]!.ts).toBe("2020-06-01T00:00:00.000Z");
+    expect(raw[1]!.ts).toBe("2020-06-01T00:05:00.000Z");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("AC15: a session written by an older version (one shared ts per line, no per-message field) still loads", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-legacy-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    // Exactly the pre-this-change on-disk shape: `writeJsonl` used to stamp
+    // ONE shared `ts` across every row of a flush.
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "old turn", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+      JSON.stringify({ role: "assistant", content: "old reply", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(resumed.history[0]?.ts).toBe("2019-01-01T00:00:00.000Z");
+    expect(resumed.history[1]?.ts).toBe("2019-01-01T00:00:00.000Z");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("openSession continue/resume and dual context/archive roundtrip", () => {
   const dataDir = tempData();
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-pr-"));
@@ -417,6 +512,167 @@ test("persisted history redacts secrets in tool-call arguments, not only in mess
       expect(raw).not.toContain(secret);
       expect(raw).toContain("shell_exec");
     }
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+// --- flow 268 T11: reasoning on NormalizedMessage (AC6) ---
+
+test("flow 268 T11: a save/resume round-trip preserves reasoning (text, redacted, nested replay data)", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-roundtrip-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(created.handle, [
+      { role: "user", content: "explain", provenance: "project" },
+      {
+        role: "assistant",
+        content: "Because X.",
+        provenance: "model",
+        reasoning: {
+          text: "step 1, step 2",
+          redacted: true,
+          replay: [
+            {
+              providerId: "anthropic",
+              kind: "thinking_signature",
+              data: { signature: "sig-xyz", nested: { depth: 2, list: [1, 2, 3] } },
+            },
+          ],
+          durationMs: 42,
+          tokens: 17,
+        },
+      },
+    ]);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    const assistant = resumed.history.find((m) => m.role === "assistant");
+    expect(assistant?.reasoning?.text).toBe("step 1, step 2");
+    expect(assistant?.reasoning?.redacted).toBe(true);
+    expect(assistant?.reasoning?.replay).toEqual([
+      {
+        providerId: "anthropic",
+        kind: "thinking_signature",
+        data: { signature: "sig-xyz", nested: { depth: 2, list: [1, 2, 3] } },
+      },
+    ]);
+    expect(assistant?.reasoning?.durationMs).toBe(42);
+    expect(assistant?.reasoning?.tokens).toBe(17);
+    // The user message never had reasoning — no key, not an empty object.
+    expect(resumed.history.some((m) => m.role === "user" && "reasoning" in m)).toBe(false);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: a transcript line with malformed reasoning is ignored while the message still loads", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-bad-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(created.handle, [{ role: "user", content: "hi", provenance: "project" }], {
+      provider: "p",
+      model: "m",
+    });
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "hi", ts: "t", kind: "message" }),
+      // Whole `reasoning` value is not an object at all.
+      JSON.stringify({ role: "assistant", content: "a", ts: "t", kind: "message", reasoning: "not-an-object" }),
+      // Object, but every recognizable field is the wrong shape/empty.
+      JSON.stringify({
+        role: "assistant",
+        content: "b",
+        ts: "t",
+        kind: "message",
+        reasoning: { text: 123, redacted: "yes", replay: "nope", durationMs: "42", tokens: -1 },
+      }),
+      // A malformed replay ENTRY is dropped, a well-formed one in the same
+      // array survives — same per-entry drop policy as `readToolCalls`.
+      JSON.stringify({
+        role: "assistant",
+        content: "c",
+        ts: "t",
+        kind: "message",
+        reasoning: {
+          replay: [
+            { providerId: "", kind: "x", data: 1 }, // empty providerId
+            { providerId: "p", data: 1 }, // missing kind
+            { providerId: "p", kind: "k" }, // missing data
+            "nonsense",
+            { providerId: "p", kind: "k", data: null },
+          ],
+        },
+      }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    // Every line still loads — only the malformed `reasoning` is dropped.
+    expect(resumed.history.map((m) => m.content)).toEqual(["hi", "a", "b", "c"]);
+    expect(resumed.history[1]?.reasoning).toBeUndefined();
+    expect(resumed.history[2]?.reasoning).toBeUndefined();
+    // The one well-formed replay entry (data: null is still a present key) survives.
+    expect(resumed.history[3]?.reasoning?.replay).toEqual([{ providerId: "p", kind: "k", data: null }]);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: a legacy transcript line with no reasoning field at all still loads, with no reasoning key", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-legacy-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "old turn", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+      JSON.stringify({ role: "assistant", content: "old reply", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(resumed.history.every((m) => !("reasoning" in m))).toBe(true);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: persisted reasoning.text is redacted like content; reasoning.replay.data reaches disk byte-exact", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-redact-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    const secret = `ghp_${"B".repeat(36)}`;
+    persistHistory(handle, [
+      { role: "user" as const, content: "deploy it", provenance: "project" as const },
+      {
+        role: "assistant" as const,
+        content: "ok",
+        provenance: "model" as const,
+        reasoning: {
+          text: `the token is ${secret}`,
+          replay: [{ providerId: "anthropic", kind: "thinking_signature", data: { signature: secret } }],
+        },
+      },
+    ]);
+
+    for (const file of ["context.jsonl", "archive.jsonl", "transcript.jsonl"]) {
+      const raw = readFileSync(path.join(handle.dir, file), "utf8");
+      // Visible reasoning text is redacted, same as `content`.
+      expect(raw).not.toContain(`the token is ${secret}`);
+    }
+    // The opaque replay payload is NEVER touched — even though it happens to
+    // contain the same secret-shaped string, mutating it would break a
+    // provider signature, so `redactHistory` deliberately excludes it.
+    const raw = readFileSync(path.join(handle.dir, "context.jsonl"), "utf8");
+    expect(raw).toContain(secret);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(proj, { recursive: true, force: true });

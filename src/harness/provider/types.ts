@@ -8,14 +8,30 @@
 // preserved (namespaced/redacted) in `unknownExtensions` rather than discarded.
 
 /**
- * The 8 documented normalized event kinds. Every provider stream normalizes to
- * exactly these (`provider-protocol.md` -> "Normalized Events").
+ * The 8 documented normalized event kinds (`provider-protocol.md` -> "Normalized
+ * Events"), plus `reasoning_delta`/`reasoning_replay` (flow 268 T11), added after
+ * that doc froze to carry reasoning/chain-of-thought support without touching
+ * the frozen 8-kind contract `assertEventValid`/`provider-port.test.ts` pin.
  */
 export type NormalizedEventKind =
   | "model_start"
   | "text_delta"
-  /** Chain-of-thought text from a reasoning-capable model (carried in `text`). */
+  /**
+   * Chain-of-thought text from a reasoning-capable model, carried in `text`.
+   * `redacted: true` on this event means the provider produced reasoning here
+   * but withheld its plain text (e.g. Anthropic's `redacted_thinking` block) —
+   * `text` is absent or empty in that case; the opaque bytes needed to send it
+   * back, if any, arrive separately as a `reasoning_replay` event.
+   */
   | "reasoning_delta"
+  /**
+   * An opaque, provider-specific payload (`replay`) that a later request must
+   * echo back verbatim to keep a reasoning round valid (a `thinking` block's
+   * `signature`, an OpenAI Responses reasoning item's `encrypted_content`, a
+   * Gemini `thoughtSignature`, MiniMax `reasoning_details`, …). Never carries
+   * visible text; not redacted/edited/shown — see {@link ProviderReplayItem}.
+   */
+  | "reasoning_replay"
   | "tool_call_start"
   | "tool_call_delta"
   | "tool_call_end"
@@ -75,8 +91,20 @@ export interface NormalizedEvent {
   sequence: number;
   /** Stable identity of the attempt that produced this event. */
   attemptId: string;
-  /** `text_delta` payload. */
+  /** `text_delta` payload; also `reasoning_delta`'s visible chain-of-thought text. */
   text?: string;
+  /**
+   * `reasoning_delta` only: true when this delta's reasoning content was
+   * withheld by the provider (no meaningful `text`). See the `reasoning_delta`
+   * kind doc on {@link NormalizedEventKind}. Absent/false elsewhere.
+   */
+  redacted?: boolean;
+  /**
+   * `reasoning_replay` payload: the opaque bytes an adapter must send back
+   * verbatim to keep this reasoning round valid on the next request. See
+   * {@link ProviderReplayItem}.
+   */
+  replay?: ProviderReplayItem;
   /** Correlates `tool_call_start`/`tool_call_delta`/`tool_call_end`. */
   toolCallId?: string;
   /** Tool name announced on `tool_call_start`. */
@@ -114,6 +142,52 @@ export interface NormalizedToolCall {
   arguments: string;
 }
 
+/**
+ * An opaque, JSON-serialisable payload a SPECIFIC provider adapter must send
+ * back verbatim to keep a reasoning round valid on a later request (flow 268
+ * T11, foundation for T12–T15's adapters). `providerId` scopes it — an adapter
+ * for a different provider must ignore an item it does not own rather than
+ * guess at its shape. `kind` is adapter-defined (e.g. `"thinking_signature"`,
+ * `"encrypted_content"`, `"reasoning_details"`, `"thought_signature"`) so one
+ * provider can carry more than one replay shape per round. `data` is never
+ * shown to the user, never edited by the agent loop or by redaction (mutating
+ * it — even whitespace-preserving masking — would invalidate a provider
+ * signature and break the round), and never parsed/interpreted outside the
+ * owning adapter.
+ */
+export interface ProviderReplayItem {
+  providerId: string;
+  kind: string;
+  data: unknown;
+}
+
+/**
+ * Reasoning metadata attached to an assistant {@link NormalizedMessage} (flow
+ * 268 T11). Provider-neutral by construction: the agent loop stores this
+ * without knowing what a specific provider's `replay` payloads contain.
+ *
+ * - `text`: accumulated visible chain-of-thought for the round, if any (same
+ *   text `io.onReasoning` was already given — this is what makes that
+ *   forwarding-only behavior ALSO durable in history/session storage).
+ * - `redacted`: true when at least part of this round's reasoning was
+ *   withheld by the provider (see `reasoning_delta`'s `redacted` field).
+ * - `replay`: opaque items, in event order, a later request replays verbatim
+ *   to the SAME provider (see {@link ProviderReplayItem}) — untouched by
+ *   redaction/display formatting.
+ * - `durationMs`/`tokens`: optional display metadata for a later TUI (T17).
+ *   `durationMs` is filled here (cheap: two `deps.now()` reads bracketing the
+ *   round's reasoning span) since `deps.now` is always available (defaults to
+ *   `() => new Date().toISOString()`); `tokens` is left for T17, which has a
+ *   provider-reported reasoning-token count to use that this layer does not.
+ */
+export interface MessageReasoning {
+  text?: string;
+  redacted?: boolean;
+  replay?: ProviderReplayItem[];
+  durationMs?: number;
+  tokens?: number;
+}
+
 /** A single message in a normalized request, with provenance class. */
 export interface NormalizedMessage {
   role: "system" | "user" | "assistant" | "tool";
@@ -133,6 +207,26 @@ export interface NormalizedMessage {
   toolCalls?: NormalizedToolCall[];
   /** Tool only: the id of the assistant call this message answers. */
   toolCallId?: string;
+  /**
+   * ISO timestamp of when this message first entered history (set at the
+   * `history.push(...)` call site, not at whatever checkpoint later flushes
+   * it to disk). Optional and store-only bookkeeping: no request builder
+   * reads it (they construct provider payloads field by field — see
+   * `toAnthropicMessages`/`toGeminiContents`/`toResponsesInput`/the compat
+   * provider's inline builder — so an extra field here never reaches the
+   * wire), and a caller that omits it is unaffected: `session/store.ts`
+   * falls back to the checkpoint-flush time for any message without one,
+   * which is the pre-existing behavior.
+   */
+  ts?: string;
+  /**
+   * Assistant only: chain-of-thought metadata for the round that produced
+   * this message (flow 268 T11). Attached alongside `toolCalls` on a
+   * tool-call-only round, and on a text round, so neither shape loses it.
+   * Never set to an empty object — absent means "no reasoning this round",
+   * matching every pre-existing message. See {@link MessageReasoning}.
+   */
+  reasoning?: MessageReasoning;
 }
 
 /** A neutral tool definition surfaced to the provider. */

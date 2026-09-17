@@ -130,6 +130,8 @@ describe("AC1 — clean text-stream SYNTHETIC fixture normalizes to the exact No
     expect(body.model).toBe("gpt-4.1");
     // instructions carries systemInstruction, NOT folded into input[].
     expect(body.instructions).toBe("fixture system instruction");
+    // AC3 (flow 268 T6): the Responses payload carries the output token limit.
+    expect(body.max_output_tokens).toBe(1024);
     expect(Array.isArray(body.input)).toBe(true);
     const inputArray = body.input as Record<string, unknown>[];
     expect(inputArray[0]).toMatchObject({ type: "message", role: "user" });

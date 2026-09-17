@@ -138,6 +138,19 @@ async function runStatus(): Promise<void> {
   } else {
     console.log("last link check: never");
   }
+  if (status.pagesWithThinkTags.length > 0) {
+    console.log("");
+    console.log(
+      `## Pages with leaked <think>/<thinking> tags (${status.pagesWithThinkTags.length})`,
+    );
+    for (const page of status.pagesWithThinkTags) {
+      console.log(`- ${page}`);
+    }
+    console.log("");
+    console.log(
+      "Hint: re-run `keryx wiki enrich --force --page <path>` on each page above to strip the leaked reasoning.",
+    );
+  }
 }
 
 async function runNew(args: string[]): Promise<void> {

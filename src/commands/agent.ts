@@ -24,12 +24,15 @@ import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type {
+  MessageReasoning,
   NormalizedError,
   NormalizedMessage,
   NormalizedRequest,
+  NormalizedRequestOptions,
   NormalizedToolCall,
   NormalizedUsage,
   ProviderPort,
+  ProviderReplayItem,
 } from "../harness/provider/types";
 import { estimateRequestTokens, needsCompaction } from "../harness/provider/context-guard";
 import { compactMessages } from "../session/compact";
@@ -108,6 +111,30 @@ export interface AgentIO {
    * Absent for models that emit no reasoning (e.g. gpt-4o-mini).
    */
   onReasoning?: (text: string) => void;
+  /**
+   * flow 268 T17 (AC16): a reasoning delta arrived, called for EVERY
+   * `reasoning_delta` event as it streams — before `onReasoning`'s single
+   * end-of-round callback and before the round's `text_delta`s. Lets a live
+   * renderer (the TUI) show a "thinking…" indicator while the model is still
+   * reasoning instead of waiting for the whole span to finish. Purely
+   * additive: `onReasoning` is still called exactly as before (see its doc
+   * comment) regardless of whether this hook is wired, so every existing
+   * `AgentIO` implementation is unaffected.
+   */
+  onReasoningDelta?: (delta: { text?: string; redacted?: boolean }) => void;
+  /**
+   * flow 268 T17 (AC16): the round's reasoning span just closed — called ONCE,
+   * at the same point `onReasoning` fires (the first non-reasoning event, or
+   * round end), but always, even when the round produced no visible text (a
+   * redacted-only span). `text` is the accumulated visible chain-of-thought
+   * (`""` when fully redacted); `redacted` is true when any part of the span
+   * was withheld by the provider; `durationMs` mirrors
+   * `MessageReasoning.durationMs`; `tokens` is filled from the provider's
+   * reasoning-token usage extension (`openai.reasoning_tokens` /
+   * `gemini.thoughts_tokens`) when a `usage_update` reporting it arrived
+   * before the span closed, else omitted.
+   */
+  onReasoningEnd?: (info: { text: string; redacted: boolean; durationMs?: number; tokens?: number }) => void;
   /** Provider-reported token usage for this run (forwarded from `usage_update`). */
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
@@ -202,6 +229,34 @@ export interface AgentDeps {
    * regardless of round budget — that guard is independent and unchanged.
    */
   maxRounds?: number;
+  /**
+   * Per-request output-token budget for the main agent turn round and its
+   * budget-exhausted wrap-up. Must be a positive safe integer when present.
+   * `undefined` falls back to {@link resolveAgentMaxOutputTokens} (env
+   * `KERYX_MAX_OUTPUT_TOKENS`, else {@link DEFAULT_MAX_OUTPUT_TOKENS}); a
+   * caller that already knows a custom provider's own override or the
+   * operator's global setting resolves those into this field itself (see
+   * {@link resolveAgentMaxOutputTokens}'s precedence doc) before building
+   * `AgentDeps`, since this deterministic core never reads config files.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Reasoning effort requested for the main agent turn round and its
+   * budget-exhausted wrap-up (flow 268 T16). One of
+   * {@link REASONING_EFFORT_LEVELS} (`"off"` or absent means not requested);
+   * an unrecognized string is treated the same as absent — no `options` key
+   * reaches the request at all, so a stale/invalid value here can never
+   * corrupt a request. A caller resolves this itself (see
+   * {@link resolveReasoningEffort}'s precedence doc: session override > env
+   * `KERYX_REASONING_EFFORT` > the operator's persisted global setting >
+   * `"off"`) before building `AgentDeps`, mirroring how {@link maxOutputTokens}
+   * above is resolved — this deterministic core never reads config files or
+   * env itself. Threaded onto `NormalizedRequest.options.reasoning`; each
+   * provider adapter maps/clamps the string to its own wire shape (and clamps
+   * an effort level it does not support to the nearest one it does) — this
+   * field carries the REQUESTED level, not a provider-specific one.
+   */
+  reasoningEffort?: string;
   /**
    * Optional independent ceiling on real tool invocations in this turn.
    * Unlike `maxRounds`, this counts only calls that pass lookup, schema
@@ -343,10 +398,22 @@ export interface AgentDeps {
    * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
    * in `commands/providers.ts`), resolved once at model-selection time by the
    * caller and re-resolved on every `/model`/`/provider`/`/connect` rebuild —
-   * same lifecycle as `providerId`/`modelId` above. Every field absent (the
-   * default) reproduces exactly today's request shape: `budget.maxOutputTokens`
-   * stays `1024`, `runReservation` mirrors it, and no `options.temperature` is
-   * set (AC3).
+   * same lifecycle as `providerId`/`modelId` above. Only `temperature`
+   * (folded into `request.options.temperature` by {@link buildRequestOptions})
+   * and `timeoutMs` (an internal chat-call abort timer, threaded straight into
+   * `StreamOptions.timeoutMs`) are read from this field by `runAgentTurnCore`/
+   * `finishWithBudgetSummary`. `maxOutputTokens` on this object is NOT read
+   * here — the caller is expected to fold a provider's own override into
+   * {@link AgentDeps.maxOutputTokens} itself, via
+   * {@link resolveAgentMaxOutputTokens}'s `providerMaxOutputTokens` input, so
+   * there remains exactly one resolved output-token budget rather than two
+   * that could drift apart; the field stays on this type only so a caller can
+   * pass through the SAME `ResolvedProviderModelParams`/`ShellModelParams`
+   * object it already built for `temperature`/`timeoutMs` without stripping
+   * it. Every field absent (the default) reproduces exactly today's request
+   * shape: `budget.maxOutputTokens` falls back to
+   * {@link resolveAgentMaxOutputTokens}'s own default, `runReservation`
+   * mirrors it, and no `options.temperature` is set (AC3).
    */
   modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
 }
@@ -487,6 +554,224 @@ export function resolveAgentMaxRounds(
     return DEFAULT_MAX_ROUNDS;
   }
   return Math.min(n, MAX_AGENT_MAX_ROUNDS);
+}
+
+/**
+ * Default per-request output-token budget for the main agent turn round
+ * (`runAgentTurnCore`) and its budget-exhausted wrap-up
+ * (`finishWithBudgetSummary`). 8192 is the safe maximum accepted by every
+ * currently supported provider family: Anthropic (`max_tokens`), Gemini
+ * (`maxOutputTokens`), the OpenAI-compatible adapter (`max_tokens`), and
+ * OpenAI Responses (`max_output_tokens`) all enforce the budget as a HARD
+ * ceiling on the reply, and DeepSeek's OpenAI-compatible endpoint caps
+ * `max_tokens` at 8192 — the tightest limit among them, hence the default.
+ * The prior hardcoded 1024 truncated long code edits and large tool-call
+ * JSON, and starved reasoning models (MiniMax-M3, DeepSeek) that spend the
+ * budget on reasoning tokens before ever reaching the answer. Overridable via
+ * {@link resolveAgentMaxOutputTokens} / `KERYX_MAX_OUTPUT_TOKENS`, a custom
+ * compat provider's own `maxOutputTokens` (`CustomCompatProvider`,
+ * `src/lib/provider-config.ts`), or the operator's global `maxOutputTokens`
+ * setting (`ShellConfig`, `src/lib/shell-config.ts`).
+ */
+export const DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+
+/** Env override for {@link DEFAULT_MAX_OUTPUT_TOKENS} (positive integer). */
+export const ENV_AGENT_MAX_OUTPUT_TOKENS = "KERYX_MAX_OUTPUT_TOKENS";
+
+/**
+ * Resolve the per-request output-token budget for a main agent turn round
+ * (and its wrap-up). Precedence, highest first:
+ *   1. `env[ENV_AGENT_MAX_OUTPUT_TOKENS]` — a positive integer; unset, empty,
+ *      or non-numeric falls through to the next source.
+ *   2. `providerMaxOutputTokens` — a custom compat provider's own override
+ *      (`CustomCompatProvider.maxOutputTokens`); not a positive integer falls
+ *      through.
+ *   3. `globalMaxOutputTokens` — the operator's persisted global setting
+ *      (`ShellConfig.maxOutputTokens`); not a positive integer falls through.
+ *   4. {@link DEFAULT_MAX_OUTPUT_TOKENS}.
+ *
+ * Pure and side-effect-free: it never reads a config file itself — callers
+ * pass `process.env` in production and already-resolved provider/global
+ * values, which keeps this unit-testable without touching disk (mirrors
+ * {@link resolveAgentMaxRounds}). No hard ceiling is applied to an override —
+ * unlike `maxRounds`, a larger reply budget is never itself a runaway-loop
+ * risk, and different providers accept different real maximums above 8192.
+ *
+ * `runReservation` on the request budget follows this same resolved value
+ * (see the call sites in `runAgentTurnCore`/`finishWithBudgetSummary`) — no
+ * separate override exists for it today; it is read by no adapter (see
+ * `NormalizedBudget.runReservation`'s doc comment), so there is nothing yet
+ * for a distinct value to change.
+ *
+ * A later reasoning task can raise this further when reasoning effort is
+ * enabled for the resolved model — this signature is the seam for that.
+ */
+export function resolveAgentMaxOutputTokens(
+  options: {
+    env?: Record<string, string | undefined>;
+    /** A lookup that found nothing (e.g. a built-in provider) is `undefined`, same as an absent field. */
+    providerMaxOutputTokens?: number | undefined;
+    /** A lookup that found nothing (no persisted setting) is `undefined`, same as an absent field. */
+    globalMaxOutputTokens?: number | undefined;
+  } = {},
+): number {
+  const env = options.env ?? process.env;
+  const raw = env[ENV_AGENT_MAX_OUTPUT_TOKENS];
+  if (raw !== undefined && raw.trim().length > 0) {
+    const n = Number.parseInt(raw.trim(), 10);
+    if (Number.isSafeInteger(n) && n > 0) {
+      return n;
+    }
+  }
+  if (Number.isSafeInteger(options.providerMaxOutputTokens) && (options.providerMaxOutputTokens as number) > 0) {
+    return options.providerMaxOutputTokens as number;
+  }
+  if (Number.isSafeInteger(options.globalMaxOutputTokens) && (options.globalMaxOutputTokens as number) > 0) {
+    return options.globalMaxOutputTokens as number;
+  }
+  return DEFAULT_MAX_OUTPUT_TOKENS;
+}
+
+/**
+ * Valid `AgentDeps.reasoningEffort` / `ShellConfig.reasoningEffort` values,
+ * in ascending order. `"off"` means "not requested" — the same as the field
+ * being absent (see {@link AgentDeps.reasoningEffort}'s doc comment). The
+ * remaining six are the union of every adapter's OWN accepted vocabulary
+ * (Anthropic: low/medium/high/xhigh/max; OpenAI Responses: minimal/low/
+ * medium/high; Gemini: low/medium/high) — a caller may request any of them
+ * against any provider, and the adapter that cannot honor a level clamps it
+ * to the nearest one it supports (see each adapter's own clamp, e.g.
+ * `anthropic-provider.ts`'s `buildThinkingParams`, `openai-provider.ts`'s
+ * `clampOpenAiReasoningEffort`, `gemini-provider.ts`'s `buildThinkingConfig`)
+ * rather than sending an unsupported string over the wire.
+ */
+export const REASONING_EFFORT_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/** One of {@link REASONING_EFFORT_LEVELS}. */
+export type ReasoningEffortLevel = (typeof REASONING_EFFORT_LEVELS)[number];
+
+/** True when `value` is exactly one of {@link REASONING_EFFORT_LEVELS} (case-sensitive, no trimming). */
+export function isReasoningEffortLevel(value: string): value is ReasoningEffortLevel {
+  return (REASONING_EFFORT_LEVELS as readonly string[]).includes(value);
+}
+
+/** Env override for {@link resolveReasoningEffort} (2nd-highest precedence, below a session override). */
+export const ENV_REASONING_EFFORT = "KERYX_REASONING_EFFORT";
+
+/**
+ * Resolve the reasoning effort level for the main agent turn (and its
+ * budget-exhausted wrap-up — see `AgentDeps.reasoningEffort`'s doc comment).
+ * Precedence, highest first:
+ *   1. `sessionOverride` — set by the `/reasoning <level>` shell command for
+ *      THIS session (see `resolveReasoningEffort`'s callers in
+ *      `commands/shell.ts`/`tui/tui-shell.ts`); an unrecognized value falls
+ *      through to the next source, exactly like an unset one.
+ *   2. `env[ENV_REASONING_EFFORT]` (`KERYX_REASONING_EFFORT`); unset, empty,
+ *      or unrecognized falls through.
+ *   3. `globalEffort` — the operator's persisted global setting
+ *      (`ShellConfig.reasoningEffort`); unrecognized falls through.
+ *   4. `"off"` (default: no reasoning requested — matches every existing
+ *      caller that never set anything here).
+ *
+ * Pure and side-effect-free, mirroring {@link resolveAgentMaxOutputTokens}:
+ * no config file or env is read by THIS function — callers pass
+ * `process.env` in production and already-resolved session/global values,
+ * which keeps this unit-testable without touching disk.
+ */
+export function resolveReasoningEffort(
+  options: {
+    env?: Record<string, string | undefined>;
+    /** Set by the `/reasoning <level>` command for this session; `undefined` when never set. */
+    sessionOverride?: string | undefined;
+    /** A lookup that found nothing (no persisted setting) is `undefined`, same as an absent field. */
+    globalEffort?: string | undefined;
+  } = {},
+): ReasoningEffortLevel {
+  const env = options.env ?? process.env;
+  if (options.sessionOverride !== undefined && isReasoningEffortLevel(options.sessionOverride)) {
+    return options.sessionOverride;
+  }
+  const raw = env[ENV_REASONING_EFFORT];
+  if (raw !== undefined) {
+    const trimmed = raw.trim();
+    if (trimmed.length > 0 && isReasoningEffortLevel(trimmed)) {
+      return trimmed;
+    }
+  }
+  if (options.globalEffort !== undefined && isReasoningEffortLevel(options.globalEffort)) {
+    return options.globalEffort;
+  }
+  return "off";
+}
+
+/** Which precedence tier {@link resolveReasoningEffort} actually resolved from. */
+export type ReasoningEffortSource = "session" | "env" | "global" | "default";
+
+/**
+ * Labeled version of {@link resolveReasoningEffort} for a human-readable
+ * `/reasoning` status line (no argument): same precedence/validation, but
+ * also names WHICH tier won, so "off (default)" reads differently from
+ * "off (saved config)". Not a second source of truth — every branch mirrors
+ * `resolveReasoningEffort`'s own, so the two can never disagree on the
+ * resolved value, only on whether the caller also wants to know why.
+ */
+export function describeReasoningEffortSource(
+  options: {
+    env?: Record<string, string | undefined>;
+    sessionOverride?: string | undefined;
+    globalEffort?: string | undefined;
+  } = {},
+): { effort: ReasoningEffortLevel; source: ReasoningEffortSource } {
+  const env = options.env ?? process.env;
+  if (options.sessionOverride !== undefined && isReasoningEffortLevel(options.sessionOverride)) {
+    return { effort: options.sessionOverride, source: "session" };
+  }
+  const raw = env[ENV_REASONING_EFFORT];
+  if (raw !== undefined) {
+    const trimmed = raw.trim();
+    if (trimmed.length > 0 && isReasoningEffortLevel(trimmed)) {
+      return { effort: trimmed, source: "env" };
+    }
+  }
+  if (options.globalEffort !== undefined && isReasoningEffortLevel(options.globalEffort)) {
+    return { effort: options.globalEffort, source: "global" };
+  }
+  return { effort: "off", source: "default" };
+}
+
+/**
+ * Build the optional `NormalizedRequest.options` for a main-turn/wrap-up
+ * request (flow 268): `temperature` (an operator's per-provider override,
+ * `deps.modelParams.temperature` — see `AgentDeps.modelParams`'s doc comment)
+ * and `reasoning` (the ALREADY-RESOLVED `reasoningEffort` level — see
+ * {@link resolveReasoningEffort}'s precedence doc) are independent fields on
+ * the same `options` object; either, both, or neither may be present.
+ * `maxOutputTokens` is deliberately NOT read from `deps.modelParams` here —
+ * unlike `temperature`/`timeoutMs`, it has its own single resolved value on
+ * `AgentDeps.maxOutputTokens` (via {@link resolveAgentMaxOutputTokens}, whose
+ * `providerMaxOutputTokens` input already folds in a provider's own default),
+ * so reading `deps.modelParams.maxOutputTokens` here as well would be a
+ * second, independently-drifting computation of the same budget.
+ * `"off"` and absent are the same "not requested" signal for
+ * `reasoningEffort`, matching `AgentDeps.reasoningEffort`'s doc comment.
+ * Absent everywhere -> `{}` (no `options` key at all), reproducing today's
+ * request byte-for-byte (AC3).
+ */
+function buildRequestOptions(
+  deps: Pick<AgentDeps, "modelParams">,
+  reasoningEffort: string | undefined,
+): { options: NormalizedRequestOptions } | Record<string, never> {
+  const temperature = deps.modelParams?.temperature;
+  const reasoning = reasoningEffort !== undefined && reasoningEffort !== "off" ? reasoningEffort : undefined;
+  if (temperature === undefined && reasoning === undefined) {
+    return {};
+  }
+  return {
+    options: {
+      ...(temperature !== undefined ? { temperature } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
+    },
+  };
 }
 
 /**
@@ -1337,6 +1622,55 @@ async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAg
   }
 }
 
+/**
+ * flow 268 T17 (AC16): the round's reasoning-token count, when the provider
+ * reported one. Providers with no neutral `NormalizedUsage` field for it
+ * (flow 268 T11/T12/T13/T14/T15's OpenAI/Gemini adapters) carry it on the
+ * `usage_update` EVENT's `unknownExtensions` (a sibling of `usage`, not
+ * nested inside it) under a namespaced key — see `openai-provider.ts`'s
+ * `openai.reasoning_tokens` and `gemini-provider.ts`'s
+ * `gemini.thoughts_tokens`. Anthropic has no separate reasoning-token count
+ * to extract. Returns `undefined` when neither key is present or the value
+ * is not a finite number (never trusts an unvalidated extension blindly).
+ */
+function extractReasoningTokens(unknownExtensions: Record<string, unknown> | undefined): number | undefined {
+  if (unknownExtensions === undefined) return undefined;
+  const raw = unknownExtensions["openai.reasoning_tokens"] ?? unknownExtensions["gemini.thoughts_tokens"];
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
+/**
+ * flow 268 T17 (AC16): builds `onReasoningDelta`'s payload from a
+ * `reasoning_delta` event's (both optional) `text`/`redacted` fields.
+ * `exactOptionalPropertyTypes` forbids passing an explicit `undefined` for an
+ * optional property, so an absent source field must be OMITTED, not copied
+ * through as `undefined` — hence the conditional spreads rather than a
+ * literal `{ text: event.text, redacted: event.redacted }`.
+ */
+function reasoningDeltaPayload(event: {
+  text?: string;
+  redacted?: boolean;
+}): { text?: string; redacted?: boolean } {
+  return {
+    ...(event.text !== undefined ? { text: event.text } : {}),
+    ...(event.redacted !== undefined ? { redacted: event.redacted } : {}),
+  };
+}
+
+/**
+ * flow 268 T17 (AC16): shared duration calc for `MessageReasoning.durationMs`
+ * and `onReasoningEnd`'s `durationMs` — both bracket the SAME reasoning span
+ * (`reasoningStartedAt`/`reasoningEndedAt`, ISO timestamps from `deps.now`).
+ * `undefined` when either bound is missing, unparsable, or the span is
+ * inverted (defensive — `now()` is monotonic-in-practice but not guaranteed).
+ */
+function computeReasoningDurationMs(startedAt: string | undefined, endedAt: string | undefined): number | undefined {
+  if (startedAt === undefined || endedAt === undefined) return undefined;
+  const startMs = Date.parse(startedAt);
+  const endMs = Date.parse(endedAt);
+  return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs ? endMs - startMs : undefined;
+}
+
 async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
@@ -1344,8 +1678,26 @@ async function runAgentTurnCore(
   userLine: string,
   options: RunAgentTurnOptions = {},
 ): Promise<RunAgentTurnResult> {
+  // Session-store append time (T7, AC15): each message pushed below is
+  // stamped with the time it entered `history` HERE, not with whatever
+  // checkpoint later flushes it to disk — `session/store.ts`'s `writeJsonl`
+  // prefers a message's own `ts` and only falls back to the flush time when
+  // one is absent. Reuses the SAME narrowly-scoped `deps.now` clock exception
+  // `emitTerminalState` already established (defaults to
+  // `() => new Date().toISOString()`), rather than a new `Date.now()` call —
+  // this module's determinism contract is "uses ONLY `deps.idSeq`" for
+  // provider/tool I/O, and `now` is the one documented, injectable exception
+  // to it.
+  const now = deps.now ?? (() => new Date().toISOString());
   const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
+  const maxOutputTokens =
+    validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
+  // flow 268 T16: `deps.reasoningEffort` is already fully resolved by the
+  // caller (see its doc comment) — "off"/absent both mean "not requested",
+  // and only then is `request.options` omitted entirely (see `baseRequest`/
+  // `finishWithBudgetSummary`'s request below).
+  const reasoningEffort = deps.reasoningEffort;
   // Flow 265 (AC7): a turn the shell started because a task finished has no
   // operator line — its INPUT is the notification itself. Pushing `userLine`
   // here would put an empty `user` message in history, which is both a lie
@@ -1360,10 +1712,10 @@ async function runAgentTurnCore(
     if (woken.length === 0) {
       return {};
     }
-    history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool" });
+    history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
   } else {
-    history.push({ role: "user", content: userLine, provenance: "project" });
+    history.push({ role: "user", content: userLine, provenance: "project", ts: now() });
     io.onHistoryChange?.("user");
   }
   const signal = options.signal;
@@ -1424,7 +1776,7 @@ async function runAgentTurnCore(
         if (!wasOpened && options.slateSession.opened) {
           const freshSlate = await readSlate(options.slateSession.dir);
           if (freshSlate !== undefined) {
-            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
+            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project", ts: now() });
             io.onHistoryChange?.("tool");
             // Flow 200: NO auto resolve-or-create here anymore. The slate
             // opens with workspaceId unset; the agent binds/creates a
@@ -1553,19 +1905,14 @@ async function runAgentTurnCore(
         });
       }
     }
-    // flow 268: `deps.modelParams` is absent by default, so `?? 1024` and the
-    // `options` omission below reproduce today's request byte-for-byte (AC3).
-    const resolvedMaxOutputTokens = deps.modelParams?.maxOutputTokens ?? 1024;
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
       systemInstruction: deps.systemInstruction,
       messages: [...history],
       tools: toolDefs,
-      budget: { maxOutputTokens: resolvedMaxOutputTokens, runReservation: resolvedMaxOutputTokens },
-      ...(deps.modelParams?.temperature !== undefined
-        ? { options: { temperature: deps.modelParams.temperature } }
-        : {}),
+      budget: { maxOutputTokens, runReservation: maxOutputTokens },
+      ...buildRequestOptions(deps, reasoningEffort),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -1577,10 +1924,42 @@ async function runAgentTurnCore(
     let assistantMessage: NormalizedMessage | undefined;
     let reasoningText = "";
     let reasoningFlushed = false;
+    // flow 268 T11: redacted flag, opaque replay items (never redacted/edited —
+    // see `ProviderReplayItem`), and the reasoning span's wall-clock bounds
+    // (cheap: `now()` is always available, defaulting to an ISO clock) for
+    // `MessageReasoning.durationMs`. `io.onReasoning` behaviour is UNCHANGED —
+    // `flushReasoning` below still only calls it on non-empty `reasoningText`
+    // (flow 268 T17 added a second, independent `onReasoningEnd` call inside
+    // the same function with its own, broader firing condition — see below).
+    let reasoningRedacted = false;
+    const reasoningReplay: ProviderReplayItem[] = [];
+    let reasoningStartedAt: string | undefined;
+    let reasoningEndedAt: string | undefined;
+    // flow 268 T17 (AC16): last-known reasoning-token count for this round,
+    // updated as `usage_update` events arrive (see `extractReasoningTokens`).
+    // Read by `flushReasoning` below when it fires `onReasoningEnd` — a round
+    // whose usage arrives before its reasoning span closes (no trailing text,
+    // e.g. a reasoning+tool-call round) has it available at that point.
+    let reasoningTokens: number | undefined;
+    let reasoningEndFlushed = false;
     const flushReasoning = (): void => {
       if (reasoningText.length > 0 && !reasoningFlushed) {
         io.onReasoning?.(reasoningText);
         reasoningFlushed = true;
+      }
+      // flow 268 T17 (AC16): fires once, at the SAME call sites as
+      // `onReasoning` above, but also for a redacted-only or replay-only span
+      // that produced no visible text (`onReasoning` never fires for those —
+      // unchanged for compatibility).
+      if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
+        const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+        io.onReasoningEnd?.({
+          text: reasoningText,
+          redacted: reasoningRedacted,
+          ...(durationMs !== undefined ? { durationMs } : {}),
+          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+        });
+        reasoningEndFlushed = true;
       }
     };
     const nameById = new Map<string, string>();
@@ -1595,18 +1974,40 @@ async function runAgentTurnCore(
       };
       for await (const event of deps.provider.stream(request, streamOptions)) {
         if (isAborted()) {
+          // flow 268 T26: fire `onReasoningEnd` for a round that started
+          // reasoning before the abort landed — otherwise a live TUI preview
+          // (`attachBlockIo`) never sees its end-of-round reset and the next
+          // turn's `reasoning_delta`s land appended to this round's stale
+          // text. Never attaches `roundReasoning` to `history` here (the
+          // early `return {}` still skips that, same as before this fix) —
+          // only the display/durable-summary forwarding callbacks fire.
+          flushReasoning();
           system("\n[stopped] Model turn interrupted by user.\n");
           return {};
         }
+        if (
+          reasoningStartedAt !== undefined &&
+          reasoningEndedAt === undefined &&
+          event.kind !== "reasoning_delta" &&
+          event.kind !== "reasoning_replay"
+        ) {
+          reasoningEndedAt = now(); // first non-reasoning event closes the span
+        }
         if (event.kind === "reasoning_delta") {
+          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
           reasoningText += event.text ?? "";
+          if (event.redacted === true) reasoningRedacted = true;
+          io.onReasoningDelta?.(reasoningDeltaPayload(event));
+        } else if (event.kind === "reasoning_replay") {
+          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+          if (event.replay !== undefined) reasoningReplay.push(event.replay);
         } else if (event.kind === "text_delta") {
           flushReasoning(); // reasoning precedes the answer → surface it first
           const text = event.text ?? "";
           io.write(text);
           assistantText += text;
           if (assistantMessage === undefined) {
-            assistantMessage = { role: "assistant", content: text, provenance: "model" };
+            assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
             history.push(assistantMessage);
           } else {
             assistantMessage.content += text;
@@ -1627,6 +2028,7 @@ async function runAgentTurnCore(
         } else if (event.kind === "usage_update") {
           if (event.usage !== undefined) {
             io.onUsage?.(event.usage);
+            reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
           }
         } else if (event.kind === "provider_error") {
           system(formatProviderErrorMessage(event.error));
@@ -1638,6 +2040,10 @@ async function runAgentTurnCore(
       }
     } catch (cause) {
       if (isAborted()) {
+        // Same flush-before-abort-return fix as the in-loop check above —
+        // an abort caught here (e.g. mid-read) must still close the round's
+        // reasoning span exactly once.
+        flushReasoning();
         system("\n[stopped] Model turn interrupted by user.\n");
         return {};
       }
@@ -1646,6 +2052,36 @@ async function runAgentTurnCore(
     }
 
     flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it
+
+    // flow 268 T11 (AC6): durable counterpart of the `onReasoning` forwarding
+    // above — carried on the round's assistant message (below, or the
+    // tool-call-only message further down) so a saved/resumed session and a
+    // compacted suffix keep it. `undefined` (not `{}`) when the round produced
+    // neither text nor a redacted marker nor replay items, matching every
+    // pre-existing message that never had reasoning.
+    const roundReasoningDurationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+    const roundReasoning: MessageReasoning | undefined =
+      reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
+        ? {
+            ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
+            ...(reasoningRedacted ? { redacted: true } : {}),
+            ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
+            ...(roundReasoningDurationMs !== undefined ? { durationMs: roundReasoningDurationMs } : {}),
+            // flow 268 T17 (AC16): durable counterpart of `onReasoningEnd`'s
+            // `tokens` — same extraction, same last-known-by-span-close value.
+            ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+          }
+        : undefined;
+    // A text (or text+tool) round already has its message in `history` — attach
+    // now via the live reference. A tool-call-only round attaches it below,
+    // where that message is created; a round with reasoning but no text and no
+    // tool calls has no assistant message to attach to at all (it falls into
+    // the toolless-finish path below) and the reasoning is dropped from
+    // history — `io.onReasoning` above is the only trace of it, same as before
+    // this change.
+    if (assistantMessage !== undefined && roundReasoning !== undefined) {
+      assistantMessage.reasoning = roundReasoning;
+    }
 
     if (assistantText.length > 0) {
       io.onAssistantText?.(assistantText);
@@ -1679,6 +2115,7 @@ async function runAgentTurnCore(
           role: "user",
           content: buildToollessReprompt(toollessReprompts),
           provenance: "project",
+          ts: now(),
         });
         io.onHistoryChange?.("tool");
         continue;
@@ -1714,7 +2151,7 @@ async function runAgentTurnCore(
       // its own test), so a turn with no tasks still ends in one request.
       const alreadyFinished = taskRegistry?.drainUndelivered() ?? [];
       if (alreadyFinished.length > 0) {
-        history.push({ role: "user", content: buildTaskNotification(alreadyFinished), provenance: "tool" });
+        history.push({ role: "user", content: buildTaskNotification(alreadyFinished), provenance: "tool", ts: now() });
         io.onHistoryChange?.("tool");
         continue;
       }
@@ -1768,7 +2205,7 @@ async function runAgentTurnCore(
         // round in which to react to what finished.
         const held = taskRegistry.drainUndelivered();
         if (held.length > 0) {
-          history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool" });
+          history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool", ts: now() });
           io.onHistoryChange?.("tool");
         }
         continue;
@@ -1795,8 +2232,16 @@ async function runAgentTurnCore(
     }));
     if (assistantMessage !== undefined) {
       assistantMessage.toolCalls = emittedCalls;
+      // `roundReasoning` (if any) was already attached to this message above.
     } else {
-      history.push({ role: "assistant", content: "", provenance: "model", toolCalls: emittedCalls });
+      history.push({
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: emittedCalls,
+        ts: now(),
+        ...(roundReasoning !== undefined ? { reasoning: roundReasoning } : {}),
+      });
     }
 
     // Execute each tool call and append its result, then loop to re-request.
@@ -1922,7 +2367,7 @@ async function runAgentTurnCore(
           isError: true,
         };
         io.onToolResult?.(call.name, result);
-        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id });
+        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
         io.onHistoryChange?.("tool");
         continue;
       }
@@ -1938,7 +2383,7 @@ async function runAgentTurnCore(
       if (!reservation.ok) {
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
-        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id });
+        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
         io.onHistoryChange?.("tool");
         toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
         continue;
@@ -1993,6 +2438,7 @@ async function runAgentTurnCore(
           : modelOutput,
         provenance: "tool",
         toolCallId: call.id,
+        ts: now(),
       });
       io.onHistoryChange?.("tool");
       if (untrusted) {
@@ -2055,11 +2501,11 @@ async function runAgentTurnCore(
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
     if (anchorsToAnnounce !== undefined) {
-      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project" });
+      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project", ts: now() });
       io.onHistoryChange?.("tool");
     }
     if (repeatedFailureHint !== undefined) {
-      history.push({ role: "user", content: repeatedFailureHint, provenance: "project" });
+      history.push({ role: "user", content: repeatedFailureHint, provenance: "project", ts: now() });
       io.onHistoryChange?.("tool");
     }
 
@@ -2074,7 +2520,7 @@ async function runAgentTurnCore(
     // command, not out of the operator's own words.
     const completions = deps.jobRegistry?.drainUndelivered() ?? [];
     if (completions.length > 0) {
-      history.push({ role: "user", content: buildTaskNotification(completions), provenance: "tool" });
+      history.push({ role: "user", content: buildTaskNotification(completions), provenance: "tool", ts: now() });
       io.onHistoryChange?.("tool");
     }
 
@@ -2194,6 +2640,11 @@ async function finishWithBudgetSummary(
       io.write(text);
     }
   };
+  const now = deps.now ?? (() => new Date().toISOString());
+  const maxOutputTokens =
+    validateDirectBudget("maxOutputTokens", deps.maxOutputTokens, 1) ?? resolveAgentMaxOutputTokens();
+  // flow 268 T16: same already-resolved field `runAgentTurnCore` reads — see its comment.
+  const reasoningEffort = deps.reasoningEffort;
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const why = `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
@@ -2217,6 +2668,7 @@ async function finishWithBudgetSummary(
       `(3) 1–3 concrete next steps (commands to re-run, fixes, or “send the same request again”). ` +
       `Do NOT call tools.`,
     provenance: "project",
+    ts: now(),
   });
 
   // Flow 267: same guard as the round loop, before the wrap-up request. No
@@ -2234,19 +2686,14 @@ async function finishWithBudgetSummary(
       });
     }
   }
-  // flow 268: same resolution as the main loop above — absent `modelParams`
-  // reproduces today's request byte-for-byte (AC3).
-  const wrapUpMaxOutputTokens = deps.modelParams?.maxOutputTokens ?? 1024;
   const request: NormalizedRequest = {
     providerId: deps.providerId,
     modelId: deps.modelId,
     systemInstruction: deps.systemInstruction,
     messages: [...history],
     // No tools — force a text wrap-up.
-    budget: { maxOutputTokens: wrapUpMaxOutputTokens, runReservation: wrapUpMaxOutputTokens },
-    ...(deps.modelParams?.temperature !== undefined
-      ? { options: { temperature: deps.modelParams.temperature } }
-      : {}),
+    budget: { maxOutputTokens, runReservation: maxOutputTokens },
+    ...buildRequestOptions(deps, reasoningEffort),
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -2255,25 +2702,61 @@ async function finishWithBudgetSummary(
   let assistantText = "";
   let reasoningText = "";
   let reasoningFlushed = false;
+  // flow 268 T11: same accumulation as `runAgentTurnCore` — see its comments.
+  let reasoningRedacted = false;
+  const reasoningReplay: ProviderReplayItem[] = [];
+  let reasoningStartedAt: string | undefined;
+  let reasoningEndedAt: string | undefined;
+  // flow 268 T17 (AC16): same pattern as `runAgentTurnCore` — see its comments.
+  let reasoningTokens: number | undefined;
+  let reasoningEndFlushed = false;
+  const flushReasoning = (): void => {
+    if (reasoningText.length > 0 && !reasoningFlushed) {
+      io.onReasoning?.(reasoningText);
+      reasoningFlushed = true;
+    }
+    if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
+      const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+      io.onReasoningEnd?.({
+        text: reasoningText,
+        redacted: reasoningRedacted,
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+      });
+      reasoningEndFlushed = true;
+    }
+  };
   try {
     const wrapUpStreamOptions = {
       attemptId: deps.idSeq(),
       ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
     };
     for await (const event of deps.provider.stream(request, wrapUpStreamOptions)) {
+      if (
+        reasoningStartedAt !== undefined &&
+        reasoningEndedAt === undefined &&
+        event.kind !== "reasoning_delta" &&
+        event.kind !== "reasoning_replay"
+      ) {
+        reasoningEndedAt = now();
+      }
       if (event.kind === "reasoning_delta") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
         reasoningText += event.text ?? "";
+        if (event.redacted === true) reasoningRedacted = true;
+        io.onReasoningDelta?.(reasoningDeltaPayload(event));
+      } else if (event.kind === "reasoning_replay") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+        if (event.replay !== undefined) reasoningReplay.push(event.replay);
       } else if (event.kind === "text_delta") {
-        if (reasoningText.length > 0 && !reasoningFlushed) {
-          io.onReasoning?.(reasoningText);
-          reasoningFlushed = true;
-        }
+        flushReasoning();
         const text = event.text ?? "";
         io.write(text);
         assistantText += text;
       } else if (event.kind === "usage_update") {
         if (event.usage !== undefined) {
           io.onUsage?.(event.usage);
+          reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
         }
       } else if (event.kind === "provider_error") {
         system(formatProviderErrorMessage(event.error));
@@ -2286,11 +2769,28 @@ async function finishWithBudgetSummary(
     system(`\n[error] wrap-up failed: ${cause instanceof Error ? cause.message : String(cause)}\n`);
   }
 
-  if (reasoningText.length > 0 && !reasoningFlushed) {
-    io.onReasoning?.(reasoningText);
-  }
+  flushReasoning();
+  // Durable counterpart of the forwarding above (AC6) — see
+  // `runAgentTurnCore`'s identical construction for the full rationale.
+  const roundReasoningDurationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+  const roundReasoning: MessageReasoning | undefined =
+    reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
+      ? {
+          ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
+          ...(reasoningRedacted ? { redacted: true } : {}),
+          ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
+          ...(roundReasoningDurationMs !== undefined ? { durationMs: roundReasoningDurationMs } : {}),
+          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+        }
+      : undefined;
   if (assistantText.length > 0) {
-    history.push({ role: "assistant", content: assistantText, provenance: "model" });
+    history.push({
+      role: "assistant",
+      content: assistantText,
+      provenance: "model",
+      ts: now(),
+      ...(roundReasoning !== undefined ? { reasoning: roundReasoning } : {}),
+    });
     io.onAssistantText?.(assistantText);
   } else {
     system(
@@ -2641,10 +3141,16 @@ async function executeCall(
   return tool.invoke(input, { ...(signal !== undefined ? { signal } : {}) });
 }
 
-function validateDirectBudget(name: "maxRounds" | "maxToolCalls", value: number | undefined, min: number): number | undefined {
+function validateDirectBudget(
+  name: "maxRounds" | "maxToolCalls" | "maxOutputTokens",
+  value: number | undefined,
+  min: number,
+): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isSafeInteger(value) || value < min) {
-    throw new RangeError(`${name} must be a non-negative safe integer`);
+    throw new RangeError(
+      `${name} must be a ${min > 0 ? "positive" : "non-negative"} safe integer`,
+    );
   }
   return value;
 }

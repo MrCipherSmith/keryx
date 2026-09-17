@@ -1387,7 +1387,13 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
 describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sweep wiring (source-text audit)", () => {
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 4200);
+  // Widened from 4200 (flow 173) to 4600 to fit T23's `maxOutputTokens`
+  // resolution, then to 5300 to fit T16's `reasoningEffort` resolution, then
+  // to 5450 for the flow 268 merge's `resolvedModelParams.maxOutputTokens`
+  // routing comment on the same `maxOutputTokens` field — all added ahead of
+  // `sweepBackgroundJobs` in the same `agentDepsBase` object — still just
+  // past that field, well short of the next declaration.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 5450);
   const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
   const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
 
@@ -1618,5 +1624,118 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (source-text 
     expect(shellSourceAc7Wake).toContain("resolveMaxAutoWake");
     // A counter that is only ever incremented is not a cap: pin the reset too.
     expect(shellSourceAc7Wake).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
+  });
+});
+
+// --- flow 268 T16 (AC11): shell.ts readline /reasoning wiring -------------
+//
+// `runAgentRepl` is explicitly "NOT unit-tested" (its own doc comment, see
+// the SLATE-3a/flow-265-AC7 audits above) and has no injection seam for its
+// command dispatch loop, so this follows the exact precedent already set in
+// this file: `readFileSync` the real source and assert on literals. The
+// RESOLVER (`resolveReasoningEffort`/`describeReasoningEffortSource`) and
+// each adapter's clamp are proven directly in `agent.test.ts` and the
+// per-provider `*-reasoning.test.ts` files; this block only proves the
+// readline surface actually wires a `/reasoning` command in.
+describe("flow 268 T16 — shell.ts readline /reasoning wiring (source-text audit)", () => {
+  const reasoningShellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = reasoningShellSource.indexOf("async function runAgentRepl(");
+  const replBodyReasoning = reasoningShellSource.slice(replStart);
+  const branchIndex = replBodyReasoning.indexOf('command === "/reasoning"');
+  const branchBlock = replBodyReasoning.slice(branchIndex, branchIndex + 2_400);
+
+  test("the command dispatch loop has a /reasoning branch", () => {
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("no arg shows the resolved effort and its source via describeReasoningEffortSource", () => {
+    expect(branchBlock).toContain("describeReasoningEffortSource(");
+    expect(branchBlock).toContain("sessionOverride: reasoningSessionOverride");
+  });
+
+  test("an invalid level is rejected via isReasoningEffortLevel before anything is mutated", () => {
+    expect(branchBlock).toContain("isReasoningEffortLevel(wanted)");
+  });
+
+  test("a valid level mutates the live deps.reasoningEffort directly (no rebuild exists for readline agent mode)", () => {
+    expect(branchBlock).toContain("deps.reasoningEffort = wanted");
+  });
+
+  test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
+    // flow 268 T26: persisted against the SAME configDir this session's
+    // other ShellConfig reads use (see the T26 describe block below), not
+    // the bare default-dir overload.
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted }, configDir)");
+  });
+
+  test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {
+    expect(branchBlock).toContain("providerByName(deps.providerId)");
+    expect(branchBlock).toContain("compatProvider.reasoning === undefined");
+    expect(branchBlock).toMatch(/no effect for it/);
+  });
+
+  test("/reasoning is advertised in the readline agent REPL's own help subset", () => {
+    expect(reasoningShellSource).toContain("READLINE_AGENT_COMMANDS");
+    const listStart = reasoningShellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
+    const listEnd = reasoningShellSource.indexOf("];", listStart);
+    expect(reasoningShellSource.slice(listStart, listEnd)).toContain('"/reasoning"');
+  });
+});
+
+// --- flow 268 T26: readline /reasoning + /think must read/write the SAME
+// ShellConfig dir as `agentDepsBase` (`loadShellConfig(runtime.cacheDir)`),
+// not the bare default-dir overload — otherwise a session started with a
+// non-default cache dir (tests, `--cache-dir`, a sandboxed run) resolves and
+// persists reasoning effort against a DIFFERENT file than the rest of the
+// session already reads, so `/reasoning` silently "does nothing" from the
+// operator's point of view, and `/think`'s display mode (persisted by the
+// TUI, only READ here) is checked against the wrong file too.
+describe("flow 268 T26 — runAgentRepl threads configDir into every loadShellConfig/saveShellConfig call (source-text audit)", () => {
+  const dirSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = dirSource.indexOf("async function runAgentRepl(");
+  // Bounded by `resolveTuiStartup`'s own doc comment, the next thing in the
+  // file after `runAgentRepl`'s closing brace — the next FUNCTION
+  // DECLARATION (`export async function resolveTuiStartup`) is not a safe
+  // boundary, since a doc comment for it (mentioning `loadShellConfig()`,
+  // literally, describing PRE-flow-112 history) sits between the brace and
+  // that declaration and would otherwise be counted as still inside
+  // `runAgentRepl`.
+  const replEndAnchor = "\n/** Persisted defaults + provider detection resolved once for a TUI launch. */";
+  const replEnd = dirSource.indexOf(replEndAnchor, replStart);
+  const replBody = dirSource.slice(replStart, replEnd >= 0 ? replEnd : dirSource.length);
+
+  test("runAgentRepl accepts a configDir parameter", () => {
+    const signatureEnd = dirSource.indexOf("): Promise<void> {", replStart);
+    const signature = dirSource.slice(replStart, signatureEnd);
+    expect(signature).toContain("configDir?: string");
+  });
+
+  test("the onReasoningEnd /think-display check reads loadShellConfig(configDir), not the bare default-dir overload", () => {
+    expect(replBody).toContain("loadShellConfig(configDir).thinkDisplay");
+    expect(replBody).not.toContain("loadShellConfig().thinkDisplay");
+  });
+
+  test("the /reasoning branch's no-arg display reads loadShellConfig(configDir)", () => {
+    const branchIndex = replBody.indexOf('command === "/reasoning"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 2_400);
+    expect(branchBlock).toContain("loadShellConfig(configDir).reasoningEffort");
+  });
+
+  test("the /reasoning branch's set path persists via saveShellConfig(..., configDir)", () => {
+    const branchIndex = replBody.indexOf('command === "/reasoning"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 2_400);
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted }, configDir)");
+  });
+
+  test("no bare loadShellConfig()/saveShellConfig() call (no dir argument at all) remains inside runAgentRepl", () => {
+    expect(replBody).not.toMatch(/loadShellConfig\(\)/);
+    expect(replBody).not.toMatch(/saveShellConfig\(\{[^}]*\}\)(?!,)/);
+  });
+
+  test("shellCommand's runAgentRepl call site passes runtime.cacheDir as the configDir argument", () => {
+    const callIndex = dirSource.indexOf("await runAgentRepl(sharedLines,");
+    expect(callIndex).toBeGreaterThanOrEqual(0);
+    const callBlock = dirSource.slice(callIndex, dirSource.indexOf(";", callIndex));
+    expect(callBlock).toContain("runtime.cacheDir");
   });
 });

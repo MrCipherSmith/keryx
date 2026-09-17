@@ -932,7 +932,7 @@ otuiTest("AC1: the REAL io wiring retains a tool result's full output (headless,
   const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
   const chrome = { reasoning: 0, calls: 0, results: 0 };
   attachBlockIo(io, h.addBlock, {
-    onReasoning: () => {
+    onReasoningStart: () => {
       chrome.reasoning += 1;
     },
     onToolCall: () => {
@@ -1622,7 +1622,7 @@ otuiTest("AC4: an expanded reasoning body is dim; tool output on the same frame 
   const h = await mountBlockHarness(otui, { width: 70, height: 24 });
   const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
   attachBlockIo(io, h.addBlock);
-  io.onReasoning?.("REASONING-BODY-LINE");
+  io.onReasoningEnd?.({ text: "REASONING-BODY-LINE", redacted: false });
   // Two lines: the first becomes the collapsed SUMMARY in the (always dim)
   // header, so the body assertion below must target a line the header never
   // shows.
@@ -1650,7 +1650,7 @@ otuiTest("AC5: an expanded reasoning body is bounded, while the retained payload
   const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
   attachBlockIo(io, h.addBlock);
   const lines = Array.from({ length: 60 }, (_, i) => `thought line ${i + 1}`);
-  io.onReasoning?.(lines.join("\n"));
+  io.onReasoningEnd?.({ text: lines.join("\n"), redacted: false });
   const id = h.registry.list().at(-1)?.id ?? "";
   h.nav.setCollapsed(id, false);
   await h.flush();
@@ -1673,7 +1673,7 @@ otuiTest("AC6: toggleNewest expands then collapses the newest reasoning block, a
   const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
   attachBlockIo(io, h.addBlock);
   io.onToolResult?.("read_file", { output: "unrelated output", isError: false });
-  io.onReasoning?.("REASONING-BODY-LINE\nsecond line");
+  io.onReasoningEnd?.({ text: "REASONING-BODY-LINE\nsecond line", redacted: false });
 
   // What `/think` calls (the shell closure keeps only the command dispatch).
   const expanded = h.nav.toggleNewest("thought");
@@ -1692,6 +1692,131 @@ otuiTest("AC6: toggleNewest expands then collapses the newest reasoning block, a
   // An unrelated tool block is never the target of `/think`.
   expect(h.registry.list().find((b) => b.kind === "output")?.collapsed).toBe(true);
   expect(h.nav.toggleNewest("no-such-kind")).toBeUndefined();
+  h.destroy();
+});
+
+// --- flow 268 T17 (AC16): live reasoning preview + display modes -----------
+
+otuiTest("flow 268 T17: onReasoningDelta fires onReasoningStart once and never double-registers via the old onReasoning", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  let starts = 0;
+  attachBlockIo(io, h.addBlock, { onReasoningStart: () => { starts += 1; } });
+
+  io.onReasoningDelta?.({ text: "step " });
+  io.onReasoningDelta?.({ text: "one" });
+  expect(starts).toBe(1); // once per round, on the FIRST delta only
+  expect(h.registry.list()).toHaveLength(0); // no block yet — the round has not ended
+
+  // `runAgentTurn` calls the OLD `io.onReasoning` unconditionally alongside
+  // `io.onReasoningEnd` (see `commands/agent.ts`'s `flushReasoning`) — it must
+  // stay a harmless no-op here, never a second block.
+  io.onReasoning?.("step one");
+  io.onReasoningEnd?.({ text: "step one", redacted: false, durationMs: 1200 });
+  expect(h.registry.list().filter((b) => b.kind === "thought")).toHaveLength(1);
+  h.destroy();
+});
+
+otuiTest("flow 268 T17: onReasoningEnd's block summary carries duration/tokens, and the redacted-only variant registers a 'hidden by provider' block", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock);
+
+  io.onReasoningEnd?.({ text: "thinking it through", redacted: false, durationMs: 12_000, tokens: 1800 });
+  const withText = h.registry.list().find((b) => b.kind === "thought");
+  expect(withText?.summary).toBe("for 12s · 1.8k tokens");
+  expect(h.registry.bodyText(withText?.id ?? "")).toBe("thinking it through");
+
+  io.onReasoningEnd?.({ text: "", redacted: true, durationMs: 3_000 });
+  const hidden = h.registry.list().filter((b) => b.kind === "thought").at(-1);
+  expect(hidden?.summary).toBe("for 3s · hidden by provider");
+  expect(h.registry.bodyText(hidden?.id ?? "")).toBe("(hidden by provider)");
+  h.destroy();
+});
+
+otuiTest("flow 268 T17: /think expand registers the finished block already expanded", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  attachBlockIo(io, h.addBlock, {}, () => "expand");
+
+  io.onReasoningEnd?.({ text: "already expanded", redacted: false });
+  const block = h.registry.list().find((b) => b.kind === "thought");
+  expect(block?.collapsed).toBe(false);
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("already expanded");
+  h.destroy();
+});
+
+otuiTest("flow 268 T17: /think hide registers no block and shows no live preview", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  const previews: (string[] | undefined)[] = [];
+  attachBlockIo(io, h.addBlock, { onReasoningPreview: (lines) => previews.push(lines) }, () => "hide");
+
+  io.onReasoningDelta?.({ text: "hidden thinking" });
+  io.onReasoningEnd?.({ text: "hidden thinking", redacted: false });
+  expect(h.registry.list().filter((b) => b.kind === "thought")).toHaveLength(0);
+  // The preview clear-on-end call (`undefined`) still fires; no lines are ever pushed.
+  expect(previews.every((p) => p === undefined)).toBe(true);
+  h.destroy();
+});
+
+otuiTest("flow 268 T17: onReasoningPreview receives the last non-empty lines while streaming and clears on end", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  const previews: (string[] | undefined)[] = [];
+  attachBlockIo(io, h.addBlock, { onReasoningPreview: (lines) => previews.push(lines) });
+
+  io.onReasoningDelta?.({ text: "line one\n" });
+  const firstPreview = previews.at(0);
+  expect(firstPreview).toEqual(["line one"]);
+
+  io.onReasoningEnd?.({ text: "line one\n", redacted: false });
+  expect(previews.at(-1)).toBeUndefined(); // cleared once the round ends
+  h.destroy();
+});
+
+// flow 268 T26: a missed `onReasoningEnd` (e.g. the shell's own abort path,
+// fixed at its source in `commands/agent.ts`) used to leak the previous
+// round's `liveText`/`hasStarted` state into the next round — the next
+// round's preview kept appending to stale text and `onReasoningStart` never
+// re-fired since `hasStarted` was still `true`. `resetReasoningLiveState()`
+// (called by the shell at the start of every new turn) is the defensive
+// fix, proven directly here without going through `onReasoningEnd` at all.
+otuiTest("flow 268 T26: resetReasoningLiveState clears stale preview state left by a missed onReasoningEnd", async () => {
+  const otui = requireOtui();
+  const h = await mountBlockHarness(otui, { width: 70, height: 24 });
+  const io = createTuiAgentIo(otui.core, h.renderer, h.scroll.content);
+  const previews: (string[] | undefined)[] = [];
+  let starts = 0;
+  const blockIo = attachBlockIo(io, h.addBlock, {
+    onReasoningStart: () => {
+      starts += 1;
+    },
+    onReasoningPreview: (lines) => previews.push(lines),
+  });
+
+  // Round 1: reasoning starts, streams a delta, but NEVER reaches
+  // `onReasoningEnd` (simulating the abort/error path that used to skip it).
+  io.onReasoningDelta?.({ text: "round one thinking" });
+  expect(starts).toBe(1);
+  expect(previews.at(-1)).toEqual(["round one thinking"]);
+
+  // The shell calls this at the start of every new turn, defensively.
+  blockIo.resetReasoningLiveState();
+
+  // Round 2: a fresh delta must start a CLEAN preview (no leftover "round
+  // one thinking") and must re-fire onReasoningStart (hasStarted was reset).
+  io.onReasoningDelta?.({ text: "round two thinking" });
+  expect(starts).toBe(2);
+  const latestPreview = previews.at(-1);
+  expect(latestPreview).toEqual(["round two thinking"]);
+  expect(latestPreview?.join(" ")).not.toContain("round one");
   h.destroy();
 });
 
@@ -3132,5 +3257,184 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
   test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
     expect(wakeSource).toContain("resolveMaxAutoWake");
     expect(wakeSource).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
+  });
+});
+
+// --- flow 268 T8/AC14: next-step suggestion abort/cancel/sanitize wiring
+// (source-text audit) --------------------------------------------------------
+//
+// `suggestNextStep` lives inside `launchTuiAgentShell`'s closure with no
+// headless injection seam (same limitation the SLATE-2a/SLATE-3a/flow 265
+// audits above document for this same function) — there is no way to drive a
+// real `runModelTurn` call and assert on `chrome.showSuggestion` from this
+// file. The behavior that CAN be driven directly is covered elsewhere:
+//   - `next-step-suggestion.test.ts` exercises `sanitizeNextStepSuggestion`
+//     and `NextStepSuggestionGate` (the abort-controller helper) in
+//     isolation — supersede-on-start, cancel-aborts-the-signal,
+//     isCurrent()-goes-false, and the combined timeout signal.
+//   - `shell-chrome.test.ts` exercises the composer-side behavior directly
+//     against a real mounted chrome: bare Enter on an empty composer no
+//     longer submits an active suggestion, Tab/Right still accepts it, and
+//     `onComposerActivity` fires on typing (including while no suggestion is
+//     shown, which is the seam a caller uses to cancel a request still in
+//     flight).
+// This block only proves tui-shell.ts actually WIRES those two pieces
+// together the way the AC requires, following the same "verify both sides by
+// grep, don't assume symmetry" precedent as every audit above.
+describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring (source-text audit)", () => {
+  const nextStepSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("suggestNextStep uses currentSel, not the start-time sel", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(start, start + 1_200);
+    expect(block).toContain("provider: currentSel.provider");
+    expect(block).toContain("model: currentSel.model");
+    expect(block).not.toMatch(/provider:\s*sel\.provider/);
+    expect(block).not.toMatch(/model:\s*sel\.model/);
+  });
+
+  test("suggestNextStep starts a suggestionGate request and passes its combined signal", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(start, start + 1_200);
+    expect(block).toContain("suggestionGate.start()");
+    expect(block).toContain("signal,");
+  });
+
+  test("a late/superseded reply is never shown: isCurrent() and credentialAvailable are both checked before showSuggestion", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    const showIndex = nextStepSource.indexOf("chrome.showSuggestion(", start);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(showIndex).toBeGreaterThan(start);
+    const guardBlock = nextStepSource.slice(start, showIndex);
+    expect(guardBlock).toContain("!isCurrent()");
+    expect(guardBlock).toContain("result.credentialAvailable");
+  });
+
+  test("the reply is sanitized through the exported pure helper before it can reach showSuggestion", () => {
+    const start = nextStepSource.indexOf("const suggestNextStep = async ()");
+    const showIndex = nextStepSource.indexOf("chrome.showSuggestion(", start);
+    const guardBlock = nextStepSource.slice(start, showIndex);
+    expect(guardBlock).toContain("sanitizeNextStepSuggestion(result.text)");
+    expect(nextStepSource).toContain(
+      'import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";',
+    );
+  });
+
+  test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
+    const runLineStart = nextStepSource.indexOf('const runLine = (line: string, origin: "operator"');
+    expect(runLineStart).toBeGreaterThanOrEqual(0);
+    const block = nextStepSource.slice(runLineStart, runLineStart + 700);
+    expect(block).toContain('suggestionGate.cancel("new turn started")');
+  });
+
+  test("composer activity (typing) is wired to cancel the suggestion gate", () => {
+    expect(nextStepSource).toContain(
+      'chrome.onComposerActivity(() => suggestionGate.cancel("composer activity"));',
+    );
+  });
+});
+
+// --- flow 268 T16 (AC11): tui-shell.ts /reasoning wiring -------------------
+//
+// `launchTuiAgentShell` has no headless injection seam for its command
+// switch (see the SLATE-2a/SLATE-3a/SLATE-15 audits above — same file, same
+// reasoning: "a giant closure inline ... with no headless test harness"), so
+// this is a source-text audit following that exact precedent. The RESOLVER
+// (`resolveReasoningEffort`/`describeReasoningEffortSource`) and each
+// adapter's clamp are proven directly in `commands/agent.test.ts` and the
+// per-provider `*-reasoning.test.ts` files; this block only proves the TUI
+// surface actually wires a `/reasoning` command in.
+describe("flow 268 T16 — tui-shell.ts /reasoning wiring (source-text audit)", () => {
+  const reasoningSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartReasoning = reasoningSource.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyReasoning = reasoningSource.slice(fnStartReasoning);
+  const branchIndex = fnBodyReasoning.indexOf('command.name === "/reasoning"');
+  const branchBlock = fnBodyReasoning.slice(branchIndex, branchIndex + 2_400);
+
+  test("the command switch has a /reasoning branch", () => {
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("no arg shows the resolved effort and its source via describeReasoningEffortSource", () => {
+    expect(branchBlock).toContain("describeReasoningEffortSource(");
+    expect(branchBlock).toContain("sessionOverride: reasoningOverride");
+  });
+
+  test("an invalid level is rejected via isReasoningEffortLevel before anything is mutated", () => {
+    expect(branchBlock).toContain("isReasoningEffortLevel(wanted)");
+  });
+
+  test("a valid level mutates the live deps immediately (no rebuild needed for the next turn)", () => {
+    expect(branchBlock).toContain("deps.reasoningEffort = wanted");
+  });
+
+  test("a valid level is threaded to commands/shell.ts via opts.setReasoningOverride, for a later /model rebuild", () => {
+    expect(branchBlock).toContain("opts.setReasoningOverride?.(wanted)");
+  });
+
+  test("a valid level is persisted to ShellConfig, so it survives a restart", () => {
+    expect(branchBlock).toContain("saveShellConfig({ reasoningEffort: wanted })");
+  });
+
+  test("an OpenAI-compatible provider with no reasoning config gets a one-line note", () => {
+    expect(branchBlock).toContain("providerByName(currentSel.provider)");
+    expect(branchBlock).toContain("compatProvider.reasoning === undefined");
+    expect(branchBlock).toMatch(/no effect for it/);
+  });
+
+  test("/reasoning is registered AGENT_ONLY in the shared slash-command registry", () => {
+    const chatCommands = commandsForMode("chat").map((c) => c.name);
+    const agentCommands = commandsForMode("agent").map((c) => c.name);
+    expect(agentCommands).toContain("/reasoning");
+    expect(chatCommands).not.toContain("/reasoning");
+  });
+});
+
+// --- flow 268 T17 (AC16): tui-shell.ts /think display-mode wiring ----------
+//
+// Same source-text-audit precedent as the T16 block above (no headless
+// injection seam for the command switch); `attachBlockIo`'s registration/
+// preview/expand/hide LOGIC is proven directly by the headless
+// `mountBlockHarness` tests above, and `parseThinkDisplayMode`/
+// `formatReasoning*` are proven in `reasoning-display.test.ts`. This block
+// only proves the TUI surface actually wires the three new `/think` args to
+// those, in addition to keeping the pre-existing toggle branch reachable.
+describe("flow 268 T17 — tui-shell.ts /think display-mode wiring (source-text audit)", () => {
+  const thinkSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartThink = thinkSource.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyThink = thinkSource.slice(fnStartThink);
+  const branchIndex = fnBodyThink.indexOf('command.name === "/think"');
+  const branchBlock = fnBodyThink.slice(branchIndex, branchIndex + 1_600);
+
+  test("the command switch has a /think branch", () => {
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("a recognized mode arg is parsed via parseThinkDisplayMode before anything is mutated", () => {
+    expect(branchBlock).toContain("parseThinkDisplayMode(arg)");
+  });
+
+  test("a recognized mode arg mutates the live thinkDisplayMode and persists it to ShellConfig", () => {
+    expect(branchBlock).toContain("thinkDisplayMode = mode");
+    expect(branchBlock).toContain("saveShellConfig({ thinkDisplay: mode })");
+  });
+
+  test("an unrecognized non-empty arg (other than the legacy 'collapse') is rejected with the mode list", () => {
+    expect(branchBlock).toContain('arg !== "collapse"');
+    expect(branchBlock).toContain("THINK_DISPLAY_MODES.join");
+  });
+
+  test("bare /think and /think collapse fall through to the pre-existing toggleNewestBlock behaviour", () => {
+    expect(branchBlock).toContain('toggleNewestBlock("thought")');
+  });
+
+  test("attachBlockIo is wired with a live thinkDisplayMode getter, read fresh (not captured) per round", () => {
+    expect(fnBodyThink).toContain("() => thinkDisplayMode");
+  });
+
+  test("thinkDisplayMode is loaded from ShellConfig at session start via resolveThinkDisplayMode", () => {
+    expect(fnBodyThink).toContain("resolveThinkDisplayMode(loadShellConfig().thinkDisplay)");
   });
 });

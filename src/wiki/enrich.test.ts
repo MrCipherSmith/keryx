@@ -394,6 +394,154 @@ test("force enrich includes accepted pages; default batch is drafts only", async
   }
 });
 
+const PAGE_WITH_THINK_BLOCK = `---
+Title: Enriched
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Test page
+---
+
+<think>
+Let me reason about how to phrase this page before writing the real answer.
+</think>
+
+# Enriched
+
+Full prose body with enough text for validation checks to pass cleanly.
+`;
+
+const PAGE_WITH_UNCLOSED_THINK = `---
+Title: Enriched
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Test page
+---
+
+<think>
+Reasoning that never closes, so this whole page must be rejected.
+
+# Enriched
+
+Full prose body with enough text for validation checks to pass cleanly.
+`;
+
+test("flow 268 T9: enrich strips a complete <think> block before writing the page", async () => {
+  const root = await seedDrafts();
+  const factory: ProviderFactory = () => stubProvider(PAGE_WITH_THINK_BLOCK);
+  try {
+    const result = await wikiEnrich({
+      cwd: root,
+      page: "components/src-alpha",
+      providerFactory: factory,
+      // Same as the other stubProvider(...) tests in this file: the stub
+      // reply is much shorter than the collected template, which the
+      // unrelated "much shorter than original" size-sanity check in
+      // `validateEnrichedMarkdown` would otherwise reject. This test is
+      // specifically about the <think>-stripping guard, not that check.
+      validate: false,
+    });
+
+    expect(result.failed).toBe(0);
+    expect(result.enriched).toBe(1);
+    const written = await readFile(path.join(root, ".metaproject", "wiki", "components", "src-alpha.md"), "utf8");
+    expect(written).not.toContain("<think");
+    expect(written).not.toContain("</think>");
+    expect(written).not.toContain("Let me reason about");
+    expect(written).toContain("Full prose body");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T9: enrich rejects a page whose model output has an unclosed <think> tag, and never writes it", async () => {
+  const root = await seedDrafts();
+  const original = await readFile(path.join(root, ".metaproject", "wiki", "components", "src-alpha.md"), "utf8");
+  const factory: ProviderFactory = () => stubProvider(PAGE_WITH_UNCLOSED_THINK);
+  try {
+    const result = await wikiEnrich({
+      cwd: root,
+      page: "components/src-alpha",
+      providerFactory: factory,
+      validate: true,
+    });
+
+    expect(result.enriched).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.pages[0]?.reason).toMatch(/think/i);
+    const stillOnDisk = await readFile(path.join(root, ".metaproject", "wiki", "components", "src-alpha.md"), "utf8");
+    expect(stillOnDisk).toBe(original);
+    expect(stillOnDisk).not.toContain("<think");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T9: the unclosed-<think> guard applies even with validate: false (never a toggle)", async () => {
+  const root = await seedDrafts();
+  const factory: ProviderFactory = () => stubProvider(PAGE_WITH_UNCLOSED_THINK);
+  try {
+    const result = await wikiEnrich({
+      cwd: root,
+      page: "components/src-alpha",
+      providerFactory: factory,
+      validate: false,
+    });
+
+    expect(result.enriched).toBe(0);
+    expect(result.failed).toBe(1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("validateEnrichedMarkdown rejects content containing a <think>/<thinking> tag", () => {
+  expect(validateEnrichedMarkdown("x".repeat(100), PAGE_WITH_THINK_BLOCK)).toMatch(/think/i);
+});
+
+// flow 268 T26: the last-line-of-defense check above now shares
+// `think-tags.ts`'s fence/inline-code-aware `containsThinkTags`, same as
+// `stripThinkBlocks` earlier in the pipeline — a page that documents this
+// guard with a fenced or inline-code `<think>` example must not be rejected.
+test("validateEnrichedMarkdown accepts a <think> tag documented inside a fenced code block", () => {
+  const pageWithFencedExample = `---
+Title: Reasoning-leak guard
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Documents the think-tag guard
+---
+
+# Reasoning-leak guard
+
+Example of a block this guard removes:
+
+\`\`\`
+<think>example reasoning</think>
+\`\`\`
+
+Full prose body with enough text for validation checks to pass cleanly.
+`;
+  expect(validateEnrichedMarkdown("x".repeat(100), pageWithFencedExample)).toBeNull();
+});
+
+test("validateEnrichedMarkdown accepts a <think> tag mentioned as inline code", () => {
+  const pageWithInlineMention = `---
+Title: Reasoning-leak guard
+Version: 1.0.0
+Type: component
+Status: draft
+Summary: Documents the think-tag guard
+---
+
+# Reasoning-leak guard
+
+This guard strips a bare \`<think>\` tag from model output before it is written.
+`;
+  expect(validateEnrichedMarkdown("x".repeat(100), pageWithInlineMention)).toBeNull();
+});
+
 test("validateEnrichedMarkdown rejects missing frontmatter", () => {
   expect(validateEnrichedMarkdown("x".repeat(100), "no frontmatter here")).toMatch(/frontmatter/i);
   expect(validateEnrichedMarkdown("x".repeat(100), GOOD_PAGE)).toBeNull();

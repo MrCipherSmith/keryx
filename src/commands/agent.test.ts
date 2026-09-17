@@ -5,16 +5,23 @@ import path from "node:path";
 import {
   buildAgentSystemInstruction,
   buildToollessReprompt,
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  describeReasoningEffortSource,
   DEFAULT_MAX_ROUNDS,
   DEFAULT_MAX_SUBAGENT_CONCURRENCY,
   ENV_AGENT_MAX_ATTEMPTS_PER_HASH,
+  ENV_AGENT_MAX_OUTPUT_TOKENS,
   ENV_AGENT_MAX_ROUNDS,
+  ENV_REASONING_EFFORT,
   MAX_AGENT_MAX_ATTEMPTS_PER_HASH,
   MAX_AGENT_MAX_ROUNDS,
   MAX_ATTEMPTS_PER_HASH,
+  REASONING_EFFORT_LEVELS,
   reserveToolAttempt,
   resolveAgentMaxAttemptsPerHash,
+  resolveAgentMaxOutputTokens,
   resolveAgentMaxRounds,
+  resolveReasoningEffort,
   runAgentTurn,
   toolCallHash,
 } from "./agent";
@@ -55,6 +62,113 @@ test("resolveAgentMaxRounds: env override clamped to ceiling", () => {
   expect(resolveAgentMaxRounds({ [ENV_AGENT_MAX_ROUNDS]: String(MAX_AGENT_MAX_ROUNDS + 50) })).toBe(
     MAX_AGENT_MAX_ROUNDS,
   );
+});
+
+test("resolveAgentMaxOutputTokens: unset/empty/invalid falls back to the default", () => {
+  expect(DEFAULT_MAX_OUTPUT_TOKENS).toBe(8192);
+  expect(resolveAgentMaxOutputTokens()).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: {} })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "  " } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "nope" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "0" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "-3" } })).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+  // `Number.parseInt` truncates at the first non-digit char (matches
+  // `resolveAgentMaxRounds`'s own parsing) — "3.5" parses to the valid
+  // integer 3, not a rejected fractional value.
+  expect(resolveAgentMaxOutputTokens({ env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "3.5" } })).toBe(3);
+});
+
+test("resolveAgentMaxOutputTokens: precedence is env > provider config > global config > default", () => {
+  // provider alone beats global and default
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: 4096, globalMaxOutputTokens: 2048 }),
+  ).toBe(4096);
+  // global alone (no provider override) beats default
+  expect(resolveAgentMaxOutputTokens({ env: {}, globalMaxOutputTokens: 2048 })).toBe(2048);
+  // env beats both provider and global
+  expect(
+    resolveAgentMaxOutputTokens({
+      env: { [ENV_AGENT_MAX_OUTPUT_TOKENS]: "16000" },
+      providerMaxOutputTokens: 4096,
+      globalMaxOutputTokens: 2048,
+    }),
+  ).toBe(16000);
+  // an invalid provider value falls through to global
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: -1, globalMaxOutputTokens: 2048 }),
+  ).toBe(2048);
+  // an invalid provider AND global value falls through to the default
+  expect(
+    resolveAgentMaxOutputTokens({ env: {}, providerMaxOutputTokens: 0, globalMaxOutputTokens: 1.5 }),
+  ).toBe(DEFAULT_MAX_OUTPUT_TOKENS);
+});
+
+test("resolveReasoningEffort: unset/empty/invalid falls back to \"off\"", () => {
+  expect(resolveReasoningEffort()).toBe("off");
+  expect(resolveReasoningEffort({ env: {} })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "" } })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "  " } })).toBe("off");
+  expect(resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "nope" } })).toBe("off");
+  expect(resolveReasoningEffort({ sessionOverride: "nope" })).toBe("off");
+  expect(resolveReasoningEffort({ globalEffort: "nope" })).toBe("off");
+});
+
+test("resolveReasoningEffort: precedence is session override > env > global config > \"off\"", () => {
+  // global alone beats "off"
+  expect(resolveReasoningEffort({ env: {}, globalEffort: "medium" })).toBe("medium");
+  // env beats global
+  expect(
+    resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "high" }, globalEffort: "medium" }),
+  ).toBe("high");
+  // session override beats both env and global
+  expect(
+    resolveReasoningEffort({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "low",
+      globalEffort: "medium",
+    }),
+  ).toBe("low");
+  // an invalid session override falls through to env
+  expect(
+    resolveReasoningEffort({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "nope",
+      globalEffort: "medium",
+    }),
+  ).toBe("high");
+  // an invalid session override AND env falls through to global
+  expect(
+    resolveReasoningEffort({ env: { [ENV_REASONING_EFFORT]: "nope" }, sessionOverride: "nope", globalEffort: "medium" }),
+  ).toBe("medium");
+});
+
+test("resolveReasoningEffort: accepts every REASONING_EFFORT_LEVELS value", () => {
+  for (const level of REASONING_EFFORT_LEVELS) {
+    expect(resolveReasoningEffort({ env: {}, globalEffort: level })).toBe(level);
+  }
+});
+
+test("describeReasoningEffortSource: labels which precedence tier resolved, matching resolveReasoningEffort's own value", () => {
+  expect(describeReasoningEffortSource()).toEqual({ effort: "off", source: "default" });
+  expect(describeReasoningEffortSource({ env: {}, globalEffort: "medium" })).toEqual({
+    effort: "medium",
+    source: "global",
+  });
+  expect(
+    describeReasoningEffortSource({ env: { [ENV_REASONING_EFFORT]: "high" }, globalEffort: "medium" }),
+  ).toEqual({ effort: "high", source: "env" });
+  expect(
+    describeReasoningEffortSource({
+      env: { [ENV_REASONING_EFFORT]: "high" },
+      sessionOverride: "low",
+      globalEffort: "medium",
+    }),
+  ).toEqual({ effort: "low", source: "session" });
+  // An invalid session override falls through, same as resolveReasoningEffort.
+  expect(
+    describeReasoningEffortSource({ env: {}, sessionOverride: "nope", globalEffort: "medium" }),
+  ).toEqual({ effort: "medium", source: "global" });
 });
 
 test("resolveAgentMaxAttemptsPerHash: unset/empty/invalid falls back to the default", () => {
@@ -181,6 +295,138 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect((requests[0]?.tools ?? []).map((t) => t.name).sort()).toEqual(["get_cwd", "list_dir", "read_file"]);
   // History ends alternating with a tool message present.
   expect(history.some((m) => m.role === "tool")).toBe(true);
+});
+
+test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests).toHaveLength(1);
+  expect(requests[0]?.budget).toEqual({
+    maxOutputTokens: DEFAULT_MAX_OUTPUT_TOKENS,
+    runReservation: DEFAULT_MAX_OUTPUT_TOKENS,
+  });
+});
+
+test("runAgentTurn: deps.maxOutputTokens overrides the default for the main-turn round", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxOutputTokens: 4096,
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.budget).toEqual({ maxOutputTokens: 4096, runReservation: 4096 });
+});
+
+test("runAgentTurn: deps.maxOutputTokens rejects a non-positive value", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxOutputTokens: 0,
+  };
+  await expect(runAgentTurn(collectingIo().io, deps, [], "hello")).rejects.toThrow(
+    "maxOutputTokens must be a positive safe integer",
+  );
+});
+
+test("runAgentTurn: deps.reasoningEffort set (not \"off\") -> request.options.reasoning carries it", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "high",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toEqual({ reasoning: "high" });
+});
+
+test("runAgentTurn: deps.reasoningEffort absent -> request has no options key at all", async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toBeUndefined();
+  expect(Object.prototype.hasOwnProperty.call(requests[0] ?? {}, "options")).toBe(false);
+});
+
+test('runAgentTurn: deps.reasoningEffort "off" -> request has no options key (explicit opt-out, identical to absent)', async () => {
+  const { provider, requests } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "off",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "hello");
+  expect(requests[0]?.options).toBeUndefined();
+  expect(Object.prototype.hasOwnProperty.call(requests[0] ?? {}, "options")).toBe(false);
+});
+
+test("finishWithBudgetSummary's wrap-up request also carries deps.reasoningEffort when set", async () => {
+  // Force the budget-exhausted wrap-up path: 0 tool calls allowed, and the
+  // model insists on calling a tool every round, exhausting the per-signature
+  // attempt budget so the driver falls through to `finishWithBudgetSummary`.
+  // Same name + same input ("{}") every round -> same `toolCallHash`. The
+  // first `MAX_ATTEMPTS_PER_HASH` (3) attempts execute; the 4th round's call
+  // is refused by `reserveToolAttempt` (exceeds the per-signature cap) and
+  // NOTHING in that round executes, which is exactly `noProgress`'s trigger
+  // (`!executedAny && calls.length > 0`) — see `runAgentTurnCore`.
+  const toolRound = [
+    { kind: "tool_call_start" as const, toolCallId: "c1", toolName: "get_cwd" },
+    { kind: "tool_call_end" as const, toolCallId: "c1", input: "{}" },
+    { kind: "model_end" as const },
+  ];
+  const { provider, requests } = scriptedProvider([
+    toolRound,
+    toolRound,
+    toolRound,
+    toolRound,
+    [{ kind: "text_delta", text: "wrap-up" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    reasoningEffort: "medium",
+  };
+  await runAgentTurn(collectingIo().io, deps, [], "loop forever");
+  // The LAST request is the no-tools wrap-up request `finishWithBudgetSummary` sends.
+  const wrapUpRequest = requests[requests.length - 1];
+  expect(wrapUpRequest?.tools).toBeUndefined();
+  expect(wrapUpRequest?.options).toEqual({ reasoning: "medium" });
 });
 
 test("untrusted web output cannot authorize later tools within the SAME turn", async () => {
@@ -576,12 +822,13 @@ test("runAgentTurn keeps an interrupted streamed assistant draft in history", as
     tools: [],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
   };
   await runAgentTurn(io, deps, history, "save this", { signal: controller.signal });
 
   expect(history).toEqual([
-    { role: "user", content: "save this", provenance: "project" },
-    { role: "assistant", content: "partial answer", provenance: "model" },
+    { role: "user", content: "save this", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+    { role: "assistant", content: "partial answer", provenance: "model", ts: "2020-01-01T00:00:00.000Z" },
   ]);
   expect(system.join("")).toContain("[stopped]");
 });
@@ -698,6 +945,7 @@ test("runAgentTurn checkpoints the user and each streamed assistant delta", asyn
     tools: builtinReadOnlyTools(tmpdir()),
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
   };
   await runAgentTurn(io, deps, history, "persist this");
 
@@ -710,8 +958,8 @@ test("runAgentTurn checkpoints the user and each streamed assistant delta", asyn
   expect(checkpoints[1]?.messages).toEqual(["persist this", "first "]);
   expect(checkpoints[2]?.messages).toEqual(["persist this", "first second"]);
   expect(history).toEqual([
-    { role: "user", content: "persist this", provenance: "project" },
-    { role: "assistant", content: "first second", provenance: "model" },
+    { role: "user", content: "persist this", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+    { role: "assistant", content: "first second", provenance: "model", ts: "2020-01-01T00:00:00.000Z" },
   ]);
 });
 
@@ -1218,6 +1466,252 @@ test("runAgentTurn does not call onReasoning when the model emits no reasoning",
   };
   await runAgentTurn(io, deps, [], "go");
   expect(called).toBe(false);
+});
+
+// --- flow 268 T17 (AC16): onReasoningDelta / onReasoningEnd hooks ---
+
+test("flow 268 T17: onReasoningDelta fires per delta in order, before onReasoning and before the first text write", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step 1 " },
+      { kind: "reasoning_delta", text: "step 2" },
+      { kind: "text_delta", text: "Final answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const order: string[] = [];
+  const io: AgentIO = {
+    write: (t) => order.push(`write:${t}`),
+    onReasoningDelta: (d) => order.push(`delta:${d.text ?? ""}`),
+    onReasoning: (t) => order.push(`reasoning:${t}`),
+    onAssistantText: (t) => order.push(`text:${t}`),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(order).toEqual([
+    "delta:step 1 ",
+    "delta:step 2",
+    "reasoning:step 1 step 2",
+    "write:Final answer.",
+    "text:Final answer.",
+  ]);
+});
+
+test("flow 268 T17: onReasoningEnd fires once with durationMs (fixed now) and tokens from the usage extension", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking" },
+      { kind: "usage_update", usage: { outputTokens: 30 }, unknownExtensions: { "openai.reasoning_tokens": 18 } },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  // now() call order: (1) the user-turn history push, (2) `reasoningStartedAt`
+  // on the first `reasoning_delta`, (3) `reasoningEndedAt` on the first
+  // non-reasoning event (`usage_update`, which closes the span BEFORE
+  // `text_delta` arrives — matching "first non-reasoning event closes the
+  // span"). Every later call is clamped to the last entry.
+  let clock = 0;
+  const timestamps = [
+    "2026-01-01T00:00:00.000Z",
+    "2026-01-01T00:00:05.000Z",
+    "2026-01-01T00:00:06.200Z",
+  ];
+  const now = (): string => timestamps[Math.min(clock++, timestamps.length - 1)] ?? "2026-01-01T00:00:00.000Z";
+  const ends: Array<{ text: string; redacted: boolean; durationMs?: number; tokens?: number }> = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoningEnd: (info) => ends.push(info),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    now,
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(ends).toHaveLength(1);
+  expect(ends[0]).toEqual({ text: "thinking", redacted: false, durationMs: 1200, tokens: 18 });
+});
+
+test("flow 268 T17: onReasoningEnd fires for a redacted-only span with no visible text (onReasoning does not fire)", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", redacted: true },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  let reasoningCalled = false;
+  const ends: Array<{ text: string; redacted: boolean; durationMs?: number; tokens?: number }> = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoning: () => { reasoningCalled = true; },
+    onReasoningEnd: (info) => ends.push(info),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(reasoningCalled).toBe(false);
+  expect(ends).toHaveLength(1);
+  expect(ends[0]?.text).toBe("");
+  expect(ends[0]?.redacted).toBe(true);
+  expect(ends[0]?.tokens).toBeUndefined();
+});
+
+// flow 268 T26: an abort landing mid-reasoning (before any text_delta) used
+// to `return {}` from inside the `for await` loop's `isAborted()` check
+// BEFORE `flushReasoning()` ran — `onReasoningEnd` never fired, and (in the
+// real TUI) `attachBlockIo`'s live-preview state never got reset, so the
+// NEXT turn's `reasoning_delta`s appended onto this round's stale text.
+test("flow 268 T26: onReasoningEnd fires exactly once when the abort lands mid-reasoning", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking" },
+      { kind: "reasoning_delta", text: " more" },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const controller = new AbortController();
+  const ends: Array<{ text: string; redacted: boolean }> = [];
+  const system: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoningDelta: () => {
+      // Abort right after the FIRST reasoning delta is observed — the agent
+      // loop's `isAborted()` check runs at the top of the NEXT iteration
+      // (processing the second reasoning_delta), before that event is
+      // applied, mirroring "runAgentTurn keeps an interrupted streamed
+      // assistant draft in history" above.
+      controller.abort();
+    },
+    onReasoningEnd: (info) => ends.push({ text: info.text, redacted: info.redacted }),
+    onSystem: (text) => system.push(text),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(io, deps, history, "go", { signal: controller.signal });
+
+  expect(ends).toHaveLength(1);
+  expect(ends[0]?.text).toBe("thinking");
+  expect(system.join("")).toContain("[stopped]");
+  // The early abort return still never attaches reasoning to history —
+  // unchanged abort semantics, only the callback firing was fixed.
+  expect(history.some((m) => m.role === "assistant")).toBe(false);
+});
+
+test("flow 268 T17: an AgentIO without onReasoningDelta/onReasoningEnd keeps working exactly as before", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step 1" },
+      { kind: "text_delta", text: "Final." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const io: AgentIO = { write: () => {} };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go"); // must not throw despite the missing hooks
+  expect(true).toBe(true);
+});
+
+// --- flow 268 T11: reasoning on NormalizedMessage (AC6) ---
+test("flow 268 T11: reasoning_delta + reasoning_replay + text attach reasoning to the assistant message", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking " },
+      { kind: "reasoning_replay", replay: { providerId: "anthropic", kind: "thinking_signature", data: "sig-abc" } },
+      { kind: "reasoning_delta", text: "more" },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "go");
+  const assistant = history.find((m) => m.role === "assistant");
+  expect(assistant?.reasoning?.text).toBe("thinking more");
+  expect(assistant?.reasoning?.replay).toEqual([
+    { providerId: "anthropic", kind: "thinking_signature", data: "sig-abc" },
+  ]);
+});
+
+test("flow 268 T11: reasoning on a tool-call-only round attaches to that round's assistant message", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "deciding" },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "покажи cwd");
+  const toolCallMsg = history.find((m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0);
+  expect(toolCallMsg?.reasoning?.text).toBe("deciding");
+});
+
+test("flow 268 T11: an assistant message with no reasoning carries no `reasoning` key", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "go");
+  const assistant = history.find((m) => m.role === "assistant");
+  expect(assistant).toBeDefined();
+  expect(Object.prototype.hasOwnProperty.call(assistant ?? {}, "reasoning")).toBe(false);
 });
 
 test("buildAgentSystemInstruction embeds an orient block when present, falls back when absent", () => {
@@ -2198,6 +2692,7 @@ test("SLATE-11: interactive zero-round budget stops locally without a TerminalSt
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
     maxRounds: 0,
     // `unattended` deliberately OMITTED — every existing call site's shape.
   };
@@ -2207,7 +2702,9 @@ test("SLATE-11: interactive zero-round budget stops locally without a TerminalSt
   await runAgentTurn(io, deps, history, "run the tests");
 
   expect(requests.length).toBe(0);
-  expect(history).toEqual([{ role: "user", content: "run the tests", provenance: "project" }]);
+  expect(history).toEqual([
+    { role: "user", content: "run the tests", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+  ]);
   expect(history.some((m) => m.content.includes("Do NOT call tools."))).toBe(false);
   expect(history.some((m) => m.content === "Here is what happened.")).toBe(false);
   expect(terminalStates.length).toBe(0);

@@ -56,6 +56,33 @@ test("compactMessages keeps last user turns and summarizes the rest", () => {
 // A compacted window can start in the middle of a tool round, leaving a result
 // whose assistant call was cut away. That half-pair must not reach a provider as
 // a dangling `tool_call_id` — the linker degrades it (flow 177).
+// flow 268 T11 (AC6): compaction slices the array (`prefix`/`suffix =
+// history.slice(...)`) rather than rebuilding messages field by field, so a
+// retained message's `reasoning` rides along for free — this pins that.
+test("flow 268 T11: compactMessages keeps `reasoning` on a retained suffix message", () => {
+  const withReasoning: NormalizedMessage = {
+    role: "assistant",
+    content: "ok4",
+    provenance: "model",
+    reasoning: { text: "because", replay: [{ providerId: "anthropic", kind: "thinking_signature", data: "sig" }] },
+  };
+  const h = [
+    u("first task"),
+    a("ok1"),
+    t("tool out"),
+    u("second task"),
+    a("ok2"),
+    u("third task"),
+    a("ok3"),
+    u("fourth"),
+    withReasoning,
+  ];
+  const r = compactMessages(h, { keepLastUserTurns: 2 });
+  expect(r.noop).toBe(false);
+  const retained = r.context.find((m) => m.content === "ok4");
+  expect(retained?.reasoning).toEqual(withReasoning.reasoning);
+});
+
 test("a cut between an assistant call and its result leaves no dangling link", () => {
   const call: NormalizedMessage = {
     role: "assistant",

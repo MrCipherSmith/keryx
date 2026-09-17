@@ -57,6 +57,34 @@
 // global is never touched); no `Date.now`/`Math.random`. Every yielded
 // event/error is scrubbed of the credential before it leaves this module,
 // and nothing is ever persisted (storage-off).
+//
+// THINKING CONFIG + THOUGHT SIGNATURES (flow 268, T15 / AC10): live-doc
+// verification via WebFetch against ai.google.dev/gemini-api/docs/thinking
+// and .../thought-signatures during this task was inconclusive — one fetch
+// redirected to the thinking guide with no signature detail, another
+// returned a `thinking_level`/`thinking_summaries`/"steps[]" shape that
+// looks like the newer, STATEFUL Interactions-style API this adapter
+// deliberately does NOT use (see "WHY LEGACY generateContent" above), not
+// the flat `generationConfig.thinkingConfig` + `candidates[].content.
+// parts[]` shape this legacy `generateContent` endpoint already uses
+// (confirmed elsewhere in this file). This adapter therefore implements
+// against the task-provided protocol facts, which match this file's own
+// prior confirmed research (the REASONING METADATA note above) rather than
+// the ambiguous fetch results:
+//   - When `request.options.reasoning` requests an effort ("low"/"medium"/
+//     "high"; absent/"off" = not requested), `generationConfig.
+//     thinkingConfig.includeThoughts` is set true, plus a depth field
+//     chosen per model family: `gemini-3*` models get `thinkingLevel`
+//     ("low"/"high" only — no confirmed "medium" level, so effort "medium"
+//     maps to "high"); every other model id (the `gemini-2.5*` family and
+//     the generic fallback) gets `thinkingBudget` in tokens (low=1024,
+//     medium=8192, high=24576).
+//   - A `thoughtSignature` on ANY response part is captured into a
+//     `reasoning_replay` event REGARDLESS of whether effort was requested
+//     (Google documents it arriving even with `includeThoughts` unset) and
+//     is replayed verbatim on the SAME part shape (including a
+//     `functionCall` part) on the next request — see
+//     `GeminiThoughtSignatureReplayData` and `toGeminiContents` below.
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 import { defaultRetryable } from "../provider-port";
@@ -71,6 +99,7 @@ import type {
   ProviderDescription,
   ProviderErrorKind,
   ProviderPort,
+  ProviderReplayItem,
   StreamOptions,
 } from "../types";
 import { AnthropicSSEParser } from "../anthropic/sse";
@@ -87,6 +116,18 @@ export interface GeminiProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: GeminiCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the API accepted but never started
+   * answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link GeminiProvider.descriptorDocument}. */
@@ -153,6 +194,116 @@ function asBoolean(value: unknown): boolean {
 }
 
 /**
+ * The `data` shape this adapter puts on a `reasoning_replay` event's
+ * {@link ProviderReplayItem} (`kind: "thought_signature"`). `target`
+ * identifies which kind of response part the signature arrived on so replay
+ * can reattach it deterministically: `"functionCall"` items also carry
+ * `functionCallIndex` (this round's 0-based position among ALL `functionCall`
+ * parts, matching the position `message.toolCalls` ends up in) and, when the
+ * chunk carried one, `toolCallId` (the normalized call id) — replay prefers
+ * `toolCallId` and falls back to `functionCallIndex` only when it is absent.
+ * `"text"` items carry neither.
+ */
+export interface GeminiThoughtSignatureReplayData {
+  target: "functionCall" | "text";
+  functionCallIndex?: number;
+  toolCallId?: string;
+  signature: string;
+}
+
+function isGeminiThoughtSignatureReplayData(value: unknown): value is GeminiThoughtSignatureReplayData {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  const target = value.target;
+  const signature = value.signature;
+  return (target === "functionCall" || target === "text") && typeof signature === "string" && signature.length > 0;
+}
+
+/**
+ * This provider's own `thought_signature` replay items on an assistant
+ * message, in event order. A foreign `providerId` (a replay item some other
+ * adapter owns) and any `kind` other than `"thought_signature"` are ignored,
+ * matching {@link ProviderReplayItem}'s "an adapter for a different provider
+ * must ignore an item it does not own" contract.
+ */
+function geminiThoughtSignatureItems(message: NormalizedMessage): GeminiThoughtSignatureReplayData[] {
+  const replay = message.reasoning?.replay;
+  if (replay === undefined) {
+    return [];
+  }
+  const out: GeminiThoughtSignatureReplayData[] = [];
+  for (const item of replay) {
+    if (item.providerId !== "gemini" || item.kind !== "thought_signature") {
+      continue;
+    }
+    if (isGeminiThoughtSignatureReplayData(item.data)) {
+      out.push(item.data);
+    }
+  }
+  return out;
+}
+
+/** Token budgets for `thinkingBudget` (Gemini 2.5-family models), per effort. */
+const THINKING_BUDGET_BY_EFFORT: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
+
+/**
+ * Gemini only confirms low/medium/high (flow 268 T16): "minimal" (below its
+ * lowest confirmed level), "xhigh" and "max" (above its highest) are clamped
+ * to the nearest one it supports rather than sent as an unconfirmed string.
+ * Applied BEFORE either depth-control mapping below, so both the
+ * `thinkingLevel` (gemini-3*) and `thinkingBudget` (gemini-2.5* / generic)
+ * branches see only low/medium/high.
+ */
+const GEMINI_EFFORT_CLAMP: Readonly<Record<string, "low" | "medium" | "high">> = {
+  minimal: "low",
+  low: "low",
+  medium: "medium",
+  high: "high",
+  xhigh: "high",
+  max: "high",
+};
+
+/** Clamp an arbitrary requested effort string to Gemini's own low/medium/high vocabulary. */
+function clampGeminiEffort(effort: string): "low" | "medium" | "high" {
+  return GEMINI_EFFORT_CLAMP[effort] ?? "medium";
+}
+
+/**
+ * `gemini-3*` model ids use the newer `thinkingLevel` depth control;
+ * everything else (the `gemini-2.5*` family, and the generic fallback for an
+ * unrecognized id) uses the older token-budget `thinkingBudget` control. See
+ * the module header's THINKING CONFIG note for the research caveat.
+ */
+function usesThinkingLevel(modelId: string): boolean {
+  return /^gemini-3(\.|-|$)/i.test(modelId);
+}
+
+/**
+ * Build `generationConfig.thinkingConfig` for a requested reasoning effort,
+ * or `undefined` when no effort was requested (`request.options.reasoning`
+ * absent or `"off"`) — `generationConfig` then carries no `thinkingConfig`
+ * key at all, unchanged from before this task. Thought-summary text
+ * (`includeThoughts`) is always requested alongside the depth control so a
+ * requested effort always surfaces its chain-of-thought as `reasoning_delta`.
+ */
+function buildThinkingConfig(modelId: string, effort: string | undefined): Record<string, unknown> | undefined {
+  if (effort === undefined || effort === "off") {
+    return undefined;
+  }
+  const clampedEffort = clampGeminiEffort(effort);
+  if (usesThinkingLevel(modelId)) {
+    // Only "low"/"high" are confirmed for `thinkingLevel` — "medium" (and any
+    // unrecognized value) maps to "high" rather than sending an unconfirmed
+    // "medium" the API might reject.
+    const level = clampedEffort === "low" ? "low" : "high";
+    return { includeThoughts: true, thinkingLevel: level };
+  }
+  const budget = THINKING_BUDGET_BY_EFFORT[clampedEffort] ?? THINKING_BUDGET_BY_EFFORT.medium;
+  return { includeThoughts: true, thinkingBudget: budget };
+}
+
+/**
  * Serialize a normalized conversation into Gemini `contents[]` wire form.
  *
  * Gemini has NO `system` role (the system instruction is a separate
@@ -195,20 +346,68 @@ function toGeminiContents(messages: readonly NormalizedMessage[]): Record<string
     }
     if (message.role === "assistant" && linked.linkedCalls.length > 0) {
       const parts: Record<string, unknown>[] = [];
+      let textPartIndex: number | undefined;
       if (message.content.length > 0) {
+        textPartIndex = parts.length;
         parts.push({ text: message.content });
       }
+      // Keyed by call id (not array index) so a `toolCallId`-addressed
+      // signature attaches to the right part even when `linkToolCalls`
+      // dropped an earlier, unanswered call from this subset.
+      const functionCallPartByCallId = new Map<string, Record<string, unknown>>();
       for (const call of linked.linkedCalls) {
-        parts.push({
+        const functionCallPart: Record<string, unknown> = {
           functionCall: { name: call.name, id: call.id, args: parseToolInput(call.arguments) },
-        });
+        };
+        functionCallPartByCallId.set(call.id, functionCallPart);
+        parts.push(functionCallPart);
       }
+
+      // flow 268 T15 (AC10): reattach this round's captured thoughtSignature
+      // items verbatim, on the same part shape they arrived on.
+      for (const item of geminiThoughtSignatureItems(message)) {
+        if (item.target === "functionCall") {
+          const resolvedCallId =
+            item.toolCallId ?? (item.functionCallIndex !== undefined ? message.toolCalls?.[item.functionCallIndex]?.id : undefined);
+          const functionCallPart = resolvedCallId === undefined ? undefined : functionCallPartByCallId.get(resolvedCallId);
+          if (functionCallPart !== undefined) {
+            (functionCallPart.functionCall as Record<string, unknown>).thoughtSignature = item.signature;
+          }
+          // Unresolvable (the call it belonged to was dropped as a half-pair
+          // by `linkToolCalls`) — there is no surviving part to carry it on
+          // this request, so it is silently omitted rather than invented.
+          continue;
+        }
+        if (textPartIndex !== undefined) {
+          (parts[textPartIndex] as Record<string, unknown>).thoughtSignature = item.signature;
+        } else {
+          // Google documents a `thoughtSignature` occasionally arriving on a
+          // final, otherwise-empty text part (no visible text this round).
+          // Reproduce exactly that shape rather than dropping the signature
+          // or inventing a non-empty text part for it to ride on.
+          textPartIndex = parts.length;
+          parts.push({ text: "", thoughtSignature: item.signature });
+        }
+      }
+
       out.push({ role: "model", parts });
       continue;
     }
+    const part: Record<string, unknown> = { text: message.content };
+    if (message.role === "assistant") {
+      // This message shape has no `functionCall` part to carry a
+      // `"functionCall"`-target signature on — only a `"text"`-target item
+      // (the only kind that fits here) is attached; a stray `"functionCall"`
+      // item (should not occur without `linkedCalls`) is dropped.
+      for (const item of geminiThoughtSignatureItems(message)) {
+        if (item.target === "text") {
+          part.thoughtSignature = item.signature;
+        }
+      }
+    }
     out.push({
       role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }],
+      parts: [part],
     });
   }
   return out;
@@ -323,6 +522,64 @@ function classifyGeminiError(httpStatus: number, rpcStatus: string | undefined):
     return { kind: "invalid_request", retryable: retryableFor("invalid_request", false), message: "" };
   }
   return { kind: "unknown", retryable: retryableFor("unknown", false), message: "" };
+}
+
+/** Default first-byte / idle stream deadline (flow 268 T22), overridable via {@link GeminiProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("gemini-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
 }
 
 /**
@@ -466,6 +723,13 @@ export class GeminiProvider implements ProviderPort {
       generationConfig: {
         maxOutputTokens: request.budget.maxOutputTokens,
         ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
+        // flow 268 T15 (AC10): only present when an effort was requested —
+        // `thinkingConfig` is entirely absent otherwise, unchanged from
+        // before this task.
+        ...(() => {
+          const thinkingConfig = buildThinkingConfig(request.modelId, request.options?.reasoning);
+          return thinkingConfig === undefined ? {} : { thinkingConfig };
+        })(),
       },
     };
     const init: RequestInit = {
@@ -514,35 +778,35 @@ export class GeminiProvider implements ProviderPort {
       return;
     }
 
-    // Happy path: read the SSE body (offline, fully in-memory) and normalize.
-    // Fail-closed body read (mirrors AnthropicProvider/compat engine): an
-    // abort mid-read yields the SAME terminal `cancelled` error the
-    // fetch()-level abort path yields; any OTHER read failure fails closed as
-    // `malformed`. No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        opts.signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: redact(`Gemini SSE body read failed: ${String(cause)}`),
-      });
-      return;
-    }
-
-    // Zero-byte / empty body: a 200 with no SSE bytes parses to zero records
-    // and never yields a first chunk, indistinguishable from a legitimate
-    // no-output attempt. Fail closed with a terminal `malformed` error (no
-    // model_end) instead.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T22): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta`/`reasoning_delta`
+    // while the model is still generating rather than only once the
+    // connection closes. Two independent deadlines guard a stalled
+    // connection: `firstByteTimeoutMs` (no byte at all since the response
+    // headers arrived) and `idleTimeoutMs` (no further chunk since the last
+    // one) — both default to 120s, configurable via `deps`. A timeout cancels
+    // the reader and yields exactly one retryable `unavailable`
+    // provider_error, never a model_end. An abort mid-read still fails closed
+    // to the SAME terminal `cancelled` error the fetch()-level abort path
+    // yields (mirrors AnthropicProvider/compat engine).
+    //
+    // TERMINAL DETECTION: unlike Anthropic's dedicated `message_stop` event
+    // or the OpenAI Responses API's `response.completed`, this legacy
+    // `generateContent` format has no distinct terminal-event type — the SAME
+    // `GenerateContentResponse` JSON shape is used for every chunk, and
+    // completion is signalled by a `finishReason` field appearing on the
+    // first candidate of the LAST chunk. That IS detectable incrementally
+    // (confirmed per-record, not merely "stream end"): the read loop stops as
+    // soon as a record carries a non-empty `finishReason`, exactly the same
+    // "stop on terminal event, don't wait for socket close" contract as the
+    // other two adapters. Only if the stream closes WITHOUT ever reporting a
+    // `finishReason` does this adapter fall back to relying on stream end
+    // (EOF) plus the idle-timeout deadline above to detect a stalled/dropped
+    // connection — that path yields a truncated-stream `malformed`, per the
+    // existing truncation handling below, never a silent model_end.
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -551,143 +815,272 @@ export class GeminiProvider implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     // Gemini's `alt=sse` framing is `data: <complete GenerateContentResponse
     // JSON>` per record, no `event:` line — exactly what AnthropicSSEParser
     // already parses (a generic `data:`-line framer tolerant of an absent
     // `event`). Reused UNCHANGED, no adaptation needed (confirmed via
     // research, see module header).
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     let sawFirstChunk = false;
     let sawFinish = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
     let promptTokens: number | undefined;
     let candidatesTokens: number | undefined;
     let totalTokens: number | undefined;
     let cachedContentTokens: number | undefined;
     let thoughtsTokens: number | undefined;
+    // flow 268 T15 (AC10): 0-based position among ALL `functionCall` parts
+    // seen so far this round — matches the position each linked call ends up
+    // at in `NormalizedMessage.toolCalls` (both are built by appending, in
+    // the same `tool_call_end` order), so a captured `functionCallIndex`
+    // resolves deterministically on replay even without a `toolCallId`.
+    let functionCallIndexInRound = 0;
 
-    for (const record of records) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(record.data);
-      } catch {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE data line was not valid JSON"),
-        };
-        break;
-      }
-      const chunk = asRecord(parsed);
-
-      if (!sawFirstChunk) {
-        sawFirstChunk = true;
-        bodies.push({ kind: "model_start" });
-      }
-
-      const candidates = asArray(chunk.candidates);
-      const firstCandidate = asRecord(candidates[0]);
-      const content = asRecord(firstCandidate.content);
-      const parts = asArray(content.parts);
-      for (const rawPart of parts) {
-        const part = asRecord(rawPart);
-        const text = asString(part.text);
-        if (text !== undefined) {
-          // A `thought: true` part is chain-of-thought reasoning text, never
-          // ordinary output (confirmed via research, see module header).
-          if (asBoolean(part.thought)) {
-            bodies.push({ kind: "reasoning_delta", text });
-          } else {
-            bodies.push({ kind: "text_delta", text });
-          }
-          continue;
+    const pushUsageAndFinish = (): void => {
+      // usage_update precedes model_end, once, using the LAST-seen
+      // usageMetadata values folded progressively across chunks (research:
+      // unclear whether usageMetadata appears per-chunk or only on the final
+      // chunk — folding progressively is correct either way).
+      if (promptTokens !== undefined || candidatesTokens !== undefined || totalTokens !== undefined) {
+        const usage = mergeUsage(promptTokens, candidatesTokens, totalTokens);
+        const unknownExtensions: Record<string, unknown> = {};
+        if (cachedContentTokens !== undefined) {
+          unknownExtensions["gemini.cached_content_tokens"] = cachedContentTokens;
         }
-        const functionCall = asRecord(part.functionCall);
-        const callName = asString(functionCall.name);
-        if (callName !== undefined) {
-          // Gemini does NOT stream partial function-call arguments by
-          // default (confirmed via research: incremental streaming is a
-          // distinct, newer, model-gated opt-in this adapter does not
-          // enable) — args arrive whole in this one chunk, so this maps to
-          // tool_call_start immediately followed by tool_call_end, no
-          // tool_call_delta in between.
-          const callId = asString(functionCall.id) ?? callName;
-          const argsInput = JSON.stringify(asRecord(functionCall.args));
-          bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
-          bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });
+        if (thoughtsTokens !== undefined) {
+          unknownExtensions["gemini.thoughts_tokens"] = thoughtsTokens;
         }
+        bodies.push({
+          kind: "usage_update",
+          usage,
+          ...(Object.keys(unknownExtensions).length > 0 ? { unknownExtensions } : {}),
+        });
       }
-
-      const usageMetadata = asRecord(chunk.usageMetadata);
-      if (Object.keys(usageMetadata).length > 0) {
-        promptTokens = asNumber(usageMetadata.promptTokenCount) ?? promptTokens;
-        candidatesTokens = asNumber(usageMetadata.candidatesTokenCount) ?? candidatesTokens;
-        totalTokens = asNumber(usageMetadata.totalTokenCount) ?? totalTokens;
-        cachedContentTokens = asNumber(usageMetadata.cachedContentTokenCount) ?? cachedContentTokens;
-        thoughtsTokens = asNumber(usageMetadata.thoughtsTokenCount) ?? thoughtsTokens;
-      }
-
-      const finishReason = asString(firstCandidate.finishReason);
-      if (finishReason !== undefined && finishReason.length > 0) {
-        sawFinish = true;
-      }
-    }
-
-    // usage_update precedes model_end, once, using the LAST-seen usageMetadata
-    // values (research: unclear whether usageMetadata appears per-chunk or
-    // only on the final chunk — folding progressively and emitting once at
-    // the end is correct either way).
-    if (promptTokens !== undefined || candidatesTokens !== undefined || totalTokens !== undefined) {
-      const usage = mergeUsage(promptTokens, candidatesTokens, totalTokens);
-      const unknownExtensions: Record<string, unknown> = {};
-      if (cachedContentTokens !== undefined) {
-        unknownExtensions["gemini.cached_content_tokens"] = cachedContentTokens;
-      }
-      if (thoughtsTokens !== undefined) {
-        unknownExtensions["gemini.thoughts_tokens"] = thoughtsTokens;
-      }
-      bodies.push({
-        kind: "usage_update",
-        usage,
-        ...(Object.keys(unknownExtensions).length > 0 ? { unknownExtensions } : {}),
-      });
-    }
-    if (sawFinish) {
       bodies.push({ kind: "model_end" });
+    };
+
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
+      try {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          opts.signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: redact(`Gemini SSE body read failed: ${String(cause)}`),
+        });
+        return;
+      }
+
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `Gemini stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const chunkText = decoder.decode(value, { stream: true });
+      for (const record of parser.push(chunkText)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: redact("Gemini SSE data line was not valid JSON"),
+          };
+          break;
+        }
+        const chunk = asRecord(parsed);
+
+        if (!sawFirstChunk) {
+          sawFirstChunk = true;
+          bodies.push({ kind: "model_start" });
+        }
+
+        const candidates = asArray(chunk.candidates);
+        const firstCandidate = asRecord(candidates[0]);
+        const content = asRecord(firstCandidate.content);
+        const parts = asArray(content.parts);
+        for (const rawPart of parts) {
+          const part = asRecord(rawPart);
+          const text = asString(part.text);
+          const functionCall = asRecord(part.functionCall);
+          const callName = asString(functionCall.name);
+          const signature = asString(part.thoughtSignature);
+          let signatureCallId: string | undefined;
+          let signatureCallIndex: number | undefined;
+
+          if (text !== undefined) {
+            // A `thought: true` part is chain-of-thought reasoning text, never
+            // ordinary output (confirmed via research, see module header).
+            if (asBoolean(part.thought)) {
+              bodies.push({ kind: "reasoning_delta", text });
+            } else {
+              bodies.push({ kind: "text_delta", text });
+            }
+          } else if (callName !== undefined) {
+            // Gemini does NOT stream partial function-call arguments by
+            // default (confirmed via research: incremental streaming is a
+            // distinct, newer, model-gated opt-in this adapter does not
+            // enable) — args arrive whole in this one chunk, so this maps to
+            // tool_call_start immediately followed by tool_call_end, no
+            // tool_call_delta in between.
+            const callId = asString(functionCall.id) ?? callName;
+            const argsInput = JSON.stringify(asRecord(functionCall.args));
+            bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
+            bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });
+            signatureCallId = callId;
+            signatureCallIndex = functionCallIndexInRound;
+            functionCallIndexInRound += 1;
+          }
+
+          // flow 268 T15 (AC10): a `thoughtSignature` on ANY part is captured
+          // regardless of whether an effort/`includeThoughts` was requested —
+          // Google documents it arriving unconditionally. Associated with the
+          // part it arrived on in THIS loop iteration, so a split-chunk
+          // signature can never drift onto the wrong part.
+          if (signature !== undefined && signature.length > 0) {
+            const data: GeminiThoughtSignatureReplayData =
+              signatureCallIndex !== undefined
+                ? {
+                    target: "functionCall",
+                    functionCallIndex: signatureCallIndex,
+                    ...(signatureCallId !== undefined ? { toolCallId: signatureCallId } : {}),
+                    signature,
+                  }
+                : { target: "text", signature };
+            const replay: ProviderReplayItem = { providerId: "gemini", kind: "thought_signature", data };
+            bodies.push({ kind: "reasoning_replay", replay });
+          }
+        }
+
+        const usageMetadata = asRecord(chunk.usageMetadata);
+        if (Object.keys(usageMetadata).length > 0) {
+          promptTokens = asNumber(usageMetadata.promptTokenCount) ?? promptTokens;
+          candidatesTokens = asNumber(usageMetadata.candidatesTokenCount) ?? candidatesTokens;
+          totalTokens = asNumber(usageMetadata.totalTokenCount) ?? totalTokens;
+          cachedContentTokens = asNumber(usageMetadata.cachedContentTokenCount) ?? cachedContentTokens;
+          thoughtsTokens = asNumber(usageMetadata.thoughtsTokenCount) ?? thoughtsTokens;
+        }
+
+        const finishReason = asString(firstCandidate.finishReason);
+        if (finishReason !== undefined && finishReason.length > 0) {
+          sawFinish = true;
+          pushUsageAndFinish();
+        }
+        if (malformed !== undefined || sawFinish) {
+          break;
+        }
+      }
+
+      // A terminal record (`finishReason` present) or a malformed record ends
+      // the attempt right here (AC1): stop reading immediately rather than
+      // waiting for the socket to close — a permissive endpoint may keep it
+      // open past the last real chunk.
+      if (malformed !== undefined || sawFinish) {
+        cancelReader();
+        const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        if (malformed !== undefined) {
+          yield stamp({ kind: "provider_error", error: malformed });
+        }
+        return;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
     }
 
-    // Torn trailing record or a stream that produced chunks but never
-    // reported a finishReason is a truncated/malformed attempt: no model_end.
-    if (malformed === undefined) {
-      if (torn.length > 0) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE stream ended mid-record (torn stream)"),
-        };
-      } else if (sawFirstChunk && !sawFinish) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE stream ended before a finishReason was reported (truncated stream)"),
-        };
-      }
+    // Reached only via a natural EOF (reader signalled `done`) — a
+    // `finishReason` or a malformed record always returns from inside the
+    // loop above. No detectable terminal event was ever seen, so the only
+    // signal this adapter has is the stream simply ending: rely on that plus
+    // the idle-timeout deadline above (already elapsed by definition if we
+    // got here) to distinguish a clean-but-unreported completion from a
+    // dropped connection — treated as a truncated/malformed attempt below,
+    // per module header.
+    const trailing = decoder.decode();
+    if (trailing.length > 0) {
+      parser.push(trailing);
+    }
+    const torn = parser.flush();
+    if (torn.length > 0) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Gemini SSE stream ended mid-record (torn stream)"),
+      };
+    } else if (!receivedAnyChunk) {
+      // A 200 with literally zero bytes never sets `sawFirstChunk` and would
+      // otherwise yield nothing — fail closed with a terminal `malformed`
+      // rather than a silent-success empty iterable.
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("empty response body"),
+      };
+    } else if (sawFirstChunk && !sawFinish) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Gemini SSE stream ended before a finishReason was reported (truncated stream)"),
+      };
     }
 
     // Emit, checking cancellation before every event so an aborted attempt
     // ends with exactly one trailing `cancelled` error and no further output.
-    for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (opts.signal?.aborted === true) {
+    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }

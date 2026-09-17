@@ -49,4 +49,33 @@ describe("custom file providers merge into the registry", () => {
     expect(all.some((p) => p.name === "deepseek")).toBe(true);
     expect(all.find((p) => p.name === "internal-qwen")?.models).toEqual(["m1"]);
   });
+
+  // flow 268 T10 / AC4-AC5: `reasoning` threads verbatim from the file through
+  // `customCompatProviders()` onto `OpenAiCompatProvider`, which `makeProvider`
+  // (src/harness/provider/make-provider.ts) reads to build the compat grant.
+  test("reasoning config threads through customCompatProviders() verbatim", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider(
+      {
+        name: "minimax",
+        baseUrl: "http://10.0.0.9:8080",
+        models: ["minimax-m1"],
+        reasoning: { format: "inline-tags", requestParams: { reasoning_split: true }, replay: "minimax" },
+      },
+      dir,
+    );
+    const mapped = customCompatProviders(dir).find((p) => p.name === "minimax");
+    expect(mapped?.reasoning).toEqual({
+      format: "inline-tags",
+      requestParams: { reasoning_split: true },
+      replay: "minimax",
+    });
+  });
+
+  test("a provider with no reasoning config maps with reasoning absent (undefined)", () => {
+    const dir = tempDir();
+    saveCustomCompatProvider({ name: "plain", baseUrl: "http://10.0.0.9:8080", models: [] }, dir);
+    const mapped = customCompatProviders(dir).find((p) => p.name === "plain");
+    expect(mapped?.reasoning).toBeUndefined();
+  });
 });

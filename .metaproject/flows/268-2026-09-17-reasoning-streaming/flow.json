@@ -1,0 +1,1078 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "268",
+  "slug": "reasoning-streaming",
+  "title": "Provider streaming, timeouts and reasoning (thinking) handling and visualization across providers",
+  "status": "in-progress",
+  "createdAt": "2026-09-17T08:38:22.653Z",
+  "updatedAt": "2026-09-17T11:26:02.904Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ec4314e4dde9b7b059cad6bde29f8dc01b924add72e9e5e8ce2c3286c674954c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by granular tasks T5-T17"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each implement task is test-first; T18 and T20 cover suite-level tests"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T26"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-17T10:57:04.660Z",
+            "outcome": "started",
+            "detail": "two parallel reviewers"
+          },
+          {
+            "at": "2026-09-17T11:05:15.457Z",
+            "outcome": "failed",
+            "detail": "review round 1: blocker deepseek replay unwired for built-in provider; major abort skips onReasoningEnd (TUI preview state leaks); major wiki think guard not fence-aware; minor readline /reasoning config dir"
+          },
+          {
+            "at": "2026-09-17T11:19:38.663Z",
+            "outcome": "started",
+            "detail": "re-review of T26 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:44:08.338Z",
+            "outcome": "started",
+            "detail": "268-T5 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:59:56.222Z",
+            "outcome": "started",
+            "detail": "268-T6 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Stamp session message ts when the message is appended, not at checkpoint flush",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:44:08.457Z",
+            "outcome": "started",
+            "detail": "268-T7 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:44:08.575Z",
+            "outcome": "started",
+            "detail": "268-T8 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:44:08.693Z",
+            "outcome": "started",
+            "detail": "268-T9 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T23"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:13:09.719Z",
+            "outcome": "started",
+            "detail": "268-T10 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7",
+        "T10"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:26:08.776Z",
+            "outcome": "started",
+            "detail": "268-T11 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:36:06.823Z",
+            "outcome": "started",
+            "detail": "268-T12 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:36:06.937Z",
+            "outcome": "started",
+            "detail": "268-T13 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "OpenAI Responses reasoning: effort+summary, encrypted_content include and replay",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:36:07.053Z",
+            "outcome": "started",
+            "detail": "268-T14 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T11",
+        "T22"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:36:07.165Z",
+            "outcome": "started",
+            "detail": "268-T15 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "User control for reasoning effort passed as options.reasoning (shell command + config)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T12",
+        "T13",
+        "T14",
+        "T15"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:45:18.746Z",
+            "outcome": "started",
+            "detail": "268-T16 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T8",
+        "T11",
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T10:07:37.575Z",
+            "outcome": "started",
+            "detail": "268-T17 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T9",
+        "T11"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:45:18.864Z",
+            "outcome": "started",
+            "detail": "268-T18 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T19",
+      "title": "Docs: README and docs site for reasoning config, effort control, timeouts",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T16"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T10:07:37.699Z",
+            "outcome": "started",
+            "detail": "268-T19 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T20",
+      "title": "Full verification: bun run check and keryx health run",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T18",
+        "T19"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T10:29:27.497Z",
+            "outcome": "started",
+            "detail": "orchestrator runs full check"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T21",
+      "title": "Smoke run against a real reasoning provider (MiniMax split) via built keryx",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T25"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-17T10:35:30.478Z",
+            "outcome": "failed",
+            "detail": "live MiniMax-M3: split works (tool loop ok, no <think> in answer) but reasoning text ends with </think>; inline-tags duplicates reasoning because MiniMax also streams delta.reasoning; unconfigured MiniMax still leaks"
+          },
+          {
+            "at": "2026-09-17T10:47:09.127Z",
+            "outcome": "started",
+            "detail": "re-run after T24"
+          },
+          {
+            "at": "2026-09-17T10:47:56.118Z",
+            "outcome": "failed",
+            "detail": "default (preset split) + tools: MiniMax sends content \"</think>\" before tool_calls, printed as answer text; inline-tags fixed but reasoning starts with a blank line"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T22",
+      "title": "Stream anthropic and gemini bodies incrementally with first-byte and idle timeouts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T08:59:56.334Z",
+            "outcome": "started",
+            "detail": "268-T22 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T23",
+      "title": "Size the main agent turn output budget: default 8192, configurable per provider and globally",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T09:02:49.187Z",
+            "outcome": "started",
+            "detail": "268-T23 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T24",
+      "title": "MiniMax live fixes: inline-tags ignores reasoning fields, strip think tags from field reasoning, default split preset for MiniMax hosts",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T20"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T10:35:30.818Z",
+            "outcome": "started",
+            "detail": "268-T24 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T25",
+      "title": "MiniMax split: drop stray think tags from content; inline-tags: trim newline after <think>",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T24"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T10:47:56.470Z",
+            "outcome": "started",
+            "detail": "268-T25 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T26",
+      "title": "Review fixes: built-in deepseek replay, onReasoningEnd on abort, fence-aware wiki think guard, readline /reasoning config dir",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T21"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-17T11:05:15.797Z",
+            "outcome": "started",
+            "detail": "268-T26 dispatch 1"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-17T08:38:22.653Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-17T08:43:24.345Z",
+      "event": "task-added",
+      "detail": "T5: Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)"
+    },
+    {
+      "at": "2026-09-17T08:43:24.462Z",
+      "event": "task-added",
+      "detail": "T6: Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)"
+    },
+    {
+      "at": "2026-09-17T08:43:24.581Z",
+      "event": "task-added",
+      "detail": "T7: Stamp session message ts when the message is appended, not at checkpoint flush"
+    },
+    {
+      "at": "2026-09-17T08:43:24.698Z",
+      "event": "task-added",
+      "detail": "T8: Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit"
+    },
+    {
+      "at": "2026-09-17T08:43:24.815Z",
+      "event": "task-added",
+      "detail": "T9: wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags"
+    },
+    {
+      "at": "2026-09-17T08:43:24.935Z",
+      "event": "task-added",
+      "detail": "T10: Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser"
+    },
+    {
+      "at": "2026-09-17T08:43:25.062Z",
+      "event": "task-added",
+      "detail": "T11: Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it"
+    },
+    {
+      "at": "2026-09-17T08:43:25.179Z",
+      "event": "task-added",
+      "detail": "T12: Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content"
+    },
+    {
+      "at": "2026-09-17T08:43:25.300Z",
+      "event": "task-added",
+      "detail": "T13: Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop"
+    },
+    {
+      "at": "2026-09-17T08:43:25.423Z",
+      "event": "task-added",
+      "detail": "T14: OpenAI Responses reasoning: effort+summary, encrypted_content include and replay"
+    },
+    {
+      "at": "2026-09-17T08:43:25.543Z",
+      "event": "task-added",
+      "detail": "T15: Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature"
+    },
+    {
+      "at": "2026-09-17T08:43:25.662Z",
+      "event": "task-added",
+      "detail": "T16: User control for reasoning effort passed as options.reasoning (shell command + config)"
+    },
+    {
+      "at": "2026-09-17T08:43:25.779Z",
+      "event": "task-added",
+      "detail": "T17: TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode"
+    },
+    {
+      "at": "2026-09-17T08:43:25.897Z",
+      "event": "task-added",
+      "detail": "T18: Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries"
+    },
+    {
+      "at": "2026-09-17T08:43:26.015Z",
+      "event": "task-added",
+      "detail": "T19: Docs: README and docs site for reasoning config, effort control, timeouts"
+    },
+    {
+      "at": "2026-09-17T08:43:26.132Z",
+      "event": "task-added",
+      "detail": "T20: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-17T08:43:26.247Z",
+      "event": "task-added",
+      "detail": "T21: Smoke run against a real reasoning provider (MiniMax split) via built keryx"
+    },
+    {
+      "at": "2026-09-17T08:43:26.363Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-17T08:43:26.478Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-17T08:43:26.596Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-17T08:43:26.712Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T21 (was empty) — review runs after verification and smoke"
+    },
+    {
+      "at": "2026-09-17T08:44:00.424Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-17T08:44:00.539Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-17T08:44:08.338Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 268-T5 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T08:44:08.457Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 268-T7 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T08:44:08.575Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 268-T8 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T08:44:08.693Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 268-T9 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T08:51:01.615Z",
+      "event": "task-done",
+      "detail": "T9: wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags"
+    },
+    {
+      "at": "2026-09-17T08:51:44.204Z",
+      "event": "task-done",
+      "detail": "T7: Stamp session message ts when the message is appended, not at checkpoint flush"
+    },
+    {
+      "at": "2026-09-17T08:52:32.868Z",
+      "event": "task-done",
+      "detail": "T8: Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit"
+    },
+    {
+      "at": "2026-09-17T08:59:43.871Z",
+      "event": "task-done",
+      "detail": "T5: Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)"
+    },
+    {
+      "at": "2026-09-17T08:59:55.871Z",
+      "event": "task-added",
+      "detail": "T22: Stream anthropic and gemini bodies incrementally with first-byte and idle timeouts"
+    },
+    {
+      "at": "2026-09-17T08:59:55.993Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T12, T22 (was T12) — anthropic thinking parse builds on the streaming reader"
+    },
+    {
+      "at": "2026-09-17T08:59:56.109Z",
+      "event": "task-depends-set",
+      "detail": "T15: dependsOn T14, T22 (was T14) — gemini thoughts build on the streaming reader"
+    },
+    {
+      "at": "2026-09-17T08:59:56.222Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 268-T6 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T08:59:56.334Z",
+      "event": "task-attempt",
+      "detail": "T22: started (attempt 1) — 268-T22 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:02:48.807Z",
+      "event": "task-done",
+      "detail": "T6: Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)"
+    },
+    {
+      "at": "2026-09-17T09:02:48.929Z",
+      "event": "task-added",
+      "detail": "T23: Size the main agent turn output budget: default 8192, configurable per provider and globally"
+    },
+    {
+      "at": "2026-09-17T09:02:49.063Z",
+      "event": "task-depends-set",
+      "detail": "T10: dependsOn T23 (was T6) — T10 edits provider-config after the budget field lands"
+    },
+    {
+      "at": "2026-09-17T09:02:49.187Z",
+      "event": "task-attempt",
+      "detail": "T23: started (attempt 1) — 268-T23 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:08:40.823Z",
+      "event": "task-done",
+      "detail": "T22: Stream anthropic and gemini bodies incrementally with first-byte and idle timeouts"
+    },
+    {
+      "at": "2026-09-17T09:13:09.590Z",
+      "event": "task-done",
+      "detail": "T23: Size the main agent turn output budget: default 8192, configurable per provider and globally"
+    },
+    {
+      "at": "2026-09-17T09:13:09.719Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 268-T10 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:26:08.662Z",
+      "event": "task-done",
+      "detail": "T10: Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser"
+    },
+    {
+      "at": "2026-09-17T09:26:08.776Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 268-T11 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:36:06.255Z",
+      "event": "task-done",
+      "detail": "T11: Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it"
+    },
+    {
+      "at": "2026-09-17T09:36:06.367Z",
+      "event": "task-depends-set",
+      "detail": "T13: dependsOn T11, T22 (was T12, T22) — adapters edit disjoint files; only the shared model is a prerequisite"
+    },
+    {
+      "at": "2026-09-17T09:36:06.484Z",
+      "event": "task-depends-set",
+      "detail": "T14: dependsOn T11, T6 (was T13) — adapters edit disjoint files; only the shared model is a prerequisite"
+    },
+    {
+      "at": "2026-09-17T09:36:06.595Z",
+      "event": "task-depends-set",
+      "detail": "T15: dependsOn T11, T22 (was T14, T22) — adapters edit disjoint files; only the shared model is a prerequisite"
+    },
+    {
+      "at": "2026-09-17T09:36:06.710Z",
+      "event": "task-depends-set",
+      "detail": "T16: dependsOn T12, T13, T14, T15 (was T15) — effort control wires all adapters"
+    },
+    {
+      "at": "2026-09-17T09:36:06.823Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 268-T12 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:36:06.937Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 268-T13 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:36:07.053Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 268-T14 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:36:07.165Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 268-T15 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:42:42.397Z",
+      "event": "task-done",
+      "detail": "T13: Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop"
+    },
+    {
+      "at": "2026-09-17T09:43:53.853Z",
+      "event": "task-done",
+      "detail": "T12: Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content"
+    },
+    {
+      "at": "2026-09-17T09:45:01.245Z",
+      "event": "task-done",
+      "detail": "T15: Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature"
+    },
+    {
+      "at": "2026-09-17T09:45:18.632Z",
+      "event": "task-done",
+      "detail": "T14: OpenAI Responses reasoning: effort+summary, encrypted_content include and replay"
+    },
+    {
+      "at": "2026-09-17T09:45:18.746Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 268-T16 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:45:18.864Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 268-T18 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T09:51:41.657Z",
+      "event": "task-done",
+      "detail": "T18: Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries"
+    },
+    {
+      "at": "2026-09-17T10:07:37.333Z",
+      "event": "task-done",
+      "detail": "T16: User control for reasoning effort passed as options.reasoning (shell command + config)"
+    },
+    {
+      "at": "2026-09-17T10:07:37.458Z",
+      "event": "task-depends-set",
+      "detail": "T19: dependsOn T16 (was T16, T17) — docs follow the frozen AC16 spec; written in parallel with T17 and reconciled in T20"
+    },
+    {
+      "at": "2026-09-17T10:07:37.575Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 268-T17 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T10:07:37.699Z",
+      "event": "task-attempt",
+      "detail": "T19: started (attempt 1) — 268-T19 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T10:29:02.994Z",
+      "event": "task-done",
+      "detail": "T17: TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode"
+    },
+    {
+      "at": "2026-09-17T10:29:27.384Z",
+      "event": "task-done",
+      "detail": "T19: Docs: README and docs site for reasoning config, effort control, timeouts"
+    },
+    {
+      "at": "2026-09-17T10:29:27.497Z",
+      "event": "task-attempt",
+      "detail": "T20: started (attempt 1) — orchestrator runs full check"
+    },
+    {
+      "at": "2026-09-17T10:34:06.621Z",
+      "event": "task-done",
+      "detail": "T20: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-17T10:35:30.478Z",
+      "event": "task-attempt",
+      "detail": "T21: failed (attempt 1) — live MiniMax-M3: split works (tool loop ok, no <think> in answer) but reasoning text ends with </think>; inline-tags duplicates reasoning because MiniMax also streams delta.reasoning; unconfigured MiniMax still leaks"
+    },
+    {
+      "at": "2026-09-17T10:35:30.590Z",
+      "event": "task-added",
+      "detail": "T24: MiniMax live fixes: inline-tags ignores reasoning fields, strip think tags from field reasoning, default split preset for MiniMax hosts"
+    },
+    {
+      "at": "2026-09-17T10:35:30.705Z",
+      "event": "task-depends-set",
+      "detail": "T21: dependsOn T24 (was T20) — re-run smoke after live-found fixes"
+    },
+    {
+      "at": "2026-09-17T10:35:30.819Z",
+      "event": "task-attempt",
+      "detail": "T24: started (attempt 1) — 268-T24 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T10:47:09.009Z",
+      "event": "task-done",
+      "detail": "T24: MiniMax live fixes: inline-tags ignores reasoning fields, strip think tags from field reasoning, default split preset for MiniMax hosts"
+    },
+    {
+      "at": "2026-09-17T10:47:09.127Z",
+      "event": "task-attempt",
+      "detail": "T21: started (attempt 2) — re-run after T24"
+    },
+    {
+      "at": "2026-09-17T10:47:56.118Z",
+      "event": "task-attempt",
+      "detail": "T21: failed (attempt 3) — default (preset split) + tools: MiniMax sends content \"</think>\" before tool_calls, printed as answer text; inline-tags fixed but reasoning starts with a blank line"
+    },
+    {
+      "at": "2026-09-17T10:47:56.233Z",
+      "event": "task-added",
+      "detail": "T25: MiniMax split: drop stray think tags from content; inline-tags: trim newline after <think>"
+    },
+    {
+      "at": "2026-09-17T10:47:56.351Z",
+      "event": "task-depends-set",
+      "detail": "T21: dependsOn T25 (was T24) — re-run smoke after second live finding"
+    },
+    {
+      "at": "2026-09-17T10:47:56.470Z",
+      "event": "task-attempt",
+      "detail": "T25: started (attempt 1) — 268-T25 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T10:52:29.148Z",
+      "event": "task-done",
+      "detail": "T25: MiniMax split: drop stray think tags from content; inline-tags: trim newline after <think>"
+    },
+    {
+      "at": "2026-09-17T10:52:53.870Z",
+      "event": "task-done",
+      "detail": "T21: Smoke run against a real reasoning provider (MiniMax split) via built keryx"
+    },
+    {
+      "at": "2026-09-17T10:57:04.661Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — two parallel reviewers"
+    },
+    {
+      "at": "2026-09-17T11:05:15.457Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — review round 1: blocker deepseek replay unwired for built-in provider; major abort skips onReasoningEnd (TUI preview state leaks); major wiki think guard not fence-aware; minor readline /reasoning config dir"
+    },
+    {
+      "at": "2026-09-17T11:05:15.570Z",
+      "event": "task-added",
+      "detail": "T26: Review fixes: built-in deepseek replay, onReasoningEnd on abort, fence-aware wiki think guard, readline /reasoning config dir"
+    },
+    {
+      "at": "2026-09-17T11:05:15.685Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T26 (was T21) — re-review after fixes"
+    },
+    {
+      "at": "2026-09-17T11:05:15.797Z",
+      "event": "task-attempt",
+      "detail": "T26: started (attempt 1) — 268-T26 dispatch 1"
+    },
+    {
+      "at": "2026-09-17T11:19:38.544Z",
+      "event": "task-done",
+      "detail": "T26: Review fixes: built-in deepseek replay, onReasoningEnd on abort, fence-aware wiki think guard, readline /reasoning config dir"
+    },
+    {
+      "at": "2026-09-17T11:19:38.663Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — re-review of T26 fixes"
+    },
+    {
+      "at": "2026-09-17T11:26:02.904Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    }
+  ]
+}

@@ -82,16 +82,43 @@ export interface OpenAiCompatProvider {
   balancePath?: string;
   balanceKind?: "deepseek" | "openrouter";
   /**
+   * Custom-provider-only override of the main agent turn's output-token
+   * budget (flow 268); mirrors `CustomCompatProvider.maxOutputTokens`
+   * (`src/lib/provider-config.ts`), which is its sole source — a built-in
+   * entry never sets this. Read by `resolveAgentMaxOutputTokens`'s callers
+   * (e.g. `commands/shell.ts`'s `makeAgentDeps`) via
+   * `resolveProviderModelParams`/`resolveProviderModelParamsByName` below —
+   * which also let an operator override it per-provider via
+   * `ShellConfig.modelParams` without editing `llm-providers.json`.
+   */
+  maxOutputTokens?: number;
+  /**
    * Default sampling temperature for this provider (flow 268). For a custom
    * provider this is copied straight from its `CustomCompatProvider` record
    * (`customCompatProviders` below); a built-in has no default of its own —
    * see `resolveProviderModelParams`'s `ShellConfig.modelParams` override.
+   * Folded into `request.options.temperature` by `commands/agent.ts`'s
+   * `buildRequestOptions` (and by `runShell`'s own chat-mode request).
    */
   temperature?: number;
-  /** Default `budget.maxOutputTokens` for this provider (flow 268). */
-  maxOutputTokens?: number;
-  /** Default chat-call abort timeout in ms for this provider (flow 268). */
+  /**
+   * Default abort timeout (ms) for the actual chat/completions call to this
+   * provider (flow 268), independent of the `/models` discovery probe's own
+   * timeout. Threaded into `StreamOptions.timeoutMs`.
+   */
   timeoutMs?: number;
+  /**
+   * Custom-provider-only reasoning configuration; mirrors
+   * `CustomCompatProvider.reasoning` (`src/lib/provider-config.ts`), which is
+   * its sole source — a built-in entry never sets this. Threaded onto
+   * `OpenAiCompatCapabilityGrant.reasoning` by `makeProvider`
+   * (`src/harness/provider/make-provider.ts`).
+   */
+  reasoning?: {
+    format?: "field" | "inline-tags" | "split";
+    requestParams?: Record<string, unknown>;
+    replay?: "none" | "deepseek" | "minimax";
+  };
 }
 
 /** Normalize a provider registry entry's platform policy.
@@ -135,6 +162,71 @@ export function resolveProviderBaseUrl(
   }
 }
 
+/** Hosts MiniMax's OpenAI-compatible gateway is reachable at (flow 268 T24). */
+const MINIMAX_REASONING_PRESET_HOSTS = new Set(["api.minimax.io", "api.minimaxi.com"]);
+
+/** Host DeepSeek's OpenAI-compatible gateway is reachable at (flow 268 T26). */
+const DEEPSEEK_REASONING_PRESET_HOSTS = new Set(["api.deepseek.com"]);
+
+/**
+ * Resolve the `reasoning` config a compat provider actually sends (flow 268
+ * T24/T26): an EXPLICIT `reasoning` config on the provider always wins,
+ * verbatim — this never overrides an operator's own choice, including one
+ * that reintroduces a known issue. Absent, a provider whose `baseUrl` host
+ * is an EXACT match (any path) for a known preset host gets a default
+ * preset instead of "no reasoning config" (the pre-existing behaviour for
+ * every other absent-config host).
+ *
+ * Why a preset, and why these:
+ * - MiniMax's un-configured default mode duplicates every reasoning
+ *   phrase — once inline in `delta.content` as `<think>…</think>`, once
+ *   again plain in `delta.reasoning` — and the `reasoning` field is not
+ *   trustworthy at the stream boundary (live smoke evidence against
+ *   MiniMax-M3, 2026-09-17: the last `reasoning` chunk bled answer text
+ *   across the boundary). `{ format: "split", requestParams: {
+ *   reasoning_split: true }, replay: "minimax" }` asks MiniMax for
+ *   out-of-band reasoning instead, which the same smoke run confirmed
+ *   keryx renders and replays cleanly (`openai-compat-provider.ts`'s
+ *   field-sourced tag strip, flow 268 T24, handles the one remaining rough
+ *   edge: split mode's reasoning stream ending in a literal `</think>`
+ *   line).
+ * - DeepSeek's thinking mode returns HTTP 400 on a tool-bearing request
+ *   whose prior assistant turns omit the `reasoning_content` field it sent
+ *   (https://api-docs.deepseek.com/guides/thinking_mode/). Without a
+ *   `reasoning` config at all, `grant.reasoning.replay` stays undefined and
+ *   `openai-compat-provider.ts` never accumulates or re-attaches
+ *   `reasoning_content` (gated on `replayMode === "deepseek"`), so the
+ *   built-in `deepseek` provider 400s the moment a multi-turn tool call
+ *   follows a thinking-mode reply. `{ format: "field", replay: "deepseek" }`
+ *   asks for nothing extra on the wire (DeepSeek's reasoning already streams
+ *   as a plain `reasoning_content` delta field) but turns on the replay
+ *   accumulation/re-attachment `openai-compat-provider.ts` already
+ *   implements for `replay: "deepseek"`.
+ *
+ * Pure: no network, no clock — string comparison against `baseUrl`'s parsed
+ * hostname. An unparsable `baseUrl` resolves to "no preset" rather than
+ * throwing (mirrors `resolveProviderBaseUrl`'s fail-open-to-unchanged shape).
+ */
+export function resolveCompatReasoningPreset(
+  explicit: OpenAiCompatProvider["reasoning"],
+  baseUrl: string,
+): OpenAiCompatProvider["reasoning"] | undefined {
+  if (explicit !== undefined) return explicit;
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch {
+    return undefined;
+  }
+  if (MINIMAX_REASONING_PRESET_HOSTS.has(host)) {
+    return { format: "split", requestParams: { reasoning_split: true }, replay: "minimax" };
+  }
+  if (DEEPSEEK_REASONING_PRESET_HOSTS.has(host)) {
+    return { format: "field", replay: "deepseek" };
+  }
+  return undefined;
+}
+
 /** Resolved per-provider sampling/budget/timeout overrides (flow 268). Every field absent when unconfigured. */
 export interface ResolvedProviderModelParams {
   temperature?: number;
@@ -152,8 +244,10 @@ export interface ResolvedProviderModelParams {
  * supplies its defaults, since a built-in `OpenAiCompatProvider` has none of
  * its own. Absent everywhere -> every field `undefined`, matching AC3's
  * byte-identical-when-unconfigured requirement; this function never invents a
- * default (the `?? 1024` fallback lives at the request-construction call
- * sites, same as today).
+ * default — the fallback lives at the request-construction call sites, same
+ * as today (the agent turn's `?? DEFAULT_MAX_OUTPUT_TOKENS` in
+ * `resolveAgentMaxOutputTokens`, `commands/agent.ts`; `runShell`'s own
+ * chat-mode loop's `?? 1024`).
  */
 export function resolveProviderModelParams(
   provider: OpenAiCompatProvider | CustomCompatProvider,
@@ -358,6 +452,7 @@ export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
       ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
       ...(p.maxOutputTokens !== undefined ? { maxOutputTokens: p.maxOutputTokens } : {}),
       ...(p.timeoutMs !== undefined ? { timeoutMs: p.timeoutMs } : {}),
+      ...(p.reasoning !== undefined ? { reasoning: p.reasoning } : {}),
     }));
 }
 

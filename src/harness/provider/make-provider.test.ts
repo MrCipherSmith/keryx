@@ -46,13 +46,17 @@
 // Deterministic + offline: `opts.fetch` is a stub that throws if ever called
 // (mirrors `executor.test.ts`'s `withFetchGuard`) — `makeProvider` must never
 // invoke fetch merely by CONSTRUCTING a provider.
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
 import { OpenAiProvider } from "./openai/openai-provider";
 import type { NormalizedRequest, StreamOptions } from "./types";
+import { saveCustomCompatProvider } from "../../lib/provider-config";
 
 // PINNED API under test — T6 impl exports these; import fails until then
 // (expected RED: "Cannot find module './make-provider'").
@@ -276,5 +280,287 @@ describe("stream usage is opt-in per provider", () => {
     for (const name of ["deepseek", "openrouter", "cerebras", "groq", "moonshot", "zai"]) {
       expect(providerByName(name)?.streamUsage).toBeUndefined();
     }
+  });
+});
+
+// --- flow 268 T10: `reasoning` threads from llm-providers.json to the grant -
+
+describe("reasoning config threads from a custom file provider onto the compat grant (flow 268 T10 / AC4-AC5)", () => {
+  let originalXdg: string | undefined;
+
+  beforeEach(() => {
+    originalXdg = process.env.XDG_DATA_HOME;
+  });
+
+  afterEach(() => {
+    if (originalXdg === undefined) {
+      delete process.env.XDG_DATA_HOME;
+    } else {
+      process.env.XDG_DATA_HOME = originalXdg;
+    }
+  });
+
+  function isolatedConfigDir(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-make-provider-reasoning-"));
+    process.env.XDG_DATA_HOME = dir;
+    return dir;
+  }
+
+  test("a custom provider's reasoning.requestParams reaches the outbound request body", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "minimax-custom",
+      baseUrl: "http://127.0.0.1:8099",
+      requiresApiKey: false,
+      models: ["minimax-m1"],
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("minimax-custom", "minimax-m1", makeOpts({ env: {}, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+
+    const request: NormalizedRequest = {
+      providerId: "minimax-custom",
+      modelId: "minimax-m1",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-reasoning",
+      parentRunId: "make-provider-reasoning",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-reasoning-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    expect(body.reasoning_split).toBe(true);
+  });
+
+  test("a custom provider WITHOUT a reasoning config constructs a grant with reasoning left absent", () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "plain-custom",
+      baseUrl: "http://127.0.0.1:8098",
+      requiresApiKey: false,
+      models: ["m"],
+    });
+    const provider = makeProvider("plain-custom", "m", makeOpts({ env: {} }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    // No reasoning config was saved, so `describe()`'s trivially-correct
+    // `reasoningMetadata: grant.reasoning !== undefined` stays false.
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(false);
+  });
+
+  // flow 268 T24: a custom provider pointed at a MiniMax host with NO
+  // `reasoning` config of its own gets the split-mode preset applied to the
+  // grant built here, so its live default-mode duplication bug (T24) never
+  // reaches the operator without them configuring anything.
+  test("a custom provider on a MiniMax host with no reasoning config sends reasoning_split: true (T24 preset)", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "my-minimax",
+      baseUrl: "https://api.minimax.io/v1",
+      requiresApiKey: false,
+      models: ["MiniMax-M3"],
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("my-minimax", "MiniMax-M3", makeOpts({ env: {}, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(true);
+
+    const request: NormalizedRequest = {
+      providerId: "my-minimax",
+      modelId: "MiniMax-M3",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-minimax-preset",
+      parentRunId: "make-provider-minimax-preset",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-minimax-preset-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    expect(body.reasoning_split).toBe(true);
+  });
+
+  // A provider on a different (non-MiniMax) host with no reasoning config
+  // stays exactly as before — the preset is scoped to the two known MiniMax
+  // hosts, never applied by guessing.
+  test("a custom provider on a non-MiniMax host with no reasoning config is unaffected by the preset", () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "other-host",
+      baseUrl: "https://api.example.com",
+      requiresApiKey: false,
+      models: ["m"],
+    });
+    const provider = makeProvider("other-host", "m", makeOpts({ env: {} }));
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(false);
+  });
+
+  // An explicit `reasoning` config on a MiniMax-host provider always wins —
+  // the preset never overrides the operator's own choice.
+  test("an explicit reasoning config on a MiniMax host wins over the preset", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "minimax-explicit",
+      baseUrl: "https://api.minimax.io",
+      requiresApiKey: false,
+      models: ["MiniMax-M3"],
+      reasoning: { format: "inline-tags" },
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("minimax-explicit", "MiniMax-M3", makeOpts({ env: {}, fetch: fetchMock }));
+    const request: NormalizedRequest = {
+      providerId: "minimax-explicit",
+      modelId: "MiniMax-M3",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-minimax-explicit",
+      parentRunId: "make-provider-minimax-explicit",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-minimax-explicit-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    // The explicit `inline-tags` config carries no `requestParams`, so the
+    // preset's `reasoning_split` must NOT have been merged in.
+    expect(body.reasoning_split).toBeUndefined();
+  });
+});
+
+// --- flow 268 T26: the built-in `deepseek` registry entry, which carries no
+// explicit `reasoning` config, must get the `{ format: "field", replay:
+// "deepseek" }` preset from `resolveCompatReasoningPreset` purely off its
+// `baseUrl` host (`api.deepseek.com`) — otherwise `grant.reasoning.replay`
+// stays undefined and `openai-compat-provider.ts` never re-attaches a prior
+// round's `reasoning_content` on a tool-bearing request, which is exactly
+// the shape DeepSeek's thinking mode 400s on.
+describe("the built-in deepseek provider gets the reasoning_content replay preset (flow 268 T26)", () => {
+  const COMPAT_REPLAY_PROVIDER_ID = "openai-compat";
+
+  test("with tools: a prior assistant message's owned reasoning_content item is sent as reasoning_content", async () => {
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("deepseek", "deepseek-reasoner", makeOpts({ env: { DEEPSEEK_API_KEY: "sk-ds" }, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(true);
+
+    const request: NormalizedRequest = {
+      providerId: "deepseek",
+      modelId: "deepseek-reasoner",
+      systemInstruction: "",
+      messages: [
+        { role: "user", content: "call the tool" },
+        {
+          role: "assistant",
+          content: "",
+          toolCalls: [{ id: "call-1", name: "lookup", arguments: "{}" }],
+          reasoning: {
+            replay: [{ providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_content", data: "earlier reasoning" }],
+          },
+        },
+        { role: "tool", content: "42", toolCallId: "call-1" },
+      ],
+      tools: [{ name: "lookup", inputSchema: { type: "object" } }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-deepseek-preset-replay",
+      parentRunId: "make-provider-deepseek-preset-replay",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-deepseek-preset-replay-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as { messages: Array<Record<string, unknown>> };
+    const assistantMsg = body.messages.find((m) => m.role === "assistant");
+    expect(assistantMsg?.reasoning_content).toBe("earlier reasoning");
+  });
+
+  test("deepseek-chat turns without reasoning emit no replay and send nothing extra", async () => {
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("deepseek", "deepseek-chat", makeOpts({ env: { DEEPSEEK_API_KEY: "sk-ds" }, fetch: fetchMock }));
+
+    const request: NormalizedRequest = {
+      providerId: "deepseek",
+      modelId: "deepseek-chat",
+      systemInstruction: "",
+      messages: [
+        { role: "user", content: "hi" },
+        { role: "assistant", content: "plain reply, no reasoning" },
+      ],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-deepseek-preset-no-reasoning",
+      parentRunId: "make-provider-deepseek-preset-no-reasoning",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-deepseek-preset-no-reasoning-attempt" };
+    const events = [];
+    for await (const event of provider.stream(request, opts)) {
+      events.push(event);
+    }
+
+    expect(events.some((e) => e.kind === "reasoning_replay")).toBe(false);
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as { messages: Array<Record<string, unknown>> };
+    const assistantMsg = body.messages.find((m) => m.role === "assistant");
+    expect(assistantMsg?.reasoning_content).toBeUndefined();
+    expect(assistantMsg?.content).toBe("plain reply, no reasoning");
   });
 });

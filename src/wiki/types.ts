@@ -115,6 +115,13 @@ export type WikiStatusResult = {
   countsByType: WikiPageTypeCount[];
   lastIndexGeneratedAt: string | null;
   lastLinkCheck: WikiLinkCheckState | null;
+  /**
+   * Relative paths of existing wiki pages whose content still contains a
+   * `<think>`/`<thinking>` reasoning tag (flow 268 T9) — a leak from `wiki
+   * enrich` before its stripping guard existed. Re-run enrich with
+   * `--force --page <path>` on each to clean it up.
+   */
+  pagesWithThinkTags: string[];
 };
 
 export type WikiCreatePageInput = {

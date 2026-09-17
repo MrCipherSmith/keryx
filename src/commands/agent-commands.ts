@@ -106,7 +106,15 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
       agent: "Add or configure a provider (interactive picker)",
     },
   },
-  { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
+  {
+    name: "/think",
+    description: "Expand the last reasoning block — /think [auto|expand|hide|collapse]",
+    // flow 268 T17 (AC16): bare `/think` and `/think collapse` keep their
+    // pre-existing meaning (expand/collapse the LAST retained block); the
+    // three new args set the PERSISTED display mode for every future round
+    // (`ShellConfig.thinkDisplay`) — see `tui-shell.ts`'s `/think` handler.
+    modes: AGENT_ONLY,
+  },
   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },
   {
     name: "/copy",
@@ -190,6 +198,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     name: "/mode",
     description: "Show or switch the permission mode — /mode [ask|trust|auto]",
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
+    modes: AGENT_ONLY,
+  },
+  {
+    name: "/reasoning",
+    description:
+      "Show or set reasoning effort — /reasoning [off|minimal|low|medium|high|xhigh|max]",
+    // Flow 268 T16 (AC11): reasoning effort feeds `request.options.reasoning`
+    // on the main agent turn (`commands/agent.ts`) — chat mode never builds
+    // that request shape (its own `runShell` core is untouched), so this
+    // command has nothing to configure there, same reasoning as `/mode`.
     modes: AGENT_ONLY,
   },
   {

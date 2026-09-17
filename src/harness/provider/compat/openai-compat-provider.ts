@@ -42,9 +42,12 @@ import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mut
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
+import { ThinkTagParser } from "./think-tag-parser";
+import { FieldThinkTagStripper } from "./think-tag-stripper";
 import type {
   NormalizedError,
   NormalizedEvent,
+  NormalizedMessage,
   NormalizedRequest,
   NormalizedUsage,
   ProviderCapabilities,
@@ -96,6 +99,35 @@ export interface OpenAiCompatCapabilityGrant {
   readonly chatPath?: string;
   /** Optional extra request headers (e.g. OpenRouter `HTTP-Referer` / `X-Title`). */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Custom-provider reasoning configuration (flow 268 T10 / AC4-AC5), threaded
+   * verbatim from `CustomCompatProvider.reasoning`
+   * (`src/lib/provider-config.ts`) via `OpenAiCompatProvider.reasoning`
+   * (`src/commands/providers.ts`) and `makeProvider`. Absent means the
+   * pre-existing default behaviour: `delta.content` passes through unchanged,
+   * and `reasoning`/`reasoning_content`/`reasoning_details` are still read
+   * (see AC5 — that part is unconditional, for every format).
+   */
+  readonly reasoning?: {
+    /**
+     * `"field"` (default when absent): reasoning read from the
+     * `reasoning`/`reasoning_content` delta field.
+     * `"inline-tags"`: `delta.content` is routed through `ThinkTagParser`
+     * (MiniMax's default `<think>…</think>` shape).
+     * `"split"`: content passes through unchanged; reasoning is expected
+     * out-of-band (typically paired with a `requestParams` opt-in, e.g.
+     * MiniMax's `reasoning_split: true`).
+     */
+    readonly format?: "field" | "inline-tags" | "split";
+    /**
+     * Shallow-merged into the compat request payload AFTER the base fields.
+     * `model`, `messages`, `stream`, and `tools` are never overridable —
+     * those keys are ignored when merging.
+     */
+    readonly requestParams?: Readonly<Record<string, unknown>>;
+    /** Stored/threaded only; a later task reads this to pick a replay strategy. */
+    readonly replay?: "none" | "deepseek" | "minimax";
+  };
 }
 
 /** Injected dependencies. `fetch` is mandatory (never the global); `grant` gates egress. */
@@ -103,6 +135,18 @@ export interface OpenAiCompatProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: OpenAiCompatCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the gateway accepted but never
+   * started answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link OpenAiCompatEngine.descriptorDocument}. */
@@ -251,6 +295,138 @@ function classifyHttpError(status: number, headers: Headers, code?: string): Nor
 /** Longest server reason kept in an error message. */
 const MAX_ERROR_REASON_CHARS = 300;
 
+/** Default first-byte / idle stream deadline (flow 268 T5), overridable via {@link OpenAiCompatProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/**
+ * Stable providerId stamped on every `reasoning_replay` item this engine
+ * emits (flow 268 T12 / AC7), and the ONLY providerId this engine reads back
+ * off `NormalizedMessage.reasoning.replay` when building a later request — an
+ * item stamped by a different adapter (Anthropic's `thinking_signature`,
+ * Gemini's `thought_signature`, …) is ignored rather than guessed at. Shared
+ * across every OpenAI-compat identity (DeepSeek, MiniMax, OpenRouter, …)
+ * because the replay SHAPE (deepseek `reasoning_content` echo, minimax
+ * `reasoning_details`/raw `<think>` content) is a property of the wire
+ * protocol this engine speaks, not of any one gateway's identity.
+ */
+const COMPAT_REPLAY_PROVIDER_ID = "openai-compat";
+
+/** One MiniMax `reasoning_details` item accumulated across streamed fragments. */
+interface ReasoningDetailSlot {
+  /** Grouping key: `idx:<index>`, `id:<id>`, or `"none"` when the item carries neither. */
+  key: string;
+  /** Every field from the FIRST fragment holding this key, except `text`. */
+  fields: Record<string, unknown>;
+  /** `text` concatenated across every fragment sharing this key, in arrival order. */
+  text: string;
+}
+
+/**
+ * Resolve what an assistant {@link NormalizedMessage} sends on a LATER
+ * request under `grant.reasoning.replay` (flow 268 T12 / AC7):
+ *
+ * - `"deepseek"`, request carries tools: an owned `reasoning_content` replay
+ *   item becomes the message's `reasoning_content` field — DeepSeek's
+ *   thinking mode 400s on a tool-bearing request whose prior assistant turns
+ *   omit it. Without tools the field is never added (DeepSeek ignores it
+ *   there, and an unconditional echo would just be dead weight on the wire).
+ * - `"minimax"`: an owned `raw_content` replay item REPLACES `content`
+ *   verbatim (the original `<think>…</think>` text must round-trip
+ *   unedited); an owned `reasoning_details` replay item is attached as the
+ *   message's `reasoning_details` field. Either, both, or neither may be
+ *   present on one message.
+ * - `"none"`/absent, or a message with no OWNED replay item (wrong
+ *   `providerId`, or none at all): `content` passes through unchanged and no
+ *   extra field is added — the pre-replay behavior.
+ */
+function resolveAssistantReplay(
+  message: NormalizedMessage,
+  replay: "none" | "deepseek" | "minimax" | undefined,
+  requestHasTools: boolean,
+): { content: string; extra: Record<string, unknown> } {
+  if (replay === undefined || replay === "none") {
+    return { content: message.content, extra: {} };
+  }
+  const owned = (message.reasoning?.replay ?? []).filter((item) => item.providerId === COMPAT_REPLAY_PROVIDER_ID);
+  if (replay === "deepseek") {
+    const extra: Record<string, unknown> = {};
+    if (requestHasTools) {
+      const item = owned.find((candidate) => candidate.kind === "reasoning_content");
+      if (item !== undefined && typeof item.data === "string" && item.data.length > 0) {
+        extra.reasoning_content = item.data;
+      }
+    }
+    return { content: message.content, extra };
+  }
+  // replay === "minimax"
+  let content = message.content;
+  const rawContent = owned.find((candidate) => candidate.kind === "raw_content");
+  if (rawContent !== undefined && typeof rawContent.data === "string") {
+    content = rawContent.data;
+  }
+  const extra: Record<string, unknown> = {};
+  const details = owned.find((candidate) => candidate.kind === "reasoning_details");
+  if (details !== undefined) {
+    extra.reasoning_details = details.data;
+  }
+  return { content, extra };
+}
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("compat-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
+}
+
 /**
  * Parse a possibly-JSON error body ONCE. `undefined` on anything that does not
  * parse (an HTML error page, a proxy banner, an empty body) — every reader
@@ -327,7 +503,14 @@ export class OpenAiCompatEngine implements ProviderPort {
       toolCalls: true,
       parallelToolCalls: true,
       structuredOutput: false,
-      reasoningMetadata: false,
+      // Trivially correct from instance state alone (AC of flow 268 T10):
+      // `true` exactly when the grant carries an explicit `reasoning`
+      // configuration, `false` otherwise (the pre-existing default — every
+      // OTHER compat provider keeps advertising `false` even though
+      // `reasoning`/`reasoning_content` parsing itself is unconditional; that
+      // wider claim is not "trivially correct" from `describe()` alone and is
+      // left alone here).
+      reasoningMetadata: this.deps.grant?.reasoning !== undefined,
       promptCaching: false,
       vision: false,
       tokenCounting: false,
@@ -430,6 +613,10 @@ export class OpenAiCompatEngine implements ProviderPort {
 
     try {
     const url = `${baseUrl.replace(/\/+$/, "")}${grant.chatPath ?? "/v1/chat/completions"}`;
+    // DeepSeek's thinking-mode `reasoning_content` echo (flow 268 T12 / AC7)
+    // only applies "when the request carries tools" (protocol fact) — an
+    // empty/absent `tools` array is "no tools" for this purpose.
+    const requestHasTools = Array.isArray(request.tools) && request.tools.length > 0;
     const messages: Array<Record<string, unknown>> = [];
     if (request.systemInstruction.length > 0) {
       messages.push({ role: "system", content: request.systemInstruction });
@@ -459,15 +646,22 @@ export class OpenAiCompatEngine implements ProviderPort {
         continue;
       }
       if (message.role === "assistant" && linked.linkedCalls.length > 0) {
+        const { content, extra } = resolveAssistantReplay(message, grant.reasoning?.replay, requestHasTools);
         messages.push({
           role: "assistant",
-          content: message.content,
+          content,
           tool_calls: linked.linkedCalls.map((call) => ({
             id: call.id,
             type: "function",
             function: { name: call.name, arguments: call.arguments },
           })),
+          ...extra,
         });
+        continue;
+      }
+      if (message.role === "assistant") {
+        const { content, extra } = resolveAssistantReplay(message, grant.reasoning?.replay, requestHasTools);
+        messages.push({ role: "assistant", content, ...extra });
         continue;
       }
       messages.push({ role: message.role, content: message.content });
@@ -475,18 +669,24 @@ export class OpenAiCompatEngine implements ProviderPort {
     const payload: Record<string, unknown> = {
       model: request.modelId,
       stream: true,
+      // Output token limit (flow 268 T6): `max_tokens` is the widely-supported
+      // default across OpenAI-compat gateways (Ollama, OpenRouter, DeepSeek,
+      // Z.AI, Cerebras, Groq, Moonshot, Grok, vLLM). Some gateways (MiniMax)
+      // also accept `max_completion_tokens`, but no provider-specific switching
+      // is done here — a later task adds per-provider `requestParams`
+      // overrides. `budget.maxOutputTokens` is a required, always-populated
+      // field on every `NormalizedRequest` (every call site defaults it —
+      // see `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode
+      // fallback), but this engine used to silently drop it rather than
+      // serialize it — always send it, unconditionally, so a configured
+      // override actually reaches the wire.
+      max_tokens: request.budget.maxOutputTokens,
       // See `OpenAiCompatCapabilityGrant.streamUsage`: without this the stream
       // reports no token usage whatsoever.
       ...(this.deps.grant?.streamUsage === true ? { stream_options: { include_usage: true } } : {}),
       messages,
-      // flow 268: `budget.maxOutputTokens` is a required, always-populated
-      // field on every `NormalizedRequest` (every call site defaults it to
-      // `1024`), but this engine used to silently drop it rather than
-      // serialize it — always send it, unconditionally, so a configured
-      // override actually reaches the wire. `temperature` stays
-      // conditional: it is genuinely absent (not merely defaulted) on every
-      // request until an operator configures one (AC3).
-      max_tokens: request.budget.maxOutputTokens,
+      // `temperature` stays conditional: it is genuinely absent (not merely
+      // defaulted) on every request until an operator configures one (AC3).
       ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
       ...(request.tools !== undefined
         ? {
@@ -501,6 +701,19 @@ export class OpenAiCompatEngine implements ProviderPort {
           }
         : {}),
     };
+    // Custom-provider `reasoning.requestParams` (AC5), shallow-merged AFTER
+    // every base field above. `model`/`messages`/`stream`/`tools` are the
+    // fields the request's own shape and tool wiring depend on — silently
+    // dropped from the merge rather than allowed to override them. Every
+    // other key (e.g. MiniMax's `reasoning_split`, or an override of
+    // `max_tokens`) passes through.
+    const requestParams = grant.reasoning?.requestParams;
+    if (requestParams !== undefined) {
+      for (const [key, value] of Object.entries(requestParams)) {
+        if (key === "model" || key === "messages" || key === "stream" || key === "tools") continue;
+        payload[key] = value;
+      }
+    }
     // Base headers are unchanged for local ollama; an authenticated gateway
     // (OpenRouter) adds a bearer credential + any caller-supplied extra headers.
     const headers: Record<string, string> = { "content-type": "application/json" };
@@ -554,31 +767,23 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
-    // Guarded body read (flow-019 fix): an abort mid-read yields the SAME terminal
-    // `cancelled` error the fetch-level abort path yields; any other read-time
-    // failure fails closed as `malformed`. No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: `${this.label} SSE body read failed: ${String(cause)}`,
-      });
-      return;
-    }
-
-    // Zero-byte body: a 200 with no SSE bytes never sets `sawStart` and would
-    // otherwise yield nothing — fail closed with a terminal `malformed`.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T5): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta` while the model
+    // is still generating rather than only once the connection closes. Two
+    // independent deadlines guard a stalled connection: `firstByteTimeoutMs`
+    // (no byte at all since the response headers arrived) and
+    // `idleTimeoutMs` (no further chunk since the last one) — both default to
+    // 120s, configurable via `deps`. A timeout cancels the reader and yields
+    // exactly one retryable `unavailable` provider_error, never a model_end.
+    // An abort mid-read still fails closed to the SAME terminal `cancelled`
+    // error the fetch()-level abort path yields (flow-019 contract) — this
+    // now also covers the flow 268 `opts.timeoutMs`-driven internal abort
+    // (`signal` above is the combined internal-timeout/external-signal one),
+    // so a configured `timeoutMs` firing mid-read yields the same single
+    // `cancelled` terminal error, never a duplicate/second error.
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -587,14 +792,145 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    // Inline `<think>…</think>` reasoning (AC4): only constructed — and only
+    // ever fed `delta.content` — when the grant asks for it. Every other
+    // format leaves `delta.content` passing straight through as `text_delta`,
+    // unchanged from before this task.
+    const thinkTagParser = grant.reasoning?.format === "inline-tags" ? new ThinkTagParser() : undefined;
+    const pushThinkSegments = (segments: ReturnType<ThinkTagParser["push"]>): void => {
+      for (const segment of segments) {
+        if (segment.text.length === 0) continue;
+        bodies.push(
+          segment.kind === "reasoning" ? { kind: "reasoning_delta", text: segment.text } : { kind: "text_delta", text: segment.text },
+        );
+      }
+    };
+    // Flushed on every NORMAL termination path (`[DONE]`, a natural
+    // finish/EOF) — never on abort/timeout, which discard in-flight parser
+    // state instead of trying to salvage it from a connection that failed.
+    const flushThinkTagParser = (): void => {
+      if (thinkTagParser === undefined) return;
+      pushThinkSegments(thinkTagParser.flush());
+    };
+
+    // Field-sourced reasoning text (`format: "field"`/`"split"`, i.e. every
+    // format EXCEPT `"inline-tags"`) can carry a literal `<think>`/`</think>`
+    // tag a gateway echoes into an otherwise plain field — MiniMax's
+    // split-mode reasoning stream was observed to end with a literal
+    // `</think>` line (flow 268 T24 live-smoke evidence) even though
+    // `delta.content` never carries tags in that mode. Strips it out of every
+    // emitted `reasoning_delta`; NEVER applied to replay accumulation
+    // (`reasoningFieldRaw`/`reasoningDetailSlots` below stay byte-exact).
+    const fieldTagStripper = thinkTagParser === undefined ? new FieldThinkTagStripper() : undefined;
+    const flushFieldTagStripper = (): void => {
+      if (fieldTagStripper === undefined) return;
+      const rest = fieldTagStripper.flush();
+      if (rest.length > 0) {
+        bodies.push({ kind: "reasoning_delta", text: rest });
+      }
+    };
+
+    // `format: "split"`: MiniMax's split-mode stream was observed (live smoke
+    // test, 2026-09-17, flow 268 T25) to send a literal `{"content":"</think>"}`
+    // delta right before the `tool_calls` deltas even though reasoning already
+    // arrived out-of-band via `reasoning_content`/`reasoning_details` — that
+    // stray close tag was leaking into the answer as a visible `</think>`
+    // `text_delta`. Strip it the same way `fieldTagStripper` strips a stray
+    // tag out of the reasoning field, but with its OWN instance: this one is
+    // fed `delta.content` (the text stream), never the reasoning field, and
+    // the two must not share hold-back state. NEVER applied to `rawContentRaw`
+    // below, which stays the byte-exact T12 replay source.
+    const contentTagStripper = grant.reasoning?.format === "split" ? new FieldThinkTagStripper() : undefined;
+    const flushContentTagStripper = (): void => {
+      if (contentTagStripper === undefined) return;
+      const rest = contentTagStripper.flush();
+      if (rest.length > 0) {
+        bodies.push({ kind: "text_delta", text: rest });
+      }
+    };
+
+    // Compat replay accumulation (flow 268 T12 / AC7): populated ONLY for the
+    // mode that needs it, across the whole round, and reported ONCE via
+    // `emitReplayEvents()` at the same normal-termination points
+    // `flushThinkTagParser()` is called — never on abort/timeout/error paths.
+    const replayMode = grant.reasoning?.replay;
+    let reasoningFieldRaw = ""; // deepseek: raw `reasoning`/`reasoning_content` delta text, concatenated verbatim.
+    let rawContentRaw = ""; // minimax: raw `delta.content`, concatenated verbatim, BEFORE any think-tag parsing.
+    const reasoningDetailSlots: ReasoningDetailSlot[] = []; // minimax split: merged `reasoning_details` fragments, first-seen order.
+    const reasoningDetailSlotIndex = new Map<string, number>();
+    /**
+     * Merge one streamed `reasoning_details` item into its slot: grouped by
+     * `index` (preferred, stable across fragments), then `id`, else the
+     * single `"none"` slot shared by every index/id-less item — mirrors the
+     * tool-call accumulator's key precedence above.
+     */
+    const accumulateReasoningDetail = (item: Record<string, unknown>): void => {
+      const index = asNumber(item.index);
+      const id = asString(item.id);
+      const key = index !== undefined ? `idx:${index}` : id !== undefined && id.length > 0 ? `id:${id}` : "none";
+      let slotIndex = reasoningDetailSlotIndex.get(key);
+      if (slotIndex === undefined) {
+        const { text: _text, ...fields } = item;
+        slotIndex = reasoningDetailSlots.length;
+        reasoningDetailSlots.push({ key, fields, text: "" });
+        reasoningDetailSlotIndex.set(key, slotIndex);
+      }
+      const slot = reasoningDetailSlots[slotIndex];
+      if (slot !== undefined) {
+        slot.text += asString(item.text) ?? "";
+      }
+    };
+    /**
+     * Emit this round's replay payload(s) once, at a NORMAL termination
+     * point. `"deepseek"` emits `reasoning_content` when the round produced
+     * field reasoning text; `"minimax"` prefers merged `reasoning_details`
+     * (split mode) and otherwise falls back to `raw_content` when the raw
+     * stream carried inline `<think>` tags (or the engine was explicitly
+     * configured to parse them via `format: "inline-tags"`).
+     */
+    const emitReplayEvents = (): void => {
+      if (replayMode === "deepseek") {
+        if (reasoningFieldRaw.length > 0) {
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_content", data: reasoningFieldRaw },
+          });
+        }
+        return;
+      }
+      if (replayMode === "minimax") {
+        if (reasoningDetailSlots.length > 0) {
+          const data = reasoningDetailSlots.map((slot) => ({ ...slot.fields, text: slot.text }));
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "reasoning_details", data },
+          });
+          return;
+        }
+        if (rawContentRaw.length > 0 && (thinkTagParser !== undefined || rawContentRaw.includes("<think>"))) {
+          bodies.push({
+            kind: "reasoning_replay",
+            replay: { providerId: COMPAT_REPLAY_PROVIDER_ID, kind: "raw_content", data: rawContentRaw },
+          });
+        }
+      }
+    };
+
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     let sawStart = false;
     let sawFinish = false;
-    let sawDone = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
 
     // OpenAI-compat streams tool calls across chunks: first delta often has
@@ -645,153 +981,316 @@ export class OpenAiCompatEngine implements ProviderPort {
       pendingTools.clear();
     };
 
-    for (const record of records) {
-      const trimmed = record.data.trim();
-      // `data: [DONE]` is the stream terminator, never a model chunk.
-      if (trimmed === "[DONE]") {
-        sawDone = true;
-        // Flush any tool calls that never saw finish_reason (defensive).
-        flushPendingToolEnds();
-        continue;
-      }
-
-      // The FIRST non-terminator chunk always yields `model_start` (keyed off
-      // "first chunk seen", not `delta.role` — the tool-call fixture's first
-      // chunk carries no role).
-      if (!sawStart) {
-        sawStart = true;
-        bodies.push({ kind: "model_start" });
-      }
-
-      let parsed: unknown;
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
       try {
-        parsed = JSON.parse(record.data);
-      } catch {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: `${this.label} SSE body read failed: ${String(cause)}`,
+        });
+        return;
+      }
+
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `${this.label} stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const text = decoder.decode(value, { stream: true });
+      for (const record of parser.push(text)) {
+        const trimmed = record.data.trim();
+        // `data: [DONE]` is the stream terminator, never a model chunk. Stop
+        // reading immediately (AC1): a permissive gateway may keep the socket
+        // open past `[DONE]`, and this adapter must not wait for it to close.
+        if (trimmed === "[DONE]") {
+          flushThinkTagParser();
+          flushFieldTagStripper();
+          flushContentTagStripper();
+          emitReplayEvents();
+          flushPendingToolEnds();
+          if (sawStart) {
+            bodies.push({ kind: "model_end" });
+          }
+          const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
+          cancelReader();
+          if (aborted) {
+            yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          }
+          return;
+        }
+
+        // The FIRST non-terminator chunk always yields `model_start` (keyed off
+        // "first chunk seen", not `delta.role` — the tool-call fixture's first
+        // chunk carries no role).
+        if (!sawStart) {
+          sawStart = true;
+          bodies.push({ kind: "model_start" });
+        }
+
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: `${this.label} SSE data line was not valid JSON`,
+          };
+          break;
+        }
+        const data = asRecord(parsed);
+
+        // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
+        if (data.usage !== undefined) {
+          const usage = asRecord(data.usage);
+          bodies.push({
+            kind: "usage_update",
+            usage: mergeUsage(
+              asNumber(usage.prompt_tokens),
+              asNumber(usage.completion_tokens),
+              asNumber(usage.total_tokens),
+            ),
+          });
+        }
+
+        const choice0 = asRecord(asArray(data.choices)[0]);
+        const delta = asRecord(choice0.delta);
+
+        // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
+        // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
+        // answer content. Surface it as `reasoning_delta`; plain models omit it.
+        //
+        // Skipped entirely under `format: "inline-tags"` (`thinkTagParser !==
+        // undefined`, T24 fix): MiniMax's default mode sends the SAME
+        // reasoning text twice — once inline in `delta.content` as
+        // `<think>…</think>`, once again in `delta.reasoning` — and the
+        // `reasoning` field is not trustworthy at the stream boundary (the
+        // last `reasoning` chunk was observed to bleed answer text into it).
+        // `delta.content` via `thinkTagParser` is the only reasoning source
+        // for this format; `reasoningFieldRaw`/`reasoningDetailSlots` replay
+        // accumulation is likewise skipped here (minimax inline replay reads
+        // `rawContentRaw`, accumulated from `content` below, unaffected).
+        if (thinkTagParser === undefined) {
+          const reasoningField = asString(delta.reasoning) ?? asString(delta.reasoning_content);
+          if (reasoningField !== undefined && reasoningField.length > 0) {
+            if (replayMode === "deepseek") {
+              reasoningFieldRaw += reasoningField;
+            }
+            // Strip a literal <think>/</think> tag a gateway echoes into this
+            // otherwise plain field (T24) — never applied to `reasoningFieldRaw`
+            // above, which stays the byte-exact replay source.
+            const stripped = fieldTagStripper?.push(reasoningField) ?? reasoningField;
+            if (stripped.length > 0) {
+              bodies.push({ kind: "reasoning_delta", text: stripped });
+            }
+          } else {
+            // MiniMax's `reasoning_details` (OpenRouter-shaped): an array of
+            // `{ text: "…", … }` objects; concatenate every item's `text` in
+            // order. Only consulted when `reasoning`/`reasoning_content` is
+            // ABSENT for this delta, so a provider that sends both never
+            // double-emits the same text.
+            const reasoningDetails = asArray(delta.reasoning_details);
+            if (reasoningDetails.length > 0) {
+              const concatenated = reasoningDetails
+                .map((item) => asString(asRecord(item).text))
+                .filter((text): text is string => text !== undefined && text.length > 0)
+                .join("");
+              if (concatenated.length > 0) {
+                // Same T24 tag-strip as above; `accumulateReasoningDetail`
+                // below still reads each item's RAW `text` for replay.
+                const stripped = fieldTagStripper?.push(concatenated) ?? concatenated;
+                if (stripped.length > 0) {
+                  bodies.push({ kind: "reasoning_delta", text: stripped });
+                }
+              }
+              if (replayMode === "minimax") {
+                for (const item of reasoningDetails) {
+                  accumulateReasoningDetail(asRecord(item));
+                }
+              }
+            }
+          }
+        }
+
+        const content = asString(delta.content);
+        if (content !== undefined && content.length > 0) {
+          if (replayMode === "minimax") {
+            rawContentRaw += content;
+          }
+          if (thinkTagParser !== undefined) {
+            // `format: "inline-tags"`: MiniMax's default shape puts reasoning
+            // INSIDE `delta.content` as `<think>…</think>` — route it through
+            // the parser instead of yielding it as `text_delta` verbatim.
+            pushThinkSegments(thinkTagParser.push(content));
+          } else if (contentTagStripper !== undefined) {
+            // `format: "split"`: strip a stray literal `<think>`/`</think>`
+            // tag out of the content stream (T25) before it reaches the
+            // caller as answer text; an all-tag chunk strips down to nothing
+            // and must not surface as an empty `text_delta`.
+            const stripped = contentTagStripper.push(content);
+            if (stripped.length > 0) {
+              bodies.push({ kind: "text_delta", text: stripped });
+            }
+          } else {
+            bodies.push({ kind: "text_delta", text: content });
+          }
+        }
+
+        for (const rawToolCall of asArray(delta.tool_calls)) {
+          const toolCall = asRecord(rawToolCall);
+          const fn = asRecord(toolCall.function);
+          const toolCallId = asString(toolCall.id);
+          const toolName = asString(fn.name);
+          const argumentsFragment = asString(fn.arguments) ?? "";
+          const key = toolCallKey(toolCall);
+
+          let acc = pendingTools.get(key);
+          if (acc === undefined) {
+            acc = {
+              id: toolCallId ?? `call_${key.replace(/[^a-zA-Z0-9_:-]/g, "_")}`,
+              name: toolName ?? "",
+              arguments: "",
+              started: false,
+              ended: false,
+            };
+            pendingTools.set(key, acc);
+          }
+          if (toolCallId !== undefined && toolCallId.length > 0) {
+            acc.id = toolCallId;
+          }
+          if (toolName !== undefined && toolName.length > 0) {
+            acc.name = toolName;
+          }
+
+          if (!acc.started) {
+            const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
+            if (acc.name.length > 0) {
+              startBody.toolName = acc.name;
+            }
+            bodies.push(startBody);
+            acc.started = true;
+          }
+
+          // Fragments append (OpenAI/Z.AI streaming). One-shot providers (Ollama)
+          // send the whole JSON in a single fragment — still correct as append.
+          if (argumentsFragment.length > 0) {
+            acc.arguments += argumentsFragment;
+            bodies.push({
+              kind: "tool_call_delta",
+              toolCallId: acc.id,
+              inputDelta: argumentsFragment,
+            });
+          }
+        }
+
+        // `finish_reason` marks completion: flush accumulated tool calls so
+        // `tool_call_end.input` is the FULL concatenated arguments JSON.
+        // Trailing usage/`[DONE]` still follow on the wire (handled above/below).
+        const finishReason = asString(choice0.finish_reason);
+        if (finishReason !== undefined && finishReason.length > 0) {
+          sawFinish = true;
+          flushPendingToolEnds();
+        }
+      }
+
+      if (malformed !== undefined) {
+        cancelReader();
+        break readLoop;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
+    }
+
+    // Reached only via a natural EOF (reader signalled `done`) or a malformed
+    // record — `[DONE]` always returns from inside the loop above.
+    if (malformed === undefined) {
+      const trailing = decoder.decode();
+      if (trailing.length > 0) {
+        parser.push(trailing);
+      }
+      const torn = parser.flush();
+      // A torn trailing record is a truncated/malformed attempt (no model_end).
+      if (torn.length > 0) {
         malformed = {
           kind: "malformed",
           retryable: retryableFor("malformed", false),
-          message: `${this.label} SSE data line was not valid JSON`,
+          message: `${this.label} SSE stream ended mid-record (torn stream)`,
         };
-        break;
-      }
-      const data = asRecord(parsed);
-
-      // A trailing usage-bearing chunk (`choices:[]` + `usage:{...}`) -> usage_update.
-      if (data.usage !== undefined) {
-        const usage = asRecord(data.usage);
-        bodies.push({
-          kind: "usage_update",
-          usage: mergeUsage(
-            asNumber(usage.prompt_tokens),
-            asNumber(usage.completion_tokens),
-            asNumber(usage.total_tokens),
-          ),
-        });
-      }
-
-      const choice0 = asRecord(asArray(data.choices)[0]);
-      const delta = asRecord(choice0.delta);
-
-      // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
-      // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
-      // answer content. Surface it as `reasoning_delta`; plain models omit it.
-      const reasoning = asString(delta.reasoning) ?? asString(delta.reasoning_content);
-      if (reasoning !== undefined && reasoning.length > 0) {
-        bodies.push({ kind: "reasoning_delta", text: reasoning });
-      }
-
-      const content = asString(delta.content);
-      if (content !== undefined && content.length > 0) {
-        bodies.push({ kind: "text_delta", text: content });
-      }
-
-      for (const rawToolCall of asArray(delta.tool_calls)) {
-        const toolCall = asRecord(rawToolCall);
-        const fn = asRecord(toolCall.function);
-        const toolCallId = asString(toolCall.id);
-        const toolName = asString(fn.name);
-        const argumentsFragment = asString(fn.arguments) ?? "";
-        const key = toolCallKey(toolCall);
-
-        let acc = pendingTools.get(key);
-        if (acc === undefined) {
-          acc = {
-            id: toolCallId ?? `call_${key.replace(/[^a-zA-Z0-9_:-]/g, "_")}`,
-            name: toolName ?? "",
-            arguments: "",
-            started: false,
-            ended: false,
-          };
-          pendingTools.set(key, acc);
-        }
-        if (toolCallId !== undefined && toolCallId.length > 0) {
-          acc.id = toolCallId;
-        }
-        if (toolName !== undefined && toolName.length > 0) {
-          acc.name = toolName;
-        }
-
-        if (!acc.started) {
-          const startBody: EventBody = { kind: "tool_call_start", toolCallId: acc.id };
-          if (acc.name.length > 0) {
-            startBody.toolName = acc.name;
-          }
-          bodies.push(startBody);
-          acc.started = true;
-        }
-
-        // Fragments append (OpenAI/Z.AI streaming). One-shot providers (Ollama)
-        // send the whole JSON in a single fragment — still correct as append.
-        if (argumentsFragment.length > 0) {
-          acc.arguments += argumentsFragment;
-          bodies.push({
-            kind: "tool_call_delta",
-            toolCallId: acc.id,
-            inputDelta: argumentsFragment,
-          });
-        }
-      }
-
-      // `finish_reason` marks completion: flush accumulated tool calls so
-      // `tool_call_end.input` is the FULL concatenated arguments JSON.
-      // Trailing usage is still emitted before `model_end` (below).
-      const finishReason = asString(choice0.finish_reason);
-      if (finishReason !== undefined && finishReason.length > 0) {
-        sawFinish = true;
+      } else if (!receivedAnyChunk) {
+        // A 200 with literally zero bytes never sets `sawStart` and would
+        // otherwise yield nothing — fail closed with a terminal `malformed`
+        // rather than a silent-success empty iterable.
+        malformed = {
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: "empty response body",
+        };
+      } else {
+        // Defensive: stream ended without finish_reason but with pending tools.
         flushPendingToolEnds();
+        // A clean stream that reached `[DONE]` or a `finish_reason` completes
+        // with a terminal `model_end` (emitted after any usage_update). `[DONE]`
+        // always exits above, so only the bare-`finish_reason` case reaches
+        // here — the (former) `sawDone` flag was always false by the time
+        // this ran, since its only assignment sat on the `[DONE]` path,
+        // which always returns before reaching this code.
+        if (sawStart && sawFinish) {
+          flushThinkTagParser();
+          flushFieldTagStripper();
+          flushContentTagStripper();
+          emitReplayEvents();
+          bodies.push({ kind: "model_end" });
+        }
       }
-    }
-
-    // A torn trailing record is a truncated/malformed attempt (no model_end).
-    if (malformed === undefined && torn.length > 0) {
-      malformed = {
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: `${this.label} SSE stream ended mid-record (torn stream)`,
-      };
-    }
-
-    // Defensive: stream ended without finish_reason but with pending tools.
-    if (malformed === undefined) {
-      flushPendingToolEnds();
-    }
-
-    // A clean stream that reached `[DONE]` or a `finish_reason` completes with a
-    // terminal `model_end` (emitted after any usage_update).
-    if (malformed === undefined && sawStart && (sawDone || sawFinish)) {
-      bodies.push({ kind: "model_end" });
     }
 
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output (AC1).
-    for (const body of bodies) {
-      if (signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (signal?.aborted === true) {
+    // Drains against the COMBINED `signal` (external `opts.signal` OR the
+    // internal flow 268 `timeoutMs` timer, whichever fired) so a configured
+    // `timeoutMs` elapsing mid-drain also yields exactly one `cancelled`,
+    // never a queue's worth of events followed by a stray error.
+    const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }
