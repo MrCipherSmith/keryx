@@ -305,7 +305,9 @@ export interface AgentDeps {
    * `persistCompacted`) instead of the shrink existing only in memory until
    * the next explicit save. `removed` is the message count dropped from the
    * model's context (still recoverable from the archive); `context` is the
-   * new context array (`=== history` by reference at call time); `estimate`
+   * `compactMessages` result array — content-equal to `history` at that
+   * moment (its elements were just spliced into `history`), but a DISTINCT
+   * array object, never `=== history`; `estimate`
    * is the request-size estimate that tripped the guard. Optional; every
    * existing call site (every test, every driver written before this flow)
    * omits it and is unaffected — the guard still compacts `history` in place
