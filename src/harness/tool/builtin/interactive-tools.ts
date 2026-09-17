@@ -24,10 +24,28 @@ export interface InteractiveToolResult {
   untrusted?: boolean;
 }
 
+/**
+ * What a tool may learn about the turn it is running inside (flow 266, D-15).
+ *
+ * Optional, and every existing tool ignores it: the loop used to check the abort
+ * signal only BETWEEN calls, so a tool that waits was uninterruptible by
+ * construction — the operator's stop could not reach it and the turn could not
+ * end until the wait's own bound fired.
+ *
+ * The rule an aborted tool follows is release, not kill: `shell_task_wait` and
+ * `shell_exec`'s yield return promptly with the tasks still RUNNING, and their
+ * completions are delivered afterwards by the flow-265 drain. Aborting a wait
+ * says "stop waiting", never "stop the work".
+ */
+export interface InteractiveToolContext {
+  /** Aborted when the operator interrupts the turn this call belongs to. */
+  signal?: AbortSignal;
+}
+
 /** A tool the interactive agent can offer to the model and execute for content. */
 export interface InteractiveTool {
   definition: NormalizedToolDefinition;
-  invoke: (input: Record<string, unknown>) => Promise<InteractiveToolResult>;
+  invoke: (input: Record<string, unknown>, ctx?: InteractiveToolContext) => Promise<InteractiveToolResult>;
 }
 
 /** Read-file output cap so a tool result stays modest. */

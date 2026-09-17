@@ -58,6 +58,12 @@ test("classifyBusyDispatch: /mode routes to mode", () => {
   ).toBe("mode");
 });
 
+test("classifyBusyDispatch: /plan routes to plan", () => {
+  expect(
+    classifyBusyDispatch({ line: "/plan on", commandName: "/plan", ...base }),
+  ).toBe("plan");
+});
+
 test("classifyBusyDispatch: /model (similar name, out of scope) still routes to deferred", () => {
   expect(
     classifyBusyDispatch({ line: "/model", commandName: "/model", ...base }),

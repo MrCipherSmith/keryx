@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "scope": "blast-radius",
+  "depth": 2,
+  "maxFiles": 40,
+  "changedFiles": [
+    ".metaproject/data/gdgraph/.provenance.json",
+    ".metaproject/data/testing/context.json",
+    ".metaproject/data/testing/context.md",
+    ".metaproject/data/testing/recommendations.md",
+    ".metaproject/data/wiki/freshness-queue.jsonl",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/acceptance-criteria.md",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/context.md",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/description.md",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/flow.json",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/journal.md",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/plan.md",
+    ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/tasks.md",
+    ".metaproject/wiki/architecture/background-jobs.md",
+    ".metaproject/wiki/index.md",
+    "docs/requirements/keryx-background-task-execution/README.md",
+    "docs/requirements/keryx-background-task-execution/prd.md",
+    "docs/requirements/keryx-background-task-execution/specification.md",
+    "docs/verification/keryx-shell-tui-test-catalog.md"
+  ],
+  "files": [],
+  "dropped": [],
+  "unresolved": [
+    {
+      "file": ".metaproject/data/gdgraph/.provenance.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/testing/recommendations.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/data/wiki/freshness-queue.jsonl",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/acceptance-criteria.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/context.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/description.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/flow.json",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/journal.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/plan.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/flows/267-2026-09-16-background-task-execution-p3-the-documen/tasks.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/wiki/architecture/background-jobs.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": ".metaproject/wiki/index.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-background-task-execution/README.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-background-task-execution/prd.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/requirements/keryx-background-task-execution/specification.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    },
+    {
+      "file": "docs/verification/keryx-shell-tui-test-catalog.md",
+      "reason": "not-a-graph-node",
+      "detail": "the code graph has no node for this path, so it has no dependents to walk. This is NOT `nothing depends on it`: the graph indexes code, and Markdown, JSON and shell files are absent from it by construction."
+    }
+  ],
+  "counts": {
+    "changedFilesSeen": 18,
+    "changedFilesResolved": 0,
+    "changedFilesUnresolved": 18,
+    "candidates": 0,
+    "retained": 0,
+    "droppedByCap": 0,
+    "droppedByPreFilter": 0,
+    "relatedTestsAdded": 0,
+    "testsRetained": 0,
+    "hopHistogram": {}
+  },
+  "graph": {
+    "nodes": 1474,
+    "edges": 4397
+  }
+}

@@ -143,7 +143,7 @@
           }
         },
         "inherit": {
-          "description": "Run this dispatch on the caller's own model. `keryx review tier` writes it — in place of `provider`/`model`, never alongside them — when the environment could not be worked out: no persisted session selection, an unrankable catalogue, or an unrankable session model. It is the recorded form of \"never a downgrade\": the alternative is an empty `provider`/`model` pair, which is schema-invalid and still reads like an answer. A `tier` and `tier_reasons` may accompany it, because the tier was assigned from signals even when no model could be named for it.",
+          "description": "Adaptive: the host picks the model. `keryx review tier` writes it — in place of `provider`/`model`, never alongside them — whenever it does not name a model other than the session's: no session was named by the caller (flags or KERYX_SESSION_PROVIDER/KERYX_SESSION_MODEL), the catalogue or the session model could not be ranked, or the tier resolved to the session's own model. The host resolves the accompanying `tier` against the models its own dispatch tool offers: `standard` on its session model, `deep` on its most capable class, `light` on its lighter class — each falling back to the session model when the host offers no choice. The alternative, an empty or stale `provider`/`model` pair, is schema-invalid or pins a model the runner may not have.",
           "type": "boolean"
         }
       }

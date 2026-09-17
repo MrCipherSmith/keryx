@@ -106,13 +106,16 @@ export type GitHubPort = {
 };
 
 /**
- * The only three things this module may read.
+ * The only four things this module may read: the three comment sources, and the
+ * pull request itself — its state and head, without which no reply can be shown
+ * to be addressed to an open pull request at the commit it describes.
  *
  * Written as anchored patterns rather than as a prefix check: `repos/o/r/pulls/7/comments`
  * and `repos/o/r/pulls/7/comments/12/replies` differ by a suffix, and a prefix
  * allow-list that accepted the first would accept every write built on it.
  */
 export const ALLOWED_GITHUB_READS: readonly RegExp[] = [
+  /^repos\/[^/]+\/[^/]+\/pulls\/\d+$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/comments(\?[^\s]*)?$/,
   /^repos\/[^/]+\/[^/]+\/pulls\/\d+\/reviews(\?[^\s]*)?$/,
   /^repos\/[^/]+\/[^/]+\/issues\/\d+\/comments(\?[^\s]*)?$/,
@@ -146,8 +149,8 @@ export function guardGitHubRequest(request: GitHubRequest): void {
     return;
   }
   throw new Error(
-    `Refusing a GitHub ${request.method} to \`${request.path}\`: it is not one of the five endpoints this module may touch. ` +
-      `Reads: pulls/{n}/comments, pulls/{n}/reviews, issues/{n}/comments. Writes: pulls/{n}/comments/{id}/replies, issues/{n}/comments. ` +
+    `Refusing a GitHub ${request.method} to \`${request.path}\`: it is not one of the six endpoints this module may touch. ` +
+      `Reads: pulls/{n}, pulls/{n}/comments, pulls/{n}/reviews, issues/{n}/comments. Writes: pulls/{n}/comments/{id}/replies, issues/{n}/comments. ` +
       `Resolving, hiding, minimising, editing and dismissing are deliberately unreachable — replying is ours, resolving is the reviewer's call, and a bot that auto-resolves is a bot that silences a human.`,
   );
 }
@@ -256,10 +259,11 @@ export type FixturePort = GitHubPort & {
  * nothing may be posted to a live pull request, and a mechanism that can only be
  * validated against a live pull request is a mechanism that ships unvalidated.
  *
- * `files` maps a fixture key to its parsed JSON. The keys are the three read
- * shapes: `pull-comments`, `pull-reviews`, `issue-comments`. A read with no
- * fixture answers `[]` — which is a real state (a pull request with no reviews),
- * not an error.
+ * `files` maps a fixture key to its parsed JSON. The keys are the four read
+ * shapes: `pull`, `pull-comments`, `pull-reviews`, `issue-comments`. A comment
+ * read with no fixture answers `[]` — which is a real state (a pull request with
+ * no reviews), not an error. A missing `pull` answers `[]` too, which reads as a
+ * pull request whose state is UNKNOWN, and the reply pass refuses it.
  */
 export function createFixturePort(files: Record<string, unknown>, options: { postUrlPrefix?: string } = {}): FixturePort {
   const calls: RecordedGitHubCall[] = [];
@@ -289,6 +293,7 @@ export function createFixturePort(files: Record<string, unknown>, options: { pos
 /** The fixture key a read path maps to. Exported so a fixture directory is nameable. */
 export function fixtureKey(apiPath: string): string {
   const withoutQuery = apiPath.split("?")[0] ?? apiPath;
+  if (/\/pulls\/\d+$/.test(withoutQuery)) return "pull";
   if (/\/pulls\/\d+\/comments$/.test(withoutQuery)) return "pull-comments";
   if (/\/pulls\/\d+\/reviews$/.test(withoutQuery)) return "pull-reviews";
   if (/\/issues\/\d+\/comments$/.test(withoutQuery)) return "issue-comments";
@@ -339,7 +344,53 @@ export type CommentSkip = {
   detail: string;
 };
 
+/**
+ * The pull request as GitHub reported it at collection time.
+ *
+ * The comments path used to read the three comment sources and never the pull
+ * request, so nothing on it could know the pull request had merged: a reply pass
+ * ran against a merged PR with a pre-merge `--sha`, and nothing noticed.
+ */
+export type PullRequestSnapshot = {
+  /** `unknown` when the read returned nothing recognisable — never assumed open. */
+  state: "open" | "closed" | "unknown";
+  merged: boolean;
+  mergedAt: string | null;
+  headSha: string | null;
+};
+
+/** Read GitHub's `pulls/{n}` object. Anything unrecognisable is `unknown`, never `open`. */
+export function parsePullRequest(raw: unknown): PullRequestSnapshot {
+  const object = Array.isArray(raw) ? raw[0] : raw;
+  const state = stringProperty(object, "state");
+  const mergedAt = stringProperty(object, "merged_at") ?? null;
+  const mergedFlag = object !== null && typeof object === "object" && (object as { merged?: unknown }).merged === true;
+  const head = object !== null && typeof object === "object" ? (object as { head?: unknown }).head : undefined;
+  const headSha = stringProperty(head, "sha") ?? null;
+  return {
+    state: state === "open" || state === "closed" ? state : "unknown",
+    merged: mergedFlag || mergedAt !== null,
+    mergedAt,
+    headSha: headSha === null ? null : headSha.toLowerCase(),
+  };
+}
+
+/** One line for an operator: what the pull request is, and at which head. */
+export function describePullRequest(pull: PullRequestSnapshot): string {
+  const status = pull.merged ? `merged${pull.mergedAt === null ? "" : ` at ${pull.mergedAt}`}` : pull.state;
+  return `${status}, head ${pull.headSha ?? "not reported"}`;
+}
+
+/** Whether `sha` names the pull request's head: equal, or a 7+ character prefix of it. */
+export function shaMatchesHead(sha: string, headSha: string | null): boolean {
+  if (headSha === null) return false;
+  const wanted = sha.trim().toLowerCase();
+  return wanted === headSha || (wanted.length >= 7 && headSha.startsWith(wanted));
+}
+
 export type CollectPrCommentsResult = {
+  /** The pull request itself: state, merge and head, read in the same pass. */
+  pull: PullRequestSnapshot;
   comments: CollectedComment[];
   /** Everything the filter removed, with the reason. A silent filter reads as "nobody commented". */
   skipped: CommentSkip[];
@@ -379,7 +430,8 @@ export async function collectPrComments(input: CollectPrCommentsInput): Promise<
     );
   }
   const base = `repos/${input.repo}`;
-  const [rawReviewComments, rawReviews, rawIssueComments] = await Promise.all([
+  const [rawPull, rawReviewComments, rawReviews, rawIssueComments] = await Promise.all([
+    callGitHub(input.port, { method: "GET", path: `${base}/pulls/${input.number}` }),
     callGitHub(input.port, { method: "GET", path: `${base}/pulls/${input.number}/comments` }),
     callGitHub(input.port, { method: "GET", path: `${base}/pulls/${input.number}/reviews` }),
     callGitHub(input.port, { method: "GET", path: `${base}/issues/${input.number}/comments` }),
@@ -469,6 +521,7 @@ export async function collectPrComments(input: CollectPrCommentsInput): Promise<
   }
 
   return {
+    pull: parsePullRequest(rawPull),
     comments,
     skipped,
     counts: {
@@ -1594,6 +1647,14 @@ export type PostReplyPassInput = {
   pass: ReplyPass;
   /** The head commit the answers are true of, recorded on every handled comment. */
   sha: string;
+  /**
+   * The pull request as collected in this same invocation. Required: the pass
+   * refuses a pull request that is not open, whose state is unknown, or whose
+   * head is not `sha`.
+   */
+  pull: PullRequestSnapshot;
+  /** Post to a closed or merged pull request anyway. The head must still match. */
+  allowClosed?: boolean | undefined;
   round: { index: number; isFinal: boolean };
   state: PrCommentState;
   now?: Date | undefined;
@@ -1611,6 +1672,43 @@ export type PostReplyPassResult = {
   /** In a dry run, exactly the requests that would have been sent. */
   requests: GitHubRequest[];
 };
+
+/**
+ * Refuse a reply pass whose target is not the pull request the answers describe.
+ *
+ * `isFinal` was the ONLY precondition, and `sha` was only ever written into the
+ * record, never compared with anything. So a pass built from a pre-merge
+ * collection posted to a pull request that had merged in the meantime, with the
+ * old SHA on every reply, and every check passed. Three refusals, in order:
+ *
+ * - **state unknown** — the pull request could not be read; nothing shows it open.
+ * - **closed or merged** — an outward action against a finished object. Allowed
+ *   only with `allowClosed`, because answering a reviewer after merge can be
+ *   deliberate; it is never the default.
+ * - **head is not `sha`** — the answers are true of a commit the pull request no
+ *   longer points at. Holds with `allowClosed` too.
+ *
+ * Checked before anything is planned, dry runs included: a rehearsal of a reply
+ * that would be refused is a rehearsal of the wrong thing.
+ */
+export function assertReplyTarget(input: Pick<PostReplyPassInput, "repo" | "number" | "sha" | "pull" | "allowClosed">): void {
+  const where = `${input.repo}#${input.number}`;
+  if (input.pull.state === "unknown") {
+    throw new Error(
+      `Refusing to reply on ${where}: the pull request's state could not be read, so nothing shows it is open or that ${input.sha} is its head. Re-run with a reachable \`gh\`, or supply \`pull.json\` with \`--fixtures\`.`,
+    );
+  }
+  if ((input.pull.merged || input.pull.state === "closed") && input.allowClosed !== true) {
+    throw new Error(
+      `Refusing to reply on ${where}: the pull request is ${describePullRequest(input.pull)}. Replies are for an open review; posting to a finished one is an outward action nobody gated. Pass \`--allow-closed-pr\` only if answering after close is intended.`,
+    );
+  }
+  if (!shaMatchesHead(input.sha, input.pull.headSha)) {
+    throw new Error(
+      `Refusing to reply on ${where}: \`--sha ${input.sha}\` is not the pull request's head (${input.pull.headSha ?? "not reported"}). Every reply would describe a commit the pull request no longer points at. Collect and review the current head, then reply with its SHA.`,
+    );
+  }
+}
 
 /**
  * Post the pass, once, after the final round.
@@ -1644,6 +1742,7 @@ export async function postReplyPass(input: PostReplyPassInput): Promise<PostRepl
       `Refusing to post replies during round ${input.round.index}: comments are collected every round and answered ONCE, after the final round and before the completion gate. Replying per round turns one review thread into six, and every reply would state an intention rather than a settled outcome.`,
     );
   }
+  assertReplyTarget(input);
 
   const now = (input.now ?? new Date()).toISOString();
   const alreadyAnswered = new Map(input.state.handled_comments.map((entry) => [entry.id, entry]));

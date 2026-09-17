@@ -1,0 +1,42 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "orchestrator-self-review",
+    "severity": "major",
+    "problem": "The id-spelling swap was applied by every caller, including shell_job_kill, shell_task_kill and demoteTask. A job-* id can only come from an earlier session, which D-14 defines as a dead reference; the swap keeps the counter and the pid, the counter restarts each session, so a recycled pid lets a stale id resolve onto a LIVE task.",
+    "impact": "A kill issued with an id copied from a resumed transcript could terminate an unrelated running task — work the operator never asked to discard — while D-14's guarantee that a stale handle resolves to `unknown task_id` is silently weakened. Demote would move a stranger's task aside on the same coincidence.",
+    "suggested_fix": "Resolve spellings for READS only. The kill tools and the demote effect take the id exactly as given and refuse anything they do not track.",
+    "evidence": "Read of the four call sites at the reviewed head: shellJobOutputTool (read), shellJobKillTool, shellTaskKillTool and demoteTask all passed the id through resolveTaskId. The collision is by construction rather than by observation — a pid collision cannot be staged on demand, which is precisely why the reasoning, not a probe, is the evidence here.",
+    "confidence": "high",
+    "file": "src/harness/tool/builtin/background-job-registry.ts",
+    "line": 1257,
+    "quote": "function resolveTaskId(registry: JobRegistry, id: string): string {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "symbol": "resolveTaskId",
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/harness/tool/builtin/background-job-registry.ts — shellJobOutputTool (a READ; resolution kept)",
+        "src/harness/tool/builtin/background-job-registry.ts — shellJobKillTool (acts; resolution removed)",
+        "src/harness/tool/builtin/background-job-registry.ts — shellTaskKillTool (acts; resolution removed)",
+        "src/harness/tool/builtin/background-job-registry.ts — demoteTask (acts; resolution removed)"
+      ],
+      "enumeration_method": "keryx ctx rg --all \"resolveTaskId\\(\" over src — four call sites, each classified as a read or an action; the helper's own definition is the fifth match."
+    },
+    "global_id": "2026-09-16-ingest-origin-main#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "At the fixed head the invariant is pinned by a new test: 'a KILL refuses the old spelling: resolving ids across spellings is for reads only' — shell_job_kill given the job-* spelling of a LIVE task returns a tool error naming that id and leaves the task running, while shell_job_output still accepts both spellings. Run against the fix: shell-task-tools.test.ts + background-job-registry.test.ts + shell-exec-background.test.ts, 101 pass / 0 fail, and `bun run typecheck` clean. The verifier went looking for the defect at this head and could not reproduce it. A pid collision cannot be staged on demand, so the proof is the invariant rather than the coincidence.",
+      "verifier": "p2-suite-run (execution, bun test over the three affected suites)"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "commit 078855b0 (fix(shell): resolve an old task id for reads, never for a kill): shell_job_kill, shell_task_kill and demoteTask now take the id exactly as given, and only the output alias resolves both spellings. The invariant is pinned by a new test in src/commands/shell-task-tools.test.ts - 'a KILL refuses the old spelling: resolving ids across spellings is for reads only' - which fails if the resolution is restored to an acting path. Verified at head c8f73420e61d37a08e6bbfddef68f692aaa1a3d1: 101 pass / 0 fail across shell-task-tools, background-job-registry and shell-exec-background, typecheck clean. The frozen criterion that required the hole (AC5) was narrowed by the owner's decision and re-sealed, so the code and the criterion now agree."
+    }
+  }
+]

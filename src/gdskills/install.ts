@@ -897,7 +897,7 @@ function bundledSharedSourcePath(): string {
   return directPath;
 }
 
-function bundledRulesSourcePath(): string {
+export function bundledRulesSourcePath(): string {
   const directPath = fileURLToPath(new URL("./bundled/rules/core", import.meta.url));
   if (existsSync(directPath)) {
     return directPath;

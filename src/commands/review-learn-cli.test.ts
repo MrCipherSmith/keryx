@@ -83,6 +83,13 @@ async function project(options: FixtureOptions = {}): Promise<void> {
     ),
     "utf8",
   );
+  // The pull request itself: open, at the SHA collection runs against. Without it
+  // collection warns that the state is unknown, which is not what these tests test.
+  await writeFile(
+    path.join(ROOT, "pull.json"),
+    JSON.stringify({ number: 7, state: "open", merged: false, merged_at: null, head: { sha: SHA } }),
+    "utf8",
+  );
   await writeFile(path.join(ROOT, "pull-reviews.json"), "[]", "utf8");
   await writeFile(path.join(ROOT, "issue-comments.json"), "[]", "utf8");
 

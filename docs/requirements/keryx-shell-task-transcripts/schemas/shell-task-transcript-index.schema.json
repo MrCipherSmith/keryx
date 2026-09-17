@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "keryx-shell-task-transcript-index",
+  "title": "Shell Task Transcript Index Record",
+  "description": "One append-only line of tasks/index.jsonl, written when a supervised task reaches a terminal status. Planned contract for keryx-shell-task-transcripts (v1.0.0). Metadata only: transcript CONTENT is never duplicated here (D-12, D-14).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["taskId", "command", "cwd", "startedAt", "file", "indexFile", "bytesWritten", "footerPresent"],
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "pattern": "^task-[0-9]+-[0-9]+$",
+      "description": "The registry's session-scoped id (task-<n>-<pid>), as issued by the shipped registry."
+    },
+    "command": {
+      "type": "string",
+      "minLength": 1,
+      "description": "REDACTED command text — redactSensitiveText(info.command), never the registry's raw BackgroundJobInfo.command (src/harness/tool/builtin/background-job-registry.ts:62). A command line routinely carries a credential."
+    },
+    "cwd": { "type": "string" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "endedAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Absent when the session died before the task reached a terminal status; see footerPresent."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["completed", "failed", "killed"],
+      "description": "Mirrors the shipped task statuses. Absent means the outcome is UNKNOWN (no footer was written) — it is never reported as success (D-11 of this package's specification §5.1)."
+    },
+    "exitCode": { "type": "integer" },
+    "killReason": {
+      "type": "string",
+      "enum": ["model", "operator", "idle", "output-cap", "hold-timeout", "session-exit"],
+      "description": "The shipped KillReason union (background-job-registry.ts:56). Present only when status is killed."
+    },
+    "file": {
+      "type": "string",
+      "description": "Transcript filename RELATIVE to the tasks/ directory (e.g. task-3-48211.log). Never an absolute path: this record is operator-facing and must not become a path source for anything model-facing (D-11)."
+    },
+    "indexFile": {
+      "type": "string",
+      "description": "Flush-map filename relative to tasks/ (e.g. task-3-48211.idx.jsonl): lines of { raw, file, bytes } mapping raw stream offsets to file offsets, which is what makes a flush-aligned ranged read possible (D-10)."
+    },
+    "rawBytes": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes the command emitted, before masking. Differs from bytesWritten because masks are fixed-width (src/security/redact.ts:23-25)."
+    },
+    "bytesWritten": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Bytes actually written to the transcript, after redaction."
+    },
+    "maskedSpans": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many spans were masked on the way to disk. An operator signal, not a guarantee: the detector floor is deterministic regex only (src/security/redact.ts:121-127), so 0 does not mean the output held no secret."
+    },
+    "truncated": {
+      "type": "string",
+      "enum": ["task-cap", "io-error", "disabled-mid-task"],
+      "description": "Why the transcript is incomplete, when it is. Absent means nothing was dropped by the sink. 'task-cap' is the per-task byte cap; 'io-error' is a sink queue that could not drain, which drops bytes rather than stalling or killing the task (PRD N2)."
+    },
+    "footerPresent": {
+      "type": "boolean",
+      "description": "Whether the closing footer was written. false means the session died mid-task; every reader must report the outcome as unknown rather than as a success, mirroring the retention stamp's started-vs-completed split (src/retention/auto-sweep.ts:103-113)."
+    },
+    "keyBlockMasked": {
+      "type": "boolean",
+      "description": "An unterminated PRIVATE KEY block was seen and the sink masked from the marker onward (specification §5.2, step 6). Recorded because a fail-closed mask is a fact an operator may need to explain a truncated-looking transcript."
+    }
+  }
+}
