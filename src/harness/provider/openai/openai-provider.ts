@@ -24,6 +24,7 @@ import { isPrivateEgressHost } from "../../mutation/guard";
 import { defaultRetryable } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import type {
+  MessageReasoning,
   NormalizedError,
   NormalizedEvent,
   NormalizedMessage,
@@ -91,6 +92,14 @@ export interface OpenAiProviderDescriptorDocument {
 
 /** Public OpenAI Responses API base URL used when the grant supplies none. */
 const DEFAULT_BASE_URL = "https://api.openai.com";
+/**
+ * This adapter's provider id — advertised on `describe()`/`descriptorDocument()`
+ * and the value a {@link ProviderReplayItem} must carry for
+ * {@link toResponsesInput} to replay it (flow 268 T14). A replay item
+ * stamped with a different provider's id is never this adapter's to
+ * interpret and is ignored.
+ */
+const PROVIDER_ID = "openai";
 /** Stable provider revision advertised by `describe()` / `descriptorDocument()`. */
 const PROVIDER_REVISION = "openai-responses-2026-08";
 /** The single model this adapter fixture pins. */
@@ -119,6 +128,33 @@ function asNumber(value: unknown): number | undefined {
 }
 
 /**
+ * This turn's captured reasoning items owned by THIS provider adapter, in
+ * original (event) order, as plain `Record<string, unknown>` items ready to
+ * splice into `input` verbatim (flow 268 T14, AC9). `MessageReasoning.replay`
+ * is provider-neutral (`ProviderReplayItem[]`) precisely so a request builder
+ * can ask "which of these are mine" without knowing another provider's
+ * shape: an item stamped with a different `providerId`, or one this adapter
+ * did not itself produce (`kind !== "reasoning_item"`), is not this
+ * adapter's to interpret and is silently skipped rather than guessed at.
+ */
+function ownedReasoningItems(reasoning: MessageReasoning | undefined): Record<string, unknown>[] {
+  const replay = reasoning?.replay;
+  if (replay === undefined) {
+    return [];
+  }
+  const items: Record<string, unknown>[] = [];
+  for (const item of replay) {
+    if (item.providerId !== PROVIDER_ID || item.kind !== "reasoning_item") {
+      continue;
+    }
+    if (isPlainObject(item.data)) {
+      items.push(item.data);
+    }
+  }
+  return items;
+}
+
+/**
  * Serialize a normalized conversation into Responses API `input` item array
  * form (NOT the Chat Completions `messages[]` shape). `systemInstruction`
  * does NOT go into `input` at all — it is sent as the top-level
@@ -132,6 +168,17 @@ function asNumber(value: unknown): number | undefined {
  * (`linkToolCalls`); a half-pair degrades to a plain message item, so a
  * compacted or resumed window cannot produce a dangling reference the API
  * would reject.
+ *
+ * Reasoning replay (flow 268 T14, AC9): an assistant turn that carries
+ * captured, owned `reasoning_item` replay items (see
+ * {@link ownedReasoningItems}) emits them FIRST, verbatim and in original
+ * order, ahead of that same turn's `message`/`function_call` items — a
+ * reasoning model that loses its chain-of-thought across a tool call round
+ * trip degrades to a non-reasoning response, so the reasoning item(s) that
+ * preceded this turn's tool calls must be replayed alongside them. A message
+ * with no owned reasoning replay items (no reasoning requested, or every
+ * item belongs to a different provider) injects nothing here and builds
+ * exactly as before.
  */
 function toResponsesInput(messages: readonly NormalizedMessage[]): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
@@ -150,8 +197,15 @@ function toResponsesInput(messages: readonly NormalizedMessage[]): Record<string
     }
     if (message.role === "assistant" && message.content.length === 0 && linked.linkedCalls.length === 0) {
       // A tool-call turn whose calls could not be linked carries no text and
-      // no calls — nothing to emit.
+      // no calls — nothing to emit (including any reasoning that preceded
+      // the now-dropped calls: a reasoning item with no accompanying
+      // function_call would itself be a dangling reference).
       continue;
+    }
+    if (message.role === "assistant") {
+      for (const item of ownedReasoningItems(message.reasoning)) {
+        out.push(item);
+      }
     }
     if (message.role === "assistant" && linked.linkedCalls.length > 0) {
       if (message.content.length > 0) {
@@ -379,14 +433,14 @@ export class OpenAiProvider implements ProviderPort {
     };
     return {
       capabilities,
-      descriptor: { providerId: "openai", providerRevision: PROVIDER_REVISION },
+      descriptor: { providerId: PROVIDER_ID, providerRevision: PROVIDER_REVISION },
     };
   }
 
   descriptorDocument(): OpenAiProviderDescriptorDocument {
     return {
       schemaVersion: 1,
-      providerId: "openai",
+      providerId: PROVIDER_ID,
       providerRevision: PROVIDER_REVISION,
       models: [{ modelId: DEFAULT_MODEL.modelId, revision: DEFAULT_MODEL.revision }],
       capabilities: {
@@ -446,6 +500,15 @@ export class OpenAiProvider implements ProviderPort {
       authorization: `Bearer ${grant.apiKey}`,
       "content-type": "application/json",
     };
+    // Reasoning (flow 268 T14, AC9): `request.options.reasoning` is the
+    // effort level a caller opted into ("minimal"|"low"|"medium"|"high");
+    // absent or the literal "off" means NOT requested. `reasoning` is only
+    // sent when set — the Responses API returns HTTP 400 for a non-reasoning
+    // model (gpt-4.1/gpt-4o) given a `reasoning` field at all (confirmed:
+    // reasoning is accepted only by o-series/gpt-5* reasoning models), so
+    // this must stay opt-in rather than always-on.
+    const reasoningEffort = request.options?.reasoning;
+    const reasoningRequested = typeof reasoningEffort === "string" && reasoningEffort.length > 0 && reasoningEffort !== "off";
     const payload: Record<string, unknown> = {
       model: request.modelId,
       instructions: request.systemInstruction,
@@ -454,6 +517,33 @@ export class OpenAiProvider implements ProviderPort {
       // Output token limit (flow 268 T6): the Responses API field is
       // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
       max_output_tokens: request.budget.maxOutputTokens,
+      ...(reasoningRequested
+        ? {
+            // `summary: "auto"` asks for the reasoning-summary text stream
+            // this adapter already normalizes into `reasoning_delta`
+            // (`response.reasoning_summary_text.delta`) — confirmed current
+            // (live docs, developers.openai.com/api/docs/guides/reasoning,
+            // fetched for this task): "auto" is accepted and is "equivalent
+            // to detailed for most reasoning models today".
+            reasoning: { effort: reasoningEffort, summary: "auto" },
+            // `include: ["reasoning.encrypted_content"]`: the SAME live docs
+            // page calls this the "legacy" spelling, now optional ("doesn't
+            // require it") because a `store:false` turn returns
+            // `encrypted_content` on the reasoning item regardless — but
+            // AC9 (frozen for this task) pins its presence explicitly, and
+            // sending the accepted-but-optional value is harmless, so it is
+            // sent unconditionally alongside `reasoning`.
+            include: ["reasoning.encrypted_content"],
+            // `store: false`: the same docs page confirms `encrypted_content`
+            // is populated "when store is false" — required to get the
+            // opaque bytes this adapter replays, and consistent with this
+            // adapter's storage-off contract (`descriptorDocument().
+            // remoteState` pins storage/retention/continuation to `false`;
+            // this adapter never sends a `previous_response_id`
+            // continuation, only a full replayed `input` array).
+            store: false,
+          }
+        : {}),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({
@@ -548,6 +638,13 @@ export class OpenAiProvider implements ProviderPort {
     let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
     let terminalError: NormalizedError | undefined;
+    // Reasoning capture bookkeeping (flow 268 T14, AC9). `sawReasoningSummaryDelta`
+    // tracks whether ANY `response.reasoning_summary_text.delta` arrived this
+    // attempt; `hiddenReasoningRedactedEmitted` guards the one-time redacted
+    // `reasoning_delta` fallback so a second hidden reasoning item in the
+    // same turn (rare, but not impossible) cannot emit it twice.
+    let sawReasoningSummaryDelta = false;
+    let hiddenReasoningRedactedEmitted = false;
 
     readLoop: while (true) {
       const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
@@ -660,6 +757,10 @@ export class OpenAiProvider implements ProviderPort {
               sawStart = true;
               bodies.push({ kind: "model_start" });
             }
+            // Any delta of this type, even an empty one, means the provider
+            // is streaming visible reasoning text for this turn — disarms
+            // the hidden-reasoning fallback below.
+            sawReasoningSummaryDelta = true;
             const text = asString(data.delta);
             if (text !== undefined && text.length > 0) {
               bodies.push({ kind: "reasoning_delta", text });
@@ -703,6 +804,47 @@ export class OpenAiProvider implements ProviderPort {
                 bodies.push({ kind: "tool_call_end", toolCallId: pending.callId, input: fullArguments });
                 pendingTools.delete(itemId);
               }
+            } else if (asString(item.type) === "reasoning") {
+              // Reasoning item capture (flow 268 T14, AC9): the final
+              // `reasoning` output item (id, summary[], encrypted_content)
+              // arrives here — and again, verbatim, inside
+              // `response.completed`'s `response.output` array, which this
+              // adapter never parses for items (only for `usage`), so this
+              // is the SINGLE capture point and an item is never
+              // double-counted between the two events.
+              if (!sawStart) {
+                sawStart = true;
+                bodies.push({ kind: "model_start" });
+              }
+              const summaryEntries = Array.isArray(item.summary) ? item.summary : [];
+              const hasVisibleSummaryText = summaryEntries.some((entry) => {
+                const text = isPlainObject(entry) ? asString(entry.text) : undefined;
+                return text !== undefined && text.length > 0;
+              });
+              const encryptedContent = asString(item.encrypted_content);
+              if (
+                !hasVisibleSummaryText &&
+                !sawReasoningSummaryDelta &&
+                encryptedContent !== undefined &&
+                encryptedContent.length > 0 &&
+                !hiddenReasoningRedactedEmitted
+              ) {
+                // Hidden reasoning: the provider produced a reasoning round
+                // but withheld its summary text entirely — no
+                // `response.reasoning_summary_text.delta` ever arrived, and
+                // the final item carries no non-empty `summary[].text`.
+                // Emit exactly one redacted `reasoning_delta`, BEFORE the
+                // `reasoning_replay` below, so a caller/UI learns hidden
+                // reasoning occurred before it receives the opaque replay
+                // payload for it (mirrors the `redacted_thinking`-style
+                // contract on `NormalizedEventKind`'s `reasoning_delta` doc).
+                hiddenReasoningRedactedEmitted = true;
+                bodies.push({ kind: "reasoning_delta", redacted: true });
+              }
+              bodies.push({
+                kind: "reasoning_replay",
+                replay: { providerId: PROVIDER_ID, kind: "reasoning_item", data: item },
+              });
             }
             break;
           }
