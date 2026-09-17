@@ -57,6 +57,34 @@
 // global is never touched); no `Date.now`/`Math.random`. Every yielded
 // event/error is scrubbed of the credential before it leaves this module,
 // and nothing is ever persisted (storage-off).
+//
+// THINKING CONFIG + THOUGHT SIGNATURES (flow 268, T15 / AC10): live-doc
+// verification via WebFetch against ai.google.dev/gemini-api/docs/thinking
+// and .../thought-signatures during this task was inconclusive — one fetch
+// redirected to the thinking guide with no signature detail, another
+// returned a `thinking_level`/`thinking_summaries`/"steps[]" shape that
+// looks like the newer, STATEFUL Interactions-style API this adapter
+// deliberately does NOT use (see "WHY LEGACY generateContent" above), not
+// the flat `generationConfig.thinkingConfig` + `candidates[].content.
+// parts[]` shape this legacy `generateContent` endpoint already uses
+// (confirmed elsewhere in this file). This adapter therefore implements
+// against the task-provided protocol facts, which match this file's own
+// prior confirmed research (the REASONING METADATA note above) rather than
+// the ambiguous fetch results:
+//   - When `request.options.reasoning` requests an effort ("low"/"medium"/
+//     "high"; absent/"off" = not requested), `generationConfig.
+//     thinkingConfig.includeThoughts` is set true, plus a depth field
+//     chosen per model family: `gemini-3*` models get `thinkingLevel`
+//     ("low"/"high" only — no confirmed "medium" level, so effort "medium"
+//     maps to "high"); every other model id (the `gemini-2.5*` family and
+//     the generic fallback) gets `thinkingBudget` in tokens (low=1024,
+//     medium=8192, high=24576).
+//   - A `thoughtSignature` on ANY response part is captured into a
+//     `reasoning_replay` event REGARDLESS of whether effort was requested
+//     (Google documents it arriving even with `includeThoughts` unset) and
+//     is replayed verbatim on the SAME part shape (including a
+//     `functionCall` part) on the next request — see
+//     `GeminiThoughtSignatureReplayData` and `toGeminiContents` below.
 
 import { isPrivateEgressHost } from "../../mutation/guard";
 import { defaultRetryable } from "../provider-port";
@@ -71,6 +99,7 @@ import type {
   ProviderDescription,
   ProviderErrorKind,
   ProviderPort,
+  ProviderReplayItem,
   StreamOptions,
 } from "../types";
 import { AnthropicSSEParser } from "../anthropic/sse";
@@ -165,6 +194,93 @@ function asBoolean(value: unknown): boolean {
 }
 
 /**
+ * The `data` shape this adapter puts on a `reasoning_replay` event's
+ * {@link ProviderReplayItem} (`kind: "thought_signature"`). `target`
+ * identifies which kind of response part the signature arrived on so replay
+ * can reattach it deterministically: `"functionCall"` items also carry
+ * `functionCallIndex` (this round's 0-based position among ALL `functionCall`
+ * parts, matching the position `message.toolCalls` ends up in) and, when the
+ * chunk carried one, `toolCallId` (the normalized call id) — replay prefers
+ * `toolCallId` and falls back to `functionCallIndex` only when it is absent.
+ * `"text"` items carry neither.
+ */
+export interface GeminiThoughtSignatureReplayData {
+  target: "functionCall" | "text";
+  functionCallIndex?: number;
+  toolCallId?: string;
+  signature: string;
+}
+
+function isGeminiThoughtSignatureReplayData(value: unknown): value is GeminiThoughtSignatureReplayData {
+  if (!isPlainObject(value)) {
+    return false;
+  }
+  const target = value.target;
+  const signature = value.signature;
+  return (target === "functionCall" || target === "text") && typeof signature === "string" && signature.length > 0;
+}
+
+/**
+ * This provider's own `thought_signature` replay items on an assistant
+ * message, in event order. A foreign `providerId` (a replay item some other
+ * adapter owns) and any `kind` other than `"thought_signature"` are ignored,
+ * matching {@link ProviderReplayItem}'s "an adapter for a different provider
+ * must ignore an item it does not own" contract.
+ */
+function geminiThoughtSignatureItems(message: NormalizedMessage): GeminiThoughtSignatureReplayData[] {
+  const replay = message.reasoning?.replay;
+  if (replay === undefined) {
+    return [];
+  }
+  const out: GeminiThoughtSignatureReplayData[] = [];
+  for (const item of replay) {
+    if (item.providerId !== "gemini" || item.kind !== "thought_signature") {
+      continue;
+    }
+    if (isGeminiThoughtSignatureReplayData(item.data)) {
+      out.push(item.data);
+    }
+  }
+  return out;
+}
+
+/** Token budgets for `thinkingBudget` (Gemini 2.5-family models), per effort. */
+const THINKING_BUDGET_BY_EFFORT: Record<string, number> = { low: 1024, medium: 8192, high: 24576 };
+
+/**
+ * `gemini-3*` model ids use the newer `thinkingLevel` depth control;
+ * everything else (the `gemini-2.5*` family, and the generic fallback for an
+ * unrecognized id) uses the older token-budget `thinkingBudget` control. See
+ * the module header's THINKING CONFIG note for the research caveat.
+ */
+function usesThinkingLevel(modelId: string): boolean {
+  return /^gemini-3(\.|-|$)/i.test(modelId);
+}
+
+/**
+ * Build `generationConfig.thinkingConfig` for a requested reasoning effort,
+ * or `undefined` when no effort was requested (`request.options.reasoning`
+ * absent or `"off"`) — `generationConfig` then carries no `thinkingConfig`
+ * key at all, unchanged from before this task. Thought-summary text
+ * (`includeThoughts`) is always requested alongside the depth control so a
+ * requested effort always surfaces its chain-of-thought as `reasoning_delta`.
+ */
+function buildThinkingConfig(modelId: string, effort: string | undefined): Record<string, unknown> | undefined {
+  if (effort === undefined || effort === "off") {
+    return undefined;
+  }
+  if (usesThinkingLevel(modelId)) {
+    // Only "low"/"high" are confirmed for `thinkingLevel` — "medium" (and any
+    // unrecognized value) maps to "high" rather than sending an unconfirmed
+    // "medium" the API might reject.
+    const level = effort === "low" ? "low" : "high";
+    return { includeThoughts: true, thinkingLevel: level };
+  }
+  const budget = THINKING_BUDGET_BY_EFFORT[effort] ?? THINKING_BUDGET_BY_EFFORT.medium;
+  return { includeThoughts: true, thinkingBudget: budget };
+}
+
+/**
  * Serialize a normalized conversation into Gemini `contents[]` wire form.
  *
  * Gemini has NO `system` role (the system instruction is a separate
@@ -207,20 +323,68 @@ function toGeminiContents(messages: readonly NormalizedMessage[]): Record<string
     }
     if (message.role === "assistant" && linked.linkedCalls.length > 0) {
       const parts: Record<string, unknown>[] = [];
+      let textPartIndex: number | undefined;
       if (message.content.length > 0) {
+        textPartIndex = parts.length;
         parts.push({ text: message.content });
       }
+      // Keyed by call id (not array index) so a `toolCallId`-addressed
+      // signature attaches to the right part even when `linkToolCalls`
+      // dropped an earlier, unanswered call from this subset.
+      const functionCallPartByCallId = new Map<string, Record<string, unknown>>();
       for (const call of linked.linkedCalls) {
-        parts.push({
+        const functionCallPart: Record<string, unknown> = {
           functionCall: { name: call.name, id: call.id, args: parseToolInput(call.arguments) },
-        });
+        };
+        functionCallPartByCallId.set(call.id, functionCallPart);
+        parts.push(functionCallPart);
       }
+
+      // flow 268 T15 (AC10): reattach this round's captured thoughtSignature
+      // items verbatim, on the same part shape they arrived on.
+      for (const item of geminiThoughtSignatureItems(message)) {
+        if (item.target === "functionCall") {
+          const resolvedCallId =
+            item.toolCallId ?? (item.functionCallIndex !== undefined ? message.toolCalls?.[item.functionCallIndex]?.id : undefined);
+          const functionCallPart = resolvedCallId === undefined ? undefined : functionCallPartByCallId.get(resolvedCallId);
+          if (functionCallPart !== undefined) {
+            (functionCallPart.functionCall as Record<string, unknown>).thoughtSignature = item.signature;
+          }
+          // Unresolvable (the call it belonged to was dropped as a half-pair
+          // by `linkToolCalls`) — there is no surviving part to carry it on
+          // this request, so it is silently omitted rather than invented.
+          continue;
+        }
+        if (textPartIndex !== undefined) {
+          (parts[textPartIndex] as Record<string, unknown>).thoughtSignature = item.signature;
+        } else {
+          // Google documents a `thoughtSignature` occasionally arriving on a
+          // final, otherwise-empty text part (no visible text this round).
+          // Reproduce exactly that shape rather than dropping the signature
+          // or inventing a non-empty text part for it to ride on.
+          textPartIndex = parts.length;
+          parts.push({ text: "", thoughtSignature: item.signature });
+        }
+      }
+
       out.push({ role: "model", parts });
       continue;
     }
+    const part: Record<string, unknown> = { text: message.content };
+    if (message.role === "assistant") {
+      // This message shape has no `functionCall` part to carry a
+      // `"functionCall"`-target signature on — only a `"text"`-target item
+      // (the only kind that fits here) is attached; a stray `"functionCall"`
+      // item (should not occur without `linkedCalls`) is dropped.
+      for (const item of geminiThoughtSignatureItems(message)) {
+        if (item.target === "text") {
+          part.thoughtSignature = item.signature;
+        }
+      }
+    }
     out.push({
       role: message.role === "assistant" ? "model" : "user",
-      parts: [{ text: message.content }],
+      parts: [part],
     });
   }
   return out;
@@ -536,6 +700,13 @@ export class GeminiProvider implements ProviderPort {
       generationConfig: {
         maxOutputTokens: request.budget.maxOutputTokens,
         ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
+        // flow 268 T15 (AC10): only present when an effort was requested —
+        // `thinkingConfig` is entirely absent otherwise, unchanged from
+        // before this task.
+        ...(() => {
+          const thinkingConfig = buildThinkingConfig(request.modelId, request.options?.reasoning);
+          return thinkingConfig === undefined ? {} : { thinkingConfig };
+        })(),
       },
     };
     const init: RequestInit = {
@@ -647,6 +818,12 @@ export class GeminiProvider implements ProviderPort {
     let totalTokens: number | undefined;
     let cachedContentTokens: number | undefined;
     let thoughtsTokens: number | undefined;
+    // flow 268 T15 (AC10): 0-based position among ALL `functionCall` parts
+    // seen so far this round — matches the position each linked call ends up
+    // at in `NormalizedMessage.toolCalls` (both are built by appending, in
+    // the same `tool_call_end` order), so a captured `functionCallIndex`
+    // resolves deterministically on replay even without a `toolCallId`.
+    let functionCallIndexInRound = 0;
 
     const pushUsageAndFinish = (): void => {
       // usage_update precedes model_end, once, using the LAST-seen
@@ -744,6 +921,12 @@ export class GeminiProvider implements ProviderPort {
         for (const rawPart of parts) {
           const part = asRecord(rawPart);
           const text = asString(part.text);
+          const functionCall = asRecord(part.functionCall);
+          const callName = asString(functionCall.name);
+          const signature = asString(part.thoughtSignature);
+          let signatureCallId: string | undefined;
+          let signatureCallIndex: number | undefined;
+
           if (text !== undefined) {
             // A `thought: true` part is chain-of-thought reasoning text, never
             // ordinary output (confirmed via research, see module header).
@@ -752,11 +935,7 @@ export class GeminiProvider implements ProviderPort {
             } else {
               bodies.push({ kind: "text_delta", text });
             }
-            continue;
-          }
-          const functionCall = asRecord(part.functionCall);
-          const callName = asString(functionCall.name);
-          if (callName !== undefined) {
+          } else if (callName !== undefined) {
             // Gemini does NOT stream partial function-call arguments by
             // default (confirmed via research: incremental streaming is a
             // distinct, newer, model-gated opt-in this adapter does not
@@ -767,6 +946,28 @@ export class GeminiProvider implements ProviderPort {
             const argsInput = JSON.stringify(asRecord(functionCall.args));
             bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
             bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });
+            signatureCallId = callId;
+            signatureCallIndex = functionCallIndexInRound;
+            functionCallIndexInRound += 1;
+          }
+
+          // flow 268 T15 (AC10): a `thoughtSignature` on ANY part is captured
+          // regardless of whether an effort/`includeThoughts` was requested —
+          // Google documents it arriving unconditionally. Associated with the
+          // part it arrived on in THIS loop iteration, so a split-chunk
+          // signature can never drift onto the wrong part.
+          if (signature !== undefined && signature.length > 0) {
+            const data: GeminiThoughtSignatureReplayData =
+              signatureCallIndex !== undefined
+                ? {
+                    target: "functionCall",
+                    functionCallIndex: signatureCallIndex,
+                    ...(signatureCallId !== undefined ? { toolCallId: signatureCallId } : {}),
+                    signature,
+                  }
+                : { target: "text", signature };
+            const replay: ProviderReplayItem = { providerId: "gemini", kind: "thought_signature", data };
+            bodies.push({ kind: "reasoning_replay", replay });
           }
         }
 
