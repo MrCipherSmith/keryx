@@ -54,6 +54,7 @@ import { spawnSync } from "node:child_process";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { MetaprojectPort } from "../harness/tool/metaproject-port";
 import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/types";
+import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
@@ -170,6 +171,7 @@ import {
   type SessionSummary,
   listSessions,
   openSession,
+  persistCompacted,
   persistHistory,
   shortSessionId,
   type SessionHandle,
@@ -1078,10 +1080,18 @@ export function shortenCwd(cwd: string, max: number): string {
  * Rough token estimate of the conversation (≈ 4 chars/token) — a fallback for the
  * context counter when the provider does not report exact `usage` (e.g. local
  * Ollama models). Pure.
+ *
+ * Flow 267: delegates to `estimateRequestTokens` (`harness/provider/
+ * context-guard.ts`) with no system instruction / tool defs, rather than
+ * summing `content` itself — ONE estimator for the codebase instead of two
+ * divergent ones. `/status`'s callers all pass bare `{ content }` history
+ * (never `systemInstruction`/tool defs), and threading those through every
+ * `/status` call site would be invasive for a display-only estimate that
+ * already carries a "rough"/"≈" disclaimer; the real guard in `agent.ts`
+ * calls `estimateRequestTokens` directly with the full request shape.
  */
 export function estimateContextTokens(history: readonly { content: string }[]): number {
-  const chars = history.reduce((n, m) => n + m.content.length, 0);
-  return Math.round(chars / 4);
+  return estimateRequestTokens(history, "", []);
 }
 
 /**
@@ -3394,6 +3404,35 @@ export async function launchTuiAgentShell(opts: {
      */
     let slateSession: SlateSessionRef | undefined;
 
+    /**
+     * Flow 267: `agent.ts`'s round-loop guard already ran `compactMessages`
+     * itself and spliced the result into `history` IN PLACE before this
+     * fires (see `AgentDeps.onContextCompaction`'s doc comment) — this
+     * mirrors the `/compact` command handler further below: persist the SAME
+     * bookkeeping (`compactCount`, `archive.jsonl`, `context.jsonl`) via
+     * `persistCompacted` (the extracted core `compactSession` itself now
+     * calls) rather than running compaction a second time, then reset
+     * `nextArchiveIndex` so later turns keep syncing `archive` from the new,
+     * shorter `history`. A system-stream line replaces a silent swap so the
+     * operator sees WHY the transcript just shrank.
+     */
+    const onContextCompaction = (r: { removed: number; context: NormalizedMessage[]; estimate: number }): void => {
+      const persisted = persistCompacted(liveSession, r.context, archive, {
+        provider: currentSel.provider,
+        model: currentSel.model,
+      });
+      liveSession = persisted.handle;
+      nextArchiveIndex = history.length;
+      paintSessionHeader();
+      io.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
+    };
+    // Flow 267: attach the callback above to the deps this session already
+    // built (`onContextCompaction` needs `history`/`archive`/`liveSession`,
+    // declared above it — a plain reassignment here, not a merge at the
+    // original `makeAgentDeps` call site, which runs before those exist).
+    deps = { ...deps, onContextCompaction };
+    liveDeps = deps;
+
     const applyOpened = (
       opened: {
         handle: SessionHandle;
@@ -3919,7 +3958,7 @@ export async function launchTuiAgentShell(opts: {
       currentSel = ns;
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
-      deps = await opts.makeAgentDeps(ns, () => slateSession);
+      deps = { ...(await opts.makeAgentDeps(ns, () => slateSession)), onContextCompaction };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },

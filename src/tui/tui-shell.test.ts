@@ -2096,7 +2096,10 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
     const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 300);
+    // Widened from 300 (flow 267): `deps` now wraps the call to merge in
+    // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
+    // onContextCompaction }`), pushing the closing `)` a bit further out.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 340);
     expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
   });
 

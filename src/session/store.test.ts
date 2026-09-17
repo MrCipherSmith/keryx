@@ -12,6 +12,7 @@ import {
   loadArchive,
   loadContext,
   openSession,
+  persistCompacted,
   persistHistory,
   projectKeyFromPath,
   resolveProjectRoot,
@@ -208,6 +209,64 @@ test("compactSession shrinks context but keeps archive", () => {
     expect(loadContext(proj, after.summary.id, dataDir).length).toBe(context.length);
     // archive still has full history
     expect(loadArchive(proj, after.summary.id, dataDir).length).toBe(8);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("persistCompacted: a host that already compacted (agent.ts's context guard) persists the same bookkeeping compactSession uses", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-pc-"));
+  try {
+    let handle = createSession({ cwd: proj, dataDir });
+    const long = [
+      { role: "user" as const, content: "t1", provenance: "project" as const },
+      { role: "assistant" as const, content: "a1", provenance: "model" as const },
+      { role: "user" as const, content: "t2", provenance: "project" as const },
+      { role: "assistant" as const, content: "a2", provenance: "model" as const },
+    ];
+    handle = persistHistory(handle, long);
+
+    // The guard already ran `compactMessages` itself (its own contract, see
+    // `context-guard.ts`) — `persistCompacted` is handed the ALREADY-compacted
+    // context and must never re-run compaction.
+    const compacted = [
+      { role: "user" as const, content: "[Compacted earlier context]", provenance: "project" as const },
+      { role: "user" as const, content: "t2", provenance: "project" as const },
+      { role: "assistant" as const, content: "a2", provenance: "model" as const },
+    ];
+
+    const persisted = persistCompacted(handle, compacted, long, { provider: "p", model: "m" });
+    expect(persisted.handle.summary.compactCount).toBe(1);
+    expect(persisted.context).toBe(compacted);
+    expect(loadContext(proj, persisted.handle.summary.id, dataDir).length).toBe(compacted.length);
+    // Archive keeps the full pre-compaction transcript.
+    expect(loadArchive(proj, persisted.handle.summary.id, dataDir).length).toBe(long.length);
+    expect(persisted.handle.summary.provider).toBe("p");
+    expect(persisted.handle.summary.model).toBe("m");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
+
+test("persistCompacted: compactSession itself now delegates to it — a resumed session loads the compacted window", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-pc2-"));
+  try {
+    let handle = createSession({ cwd: proj, dataDir });
+    const long = [
+      { role: "user" as const, content: "t1", provenance: "project" as const },
+      { role: "assistant" as const, content: "a1", provenance: "model" as const },
+      { role: "user" as const, content: "t2", provenance: "project" as const },
+      { role: "assistant" as const, content: "a2", provenance: "model" as const },
+    ];
+    handle = persistHistory(handle, long);
+    const { handle: after, context } = compactSession(handle, long, long, { keepLastUserTurns: 1 });
+    const opened = openSession({ cwd: proj, dataDir, resumeId: after.summary.id });
+    expect(opened.history.length).toBe(context.length);
+    expect(opened.history.length).toBeLessThan(long.length);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
     rmSync(proj, { recursive: true, force: true });
