@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
   createShellChrome,
@@ -26,6 +27,7 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  mountTitlePanel,
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
@@ -478,6 +480,27 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   // inside the text budget.
   const cell = rows[0]?.slice((rows[0]?.lastIndexOf("│") ?? -1) + 1) ?? "";
   expect(cell.trim().length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+
+  chrome.destroy();
+  setup.renderer.destroy();
+});
+
+otuiTest("flow 266 AC11/AC12: the shipped sidebar title shows keryx + the running version", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "s/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  mountTitlePanel(otui.core, setup.renderer, chrome.sidebarTop);
+  await setup.flush();
+  const frame = setup.captureCharFrame();
+
+  expect(frame).toContain("keryx");
+  expect(frame).toContain(`v${packageJson.version}`);
 
   chrome.destroy();
   setup.renderer.destroy();

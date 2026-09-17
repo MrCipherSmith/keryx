@@ -57,6 +57,7 @@ import type { NormalizedMessage, NormalizedUsage } from "../harness/provider/typ
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
+import { playBootAnimation } from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -695,6 +696,23 @@ export function attachBlockIo(io: AgentIO, addBlock: BlockSink, chrome: BlockIoC
     );
   };
   return io;
+}
+
+/**
+ * Mount the sidebar's title row: bold "keryx" + the running `packageJson.version`
+ * in dim/secondary style (flow 266 P3, AC11/AC12).
+ *
+ * Exported — same reason as {@link mountCwdPanel} just below: a headless test
+ * mounts the SHIPPED panel instead of a replica, so a future edit to the id or
+ * the wording is caught here rather than in a test that re-typed it.
+ */
+export function mountTitlePanel(otui: OpenTui, r: Renderer, sidebarTop: Box): void {
+  sidebarTop.add(
+    new otui.TextRenderable(r, {
+      id: "sb-title",
+      content: otui.t`${otui.bold("keryx")} ${otui.dim(`v${packageJson.version}`)}`,
+    }),
+  );
 }
 
 /**
@@ -2373,6 +2391,11 @@ export async function launchTuiAgentShell(opts: {
     };
     r.on("theme_mode", onThemeMode);
 
+    // Branded intro (flow 266 P1) — before the picker so it is the FIRST thing
+    // shown, matching a launch sequence rather than interrupting one already in
+    // progress. `KERYX_SKIP_BOOT=1` bypasses it entirely (see boot-animation.ts).
+    await playBootAnimation(otui, r, { onKeypress: (handler) => onKeypress(r, handler) });
+
     // Resolve the provider/model — from flags, or an in-TUI picker.
     const sel = opts.initial ?? (await selectProviderModelInTui(otui, r, opts.detected));
     if (sel === undefined) {
@@ -2462,7 +2485,7 @@ export async function launchTuiAgentShell(opts: {
     // `sidebar`: the chrome pins the toast to the bottom with a flexGrow spacer,
     // so anything added to `sidebar` itself would land beside the toast.
     const sidebar = chrome.sidebarTop;
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-title", content: otui.t`${otui.bold("keryx")}` }));
+    mountTitlePanel(otui, r, sidebar);
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
