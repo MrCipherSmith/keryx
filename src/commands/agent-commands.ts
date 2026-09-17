@@ -192,6 +192,12 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     // Chat mode has no tools, so there is nothing for a permission mode to gate.
     modes: AGENT_ONLY,
   },
+  {
+    name: "/plan",
+    description: "Toggle read-only mode — /plan [on|off]",
+    // Chat mode has no tools, so there is nothing for read-only mode to gate.
+    modes: AGENT_ONLY,
+  },
   { name: "/clear", description: "New session (alias of /new)", modes: BOTH },
   { name: "/interrupt", description: "Interrupt the running main agent turn", modes: AGENT_ONLY },
   {

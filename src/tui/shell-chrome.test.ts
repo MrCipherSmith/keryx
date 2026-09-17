@@ -328,6 +328,72 @@ otuiTest("flow 142 AC4: late notice remains visible above a full 12-agent sideba
   h.destroy();
 });
 
+// flow 266 P2 — `sb-top` used to be a plain `BoxRenderable` with
+// `flexShrink: 0`: content past what fit the terminal height was silently
+// CLIPPED, not scrollable (a real defect, not cosmetic). It is now a
+// `ScrollBoxRenderable` (`sidebarTop` bound to its `.content`, mirroring the
+// transcript's own `scroll`/`transcript` pair). This test proves the
+// scrollability against the real `@opentui/core` test renderer rather than
+// assuming the flexbox shrink math, per the flow's own stated risk.
+otuiTest("flow 266 AC7-AC9: sidebarTop is a real ScrollBoxRenderable that scrolls past clipped panels", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 14, chrome: { toastMs: TOAST_HOLD_MS } });
+
+  // AC7: `sidebarTop` is `.content` of a real `ScrollBoxRenderable`, not a
+  // bare box — same relationship `transcript` already has to `scroll`.
+  expect(h.chrome.sidebarScroll).toBeInstanceOf(otui.core.ScrollBoxRenderable);
+  expect(h.chrome.sidebarTop).toBe(h.chrome.sidebarScroll.content);
+
+  // Mount enough sidebar panels — mirroring the real shell's Model/Usage/
+  // Context/Directory/Branch/PR/Workspace/Review/Tools/Status/Subagents/
+  // Background Jobs stack — to exceed the 14-row test terminal.
+  const panels = [
+    ["Model", "provider/model"],
+    ["Usage", "1,234 tokens"],
+    ["Context", "0 tokens"],
+    ["Directory", "/workspace"],
+    ["Branch", "feature/x"],
+    ["PR", "#123"],
+    ["Workspace", "ws-1"],
+    ["Review", "pending"],
+    ["Tools", "12 available"],
+    ["Status", "idle"],
+    ["Subagents", "0 running"],
+    ["Background Jobs", "0 running"],
+  ] as const;
+  for (const [index, [label, value]] of panels.entries()) {
+    h.chrome.sidebarTop.add(
+      new otui.core.TextRenderable(h.renderer, { id: `sc-${index}-k`, content: label, marginTop: 1 }),
+    );
+    h.chrome.sidebarTop.add(new otui.core.TextRenderable(h.renderer, { id: `sc-${index}-v`, content: value }));
+  }
+  await h.flush();
+
+  // AC9: the scrollbox reports more content than its own viewport height —
+  // a real, provable overflow, not a clipped-but-unreachable one.
+  expect(h.chrome.sidebarScroll.scrollHeight).toBeGreaterThan(h.chrome.sidebarScroll.height);
+
+  // The last panel is out of view at the default (top) scroll position...
+  expect(h.captureCharFrame()).not.toContain("Background Jobs");
+
+  // AC8: `sidebarSpacer`/the toast stay direct children of `sidebar`, outside
+  // the new scrollbox — reachable and pinned to the bottom regardless of how
+  // full `sidebarTop` is. Checked BEFORE scrolling, at the box's resting
+  // (top) position.
+  h.chrome.showToast("still pinned");
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("still pinned");
+
+  // ...and the clipped panel is reachable by scrolling the box, proving the
+  // content is actually retrievable through the scrollbox rather than merely
+  // present-but-clipped (what the old `flexShrink: 0` plain box did).
+  h.chrome.sidebarScroll.scrollTop = h.chrome.sidebarScroll.scrollHeight;
+  await h.flush();
+  expect(h.captureCharFrame()).toContain("Background Jobs");
+
+  h.destroy();
+});
+
 otuiTest("flow 142 AC4-AC5: shared chrome stays silent for non-updates and ignores late teardown", async () => {
   const otui = requireOtui();
   for (const result of [

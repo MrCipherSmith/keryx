@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { wikiCollect, wikiPruneOrphans } from "./service";
+import { isTestSourceFile, wikiCollect, wikiPruneOrphans } from "./service";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
 
@@ -128,6 +128,75 @@ test("collect creates draft wiki pages from graph, health, and testing artifacts
     expect(second.skipped).toBe(4);
     expect(await readFile(path.join(root, ".metaproject", "wiki", "architecture", "project-map.md"), "utf8"))
       .toContain("Manual Project Map");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+// The "Depends on" / "Depended on by" lists are read by `wiki enrich` as
+// production couplings; a test file's imports are not. Test-only edges were the
+// root cause of ~a dozen false claims in the 2026-09-16 draft review.
+test("isTestSourceFile — the repo's own naming convention", () => {
+  expect(isTestSourceFile("src/forgetting/journal.test.ts")).toBe(true);
+  expect(isTestSourceFile("src/mcp/http.live.test.ts")).toBe(true);
+  expect(isTestSourceFile("src/lib/thing.spec.ts")).toBe(true);
+  expect(isTestSourceFile("e2e/smoke.test.ts")).toBe(true);
+  // Product code stays, including the module whose JOB is testing: a path rule
+  // would silence it, a file-name rule does not.
+  expect(isTestSourceFile("src/testing/sweep.ts")).toBe(false);
+  expect(isTestSourceFile("src/flow/review-fixtures.ts")).toBe(false);
+  expect(isTestSourceFile("src/wiki/service.ts")).toBe(false);
+});
+
+test("collect — test-file imports are excluded from module Depends on/Depended on by", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-collect-testonly-"));
+  const graphDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+  try {
+    await mkdir(graphDir, { recursive: true });
+    await writeFile(path.join(graphDir, "nodes.jsonl"), jsonl([
+      { id: "src/alpha/a.ts", kind: "file", path: "src/alpha/a.ts" },
+      { id: "src/alpha/a.test.ts", kind: "file", path: "src/alpha/a.test.ts" },
+      { id: "src/beta/b.ts", kind: "file", path: "src/beta/b.ts" },
+      { id: "src/beta/b2.ts", kind: "file", path: "src/beta/b2.ts" },
+      { id: "src/gamma/g.ts", kind: "file", path: "src/gamma/g.ts" },
+      { id: "src/gamma/g2.ts", kind: "file", path: "src/gamma/g2.ts" },
+    ]), "utf8");
+    await writeFile(path.join(graphDir, "edges.jsonl"), jsonl([
+      // Production fact: alpha imports beta. Must survive.
+      { from: "src/alpha/a.ts", to: "src/beta/b.ts", kind: "imports" },
+      // Test-only facts: same pair via a test file, plus a second test-only
+      // target. Must contribute to neither Depends on nor Depended on by.
+      { from: "src/alpha/a.test.ts", to: "src/beta/b.ts", kind: "imports" },
+      { from: "src/alpha/a.test.ts", to: "src/gamma/g.ts", kind: "imports" },
+      // A production file importing a TEST file stays: the filter is source-side.
+      { from: "src/beta/b2.ts", to: "src/delta/d.test.ts", kind: "imports" },
+      { from: "src/beta/b.ts", to: "src/gamma/g.ts", kind: "imports" },
+    ]), "utf8");
+
+    await wikiCollect({ cwd: root });
+
+    const alpha = await readFile(path.join(root, ".metaproject", "wiki", "components", "src-alpha.md"), "utf8");
+    const beta = await readFile(path.join(root, ".metaproject", "wiki", "components", "src-beta.md"), "utf8");
+
+    // Production import counts once; the test file's import of the same pair
+    // adds nothing to the edge count.
+    expect(alpha).toContain("- `src/beta` - 1 import(s)");
+    expect(alpha).not.toContain("- `src/beta` - 2 import(s)");
+    // Nothing production-side imports alpha; its only cross-module edges come
+    // from its own test file, so the section never appears on the page.
+    expect(alpha).not.toContain("### Depended on by");
+    // beta's production dependents: src/alpha once — before the filter the
+    // test file doubled it to 2.
+    expect(beta).toContain("### Depended on by");
+    expect(beta).toContain("- `src/alpha` - 1 import(s)");
+    expect(beta).not.toContain("- `src/alpha` - 2 import(s)");
+    // d.test.ts is a production import BY b2.ts, so src/delta stays counted.
+    expect(beta).toContain("- `src/delta` - 1 import(s)");
+    // The exclusion is stated ON the page: an absent section never reads as
+    // "nothing imports this module".
+    expect(beta).toContain("### Dependency basis");
+    expect(beta).toContain("src/alpha/a.test.ts");
+    expect(alpha).toContain("### Dependency basis");
   } finally {
     await rm(root, { recursive: true, force: true });
   }
