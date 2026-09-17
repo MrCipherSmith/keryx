@@ -138,6 +138,11 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       apiKey?: string;
       streamUsage?: true;
       headers?: Readonly<Record<string, string>>;
+      reasoning?: {
+        format?: "field" | "inline-tags" | "split";
+        requestParams?: Record<string, unknown>;
+        replay?: "none" | "deepseek" | "minimax";
+      };
     } = {
       network: true,
       // Only where the gateway is known to honour it. Without the field a stream
@@ -152,6 +157,7 @@ export function makeProvider(name: string, _model: string, opts: MakeProviderOpt
       ...(compat.chatPath !== undefined ? { chatPath: compat.chatPath } : {}),
       ...(apiKey !== undefined ? { apiKey } : {}),
       ...(extraHeaders !== undefined ? { headers: extraHeaders } : {}),
+      ...(compat.reasoning !== undefined ? { reasoning: compat.reasoning } : {}),
     };
     // The label is the registry's own, so an error names the gateway that sent it.
     // A grok session used to report `Ollama API returned HTTP 403` — and whoever

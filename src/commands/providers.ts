@@ -88,6 +88,18 @@ export interface OpenAiCompatProvider {
    * (e.g. `commands/shell.ts`'s `makeAgentDeps`) via `providerByName`.
    */
   maxOutputTokens?: number;
+  /**
+   * Custom-provider-only reasoning configuration; mirrors
+   * `CustomCompatProvider.reasoning` (`src/lib/provider-config.ts`), which is
+   * its sole source — a built-in entry never sets this. Threaded onto
+   * `OpenAiCompatCapabilityGrant.reasoning` by `makeProvider`
+   * (`src/harness/provider/make-provider.ts`).
+   */
+  reasoning?: {
+    format?: "field" | "inline-tags" | "split";
+    requestParams?: Record<string, unknown>;
+    replay?: "none" | "deepseek" | "minimax";
+  };
 }
 
 /** Normalize a provider registry entry's platform policy.
@@ -290,6 +302,7 @@ export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
       models: p.models,
       ...(p.note !== undefined ? { note: p.note } : {}),
       ...(p.maxOutputTokens !== undefined ? { maxOutputTokens: p.maxOutputTokens } : {}),
+      ...(p.reasoning !== undefined ? { reasoning: p.reasoning } : {}),
     }));
 }
 

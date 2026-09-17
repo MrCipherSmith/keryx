@@ -46,13 +46,17 @@
 // Deterministic + offline: `opts.fetch` is a stub that throws if ever called
 // (mirrors `executor.test.ts`'s `withFetchGuard`) — `makeProvider` must never
 // invoke fetch merely by CONSTRUCTING a provider.
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { AnthropicProvider } from "./anthropic/anthropic-provider";
 import { OpenAiCompatEngine } from "./compat/openai-compat-provider";
 import { FakeProvider } from "./fake-provider";
 import { OllamaProvider } from "./ollama/ollama-provider";
 import { OpenAiProvider } from "./openai/openai-provider";
 import type { NormalizedRequest, StreamOptions } from "./types";
+import { saveCustomCompatProvider } from "../../lib/provider-config";
 
 // PINNED API under test — T6 impl exports these; import fails until then
 // (expected RED: "Cannot find module './make-provider'").
@@ -276,5 +280,86 @@ describe("stream usage is opt-in per provider", () => {
     for (const name of ["deepseek", "openrouter", "cerebras", "groq", "moonshot", "zai"]) {
       expect(providerByName(name)?.streamUsage).toBeUndefined();
     }
+  });
+});
+
+// --- flow 268 T10: `reasoning` threads from llm-providers.json to the grant -
+
+describe("reasoning config threads from a custom file provider onto the compat grant (flow 268 T10 / AC4-AC5)", () => {
+  let originalXdg: string | undefined;
+
+  beforeEach(() => {
+    originalXdg = process.env.XDG_DATA_HOME;
+  });
+
+  afterEach(() => {
+    if (originalXdg === undefined) {
+      delete process.env.XDG_DATA_HOME;
+    } else {
+      process.env.XDG_DATA_HOME = originalXdg;
+    }
+  });
+
+  function isolatedConfigDir(): string {
+    const dir = mkdtempSync(path.join(tmpdir(), "keryx-make-provider-reasoning-"));
+    process.env.XDG_DATA_HOME = dir;
+    return dir;
+  }
+
+  test("a custom provider's reasoning.requestParams reaches the outbound request body", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "minimax-custom",
+      baseUrl: "http://127.0.0.1:8099",
+      requiresApiKey: false,
+      models: ["minimax-m1"],
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("minimax-custom", "minimax-m1", makeOpts({ env: {}, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+
+    const request: NormalizedRequest = {
+      providerId: "minimax-custom",
+      modelId: "minimax-m1",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-reasoning",
+      parentRunId: "make-provider-reasoning",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-reasoning-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    expect(body.reasoning_split).toBe(true);
+  });
+
+  test("a custom provider WITHOUT a reasoning config constructs a grant with reasoning left absent", () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "plain-custom",
+      baseUrl: "http://127.0.0.1:8098",
+      requiresApiKey: false,
+      models: ["m"],
+    });
+    const provider = makeProvider("plain-custom", "m", makeOpts({ env: {} }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    // No reasoning config was saved, so `describe()`'s trivially-correct
+    // `reasoningMetadata: grant.reasoning !== undefined` stays false.
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(false);
   });
 });

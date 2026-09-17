@@ -41,6 +41,60 @@ export interface CustomCompatProvider {
    * setting (or the built-in default) in effect for this provider.
    */
   maxOutputTokens?: number;
+  /**
+   * Custom-provider-only reasoning configuration (flow 268 T10 / AC4-AC5).
+   * Threaded verbatim to `OpenAiCompatProvider.reasoning`
+   * (`src/commands/providers.ts`) and from there onto
+   * `OpenAiCompatCapabilityGrant.reasoning` (`compat/openai-compat-provider.ts`),
+   * which `stream()` reads.
+   *
+   * `format`:
+   *   - `"field"` (default when absent): current behaviour — reasoning read
+   *     from the `reasoning`/`reasoning_content` delta field (DeepSeek,
+   *     OpenRouter, vLLM, …).
+   *   - `"inline-tags"`: the gateway puts reasoning INSIDE `delta.content` as
+   *     `<think>…</think>` (MiniMax's default shape) — parsed by the
+   *     `ThinkTagParser` (`compat/think-tag-parser.ts`).
+   *   - `"split"`: the gateway can be asked (via `requestParams`) to send
+   *     reasoning out-of-band instead; `delta.content` passes through
+   *     unchanged and `reasoning_content`/`reasoning_details` are read as
+   *     usual.
+   * `requestParams`: shallow-merged into the compat request payload AFTER
+   * the base fields (e.g. `{ reasoning_split: true }` for MiniMax). Cannot
+   * override `model`, `messages`, `stream`, or `tools` — those keys are
+   * ignored when merging.
+   * `replay`: stored/threaded only by this task; a later task reads it to
+   * pick how a resumed transcript replays a provider's own past reasoning
+   * segments (`"none"`, `"deepseek"`, `"minimax"`).
+   */
+  reasoning?: {
+    format?: "field" | "inline-tags" | "split";
+    requestParams?: Record<string, unknown>;
+    replay?: "none" | "deepseek" | "minimax";
+  };
+}
+
+const VALID_REASONING_FORMATS = new Set(["field", "inline-tags", "split"]);
+const VALID_REASONING_REPLAYS = new Set(["none", "deepseek", "minimax"]);
+
+/** Loose runtime shape guard for `CustomCompatProvider.reasoning` (never throws). */
+function isValidReasoningConfig(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const r = value as Record<string, unknown>;
+  if (r.format !== undefined && (typeof r.format !== "string" || !VALID_REASONING_FORMATS.has(r.format))) {
+    return false;
+  }
+  if (r.replay !== undefined && (typeof r.replay !== "string" || !VALID_REASONING_REPLAYS.has(r.replay))) {
+    return false;
+  }
+  if (
+    r.requestParams !== undefined &&
+    (typeof r.requestParams !== "object" || r.requestParams === null || Array.isArray(r.requestParams))
+  ) {
+    return false;
+  }
+  return true;
 }
 
 interface LlmProvidersConfig {
@@ -75,7 +129,8 @@ export function isCustomCompatProvider(value: unknown): value is CustomCompatPro
     Array.isArray(p.models) &&
     p.models.every((m) => typeof m === "string") &&
     (p.maxOutputTokens === undefined ||
-      (typeof p.maxOutputTokens === "number" && Number.isSafeInteger(p.maxOutputTokens) && p.maxOutputTokens > 0))
+      (typeof p.maxOutputTokens === "number" && Number.isSafeInteger(p.maxOutputTokens) && p.maxOutputTokens > 0)) &&
+    isValidReasoningConfig(p.reasoning)
   );
 }
 

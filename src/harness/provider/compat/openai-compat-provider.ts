@@ -42,6 +42,7 @@ import { isLoopbackHost, isPrivateEgressHost, isPrivateLanHost } from "../../mut
 import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
+import { ThinkTagParser } from "./think-tag-parser";
 import type {
   NormalizedError,
   NormalizedEvent,
@@ -96,6 +97,35 @@ export interface OpenAiCompatCapabilityGrant {
   readonly chatPath?: string;
   /** Optional extra request headers (e.g. OpenRouter `HTTP-Referer` / `X-Title`). */
   readonly headers?: Readonly<Record<string, string>>;
+  /**
+   * Custom-provider reasoning configuration (flow 268 T10 / AC4-AC5), threaded
+   * verbatim from `CustomCompatProvider.reasoning`
+   * (`src/lib/provider-config.ts`) via `OpenAiCompatProvider.reasoning`
+   * (`src/commands/providers.ts`) and `makeProvider`. Absent means the
+   * pre-existing default behaviour: `delta.content` passes through unchanged,
+   * and `reasoning`/`reasoning_content`/`reasoning_details` are still read
+   * (see AC5 — that part is unconditional, for every format).
+   */
+  readonly reasoning?: {
+    /**
+     * `"field"` (default when absent): reasoning read from the
+     * `reasoning`/`reasoning_content` delta field.
+     * `"inline-tags"`: `delta.content` is routed through `ThinkTagParser`
+     * (MiniMax's default `<think>…</think>` shape).
+     * `"split"`: content passes through unchanged; reasoning is expected
+     * out-of-band (typically paired with a `requestParams` opt-in, e.g.
+     * MiniMax's `reasoning_split: true`).
+     */
+    readonly format?: "field" | "inline-tags" | "split";
+    /**
+     * Shallow-merged into the compat request payload AFTER the base fields.
+     * `model`, `messages`, `stream`, and `tools` are never overridable —
+     * those keys are ignored when merging.
+     */
+    readonly requestParams?: Readonly<Record<string, unknown>>;
+    /** Stored/threaded only; a later task reads this to pick a replay strategy. */
+    readonly replay?: "none" | "deepseek" | "minimax";
+  };
 }
 
 /** Injected dependencies. `fetch` is mandatory (never the global); `grant` gates egress. */
@@ -367,7 +397,14 @@ export class OpenAiCompatEngine implements ProviderPort {
       toolCalls: true,
       parallelToolCalls: true,
       structuredOutput: false,
-      reasoningMetadata: false,
+      // Trivially correct from instance state alone (AC of flow 268 T10):
+      // `true` exactly when the grant carries an explicit `reasoning`
+      // configuration, `false` otherwise (the pre-existing default — every
+      // OTHER compat provider keeps advertising `false` even though
+      // `reasoning`/`reasoning_content` parsing itself is unconditional; that
+      // wider claim is not "trivially correct" from `describe()` alone and is
+      // left alone here).
+      reasoningMetadata: this.deps.grant?.reasoning !== undefined,
       promptCaching: false,
       vision: false,
       tokenCounting: false,
@@ -507,6 +544,19 @@ export class OpenAiCompatEngine implements ProviderPort {
           }
         : {}),
     };
+    // Custom-provider `reasoning.requestParams` (AC5), shallow-merged AFTER
+    // every base field above. `model`/`messages`/`stream`/`tools` are the
+    // fields the request's own shape and tool wiring depend on — silently
+    // dropped from the merge rather than allowed to override them. Every
+    // other key (e.g. MiniMax's `reasoning_split`, or an override of
+    // `max_tokens`) passes through.
+    const requestParams = grant.reasoning?.requestParams;
+    if (requestParams !== undefined) {
+      for (const [key, value] of Object.entries(requestParams)) {
+        if (key === "model" || key === "messages" || key === "stream" || key === "tools") continue;
+        payload[key] = value;
+      }
+    }
     // Base headers are unchanged for local ollama; an authenticated gateway
     // (OpenRouter) adds a bearer credential + any caller-supplied extra headers.
     const headers: Record<string, string> = { "content-type": "application/json" };
@@ -582,6 +632,26 @@ export class OpenAiCompatEngine implements ProviderPort {
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     const parser = new AnthropicSSEParser();
+    // Inline `<think>…</think>` reasoning (AC4): only constructed — and only
+    // ever fed `delta.content` — when the grant asks for it. Every other
+    // format leaves `delta.content` passing straight through as `text_delta`,
+    // unchanged from before this task.
+    const thinkTagParser = grant.reasoning?.format === "inline-tags" ? new ThinkTagParser() : undefined;
+    const pushThinkSegments = (segments: ReturnType<ThinkTagParser["push"]>): void => {
+      for (const segment of segments) {
+        if (segment.text.length === 0) continue;
+        bodies.push(
+          segment.kind === "reasoning" ? { kind: "reasoning_delta", text: segment.text } : { kind: "text_delta", text: segment.text },
+        );
+      }
+    };
+    // Flushed on every NORMAL termination path (`[DONE]`, a natural
+    // finish/EOF) — never on abort/timeout, which discard in-flight parser
+    // state instead of trying to salvage it from a connection that failed.
+    const flushThinkTagParser = (): void => {
+      if (thinkTagParser === undefined) return;
+      pushThinkSegments(thinkTagParser.flush());
+    };
     const cancelReader = (): void => {
       // Best-effort cleanup: the socket may already be closed/errored, and a
       // cancel() rejection here is never a second failure mode.
@@ -697,6 +767,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         // open past `[DONE]`, and this adapter must not wait for it to close.
         if (trimmed === "[DONE]") {
           sawDone = true;
+          flushThinkTagParser();
           flushPendingToolEnds();
           if (sawStart) {
             bodies.push({ kind: "model_end" });
@@ -749,14 +820,40 @@ export class OpenAiCompatEngine implements ProviderPort {
         // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
         // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
         // answer content. Surface it as `reasoning_delta`; plain models omit it.
-        const reasoning = asString(delta.reasoning) ?? asString(delta.reasoning_content);
-        if (reasoning !== undefined && reasoning.length > 0) {
-          bodies.push({ kind: "reasoning_delta", text: reasoning });
+        // Unconditional for every `reasoning.format` (AC5) — this is harmless
+        // when the fields are absent, and MiniMax's `reasoning_split: true`
+        // request param (via `requestParams`) makes it send exactly this shape.
+        const reasoningField = asString(delta.reasoning) ?? asString(delta.reasoning_content);
+        if (reasoningField !== undefined && reasoningField.length > 0) {
+          bodies.push({ kind: "reasoning_delta", text: reasoningField });
+        } else {
+          // MiniMax's `reasoning_details` (OpenRouter-shaped): an array of
+          // `{ text: "…", … }` objects; concatenate every item's `text` in
+          // order. Only consulted when `reasoning`/`reasoning_content` is
+          // ABSENT for this delta, so a provider that sends both never
+          // double-emits the same text.
+          const reasoningDetails = asArray(delta.reasoning_details);
+          if (reasoningDetails.length > 0) {
+            const concatenated = reasoningDetails
+              .map((item) => asString(asRecord(item).text))
+              .filter((text): text is string => text !== undefined && text.length > 0)
+              .join("");
+            if (concatenated.length > 0) {
+              bodies.push({ kind: "reasoning_delta", text: concatenated });
+            }
+          }
         }
 
         const content = asString(delta.content);
         if (content !== undefined && content.length > 0) {
-          bodies.push({ kind: "text_delta", text: content });
+          if (thinkTagParser !== undefined) {
+            // `format: "inline-tags"`: MiniMax's default shape puts reasoning
+            // INSIDE `delta.content` as `<think>…</think>` — route it through
+            // the parser instead of yielding it as `text_delta` verbatim.
+            pushThinkSegments(thinkTagParser.push(content));
+          } else {
+            bodies.push({ kind: "text_delta", text: content });
+          }
         }
 
         for (const rawToolCall of asArray(delta.tool_calls)) {
@@ -863,6 +960,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         // with a terminal `model_end` (emitted after any usage_update). `[DONE]`
         // always exits above, so only the bare-`finish_reason` case reaches here.
         if (sawStart && (sawDone || sawFinish)) {
+          flushThinkTagParser();
           bodies.push({ kind: "model_end" });
         }
       }
