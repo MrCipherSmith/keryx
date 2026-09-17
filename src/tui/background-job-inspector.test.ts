@@ -73,6 +73,15 @@ function fakeRegistry(overrides: Partial<JobRegistry> = {}): JobRegistry {
     promote: () => ({ ok: true }),
     kill: async () => ({ ok: true }),
     sweepAll: async () => {},
+    // flow 265: the inspector never delivers completions — it only kills
+    // through the same path the model-facing tool uses — so both are inert here.
+    drainUndelivered: () => [],
+    onCompletion: () => () => {},
+    // flow 266: same reasoning. The inspector reads through the STORE, not
+    // through the registry's cursor, and it is not an agent, so it never marks
+    // a task as delivered.
+    readOutputSince: () => ({ ok: true, output: "", nextCursor: 0, missed: 0, status: "running" }),
+    markObserved: () => {},
     ...overrides,
   };
 }

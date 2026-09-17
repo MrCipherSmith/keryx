@@ -5,8 +5,11 @@ import path from "node:path";
 import {
   githubBlobToRaw,
   importProjectSkills,
+  portableOriginRef,
+  stampImportHeader,
   updateProjectSkills,
 } from "./import-skills";
+import { verifyProjectSkill } from "./verify";
 
 let cwd: string;
 let source: string;
@@ -147,5 +150,112 @@ describe("updateProjectSkills", () => {
     );
     expect(written).toContain("new supper body");
     expect(written).not.toContain("old body");
+  });
+});
+
+describe("imported skill header", () => {
+  test("keeps Version (from metadata.version), Target, Status and Last Verified, and registers the author's version", async () => {
+    const dir = path.join(source, "skills", "review-house");
+    await mkdir(dir, { recursive: true });
+    const body = "# House reviewer\n\nbody stays byte-for-byte\n";
+    await writeFile(
+      path.join(dir, "SKILL.md"),
+      `---\nname: review-house\nmetadata:\n  version: "2.0.0"\n  category: review\n---\n\n${body}`,
+      "utf8",
+    );
+    await importProjectSkills({ projectRoot: cwd, from: path.join(source, "skills"), module: "review" });
+
+    const skillMd = path.join(cwd, ".metaproject", "project-skills", "review", "review-house", "SKILL.md");
+    const written = await readFile(skillMd, "utf8");
+    // `keryx skills verify` reads exactly these labels. Dropping them made every
+    // imported skill `stale` and unable to record a verification.
+    expect(written).toMatch(/^Version: 2\.0\.0$/m);
+    expect(written).toMatch(/^Target: review-house$/m);
+    expect(written).toMatch(/^Status: active$/m);
+    expect(written).toMatch(/^Last Verified: never$/m);
+    expect(written.endsWith(body)).toBe(true);
+
+    const manifest = JSON.parse(await readFile(path.join(cwd, ".metaproject", "metaproject.json"), "utf8"));
+    expect(manifest.modules.gdskills.projectSkillRegistry[0].version).toBe("2.0.0");
+
+    const report = await verifyProjectSkill(cwd, { input: "review/review-house" });
+    expect(report.signals.filter((signal) => signal.name.startsWith("metadata:") && signal.status === "fail")).toEqual([]);
+    expect(await readFile(skillMd, "utf8")).toMatch(/^Last Verified: 20\d\d-/m);
+  });
+
+  test("re-stamping replaces an earlier header instead of stacking a second one", () => {
+    const once = stampImportHeader("---\nname: x\n---\n# Body\n", "Version: 1.0.0\nStatus: active\n");
+    const twice = stampImportHeader(once, "Version: 2.0.0\nStatus: active\n");
+    expect(twice).toBe("---\nname: x\n---\nVersion: 2.0.0\nStatus: active\n# Body\n");
+  });
+
+  test("a Status: line in the author's body is left alone", () => {
+    const stamped = stampImportHeader("---\nname: x\n---\n# Body\nStatus: draft\n", "Version: 1.0.0\n");
+    expect(stamped).toContain("# Body\nStatus: draft\n");
+  });
+});
+
+describe("portableOriginRef", () => {
+  test("project-relative inside the project, ~/ under home, absolute otherwise", () => {
+    expect(portableOriginRef("/work/proj/docs/rule.md", "/work/proj", "/home/me")).toBe("docs/rule.md");
+    expect(portableOriginRef("/home/me/.overlay/skills/a/SKILL.md", "/work/proj", "/home/me")).toBe(
+      "~/.overlay/skills/a/SKILL.md",
+    );
+    expect(portableOriginRef("/opt/skills/a/SKILL.md", "/work/proj", "/home/me")).toBe("/opt/skills/a/SKILL.md");
+  });
+});
+
+describe("rules the imported skills cite", () => {
+  async function writeOverlaySkill(name: string, body: string): Promise<void> {
+    const dir = path.join(source, "skills", name);
+    await mkdir(dir, { recursive: true });
+    await writeFile(path.join(dir, "SKILL.md"), `---\nname: ${name}\nmetadata:\n  category: review\n---\n\n${body}\n`, "utf8");
+  }
+
+  test("copies a missing rule from the overlay, keeps a present one, reports one it cannot find", async () => {
+    await writeOverlaySkill("review-house", "Round contract: `core/house-round.mdc`. Style: `core/house-style.mdc`. Also `core/nowhere.mdc`.");
+    await mkdir(path.join(source, "rules", "core"), { recursive: true });
+    await writeFile(path.join(source, "rules", "core", "house-round.mdc"), "# round\n", "utf8");
+    await mkdir(path.join(cwd, ".metaproject", "rules", "core"), { recursive: true });
+    await writeFile(path.join(cwd, ".metaproject", "rules", "core", "house-style.mdc"), "# local style\n", "utf8");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    const byRef = Object.fromEntries(result.rules.map((rule) => [rule.ref, rule]));
+    expect(byRef["core/house-round.mdc"]?.status).toBe("imported");
+    expect(byRef["core/house-style.mdc"]?.status).toBe("present");
+    expect(byRef["core/nowhere.mdc"]?.status).toBe("unresolved");
+    expect(byRef["core/house-round.mdc"]?.citedBy).toEqual(["review-house"]);
+    expect(await readFile(path.join(cwd, ".metaproject", "rules", "core", "house-round.mdc"), "utf8")).toBe("# round\n");
+    // A present rule is the project's; the overlay never overwrites it.
+    expect(await readFile(path.join(cwd, ".metaproject", "rules", "core", "house-style.mdc"), "utf8")).toBe("# local style\n");
+  });
+
+  test("dry-run copies nothing, and a re-run over skipped skills still fetches their rules", async () => {
+    await writeOverlaySkill("review-house", "Round contract: `core/house-round.mdc`.");
+    await mkdir(path.join(source, "rules", "core"), { recursive: true });
+    await writeFile(path.join(source, "rules", "core", "house-round.mdc"), "# round\n", "utf8");
+    const target = path.join(cwd, ".metaproject", "rules", "core", "house-round.mdc");
+
+    const dry = await importProjectSkills({ projectRoot: cwd, from: source, module: "review", dryRun: true });
+    expect(dry.rules[0]?.status).toBe("would-import");
+    await expect(readFile(target, "utf8")).rejects.toThrow();
+
+    await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    await rm(target);
+    const rerun = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    expect(rerun.imported[0]?.status).toBe("skipped");
+    expect(rerun.rules[0]?.status).toBe("imported");
+  });
+
+  test("a rule name keryx ships is never copied from an overlay", async () => {
+    await writeOverlaySkill("review-house", "Git: `core/git-rules.mdc`.");
+    await mkdir(path.join(source, "rules", "core"), { recursive: true });
+    await writeFile(path.join(source, "rules", "core", "git-rules.mdc"), "# overlay git rules\n", "utf8");
+
+    const result = await importProjectSkills({ projectRoot: cwd, from: source, module: "review" });
+    // `keryx install` rewrites rules/core/<bundled name> on every run; an
+    // overlay copy there would be silently replaced by a different file.
+    expect(result.rules[0]).toMatchObject({ ref: "core/git-rules.mdc", status: "unresolved" });
+    expect(result.rules[0]?.reason).toContain("keryx install");
   });
 });

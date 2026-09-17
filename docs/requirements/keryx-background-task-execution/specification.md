@@ -1,8 +1,11 @@
 # Keryx Background Task Execution — Specification
 Version: 1.1.0
 
-Status: **P0 implemented** (2026-09-16, keryx flow 263); P1–P3 `spec ready` and
-not implemented. Sections describing P1/P2/P3 behaviour stay marked **planned**.
+Status: **fully implemented** — P0, P1 and P2 (2026-09-16, keryx flows 263, 265
+and 266, released in 0.2.108–0.2.110) and P3, the documentation sweep
+(keryx flow 267). No section of this document is `planned` any more; the one
+criterion the package deliberately does NOT meet is named in §7.
+
 What P0 shipped: the bounded yield and the supervised-task model (§4.1), the
 idle timeout and its config (§3, pulled forward from P1), the derived statuses
 and `killReason` (§5), and the phase-gated TUI list (§6). Deviations from this
@@ -11,6 +14,30 @@ than split into the `shell-task-*.ts` files of §2 (field names stay `jobId`
 while ids became `task-<n>-<pid>`), and the transcript's first 24 000 bytes are
 snapshotted separately so a short command's synchronous result is still capped
 from the START.
+
+What P1 shipped: exactly-once completion delivery (`observed`, `drainUndelivered`,
+`onCompletion` on the registry), the round-boundary notification, the hold for a
+session nobody can wake, and the capped auto-wake in both REPLs. Deviations,
+recorded in the flow 265 journal: delivery mode defaults to `hold` only when the
+session is unattended and to `wake` otherwise, rather than being a single global
+default; the notification enters history as a `user` message with
+`provenance: "tool"` and a fixed banner, so no new role was introduced; and
+`KERYX_SHELL_HOLD_MS=0` / `KERYX_SHELL_MAX_AUTO_WAKE=0` are honoured as
+"disabled" rather than falling back to the default, so an operator can switch
+either mechanism off outright.
+
+What P2 shipped: the three task tools of §4.2, the invocation context of §4.3
+(`invoke(input, ctx)`, with `executeCall` passing the turn's signal), operator
+demote, and the side-worker rules of D-16. Deviations, recorded in the flow 266
+journal: `shell_task_output` takes an ABSOLUTE cursor rather than a buffer index
+— the registry now counts bytes ever dropped, because `readCursor` is rebased by
+truncation and a cursor handed out as an index would silently change meaning;
+`/demote` is a slash command in both shells (a pure parser in the command
+registry plus one `demoteTask` effect beside the registry), and it is in the
+busy-dispatch allow-list, since a turn blocked on its own command is exactly when
+it is wanted; and `SIDE_WORKER_DENIED_TOOL_NAMES` / `REPEATABLE_TOOL_NAMES` are
+now exported, because AC9 and AC11 are about what those sets CONTAIN and a
+criterion nobody can observe is one nobody can check.
 
 ## 1. Module identity
 
@@ -242,6 +269,17 @@ completion reminder). The delivery rule is:
 | AC11 | A side worker cannot kill or wait on a main-session task, cannot advance its cursor, and cannot suppress its notification. (D-16) | P2 |
 | AC12 | With `maxConcurrent` background tasks running, a short command still runs, and running tasks never exceed `maxConcurrent + 1`. (D-12) | P0 |
 | AC13 | An aborted turn returns from a yield or `shell_task_wait` promptly and leaves the tasks running. (D-15) | P2 |
+
+Shipped so far: AC1, AC2, AC6 and AC12 in P0, together with AC3, whose idle
+timeout was pulled forward into that phase; AC4, AC8, AC9 and AC10 in P1; AC11
+and AC13 in P2. AC7 is re-proved by the full suite at the end of every phase.
+
+AC5 is the one to read carefully: P2 shipped the DEMOTE half (`/demote
+<task_id>`, in both shells and while the turn is busy) and the abort half that
+releases a wait without killing the task, but NOT "the operator can interrupt a
+wait" in the sense S4/M7 measure — a queued message pre-empting a running wait.
+That mechanism remains unbuilt and both rows say so. The proof for each criterion
+is named in [metrics-and-validation.md](metrics-and-validation.md).
 
 ## 8. Migration and compatibility
 

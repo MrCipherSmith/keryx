@@ -22,7 +22,8 @@ import {
 } from "../lib/provider-config";
 import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
-import { envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
+import { resolveCallerSession } from "../lib/caller-session";
+import { envWithSavedApiKeys } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
@@ -726,10 +727,14 @@ function runProvidersList(args: string[]): void {
  * what WOULD happen; it never enrols anybody.
  */
 function runCrossFamily(args: string[]): void {
-  const decision = crossFamilyReviewForSession(args.includes("--opt-in"), {
-    providerId: optionValue(args, "--session-provider"),
-    modelId: optionValue(args, "--session-model"),
-  });
+  const decision = crossFamilyReviewForSession(
+    args.includes("--opt-in"),
+    {
+      providerId: optionValue(args, "--session-provider"),
+      modelId: optionValue(args, "--session-model"),
+    },
+    { fromShellConfig: args.includes("--from-shell-config") },
+  );
 
   if (args.includes("--json")) {
     console.log(JSON.stringify({ cross_family_review: decision }, null, 2));
@@ -748,11 +753,14 @@ function runCrossFamily(args: string[]): void {
  * the operator opted in, and the session it is running on — and never enumerates
  * providers itself.
  *
- * `session` fields are optional and fall back to the selection `keryx shell`
- * persisted, matching what `sessionModelFromArgs` in `review.ts` already does
- * for `keryx review tier`. So the two model-selection seams compose: `review
+ * `session` fields are optional and resolve through `resolveCallerSession`,
+ * exactly as `keryx review tier` resolves its session: `KERYX_SESSION_PROVIDER`/
+ * `KERYX_SESSION_MODEL`, else nothing — the selection `keryx shell` persisted
+ * only with `fromShellConfig`. So the two model-selection seams compose: `review
  * tier` answers "how capable a model", this answers "whose model", and both read
- * the same session.
+ * the same session. The persisted selection is not the default because it is not
+ * the caller: from Claude Code it classified a Claude-authored change as the
+ * family `keryx shell` was last pointed at.
  *
  * Never throws, never makes a network call, and returns a decision with a stated
  * reason on every path.
@@ -760,14 +768,17 @@ function runCrossFamily(args: string[]): void {
 export function crossFamilyReviewForSession(
   optIn: boolean,
   session: { providerId?: string | undefined; modelId?: string | undefined } = {},
+  options: { fromShellConfig?: boolean; env?: Readonly<Record<string, string | undefined>> } = {},
 ): CrossFamilyReviewDecision {
-  const config = loadShellConfig();
+  const resolved = resolveCallerSession({
+    flagProvider: session.providerId,
+    flagModel: session.modelId,
+    fromShellConfig: options.fromShellConfig,
+    env: options.env,
+  });
   return decideCrossFamilyReview({
     optIn,
-    session: {
-      providerId: (session.providerId ?? config.provider ?? "").trim(),
-      modelId: (session.modelId ?? config.model ?? "").trim(),
-    },
+    session: { providerId: resolved.providerId, modelId: resolved.modelId },
     configured: configuredProviders(envWithOAuthAccess(envWithSavedApiKeys())),
   });
 }
@@ -815,7 +826,7 @@ function printProvidersHelp(): void {
 
 Usage:
   keryx providers list [--json]
-  keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--json]
+  keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
 
 Commands:
   list          Providers this operator has configured, and the family of each

@@ -64,6 +64,7 @@ function reportMcpProblems(runtime: McpRuntime): void {
 import { emitBackgroundJob } from "../tui/job-bridge";
 import { emitSubagentFleet } from "../tui/subagent-bridge";
 import { approveExternalSpawn, externalRunBridgeObserver } from "../tui/external-bridge";
+import { exportCallerSession } from "../lib/caller-session";
 import { collapseHome } from "../lib/statusbar";
 import { LiveMarkdownBlock } from "../lib/live-render";
 import { applyThemeId, formatThemeList, getThemeId, parseThemeId, persistThemeId, themeLabel } from "../tui/theme";
@@ -104,12 +105,16 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import packageJson from "../../package.json" with { type: "json" };
-import { describeUnavailableCommand, renderCommandHelp } from "./agent-commands";
+import { describeUnavailableCommand, parseDemoteCommand, renderCommandHelp } from "./agent-commands";
+// Flow 266 (AC8): the demote EFFECT lives with the registry, not with either
+// shell, so both dispatch into the same rule instead of growing two.
+import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import {
   type AgentDeps,
   type AgentIO,
   buildAgentSystemInstruction,
   resolveAgentMaxRounds,
+  resolveMaxAutoWake,
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
@@ -969,6 +974,40 @@ async function runAgentRepl(
     return next.done ? undefined : next.value;
   };
 
+  // Flow 265 (AC7): the MAIN loop's consumer — the next operator line OR the
+  // next finished task, whichever comes first, so an idle REPL reports a
+  // completion without a keystroke. The approval prompts keep calling the bare
+  // `readLine` above: a finished task must never answer a y/N question.
+  type LoopInput = { kind: "line"; line: string } | { kind: "eof" } | { kind: "completion" };
+  let completionWaiters: Array<() => void> = [];
+  // The in-flight line read SURVIVES a lost race — `iterator.next()` consumes
+  // from stdin when called, so re-reading would drop what was typed meanwhile.
+  let pendingLine: Promise<{ kind: "line"; line: string } | { kind: "eof" }> | undefined;
+  const readLineOrCompletion = async (): Promise<LoopInput> => {
+    pendingLine ??= readLine().then((line) =>
+      line === undefined ? ({ kind: "eof" } as const) : ({ kind: "line", line } as const),
+    );
+    if (deps.jobRegistry === undefined) {
+      const settled = await pendingLine;
+      pendingLine = undefined;
+      return settled;
+    }
+    const completion = new Promise<{ kind: "completion" }>((resolve) => {
+      completionWaiters.push(() => resolve({ kind: "completion" }));
+    });
+    const winner = await Promise.race([pendingLine, completion]);
+    if (winner.kind !== "completion") {
+      pendingLine = undefined;
+    }
+    return winner;
+  };
+  let consecutiveAutoWakes = 0;
+  deps.jobRegistry?.onCompletion(() => {
+    const waiters = completionWaiters;
+    completionWaiters = [];
+    for (const wake of waiters) wake();
+  });
+
   // Per-turn token usage (last `usage_update` the provider reported), printed
   // once when the turn ends.
   let lastUsage: NormalizedUsage | undefined;
@@ -1375,7 +1414,37 @@ async function runAgentRepl(
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
-    const line = await readLine();
+    const input = await readLineOrCompletion();
+    if (input.kind === "completion") {
+      // A task finished while nobody was typing. The cap is what keeps a chain
+      // of task-starts-task from running the machine unattended; an operator
+      // line resets it below.
+      if (consecutiveAutoWakes >= resolveMaxAutoWake()) {
+        agentIo.onSystem?.(
+          "◇ a shell task finished; automatic wakes are capped, so it will be reported with your next message.\n",
+        );
+        continue;
+      }
+      consecutiveAutoWakes += 1;
+      out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
+      startSpinner();
+      try {
+        await runAgentTurn(agentIo, deps, history, "", {
+          origin: "task-notification",
+          ...(slateSession !== undefined ? { slateSession } : {}),
+        });
+      } finally {
+        endBlock();
+        stopSpinner();
+      }
+      flushSessionCheckpoint();
+      out(`\n${GUTTER}${turnSeparator()}\n\n`);
+      rich.printPrompt();
+      continue;
+    }
+    const line = input.kind === "line" ? input.line : undefined;
+    // An operator line means a human is here: the auto-wake budget starts over.
+    consecutiveAutoWakes = 0;
     if (line === undefined) {
       // SLATE-5 close trigger: shell exit (end of input / Ctrl-D).
       await closeSlateSession(slateSession, mintTimestampAttemptId);
@@ -1482,6 +1551,29 @@ async function runAgentRepl(
           } else {
             agentIo.onSystem?.(
               `Compacted −${packed.result.removed} context msgs · archive ${live.summary.archiveMessageCount} · compact×${live.summary.compactCount}\n`,
+            );
+          }
+        }
+      } else if (command === "/demote") {
+        // Flow 266 (AC8). Parse and effect are both shared with the TUI; only
+        // the reporting is this shell's own. Demote never stops the command —
+        // that is the difference between this and killing it, and the message
+        // says so, because an operator who thought they had stopped a build
+        // would not go looking for its output later.
+        const parsed = parseDemoteCommand(rest);
+        if (!parsed.ok) {
+          agentIo.onSystem?.(`${parsed.reason}\n`);
+        } else if (deps.jobRegistry === undefined) {
+          agentIo.onSystem?.("This session tracks no shell tasks, so there is nothing to demote.\n");
+        } else {
+          const demoted = demoteTask(deps.jobRegistry, parsed.taskId);
+          if (!demoted.ok) {
+            agentIo.onSystem?.(`${demoted.error}\n`);
+          } else {
+            const overCap =
+              demoted.overCap !== undefined ? ` Background tasks are over the cap; also running: ${demoted.overCap}.` : "";
+            agentIo.onSystem?.(
+              `Task ${parsed.taskId} keeps running, now in the background — it was NOT stopped.${overCap}\n`,
             );
           }
         }
@@ -2149,6 +2241,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // `.dir`-only shape `buildInteractiveAgentTools` still wants is derived
       // locally right below, not threaded in from the caller.
       const getSessionDir = (): string | undefined => getSlateSession()?.dir;
+      // Rebuilt on launch and on every `/model` switch, so this is the live session.
+      exportCallerSession(sel.provider, sel.model);
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
       let orient: string;
       try {
@@ -2465,6 +2559,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
 
     if (agentMode) {
       // Agent mode: give the model read-only hands + metaproject orientation.
+      exportCallerSession(provider, model);
       const agentProvider = baseFactory(provider, model, baseUrl);
       let orient: string;
       try {

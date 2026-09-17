@@ -20,7 +20,7 @@
 // catch.
 
 import { afterEach, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { reviewCommand } from "./review";
@@ -73,6 +73,11 @@ async function fixtureDir(count = 1): Promise<void> {
         created_at: "2026-08-30T00:00:00Z",
       })),
     ),
+    "utf8",
+  );
+  await writeFile(
+    path.join(ROOT, "pull.json"),
+    JSON.stringify({ number: 7, state: "open", merged: false, merged_at: null, head: { sha: SHA } }),
     "utf8",
   );
   await writeFile(path.join(ROOT, "pull-reviews.json"), "[]", "utf8");
@@ -311,5 +316,66 @@ test("`comments collect --sha` refuses a value that is not a commit SHA", async 
   await collect(["--sha", "HEAD"]);
 
   expect(output()).toContain("is not a commit SHA");
+  expect(process.exitCode).toBe(1);
+});
+
+// --- posting needs a managed review -----------------------------------------
+//
+// A plain "review this PR" is lightweight: report-only. It still ended by posting
+// replies, because nothing between the skill's checklist and the pull request
+// asked whether the review was managed. `--review` / `--result` is that evidence.
+
+/** The same reply as `reply()`, but for real: no `--dry-run`. */
+async function postReply(extra: string[]): Promise<void> {
+  await reviewCommand([
+    "comments",
+    "reply",
+    "--repo",
+    "o/r",
+    "--pr",
+    "7",
+    "--sha",
+    SHA,
+    "--self",
+    "us",
+    "--final",
+    "--fixtures",
+    ROOT,
+    "--outcomes",
+    path.join(ROOT, "outcomes.json"),
+    ...extra,
+  ]);
+}
+
+async function managedPackage(id: string, target: Record<string, unknown>): Promise<void> {
+  const dir = path.join(ROOT, ".metaproject", "reviews", id);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "manifest.json"), JSON.stringify({ id, mode: "review-flow", target }), "utf8");
+}
+
+test("posting without --review or --result is refused: a lightweight review answers nobody", async () => {
+  await fixtureDir();
+  await postReply([]);
+
+  expect(output()).toContain("posting is for a MANAGED review");
+  expect(output()).not.toContain("POST ");
+  expect(process.exitCode).toBe(1);
+});
+
+test("--review naming this pull request's managed package lets the pass post", async () => {
+  await fixtureDir();
+  await managedPackage("r-7", { kind: "pr", ref: "https://github.com/o/r/pull/7", repository: "o/r" });
+  await postReply(["--review", "r-7"]);
+
+  expect(output()).toContain("posted: 1");
+  expect(process.exitCode).toBe(0);
+});
+
+test("--review naming another pull request's package is refused", async () => {
+  await fixtureDir();
+  await managedPackage("r-8", { kind: "pr", ref: "https://github.com/o/r/pull/8" });
+  await postReply(["--review", "r-8"]);
+
+  expect(output()).toContain("not this pull request");
   expect(process.exitCode).toBe(1);
 });

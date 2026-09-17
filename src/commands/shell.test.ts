@@ -846,6 +846,11 @@ test("shellCommand wires web_search into the agent TUI tool set", async () => {
     "shell_exec",
     "shell_job_kill",
     "shell_job_output",
+    // Flow 266: the task tools proper; the two `shell_job_*` names stay for one
+    // release as deprecated aliases, so a session offers both spellings.
+    "shell_task_kill",
+    "shell_task_output",
+    "shell_task_wait",
     "skill_load",
     "skills_catalog",
     "slate_read",
@@ -1566,5 +1571,52 @@ describe("--deny-tools", () => {
     expect(flags.wantTui).toBe(false);
     expect(flags.permissionModeFlag).toBe("auto");
     expect(flags.denyTools).toEqual(["web_search"]);
+  });
+});
+
+// --- flow 265 AC7/AC8 — readline completion wake (source-text audit) -----
+//
+// RED: none of this wiring exists yet. `runAgentRepl` is explicitly "NOT
+// unit-tested" (its own doc comment) and has no injection seam for its single
+// line consumer, so this follows the exact precedent the flow-163/flow-173
+// audits above already set in this file: `readFileSync` the real source and
+// assert on literals. These are SOURCE-TEXT claims, not behavioural ones — an
+// audit cannot see a rule deleted from between the lines it matches, so the
+// exactly-once and message-shape guarantees are proven by execution in
+// `background-job-registry.test.ts` and `agent-task-notification.test.ts`
+// instead. What is audited here is only what has no other seam: that the
+// single line consumer races completions, and that the wake cap exists.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. The session-scoped `jobRegistry` (already declared in the agent-mode
+//      branch for the exit sweep) gains a `.onCompletion(...)` subscription.
+//   2. `readLine` becomes a race between the next input line and the next
+//      completion, so an idle REPL starts a turn without a keystroke.
+//   3. A completion-started turn passes `origin: "task-notification"` in
+//      `runAgentTurn`'s options; an operator line does not.
+//   4. Consecutive completion-started turns are capped by `resolveMaxAutoWake`
+//      and the counter is reset to 0 by any operator line.
+describe("flow 265 AC7/AC8 — readline wakes on a task completion (source-text audit)", () => {
+  const shellSourceAc7Wake = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+
+  test("the session-scoped registry gets a completion subscription", () => {
+    expect(shellSourceAc7Wake).toContain(".onCompletion(");
+  });
+
+  test("the single line consumer races the next input line against the next completion", () => {
+    const start = shellSourceAc7Wake.indexOf("const readLine = async (");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = shellSourceAc7Wake.slice(start, start + 1_400);
+    expect(block).toContain("Promise.race");
+  });
+
+  test("a completion-started turn is marked with origin: 'task-notification'", () => {
+    expect(shellSourceAc7Wake).toMatch(/origin:\s*"task-notification"/);
+  });
+
+  test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
+    expect(shellSourceAc7Wake).toContain("resolveMaxAutoWake");
+    // A counter that is only ever incremented is not a cap: pin the reset too.
+    expect(shellSourceAc7Wake).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
   });
 });

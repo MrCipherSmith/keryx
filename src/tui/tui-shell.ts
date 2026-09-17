@@ -39,7 +39,7 @@
 // is defensive: it returns `false` (caller falls back to the readline shell)
 // whenever there is no TTY, the package is absent, or the renderer fails to init.
 import type { AgentDeps, AgentIO } from "../commands/agent";
-import { runAgentTurn } from "../commands/agent";
+import { resolveMaxAutoWake, runAgentTurn } from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
@@ -104,8 +104,12 @@ import {
   filterCommands,
   findAgentCommand,
   parseDelegateCommand,
+  parseDemoteCommand,
   renderCommandHelp,
 } from "../commands/agent-commands";
+// Flow 266 (AC8): the demote EFFECT lives with the registry so both shells
+// dispatch into one rule rather than growing two.
+import { demoteTask } from "../harness/tool/builtin/background-job-registry";
 import {
   applyThemeId,
   formatThemeList,
@@ -243,7 +247,25 @@ const SESSION_PREVIEW_MESSAGE_COUNT = 200;
  * side-worker access via `risk === "read"` alone. `shell_job_output` stays
  * available — it is genuinely read-only in effect.
  */
-const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);
+export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
+  "shell_job_kill",
+  // Flow 266 (D-16, AC9). Two hazards a side worker must not have:
+  //
+  // `shell_task_kill` and `shell_task_wait` act on the MAIN session's tasks —
+  // one ends them, the other blocks on them — and a read-only helper has no
+  // business doing either.
+  //
+  // `shell_job_output` is subtler and is the reason this list exists rather
+  // than a `risk === "read"` filter alone: its cursor is implicit shared state,
+  // so a side worker reading it would consume output the main session has not
+  // seen. `shell_task_output` stays available because its cursor is explicit
+  // (`since`), and its side-worker copy is built with observer "side", so it
+  // also cannot mark a task delivered and make the main session's notification
+  // vanish.
+  "shell_task_kill",
+  "shell_task_wait",
+  "shell_job_output",
+]);
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
 function parseGitHubRemote(remote: string): string | undefined {
@@ -4472,9 +4494,18 @@ export async function launchTuiAgentShell(opts: {
 
     // Run a submitted line: a slash command, an unknown-slash notice, a main turn,
     // or (when main is busy) an automatic side worker — no special command needed.
-    const runLine = (line: string): void => {
-      if (line.length === 0) {
+    // Flow 265 (AC7/AC8): `origin` lets a completion reuse this ONE turn
+    // dispatch instead of growing a second one. A notification-started turn
+    // carries no operator text, so it skips the empty-line guard and the user
+    // echo — there is nobody to echo.
+    let consecutiveAutoWakes = 0;
+    const runLine = (line: string, origin: "operator" | "task-notification" = "operator"): void => {
+      if (line.length === 0 && origin === "operator") {
         return;
+      }
+      if (origin === "operator") {
+        // A human is here: the auto-wake budget starts over.
+        consecutiveAutoWakes = 0;
       }
       const displayLine = summarizeSubmittedLine(line);
 
@@ -4497,6 +4528,25 @@ export async function launchTuiAgentShell(opts: {
           isMcpConsumer: isMcpConsumerCommand(line),
         });
         switch (decision) {
+          case "demote": {
+            // Runs WHILE the main turn is busy, on purpose: a turn blocked on
+            // its own command is when an operator wants this. It never touches
+            // the turn — the task moves to the background and keeps running.
+            const parsed = parseDemoteCommand(line.trim().replace(/^\/\S+\s*/, ""));
+            if (!parsed.ok) {
+              io.onSystem?.(`${parsed.reason}\n`);
+            } else if (deps.jobRegistry === undefined) {
+              io.onSystem?.("This session tracks no shell tasks, so there is nothing to demote.\n");
+            } else {
+              const demoted = demoteTask(deps.jobRegistry, parsed.taskId);
+              io.onSystem?.(
+                demoted.ok
+                  ? `Task ${parsed.taskId} keeps running, now in the background — it was NOT stopped.\n`
+                  : `${demoted.error}\n`,
+              );
+            }
+            return;
+          }
           case "exit": {
             // Cancel synchronously; close/sweep may block (SLATE-5, F-002).
             foregroundOperation.cancel("shell exit");
@@ -4712,6 +4762,22 @@ export async function launchTuiAgentShell(opts: {
             r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
+          return;
+        }
+        if (command.name === "/demote") {
+          const parsed = parseDemoteCommand(line.trim().replace(/^\/\S+\s*/, ""));
+          if (!parsed.ok) {
+            io.onSystem?.(`${parsed.reason}\n`);
+          } else if (deps.jobRegistry === undefined) {
+            io.onSystem?.("This session tracks no shell tasks, so there is nothing to demote.\n");
+          } else {
+            const demoted = demoteTask(deps.jobRegistry, parsed.taskId);
+            io.onSystem?.(
+              demoted.ok
+                ? `Task ${parsed.taskId} keeps running, now in the background — it was NOT stopped.\n`
+                : `${demoted.error}\n`,
+            );
+          }
           return;
         }
         if (command.name === "/clear" || command.name === "/new") {
@@ -5281,6 +5347,7 @@ export async function launchTuiAgentShell(opts: {
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
       void runAgentTurn(foregroundIo, deps, history, line, {
         signal: foregroundOperation.signal,
+        ...(origin === "task-notification" ? { origin: "task-notification" as const } : {}),
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
@@ -5327,6 +5394,33 @@ export async function launchTuiAgentShell(opts: {
         }
       });
     };
+
+    // --- flow 265 (AC7/AC8): wake on a finished task, only when idle ---------
+    //
+    // Subscribed HERE rather than beside the store's `setBackgroundJobListener`
+    // (which runs far earlier): `runLine` is defined above this point, and a
+    // listener registered before it would close over a binding that is not
+    // initialised yet.
+    //
+    // Idle means both halves — nothing running in the foreground AND nothing
+    // the operator queued. A queued message is the real next step and the
+    // settle handlers keep draining it first; a notification that jumped that
+    // queue would answer a question nobody asked yet.
+    deps.jobRegistry?.onCompletion(() => {
+      const busy = chrome.isBusy() || foregroundOperation.isActive;
+      const idle = !busy && mainQueue.length === 0;
+      if (!idle) {
+        return;
+      }
+      if (consecutiveAutoWakes >= resolveMaxAutoWake()) {
+        io.onSystem?.(
+          "◇ a shell task finished; automatic wakes are capped, so it will be reported with your next message.\n",
+        );
+        return;
+      }
+      consecutiveAutoWakes += 1;
+      runLine("", "task-notification");
+    });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
     // The mode itself is `createBlockNavController` (transcript-blocks.ts); all

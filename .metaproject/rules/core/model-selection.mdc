@@ -155,17 +155,33 @@ The rules `assignTier` applies, in the order it applies them:
 Floors are applied after downgrades, so "at least `deep`" means at least: a
 blast-radius round over a twelve-line diff is still a blast-radius round.
 
-The session's provider/model come from the selection `keryx shell` persisted, and
-the candidate set from live provider detection. A caller that already holds
-either passes `--session-provider`/`--session-model` and `--catalog` instead of
-paying for the lookup. **There is no `--tier` flag, and there will not be**:
-accepting a hand-written tier would put the arithmetic straight back in the
-caller's head.
+The session's provider/model come from the **caller**: `--session-provider`/
+`--session-model`, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL` exported by
+the host (`keryx shell` exports its live session to every `shell_exec` command). The selection `keryx shell` persisted is read only with
+`--from-shell-config`: it is whatever `keryx shell` was last pointed at, not the
+session running the orchestrator, and as a silent default it pinned a `keryx
+shell` model into dispatches authored from Claude Code. The candidate set comes
+from live provider detection (`--catalog` to supply it). **There is no `--tier`
+flag, and there will not be**: accepting a hand-written tier would put the
+arithmetic straight back in the caller's head.
 
-When nothing can be worked out — no persisted session, an unrankable catalogue,
-an unrankable session model — the block says `inherit: true` and the dispatch
-runs on the **caller's own model**. Exit status is still 0: a fallback is an
-answer, not a failure.
+## Adaptive: `inherit: true`
+
+A model is named only when discovery assigned one **other than** the session's
+(`tier_resolution: discovered`). In every other case — no session named, ranking
+refused, or the tier resolving to the session's own model — the block carries the
+tier and `inherit: true`, and the **host** resolves it against the models its own
+dispatch tool offers:
+
+| Tier | Host dispatches on |
+|---|---|
+| `standard` | its session model |
+| `deep` | its most capable model class, else the session model |
+| `light` | its lighter/faster model class, else the session model |
+
+This is how the tier reaches runtimes keryx cannot enumerate (a Claude Code
+`Agent`, a Codex subagent). `light` there is the tier the signals assigned, not a
+fallback. Exit status is always 0.
 
 ## Recording the decision
 
@@ -201,5 +217,6 @@ recording them is one copy rather than four decisions.
   the resolution code.
 - Take the candidate set from runtime detection. Never from a literal list of
   what exists.
-- When the candidates cannot be ranked, keep the session model. Never substitute
-  a cheaper one.
+- When the candidates cannot be ranked, the block is adaptive (`inherit: true`).
+  The host never goes below its session model for `standard` or `deep`, and takes
+  a lighter class only for a `light` tier.

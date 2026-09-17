@@ -35,6 +35,8 @@ export interface SkillFrontmatter {
   readonly triggers?: string[];
   /** `metadata.category`, whatever shape it was declared in. */
   readonly metadataCategory?: string;
+  /** `metadata.version`, as the skill's author declared it. */
+  readonly metadataVersion?: string;
   /**
    * `metadata.compatible_harnesses`, split into individual harness names
    * regardless of whether the source wrote a quoted comma-separated scalar
@@ -94,6 +96,7 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
   let inTriggers = false;
   let inMetadata = false;
   let metadataCategory: string | undefined;
+  let metadataVersion: string | undefined;
   let compatibleHarnesses: string[] | undefined;
   /** True on the line right after an empty `compatible_harnesses:`, looking for a block list next. */
   let awaitingHarnessesList = false;
@@ -167,6 +170,11 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
           metadataCategory = stripSkillFieldQuotes(categoryMatch[1].trim());
           continue;
         }
+        const versionMatch = /^\s+version:\s*(.+)$/.exec(line);
+        if (versionMatch !== null && versionMatch[1] !== undefined) {
+          metadataVersion = stripSkillFieldQuotes(versionMatch[1].trim());
+          continue;
+        }
         const harnessesMatch = /^\s+compatible_harnesses:\s*(.*)$/.exec(line);
         if (harnessesMatch !== null) {
           const inline = parseInlineHarnesses((harnessesMatch[1] ?? "").trim());
@@ -188,6 +196,7 @@ export function parseSkillFrontmatter(content: string): SkillFrontmatter {
     ...(description !== undefined ? { description } : {}),
     ...(triggers.length > 0 ? { triggers } : {}),
     ...(metadataCategory !== undefined ? { metadataCategory } : {}),
+    ...(metadataVersion !== undefined ? { metadataVersion } : {}),
     ...(compatibleHarnesses !== undefined ? { compatibleHarnesses } : {}),
   };
 }
