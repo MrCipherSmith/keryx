@@ -1314,6 +1314,75 @@ test("runAgentTurn does not call onReasoning when the model emits no reasoning",
   expect(called).toBe(false);
 });
 
+// --- flow 268 T11: reasoning on NormalizedMessage (AC6) ---
+test("flow 268 T11: reasoning_delta + reasoning_replay + text attach reasoning to the assistant message", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking " },
+      { kind: "reasoning_replay", replay: { providerId: "anthropic", kind: "thinking_signature", data: "sig-abc" } },
+      { kind: "reasoning_delta", text: "more" },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "go");
+  const assistant = history.find((m) => m.role === "assistant");
+  expect(assistant?.reasoning?.text).toBe("thinking more");
+  expect(assistant?.reasoning?.replay).toEqual([
+    { providerId: "anthropic", kind: "thinking_signature", data: "sig-abc" },
+  ]);
+});
+
+test("flow 268 T11: reasoning on a tool-call-only round attaches to that round's assistant message", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "deciding" },
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "get_cwd" },
+      { kind: "tool_call_end", toolCallId: "c1", input: "{}" },
+      { kind: "model_end" },
+    ],
+    [{ kind: "text_delta", text: "done" }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "покажи cwd");
+  const toolCallMsg = history.find((m) => m.role === "assistant" && (m.toolCalls?.length ?? 0) > 0);
+  expect(toolCallMsg?.reasoning?.text).toBe("deciding");
+});
+
+test("flow 268 T11: an assistant message with no reasoning carries no `reasoning` key", async () => {
+  const { provider } = scriptedProvider([[{ kind: "text_delta", text: "hi" }, { kind: "model_end" }]]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn({ write: () => {} }, deps, history, "go");
+  const assistant = history.find((m) => m.role === "assistant");
+  expect(assistant).toBeDefined();
+  expect(Object.prototype.hasOwnProperty.call(assistant ?? {}, "reasoning")).toBe(false);
+});
+
 test("buildAgentSystemInstruction embeds an orient block when present, falls back when absent", () => {
   const withOrient = buildAgentSystemInstruction("MODULE MAP: a→b");
   expect(withOrient).toContain("MODULE MAP: a→b");

@@ -24,11 +24,13 @@ import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
 import type {
+  MessageReasoning,
   NormalizedMessage,
   NormalizedRequest,
   NormalizedToolCall,
   NormalizedUsage,
   ProviderPort,
+  ProviderReplayItem,
 } from "../harness/provider/types";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
 import { readSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
@@ -1577,6 +1579,15 @@ async function runAgentTurnCore(
     let assistantMessage: NormalizedMessage | undefined;
     let reasoningText = "";
     let reasoningFlushed = false;
+    // flow 268 T11: redacted flag, opaque replay items (never redacted/edited —
+    // see `ProviderReplayItem`), and the reasoning span's wall-clock bounds
+    // (cheap: `now()` is always available, defaulting to an ISO clock) for
+    // `MessageReasoning.durationMs`. `io.onReasoning` behaviour is UNCHANGED —
+    // `flushReasoning` below still only fires on non-empty `reasoningText`.
+    let reasoningRedacted = false;
+    const reasoningReplay: ProviderReplayItem[] = [];
+    let reasoningStartedAt: string | undefined;
+    let reasoningEndedAt: string | undefined;
     const flushReasoning = (): void => {
       if (reasoningText.length > 0 && !reasoningFlushed) {
         io.onReasoning?.(reasoningText);
@@ -1594,8 +1605,21 @@ async function runAgentTurnCore(
           system("\n[stopped] Model turn interrupted by user.\n");
           return {};
         }
+        if (
+          reasoningStartedAt !== undefined &&
+          reasoningEndedAt === undefined &&
+          event.kind !== "reasoning_delta" &&
+          event.kind !== "reasoning_replay"
+        ) {
+          reasoningEndedAt = now(); // first non-reasoning event closes the span
+        }
         if (event.kind === "reasoning_delta") {
+          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
           reasoningText += event.text ?? "";
+          if (event.redacted === true) reasoningRedacted = true;
+        } else if (event.kind === "reasoning_replay") {
+          if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+          if (event.replay !== undefined) reasoningReplay.push(event.replay);
         } else if (event.kind === "text_delta") {
           flushReasoning(); // reasoning precedes the answer → surface it first
           const text = event.text ?? "";
@@ -1642,6 +1666,40 @@ async function runAgentTurnCore(
     }
 
     flushReasoning(); // reasoning-only round (e.g. before a tool call) still surfaces it
+
+    // flow 268 T11 (AC6): durable counterpart of the `onReasoning` forwarding
+    // above — carried on the round's assistant message (below, or the
+    // tool-call-only message further down) so a saved/resumed session and a
+    // compacted suffix keep it. `undefined` (not `{}`) when the round produced
+    // neither text nor a redacted marker nor replay items, matching every
+    // pre-existing message that never had reasoning.
+    const roundReasoning: MessageReasoning | undefined =
+      reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
+        ? {
+            ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
+            ...(reasoningRedacted ? { redacted: true } : {}),
+            ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
+            ...(reasoningStartedAt !== undefined && reasoningEndedAt !== undefined
+              ? (() => {
+                  const startMs = Date.parse(reasoningStartedAt);
+                  const endMs = Date.parse(reasoningEndedAt);
+                  return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs
+                    ? { durationMs: endMs - startMs }
+                    : {};
+                })()
+              : {}),
+          }
+        : undefined;
+    // A text (or text+tool) round already has its message in `history` — attach
+    // now via the live reference. A tool-call-only round attaches it below,
+    // where that message is created; a round with reasoning but no text and no
+    // tool calls has no assistant message to attach to at all (it falls into
+    // the toolless-finish path below) and the reasoning is dropped from
+    // history — `io.onReasoning` above is the only trace of it, same as before
+    // this change.
+    if (assistantMessage !== undefined && roundReasoning !== undefined) {
+      assistantMessage.reasoning = roundReasoning;
+    }
 
     if (assistantText.length > 0) {
       io.onAssistantText?.(assistantText);
@@ -1792,8 +1850,16 @@ async function runAgentTurnCore(
     }));
     if (assistantMessage !== undefined) {
       assistantMessage.toolCalls = emittedCalls;
+      // `roundReasoning` (if any) was already attached to this message above.
     } else {
-      history.push({ role: "assistant", content: "", provenance: "model", toolCalls: emittedCalls, ts: now() });
+      history.push({
+        role: "assistant",
+        content: "",
+        provenance: "model",
+        toolCalls: emittedCalls,
+        ts: now(),
+        ...(roundReasoning !== undefined ? { reasoning: roundReasoning } : {}),
+      });
     }
 
     // Execute each tool call and append its result, then loop to re-request.
@@ -2235,10 +2301,28 @@ async function finishWithBudgetSummary(
   let assistantText = "";
   let reasoningText = "";
   let reasoningFlushed = false;
+  // flow 268 T11: same accumulation as `runAgentTurnCore` — see its comments.
+  let reasoningRedacted = false;
+  const reasoningReplay: ProviderReplayItem[] = [];
+  let reasoningStartedAt: string | undefined;
+  let reasoningEndedAt: string | undefined;
   try {
     for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
+      if (
+        reasoningStartedAt !== undefined &&
+        reasoningEndedAt === undefined &&
+        event.kind !== "reasoning_delta" &&
+        event.kind !== "reasoning_replay"
+      ) {
+        reasoningEndedAt = now();
+      }
       if (event.kind === "reasoning_delta") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
         reasoningText += event.text ?? "";
+        if (event.redacted === true) reasoningRedacted = true;
+      } else if (event.kind === "reasoning_replay") {
+        if (reasoningStartedAt === undefined) reasoningStartedAt = now();
+        if (event.replay !== undefined) reasoningReplay.push(event.replay);
       } else if (event.kind === "text_delta") {
         if (reasoningText.length > 0 && !reasoningFlushed) {
           io.onReasoning?.(reasoningText);
@@ -2265,8 +2349,33 @@ async function finishWithBudgetSummary(
   if (reasoningText.length > 0 && !reasoningFlushed) {
     io.onReasoning?.(reasoningText);
   }
+  // Durable counterpart of the forwarding above (AC6) — see
+  // `runAgentTurnCore`'s identical construction for the full rationale.
+  const roundReasoning: MessageReasoning | undefined =
+    reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
+      ? {
+          ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
+          ...(reasoningRedacted ? { redacted: true } : {}),
+          ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
+          ...(reasoningStartedAt !== undefined && reasoningEndedAt !== undefined
+            ? (() => {
+                const startMs = Date.parse(reasoningStartedAt);
+                const endMs = Date.parse(reasoningEndedAt);
+                return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs
+                  ? { durationMs: endMs - startMs }
+                  : {};
+              })()
+            : {}),
+        }
+      : undefined;
   if (assistantText.length > 0) {
-    history.push({ role: "assistant", content: assistantText, provenance: "model", ts: now() });
+    history.push({
+      role: "assistant",
+      content: assistantText,
+      provenance: "model",
+      ts: now(),
+      ...(roundReasoning !== undefined ? { reasoning: roundReasoning } : {}),
+    });
     io.onAssistantText?.(assistantText);
   } else {
     system(

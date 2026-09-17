@@ -458,3 +458,164 @@ test("persisted history redacts secrets in tool-call arguments, not only in mess
     rmSync(proj, { recursive: true, force: true });
   }
 });
+
+// --- flow 268 T11: reasoning on NormalizedMessage (AC6) ---
+
+test("flow 268 T11: a save/resume round-trip preserves reasoning (text, redacted, nested replay data)", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-roundtrip-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(created.handle, [
+      { role: "user", content: "explain", provenance: "project" },
+      {
+        role: "assistant",
+        content: "Because X.",
+        provenance: "model",
+        reasoning: {
+          text: "step 1, step 2",
+          redacted: true,
+          replay: [
+            {
+              providerId: "anthropic",
+              kind: "thinking_signature",
+              data: { signature: "sig-xyz", nested: { depth: 2, list: [1, 2, 3] } },
+            },
+          ],
+          durationMs: 42,
+          tokens: 17,
+        },
+      },
+    ]);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    const assistant = resumed.history.find((m) => m.role === "assistant");
+    expect(assistant?.reasoning?.text).toBe("step 1, step 2");
+    expect(assistant?.reasoning?.redacted).toBe(true);
+    expect(assistant?.reasoning?.replay).toEqual([
+      {
+        providerId: "anthropic",
+        kind: "thinking_signature",
+        data: { signature: "sig-xyz", nested: { depth: 2, list: [1, 2, 3] } },
+      },
+    ]);
+    expect(assistant?.reasoning?.durationMs).toBe(42);
+    expect(assistant?.reasoning?.tokens).toBe(17);
+    // The user message never had reasoning — no key, not an empty object.
+    expect(resumed.history.some((m) => m.role === "user" && "reasoning" in m)).toBe(false);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: a transcript line with malformed reasoning is ignored while the message still loads", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-bad-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(created.handle, [{ role: "user", content: "hi", provenance: "project" }], {
+      provider: "p",
+      model: "m",
+    });
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "hi", ts: "t", kind: "message" }),
+      // Whole `reasoning` value is not an object at all.
+      JSON.stringify({ role: "assistant", content: "a", ts: "t", kind: "message", reasoning: "not-an-object" }),
+      // Object, but every recognizable field is the wrong shape/empty.
+      JSON.stringify({
+        role: "assistant",
+        content: "b",
+        ts: "t",
+        kind: "message",
+        reasoning: { text: 123, redacted: "yes", replay: "nope", durationMs: "42", tokens: -1 },
+      }),
+      // A malformed replay ENTRY is dropped, a well-formed one in the same
+      // array survives — same per-entry drop policy as `readToolCalls`.
+      JSON.stringify({
+        role: "assistant",
+        content: "c",
+        ts: "t",
+        kind: "message",
+        reasoning: {
+          replay: [
+            { providerId: "", kind: "x", data: 1 }, // empty providerId
+            { providerId: "p", data: 1 }, // missing kind
+            { providerId: "p", kind: "k" }, // missing data
+            "nonsense",
+            { providerId: "p", kind: "k", data: null },
+          ],
+        },
+      }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    // Every line still loads — only the malformed `reasoning` is dropped.
+    expect(resumed.history.map((m) => m.content)).toEqual(["hi", "a", "b", "c"]);
+    expect(resumed.history[1]?.reasoning).toBeUndefined();
+    expect(resumed.history[2]?.reasoning).toBeUndefined();
+    // The one well-formed replay entry (data: null is still a present key) survives.
+    expect(resumed.history[3]?.reasoning?.replay).toEqual([{ providerId: "p", kind: "k", data: null }]);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: a legacy transcript line with no reasoning field at all still loads, with no reasoning key", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-legacy-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "old turn", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+      JSON.stringify({ role: "assistant", content: "old reply", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(resumed.history.every((m) => !("reasoning" in m))).toBe(true);
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T11: persisted reasoning.text is redacted like content; reasoning.replay.data reaches disk byte-exact", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-reasoning-redact-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    const secret = `ghp_${"B".repeat(36)}`;
+    persistHistory(handle, [
+      { role: "user" as const, content: "deploy it", provenance: "project" as const },
+      {
+        role: "assistant" as const,
+        content: "ok",
+        provenance: "model" as const,
+        reasoning: {
+          text: `the token is ${secret}`,
+          replay: [{ providerId: "anthropic", kind: "thinking_signature", data: { signature: secret } }],
+        },
+      },
+    ]);
+
+    for (const file of ["context.jsonl", "archive.jsonl", "transcript.jsonl"]) {
+      const raw = readFileSync(path.join(handle.dir, file), "utf8");
+      // Visible reasoning text is redacted, same as `content`.
+      expect(raw).not.toContain(`the token is ${secret}`);
+    }
+    // The opaque replay payload is NEVER touched — even though it happens to
+    // contain the same secret-shaped string, mutating it would break a
+    // provider signature, so `redactHistory` deliberately excludes it.
+    const raw = readFileSync(path.join(handle.dir, "context.jsonl"), "utf8");
+    expect(raw).toContain(secret);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+    rmSync(proj, { recursive: true, force: true });
+  }
+});
