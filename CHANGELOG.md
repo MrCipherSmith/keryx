@@ -3,6 +3,62 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.115] — 2026-09-17
+The shell no longer looks hung on a slow or reasoning-heavy model: responses
+stream, stalled connections end with an error, and model reasoning is requested,
+shown live, kept and sent back the way each provider requires.
+
+This code (PR #587) was already merged when 0.2.114 was cut, and 0.2.114's entry
+does not describe it. One statement there is no longer true: the main agent turn
+does not default to 1024 output tokens — see Fixed below.
+
+### Fixed
+
+- **Provider responses stream.** The OpenAI-compatible, OpenAI, Anthropic and
+  Gemini adapters used to read the whole response before showing anything, so a
+  long turn was a spinner and a server that kept the connection open after its
+  last event held the turn forever. Text now appears as it arrives, the turn ends
+  on the provider's terminal event, and 120 s without a first byte or without a
+  new chunk ends the turn with a retryable `unavailable` error. A provider's
+  `timeoutMs`, when set, still bounds the whole call.
+- **The main turn gets room to answer.** Every round of the main agent turn was
+  capped at 1024 output tokens — enough to truncate a long edit, and not enough
+  for a reasoning model to answer at all. It now defaults to 8192:
+  `KERYX_MAX_OUTPUT_TOKENS`, then the provider's `maxOutputTokens`, then the shell
+  config. One-shot commands keep their own smaller limits.
+- **Inline `<think>` reasoning no longer leaks** into answers, history, the
+  next-step hint or wiki pages. MiniMax and DeepSeek hosts get the right
+  reasoning handling without configuration.
+- **The next-step hint** has a timeout, is cancelled when a turn starts or you
+  type, uses the current model, drops malformed replies, and is accepted only with
+  Tab or Right — Enter on an empty composer no longer sends it.
+- **Session messages record when they were appended**, not when the session was
+  last saved.
+- **`wiki enrich` never writes reasoning tags** outside code into a page;
+  `wiki status` lists pages that already carry them.
+
+### Added
+
+- **Model reasoning, end to end.**
+  - Anthropic: adaptive thinking with summarized display on current models,
+    `budget_tokens` on 4.5 and older; thinking blocks are sent back unchanged in
+    the tool loop.
+  - OpenAI: reasoning effort with a summary; encrypted reasoning items are
+    replayed. `temperature` is not sent with a reasoning request, which rejects it.
+  - Gemini: thoughts on request; every `thoughtSignature` is sent back on the
+    part it came on, which Gemini 3 requires for function calling.
+  - OpenAI-compatible providers: `reasoning.format` (`field`, `inline-tags`,
+    `split`), `requestParams` and `replay` (`deepseek`, `minimax`) in
+    `llm-providers.json`.
+- **`/reasoning [off|minimal|low|medium|high|xhigh|max]`**, also
+  `KERYX_REASONING_EFFORT` and the shell config; off by default.
+- **Live reasoning in the shell.** The thinking phase starts on the first
+  reasoning fragment with a preview; finished reasoning collapses to
+  `◆ thought for 12s · 1.8k tokens`, or says it was hidden by the provider.
+  `/think auto|expand|hide` chooses how it is shown and is remembered.
+
+See [the CLI reference](docs/docs/cli-reference.md#reasoning-effort-and-output-budget).
+
 ## [0.2.114] — 2026-09-17
 An auto-compaction guard that keeps a long tool loop from overflowing the
 provider's context window, and per-provider `temperature`/`maxOutputTokens`/

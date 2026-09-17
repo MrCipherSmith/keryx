@@ -7,17 +7,94 @@
   "id": "268",
   "slug": "reasoning-streaming",
   "title": "Provider streaming, timeouts and reasoning (thinking) handling and visualization across providers",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-17T08:38:22.653Z",
-  "updatedAt": "2026-09-17T11:26:02.904Z",
+  "updatedAt": "2026-09-17T12:20:34.201Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:ec4314e4dde9b7b059cad6bde29f8dc01b924add72e9e5e8ce2c3286c674954c",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-17T12:17:23.157Z",
+      "note": "openai-compat-streaming.test.ts, openai-streaming.test.ts (chunk before close; terminal without close ends turn); anthropic/gemini streaming suites (T22); live MiniMax runs streamed"
+    },
+    "AC2": {
+      "at": "2026-09-17T12:17:23.274Z",
+      "note": "first-byte/idle timeout and abort-mid-drain tests in all four *-streaming.test.ts; timeouts configurable via adapter deps; overall timeoutMs from main coexists (merge 514cff07)"
+    },
+    "AC3": {
+      "at": "2026-09-17T12:17:23.390Z",
+      "note": "ollama-provider.test.ts max_tokens and openai-provider.test.ts max_output_tokens assertions (T6); main-turn budget resolver default 8192 (T23)"
+    },
+    "AC4": {
+      "at": "2026-09-17T12:17:23.510Z",
+      "note": "provider-config.test.ts reasoning validation; think-tag-parser.test.ts split positions/unclosed/stray; openai-compat-reasoning.test.ts inline-tags and pass-through"
+    },
+    "AC5": {
+      "at": "2026-09-17T12:17:23.628Z",
+      "note": "openai-compat-reasoning.test.ts requestParams merge + protected keys, reasoning_content/reasoning/reasoning_details -> reasoning_delta; live MiniMax split run"
+    },
+    "AC6": {
+      "at": "2026-09-17T12:17:23.744Z",
+      "note": "agent.test.ts T11 (text and tool-call-only rounds), store.test.ts round-trip/malformed/legacy, compact.test.ts suffix keeps reasoning"
+    },
+    "AC7": {
+      "at": "2026-09-17T12:17:23.864Z",
+      "note": "openai-compat-replay.test.ts deepseek with/without tools, minimax reasoning_details/raw_content, none; make-provider.test.ts built-in deepseek preset (T26); live MiniMax tool loop accepted replay"
+    },
+    "AC8": {
+      "at": "2026-09-17T12:17:23.980Z",
+      "note": "anthropic-reasoning.test.ts: thinking request per model family, thinking_delta, signature and redacted_thinking capture, replay order before tool_use; reasoningMetadata true"
+    },
+    "AC9": {
+      "at": "2026-09-17T12:17:24.097Z",
+      "note": "openai-reasoning.test.ts: reasoning effort+summary auto, include encrypted_content, store false, reasoning item capture and replay"
+    },
+    "AC10": {
+      "at": "2026-09-17T12:17:24.218Z",
+      "note": "gemini-provider.test.ts AC10: thinkingConfig includeThoughts per family, thoughtSignature captured without effort and replayed on functionCall/text parts"
+    },
+    "AC11": {
+      "at": "2026-09-17T12:17:24.337Z",
+      "note": "agent.test.ts resolveReasoningEffort precedence and options.reasoning present/absent; /reasoning in TUI and readline; KERYX_REASONING_EFFORT; shell config reasoningEffort; default off"
+    },
+    "AC12": {
+      "at": "2026-09-17T12:17:24.455Z",
+      "note": "*.reasoning-guard.test.ts: single-turn, next-step-suggestion, wiki enrich, machine-wrap-up memory, session title, spawn-subagent result, compaction (T18)"
+    },
+    "AC13": {
+      "at": "2026-09-17T12:17:24.572Z",
+      "note": "think-tags.test.ts, enrich.test.ts strip/reject outside code, service.test.ts pagesWithThinkTags; code-aware per T26"
+    },
+    "AC14": {
+      "at": "2026-09-17T12:17:24.692Z",
+      "note": "next-step-suggestion.test.ts sanitizer and gate abort/timeout; shell-chrome.test.ts bare Enter does not submit, Tab accepts; tui-shell.test.ts currentSel and cancel wiring"
+    },
+    "AC15": {
+      "at": "2026-09-17T12:17:24.808Z",
+      "note": "store.test.ts distinct per-message ts, preserved across resume, legacy file loads (T7)"
+    },
+    "AC16": {
+      "at": "2026-09-17T12:17:24.927Z",
+      "note": "agent.test.ts onReasoningDelta/onReasoningEnd (incl. abort, T26); reasoning-display.test.ts header/preview/modes; tui-shell.test.ts attachBlockIo live phase, reset, /think auto|expand|hide persisted; foreground facade forwarding"
+    },
+    "AC17": {
+      "at": "2026-09-17T12:17:25.044Z",
+      "note": "README.md reasoning bullet; docs/docs/cli-reference.md sections on reasoning effort and output budget, custom-provider reasoning, /think display, timeouts; mkdocs build --strict passed in PR 587 CI"
+    },
+    "AC18": {
+      "at": "2026-09-17T12:17:25.165Z",
+      "note": "bun run check on merged tree: 10839 pass, 0 fail; keryx health run PASS; PR 587 CI all green"
+    },
+    "AC19": {
+      "at": "2026-09-17T12:17:25.285Z",
+      "note": "live MiniMax-M3 tool loop via keryx shell --no-tui with default preset (split) and inline-tags: streamed reasoning shown once, no think tags in answer, replay accepted (after T24/T25 fixes)"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/587"
   },
   "baseBranch": "main",
   "tasks": [
@@ -1073,6 +1150,140 @@
       "at": "2026-09-17T11:26:02.904Z",
       "event": "task-done",
       "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-17T12:17:23.032Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/587 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-17T12:17:23.157Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: openai-compat-streaming.test.ts, openai-streaming.test.ts (chunk before close; terminal without close ends turn); anthropic/gemini streaming suites (T22); live MiniMax runs streamed"
+    },
+    {
+      "at": "2026-09-17T12:17:23.274Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: first-byte/idle timeout and abort-mid-drain tests in all four *-streaming.test.ts; timeouts configurable via adapter deps; overall timeoutMs from main coexists (merge 514cff07)"
+    },
+    {
+      "at": "2026-09-17T12:17:23.390Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: ollama-provider.test.ts max_tokens and openai-provider.test.ts max_output_tokens assertions (T6); main-turn budget resolver default 8192 (T23)"
+    },
+    {
+      "at": "2026-09-17T12:17:23.510Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: provider-config.test.ts reasoning validation; think-tag-parser.test.ts split positions/unclosed/stray; openai-compat-reasoning.test.ts inline-tags and pass-through"
+    },
+    {
+      "at": "2026-09-17T12:17:23.628Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: openai-compat-reasoning.test.ts requestParams merge + protected keys, reasoning_content/reasoning/reasoning_details -> reasoning_delta; live MiniMax split run"
+    },
+    {
+      "at": "2026-09-17T12:17:23.744Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: agent.test.ts T11 (text and tool-call-only rounds), store.test.ts round-trip/malformed/legacy, compact.test.ts suffix keeps reasoning"
+    },
+    {
+      "at": "2026-09-17T12:17:23.864Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: openai-compat-replay.test.ts deepseek with/without tools, minimax reasoning_details/raw_content, none; make-provider.test.ts built-in deepseek preset (T26); live MiniMax tool loop accepted replay"
+    },
+    {
+      "at": "2026-09-17T12:17:23.980Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: anthropic-reasoning.test.ts: thinking request per model family, thinking_delta, signature and redacted_thinking capture, replay order before tool_use; reasoningMetadata true"
+    },
+    {
+      "at": "2026-09-17T12:17:24.097Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: openai-reasoning.test.ts: reasoning effort+summary auto, include encrypted_content, store false, reasoning item capture and replay"
+    },
+    {
+      "at": "2026-09-17T12:17:24.218Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: gemini-provider.test.ts AC10: thinkingConfig includeThoughts per family, thoughtSignature captured without effort and replayed on functionCall/text parts"
+    },
+    {
+      "at": "2026-09-17T12:17:24.337Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: agent.test.ts resolveReasoningEffort precedence and options.reasoning present/absent; /reasoning in TUI and readline; KERYX_REASONING_EFFORT; shell config reasoningEffort; default off"
+    },
+    {
+      "at": "2026-09-17T12:17:24.455Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: *.reasoning-guard.test.ts: single-turn, next-step-suggestion, wiki enrich, machine-wrap-up memory, session title, spawn-subagent result, compaction (T18)"
+    },
+    {
+      "at": "2026-09-17T12:17:24.572Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: think-tags.test.ts, enrich.test.ts strip/reject outside code, service.test.ts pagesWithThinkTags; code-aware per T26"
+    },
+    {
+      "at": "2026-09-17T12:17:24.692Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: next-step-suggestion.test.ts sanitizer and gate abort/timeout; shell-chrome.test.ts bare Enter does not submit, Tab accepts; tui-shell.test.ts currentSel and cancel wiring"
+    },
+    {
+      "at": "2026-09-17T12:17:24.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC15: store.test.ts distinct per-message ts, preserved across resume, legacy file loads (T7)"
+    },
+    {
+      "at": "2026-09-17T12:17:24.927Z",
+      "event": "ac-confirmed",
+      "detail": "AC16: agent.test.ts onReasoningDelta/onReasoningEnd (incl. abort, T26); reasoning-display.test.ts header/preview/modes; tui-shell.test.ts attachBlockIo live phase, reset, /think auto|expand|hide persisted; foreground facade forwarding"
+    },
+    {
+      "at": "2026-09-17T12:17:25.044Z",
+      "event": "ac-confirmed",
+      "detail": "AC17: README.md reasoning bullet; docs/docs/cli-reference.md sections on reasoning effort and output budget, custom-provider reasoning, /think display, timeouts; mkdocs build --strict passed in PR 587 CI"
+    },
+    {
+      "at": "2026-09-17T12:17:25.165Z",
+      "event": "ac-confirmed",
+      "detail": "AC18: bun run check on merged tree: 10839 pass, 0 fail; keryx health run PASS; PR 587 CI all green"
+    },
+    {
+      "at": "2026-09-17T12:17:25.285Z",
+      "event": "ac-confirmed",
+      "detail": "AC19: live MiniMax-M3 tool loop via keryx shell --no-tui with default preset (split) and inline-tags: streamed reasoning shown once, no think tags in answer, replay accepted (after T24/T25 fixes)"
+    },
+    {
+      "at": "2026-09-17T12:17:31.624Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-17T12:17:35.520Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/268-2026-09-17-reasoning-streaming/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#587 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__587.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 587 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-17T12:20:17.330Z",
+      "event": "completing",
+      "detail": "merged commit: 12c3d8da2867897ef17eac4f867961c39c1baa88"
+    },
+    {
+      "at": "2026-09-17T12:20:21.015Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — head-commit (violated): the latest round ran against 12c3d8da2867897ef17eac4f867961c39c1baa88, but the PR head is 65a2af0002ad5e21f439f0096e16a00d1e881167. A clean round against a stale SHA proves nothing about what will merge — re-run the round."
+    },
+    {
+      "at": "2026-09-17T12:20:30.199Z",
+      "event": "completing",
+      "detail": "merged commit: 12c3d8da2867897ef17eac4f867961c39c1baa88"
+    },
+    {
+      "at": "2026-09-17T12:20:34.201Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "12c3d8da2867897ef17eac4f867961c39c1baa88",
+    "ref": "origin/main",
+    "at": "2026-09-17T12:20:34.201Z"
+  }
 }
