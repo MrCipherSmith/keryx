@@ -24,3 +24,80 @@
 - 2026-09-17T08:43:26.712Z - task-depends-set: T4: dependsOn T21 (was empty) — review runs after verification and smoke
 - 2026-09-17T08:44:00.424Z - frozen: 19 criteria; checksum recorded
 - 2026-09-17T08:44:00.539Z - started
+- 2026-09-17T08:44:08.338Z - task-attempt: T5: started (attempt 1) — 268-T5 dispatch 1
+- 2026-09-17T08:44:08.457Z - task-attempt: T7: started (attempt 1) — 268-T7 dispatch 1
+- 2026-09-17T08:44:08.575Z - task-attempt: T8: started (attempt 1) — 268-T8 dispatch 1
+- 2026-09-17T08:44:08.693Z - task-attempt: T9: started (attempt 1) — 268-T9 dispatch 1
+- 2026-09-17T08:51:01.615Z - task-done: T9: wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags
+- 2026-09-17T08:51:44.204Z - task-done: T7: Stamp session message ts when the message is appended, not at checkpoint flush
+- 2026-09-17T08:52:32.868Z - task-done: T8: Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit
+- 2026-09-17T08:59:43.871Z - task-done: T5: Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)
+- 2026-09-17T08:59:55.871Z - task-added: T22: Stream anthropic and gemini bodies incrementally with first-byte and idle timeouts
+- 2026-09-17T08:59:55.993Z - task-depends-set: T13: dependsOn T12, T22 (was T12) — anthropic thinking parse builds on the streaming reader
+- 2026-09-17T08:59:56.109Z - task-depends-set: T15: dependsOn T14, T22 (was T14) — gemini thoughts build on the streaming reader
+- 2026-09-17T08:59:56.222Z - task-attempt: T6: started (attempt 1) — 268-T6 dispatch 1
+- 2026-09-17T08:59:56.334Z - task-attempt: T22: started (attempt 1) — 268-T22 dispatch 1
+- note (orchestrator): T5 concern — anthropic-provider.ts:392 and gemini-provider.ts:524 still buffer with `response.text()`, same hang class with Claude/Gemini. Added T22 (not covered by AC1/AC2 wording, which names compat and Responses only); T13/T15 now depend on it.
+- note (orchestrator): T8 concern — abort-on-new-turn proven by unit test of NextStepSuggestionGate plus source audit; no headless seam for suggestNextStep. Accepted.
+- note (orchestrator): T9 concern — wiki status reads every page for think tags; same O(pages) cost as collectPages. Accepted.
+- note (orchestrator): T6 concern — main turn hardcoded maxOutputTokens 1024, now enforced for all providers; added T23 (default 8192, env/provider/global override). T23 done.
+- note (orchestrator): T10 — worker ran `git stash` to compare lint despite the constraint; verified stash list holds only 4 old entries and the working tree (57 pre-existing .metaproject changes + T10 files) is intact. Lint error `no-useless-assignment` on `sawDone` (openai-compat-provider.ts ~769) was introduced in T5; fix folded into T12 (same file).
+- note (orchestrator): T12 — raw_content replay also triggers on a literal `<think>` substring when replay=minimax (provider-scoped heuristic). Accepted.
+- note (orchestrator): T13 — Anthropic shapes verified against the bundled claude-api reference (adaptive+display summarized+output_config.effort on 4.6+/5; budget_tokens on 4.5 and older; replay thinking blocks unchanged). Fixture-only; live check in T21 if credentials exist.
+- note (orchestrator): T15 — Gemini docs fetch was inconclusive; thinkingLevel values (low/high) and signature placement implemented per recorded protocol facts, live check needed (T21).
+- note (orchestrator): T21 live smoke (MiniMax-M3) found three real-provider defects not visible in fixtures — duplicate reasoning in inline-tags (MiniMax streams `reasoning` alongside `<think>` content), `</think>` inside split reasoning, lone `</think>` content before tool_calls; fixed in T24/T25; final runs clean in default (preset split) and inline-tags modes.
+- note (orchestrator): review round 1 — blocker (built-in deepseek replay unwired), 2 majors (abort skipped onReasoningEnd; wiki guard not code-aware), 1 minor (readline config dir); fixed in T26; re-review clean. Below-threshold observation left open: an odd number of bare ``` markers can make maskCodeRegions pair the wrong fences and hide a leak between them; `~~~` fences not recognised. Also open: a custom llm-providers.json entry named like a built-in (e.g. "deepseek") is silently dropped (pre-existing).
+- note (orchestrator): T7 design — optional `ts` on NormalizedMessage stamped at agent.ts push sites via deps.now; store falls back to checkpoint ts for unstamped messages.
+- 2026-09-17T09:02:48.807Z - task-done: T6: Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)
+- 2026-09-17T09:02:48.929Z - task-added: T23: Size the main agent turn output budget: default 8192, configurable per provider and globally
+- 2026-09-17T09:02:49.063Z - task-depends-set: T10: dependsOn T23 (was T6) — T10 edits provider-config after the budget field lands
+- 2026-09-17T09:02:49.187Z - task-attempt: T23: started (attempt 1) — 268-T23 dispatch 1
+- 2026-09-17T09:08:40.823Z - task-done: T22: Stream anthropic and gemini bodies incrementally with first-byte and idle timeouts
+- 2026-09-17T09:13:09.590Z - task-done: T23: Size the main agent turn output budget: default 8192, configurable per provider and globally
+- 2026-09-17T09:13:09.719Z - task-attempt: T10: started (attempt 1) — 268-T10 dispatch 1
+- 2026-09-17T09:26:08.662Z - task-done: T10: Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser
+- 2026-09-17T09:26:08.776Z - task-attempt: T11: started (attempt 1) — 268-T11 dispatch 1
+- 2026-09-17T09:36:06.255Z - task-done: T11: Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it
+- 2026-09-17T09:36:06.367Z - task-depends-set: T13: dependsOn T11, T22 (was T12, T22) — adapters edit disjoint files; only the shared model is a prerequisite
+- 2026-09-17T09:36:06.484Z - task-depends-set: T14: dependsOn T11, T6 (was T13) — adapters edit disjoint files; only the shared model is a prerequisite
+- 2026-09-17T09:36:06.595Z - task-depends-set: T15: dependsOn T11, T22 (was T14, T22) — adapters edit disjoint files; only the shared model is a prerequisite
+- 2026-09-17T09:36:06.710Z - task-depends-set: T16: dependsOn T12, T13, T14, T15 (was T15) — effort control wires all adapters
+- 2026-09-17T09:36:06.823Z - task-attempt: T12: started (attempt 1) — 268-T12 dispatch 1
+- 2026-09-17T09:36:06.937Z - task-attempt: T13: started (attempt 1) — 268-T13 dispatch 1
+- 2026-09-17T09:36:07.053Z - task-attempt: T14: started (attempt 1) — 268-T14 dispatch 1
+- 2026-09-17T09:36:07.165Z - task-attempt: T15: started (attempt 1) — 268-T15 dispatch 1
+- 2026-09-17T09:42:42.397Z - task-done: T13: Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop
+- 2026-09-17T09:43:53.853Z - task-done: T12: Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content
+- 2026-09-17T09:45:01.245Z - task-done: T15: Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature
+- 2026-09-17T09:45:18.632Z - task-done: T14: OpenAI Responses reasoning: effort+summary, encrypted_content include and replay
+- 2026-09-17T09:45:18.746Z - task-attempt: T16: started (attempt 1) — 268-T16 dispatch 1
+- 2026-09-17T09:45:18.864Z - task-attempt: T18: started (attempt 1) — 268-T18 dispatch 1
+- 2026-09-17T09:51:41.657Z - task-done: T18: Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries
+- 2026-09-17T10:07:37.333Z - task-done: T16: User control for reasoning effort passed as options.reasoning (shell command + config)
+- 2026-09-17T10:07:37.458Z - task-depends-set: T19: dependsOn T16 (was T16, T17) — docs follow the frozen AC16 spec; written in parallel with T17 and reconciled in T20
+- 2026-09-17T10:07:37.575Z - task-attempt: T17: started (attempt 1) — 268-T17 dispatch 1
+- 2026-09-17T10:07:37.699Z - task-attempt: T19: started (attempt 1) — 268-T19 dispatch 1
+- 2026-09-17T10:29:02.994Z - task-done: T17: TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode
+- 2026-09-17T10:29:27.384Z - task-done: T19: Docs: README and docs site for reasoning config, effort control, timeouts
+- 2026-09-17T10:29:27.497Z - task-attempt: T20: started (attempt 1) — orchestrator runs full check
+- 2026-09-17T10:34:06.621Z - task-done: T20: Full verification: bun run check and keryx health run
+- 2026-09-17T10:35:30.478Z - task-attempt: T21: failed (attempt 1) — live MiniMax-M3: split works (tool loop ok, no <think> in answer) but reasoning text ends with </think>; inline-tags duplicates reasoning because MiniMax also streams delta.reasoning; unconfigured MiniMax still leaks
+- 2026-09-17T10:35:30.590Z - task-added: T24: MiniMax live fixes: inline-tags ignores reasoning fields, strip think tags from field reasoning, default split preset for MiniMax hosts
+- 2026-09-17T10:35:30.705Z - task-depends-set: T21: dependsOn T24 (was T20) — re-run smoke after live-found fixes
+- 2026-09-17T10:35:30.819Z - task-attempt: T24: started (attempt 1) — 268-T24 dispatch 1
+- 2026-09-17T10:47:09.009Z - task-done: T24: MiniMax live fixes: inline-tags ignores reasoning fields, strip think tags from field reasoning, default split preset for MiniMax hosts
+- 2026-09-17T10:47:09.127Z - task-attempt: T21: started (attempt 2) — re-run after T24
+- 2026-09-17T10:47:56.118Z - task-attempt: T21: failed (attempt 3) — default (preset split) + tools: MiniMax sends content "</think>" before tool_calls, printed as answer text; inline-tags fixed but reasoning starts with a blank line
+- 2026-09-17T10:47:56.233Z - task-added: T25: MiniMax split: drop stray think tags from content; inline-tags: trim newline after <think>
+- 2026-09-17T10:47:56.351Z - task-depends-set: T21: dependsOn T25 (was T24) — re-run smoke after second live finding
+- 2026-09-17T10:47:56.470Z - task-attempt: T25: started (attempt 1) — 268-T25 dispatch 1
+- 2026-09-17T10:52:29.148Z - task-done: T25: MiniMax split: drop stray think tags from content; inline-tags: trim newline after <think>
+- 2026-09-17T10:52:53.870Z - task-done: T21: Smoke run against a real reasoning provider (MiniMax split) via built keryx
+- 2026-09-17T10:57:04.661Z - task-attempt: T4: started (attempt 1) — two parallel reviewers
+- 2026-09-17T11:05:15.457Z - task-attempt: T4: failed (attempt 2) — review round 1: blocker deepseek replay unwired for built-in provider; major abort skips onReasoningEnd (TUI preview state leaks); major wiki think guard not fence-aware; minor readline /reasoning config dir
+- 2026-09-17T11:05:15.570Z - task-added: T26: Review fixes: built-in deepseek replay, onReasoningEnd on abort, fence-aware wiki think guard, readline /reasoning config dir
+- 2026-09-17T11:05:15.685Z - task-depends-set: T4: dependsOn T26 (was T21) — re-review after fixes
+- 2026-09-17T11:05:15.797Z - task-attempt: T26: started (attempt 1) — 268-T26 dispatch 1
+- 2026-09-17T11:19:38.544Z - task-done: T26: Review fixes: built-in deepseek replay, onReasoningEnd on abort, fence-aware wiki think guard, readline /reasoning config dir
+- 2026-09-17T11:19:38.663Z - task-attempt: T4: started (attempt 3) — re-review of T26 fixes
+- 2026-09-17T11:26:02.904Z - task-done: T4: Self-review and prepare draft PR
