@@ -97,11 +97,108 @@ const DEFAULT_MODEL: AnthropicModelDescriptor = {
 /** A normalized event without its per-attempt bookkeeping fields. */
 type EventBody = Omit<NormalizedEvent, "sequence" | "attemptId">;
 
-/** In-progress content-block state, keyed by the wire `index`. */
+/**
+ * In-progress content-block state, keyed by the wire `index`. `input` doubles
+ * as the tool's partial-JSON accumulator and the `thinking` block's visible
+ * text accumulator (mutually exclusive by `type`); `signature` accumulates a
+ * `thinking` block's `signature_delta` fragments; `redactedData` captures a
+ * `redacted_thinking` block's opaque `data` at `content_block_start` (it
+ * carries no deltas).
+ */
 interface BlockState {
-  type: "tool" | "text";
+  type: "tool" | "text" | "thinking" | "redacted_thinking";
   toolCallId?: string;
   input: string;
+  signature?: string;
+  redactedData?: string;
+}
+
+/** This adapter's own `providerId`, stamped on every `reasoning_replay` item it emits. */
+const PROVIDER_ID = "anthropic";
+
+/** Thinking-request family (Anthropic 2026 thinking API) a model id belongs to. */
+export type AnthropicModelFamily = "adaptive" | "budget";
+
+/**
+ * `-4-5` generation marker (Haiku 4.5, Sonnet 4.5, Opus 4.5): these, plus any
+ * `claude-3*`/`claude-2*` id, are the "budget" family (`thinking: { type:
+ * "enabled", budget_tokens }`). Everything else — Opus 5, Sonnet 5, Fable,
+ * Mythos, Opus 4.6/4.7/4.8, Sonnet 4.6, and any unrecognized future claude id
+ * — defaults to "adaptive" (`thinking: { type: "adaptive" }` +
+ * `output_config.effort`), matching the newer models' behavior of thinking
+ * by default even when no reasoning effort was requested.
+ */
+const BUDGET_FAMILY_PATTERN = /(^|\D)4-5(\D|$)/;
+/** Any Claude 3.x or 2.x generation id (`claude-3-5-sonnet-...`, `claude-2.1`, ...). */
+const OLD_GENERATION_PATTERN = /claude-[23](\D|$)/;
+/** Opus/Sonnet 4.6: adaptive family, but WITHOUT an `xhigh` effort level. */
+const NO_XHIGH_PATTERN = /(^|\D)4-6(\D|$)/;
+
+/**
+ * Classify `modelId` into its thinking-request family. Pure and exported so
+ * request-building logic and tests share one source of truth.
+ */
+export function anthropicModelFamily(modelId: string): AnthropicModelFamily {
+  const id = modelId.toLowerCase();
+  if (BUDGET_FAMILY_PATTERN.test(id) || OLD_GENERATION_PATTERN.test(id)) {
+    return "budget";
+  }
+  return "adaptive";
+}
+
+/** `budget_tokens` for each reasoning effort level on a "budget"-family model. */
+const BUDGET_TOKENS_BY_EFFORT: Record<string, number> = {
+  low: 2048,
+  medium: 4096,
+  high: 8192,
+  xhigh: 16000,
+  max: 16000,
+};
+
+/** Fallback `budget_tokens` for an effort string outside the documented set. */
+const DEFAULT_BUDGET_TOKENS = BUDGET_TOKENS_BY_EFFORT.medium!;
+
+/** The request-body fields a reasoning effort setting contributes (`thinking` shape and `max_tokens`). */
+interface ThinkingRequestParams {
+  thinking?: Record<string, unknown>;
+  outputConfig?: Record<string, unknown>;
+  maxTokens: number;
+}
+
+/**
+ * Resolve the `thinking`/`output_config`/`max_tokens` request fields for a
+ * given model + reasoning effort. `effort` absent or `"off"` means the user
+ * did not ask for reasoning: no `thinking` param is sent at all (an
+ * "adaptive"-family model may still think by default — that is fine, it is
+ * captured and replayed regardless of whether it was requested).
+ */
+function buildThinkingParams(
+  modelId: string,
+  effort: string | undefined,
+  maxOutputTokens: number,
+): ThinkingRequestParams {
+  if (effort === undefined || effort === "off") {
+    return { maxTokens: maxOutputTokens };
+  }
+  const family = anthropicModelFamily(modelId);
+  if (family === "adaptive") {
+    const resolvedEffort = effort === "xhigh" && NO_XHIGH_PATTERN.test(modelId.toLowerCase()) ? "high" : effort;
+    return {
+      // "summarized" display is REQUIRED: these models default to "omitted",
+      // which arrives with an EMPTY thinking text (the round is still valid
+      // and replayed, but the user sees nothing).
+      thinking: { type: "adaptive", display: "summarized" },
+      outputConfig: { effort: resolvedEffort },
+      maxTokens: maxOutputTokens,
+    };
+  }
+  const budgetTokens = BUDGET_TOKENS_BY_EFFORT[effort] ?? DEFAULT_BUDGET_TOKENS;
+  return {
+    thinking: { type: "enabled", budget_tokens: budgetTokens },
+    // budget_tokens must be < max_tokens; raise max_tokens to make room for
+    // both the thinking budget and the requested output budget.
+    maxTokens: budgetTokens + maxOutputTokens,
+  };
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -128,6 +225,34 @@ function asNumber(value: unknown): number | undefined {
  * goes out and the model sees its own call.
  */
 /**
+ * This adapter's own `thinking`/`redacted_thinking` replay items on a message
+ * (owned means `providerId === "anthropic"`; a foreign item — carried over
+ * from a different provider adapter, e.g. after a mid-session provider switch
+ * — is ignored here rather than guessed at), in stored (event) order, as
+ * READY-TO-SEND wire blocks. `item.data` is already the exact wire block
+ * shape (`{ type: "thinking", thinking, signature }` /
+ * `{ type: "redacted_thinking", data }`) constructed when the block was
+ * parsed, so replay is a verbatim echo — no reshaping, no touching the
+ * signature/opaque bytes.
+ */
+function ownedThinkingBlocks(message: NormalizedMessage): Record<string, unknown>[] {
+  const replay = message.reasoning?.replay;
+  if (replay === undefined || replay.length === 0) {
+    return [];
+  }
+  const blocks: Record<string, unknown>[] = [];
+  for (const item of replay) {
+    if (item.providerId !== PROVIDER_ID) {
+      continue;
+    }
+    if (item.kind === "thinking" || item.kind === "redacted_thinking") {
+      blocks.push(asRecord(item.data));
+    }
+  }
+  return blocks;
+}
+
+/**
  * Serialize a normalized conversation into Anthropic Messages wire form.
  *
  * Anthropic expresses the tool loop as content BLOCKS: `tool_use` on the
@@ -137,16 +262,30 @@ function asNumber(value: unknown): number | undefined {
  * together inside THIS request become blocks (`linkToolCalls`); a half-pair
  * keeps the previous plain mapping, so a compacted or resumed window cannot
  * produce a dangling reference.
+ *
+ * An assistant message that owns `thinking`/`redacted_thinking` replay items
+ * (flow 268 T13) ALSO becomes array-content, even when it has no linked tool
+ * calls (a thinking-only text round): those blocks are replayed first, in
+ * their original order, before the `text` and `tool_use` blocks — dropping or
+ * reordering an earlier round's thinking block is treated as history editing
+ * by newer models and can be rejected, so every prior assistant message that
+ * owns replay items gets it here, not only the most recent one.
  */
-function toAnthropicMessages(messages: readonly NormalizedMessage[]): Record<string, unknown>[] {
+export function toAnthropicMessages(messages: readonly NormalizedMessage[]): Record<string, unknown>[] {
   const out: Record<string, unknown>[] = [];
   for (const linked of linkToolCalls(messages)) {
     const message = linked.message;
-    if (message.role === "assistant" && message.content.length === 0 && linked.linkedCalls.length === 0) {
-      // A tool-call turn whose calls could not be linked carries no text and no
-      // calls. Anthropic REJECTS an empty content string, and this message only
-      // exists at all because assistant tool calls are now recorded — so it must
-      // not reach the wire.
+    const thinkingBlocks = message.role === "assistant" ? ownedThinkingBlocks(message) : [];
+    if (
+      message.role === "assistant" &&
+      message.content.length === 0 &&
+      linked.linkedCalls.length === 0 &&
+      thinkingBlocks.length === 0
+    ) {
+      // A tool-call turn whose calls could not be linked carries no text, no
+      // calls, and no thinking to replay. Anthropic REJECTS an empty content
+      // string, and this message only exists at all because assistant tool
+      // calls are now recorded — so it must not reach the wire.
       continue;
     }
     if (message.role === "tool" && linked.linkedToolCallId !== undefined) {
@@ -156,8 +295,8 @@ function toAnthropicMessages(messages: readonly NormalizedMessage[]): Record<str
       });
       continue;
     }
-    if (message.role === "assistant" && linked.linkedCalls.length > 0) {
-      const blocks: Record<string, unknown>[] = [];
+    if (message.role === "assistant" && (linked.linkedCalls.length > 0 || thinkingBlocks.length > 0)) {
+      const blocks: Record<string, unknown>[] = [...thinkingBlocks];
       if (message.content.length > 0) {
         blocks.push({ type: "text", text: message.content });
       }
@@ -338,7 +477,7 @@ export class AnthropicProvider implements ProviderPort {
       toolCalls: true,
       parallelToolCalls: true,
       structuredOutput: false,
-      reasoningMetadata: false,
+      reasoningMetadata: true,
       promptCaching: false,
       vision: false,
       tokenCounting: false,
@@ -414,12 +553,24 @@ export class AnthropicProvider implements ProviderPort {
       "content-type": "application/json",
       "anthropic-version": ANTHROPIC_VERSION,
     };
+    // Reasoning request (flow 268 T13): `request.options?.reasoning` is the
+    // effort a caller asked for ("off"/absent = not asked). Sampling params
+    // (temperature/top_p/top_k) are rejected alongside `thinking` on the
+    // newer models — this adapter never sends them at all, so no gating is
+    // needed here.
+    const thinkingParams = buildThinkingParams(
+      request.modelId,
+      request.options?.reasoning,
+      request.budget.maxOutputTokens,
+    );
     const payload: Record<string, unknown> = {
       model: request.modelId,
-      max_tokens: request.budget.maxOutputTokens,
+      max_tokens: thinkingParams.maxTokens,
       system: request.systemInstruction,
       messages: toAnthropicMessages(request.messages),
       stream: true,
+      ...(thinkingParams.thinking !== undefined ? { thinking: thinkingParams.thinking } : {}),
+      ...(thinkingParams.outputConfig !== undefined ? { output_config: thinkingParams.outputConfig } : {}),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({
@@ -588,7 +739,8 @@ export class AnthropicProvider implements ProviderPort {
           case "content_block_start": {
             const index = asNumber(data.index) ?? -1;
             const block = asRecord(data.content_block);
-            if (asString(block.type) === "tool_use") {
+            const blockType = asString(block.type);
+            if (blockType === "tool_use") {
               const state: BlockState = { type: "tool", input: "" };
               const toolCallId = asString(block.id);
               if (toolCallId !== undefined) {
@@ -604,6 +756,16 @@ export class AnthropicProvider implements ProviderPort {
                 startBody.toolName = toolName;
               }
               bodies.push(startBody);
+            } else if (blockType === "thinking") {
+              blocks.set(index, { type: "thinking", input: "", signature: "" });
+            } else if (blockType === "redacted_thinking") {
+              // No deltas ever follow a `redacted_thinking` block — the opaque
+              // `data` arrives whole here. The visible-text side (`reasoning_delta`
+              // with `redacted: true`, no text) is emitted right away; the
+              // `reasoning_replay` carrying `data` follows at `content_block_stop`,
+              // mirroring the `thinking` block's start-then-stop shape.
+              blocks.set(index, { type: "redacted_thinking", input: "", redactedData: asString(block.data) ?? "" });
+              bodies.push({ kind: "reasoning_delta", redacted: true });
             } else {
               blocks.set(index, { type: "text", input: "" });
             }
@@ -631,6 +793,25 @@ export class AnthropicProvider implements ProviderPort {
                 body.toolCallId = block.toolCallId;
               }
               bodies.push(body);
+            } else if (deltaType === "thinking_delta") {
+              const block = blocks.get(index);
+              const text = asString(delta.thinking);
+              if (text !== undefined) {
+                if (block !== undefined && block.type === "thinking") {
+                  block.input += text;
+                }
+                if (text.length > 0) {
+                  bodies.push({ kind: "reasoning_delta", text });
+                }
+              }
+            } else if (deltaType === "signature_delta") {
+              // Bookkeeping only — accumulated for the `reasoning_replay` this
+              // block emits at `content_block_stop`; no visible-text event.
+              const block = blocks.get(index);
+              const signature = asString(delta.signature);
+              if (block !== undefined && block.type === "thinking" && signature !== undefined) {
+                block.signature = (block.signature ?? "") + signature;
+              }
             }
             break;
           }
@@ -643,6 +824,24 @@ export class AnthropicProvider implements ProviderPort {
                 endBody.toolCallId = block.toolCallId;
               }
               bodies.push(endBody);
+            } else if (block !== undefined && block.type === "thinking") {
+              bodies.push({
+                kind: "reasoning_replay",
+                replay: {
+                  providerId: PROVIDER_ID,
+                  kind: "thinking",
+                  data: { type: "thinking", thinking: block.input, signature: block.signature ?? "" },
+                },
+              });
+            } else if (block !== undefined && block.type === "redacted_thinking") {
+              bodies.push({
+                kind: "reasoning_replay",
+                replay: {
+                  providerId: PROVIDER_ID,
+                  kind: "redacted_thinking",
+                  data: { type: "redacted_thinking", data: block.redactedData ?? "" },
+                },
+              });
             }
             break;
           }
