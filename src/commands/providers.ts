@@ -16,6 +16,7 @@
 import {
   type ConfiguredProvider,
   type CrossFamilyReviewDecision,
+  type CustomCompatProvider,
   decideCrossFamilyReview,
   familyOf,
   loadCustomCompatProviders,
@@ -23,7 +24,7 @@ import {
 import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
 import { resolveCallerSession } from "../lib/caller-session";
-import { envWithSavedApiKeys } from "../lib/shell-config";
+import { type ShellConfig, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
@@ -80,6 +81,17 @@ export interface OpenAiCompatProvider {
    */
   balancePath?: string;
   balanceKind?: "deepseek" | "openrouter";
+  /**
+   * Default sampling temperature for this provider (flow 268). For a custom
+   * provider this is copied straight from its `CustomCompatProvider` record
+   * (`customCompatProviders` below); a built-in has no default of its own —
+   * see `resolveProviderModelParams`'s `ShellConfig.modelParams` override.
+   */
+  temperature?: number;
+  /** Default `budget.maxOutputTokens` for this provider (flow 268). */
+  maxOutputTokens?: number;
+  /** Default chat-call abort timeout in ms for this provider (flow 268). */
+  timeoutMs?: number;
 }
 
 /** Normalize a provider registry entry's platform policy.
@@ -121,6 +133,60 @@ export function resolveProviderBaseUrl(
   } catch {
     return provider.baseUrl;
   }
+}
+
+/** Resolved per-provider sampling/budget/timeout overrides (flow 268). Every field absent when unconfigured. */
+export interface ResolvedProviderModelParams {
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}
+
+/**
+ * Resolve `temperature`/`maxOutputTokens`/`timeoutMs` for one provider.
+ *
+ * Precedence: `shellConfig.modelParams[provider.name]` (an operator override
+ * saved for a BUILT-IN provider, `saveProviderModelParams`) wins when present,
+ * else the provider record's OWN fields — which is how a custom provider's
+ * `llm-providers.json` entry (already carrying these per `CustomCompatProvider`)
+ * supplies its defaults, since a built-in `OpenAiCompatProvider` has none of
+ * its own. Absent everywhere -> every field `undefined`, matching AC3's
+ * byte-identical-when-unconfigured requirement; this function never invents a
+ * default (the `?? 1024` fallback lives at the request-construction call
+ * sites, same as today).
+ */
+export function resolveProviderModelParams(
+  provider: OpenAiCompatProvider | CustomCompatProvider,
+  shellConfig: Pick<ShellConfig, "modelParams"> = loadShellConfig(),
+): ResolvedProviderModelParams {
+  const override = shellConfig.modelParams?.[provider.name];
+  const temperature = override?.temperature ?? provider.temperature;
+  const maxOutputTokens = override?.maxOutputTokens ?? provider.maxOutputTokens;
+  const timeoutMs = override?.timeoutMs ?? provider.timeoutMs;
+  return {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  };
+}
+
+/**
+ * Convenience wrapper over {@link resolveProviderModelParams} for a caller that
+ * only has a provider NAME (e.g. a shell's current `providerName` string, not
+ * an `OpenAiCompatProvider` object) — model-selection call sites in
+ * `commands/shell.ts`/`tui/tui-shell.ts` use this. Returns every field
+ * `undefined` for a name with no OpenAI-compatible registry entry (the native
+ * anthropic/openai/gemini adapters, `ollama`-as-native, `fake`) — scope
+ * discipline: this flow only covers OpenAI-compatible gateways (see
+ * `docs requirements` for flow 268), so a native adapter's config surface is
+ * simply untouched rather than guessed at.
+ */
+export function resolveProviderModelParamsByName(
+  name: string,
+  shellConfig: Pick<ShellConfig, "modelParams"> = loadShellConfig(),
+): ResolvedProviderModelParams {
+  const provider = providerByName(name);
+  return provider === undefined ? {} : resolveProviderModelParams(provider, shellConfig);
 }
 
 /**
@@ -281,6 +347,9 @@ export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
       ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),
       models: p.models,
       ...(p.note !== undefined ? { note: p.note } : {}),
+      ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
+      ...(p.maxOutputTokens !== undefined ? { maxOutputTokens: p.maxOutputTokens } : {}),
+      ...(p.timeoutMs !== undefined ? { timeoutMs: p.timeoutMs } : {}),
     }));
 }
 
