@@ -1,0 +1,482 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "268",
+  "slug": "reasoning-streaming",
+  "title": "Provider streaming, timeouts and reasoning (thinking) handling and visualization across providers",
+  "status": "in-progress",
+  "createdAt": "2026-09-17T08:38:22.653Z",
+  "updatedAt": "2026-09-17T08:44:00.539Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:ec4314e4dde9b7b059cad6bde29f8dc01b924add72e9e5e8ce2c3286c674954c",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by granular tasks T5-T17"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "each implement task is test-first; T18 and T20 cover suite-level tests"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [
+        "T21"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Stamp session message ts when the message is appended, not at checkpoint flush",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T7",
+        "T10"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T12"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T14",
+      "title": "OpenAI Responses reasoning: effort+summary, encrypted_content include and replay",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T13"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T15",
+      "title": "Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T14"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T16",
+      "title": "User control for reasoning effort passed as options.reasoning (shell command + config)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T15"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T17",
+      "title": "TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T8",
+        "T11",
+        "T16"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T18",
+      "title": "Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T9",
+        "T11"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T19",
+      "title": "Docs: README and docs site for reasoning config, effort control, timeouts",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [
+        "T16",
+        "T17"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T20",
+      "title": "Full verification: bun run check and keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T18",
+        "T19"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T21",
+      "title": "Smoke run against a real reasoning provider (MiniMax split) via built keryx",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T20"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-17T08:38:22.653Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-17T08:43:24.345Z",
+      "event": "task-added",
+      "detail": "T5: Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)"
+    },
+    {
+      "at": "2026-09-17T08:43:24.462Z",
+      "event": "task-added",
+      "detail": "T6: Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)"
+    },
+    {
+      "at": "2026-09-17T08:43:24.581Z",
+      "event": "task-added",
+      "detail": "T7: Stamp session message ts when the message is appended, not at checkpoint flush"
+    },
+    {
+      "at": "2026-09-17T08:43:24.698Z",
+      "event": "task-added",
+      "detail": "T8: Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit"
+    },
+    {
+      "at": "2026-09-17T08:43:24.815Z",
+      "event": "task-added",
+      "detail": "T9: wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags"
+    },
+    {
+      "at": "2026-09-17T08:43:24.935Z",
+      "event": "task-added",
+      "detail": "T10: Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser"
+    },
+    {
+      "at": "2026-09-17T08:43:25.062Z",
+      "event": "task-added",
+      "detail": "T11: Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it"
+    },
+    {
+      "at": "2026-09-17T08:43:25.179Z",
+      "event": "task-added",
+      "detail": "T12: Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content"
+    },
+    {
+      "at": "2026-09-17T08:43:25.300Z",
+      "event": "task-added",
+      "detail": "T13: Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop"
+    },
+    {
+      "at": "2026-09-17T08:43:25.423Z",
+      "event": "task-added",
+      "detail": "T14: OpenAI Responses reasoning: effort+summary, encrypted_content include and replay"
+    },
+    {
+      "at": "2026-09-17T08:43:25.543Z",
+      "event": "task-added",
+      "detail": "T15: Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature"
+    },
+    {
+      "at": "2026-09-17T08:43:25.662Z",
+      "event": "task-added",
+      "detail": "T16: User control for reasoning effort passed as options.reasoning (shell command + config)"
+    },
+    {
+      "at": "2026-09-17T08:43:25.779Z",
+      "event": "task-added",
+      "detail": "T17: TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode"
+    },
+    {
+      "at": "2026-09-17T08:43:25.897Z",
+      "event": "task-added",
+      "detail": "T18: Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries"
+    },
+    {
+      "at": "2026-09-17T08:43:26.015Z",
+      "event": "task-added",
+      "detail": "T19: Docs: README and docs site for reasoning config, effort control, timeouts"
+    },
+    {
+      "at": "2026-09-17T08:43:26.132Z",
+      "event": "task-added",
+      "detail": "T20: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-17T08:43:26.247Z",
+      "event": "task-added",
+      "detail": "T21: Smoke run against a real reasoning provider (MiniMax split) via built keryx"
+    },
+    {
+      "at": "2026-09-17T08:43:26.363Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-17T08:43:26.478Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-17T08:43:26.596Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-17T08:43:26.712Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T21 (was empty) — review runs after verification and smoke"
+    },
+    {
+      "at": "2026-09-17T08:44:00.424Z",
+      "event": "frozen",
+      "detail": "19 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-17T08:44:00.539Z",
+      "event": "started"
+    }
+  ]
+}

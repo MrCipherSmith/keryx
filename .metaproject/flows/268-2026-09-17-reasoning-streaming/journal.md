@@ -1,0 +1,26 @@
+# Flow Journal
+
+- 2026-09-17T08:38:22.653Z - flow created
+- 2026-09-17T08:43:24.345Z - task-added: T5: Stream provider bodies incrementally with first-byte and idle timeouts (compat, openai)
+- 2026-09-17T08:43:24.462Z - task-added: T6: Send output token limit: max_tokens (compat) and max_output_tokens (openai responses)
+- 2026-09-17T08:43:24.581Z - task-added: T7: Stamp session message ts when the message is appended, not at checkpoint flush
+- 2026-09-17T08:43:24.698Z - task-added: T8: Fix next-step suggestion: signal+timeout, sanitizer, current model, no bare-Enter submit
+- 2026-09-17T08:43:24.815Z - task-added: T9: wiki enrich refuses reasoning in pages; wiki status reports pages containing think tags
+- 2026-09-17T08:43:24.935Z - task-added: T10: Compat reasoning config (format field|inline-tags|split, requestParams, replay) with inline think parser
+- 2026-09-17T08:43:25.062Z - task-added: T11: Reasoning on NormalizedMessage: event for opaque replay data, agent loop stores it, session persists it
+- 2026-09-17T08:43:25.179Z - task-added: T12: Compat reasoning replay: deepseek reasoning_content, minimax reasoning_details or think content
+- 2026-09-17T08:43:25.300Z - task-added: T13: Anthropic thinking: request, parse thinking/signature/redacted, replay in tool loop
+- 2026-09-17T08:43:25.423Z - task-added: T14: OpenAI Responses reasoning: effort+summary, encrypted_content include and replay
+- 2026-09-17T08:43:25.543Z - task-added: T15: Gemini thoughts: includeThoughts on effort, capture and replay thoughtSignature
+- 2026-09-17T08:43:25.662Z - task-added: T16: User control for reasoning effort passed as options.reasoning (shell command + config)
+- 2026-09-17T08:43:25.779Z - task-added: T17: TUI reasoning visualization: live delta, thinking phase, duration/tokens, redacted marker, /think mode
+- 2026-09-17T08:43:25.897Z - task-added: T18: Guard tests: reasoning never reaches suggestion, wiki, memory, titles, subagent summaries
+- 2026-09-17T08:43:26.015Z - task-added: T19: Docs: README and docs site for reasoning config, effort control, timeouts
+- 2026-09-17T08:43:26.132Z - task-added: T20: Full verification: bun run check and keryx health run
+- 2026-09-17T08:43:26.247Z - task-added: T21: Smoke run against a real reasoning provider (MiniMax split) via built keryx
+- 2026-09-17T08:43:26.363Z - task-done: T1: Collect remaining context
+- 2026-09-17T08:43:26.478Z - task-done: T2: Implement per plan
+- 2026-09-17T08:43:26.596Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-17T08:43:26.712Z - task-depends-set: T4: dependsOn T21 (was empty) — review runs after verification and smoke
+- 2026-09-17T08:44:00.424Z - frozen: 19 criteria; checksum recorded
+- 2026-09-17T08:44:00.539Z - started
