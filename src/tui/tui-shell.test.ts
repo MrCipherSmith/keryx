@@ -10,6 +10,7 @@ import { readFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import packageJson from "../../package.json" with { type: "json" };
 import {
   composerHeightForLines,
   createShellChrome,
@@ -26,6 +27,7 @@ import {
   fmtTokens,
   isShellApproved,
   mountCwdPanel,
+  mountTitlePanel,
   resolveSidebarMetadata,
   onKeypress,
   pickShellApproval,
@@ -478,6 +480,27 @@ otuiTest("G-2: the shipped sidebar shows the working directory, tail-first and u
   // inside the text budget.
   const cell = rows[0]?.slice((rows[0]?.lastIndexOf("│") ?? -1) + 1) ?? "";
   expect(cell.trim().length).toBeLessThanOrEqual(SIDEBAR_TEXT_WIDTH);
+
+  chrome.destroy();
+  setup.renderer.destroy();
+});
+
+otuiTest("flow 266 AC11/AC12: the shipped sidebar title shows keryx + the running version", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 90, height: 24 });
+  const chrome = await createShellChrome(otui.core, setup.renderer, {
+    title: "keryx · agent",
+    status: "s/m",
+    footerHint: "/ commands",
+    placeholder: "ask keryx",
+    commands: commandsForMode("agent"),
+  });
+  mountTitlePanel(otui.core, setup.renderer, chrome.sidebarTop);
+  await setup.flush();
+  const frame = setup.captureCharFrame();
+
+  expect(frame).toContain("keryx");
+  expect(frame).toContain(`v${packageJson.version}`);
 
   chrome.destroy();
   setup.renderer.destroy();
@@ -2096,7 +2119,10 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
     const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 300);
+    // Widened from 300 (flow 267): `deps` now wraps the call to merge in
+    // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
+    // onContextCompaction }`), pushing the closing `)` a bit further out.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 340);
     expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
   });
 
@@ -2181,6 +2207,61 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
     expect(branchBlock).toContain("sessionCwd");
     expect(branchBlock).toContain("slateSession");
     expect(branchBlock).toContain("mintTimestampAttemptId");
+  });
+});
+
+// --- flow 265 T2: /plan (read-only toggle) in the TUI ----------------------
+//
+// `launchTuiAgentShell` has no headless injection seam (same precedent as
+// every audit in this file) — source-text audit. `runPlanCommand`'s shape
+// (no confirmation dialog, no picker overlay — those are TUI cosmetics,
+// explicitly out of scope for this pass) is proven by reading the real
+// source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
+  const tuiSourcePlan = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartPlan = tuiSourcePlan.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyPlan = tuiSourcePlan.slice(fnStartPlan);
+
+  test("declares its own `readOnly` let, independent of `permissionMode`", () => {
+    expect(fnBodyPlan).toMatch(/let\s+readOnly\s*=\s*false;/);
+  });
+
+  test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
+    expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
+    expect(fnBodyPlan).toContain("io.permissionMode = () => permissionMode;");
+  });
+
+  test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    expect(fnIndex).toBeGreaterThanOrEqual(0);
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).not.toContain("withOverlay");
+    expect(fnBlock).not.toContain("showComposerChoice");
+  });
+
+  test("no-arg reports current state via chrome.showToast; on/off toggle readOnly + toast; anything else is a usage message", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).toContain("chrome.showToast(`Read-only mode: ${readOnly ? \"on\" : \"off\"}`)");
+    expect(fnBlock).toContain('"on"');
+    expect(fnBlock).toContain("readOnly = true;");
+    expect(fnBlock).toContain('"off"');
+    expect(fnBlock).toContain("readOnly = false;");
+    expect(fnBlock).toContain("Usage: /plan [on|off]");
+  });
+
+  test("the command switch has a /plan branch calling runPlanCommand, and the busy-branch switch has a matching case", () => {
+    const branchIndex = fnBodyPlan.indexOf('command.name === "/plan"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+    const branchBlock = fnBodyPlan.slice(branchIndex, branchIndex + 200);
+    expect(branchBlock).toContain("runPlanCommand(line);");
+
+    const caseIndex = fnBodyPlan.indexOf('case "plan": {');
+    expect(caseIndex).toBeGreaterThanOrEqual(0);
+    const caseBlock = fnBodyPlan.slice(caseIndex, caseIndex + 100);
+    expect(caseBlock).toContain("runPlanCommand(line);");
   });
 });
 

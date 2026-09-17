@@ -25,6 +25,7 @@ export {
   loadContext,
   loadTranscript,
   openSession,
+  persistCompacted,
   persistHistory,
   renameSession,
   shortSessionId,

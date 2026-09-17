@@ -590,6 +590,137 @@ test("AC10: trust mode still asks for a destructive background command, and deni
   expect(registry.list()).toHaveLength(0);
 });
 
+// --- flow 265 T2: readOnly ("/plan") — orthogonal hard floor on top of the
+// permission-mode gate above. Proves the axes are truly independent: `trust`
+// (a mode that would otherwise auto-approve a benign shell command, per the
+// "trust mode auto-approves a benign shell command without prompting" test
+// above) still denies outright once `readOnly: true` is set — this is not a
+// hidden 4th mode value, it is a floor `resolveApprovalDecision` applies
+// before consulting `mode` at all (see `permission-mode.ts`).
+
+test("readOnly denies a non-read tool call under trust mode, and requestApproval is never invoked", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const results: { name: string; isError: boolean; output: string }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "trust",
+    readOnly: () => true,
+    onToolResult: (name, result) => {
+      results.push({ name, isError: result.isError === true, output: result.output });
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(false);
+  expect(approvalCalls).toBe(0);
+  expect(results).toHaveLength(1);
+  expect(results[0]?.isError).toBe(true);
+  expect(results[0]?.output.toLowerCase()).toContain("read-only");
+});
+
+test("readOnly still allows a read-risk tool call to run normally", async () => {
+  const { tool, ran } = fakeTool("get_cwd", "read");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "trust",
+    readOnly: () => true,
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("get_cwd", '{"command":"n/a"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(approvalCalls).toBe(0);
+});
+
+test("readOnly: false (or unset) reproduces existing behavior — trust mode still auto-approves a benign shell command", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "trust",
+    // no `readOnly` field at all — mirrors "no permissionMode getter" above
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(approvalCalls).toBe(0);
+});
+
+test("readOnly denies even under auto mode (the most permissive mode)", async () => {
+  const { tool, ran } = fakeTool("apply_patch", "write");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+    readOnly: () => true,
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("apply_patch", '{"command":"anything"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(false);
+  expect(approvalCalls).toBe(0);
+});
+
 test("AC10: ask mode (default, no permissionMode getter) still prompts for a background command exactly like any other shell_exec call", async () => {
   const { registry } = fakeJobRegistryForApprovalTests();
   const tool = shellExecTool("/proj", async () => ({ output: "unused", isError: false }), registry);

@@ -1,0 +1,467 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "266",
+  "slug": "tui-boot-animation-scrollable-sidebar-ve",
+  "title": "TUI boot animation, scrollable sidebar, version display",
+  "status": "in-progress",
+  "createdAt": "2026-09-16T19:17:04.052Z",
+  "updatedAt": "2026-09-17T09:41:17.354Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:adee777da2ba2ef2675614a8cdf8589aaee9db9c02d9199db5253e10a0b5d198",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-17T09:35:53.772Z",
+      "note": "boot-animation.ts:12-13 type OpenTui = typeof import(\"@opentui/core\"); no top-level import; no-optional-imports.test.ts + block-d-no-network.test.ts pass"
+    },
+    "AC2": {
+      "at": "2026-09-17T09:35:53.879Z",
+      "note": "only getTheme() reads used for colors (bg for the box, no other hardcoded hex/palette literal in the file)"
+    },
+    "AC3": {
+      "at": "2026-09-17T09:35:53.979Z",
+      "note": "both KERYX_SKIP_BOOT===1 and opts.skip===true checked first, before any renderable is created; both covered by tests"
+    },
+    "AC4": {
+      "at": "2026-09-17T09:35:54.077Z",
+      "note": "onKeypress injected, unsubscribe() called inside finish() before resolve(); covered by the keypress-skip test"
+    },
+    "AC5": {
+      "at": "2026-09-17T09:35:54.176Z",
+      "note": "called only in launchTuiAgentShell (tui-shell.ts), between createShellRenderer and selectProviderModelInTui/createShellChrome; chat-shell.ts untouched (git diff confirms)"
+    },
+    "AC6": {
+      "at": "2026-09-17T09:36:08.407Z",
+      "note": "KERYX_SKIP_BOOT: \"1\" added to runPtyShell's env block (shell-pty-launch.smoke.test.ts); ran the suite: 1 pass, 2 skip (REAL_SUBPROCESS gated, pre-existing gating unrelated to this change), 0 fail"
+    },
+    "AC7": {
+      "at": "2026-09-17T09:36:08.511Z",
+      "note": "already true from T6/commit bb34eb92 -- sidebarTop = new otui.ScrollBoxRenderable(...).content, ShellChrome.sidebarTop type unchanged (Box)"
+    },
+    "AC8": {
+      "at": "2026-09-17T09:36:08.603Z",
+      "note": "already true from T6 -- sidebarSpacer/toast remain direct children of sidebar, siblings of the scrollbox"
+    },
+    "AC9": {
+      "at": "2026-09-17T09:36:08.705Z",
+      "note": "already true from T6, shell-chrome.test.ts AC7-AC9 test: scrollHeight>height, clipped panel absent then present after scrollTop=scrollHeight"
+    },
+    "AC10": {
+      "at": "2026-09-17T09:36:08.808Z",
+      "note": "144/144 tests pass across tui-shell.test.ts + shell-chrome.test.ts + shell-fallback.test.ts + boot-animation.test.ts, no pre-existing assertion touched"
+    },
+    "AC11": {
+      "at": "2026-09-17T09:38:33.395Z",
+      "note": "mountTitlePanel (tui-shell.ts) renders otui.bold(\"keryx\") + otui.dim(`v${packageJson.version}`) on the sb-title renderable, distinct from shell-chrome.ts's sb-version-${uid++}"
+    },
+    "AC12": {
+      "at": "2026-09-17T09:38:33.513Z",
+      "note": "tui-shell.test.ts: 'flow 266 AC11/AC12: the shipped sidebar title shows keryx + the running version' -- frame.toContain('keryx') and frame.toContain(`v${packageJson.version}`), both pass"
+    },
+    "AC13": {
+      "at": "2026-09-17T09:38:33.603Z",
+      "note": "bun run typecheck clean, bun run lint clean, 144/144 focused tests + 6/6 dependency-floor guard tests pass. keryx health run: INCOMPLETE on eslint source only (resolveBin() env gap, same pre-existing issue flow 265 documented, not introduced here)"
+    },
+    "AC14": {
+      "at": "2026-09-17T09:38:33.737Z",
+      "note": "recorded in journal.md by the (later-crashed) coordinator before it died: KERYX_SKIP_BOOT skip hatch, 350ms duration, agent-mode-only -- all three match what shipped"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "feature/interactive-shell-enhancements",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "context gathered directly via keryx ctx rg against tui-shell.ts/shell-chrome.ts/theme.ts/theme-picker.ts/modal-host.ts/tests, recorded in context.md Agent Findings"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by P1/P2/P3 split (T5/T6/T7)"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T8 (verification)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T9 (review-orchestrator)"
+    },
+    {
+      "id": "T5",
+      "title": "P1: boot-animation.ts + tui-shell.ts wiring + smoke-test skip hatch",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 4,
+        "log": [
+          {
+            "at": "2026-09-16T19:25:01.277Z",
+            "outcome": "started",
+            "detail": "dispatching task-implementer for P1 boot animation"
+          },
+          {
+            "at": "2026-09-16T19:27:00.228Z",
+            "outcome": "blocked",
+            "detail": "first dispatch returned STATUS: NEEDS_CONTEXT worker cd mismatch, re-dispatching"
+          },
+          {
+            "at": "2026-09-16T21:42:10.257Z",
+            "outcome": "blocked",
+            "detail": "second dispatch (a3ceb6cc3d7d47249) produced no file changes after a very long run, unresponsive to a direct status-check SendMessage, and TaskStop refused (owned by a different session lineage) -- treating as stuck, abandoning it in place, dispatching a third, more tightly scoped attempt"
+          },
+          {
+            "at": "2026-09-17T07:39:34.004Z",
+            "outcome": "started",
+            "detail": "Resumed directly by the primary session (not a subagent dispatch) after the coordinator agent died mid-flow with an expired-login API error; the abandoned attempt-2 worker was stopped."
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "boot-animation.ts + tui-shell.ts wiring + smoke-test skip hatch implemented directly, committed 880c5449, typecheck/lint/focused tests all green"
+    },
+    {
+      "id": "T6",
+      "title": "P2: sidebar sidebarTop -> ScrollBoxRenderable",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-16T19:25:48.369Z",
+            "outcome": "started",
+            "detail": "dispatching task-implementer for P2 sidebar scroll, in parallel with T5 (disjoint files)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "P3: sidebar version display next to title",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "packageJson.version added dim next to the sb-title TextRenderable in tui-shell.ts, same commit 880c5449"
+    },
+    {
+      "id": "T8",
+      "title": "Verification: focused tests, code-verifier, keryx health run",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "bun run typecheck clean, bun run lint clean, 142/142 focused tests pass (tui-shell/shell-chrome/shell-fallback/boot-animation), pty smoke test passes with KERYX_SKIP_BOOT. keryx health run --source typescript,complexity: INCOMPLETE on the eslint source (resolveBin() cannot find the binary in this environment) -- same pre-existing, project-wide gap flow 265 already documented, not introduced by this change."
+    },
+    {
+      "id": "T9",
+      "title": "review-orchestrator pass over the full diff",
+      "kind": "review",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 2,
+        "log": [
+          {
+            "at": "2026-09-17T07:46:15.295Z",
+            "outcome": "started",
+            "detail": "self-review by the primary session (not review-orchestrator fan-out) -- user explicitly chose direct implementation over another background dispatch after the flow's coordinator died mid-run"
+          },
+          {
+            "at": "2026-09-17T09:41:17.354Z",
+            "outcome": "blocked",
+            "detail": "keryx flow complete's review gate requires an ingested review-orchestrator round under .metaproject/flows/266-.../reviews/, which the self-review substitution did not produce; same structural gap as the main-merge/base-branch origin gates (flow 265 precedent) -- flow stays in-progress as a verified handoff, not a defect"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Self-review over the full diff (commits 880c5449, 89e1688d) in place of the multi-agent review-orchestrator fan-out: checked AC1-AC14 against the actual code one by one (found AC3's opts.skip and AC12's dedicated test were missing from the first pass, fixed in 89e1688d), checked idempotent cleanup in playBootAnimation (settled guard, timer/listener disposal), checked ctrl+c/renderer-destroy interaction (process exits, no leaked handle), checked no hardcoded colors (AC2, only getTheme()), no static @opentui/core import (AC1). No blocker/major findings. Not a substitute for adversarial multi-reviewer fan-out on higher-risk changes; judged proportionate for this size/risk of change per explicit user direction."
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-16T19:17:04.052Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-16T19:23:51.467Z",
+      "event": "task-added",
+      "detail": "T5: P1: boot-animation.ts + tui-shell.ts wiring + smoke-test skip hatch"
+    },
+    {
+      "at": "2026-09-16T19:23:57.026Z",
+      "event": "task-added",
+      "detail": "T6: P2: sidebar sidebarTop -> ScrollBoxRenderable"
+    },
+    {
+      "at": "2026-09-16T19:24:02.058Z",
+      "event": "task-added",
+      "detail": "T7: P3: sidebar version display next to title"
+    },
+    {
+      "at": "2026-09-16T19:24:07.928Z",
+      "event": "task-added",
+      "detail": "T8: Verification: focused tests, code-verifier, keryx health run"
+    },
+    {
+      "at": "2026-09-16T19:24:13.160Z",
+      "event": "task-added",
+      "detail": "T9: review-orchestrator pass over the full diff"
+    },
+    {
+      "at": "2026-09-16T19:24:25.711Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-16T19:24:31.114Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-16T19:24:36.459Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-16T19:24:42.281Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-16T19:24:48.119Z",
+      "event": "frozen",
+      "detail": "14 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-16T19:24:53.865Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-16T19:25:01.277Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — dispatching task-implementer for P1 boot animation"
+    },
+    {
+      "at": "2026-09-16T19:25:48.369Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — dispatching task-implementer for P2 sidebar scroll, in parallel with T5 (disjoint files)"
+    },
+    {
+      "at": "2026-09-16T19:27:00.228Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 2) — first dispatch returned STATUS: NEEDS_CONTEXT worker cd mismatch, re-dispatching"
+    },
+    {
+      "at": "2026-09-16T19:42:01.452Z",
+      "event": "task-done",
+      "detail": "T6: P2: sidebar sidebarTop -> ScrollBoxRenderable"
+    },
+    {
+      "at": "2026-09-16T21:42:10.257Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 3) — second dispatch (a3ceb6cc3d7d47249) produced no file changes after a very long run, unresponsive to a direct status-check SendMessage, and TaskStop refused (owned by a different session lineage) -- treating as stuck, abandoning it in place, dispatching a third, more tightly scoped attempt"
+    },
+    {
+      "at": "2026-09-17T07:39:34.004Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 4) — Resumed directly by the primary session (not a subagent dispatch) after the coordinator agent died mid-flow with an expired-login API error; the abandoned attempt-2 worker was stopped."
+    },
+    {
+      "at": "2026-09-17T07:39:34.136Z",
+      "event": "task-done",
+      "detail": "T5: P1: boot-animation.ts + tui-shell.ts wiring + smoke-test skip hatch"
+    },
+    {
+      "at": "2026-09-17T07:39:45.999Z",
+      "event": "task-done",
+      "detail": "T7: P3: sidebar version display next to title"
+    },
+    {
+      "at": "2026-09-17T07:40:25.326Z",
+      "event": "task-done",
+      "detail": "T8: Verification: focused tests, code-verifier, keryx health run"
+    },
+    {
+      "at": "2026-09-17T07:46:15.296Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — self-review by the primary session (not review-orchestrator fan-out) -- user explicitly chose direct implementation over another background dispatch after the flow's coordinator died mid-run"
+    },
+    {
+      "at": "2026-09-17T07:46:24.854Z",
+      "event": "task-done",
+      "detail": "T9: review-orchestrator pass over the full diff"
+    },
+    {
+      "at": "2026-09-17T09:35:53.772Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: boot-animation.ts:12-13 type OpenTui = typeof import(\"@opentui/core\"); no top-level import; no-optional-imports.test.ts + block-d-no-network.test.ts pass"
+    },
+    {
+      "at": "2026-09-17T09:35:53.879Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: only getTheme() reads used for colors (bg for the box, no other hardcoded hex/palette literal in the file)"
+    },
+    {
+      "at": "2026-09-17T09:35:53.979Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: both KERYX_SKIP_BOOT===1 and opts.skip===true checked first, before any renderable is created; both covered by tests"
+    },
+    {
+      "at": "2026-09-17T09:35:54.077Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: onKeypress injected, unsubscribe() called inside finish() before resolve(); covered by the keypress-skip test"
+    },
+    {
+      "at": "2026-09-17T09:35:54.176Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: called only in launchTuiAgentShell (tui-shell.ts), between createShellRenderer and selectProviderModelInTui/createShellChrome; chat-shell.ts untouched (git diff confirms)"
+    },
+    {
+      "at": "2026-09-17T09:36:08.407Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: KERYX_SKIP_BOOT: \"1\" added to runPtyShell's env block (shell-pty-launch.smoke.test.ts); ran the suite: 1 pass, 2 skip (REAL_SUBPROCESS gated, pre-existing gating unrelated to this change), 0 fail"
+    },
+    {
+      "at": "2026-09-17T09:36:08.511Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: already true from T6/commit bb34eb92 -- sidebarTop = new otui.ScrollBoxRenderable(...).content, ShellChrome.sidebarTop type unchanged (Box)"
+    },
+    {
+      "at": "2026-09-17T09:36:08.603Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: already true from T6 -- sidebarSpacer/toast remain direct children of sidebar, siblings of the scrollbox"
+    },
+    {
+      "at": "2026-09-17T09:36:08.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: already true from T6, shell-chrome.test.ts AC7-AC9 test: scrollHeight>height, clipped panel absent then present after scrollTop=scrollHeight"
+    },
+    {
+      "at": "2026-09-17T09:36:08.808Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: 144/144 tests pass across tui-shell.test.ts + shell-chrome.test.ts + shell-fallback.test.ts + boot-animation.test.ts, no pre-existing assertion touched"
+    },
+    {
+      "at": "2026-09-17T09:38:33.395Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: mountTitlePanel (tui-shell.ts) renders otui.bold(\"keryx\") + otui.dim(`v${packageJson.version}`) on the sb-title renderable, distinct from shell-chrome.ts's sb-version-${uid++}"
+    },
+    {
+      "at": "2026-09-17T09:38:33.514Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: tui-shell.test.ts: 'flow 266 AC11/AC12: the shipped sidebar title shows keryx + the running version' -- frame.toContain('keryx') and frame.toContain(`v${packageJson.version}`), both pass"
+    },
+    {
+      "at": "2026-09-17T09:38:33.603Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: bun run typecheck clean, bun run lint clean, 144/144 focused tests + 6/6 dependency-floor guard tests pass. keryx health run: INCOMPLETE on eslint source only (resolveBin() env gap, same pre-existing issue flow 265 documented, not introduced here)"
+    },
+    {
+      "at": "2026-09-17T09:38:33.737Z",
+      "event": "ac-confirmed",
+      "detail": "AC14: recorded in journal.md by the (later-crashed) coordinator before it died: KERYX_SKIP_BOOT skip hatch, 350ms duration, agent-mode-only -- all three match what shipped"
+    },
+    {
+      "at": "2026-09-17T09:40:58.373Z",
+      "event": "completing",
+      "detail": "merged commit: 70b58d18"
+    },
+    {
+      "at": "2026-09-17T09:40:58.619Z",
+      "event": "completion-failed",
+      "detail": "main-merge: 70b58d18 is not contained in origin/main | base-branch: unobserved: origin/feature/interactive-shell-enhancements could not be resolved, so whether 70b58d18 landed there is unknown. Fetch the remote (`git fetch origin feature/interactive-shell-enhancements`) and re-run; an unresolvable base is not a passing one. | review: 4 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/266-2026-09-16-tui-boot-animation-scrollable-sidebar-ve/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | verifier-stats (unobserved): no ingested round to read verification stats from | health: INCOMPLETE: required source unavailable: eslint: excluded by source filter; OPTIONAL: tests source skipped; OPTIONAL: dependencyAudit source skipped; OPTIONAL: sonarqube source skipped"
+    },
+    {
+      "at": "2026-09-17T09:41:17.354Z",
+      "event": "task-attempt",
+      "detail": "T9: blocked (attempt 2) — keryx flow complete's review gate requires an ingested review-orchestrator round under .metaproject/flows/266-.../reviews/, which the self-review substitution did not produce; same structural gap as the main-merge/base-branch origin gates (flow 265 precedent) -- flow stays in-progress as a verified handoff, not a defect"
+    }
+  ]
+}

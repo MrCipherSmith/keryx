@@ -124,6 +124,7 @@ import {
   createSession,
   latestSession,
   openSession,
+  persistCompacted,
   persistHistory,
   shortSessionId,
   type SessionHandle,
@@ -183,6 +184,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/flows",
   "/theme",
   "/mode",
+  "/plan",
   "/exit",
 ];
 
@@ -1320,6 +1322,11 @@ async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  // Read-only ("plan") posture — orthogonal to `permissionMode` (see
+  // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
+  // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
+  let readOnly = false;
+  agentIo.readOnly = () => readOnly;
   agentIo.onAutoApproved = (tool, input, meta) => {
     stopSpinner();
     // NOT dimmed (see `AgentIO.onAutoApproved`'s docstring): unlike the shell
@@ -1347,6 +1354,42 @@ async function runAgentRepl(
    * all slate lifecycle work (see `RunAgentTurnOptions.slateSession`).
    */
   let slateSession: SlateSessionRef | undefined;
+  // Flow 267: fetch the provider's real context window ONCE for this session.
+  // Unlike the chat REPL above, this readline AGENT REPL has no `/model`/
+  // `/provider`/`/connect` command to react to (confirmed: those branches only
+  // exist in the chat loop above) — `deps.providerId`/`deps.modelId` never
+  // change for the lifetime of one `runAgentRepl` call — so there is no
+  // rebuild point to re-fetch this at. Best-effort: an unreachable gateway or
+  // unrecognized provider just leaves the guard off, same as `/status`'s own
+  // "never invent a window" contract.
+  try {
+    const limits = await loadSessionLimits({ provider: deps.providerId, model: deps.modelId });
+    if (limits.contextWindow !== undefined) {
+      deps = { ...deps, contextWindow: limits.contextWindow };
+    }
+  } catch {
+    // best-effort — the guard simply stays off for this session.
+  }
+  deps = {
+    ...deps,
+    // Flow 267: mirrors the `/compact` command handler below — persist the
+    // SAME bookkeeping (`compactCount`, `archive.jsonl`, `context.jsonl`) via
+    // `persistCompacted` instead of letting the shrink exist only in memory.
+    // `live === undefined` (sessions off) just skips persistence; `history`
+    // was already spliced in place by the guard regardless.
+    onContextCompaction: (r) => {
+      if (live === undefined) {
+        return;
+      }
+      const persisted = persistCompacted(live, r.context, archive, {
+        provider: deps.providerId,
+        model: deps.modelId,
+      });
+      live = persisted.handle;
+      nextArchiveIndex = history.length;
+      agentIo.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
+    },
+  };
   if (sessionsOn) {
     try {
       const resumeId = sessionOpts?.resumeId;
@@ -1643,6 +1686,26 @@ async function runAgentRepl(
               agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
             }
           }
+        }
+      } else if (command === "/plan") {
+        const planArgs = rest.split(/\s+/).filter((p) => p.length > 0);
+        const wanted = planArgs[0] ?? "";
+
+        if (wanted.length === 0) {
+          agentIo.onSystem?.(
+            `Read-only mode: ${readOnly ? "on" : "off"}\n` + `Usage: /plan [on|off]\n`,
+          );
+        } else if (wanted === "on") {
+          // Going read-only is the safe direction — no confirmation needed
+          // (unlike `/mode auto`, which can skip confirmation for destructive
+          // actions).
+          readOnly = true;
+          agentIo.onSystem?.("Read-only mode: on\n");
+        } else if (wanted === "off") {
+          readOnly = false;
+          agentIo.onSystem?.(`Read-only mode: off (permission mode stays: ${permissionMode})\n`);
+        } else {
+          agentIo.onSystem?.("Usage: /plan [on|off]\n");
         }
       } else if (command === "/search-provider") {
         const args = parseSearchProviderArgs(parts.slice(1));
@@ -2331,6 +2394,26 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           steerable: true,
         }),
       });
+      // Flow 267: fetch the provider's real context window for the auto-
+      // compaction guard (`AgentDeps.contextWindow`). This runs on every
+      // `makeAgentDeps` call — the initial launch AND every `/model`/
+      // `/connect` rebuild (see this function's own doc comment above) — so
+      // the guard's window always matches the CURRENTLY selected model,
+      // never a stale one from before a switch. Best-effort: an unreachable
+      // gateway or unrecognized provider just leaves `contextWindow`
+      // undefined, same as `loadSessionLimits`'s own "never invent a window"
+      // contract for `/status`.
+      let contextWindow: number | undefined;
+      try {
+        const limits = await loadSessionLimits({
+          provider: sel.provider,
+          model: sel.model,
+          ...(sel.baseUrl !== undefined ? { baseUrl: sel.baseUrl } : {}),
+        });
+        contextWindow = limits.contextWindow;
+      } catch {
+        // best-effort — the guard simply stays off.
+      }
       const deps = {
         provider: agentProvider,
         providerId: sel.provider,
@@ -2358,6 +2441,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
         ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
       };
       // The instruction is built from the roster it describes, so it never

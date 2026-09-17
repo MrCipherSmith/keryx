@@ -10,8 +10,9 @@
 // The mode itself must only ever be set by an explicit user action (CLI flag,
 // config-dir default, `/mode` command) — never from tool or model output.
 // `src/harness/child/quarantine.ts` already treats `permissionMode` /
-// `bypassPermissions` appearing in subagent free text as an injection marker;
-// this module gives that vocabulary a real, host-only home.
+// `bypassPermissions` (and, alongside them, `readOnly`/`/plan`) appearing in
+// subagent free text as an injection marker; this module gives that
+// vocabulary a real, host-only home.
 
 /** The three user-selectable postures for the interactive session. */
 export type PermissionMode = "ask" | "trust" | "auto";
@@ -58,13 +59,30 @@ export interface ApprovalGateInput {
    * `credentials`, not a variant of it.
    */
   sacReviewConfirmation: boolean;
+  /**
+   * Whether the session is in read-only ("plan") mode. This is an axis
+   * orthogonal to {@link PermissionMode} — not a 4th mode value. `mode`
+   * governs how much confirmation a reachable action needs; `readOnly`
+   * governs whether a mutating action is reachable at all. Both are
+   * independently settable (e.g. `trust` + `readOnly` together). Set via the
+   * `/plan` command; always `false` unless a caller opts in.
+   */
+  readOnly: boolean;
 }
 
-export type ApprovalGateDecision = "auto" | "ask";
+export type ApprovalGateDecision = "auto" | "ask" | "deny";
 
 /**
- * Decide whether an action proceeds without prompting, or still needs
- * `AgentIO.requestApproval`.
+ * Decide whether an action proceeds without prompting, still needs
+ * `AgentIO.requestApproval`, or is refused outright.
+ *
+ * `readOnly` is a hard floor above everything else except `read` risk itself:
+ * when the session is read-only, every non-`read` action is denied
+ * regardless of `mode`, `destructive`, `credentials`, or
+ * `sacReviewConfirmation` — including combinations that would otherwise
+ * auto-approve under `trust`/`auto`. This mirrors the same "no mode lifts
+ * this" shape `credentials`/`sacReviewConfirmation` already use, just for a
+ * different (session-scoped, user-toggled) reason.
  *
  * `credentials` and `sacReviewConfirmation` are hard floors that no mode
  * lifts — `ApprovalMeta`'s own docstring already commits to this for the
@@ -85,10 +103,14 @@ export type ApprovalGateDecision = "auto" | "ask";
  *     any action is skipped under it.
  */
 export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateDecision {
-  const { mode, risk, destructive, credentials, sacReviewConfirmation } = input;
+  const { mode, risk, destructive, credentials, sacReviewConfirmation, readOnly } = input;
 
   if (risk === "read") {
     return "auto";
+  }
+
+  if (readOnly) {
+    return "deny";
   }
 
   if (credentials || sacReviewConfirmation) {
