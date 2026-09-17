@@ -3358,6 +3358,11 @@ export async function launchTuiAgentShell(opts: {
     let permissionMode: PermissionMode =
       opts.initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
     io.permissionMode = () => permissionMode;
+    // Read-only ("plan") posture — orthogonal to `permissionMode` (see
+    // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
+    // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
+    let readOnly = false;
+    io.readOnly = () => readOnly;
     io.onAutoApproved = (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -3906,6 +3911,31 @@ export async function launchTuiAgentShell(opts: {
           await applyMode(id);
         }
       })();
+    };
+
+    // Read-only ("plan") toggle — mirrors `runModeCommand`'s shape but
+    // simpler: no confirmation dialog, no picker overlay (TUI cosmetics are
+    // out of scope for this pass). Going read-only is the safe direction, so
+    // `on` needs no confirm step, unlike `/mode auto`.
+    const runPlanCommand = (line: string): void => {
+      const planArgs = line.trim().split(/\s+/).slice(1).filter((p) => p.length > 0);
+      const wanted = planArgs[0] ?? "";
+
+      if (wanted.length === 0) {
+        chrome.showToast(`Read-only mode: ${readOnly ? "on" : "off"}`);
+        return;
+      }
+      if (wanted === "on") {
+        readOnly = true;
+        chrome.showToast("Read-only mode: on");
+        return;
+      }
+      if (wanted === "off") {
+        readOnly = false;
+        chrome.showToast(`Read-only mode: off (permission mode stays: ${permissionMode})`);
+        return;
+      }
+      io.onSystem?.("Usage: /plan [on|off]\n");
     };
 
     // `/model` and `/connect` rebuild `deps` mid-session and refresh the labels.
@@ -4532,6 +4562,10 @@ export async function launchTuiAgentShell(opts: {
             runModeCommand(line);
             return;
           }
+          case "plan": {
+            runPlanCommand(line);
+            return;
+          }
           case "session-info": {
             showSessionInfo();
             return;
@@ -4880,6 +4914,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (command.name === "/mode") {
           runModeCommand(line);
+          return;
+        }
+        if (command.name === "/plan") {
+          runPlanCommand(line);
           return;
         }
         if (command.name === "/model") {

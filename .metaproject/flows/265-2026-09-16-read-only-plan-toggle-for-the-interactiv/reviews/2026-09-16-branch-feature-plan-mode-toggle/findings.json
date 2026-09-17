@@ -1,0 +1,54 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-security-code",
+    "severity": "minor",
+    "problem": "quarantine.ts's permission-config pattern did not cover readOnly/plan vocabulary, unlike permissionMode/bypassPermissions which permission-mode.ts's own docstring says it covers.",
+    "impact": "No live exploit (readOnly has no tool/model-output write path); defense-in-depth completeness gap relative to the existing threat model permission-mode.ts commits to.",
+    "suggested_fix": "Extend the permission-config regex to also match readOnly/read-only-mode/plan vocabulary.",
+    "evidence": "permission-mode.ts's top-of-file docstring states quarantine.ts covers permissionMode/bypassPermissions; quarantine.ts:38-42's permission-config pattern's regex alternation had no readOnly/plan terms before this fix.",
+    "confidence": "high",
+    "file": "src/harness/child/quarantine.ts",
+    "line": 39,
+    "quote": "name: \"permission-config\",",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-branch-feature-plan-mode-toggle#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "bun test src/harness/child/quarantine.test.ts -> 8 pass, 0 fail (2026-09-16). Includes 'readOnly/read-only mode and /plan mentions are flagged as permission-config' (fails if quarantineChildSummary does not flag those strings, which is exactly what F-001 reported as missing) and 'innocuous read-only mentions without mode are not flagged (no false positive)'. Both pass against commit 9fe403b0d25f3d3f4d3a2c0b928273739182d7e2, which is the commit the disposition cites as having closed the finding.",
+      "verifier": "flow-orchestrator-execution-check"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "closed by commit 9fe403b0d25f3d3f4d3a2c0b928273739182d7e2 (flow 265 T5); independently verified by execution check (verifier: flow-orchestrator-execution-check, verdict: refuted, bun test src/harness/child/quarantine.test.ts 8 pass/0 fail)"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-security-code",
+    "severity": "info",
+    "problem": "The gateDecision branch does not exhaustively narrow the new \"deny\" outcome; its final else treats any non-auto decision (including a hypothetical deny) as ask.",
+    "impact": "None today: readOnly is hardcoded false at this call site, so resolveApprovalDecision can never actually return \"deny\" here.",
+    "suggested_fix": "Optional: switch on gateDecision with an explicit deny case for future-proofing, if this call site's readOnly is ever wired to something toggle-able.",
+    "evidence": "supervise-mcp.ts:263-291 constructs the ApprovalGateInput with readOnly: false unconditionally, then branches only on auto vs. requestApproval-undefined vs. else.",
+    "confidence": "high",
+    "file": "src/harness/external/supervise-mcp.ts",
+    "line": 287,
+    "quote": "} else if (deps.requestApproval === undefined) {",
+    "locator": {
+      "state": "derived",
+      "method": "exact",
+      "reported_line": null
+    },
+    "global_id": "2026-09-16-branch-feature-plan-mode-toggle#F-002",
+    "disposition": {
+      "state": "dismissed-deprioritised",
+      "evidence": "no attack vector: readOnly is hardcoded false at this call site so resolveApprovalDecision can never return deny here; optional hardening only, deferred"
+    }
+  }
+]
