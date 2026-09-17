@@ -228,6 +228,17 @@ What is in it today:
   LAN hosts (RFC1918/CGNAT) as an explicit operator-trust boundary — built-in
   providers never get it, and loopback/link-local metadata addresses stay
   denied regardless.
+- **Reasoning effort, provider-neutral.** `/reasoning
+  [off|minimal|low|medium|high|xhigh|max]` sets the session's thinking effort
+  for the main turn (no argument shows the resolved level and its source);
+  `KERYX_REASONING_EFFORT` and a persisted shell-config setting sit below it
+  in precedence, defaulting to `off`. Anthropic, OpenAI and Gemini each map
+  the level onto their own reasoning knob, clamping a level a model does not
+  support rather than sending it unrecognized. A custom OpenAI-compatible
+  provider ignores this control — its reasoning shape (inline `<think>` tags,
+  an out-of-band field, a gateway-specific request flag) is configured
+  per-provider in `llm-providers.json` instead. See [the CLI
+  reference](docs/docs/cli-reference.md#reasoning-effort-and-output-budget).
 - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
   process restart, and context compaction that keeps the full archive.
   `/resume`, `/sessions`, `/status`, `/flows`, `/compact`, `/new`, and

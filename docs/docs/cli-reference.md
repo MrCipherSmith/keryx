@@ -209,6 +209,78 @@ holds and what forking copies.
 When side-worker context is still processing, queued questions do not block the
 session state and still see recent context about the busy main turn.
 
+### Reasoning effort and output budget
+
+- `/reasoning [off|minimal|low|medium|high|xhigh|max]` sets the session's
+  thinking effort for the main agent turn; no argument prints the resolved
+  level and which tier it came from. Precedence, highest first: this
+  session's `/reasoning` override, then `KERYX_REASONING_EFFORT`, then the
+  persisted `reasoningEffort` in the shell config, then `off` (no reasoning
+  requested — the default). Setting it also persists to the shell config, so
+  it survives a restart. Readline (`--no-tui`) has the same command.
+- Each native provider maps the requested level onto its own knob and clamps
+  a level it does not support to the nearest one it does, rather than
+  sending an unrecognized value:
+  - **Anthropic** — current-generation models (Opus/Sonnet 5, Fable, Mythos,
+    Opus/Sonnet 4.6 and newer) use adaptive thinking
+    (`thinking: { type: "adaptive" }`) with `display: "summarized"` forced
+    on — the default arrives with empty thinking text — and the level
+    passed as `output_config.effort`. The `4.5` generation (Haiku, Sonnet
+    and Opus 4.5) and any Claude 3.x/2.x model use budget-based thinking
+    instead (`thinking: { type: "enabled", budget_tokens }`), with
+    `budget_tokens` fixed per level (2048 low, 4096 medium, 8192 high,
+    16000 xhigh/max) and `max_tokens` raised to make room for it. Anthropic
+    has no `minimal` level (clamps to `low`), and Opus/Sonnet 4.6 have no
+    `xhigh` (clamps to `high`).
+  - **OpenAI (Responses API)** — passed as `reasoning.effort`, with a
+    requested summary. OpenAI's own vocabulary is
+    `minimal|low|medium|high`; `xhigh`/`max` clamp to `high`.
+  - **Gemini** — `generationConfig.thinkingConfig`, always requesting
+    `includeThoughts: true` alongside the depth control. `gemini-3*` models
+    use `thinkingLevel` (`low` or `high` — `medium` clamps to `high`);
+    older or unrecognized model ids use `thinkingBudget`, a token budget per
+    level. No effort requested means no `thinkingConfig` at all.
+  - **Custom OpenAI-compatible providers ignore this control.** Their
+    reasoning shape is configured per-provider in `llm-providers.json`
+    instead — see
+    [Custom-provider reasoning configuration](#custom-provider-reasoning-configuration)
+    below. `/reasoning <level>` still prints a note naming the active
+    provider when it has no `reasoning` entry there.
+- **Output budget.** The main turn's per-request output-token budget
+  defaults to 8192 — the tightest hard ceiling among currently supported
+  providers (DeepSeek's OpenAI-compatible `max_tokens` cap). Precedence,
+  highest first: the `KERYX_MAX_OUTPUT_TOKENS` env var, a custom provider's
+  own `maxOutputTokens` in `llm-providers.json`, the operator's global
+  `maxOutputTokens` shell-config setting, then the 8192 default. No upper
+  ceiling is enforced on an override.
+- **Streaming and timeouts.** Every provider adapter (Anthropic, OpenAI,
+  Gemini, and the OpenAI-compatible engine) streams the reply incrementally
+  instead of waiting for the full response. Two independent deadlines guard
+  a stalled connection: a first-byte timeout (no byte at all since the
+  request was sent) and an idle timeout (no further chunk since the last
+  one) — both default to 120 seconds. A timeout surfaces as a retryable
+  `unavailable` provider error, the same class as a dropped connection.
+  There is no user-facing setting for either timeout today.
+- Tab or Right accepts the next-step hint shown under the composer;
+  starting a new turn, or typing or pasting into the composer, cancels an
+  in-flight or already-shown hint. Enter on an empty composer no longer
+  sends the hint — only Tab/Right accept it.
+
+<!-- keryx-docs T19: reasoning-display spec below is frozen for flow 268 T18
+     (implemented concurrently on this branch under src/tui/, not yet landed
+     as of this writing). Verify the exact indicator/label strings against
+     src/tui once T18 lands, before this section ships. -->
+
+- `/think` expands or collapses the last reasoning block; it is gaining an
+  argument — `/think auto|expand|hide` — to set how reasoning displays for
+  the rest of the session, persisted like other session settings. While the
+  main turn is reasoning, a live "thinking…" indicator shows elapsed time
+  and the last lines of reasoning; once the turn finishes, it collapses to a
+  block like `◆ thought for 12s · 1.8k tokens`. A provider that hides its
+  own reasoning shows a redacted marker instead of a block. `Ctrl+O` and `y`
+  (copy) work on a reasoning block the same as on any other transcript
+  block.
+
 ---
 
 ## harness
@@ -266,6 +338,66 @@ today". Nothing is contacted — no provider, no tool, no network.
 Masking without TLS termination **fails closed** — it does not proceed with an
 unmasked connection. Spawn failures carry structured diagnostics rather than a
 bare exit code.
+
+### Custom-provider reasoning configuration
+
+An entry in `llm-providers.json` (see above) may carry a `reasoning` block
+that tells the OpenAI-compatible adapter how to read — and later replay — a
+gateway's reasoning output. Absent, reasoning is read the default way.
+
+```json
+{
+  "schemaVersion": 1,
+  "providers": {
+    "my-minimax": {
+      "name": "my-minimax",
+      "baseUrl": "https://api.minimax.chat",
+      "models": ["MiniMax-M3"],
+      "reasoning": {
+        "format": "split",
+        "requestParams": { "reasoning_split": true },
+        "replay": "minimax"
+      }
+    }
+  }
+}
+```
+
+`reasoning.format`:
+
+| Value | Use when | Behavior |
+|---|---|---|
+| `"field"` (default when `reasoning` is absent or `format` is omitted) | The gateway sends reasoning in a `reasoning`/`reasoning_content` delta field, separate from `content` (DeepSeek, OpenRouter, vLLM, most gateways). | The field is read as-is, no parsing needed. |
+| `"inline-tags"` | The gateway writes reasoning INSIDE `delta.content` as `<think>…</think>` — MiniMax's own default shape, and typical of Qwen3 or a DeepSeek-R1 distill served with no reasoning parser in front of it. | keryx strips the tags out of the visible content and surfaces the tagged text as reasoning, via `ThinkTagParser`. |
+| `"split"` | The gateway can be asked, via `requestParams`, to send reasoning out-of-band instead of inline. | `delta.content` passes through unchanged; reasoning is read from `reasoning_content`/`reasoning_details` as usual. |
+
+`reasoning.requestParams` — an object shallow-merged into the request body
+AFTER every field keryx builds itself. It cannot override `model`,
+`messages`, `stream`, or `tools` — those keys are dropped from the merge;
+every other key passes through, including a provider-specific flag like
+MiniMax's `reasoning_split`.
+
+`reasoning.replay` — which shape a resumed transcript uses to replay this
+provider's own past reasoning: `"none"` (default), `"deepseek"` (echoes an
+owned `reasoning_content` field back for a tool-using round), or
+`"minimax"` (an owned `raw_content` replay item replaces `content`).
+
+Two worked examples, alongside the inline-tags one above:
+
+- **MiniMax**, asking for out-of-band reasoning and replaying it MiniMax's way:
+  ```json
+  { "format": "split", "requestParams": { "reasoning_split": true }, "replay": "minimax" }
+  ```
+- **DeepSeek**, default field-based reasoning with DeepSeek-shaped replay:
+  ```json
+  { "format": "field", "replay": "deepseek" }
+  ```
+
+**Per-provider output budget.** `maxOutputTokens` (a sibling field of
+`reasoning`, not inside it) overrides the main turn's output-token budget
+for just this provider — see
+[Reasoning effort and output budget](#reasoning-effort-and-output-budget)
+above.
 
 ---
 
@@ -757,7 +889,7 @@ keryx wiki sections migrate [--dry-run]
 
 | Subcommand | Flags / args | Description |
 |---|---|---|
-| `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state. |
+| `status` | — | Show enabled state, root, total pages, per-type counts, last index/link-check state, and any pages carrying a leaked `<think>`/`<thinking>` tag (with a hint to re-run `enrich --force` on each). |
 | `sections list` | `--json` | List every indexed section with its identity, its stability, and the page it belongs to. |
 | `sections resolve` | `<section-ref>`, `--json` | Resolve a section reference. Answers found, page-found, tombstoned, reoccupied, pending-tombstone, stale-locator, registry-unreadable or unknown, and never redirects a deleted identity to a same-named section elsewhere. A `found` identity that was once removed also prints its removal history and the basis on which its tombstone was lifted — `byte-identical` (a genuine restoration) or `accepted-substitution` (an operator accepted a different document at that address). Exits `0` when live, `1` for any answer about a dead identity, `2` when the registry cannot be read. |
 | `sections sync` | `--dry-run`, `--accept-reoccupation <ref>[,<ref>...]`, `--json` | Rebuild the section index from the pages on disk: register the current stable identities and tombstone the ones that disappeared. The only command in this area that writes. Exits `1` when any identity is *reoccupied* — removed, then re-minted at the same address by a different document — because a tombstone and a live document claiming one address is a contradiction, not a completed sync. `--accept-reoccupation` is the only exit from that state: it lifts the named tombstones and records permanently that the content was substituted rather than restored, which `sections resolve` then reports on every read. Accepting a page ref also accepts the sections inside that page. |
@@ -768,7 +900,7 @@ keryx wiki sections migrate [--dry-run]
 | `check-links` | — | Validate internal Markdown links; write a report. Exits `1` if any broken. |
 | `validate` | — | Metadata + link + index-staleness checks (superset of `check-links`). Exits `1` on issues. |
 | `ask "<question>"` | `--k <n>`, `--rerank` | Answer a question from the local wiki with a deterministic, citation-backed retrieval pass over the pages. `--k` caps the number of retrieved passages; `--rerank` applies the extra reranking step. |
-| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
+| `enrich [<page>]` | `--all`, `--force`, `--list`, `--resume`, `--limit <n>`, `--concurrency <n>`, `--provider <p>`, `--model <m>`, `--dry-run`, `--json` | **Needs a model credential.** Fill draft pages with model-written prose; defaults to drafts only, validates, and marks pages accepted. Strips a complete `<think>`/`<thinking>` block out of model output before it reaches a page, and rejects (does not write) content that still carries a stray, unclosed tag. Supports optional RLM mode via `.metaproject/wiki.config.json` (set `rlm.enabled: true`): classifies pages as skip/light/deep based on staleness and graph metrics; deep pages receive a graph-aware model call; batching and staleness-skipping apply automatically; budget-exhausted pages fall back to the template. The exception among the model commands: without a credential it exits `0` and marks the affected pages skipped rather than failing. |
 | `context` | — | Emit the bounded wiki-index portion of the turn-start orientation block. |
 | `backlinks <target>` | — | For a wiki page or code file, print wiki pages linking to the target and graph dependents when the target is a graphed code file. |
 | `freshness` | — | Read-only backlog: which pages the code has moved under since each was last verified, classified and ordered by how far behind. Writes only its own report, never a page. Always exits `0` — a report, not a gate. |
