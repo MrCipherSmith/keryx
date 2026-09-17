@@ -266,20 +266,20 @@ session state and still see recent context about the busy main turn.
   in-flight or already-shown hint. Enter on an empty composer no longer
   sends the hint — only Tab/Right accept it.
 
-<!-- keryx-docs T19: reasoning-display spec below is frozen for flow 268 T18
-     (implemented concurrently on this branch under src/tui/, not yet landed
-     as of this writing). Verify the exact indicator/label strings against
-     src/tui once T18 lands, before this section ships. -->
-
-- `/think` expands or collapses the last reasoning block; it is gaining an
-  argument — `/think auto|expand|hide` — to set how reasoning displays for
-  the rest of the session, persisted like other session settings. While the
-  main turn is reasoning, a live "thinking…" indicator shows elapsed time
-  and the last lines of reasoning; once the turn finishes, it collapses to a
-  block like `◆ thought for 12s · 1.8k tokens`. A provider that hides its
-  own reasoning shows a redacted marker instead of a block. `Ctrl+O` and `y`
-  (copy) work on a reasoning block the same as on any other transcript
-  block.
+- While the model reasons, the busy line switches to `thinking…` on the
+  first reasoning fragment and shows the latest reasoning lines next to the
+  elapsed time. When the reasoning ends it becomes a collapsed block headed
+  `◆ thought for 12s · 1.8k tokens`; the token count appears when the
+  provider reports it (OpenAI, Gemini). Reasoning the provider hides is
+  shown as `◆ thought · hidden by provider`.
+- `/think` with no argument expands or collapses the last reasoning block;
+  `Ctrl+O` and `y` (copy) work on it like on any other transcript block.
+- `/think auto|expand|hide` sets how reasoning is shown and is saved as
+  `thinkDisplay` in the shell config: `auto` (default) collapses the block,
+  `expand` shows it expanded, `hide` shows neither the live preview nor the
+  block, and the hidden reasoning is not kept for copying. The plain
+  (non-TUI) shell prints `◆ thought for 12s (3 lines)` and follows `hide`
+  too.
 
 ---
 

@@ -237,7 +237,9 @@ What is in it today:
   support rather than sending it unrecognized. A custom OpenAI-compatible
   provider ignores this control — its reasoning shape (inline `<think>` tags,
   an out-of-band field, a gateway-specific request flag) is configured
-  per-provider in `llm-providers.json` instead. See [the CLI
+  per-provider in `llm-providers.json` instead. Reasoning streams live into
+  the shell and collapses to a `◆ thought for 12s · 1.8k tokens` block;
+  `/think auto|expand|hide` chooses how it is shown. See [the CLI
   reference](docs/docs/cli-reference.md#reasoning-effort-and-output-budget).
 - **Durable sessions, per project.** JSONL transcripts on disk, resume across a
   process restart, and context compaction that keeps the full archive.
