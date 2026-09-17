@@ -9,6 +9,9 @@ import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
   shellJobKillTool,
   shellJobOutputTool,
+  shellTaskKillTool,
+  shellTaskOutputTool,
+  shellTaskWaitTool,
   type JobRegistry,
 } from "../harness/tool/builtin/background-job-registry";
 import { builtinReadOnlyTools, type InteractiveTool } from "../harness/tool/builtin/interactive-tools";
@@ -182,7 +185,20 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     webFetchTool(),
     webSearchTool(input.searchController),
     shellExecTool(input.cwd, undefined, jobRegistry),
-    ...(jobRegistry !== undefined ? [shellJobOutputTool(jobRegistry), shellJobKillTool(jobRegistry)] : []),
+    // Flow 266: the task tools proper, plus the two old names kept as
+    // deprecated aliases for one release. `observer` is what decides whether a
+    // read counts as delivery — this roster is the MAIN session's, so its copy
+    // marks a finished task observed; the side-worker roster is built
+    // separately and never does (D-16).
+    ...(jobRegistry !== undefined
+      ? [
+          shellTaskOutputTool(jobRegistry, { observer: "main" }),
+          shellTaskWaitTool(jobRegistry),
+          shellTaskKillTool(jobRegistry),
+          shellJobOutputTool(jobRegistry),
+          shellJobKillTool(jobRegistry),
+        ]
+      : []),
     applyPatchTool(input.cwd),
     workspaceOverviewTool(input.cwd),
     workspaceReadTool(input.cwd),

@@ -50,6 +50,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/demote",
     "/exit",
   ]);
 });
@@ -135,6 +136,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/demote",
     "/exit",
   ]);
 });
@@ -242,6 +244,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/interrupt",
     "/queue",
     "/delegate",
+    "/demote",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([

@@ -2438,7 +2438,28 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
   const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
   test("a module-level deny-list constant names shell_job_kill (not a risk-level change — AC6 is frozen)", () => {
-    expect(tuiSourceF003).toContain('const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set(["shell_job_kill"]);');
+    // Flow 266 widened this list, so the audit can no longer pin the literal
+    // one-element Set it was written against. What it protects is unchanged and
+    // is what is asserted here: a MODULE-LEVEL constant that denies tools BY
+    // NAME — not a risk-level change, which AC6 freezes.
+    expect(tuiSourceF003).toContain("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(tuiSourceF003).toContain('"shell_job_kill"');
+  });
+
+  test("flow 266: the deny-list also covers kill/wait and the implicit-cursor read, but NOT shell_task_output", () => {
+    // The executed proof lives in `shell-task-tools.test.ts`, which reads the
+    // exported Set. This audit exists for the file itself: the three additions
+    // are the reason a side worker cannot end a main-session task, block on one,
+    // or consume output the main session has not seen — and the one omission is
+    // deliberate, because `shell_task_output` takes an explicit cursor and its
+    // side-worker copy never marks a task delivered.
+    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    expect(declIdx).toBeGreaterThanOrEqual(0);
+    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
+    for (const name of ["shell_job_kill", "shell_task_kill", "shell_task_wait", "shell_job_output"]) {
+      expect(declBlock).toContain(`"${name}"`);
+    }
+    expect(declBlock).not.toContain('"shell_task_output"');
   });
 
   test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
@@ -3058,5 +3079,55 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     );
     expect(onDestroy).toMatch(/foregroundOperation\.cancel\(/);
     expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
+  });
+});
+
+// --- flow 265 AC7/AC8 — TUI completion wake (source-text audit) ----------
+//
+// RED: none of this wiring exists yet. The complete OpenTUI REPL is not
+// mountable under the unit harness (see the foreground-operation audit block
+// directly above, which states the same limitation), so the wake GUARD and the
+// operator-first ordering are pinned here as source text. The behaviour that
+// does have a seam — exactly-once draining, the message shape, the round
+// boundary and `hold` — is proven by execution in
+// `background-job-registry.test.ts` and `agent-task-notification.test.ts`.
+//
+// PINNED SHAPE (task-implementer builds exactly this):
+//   1. The registry's `.onCompletion(...)` starts a turn ONLY when the shell is
+//      idle: no foreground operation active and the operator queue empty.
+//   2. That turn carries `origin: "task-notification"`.
+//   3. The settle handlers keep draining the operator queue FIRST — a queued
+//      operator message always beats a pending notification.
+//   4. Consecutive auto-wakes are capped via `resolveMaxAutoWake`, reset to 0
+//      by any operator line.
+describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (source-text audit)", () => {
+  const wakeSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("the TUI subscribes to registry completions", () => {
+    expect(wakeSource).toContain(".onCompletion(");
+  });
+
+  test("the wake is guarded by no foreground operation AND an empty operator queue", () => {
+    const start = wakeSource.indexOf(".onCompletion(");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = wakeSource.slice(start, start + 1_600);
+    // Idle means both: nothing running in the foreground, nothing queued.
+    expect(block).toMatch(/chrome\.isBusy\(\)|foregroundOperation/);
+    expect(block).toContain("mainQueue.length === 0");
+  });
+
+  test("a notification-started turn is marked with origin: 'task-notification'", () => {
+    expect(wakeSource).toMatch(/origin:\s*"task-notification"/);
+  });
+
+  test("the settle handler still drains a queued operator item before anything else", () => {
+    // The existing operator-first drain must survive: a queued message is the
+    // real next step and beats a pending notification.
+    expect(wakeSource).toContain("forceHandoff.takeNext() ?? mainQueue.shift()");
+  });
+
+  test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
+    expect(wakeSource).toContain("resolveMaxAutoWake");
+    expect(wakeSource).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
   });
 });

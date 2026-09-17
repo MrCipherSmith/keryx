@@ -3,6 +3,185 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.112] — 2026-09-16
+Output from a background task reached the model provider unredacted. Releases
+0.2.109, 0.2.110 and 0.2.111 carry the defect; this release is the fix and
+contains nothing else.
+
+### Fixed
+
+- **A task-completion notification is redacted before it reaches the provider.**
+  `redactSensitiveText` ran on the ordinary tool-result path and nowhere else. A
+  completion notification carries the same kind of bytes into the same
+  provider-bound history and never passed through it, so output was scrubbed when
+  a command returned inline and leaked verbatim when the identical command
+  outlived its yield and finished as a background task. The scrubber's own reason
+  to exist names this case — a contained command that reads a credential must not
+  leak the raw value onward to the provider — and delivery is that path too.
+  Redaction now happens in the single notification builder every delivery path
+  funnels through, after the tail slice rather than before it, because redaction
+  is not length-preserving and scrubbing first would silently change what the
+  4 000-byte bound means.
+
+  **Who is affected.** Only sessions that ran a command whose *output* contained
+  a secret through a background task — `env`, reading a credentials file, a build
+  that echoes a token into its log. A command that merely *uses* a secret without
+  printing it was never exposed by this. The leak went to the configured model
+  provider as part of the conversation, not to disk or to any third party.
+
+  **What you cannot check, and what to do instead.** Notifications are not
+  written to disk and the context sent to a provider is not readable after the
+  fact, so there is no local artifact to audit — "check whether you were
+  affected" is advice that cannot be followed. If you recognise the case above in
+  how you used background tasks on 0.2.109–0.2.111, treat the printed credential
+  as exposed and rotate it.
+
+  Found while drafting the requirements for on-disk transcripts: stating what a
+  transcript must redact required stating what the code redacts today, and this
+  path did not survive the check.
+
+## [0.2.111] — 2026-09-16
+Review stops acting on the wrong thing. An imported reviewer can now verify and
+brings the rules it cites; a model block no longer pins whatever `keryx shell`
+was last pointed at; and a reply pass can no longer post to a pull request that
+has merged, at a commit it has left, from a review that was only ever a report.
+
+### Fixed
+
+- **`comments reply` refuses a merged or closed pull request, a stale `--sha`,
+  and an unmanaged review.** A lightweight "review this PR" ended by replying to
+  a pull request that had merged, citing a pre-merge SHA, and every check passed:
+  the comments path never read `pulls/{n}`, `--final` was the only precondition,
+  and `--sha` was written into the record but never compared. `collect` now reads
+  the pull request and prints its state and head, warning when it is not open or
+  `--sha` is not its head. `reply` refuses a closed or merged PR (`--allow-closed-pr`
+  overrides), one whose state could not be read, and a `--sha` that is not the
+  head — dry runs included — and validates `--sha` as a SHA. Posting requires
+  `--review <managed package for this PR>` or `--result`; `--dry-run` does not.
+
+- **`review tier` and `providers cross-family` read the caller's session.**
+  Without flags both fell back to the provider/model `keryx shell` persisted in
+  `auth.json`, so an orchestrator in Claude Code got a block pinning `keryx
+  shell`'s last model — one its dispatch tool cannot run — and cross-family would
+  class a Claude-authored change as another vendor's. The session now comes from
+  `--session-provider`/`--session-model`, then `KERYX_SESSION_PROVIDER`/
+  `KERYX_SESSION_MODEL` (which `keryx shell` exports to every `shell_exec`
+  command, and external agents never inherit); `auth.json` only with
+  `--from-shell-config`. A block names a model only when discovery assigned one
+  other than the session's; otherwise it is adaptive — the tier plus
+  `inherit: true` — and the host picks its own model for that tier.
+
+- **Imported project-skills verify.** Import kept only the Origin lines of the
+  keryx header, so `keryx skills verify` found no Version or Target (always
+  `stale`) and no `Last Verified:` line to update (always `never`). The header is
+  kept, with the author's `metadata.version` registered; skills imported earlier
+  verify too. Origin is recorded as `~/…` or project-relative rather than an
+  absolute home path that reads as `missing` on every other machine.
+
+### Added
+
+- **Import brings the rules a skill cites.** Missing `core/*.mdc` rules are
+  copied from the overlay's `rules/`; a present rule is never overwritten, and a
+  rule name keryx itself ships is never copied. Re-running `keryx review import`
+  over an existing import fetches only the rules.
+
+- **Project reviewers carry their triggers.** `keryx review reviewers --json`
+  reports `paths` (from `metadata.paths` or the description's globs), `flags`,
+  `stackRequires` and `unresolvedRules`, and review-orchestrator path-gates and
+  selects project reviewers with them instead of running all of them every round.
+
+## [0.2.110] — 2026-09-16
+A running command is now something you can watch, wait for, interrupt and set
+aside. 0.2.108 stopped a long command from freezing the session and 0.2.109 made
+a finished one report itself; this release fills in everything in between.
+
+### Added
+
+- **Three task tools.** `shell_task_output(task_id, since?)` reads from a cursor
+  YOU hold and tells you where to continue — unlike `shell_job_output`, whose
+  cursor is implicit shared state, so two readers of one task quietly consumed
+  each other's output. `shell_task_wait({task_ids, mode, timeout_ms?})` waits for
+  `any` or `all` of a set instead of polling in a loop, bounded by a timeout
+  clamped to at most five minutes. `shell_task_kill(task_id)` stops a task's
+  whole process group and is idempotent: asking again after it ended reports its
+  status rather than signalling anything, and a task that exited cleanly is not
+  relabelled as killed.
+
+- **A wait you can interrupt.** Tools now receive the turn's abort signal. The
+  agent loop used to check for an interrupt only BETWEEN tool calls, so a call
+  that was waiting could not be reached at all — the operator's stop did nothing
+  until the wait's own bound fired. Interrupting now ends the WAIT and never the
+  command: the task moves to the background, keeps running with its output
+  intact, and still reports itself when it finishes. Both the `shell_exec` yield
+  and `shell_task_wait` honour it.
+
+- **`/demote <task_id>`**, in the TUI and in `--no-tui`, moves a running command
+  to the background without stopping it and without ending the turn. It works
+  while the agent is busy, which is the case it exists for: a turn blocked on its
+  own long command is exactly when you want the command set aside rather than
+  killed.
+
+### Changed
+
+- **Side workers can no longer disturb the main session's tasks.** They are
+  denied kill, wait and the implicit-cursor read, and keep only the explicit
+  read. Their copy of it never marks a task as reported, so a side worker looking
+  at a finished task can no longer make the main session's completion notice
+  disappear — the failure that exactly-once delivery could not defend against on
+  its own.
+
+- **The old names are deprecated.** `shell_job_output` and `shell_job_kill` keep
+  working for one more release and now say so, each naming its replacement. An id
+  written as `job-…` still resolves for READS; the acting tools take the id
+  exactly as given, because a task id from an earlier session is a dead reference
+  and resolving one onto a live task would kill the wrong work.
+
+## [0.2.109] — 2026-09-16
+A command that outlives the wait now reports itself. 0.2.108 stopped a long
+command from freezing the session; this release closes the other half — the
+result comes back on its own, exactly once, without the agent remembering to ask.
+
+### Added
+
+- **A finished task announces itself.** Until now a command that outlived the
+  bounded wait kept running and its outcome reached nobody unless the model
+  remembered to poll `shell_job_output` — so a build that failed while the model
+  was writing a sentence about it simply vanished from the conversation. Each
+  finished task is now delivered once, as a `<task-notification>` block carrying
+  `task_id`, `status`, `exit_code`, `kill_reason` and `duration_ms`, with the last
+  4 000 bytes of output and a banner stating the text is command output rather
+  than an instruction. It is pushed at a round boundary, so it can never split a
+  batch of tool results.
+
+- **An unattended session waits for its own command instead of abandoning it.**
+  `keryx shell --print` used to end its turn as soon as the model stopped
+  talking, and the session sweep then killed whatever was still running: the
+  command was started, the process died, and the output belonged to nobody. Such
+  a session now holds the turn open until the task ends, reports it, and
+  continues. The outer bound is `KERYX_SHELL_HOLD_MS` (default 30 min); a task
+  still running past it is killed with the reason `hold-timeout` and reported as
+  such, so the turn always ends on a stated outcome.
+
+- **An idle interactive session wakes when a task finishes.** Both the TUI and
+  the `--no-tui` REPL start a turn from the completion — the readline loop races
+  your next line against the next completion, so a line you are typing always
+  wins and nothing typed is dropped, and the TUI wakes only when nothing is
+  running and no message of yours is queued. Consecutive automatic wakes are
+  capped by `KERYX_SHELL_MAX_AUTO_WAKE` (default 5) and the cap resets the moment
+  you type; past it the pending result is surfaced and delivered with your next
+  message. Both knobs follow the project's fail-safe pattern: unset, empty,
+  malformed and negative fall back to the default, and an explicit `0` switches
+  the mechanism off.
+
+### Changed
+
+- **Reading a result counts as being told.** A task whose terminal status you or
+  the model already saw — through `shell_job_output`, or by killing it — is never
+  announced a second time. The rails are deliberately the other way round: a task
+  killed for going idle or for flooding its output buffer still reports, because
+  nobody asked for that kill. There is no recurring reminder: a running task
+  produces no message at all, and a finished one produces exactly one.
+
 ## [0.2.108] — 2026-09-16
 A long command no longer freezes the session. Every shell command the agent runs
 is now a supervised task that hands back control within a bounded wait, and what

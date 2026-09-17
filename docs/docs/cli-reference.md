@@ -428,13 +428,13 @@ network-free: it reads files and exits, and spends no tokens.
 
 ```
 keryx providers list [--json]
-keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--json]
+keryx providers cross-family [--opt-in] [--session-provider <id>] [--session-model <id>] [--from-shell-config] [--json]
 ```
 
 | Subcommand | Flags | Description |
 |---|---|---|
 | `list` | `--json` | Providers this operator has actually **configured** — a custom entry in `llm-providers.json`, or a built-in with a resolvable credential — and the model family of each. |
-| `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. |
+| `cross-family` | `--opt-in`, `--session-provider <id>`, `--session-model <id>`, `--from-shell-config`, `--json` | Decide whether review may run on a different model family than authored the change, and print the record the round should carry. The authoring session comes from the flags, else `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; the selection `keryx shell` persisted only with `--from-shell-config`. |
 
 ### Cross-family review
 
@@ -1462,9 +1462,9 @@ keryx review comments collect --repo <owner/repo> --pr <n> --sha <head-sha>
                               [--self <login>] [--round <n>]
                               [--out <findings.json>] [--json] [--fixtures <dir>]
 keryx review comments reply --repo <owner/repo> --pr <n> --outcomes <file|->
-                            --sha <head-sha> --final [--round <n>] [--dry-run]
+                            --review <review-id> --sha <head-sha> --final [--round <n>] [--dry-run]
                             [--max-replies <n>] [--max-sentences <n>] [--max-chars <n>]
-                            [--flow-link <url>] [--fixtures <dir>]
+                            [--flow-link <url>] [--fixtures <dir>] [--allow-closed-pr]
 keryx review learn --pr <n> [--dry-run] [--json]
 keryx review loop --flow <flow-id> [--task <Tn>]
 keryx review status <review-id-or-path>
@@ -1509,8 +1509,8 @@ left off and the gate reports it as unobserved.
 | `stack` | Which reviewers this repository's declared stack calls for. Fails toward **including** a reviewer: an unreadable, workspace-only or dependency-less manifest runs everything. |
 | `comments` | Collect comments left on the PR by anyone else, and answer them — once, at the end. See below. |
 | `learn` | Turn collected PR comments from the authors this project configured into a learning proposal for its own local review skill. Reads the collected record; never fetches. See below. |
-| `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`. |
-| `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). |
+| `reviewers` | List bundled and project-local reviewers (`keryx review reviewers [--json]`). The project half is `.metaproject/project-skills/review/<name>/`; each entry carries `paths` + `pathsSource`, `flags`, `stackRequires` and `unresolvedRules` for the orchestrator's filters. |
+| `import` | Alias for `keryx skills import --module review` with a `review-vantage-*` name filter (`keryx review import --from <dir>`). Also copies the `core/*.mdc` rules the skills cite from the overlay's `rules/` when the project lacks them; re-run it over an existing import to fetch only the rules. |
 
 Target kinds are validated by the runtime. Review packages are stored under the
 linked flow when attached, or in the managed standalone review location selected
@@ -1548,19 +1548,21 @@ Two rules that are not conveniences:
 | Flag | Sub | Description |
 |---|---|---|
 | `--repo <owner/repo>`, `--pr <n>` | both | The pull request. Required. |
-| `--sha <head-sha>` | both | **Required.** On `collect` it is the head the pass READ, written to the record as `collected_sha`; on `reply` it is the head the answers are true of, recorded on every handled comment. 7–40 hex characters — a value that is not a commit SHA is refused. |
+| `--sha <head-sha>` | both | **Required.** On `collect` it is the head the pass READ, written to the record as `collected_sha`; on `reply` it is the head the answers are true of, recorded on every handled comment — and it must BE the pull request's head (equal, or a 7+ character prefix), or the pass is refused. 7–40 hex characters on both. `collect` prints the PR's state and head and warns on a mismatch. |
 | `--self <login>` | both | The identity we are acting as. Resolved from `gh api user` when omitted, and **required** with `--fixtures`. On `reply` the login recorded at collection time wins. |
 | `--round <n>` | both | The review round. Default `1`. |
 | `--out <file>` | collect | Write the external findings (`source: "external"`) as JSON. |
 | `--json` | collect | Machine-readable result, including the state that was written. |
 | `--outcomes <file\|->` | reply | One disposition and one reply sentence per collected comment. Required — the judgement is the model's; this command enforces the budget, the threading and the once-at-the-end rule. |
 | `--final` | reply | Required. Without it the pass refuses: replying per round turns one thread into six. |
+| `--review <review-id-or-path>` | reply | The managed review package this pass answers for; its target must be this pull request. Posting requires it or `--result` — a lightweight review is report-only and answers nobody. Not needed with `--dry-run`. |
 | `--dry-run` | reply | Print the exact requests; post nothing, write nothing. |
 | `--max-replies <n>` | reply | Individual replies before the overflow summary. Default **30**. `0` is legal and means one summary stands for everybody. |
 | `--max-sentences <n>` | reply | Sentence budget per reply. Default **2**. Below `1` is refused. |
 | `--max-chars <n>` | reply | Character ceiling per reply. Default **600**. Below `1` is refused. |
 | `--flow-link <url>` | reply | The flow artifact the overflow summary points at. |
-| `--fixtures <dir>` | both | Answer every read from JSON on disk and record writes without sending them. |
+| `--fixtures <dir>` | both | Answer every read from JSON on disk and record writes without sending them. `pull.json` is the pull request (`state`, `merged`, `merged_at`, `head.sha`); without it the state is unknown and `reply` refuses. |
+| `--allow-closed-pr` | reply | Post to a closed or merged pull request. Off by default: `reply` refuses a pull request that is not open, and one whose state could not be read. The head must still match `--sha`. |
 
 `collect --sha` is what makes the record **datable**, and the review gate depends
 on it: `rounds_collected` is a count, `--round` defaults to `1`, and nothing else
@@ -2052,7 +2054,8 @@ entry point that removes that step.
 | `--diff-lines <n>` | Changed lines in the diff under review. `<= 3` findings **and** `<= 50` lines allow `light`. |
 | `--verifier <method>` | `execution`, `site-check` or `reasoning`. The first two allow `light`: the evidence comes from running something. An unrecognised method is refused, not ignored. |
 | `--security` | Any security finding in scope. Never below `standard`. |
-| `--session-provider <id>`, `--session-model <id>` | The session's own provider/model, for a caller that already holds them. Omitted, they come from the selection `keryx shell` persisted. |
+| `--session-provider <id>`, `--session-model <id>` | The session's own provider/model. Omitted, they come from `KERYX_SESSION_PROVIDER`/`KERYX_SESSION_MODEL`; with neither, the block is adaptive. |
+| `--from-shell-config` | Use the selection `keryx shell` persisted as the session. Off by default: it is `keryx shell`'s last choice, not the caller's model. |
 | `--catalog <file\|->` | The candidate set, in the `detectProviders()` shape `[{"name": …, "models": [ … ]}]`. Omitted, providers are detected live. |
 | `--json` | Print the `{"model": …}` block alone. |
 
@@ -2068,10 +2071,12 @@ using size words in model names (`mini`, `haiku`, `pro`, `opus`, …), never a l
 of models that exist. Accepting a hand-written tier would put the arithmetic
 back in the caller's head, which is the defect.
 
-**An unresolvable environment inherits, and exits 0.** With no persisted session,
-an unrankable catalogue, or a session model carrying no size marker, the block
-carries `inherit: true` instead of `provider`/`model` and the dispatch runs on
-the caller's **own** model. Never a downgrade, never a failure — degrading
+**A model is named only when discovery found a different one; otherwise the block
+is adaptive, and exits 0.** With no session named, an unrankable catalogue, a
+session model carrying no size marker, or a tier that resolves to the session
+model, the block carries `inherit: true` with the tier instead of
+`provider`/`model`, and the host dispatches on its own model for that tier
+(`standard`: the session model). Never a downgrade, never a failure — degrading
 capability because discovery failed is the worst of the three outcomes. Detection
 is skipped entirely when the session names neither provider nor model, because
 ranking is refused without an anchor whatever the catalogue holds.

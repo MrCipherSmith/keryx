@@ -65,7 +65,7 @@ review-pr-feedback Progress:
 - [ ] Step 7: Explain each comment and name the concrete fix
 - [ ] Step 8: Build the fix plan — one item per class, ordered, each with an acceptance criterion
 - [ ] Step 9: --fix only — confirm, then dispatch `flow-orchestrator` with the plan as frozen AC
-- [ ] Step 10: --fix only — after the merge, answer every comment once: `keryx review comments reply --final`
+- [ ] Step 10: --fix only — after the FIX merges into the reviewed PR's branch (the reviewed PR itself still OPEN, at its new head), answer every comment once: `keryx review comments reply --final --result <file>`
 - [ ] Step 11: Learning proposal for configured authors — propose, never apply
 ```
 

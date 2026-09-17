@@ -33,6 +33,13 @@ export type BusyDispatchTarget =
   | "copy"
   | "mode"
   | "plan"
+  /**
+   * `/demote` (flow 266 AC8): moving a running task to the background is most
+   * useful precisely WHILE the main agent is busy — a turn blocked on its own
+   * command is the case the command exists for. Deferring it would make the
+   * capability available only when it is not needed.
+   */
+  | "demote"
   | "game"
   | "deferred"
   | "not-a-command";
@@ -64,6 +71,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/copy") return "copy";
   if (commandName === "/mode") return "mode";
   if (commandName === "/plan") return "plan";
+  if (commandName === "/demote") return "demote";
   if (commandName === "/game") return "game";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";

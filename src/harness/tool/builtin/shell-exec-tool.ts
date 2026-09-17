@@ -323,7 +323,7 @@ export function shellExecTool(
       },
       risk: "shell",
     },
-    invoke: async (input) => {
+    invoke: async (input, ctx) => {
       const command = typeof input.command === "string" ? input.command : "";
       if (command.length === 0) {
         return { output: "shell_exec requires a non-empty 'command'", isError: true };
@@ -366,7 +366,25 @@ export function shellExecTool(
       }
 
       const yieldMs = options?.yieldMs ?? resolveShellYieldMs();
-      const outcome = await jobRegistry.waitForExit(taskId, yieldMs);
+      // Flow 266 (D-15, AC7): the operator's stop has to reach a call that is
+      // WAITING, not only the gap between calls. The abort races the yield, and
+      // what it ends is the WAIT — never the command: the task is promoted just
+      // as a timeout promotes it, keeps running with its output intact, and
+      // flow 265's drain reports it when it ends. An abort that killed the task
+      // would throw away work the operator never asked to discard.
+      const signal = ctx?.signal;
+      let onAbort: (() => void) | undefined;
+      const outcome = await (signal === undefined || signal.aborted === false
+        ? Promise.race([
+            jobRegistry.waitForExit(taskId, yieldMs),
+            new Promise<"aborted">((resolve) => {
+              if (signal === undefined) return; // never settles; the wait decides
+              onAbort = (): void => resolve("aborted");
+              signal.addEventListener("abort", onAbort, { once: true });
+            }),
+          ])
+        : Promise.resolve("aborted" as const));
+      if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
       // Drain once, after the wait: `start` already consumed whatever was
       // buffered at spawn time, so the full transcript is the two halves
       // concatenated.
@@ -374,18 +392,24 @@ export function shellExecTool(
       const pending = jobRegistry.readOutput(taskId);
       if (pending.ok) collected += pending.output;
 
-      if (outcome === "timeout") {
+      if (outcome === "timeout" || outcome === "aborted") {
         // Promote, never kill — this is what turns a slow command into a task
-        // the model can come back to instead of a dead one.
+        // the model can come back to instead of a dead one. An ABORT lands here
+        // too, and deliberately takes the same path: the operator stopped the
+        // WAIT, not the command, so the work survives and is reported later.
         const promoted = jobRegistry.promote(taskId);
         if (!promoted.ok) {
           return { output: promoted.error, isError: true };
         }
+        const notice =
+          outcome === "aborted"
+            ? `interrupted: the wait was stopped, so this is now a background task and it is STILL RUNNING — it was not killed; read new output with shell_job_output("${taskId}") and stop it with shell_job_kill("${taskId}")`
+            : `still running after ${yieldMs}ms, so it is now a background task; read new output with shell_job_output("${taskId}") and stop it with shell_job_kill("${taskId}")`;
         return taskHandleResult({
           taskId,
           pid: started.pid,
           output: collected,
-          notice: `still running after ${yieldMs}ms, so it is now a background task; read new output with shell_job_output("${taskId}") and stop it with shell_job_kill("${taskId}")`,
+          notice,
           ...(promoted.overCap !== undefined ? { overCap: promoted.overCap } : {}),
         });
       }

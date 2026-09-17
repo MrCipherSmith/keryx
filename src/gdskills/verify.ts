@@ -6,6 +6,7 @@ import { relevantAcceptedMemory } from "../memory/relevant";
 import { wikiValidate } from "../wiki/service";
 import type { ProjectSkillRegistryEntry } from "./project-skills";
 import { resolveProjectSkill } from "./resolve";
+import { parseSkillFrontmatter } from "./skill-frontmatter";
 
 export type ProjectSkillVerificationStatus = "fresh" | "needs-review" | "stale" | "blocked";
 
@@ -69,7 +70,7 @@ export async function verifyProjectSkill(
 
   const skillMdPath = path.join(resolved.packageRoot, "SKILL.md");
   const skillMd = await readFile(skillMdPath, "utf8");
-  const metadata = parseSkillMetadata(skillMd);
+  const metadata = parseSkillMetadata(skillMd, resolved.entry);
   const moduleName = metadata.module ?? resolved.entry?.module ?? inferModuleFromPath(resolved.packageRoot);
   const skillName = resolved.entry?.name ?? path.basename(resolved.packageRoot);
   const target = metadata.target ?? resolved.entry?.target ?? options.input;
@@ -375,10 +376,16 @@ ${recommendations}
 `;
 }
 
-function parseSkillMetadata(skillMd: string): SkillMetadata {
+/**
+ * The header keryx writes, with two fallbacks for a skill imported before the
+ * import kept that header: the author's `metadata.version` from frontmatter,
+ * and the target the registry recorded. Without them every such skill was
+ * `stale` on `metadata:version` and `metadata:target` no matter what it said.
+ */
+function parseSkillMetadata(skillMd: string, registryEntry?: ProjectSkillRegistryEntry): SkillMetadata {
   return {
-    version: readMetadataLine(skillMd, "Version"),
-    target: readMetadataLine(skillMd, "Target"),
+    version: readMetadataLine(skillMd, "Version") ?? parseSkillFrontmatter(skillMd).metadataVersion,
+    target: readMetadataLine(skillMd, "Target") ?? registryEntry?.target,
     module: readMetadataLine(skillMd, "Module"),
     status: readMetadataLine(skillMd, "Status"),
     lastVerified: readMetadataLine(skillMd, "Last Verified"),
@@ -397,6 +404,22 @@ function updateLastVerified(skillMd: string, verifiedAt: string): string {
 
   if (/^Status:.*$/m.test(skillMd)) {
     return skillMd.replace(/^Status:.*$/m, (line) => `${line}\nLast Verified: ${verifiedAt}`);
+  }
+
+  // No Status line either — an imported skill from before the import kept the
+  // keryx header. Returning the file unchanged here is why such a skill stayed
+  // "last verified: never" after every verification. Put the line after the
+  // origin block, or straight after the frontmatter.
+  if (/^Imported At:.*$/m.test(skillMd)) {
+    return skillMd.replace(/^Imported At:.*$/m, (line) => `${line}\nLast Verified: ${verifiedAt}`);
+  }
+  if (skillMd.startsWith("---")) {
+    const end = skillMd.indexOf("\n---", 3);
+    if (end !== -1) {
+      const afterFence = end + "\n---".length;
+      const insertAt = skillMd[afterFence] === "\n" ? afterFence + 1 : afterFence;
+      return `${skillMd.slice(0, insertAt)}Last Verified: ${verifiedAt}\n${skillMd.slice(insertAt)}`;
+    }
   }
 
   return skillMd;
