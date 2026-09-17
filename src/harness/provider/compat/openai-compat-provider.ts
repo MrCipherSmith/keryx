@@ -484,6 +484,12 @@ export class OpenAiCompatEngine implements ProviderPort {
     const payload: Record<string, unknown> = {
       model: request.modelId,
       stream: true,
+      // Output token limit (flow 268 T6): `max_tokens` is the widely-supported
+      // default across OpenAI-compat gateways (Ollama, OpenRouter, DeepSeek,
+      // Z.AI, Cerebras, Groq, Moonshot, Grok, vLLM). Some gateways (MiniMax)
+      // also accept `max_completion_tokens`, but no provider-specific switching
+      // is done here — a later task adds per-provider `requestParams` overrides.
+      max_tokens: request.budget.maxOutputTokens,
       // See `OpenAiCompatCapabilityGrant.streamUsage`: without this the stream
       // reports no token usage whatsoever.
       ...(this.deps.grant?.streamUsage === true ? { stream_options: { include_usage: true } } : {}),

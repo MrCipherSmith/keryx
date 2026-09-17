@@ -451,6 +451,9 @@ export class OpenAiProvider implements ProviderPort {
       instructions: request.systemInstruction,
       input: toResponsesInput(request.messages),
       stream: true,
+      // Output token limit (flow 268 T6): the Responses API field is
+      // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
+      max_output_tokens: request.budget.maxOutputTokens,
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({

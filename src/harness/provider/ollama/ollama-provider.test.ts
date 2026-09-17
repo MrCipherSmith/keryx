@@ -231,6 +231,8 @@ describe("AC1 — recorded text-stream SSE transcript normalizes to model_start,
     const body = JSON.parse(String(call.init?.body)) as Record<string, unknown>;
     expect(body.stream).toBe(true);
     expect(body.model).toBe("llama3.1:latest");
+    // AC3 (flow 268 T6): the compat payload carries the output token limit.
+    expect(body.max_tokens).toBe(1024);
     expect(Array.isArray(body.messages)).toBe(true);
   });
 
