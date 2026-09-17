@@ -343,7 +343,14 @@ bare exit code.
 
 An entry in `llm-providers.json` (see above) may carry a `reasoning` block
 that tells the OpenAI-compatible adapter how to read — and later replay — a
-gateway's reasoning output. Absent, reasoning is read the default way.
+gateway's reasoning output. Absent, reasoning is read the default way — with
+one exception: a provider whose `baseUrl` host is `api.minimax.io` or
+`api.minimaxi.com` (any path) with no `reasoning` block of its own gets
+`{ "format": "split", "requestParams": { "reasoning_split": true }, "replay":
+"minimax" }` automatically. MiniMax's own default mode sends every reasoning
+phrase twice (inline in `content` as `<think>…</think>` AND again in a
+`reasoning` field), so the preset asks it for out-of-band reasoning instead.
+An explicit `reasoning` block on a MiniMax entry always overrides the preset.
 
 ```json
 {
@@ -367,9 +374,9 @@ gateway's reasoning output. Absent, reasoning is read the default way.
 
 | Value | Use when | Behavior |
 |---|---|---|
-| `"field"` (default when `reasoning` is absent or `format` is omitted) | The gateway sends reasoning in a `reasoning`/`reasoning_content` delta field, separate from `content` (DeepSeek, OpenRouter, vLLM, most gateways). | The field is read as-is, no parsing needed. |
-| `"inline-tags"` | The gateway writes reasoning INSIDE `delta.content` as `<think>…</think>` — MiniMax's own default shape, and typical of Qwen3 or a DeepSeek-R1 distill served with no reasoning parser in front of it. | keryx strips the tags out of the visible content and surfaces the tagged text as reasoning, via `ThinkTagParser`. |
-| `"split"` | The gateway can be asked, via `requestParams`, to send reasoning out-of-band instead of inline. | `delta.content` passes through unchanged; reasoning is read from `reasoning_content`/`reasoning_details` as usual. |
+| `"field"` (default when `reasoning` is absent or `format` is omitted) | The gateway sends reasoning in a `reasoning`/`reasoning_content` delta field, separate from `content` (DeepSeek, OpenRouter, vLLM, most gateways). | The field is read as-is; a literal `<think>`/`</think>` tag leaked into it (and its one adjacent newline on each side) is stripped, same as `"split"` below. |
+| `"inline-tags"` | The gateway writes reasoning INSIDE `delta.content` as `<think>…</think>` — MiniMax's own default shape, and typical of Qwen3 or a DeepSeek-R1 distill served with no reasoning parser in front of it. | keryx strips the tags out of the visible content and surfaces the tagged text as reasoning, via `ThinkTagParser`. `content` is the ONLY reasoning source under this format — a `reasoning`/`reasoning_content`/`reasoning_details` delta is ignored, so a gateway that sends both (MiniMax's own default mode) never double-emits the same reasoning text. |
+| `"split"` | The gateway can be asked, via `requestParams`, to send reasoning out-of-band instead of inline. | `delta.content` passes through unchanged; reasoning is read from `reasoning_content`/`reasoning_details` as usual. A literal `<think>`/`</think>` tag a gateway echoes into that field (MiniMax's split-mode stream was observed to end with one) is stripped out, along with its one adjacent newline on each side. |
 
 `reasoning.requestParams` — an object shallow-merged into the request body
 AFTER every field keryx builds itself. It cannot override `model`,

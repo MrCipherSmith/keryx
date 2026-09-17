@@ -204,6 +204,52 @@ describe("AC7 — emission: replay: \"minimax\", format: \"split\"", () => {
       data: [{ type: "reasoning.text", text: "AB" }],
     });
   });
+
+  // flow 268 T24: live smoke evidence against MiniMax-M3 — split-mode
+  // reasoning_details ends with a literal `</think>` line, itself split
+  // across two deltas (`"...\n</thi"` + `"nk>"`). The EMITTED reasoning_delta
+  // must have the tag and its adjacent newline stripped; the REPLAY payload
+  // (reasoning_details) must stay byte-exact, tag included, since a replayed
+  // transcript must round-trip exactly what the provider sent.
+  test("a </think> tag split across two deltas is stripped from reasoning_delta but left verbatim in the reasoning_replay payload", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_details":[{"index":0,"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","text":"The user wants a greeting in a friendly "}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{"reasoning_details":[{"index":0,"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","text":"manner.\\n</thi"}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{"reasoning_details":[{"index":0,"type":"reasoning.text","id":"reasoning-text-1","format":"MiniMax-response-v1","text":"nk>"}]}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Hi there!"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      network: true,
+      baseUrl: identity.defaultBaseUrl,
+      allowLoopback: true,
+      reasoning: { format: "split", replay: "minimax", requestParams: { reasoning_split: true } },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "minimax-split-tag-boundary");
+
+    const reasoning = events.filter((e) => e.kind === "reasoning_delta").map((e) => e.text ?? "").join("");
+    expect(reasoning).toBe("The user wants a greeting in a friendly manner.");
+    expect(reasoning).not.toContain("<think>");
+    expect(reasoning).not.toContain("</think>");
+
+    const replays = replayEvents(events);
+    expect(replays).toHaveLength(1);
+    expect(replays[0]?.replay).toEqual({
+      providerId: COMPAT_REPLAY_PROVIDER_ID,
+      kind: "reasoning_details",
+      data: [
+        {
+          index: 0,
+          type: "reasoning.text",
+          id: "reasoning-text-1",
+          format: "MiniMax-response-v1",
+          text: "The user wants a greeting in a friendly manner.\n</think>",
+        },
+      ],
+    });
+  });
 });
 
 // --- emission: minimax inline (raw_content) ----------------------------------

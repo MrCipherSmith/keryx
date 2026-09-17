@@ -143,6 +143,49 @@ export function resolveProviderBaseUrl(
   }
 }
 
+/** Hosts MiniMax's OpenAI-compatible gateway is reachable at (flow 268 T24). */
+const MINIMAX_REASONING_PRESET_HOSTS = new Set(["api.minimax.io", "api.minimaxi.com"]);
+
+/**
+ * Resolve the `reasoning` config a compat provider actually sends (flow 268
+ * T24): an EXPLICIT `reasoning` config on the provider always wins,
+ * verbatim — this never overrides an operator's own choice, including one
+ * that reintroduces a known issue. Absent, a provider whose `baseUrl` host
+ * is an EXACT match (any path) for a known MiniMax host gets a default
+ * preset instead of "no reasoning config" (the pre-existing behaviour for
+ * every other absent-config host).
+ *
+ * Why a preset, and why this one: MiniMax's un-configured default mode
+ * duplicates every reasoning phrase — once inline in `delta.content` as
+ * `<think>…</think>`, once again plain in `delta.reasoning` — and the
+ * `reasoning` field is not trustworthy at the stream boundary (live smoke
+ * evidence against MiniMax-M3, 2026-09-17: the last `reasoning` chunk bled
+ * answer text across the boundary). `{ format: "split", requestParams: {
+ * reasoning_split: true }, replay: "minimax" }` asks MiniMax for out-of-band
+ * reasoning instead, which the same smoke run confirmed keryx renders and
+ * replays cleanly (`openai-compat-provider.ts`'s field-sourced tag strip,
+ * flow 268 T24, handles the one remaining rough edge: split mode's
+ * reasoning stream ending in a literal `</think>` line).
+ *
+ * Pure: no network, no clock — string comparison against `baseUrl`'s parsed
+ * hostname. An unparsable `baseUrl` resolves to "no preset" rather than
+ * throwing (mirrors `resolveProviderBaseUrl`'s fail-open-to-unchanged shape).
+ */
+export function resolveCompatReasoningPreset(
+  explicit: OpenAiCompatProvider["reasoning"],
+  baseUrl: string,
+): OpenAiCompatProvider["reasoning"] | undefined {
+  if (explicit !== undefined) return explicit;
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname;
+  } catch {
+    return undefined;
+  }
+  if (!MINIMAX_REASONING_PRESET_HOSTS.has(host)) return undefined;
+  return { format: "split", requestParams: { reasoning_split: true }, replay: "minimax" };
+}
+
 /**
  * The registry, in picker order. All are ALWAYS offered (a key is prompted +
  * persisted in-TUI when absent). Curated `models` are a fallback only — the

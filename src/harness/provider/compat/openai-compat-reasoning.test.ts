@@ -128,6 +128,102 @@ describe("AC4 — format: inline-tags routes delta.content through the parser", 
   });
 });
 
+// --- T24: MiniMax default-mode duplication fix ---------------------------
+//
+// Live smoke evidence (2026-09-17, api.minimax.io, MiniMax-M3, no
+// `reasoning_split`): every reasoning phrase arrives TWICE — inline in
+// `delta.content` as `<think>…</think>`, AND again, plain, in `delta.reasoning`
+// — and the LAST `reasoning` chunk bled answer text across the boundary
+// (`content:" manner.Hi"`, `reasoning:" manner.Hi"`, where "Hi" starts the
+// answer). Configuring `format: "inline-tags"` must make `delta.content`
+// (via `ThinkTagParser`) the ONLY reasoning source: `reasoning`/
+// `reasoning_content`/`reasoning_details` deltas are ignored entirely for
+// `reasoning_delta` emission once inline-tags is active.
+describe("T24 — format: inline-tags ignores reasoning/reasoning_content/reasoning_details deltas", () => {
+  test("MiniMax default-mode duplicate deltas: each reasoning phrase surfaces exactly once, answer excludes tags and reasoning text", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"content":"<think>\\nThe","reasoning":"The"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":" user just","reasoning":" user just"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":" manner.Hi","reasoning":" manner.Hi"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"\\n</think>\\n\\nthere! \\ud83d\\udc4b"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = { ...baseGrant, reasoning: { format: "inline-tags" } };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "minimax-default-mode-duplicate");
+
+    const reasoning = textOf(events, "reasoning_delta");
+    const text = textOf(events, "text_delta");
+    expect(reasoning).toBe("\nThe user just manner.Hi\n");
+    expect(text).toBe("there! \u{1F44B}");
+    // The bug: the "reasoning" field's raw text used to surface a SECOND time
+    // alongside the inline-tags segments. Every occurrence of each phrase is
+    // accounted for above by the SINGLE reasoning string, not doubled.
+    expect(reasoning.split("The user just").length - 1).toBe(1);
+    expect(events.filter((e) => e.kind === "text_delta").length).toBe(1);
+    expect(text).not.toContain("<think>");
+    expect(text).not.toContain("</think>");
+  });
+});
+
+// --- T24: field-sourced reasoning tag stripping (format: field / split) --
+//
+// Live smoke evidence: split-mode (`reasoning_split: true`) reasoning text
+// ended with a literal `</think>` line even though the gateway never puts
+// tags in `delta.content` under split mode. Any `format` OTHER than
+// `"inline-tags"` (including the default, absent `format`) must strip a
+// literal `<think>`/`</think>` tag — and its one adjacent newline on each
+// side — out of the emitted `reasoning_delta`, without ever touching the
+// replay accumulation (covered separately in `openai-compat-replay.test.ts`).
+describe("T24 — field-sourced reasoning strips a leaked <think>/</think> tag", () => {
+  test("format: split, tag split across two deltas: reasoning_delta has no tag", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"All good so far.\\n</thi"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"reasoning_content":"nk>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const grant: OpenAiCompatCapabilityGrant = {
+      ...baseGrant,
+      reasoning: { format: "split", requestParams: { reasoning_split: true } },
+    };
+    const provider = new OpenAiCompatEngine({ fetch, grant }, identity);
+    const events = await collectEvents(provider, "field-strip-split-boundary");
+
+    expect(textOf(events, "reasoning_delta")).toBe("All good so far.");
+    expect(textOf(events, "text_delta")).toBe("Answer");
+  });
+
+  test("no reasoning config at all (default format: field): a leaked tag in reasoning_content is still stripped", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"<think>thinking about it</think>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const provider = new OpenAiCompatEngine({ fetch, grant: baseGrant }, identity);
+    const events = await collectEvents(provider, "field-strip-default-format");
+
+    expect(textOf(events, "reasoning_delta")).toBe("thinking about it");
+    expect(textOf(events, "text_delta")).toBe("Answer");
+  });
+
+  test("a delta that becomes empty after stripping the tag is skipped entirely (no empty reasoning_delta)", async () => {
+    const sse =
+      'data: {"choices":[{"delta":{"reasoning_content":"</think>"}}]}\n\n' +
+      'data: {"choices":[{"delta":{"content":"Answer"}}]}\n\n' +
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n' +
+      "data: [DONE]\n\n";
+    const { fetch } = fetchMockFor(sse);
+    const provider = new OpenAiCompatEngine({ fetch, grant: baseGrant }, identity);
+    const events = await collectEvents(provider, "field-strip-empty-after-strip");
+
+    expect(events.some((e) => e.kind === "reasoning_delta")).toBe(false);
+  });
+});
+
 // --- AC5: requestParams + reasoning_details ------------------------------
 
 describe("AC5 — requestParams merge and reasoning_details parsing", () => {

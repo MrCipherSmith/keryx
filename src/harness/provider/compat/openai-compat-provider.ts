@@ -43,6 +43,7 @@ import { AnthropicSSEParser } from "../anthropic/sse";
 import { defaultRetryable } from "../provider-port";
 import { linkToolCalls } from "../tool-call-linking";
 import { ThinkTagParser } from "./think-tag-parser";
+import { FieldThinkTagStripper } from "./think-tag-stripper";
 import type {
   NormalizedError,
   NormalizedEvent,
@@ -739,6 +740,23 @@ export class OpenAiCompatEngine implements ProviderPort {
       pushThinkSegments(thinkTagParser.flush());
     };
 
+    // Field-sourced reasoning text (`format: "field"`/`"split"`, i.e. every
+    // format EXCEPT `"inline-tags"`) can carry a literal `<think>`/`</think>`
+    // tag a gateway echoes into an otherwise plain field — MiniMax's
+    // split-mode reasoning stream was observed to end with a literal
+    // `</think>` line (flow 268 T24 live-smoke evidence) even though
+    // `delta.content` never carries tags in that mode. Strips it out of every
+    // emitted `reasoning_delta`; NEVER applied to replay accumulation
+    // (`reasoningFieldRaw`/`reasoningDetailSlots` below stay byte-exact).
+    const fieldTagStripper = thinkTagParser === undefined ? new FieldThinkTagStripper() : undefined;
+    const flushFieldTagStripper = (): void => {
+      if (fieldTagStripper === undefined) return;
+      const rest = fieldTagStripper.flush();
+      if (rest.length > 0) {
+        bodies.push({ kind: "reasoning_delta", text: rest });
+      }
+    };
+
     // Compat replay accumulation (flow 268 T12 / AC7): populated ONLY for the
     // mode that needs it, across the whole round, and reported ONCE via
     // `emitReplayEvents()` at the same normal-termination points
@@ -920,6 +938,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         // open past `[DONE]`, and this adapter must not wait for it to close.
         if (trimmed === "[DONE]") {
           flushThinkTagParser();
+          flushFieldTagStripper();
           emitReplayEvents();
           flushPendingToolEnds();
           if (sawStart) {
@@ -973,33 +992,54 @@ export class OpenAiCompatEngine implements ProviderPort {
         // Reasoning-capable models (OpenRouter, DeepSeek, …) stream chain-of-thought
         // in a separate delta field (`reasoning` or `reasoning_content`) BEFORE the
         // answer content. Surface it as `reasoning_delta`; plain models omit it.
-        // Unconditional for every `reasoning.format` (AC5) — this is harmless
-        // when the fields are absent, and MiniMax's `reasoning_split: true`
-        // request param (via `requestParams`) makes it send exactly this shape.
-        const reasoningField = asString(delta.reasoning) ?? asString(delta.reasoning_content);
-        if (reasoningField !== undefined && reasoningField.length > 0) {
-          bodies.push({ kind: "reasoning_delta", text: reasoningField });
-          if (replayMode === "deepseek") {
-            reasoningFieldRaw += reasoningField;
-          }
-        } else {
-          // MiniMax's `reasoning_details` (OpenRouter-shaped): an array of
-          // `{ text: "…", … }` objects; concatenate every item's `text` in
-          // order. Only consulted when `reasoning`/`reasoning_content` is
-          // ABSENT for this delta, so a provider that sends both never
-          // double-emits the same text.
-          const reasoningDetails = asArray(delta.reasoning_details);
-          if (reasoningDetails.length > 0) {
-            const concatenated = reasoningDetails
-              .map((item) => asString(asRecord(item).text))
-              .filter((text): text is string => text !== undefined && text.length > 0)
-              .join("");
-            if (concatenated.length > 0) {
-              bodies.push({ kind: "reasoning_delta", text: concatenated });
+        //
+        // Skipped entirely under `format: "inline-tags"` (`thinkTagParser !==
+        // undefined`, T24 fix): MiniMax's default mode sends the SAME
+        // reasoning text twice — once inline in `delta.content` as
+        // `<think>…</think>`, once again in `delta.reasoning` — and the
+        // `reasoning` field is not trustworthy at the stream boundary (the
+        // last `reasoning` chunk was observed to bleed answer text into it).
+        // `delta.content` via `thinkTagParser` is the only reasoning source
+        // for this format; `reasoningFieldRaw`/`reasoningDetailSlots` replay
+        // accumulation is likewise skipped here (minimax inline replay reads
+        // `rawContentRaw`, accumulated from `content` below, unaffected).
+        if (thinkTagParser === undefined) {
+          const reasoningField = asString(delta.reasoning) ?? asString(delta.reasoning_content);
+          if (reasoningField !== undefined && reasoningField.length > 0) {
+            if (replayMode === "deepseek") {
+              reasoningFieldRaw += reasoningField;
             }
-            if (replayMode === "minimax") {
-              for (const item of reasoningDetails) {
-                accumulateReasoningDetail(asRecord(item));
+            // Strip a literal <think>/</think> tag a gateway echoes into this
+            // otherwise plain field (T24) — never applied to `reasoningFieldRaw`
+            // above, which stays the byte-exact replay source.
+            const stripped = fieldTagStripper?.push(reasoningField) ?? reasoningField;
+            if (stripped.length > 0) {
+              bodies.push({ kind: "reasoning_delta", text: stripped });
+            }
+          } else {
+            // MiniMax's `reasoning_details` (OpenRouter-shaped): an array of
+            // `{ text: "…", … }` objects; concatenate every item's `text` in
+            // order. Only consulted when `reasoning`/`reasoning_content` is
+            // ABSENT for this delta, so a provider that sends both never
+            // double-emits the same text.
+            const reasoningDetails = asArray(delta.reasoning_details);
+            if (reasoningDetails.length > 0) {
+              const concatenated = reasoningDetails
+                .map((item) => asString(asRecord(item).text))
+                .filter((text): text is string => text !== undefined && text.length > 0)
+                .join("");
+              if (concatenated.length > 0) {
+                // Same T24 tag-strip as above; `accumulateReasoningDetail`
+                // below still reads each item's RAW `text` for replay.
+                const stripped = fieldTagStripper?.push(concatenated) ?? concatenated;
+                if (stripped.length > 0) {
+                  bodies.push({ kind: "reasoning_delta", text: stripped });
+                }
+              }
+              if (replayMode === "minimax") {
+                for (const item of reasoningDetails) {
+                  accumulateReasoningDetail(asRecord(item));
+                }
               }
             }
           }
@@ -1128,6 +1168,7 @@ export class OpenAiCompatEngine implements ProviderPort {
         // which always returns before reaching this code.
         if (sawStart && sawFinish) {
           flushThinkTagParser();
+          flushFieldTagStripper();
           emitReplayEvents();
           bodies.push({ kind: "model_end" });
         }

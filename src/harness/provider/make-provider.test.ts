@@ -362,4 +362,108 @@ describe("reasoning config threads from a custom file provider onto the compat g
     // `reasoningMetadata: grant.reasoning !== undefined` stays false.
     expect(provider.describe().capabilities.reasoningMetadata).toBe(false);
   });
+
+  // flow 268 T24: a custom provider pointed at a MiniMax host with NO
+  // `reasoning` config of its own gets the split-mode preset applied to the
+  // grant built here, so its live default-mode duplication bug (T24) never
+  // reaches the operator without them configuring anything.
+  test("a custom provider on a MiniMax host with no reasoning config sends reasoning_split: true (T24 preset)", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "my-minimax",
+      baseUrl: "https://api.minimax.io/v1",
+      requiresApiKey: false,
+      models: ["MiniMax-M3"],
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("my-minimax", "MiniMax-M3", makeOpts({ env: {}, fetch: fetchMock }));
+    expect(provider).toBeInstanceOf(OpenAiCompatEngine);
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(true);
+
+    const request: NormalizedRequest = {
+      providerId: "my-minimax",
+      modelId: "MiniMax-M3",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-minimax-preset",
+      parentRunId: "make-provider-minimax-preset",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-minimax-preset-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    expect(body.reasoning_split).toBe(true);
+  });
+
+  // A provider on a different (non-MiniMax) host with no reasoning config
+  // stays exactly as before — the preset is scoped to the two known MiniMax
+  // hosts, never applied by guessing.
+  test("a custom provider on a non-MiniMax host with no reasoning config is unaffected by the preset", () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "other-host",
+      baseUrl: "https://api.example.com",
+      requiresApiKey: false,
+      models: ["m"],
+    });
+    const provider = makeProvider("other-host", "m", makeOpts({ env: {} }));
+    expect(provider.describe().capabilities.reasoningMetadata).toBe(false);
+  });
+
+  // An explicit `reasoning` config on a MiniMax-host provider always wins —
+  // the preset never overrides the operator's own choice.
+  test("an explicit reasoning config on a MiniMax host wins over the preset", async () => {
+    isolatedConfigDir();
+    saveCustomCompatProvider({
+      name: "minimax-explicit",
+      baseUrl: "https://api.minimax.io",
+      requiresApiKey: false,
+      models: ["MiniMax-M3"],
+      reasoning: { format: "inline-tags" },
+    });
+
+    const calls: RequestInit[] = [];
+    const fetchMock = (async (_input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      if (init !== undefined) calls.push(init);
+      return new Response(
+        'data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n',
+        { status: 200, headers: { "content-type": "text/event-stream" } },
+      );
+    }) as unknown as typeof fetch;
+
+    const provider = makeProvider("minimax-explicit", "MiniMax-M3", makeOpts({ env: {}, fetch: fetchMock }));
+    const request: NormalizedRequest = {
+      providerId: "minimax-explicit",
+      modelId: "MiniMax-M3",
+      systemInstruction: "",
+      messages: [{ role: "user", content: "hi" }],
+      budget: { maxOutputTokens: 32, runReservation: 32 },
+      stream: true,
+      requestId: "make-provider-minimax-explicit",
+      parentRunId: "make-provider-minimax-explicit",
+    };
+    const opts: StreamOptions = { attemptId: "make-provider-minimax-explicit-attempt" };
+    for await (const _event of provider.stream(request, opts)) {
+      // draining is enough — the assertion is on the captured request body
+    }
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+    // The explicit `inline-tags` config carries no `requestParams`, so the
+    // preset's `reasoning_split` must NOT have been merged in.
+    expect(body.reasoning_split).toBeUndefined();
+  });
 });

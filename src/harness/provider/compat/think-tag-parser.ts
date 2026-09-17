@@ -44,8 +44,12 @@ export interface ThinkTagSegment {
 const OPEN_TAG = "<think>";
 const CLOSE_TAG = "</think>";
 
-/** Longest suffix of `s` that equals a PROPER (non-full-length) prefix of one of `tags`. */
-function partialTagSuffixLength(s: string, tags: readonly string[]): number {
+/**
+ * Longest suffix of `s` that equals a PROPER (non-full-length) prefix of one
+ * of `tags`. Exported for reuse by `./think-tag-stripper.ts`, which holds
+ * back the same kind of chunk-boundary partial tag match.
+ */
+export function partialTagSuffixLength(s: string, tags: readonly string[]): number {
   let best = 0;
   for (const tag of tags) {
     const maxLen = Math.min(s.length, tag.length - 1);
