@@ -218,6 +218,16 @@ export function createForegroundAgentIoFacade(
     onReasoning: (text) => {
       if (accepts()) io.onReasoning?.(text);
     },
+    // flow 268 T17 (AC16): forward the live-delta and end-of-span hooks the
+    // same guarded way as `onReasoning` above — a stale/disposed turn must
+    // not paint a "thinking…" indicator or a finished reasoning block onto
+    // whatever operation now owns the screen.
+    onReasoningDelta: (delta) => {
+      if (accepts()) io.onReasoningDelta?.(delta);
+    },
+    onReasoningEnd: (info) => {
+      if (accepts()) io.onReasoningEnd?.(info);
+    },
     onUsage: (usage) => {
       if (accepts()) io.onUsage?.(usage);
     },

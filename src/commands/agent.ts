@@ -107,6 +107,30 @@ export interface AgentIO {
    * Absent for models that emit no reasoning (e.g. gpt-4o-mini).
    */
   onReasoning?: (text: string) => void;
+  /**
+   * flow 268 T17 (AC16): a reasoning delta arrived, called for EVERY
+   * `reasoning_delta` event as it streams — before `onReasoning`'s single
+   * end-of-round callback and before the round's `text_delta`s. Lets a live
+   * renderer (the TUI) show a "thinking…" indicator while the model is still
+   * reasoning instead of waiting for the whole span to finish. Purely
+   * additive: `onReasoning` is still called exactly as before (see its doc
+   * comment) regardless of whether this hook is wired, so every existing
+   * `AgentIO` implementation is unaffected.
+   */
+  onReasoningDelta?: (delta: { text?: string; redacted?: boolean }) => void;
+  /**
+   * flow 268 T17 (AC16): the round's reasoning span just closed — called ONCE,
+   * at the same point `onReasoning` fires (the first non-reasoning event, or
+   * round end), but always, even when the round produced no visible text (a
+   * redacted-only span). `text` is the accumulated visible chain-of-thought
+   * (`""` when fully redacted); `redacted` is true when any part of the span
+   * was withheld by the provider; `durationMs` mirrors
+   * `MessageReasoning.durationMs`; `tokens` is filled from the provider's
+   * reasoning-token usage extension (`openai.reasoning_tokens` /
+   * `gemini.thoughts_tokens`) when a `usage_update` reporting it arrived
+   * before the span closed, else omitted.
+   */
+  onReasoningEnd?: (info: { text: string; redacted: boolean; durationMs?: number; tokens?: number }) => void;
   /** Provider-reported token usage for this run (forwarded from `usage_update`). */
   onUsage?: (usage: NormalizedUsage) => void;
   /** A model tool call is about to run (raw JSON input string). */
@@ -1476,6 +1500,55 @@ async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAg
   }
 }
 
+/**
+ * flow 268 T17 (AC16): the round's reasoning-token count, when the provider
+ * reported one. Providers with no neutral `NormalizedUsage` field for it
+ * (flow 268 T11/T12/T13/T14/T15's OpenAI/Gemini adapters) carry it on the
+ * `usage_update` EVENT's `unknownExtensions` (a sibling of `usage`, not
+ * nested inside it) under a namespaced key — see `openai-provider.ts`'s
+ * `openai.reasoning_tokens` and `gemini-provider.ts`'s
+ * `gemini.thoughts_tokens`. Anthropic has no separate reasoning-token count
+ * to extract. Returns `undefined` when neither key is present or the value
+ * is not a finite number (never trusts an unvalidated extension blindly).
+ */
+function extractReasoningTokens(unknownExtensions: Record<string, unknown> | undefined): number | undefined {
+  if (unknownExtensions === undefined) return undefined;
+  const raw = unknownExtensions["openai.reasoning_tokens"] ?? unknownExtensions["gemini.thoughts_tokens"];
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
+/**
+ * flow 268 T17 (AC16): builds `onReasoningDelta`'s payload from a
+ * `reasoning_delta` event's (both optional) `text`/`redacted` fields.
+ * `exactOptionalPropertyTypes` forbids passing an explicit `undefined` for an
+ * optional property, so an absent source field must be OMITTED, not copied
+ * through as `undefined` — hence the conditional spreads rather than a
+ * literal `{ text: event.text, redacted: event.redacted }`.
+ */
+function reasoningDeltaPayload(event: {
+  text?: string;
+  redacted?: boolean;
+}): { text?: string; redacted?: boolean } {
+  return {
+    ...(event.text !== undefined ? { text: event.text } : {}),
+    ...(event.redacted !== undefined ? { redacted: event.redacted } : {}),
+  };
+}
+
+/**
+ * flow 268 T17 (AC16): shared duration calc for `MessageReasoning.durationMs`
+ * and `onReasoningEnd`'s `durationMs` — both bracket the SAME reasoning span
+ * (`reasoningStartedAt`/`reasoningEndedAt`, ISO timestamps from `deps.now`).
+ * `undefined` when either bound is missing, unparsable, or the span is
+ * inverted (defensive — `now()` is monotonic-in-practice but not guaranteed).
+ */
+function computeReasoningDurationMs(startedAt: string | undefined, endedAt: string | undefined): number | undefined {
+  if (startedAt === undefined || endedAt === undefined) return undefined;
+  const startMs = Date.parse(startedAt);
+  const endMs = Date.parse(endedAt);
+  return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs ? endMs - startMs : undefined;
+}
+
 async function runAgentTurnCore(
   io: AgentIO,
   deps: AgentDeps,
@@ -1715,15 +1788,38 @@ async function runAgentTurnCore(
     // see `ProviderReplayItem`), and the reasoning span's wall-clock bounds
     // (cheap: `now()` is always available, defaulting to an ISO clock) for
     // `MessageReasoning.durationMs`. `io.onReasoning` behaviour is UNCHANGED —
-    // `flushReasoning` below still only fires on non-empty `reasoningText`.
+    // `flushReasoning` below still only calls it on non-empty `reasoningText`
+    // (flow 268 T17 added a second, independent `onReasoningEnd` call inside
+    // the same function with its own, broader firing condition — see below).
     let reasoningRedacted = false;
     const reasoningReplay: ProviderReplayItem[] = [];
     let reasoningStartedAt: string | undefined;
     let reasoningEndedAt: string | undefined;
+    // flow 268 T17 (AC16): last-known reasoning-token count for this round,
+    // updated as `usage_update` events arrive (see `extractReasoningTokens`).
+    // Read by `flushReasoning` below when it fires `onReasoningEnd` — a round
+    // whose usage arrives before its reasoning span closes (no trailing text,
+    // e.g. a reasoning+tool-call round) has it available at that point.
+    let reasoningTokens: number | undefined;
+    let reasoningEndFlushed = false;
     const flushReasoning = (): void => {
       if (reasoningText.length > 0 && !reasoningFlushed) {
         io.onReasoning?.(reasoningText);
         reasoningFlushed = true;
+      }
+      // flow 268 T17 (AC16): fires once, at the SAME call sites as
+      // `onReasoning` above, but also for a redacted-only or replay-only span
+      // that produced no visible text (`onReasoning` never fires for those —
+      // unchanged for compatibility).
+      if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
+        const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+        io.onReasoningEnd?.({
+          text: reasoningText,
+          redacted: reasoningRedacted,
+          ...(durationMs !== undefined ? { durationMs } : {}),
+          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+        });
+        reasoningEndFlushed = true;
       }
     };
     const nameById = new Map<string, string>();
@@ -1749,6 +1845,7 @@ async function runAgentTurnCore(
           if (reasoningStartedAt === undefined) reasoningStartedAt = now();
           reasoningText += event.text ?? "";
           if (event.redacted === true) reasoningRedacted = true;
+          io.onReasoningDelta?.(reasoningDeltaPayload(event));
         } else if (event.kind === "reasoning_replay") {
           if (reasoningStartedAt === undefined) reasoningStartedAt = now();
           if (event.replay !== undefined) reasoningReplay.push(event.replay);
@@ -1779,6 +1876,7 @@ async function runAgentTurnCore(
         } else if (event.kind === "usage_update") {
           if (event.usage !== undefined) {
             io.onUsage?.(event.usage);
+            reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
           }
         } else if (event.kind === "provider_error") {
           system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
@@ -1805,21 +1903,17 @@ async function runAgentTurnCore(
     // compacted suffix keep it. `undefined` (not `{}`) when the round produced
     // neither text nor a redacted marker nor replay items, matching every
     // pre-existing message that never had reasoning.
+    const roundReasoningDurationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
     const roundReasoning: MessageReasoning | undefined =
       reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
         ? {
             ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
             ...(reasoningRedacted ? { redacted: true } : {}),
             ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
-            ...(reasoningStartedAt !== undefined && reasoningEndedAt !== undefined
-              ? (() => {
-                  const startMs = Date.parse(reasoningStartedAt);
-                  const endMs = Date.parse(reasoningEndedAt);
-                  return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs
-                    ? { durationMs: endMs - startMs }
-                    : {};
-                })()
-              : {}),
+            ...(roundReasoningDurationMs !== undefined ? { durationMs: roundReasoningDurationMs } : {}),
+            // flow 268 T17 (AC16): durable counterpart of `onReasoningEnd`'s
+            // `tokens` — same extraction, same last-known-by-span-close value.
+            ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
           }
         : undefined;
     // A text (or text+tool) round already has its message in `history` — attach
@@ -2443,6 +2537,25 @@ async function finishWithBudgetSummary(
   const reasoningReplay: ProviderReplayItem[] = [];
   let reasoningStartedAt: string | undefined;
   let reasoningEndedAt: string | undefined;
+  // flow 268 T17 (AC16): same pattern as `runAgentTurnCore` — see its comments.
+  let reasoningTokens: number | undefined;
+  let reasoningEndFlushed = false;
+  const flushReasoning = (): void => {
+    if (reasoningText.length > 0 && !reasoningFlushed) {
+      io.onReasoning?.(reasoningText);
+      reasoningFlushed = true;
+    }
+    if (!reasoningEndFlushed && (reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0)) {
+      const durationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
+      io.onReasoningEnd?.({
+        text: reasoningText,
+        redacted: reasoningRedacted,
+        ...(durationMs !== undefined ? { durationMs } : {}),
+        ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
+      });
+      reasoningEndFlushed = true;
+    }
+  };
   try {
     for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
       if (
@@ -2457,20 +2570,19 @@ async function finishWithBudgetSummary(
         if (reasoningStartedAt === undefined) reasoningStartedAt = now();
         reasoningText += event.text ?? "";
         if (event.redacted === true) reasoningRedacted = true;
+        io.onReasoningDelta?.(reasoningDeltaPayload(event));
       } else if (event.kind === "reasoning_replay") {
         if (reasoningStartedAt === undefined) reasoningStartedAt = now();
         if (event.replay !== undefined) reasoningReplay.push(event.replay);
       } else if (event.kind === "text_delta") {
-        if (reasoningText.length > 0 && !reasoningFlushed) {
-          io.onReasoning?.(reasoningText);
-          reasoningFlushed = true;
-        }
+        flushReasoning();
         const text = event.text ?? "";
         io.write(text);
         assistantText += text;
       } else if (event.kind === "usage_update") {
         if (event.usage !== undefined) {
           io.onUsage?.(event.usage);
+          reasoningTokens = extractReasoningTokens(event.unknownExtensions) ?? reasoningTokens;
         }
       } else if (event.kind === "provider_error") {
         system(`\n[error] ${event.error?.message ?? event.error?.kind ?? "provider error"}\n`);
@@ -2483,26 +2595,18 @@ async function finishWithBudgetSummary(
     system(`\n[error] wrap-up failed: ${cause instanceof Error ? cause.message : String(cause)}\n`);
   }
 
-  if (reasoningText.length > 0 && !reasoningFlushed) {
-    io.onReasoning?.(reasoningText);
-  }
+  flushReasoning();
   // Durable counterpart of the forwarding above (AC6) — see
   // `runAgentTurnCore`'s identical construction for the full rationale.
+  const roundReasoningDurationMs = computeReasoningDurationMs(reasoningStartedAt, reasoningEndedAt);
   const roundReasoning: MessageReasoning | undefined =
     reasoningText.length > 0 || reasoningRedacted || reasoningReplay.length > 0
       ? {
           ...(reasoningText.length > 0 ? { text: reasoningText } : {}),
           ...(reasoningRedacted ? { redacted: true } : {}),
           ...(reasoningReplay.length > 0 ? { replay: reasoningReplay } : {}),
-          ...(reasoningStartedAt !== undefined && reasoningEndedAt !== undefined
-            ? (() => {
-                const startMs = Date.parse(reasoningStartedAt);
-                const endMs = Date.parse(reasoningEndedAt);
-                return !Number.isNaN(startMs) && !Number.isNaN(endMs) && endMs >= startMs
-                  ? { durationMs: endMs - startMs }
-                  : {};
-              })()
-            : {}),
+          ...(roundReasoningDurationMs !== undefined ? { durationMs: roundReasoningDurationMs } : {}),
+          ...(reasoningTokens !== undefined ? { tokens: reasoningTokens } : {}),
         }
       : undefined;
   if (assistantText.length > 0) {

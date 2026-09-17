@@ -106,7 +106,15 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
       agent: "Add or configure a provider (interactive picker)",
     },
   },
-  { name: "/think", description: "Expand the last reasoning block", modes: AGENT_ONLY },
+  {
+    name: "/think",
+    description: "Expand the last reasoning block — /think [auto|expand|hide|collapse]",
+    // flow 268 T17 (AC16): bare `/think` and `/think collapse` keep their
+    // pre-existing meaning (expand/collapse the LAST retained block); the
+    // three new args set the PERSISTED display mode for every future round
+    // (`ShellConfig.thinkDisplay`) — see `tui-shell.ts`'s `/think` handler.
+    modes: AGENT_ONLY,
+  },
   { name: "/expand", description: "Expand the last tool output block", modes: AGENT_ONLY },
   {
     name: "/copy",

@@ -805,6 +805,14 @@ export interface BlockViewOptions {
   dim?: boolean;
   /** Body lines shown when expanded; defaults to {@link MAX_BODY_LINES}. */
   maxLines?: number;
+  /**
+   * flow 268 T17 (AC16): register this block already expanded instead of the
+   * default collapsed start (`/think expand` display mode). Read ONLY by
+   * `BlockMount.add` — `createBlockView` itself always renders from whatever
+   * `BlockState.collapsed` already is, so this has no effect if passed
+   * directly to it.
+   */
+  startExpanded?: boolean;
 }
 
 export interface BlockView {
@@ -1044,6 +1052,12 @@ export function createBlockMount(
   return {
     add: (input, options = {}) => {
       const id = registry.register(input);
+      // flow 268 T17 (AC16): flip BEFORE reading `state` below, so the first
+      // view render already sees `collapsed: false` — one frame, no visible
+      // collapsed→expanded flash.
+      if (options.startExpanded === true) {
+        registry.toggle(id);
+      }
       const state = registry.get(id);
       if (state !== undefined) {
         views.set(id, createBlockView(otui, renderer, parent, state, options));

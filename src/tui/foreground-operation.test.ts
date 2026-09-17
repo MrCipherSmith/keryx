@@ -164,6 +164,8 @@ test("flow 219: a stale or disposed foreground AgentIO facade suppresses every c
     onHistoryChange: (kind) => received.push(`history:${kind}`),
     onAssistantText: (text) => received.push(`assistant:${text}`),
     onReasoning: (text) => received.push(`reasoning:${text}`),
+    onReasoningDelta: (delta) => received.push(`reasoning-delta:${delta.text ?? ""}`),
+    onReasoningEnd: (info) => received.push(`reasoning-end:${info.text}`),
     onSystem: (text) => received.push(`system:${text}`),
     onAutoApproved: (tool) => received.push(`auto:${tool}`),
     requestApproval: async (tool) => {
@@ -182,6 +184,8 @@ test("flow 219: a stale or disposed foreground AgentIO facade suppresses every c
   stale.onHistoryChange?.("assistant_final");
   stale.onAssistantText?.("late");
   stale.onReasoning?.("late");
+  stale.onReasoningDelta?.({ text: "late" });
+  stale.onReasoningEnd?.({ text: "late", redacted: false });
   stale.onSystem?.("late");
   stale.onAutoApproved?.("shell_exec", "{}", { destructive: false, credentials: false });
   expect(await stale.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
@@ -192,6 +196,28 @@ test("flow 219: a stale or disposed foreground AgentIO facade suppresses every c
   expect(await disposed.requestApproval?.("shell_exec", "{}", undefined)).toBe(false);
 
   expect(received).toEqual(["write:before", "approval:shell_exec"]);
+});
+
+test("flow 268 T17: an accepted foreground facade forwards onReasoningDelta and onReasoningEnd unchanged", () => {
+  const owner = createForegroundOperationOwner();
+  const operation = owner.begin();
+  const received: string[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoningDelta: (delta) => received.push(`delta:${delta.text ?? ""}:${delta.redacted ?? false}`),
+    onReasoningEnd: (info) => received.push(`end:${info.text}:${info.redacted}:${info.durationMs ?? "-"}:${info.tokens ?? "-"}`),
+  };
+  const facade = createForegroundAgentIoFacade(owner, operation, io);
+
+  facade.onReasoningDelta?.({ text: "chunk one" });
+  facade.onReasoningDelta?.({ text: "chunk two", redacted: false });
+  facade.onReasoningEnd?.({ text: "chunk one chunk two", redacted: false, durationMs: 1200, tokens: 18 });
+
+  expect(received).toEqual([
+    "delta:chunk one:false",
+    "delta:chunk two:false",
+    "end:chunk one chunk two:false:1200:18",
+  ]);
 });
 
 test("flow 219: an approval resolved after disposal remains denied", async () => {

@@ -75,6 +75,18 @@ export interface ShellConfig {
    * resolver's own guard.
    */
   reasoningEffort?: string;
+  /**
+   * Operator-set display mode for reasoning blocks in the TUI (flow 268 T17,
+   * AC16), persisted by `/think auto|expand|hide`. One of `"auto"` (default:
+   * a collapsed block, expandable with bare `/think`/ctrl+o — today's
+   * behaviour), `"expand"` (render the finished block already expanded), or
+   * `"hide"` (no live "thinking…" preview and no retained block; see
+   * `tui-shell.ts`'s `/think` handler for the exact contract). Not validated
+   * here (this file is a raw best-effort reader/writer, like every other
+   * field above); an invalid hand-edited value falls back to `"auto"` at the
+   * read site.
+   */
+  thinkDisplay?: string;
 }
 
 /**

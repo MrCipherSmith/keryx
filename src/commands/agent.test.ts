@@ -1468,6 +1468,134 @@ test("runAgentTurn does not call onReasoning when the model emits no reasoning",
   expect(called).toBe(false);
 });
 
+// --- flow 268 T17 (AC16): onReasoningDelta / onReasoningEnd hooks ---
+
+test("flow 268 T17: onReasoningDelta fires per delta in order, before onReasoning and before the first text write", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step 1 " },
+      { kind: "reasoning_delta", text: "step 2" },
+      { kind: "text_delta", text: "Final answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const order: string[] = [];
+  const io: AgentIO = {
+    write: (t) => order.push(`write:${t}`),
+    onReasoningDelta: (d) => order.push(`delta:${d.text ?? ""}`),
+    onReasoning: (t) => order.push(`reasoning:${t}`),
+    onAssistantText: (t) => order.push(`text:${t}`),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(order).toEqual([
+    "delta:step 1 ",
+    "delta:step 2",
+    "reasoning:step 1 step 2",
+    "write:Final answer.",
+    "text:Final answer.",
+  ]);
+});
+
+test("flow 268 T17: onReasoningEnd fires once with durationMs (fixed now) and tokens from the usage extension", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "thinking" },
+      { kind: "usage_update", usage: { outputTokens: 30 }, unknownExtensions: { "openai.reasoning_tokens": 18 } },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  // now() call order: (1) the user-turn history push, (2) `reasoningStartedAt`
+  // on the first `reasoning_delta`, (3) `reasoningEndedAt` on the first
+  // non-reasoning event (`usage_update`, which closes the span BEFORE
+  // `text_delta` arrives — matching "first non-reasoning event closes the
+  // span"). Every later call is clamped to the last entry.
+  let clock = 0;
+  const timestamps = [
+    "2026-01-01T00:00:00.000Z",
+    "2026-01-01T00:00:05.000Z",
+    "2026-01-01T00:00:06.200Z",
+  ];
+  const now = (): string => timestamps[Math.min(clock++, timestamps.length - 1)] ?? "2026-01-01T00:00:00.000Z";
+  const ends: Array<{ text: string; redacted: boolean; durationMs?: number; tokens?: number }> = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoningEnd: (info) => ends.push(info),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    now,
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(ends).toHaveLength(1);
+  expect(ends[0]).toEqual({ text: "thinking", redacted: false, durationMs: 1200, tokens: 18 });
+});
+
+test("flow 268 T17: onReasoningEnd fires for a redacted-only span with no visible text (onReasoning does not fire)", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", redacted: true },
+      { kind: "text_delta", text: "Answer." },
+      { kind: "model_end" },
+    ],
+  ]);
+  let reasoningCalled = false;
+  const ends: Array<{ text: string; redacted: boolean; durationMs?: number; tokens?: number }> = [];
+  const io: AgentIO = {
+    write: () => {},
+    onReasoning: () => { reasoningCalled = true; },
+    onReasoningEnd: (info) => ends.push(info),
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go");
+  expect(reasoningCalled).toBe(false);
+  expect(ends).toHaveLength(1);
+  expect(ends[0]?.text).toBe("");
+  expect(ends[0]?.redacted).toBe(true);
+  expect(ends[0]?.tokens).toBeUndefined();
+});
+
+test("flow 268 T17: an AgentIO without onReasoningDelta/onReasoningEnd keeps working exactly as before", async () => {
+  const { provider } = scriptedProvider([
+    [
+      { kind: "reasoning_delta", text: "step 1" },
+      { kind: "text_delta", text: "Final." },
+      { kind: "model_end" },
+    ],
+  ]);
+  const io: AgentIO = { write: () => {} };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "s",
+    modelId: "m",
+    tools: builtinReadOnlyTools(tmpdir()),
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  await runAgentTurn(io, deps, [], "go"); // must not throw despite the missing hooks
+  expect(true).toBe(true);
+});
+
 // --- flow 268 T11: reasoning on NormalizedMessage (AC6) ---
 test("flow 268 T11: reasoning_delta + reasoning_replay + text attach reasoning to the assistant message", async () => {
   const { provider } = scriptedProvider([

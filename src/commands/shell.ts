@@ -79,6 +79,7 @@ import {
 } from "../tui/session-info";
 import { loadSessionLimits } from "./model-limits";
 import { applySavedApiKeys, envWithSavedApiKeys, loadShellConfig, saveShellConfig } from "../lib/shell-config";
+import { formatReasoningOneLiner, resolveThinkDisplayMode } from "../tui/reasoning-display";
 import { loadShellPermissions, parseShellExecCommand, shellPermissionsFingerprint } from "../lib/shell-permissions";
 import { extractPatchText } from "../lib/patch-risk";
 import { describeElicitationPrompt, MCP_ELICITATION_TOOL_PREFIX } from "../mcp-client/elicitation";
@@ -1084,11 +1085,32 @@ async function runAgentRepl(
         out(`${indentBlock(renderMarkdown(text.trimEnd()), GUTTER)}\n`);
       }
     },
-    onReasoning: (text) => {
+    // flow 268 T17 (AC16): moved from `onReasoning` to `onReasoningEnd` so the
+    // header line carries duration when known (`formatReasoningOneLiner` —
+    // same format `createTuiAgentIo`'s one-line default uses) and so
+    // `/think hide` (persisted to `ShellConfig`, the readline shell's only
+    // reasoning-display surface) can suppress the whole block, not just the
+    // TUI's live preview.
+    onReasoningEnd: (info) => {
       stopSpinner();
       endBlock(); // reasoning precedes the answer block
-      out(`\n${GUTTER}${style.dim("⋯ thinking")}\n`);
-      out(`${indentBlock(style.dim(text.trimEnd()), GUTTER)}\n`);
+      if (resolveThinkDisplayMode(loadShellConfig().thinkDisplay) === "hide") {
+        return;
+      }
+      const lineCount = info.text.trim().split("\n").filter((l) => l.trim().length > 0).length;
+      out(
+        `\n${GUTTER}${style.dim(
+          formatReasoningOneLiner({
+            lineCount,
+            redacted: info.redacted,
+            hasText: info.text.length > 0,
+            ...(info.durationMs !== undefined ? { durationMs: info.durationMs } : {}),
+          }),
+        )}\n`,
+      );
+      if (info.text.length > 0) {
+        out(`${indentBlock(style.dim(info.text.trimEnd()), GUTTER)}\n`);
+      }
     },
     onUsage: (usage) => {
       lastUsage = usage;
