@@ -159,3 +159,30 @@ test("K-005: 401/403 are authentication, 429 is a retryable rate limit that hono
   expect((await errorFor(json({ error: "gone" }, 404))).kind).toBe("invalid_request");
   expect((await errorFor(new Response("", { status: 502 }))).kind).toBe("unavailable");
 });
+
+test("flow 267 / AC4: a 400 body with error.code 'context_length_exceeded' classifies as context_overflow", async () => {
+  const overflow = await errorFor(
+    json(
+      {
+        error: {
+          message: "This model's maximum context length is 200000 tokens.",
+          code: "context_length_exceeded",
+        },
+      },
+      400,
+    ),
+  );
+  expect(overflow.kind).toBe("context_overflow");
+  expect(overflow.retryable).toBe(false);
+  expect(overflow.message).toContain("HTTP 400");
+
+  // Top-level `code` (no nested `error` object) is read too — reusing the
+  // SAME parsed body `errorReasonFromParsed` reads its message from.
+  const topLevel = await errorFor(json({ code: "context_length_exceeded", message: "too long" }, 400));
+  expect(topLevel.kind).toBe("context_overflow");
+
+  // A DIFFERENT code, or the right code on a DIFFERENT status, is unaffected —
+  // this is not a blanket "any code on a 400" rule.
+  expect((await errorFor(json({ error: { code: "context_length_exceeded" } }, 429))).kind).toBe("rate_limit");
+  expect((await errorFor(json({ error: { code: "some_other_code" } }, 400))).kind).toBe("invalid_request");
+});

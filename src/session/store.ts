@@ -620,6 +620,41 @@ export function persistHistory(
 }
 
 /**
+ * Persist an ALREADY-compacted context + its archive baseline, and bump
+ * `compactCount`. Extracted from `compactSession` (flow 267) so a host that
+ * compacts OUTSIDE the manual `/compact` command — `commands/agent.ts`'s
+ * automatic context guard, which runs `compactMessages` itself and splices
+ * the result into its own `history` array in place — can record the exact
+ * same bookkeeping (`compactCount`, `archive.jsonl`, `context.jsonl`) via
+ * this ONE function, without running compaction a second time. `compactSession`
+ * itself now calls this for the manual path; `context` is the NEW (already
+ * compacted) context to write, and `archive` is whatever the caller has
+ * already resolved as the fuller baseline to persist alongside it (see
+ * `compactSession`'s own `nextArchive` resolution below for that logic).
+ */
+export function persistCompacted(
+  handle: SessionHandle,
+  context: readonly NormalizedMessage[],
+  archive: readonly NormalizedMessage[],
+  meta?: Pick<PersistMeta, "provider" | "model">,
+): { handle: SessionHandle; context: readonly NormalizedMessage[] } {
+  const next = persistHistory(handle, context, {
+    archive,
+    ...(meta?.provider !== undefined ? { provider: meta.provider } : {}),
+    ...(meta?.model !== undefined ? { model: meta.model } : {}),
+  });
+  const withCount: SessionHandle = {
+    dir: next.dir,
+    summary: {
+      ...next.summary,
+      compactCount: next.summary.compactCount + 1,
+    },
+  };
+  atomicWriteJson(path.join(withCount.dir, "summary.json"), withCount.summary);
+  return { handle: withCount, context };
+}
+
+/**
  * Compact the live model context. Archive is preserved (and grown if needed).
  * Returns the new context array for the caller to swap into memory.
  */
@@ -635,21 +670,9 @@ export function compactSession(
   }
   // Archive keeps everything we had before compact + a marker line is not needed
   // as messages — full prior context already lives in archive.
-  const nextArchive = archive.length >= context.length ? [...archive] : [...context];
-  const next = persistHistory(handle, result.context, {
-    archive: nextArchive,
-    ...(opts?.provider !== undefined ? { provider: opts.provider } : {}),
-    ...(opts?.model !== undefined ? { model: opts.model } : {}),
-  });
-  const withCount: SessionHandle = {
-    dir: next.dir,
-    summary: {
-      ...next.summary,
-      compactCount: next.summary.compactCount + 1,
-    },
-  };
-  atomicWriteJson(path.join(withCount.dir, "summary.json"), withCount.summary);
-  return { handle: withCount, context: result.context, result };
+  const nextArchive = archive.length >= context.length ? archive : context;
+  const persisted = persistCompacted(handle, result.context, nextArchive, opts);
+  return { handle: persisted.handle, context: result.context, result };
 }
 
 /** Typed rejection for a fork whose source session is not in this project. */

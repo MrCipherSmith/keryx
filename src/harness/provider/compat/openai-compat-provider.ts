@@ -214,8 +214,17 @@ function mergeUsage(
  * validated.` — and that is a credential problem, not a malformed request. Every
  * 4xx used to be `invalid_request`, so a refused credential and a request with a
  * bad field were the same error, and a rate limit was not retryable.
+ *
+ * `code` (flow 267): the JSON error body's `error.code`/`code` field, when the
+ * body parsed and carried one. `"context_length_exceeded"` on a 400 maps to
+ * the dedicated `context_overflow` taxonomy row rather than the generic
+ * `invalid_request` — mirroring the STRUCTURE the native `OpenAiProvider`
+ * already uses for this exact code (`openai/openai-provider.ts`'s own
+ * `classifyHttpError`). Before this, every compat-gateway context overflow
+ * (this file never read `code` at all) surfaced as a bare `invalid_request`
+ * with no `/compact` hint reachable downstream.
  */
-function classifyHttpError(status: number, headers: Headers): NormalizedError {
+function classifyHttpError(status: number, headers: Headers, code?: string): NormalizedError {
   if (status === 401 || status === 403) {
     // A refused credential or account. The same request cannot succeed on retry.
     return { kind: "authentication", retryable: retryableFor("authentication", false), message: "" };
@@ -229,6 +238,9 @@ function classifyHttpError(status: number, headers: Headers): NormalizedError {
     }
     return error;
   }
+  if (status === 400 && code === "context_length_exceeded") {
+    return { kind: "context_overflow", retryable: retryableFor("context_overflow", false), message: "" };
+  }
   if (status >= 500) {
     return { kind: "unavailable", retryable: retryableFor("unavailable", true), message: "" };
   }
@@ -240,6 +252,30 @@ function classifyHttpError(status: number, headers: Headers): NormalizedError {
 const MAX_ERROR_REASON_CHARS = 300;
 
 /**
+ * Parse a possibly-JSON error body ONCE. `undefined` on anything that does not
+ * parse (an HTML error page, a proxy banner, an empty body) — every reader
+ * below degrades to "nothing to report" rather than throwing.
+ */
+function parseErrorBody(bodyText: string): unknown {
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The JSON error body's `error.code` (nested, OpenAI-compat shape) or a
+ * top-level `code` field, when present. Reads the SAME parsed body
+ * `errorReasonFromParsed` reads its message from (flow 267) — the response is
+ * read as text once at the call site, never twice.
+ */
+function extractErrorCode(parsed: unknown): string | undefined {
+  const record = asRecord(parsed);
+  return asString(asRecord(record.error).code) ?? asString(record.code);
+}
+
+/**
  * The server's own reason for a refusal, from the JSON shapes gateways use.
  *
  * Only `error.message` used to be read, so a gateway answering
@@ -249,13 +285,7 @@ const MAX_ERROR_REASON_CHARS = 300;
  * OpenAI and Anthropic adapters): an HTML error page or a proxy banner is not a
  * reason.
  */
-function errorReason(bodyText: string): string | undefined {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(bodyText);
-  } catch {
-    return undefined;
-  }
+function errorReasonFromParsed(parsed: unknown): string | undefined {
   const record = asRecord(parsed);
   const raw =
     asString(asRecord(record.error).message) ??
@@ -505,13 +535,17 @@ export class OpenAiCompatEngine implements ProviderPort {
 
     // Provider negatives: non-2xx -> typed, fail-closed error, no model_end.
     if (!response.ok) {
-      const error = classifyHttpError(response.status, response.headers);
-      let reason: string | undefined;
+      // Read the body ONCE (flow 267) — `code` (for classification) and
+      // `reason` (for the message) both come from this SAME parse, not two
+      // separate reads/parses of the response body.
+      let parsedBody: unknown;
       try {
-        reason = errorReason(await response.text());
+        parsedBody = parseErrorBody(await response.text());
       } catch {
-        // An unreadable body has no reason to give; the status still stands.
+        // An unreadable body has no code/reason to give; the status still stands.
       }
+      const error = classifyHttpError(response.status, response.headers, extractErrorCode(parsedBody));
+      const reason = errorReasonFromParsed(parsedBody);
       // The status stays in the message even when the server gave a reason: a
       // reason alone ("balance exhausted") does not say which provider or which
       // class of failure, and the label is what names the gateway.

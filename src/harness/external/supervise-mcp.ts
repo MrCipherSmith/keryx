@@ -266,6 +266,10 @@ export async function superviseCodexMcpRun(
       destructive,
       credentials,
       sacReviewConfirmation,
+      // This MCP dispatch path has its own, stricter, always-ask-or-deny
+      // posture (see this module's top-of-file docstring) and is out of
+      // scope for `/plan` read-only mode — it never toggles, so always false.
+      readOnly: false,
     });
 
     const toolName = `${MCP_ELICITATION_TOOL_PREFIX}${String(pending.requestId)}`;

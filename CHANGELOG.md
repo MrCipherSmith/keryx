@@ -3,6 +3,74 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.113] — 2026-09-17
+A read-only posture for the interactive agent session, and three small fixes
+to the OpenTUI shell.
+
+### Added
+
+- **`/plan` — a read-only toggle for `keryx shell`.** Orthogonal to the
+  existing `/mode ask|trust|auto`: where `/mode` decides how much
+  confirmation a mutating call needs, `/plan` decides whether mutating tools
+  are reachable at all. `/plan on` denies every non-`read` tool call
+  unconditionally — a hard floor no mode lifts, not even `auto`. In-memory
+  only, always starts off; there is no persisted default. See
+  [Read-only mode: `/plan`](docs/docs/guides/permission-modes.md) in the
+  permission-modes guide. `shell_exec` is denied entirely under `/plan` in
+  this release — there is no read-only git surface (`git diff`/`log`/`status`)
+  yet.
+- **A one-time boot animation on `keryx shell --tui` launch.** Shown once
+  before the provider/model picker; any keypress skips it. Set
+  `KERYX_SKIP_BOOT=1` to disable it entirely (already applied automatically
+  for automated/CI launches).
+
+### Fixed
+
+- **The sidebar silently clipped content instead of scrolling.** Anything
+  mounted past what fit the terminal height — Workspace, Review, Tools,
+  Status, Subagents, Background Jobs — was simply unreachable on a short
+  terminal. The sidebar's content area is now a real scrollbox, the same
+  primitive the main transcript already uses.
+- **The sidebar's title didn't show which version was running.** The
+  "keryx" title now carries the running version next to it, dim.
+
+## [0.2.112] — 2026-09-16
+Output from a background task reached the model provider unredacted. Releases
+0.2.109, 0.2.110 and 0.2.111 carry the defect; this release is the fix and
+contains nothing else.
+
+### Fixed
+
+- **A task-completion notification is redacted before it reaches the provider.**
+  `redactSensitiveText` ran on the ordinary tool-result path and nowhere else. A
+  completion notification carries the same kind of bytes into the same
+  provider-bound history and never passed through it, so output was scrubbed when
+  a command returned inline and leaked verbatim when the identical command
+  outlived its yield and finished as a background task. The scrubber's own reason
+  to exist names this case — a contained command that reads a credential must not
+  leak the raw value onward to the provider — and delivery is that path too.
+  Redaction now happens in the single notification builder every delivery path
+  funnels through, after the tail slice rather than before it, because redaction
+  is not length-preserving and scrubbing first would silently change what the
+  4 000-byte bound means.
+
+  **Who is affected.** Only sessions that ran a command whose *output* contained
+  a secret through a background task — `env`, reading a credentials file, a build
+  that echoes a token into its log. A command that merely *uses* a secret without
+  printing it was never exposed by this. The leak went to the configured model
+  provider as part of the conversation, not to disk or to any third party.
+
+  **What you cannot check, and what to do instead.** Notifications are not
+  written to disk and the context sent to a provider is not readable after the
+  fact, so there is no local artifact to audit — "check whether you were
+  affected" is advice that cannot be followed. If you recognise the case above in
+  how you used background tasks on 0.2.109–0.2.111, treat the printed credential
+  as exposed and rotate it.
+
+  Found while drafting the requirements for on-disk transcripts: stating what a
+  transcript must redact required stating what the code redacts today, and this
+  path did not survive the check.
+
 ## [0.2.111] — 2026-09-16
 Review stops acting on the wrong thing. An imported reviewer can now verify and
 brings the rules it cites; a model block no longer pins whatever `keryx shell`

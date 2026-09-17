@@ -190,6 +190,11 @@ async function runPtyShell(opts: { args: string[]; readyMarker: string }): Promi
         // launch can never read or write the developer's real `auth.json`.
         XDG_DATA_HOME: path.join(home, ".local", "share"),
         TERM: "xterm-256color",
+        // Flow 266 P1: skip the branded boot animation — this test spawns the
+        // REAL launch path and asserts on early output; a fixed-duration intro
+        // would just add latency to every run, not exercise anything this test
+        // checks.
+        KERYX_SKIP_BOOT: "1",
       },
     });
     // Drain stderr concurrently: an undrained pipe can block the child.
