@@ -28,6 +28,7 @@ import { enrichPageDeep } from "./deep-enrich";
 import type { ResumeState } from "./resume-state";
 import { wikiValidate } from "./service";
 import { computePageNodeHash, isPageUnchangedSinceLastEnrich } from "./staleness";
+import { stripThinkBlocks } from "./think-tags";
 import type { WikiPage } from "./types";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -574,6 +575,14 @@ export function validateEnrichedMarkdown(original: string, enriched: string): st
   if (text.length === 0) {
     return "empty model response";
   }
+  // Last line of defense (flow 268 T9): every page-write path already strips
+  // complete <think>/<thinking> reasoning blocks and rejects a stray tag
+  // before it reaches here (see `stripThinkBlocks` calls in `wikiEnrich` and
+  // `finalizeEnrichedText`). This catches anything that somehow still slips
+  // through — `wiki enrich` must never persist a page containing these tags.
+  if (/<\/?think(?:ing)?>/i.test(text)) {
+    return "content contains a <think>/<thinking> reasoning tag";
+  }
   if (!text.startsWith("---")) {
     return "missing YAML frontmatter (must start with ---)";
   }
@@ -823,6 +832,30 @@ export async function wikiEnrich(input: WikiEnrichInput): Promise<WikiEnrichResu
       if (enriched.length === 0) {
         onPage({ index, total, path: page.relativePath, status, phase: "failed" });
         return { path: page.relativePath, action: "failed" as const, reason: "empty model response" };
+      }
+
+      // Strip inline <think>/<thinking> reasoning blocks before anything
+      // else touches this output — a real incident wrote such a block
+      // straight into a wiki page right after its frontmatter (flow 268 T9).
+      // This runs unconditionally, independent of `validate`: never writing
+      // a page containing these tags is a hard guarantee, not a toggle.
+      const stripped = stripThinkBlocks(enriched);
+      if (stripped.hasStrayTag) {
+        onPage({ index, total, path: page.relativePath, status, phase: "failed" });
+        return {
+          path: page.relativePath,
+          action: "failed" as const,
+          reason: "validation: unclosed or stray <think>/<thinking> tag in model output",
+        };
+      }
+      enriched = stripped.content.trim();
+      if (enriched.length === 0) {
+        onPage({ index, total, path: page.relativePath, status, phase: "failed" });
+        return {
+          path: page.relativePath,
+          action: "failed" as const,
+          reason: "empty model response after stripping reasoning block",
+        };
       }
 
       // Model sometimes returns body-only; re-attach original frontmatter.
@@ -1080,7 +1113,21 @@ function finalizeEnrichedText(
   if (trimmed.length === 0) {
     return { content: original, structuralError: "empty model response" };
   }
-  let content = repairEnrichedFrontmatter(original, trimmed);
+  // Same unconditional reasoning-block guard as the RLM-off path above (flow
+  // 268 T9) — applies to both `light` (incl. batched) and `deep` tiers, since
+  // both funnel their raw model output through this function.
+  const stripped = stripThinkBlocks(trimmed);
+  if (stripped.hasStrayTag) {
+    return {
+      content: original,
+      structuralError: "unclosed or stray <think>/<thinking> tag in model output",
+    };
+  }
+  const cleaned = stripped.content.trim();
+  if (cleaned.length === 0) {
+    return { content: original, structuralError: "empty model response after stripping reasoning block" };
+  }
+  let content = repairEnrichedFrontmatter(original, cleaned);
   let structuralError: string | null = null;
   if (options.validate) {
     structuralError = validateEnrichedMarkdown(original, content);

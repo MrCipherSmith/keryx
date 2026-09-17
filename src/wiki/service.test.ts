@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathExists } from "../lib/fs";
-import { wikiCollect, wikiPruneOrphans } from "./service";
+import { wikiCollect, wikiPruneOrphans, wikiStatus } from "./service";
 
 const jsonl = (rows: object[]): string => rows.map((r) => JSON.stringify(r)).join("\n");
 
@@ -128,6 +128,38 @@ test("collect creates draft wiki pages from graph, health, and testing artifacts
     expect(second.skipped).toBe(4);
     expect(await readFile(path.join(root, ".metaproject", "wiki", "architecture", "project-map.md"), "utf8"))
       .toContain("Manual Project Map");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("flow 268 T9: wikiStatus reports existing pages that still contain a leaked <think> tag", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "gd-wiki-status-think-"));
+  const graphDir = path.join(root, ".metaproject", "data", "gdgraph", "storage");
+  const components = path.join(root, ".metaproject", "wiki", "components");
+  try {
+    await mkdir(graphDir, { recursive: true });
+    await writeFile(
+      path.join(graphDir, "nodes.jsonl"),
+      jsonl([
+        { id: "src/alpha/a.ts", kind: "file", path: "src/alpha/a.ts" },
+        { id: "src/alpha/b.ts", kind: "file", path: "src/alpha/b.ts" },
+      ]),
+      "utf8",
+    );
+    await writeFile(path.join(graphDir, "edges.jsonl"), "", "utf8");
+    await wikiCollect({ cwd: root });
+
+    const leakedPath = path.join(components, "src-alpha.md");
+    const original = await readFile(leakedPath, "utf8");
+    await writeFile(
+      leakedPath,
+      `${original}\n<think>\nreasoning that leaked into this page before the guard existed\n</think>\n`,
+      "utf8",
+    );
+
+    const status = await wikiStatus(root);
+    expect(status.pagesWithThinkTags).toEqual(["components/src-alpha.md"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -16,6 +16,7 @@ import {
 import { buildSectionIndex } from "./section-index";
 import { readSectionRegistryState } from "./section-tombstone";
 import { HEAD_NOT_REQUESTED, resolveWikiSourceGate } from "./staleness";
+import { containsThinkTags } from "./think-tags";
 import {
   WIKI_INDEX_BEGIN,
   WIKI_INDEX_END,
@@ -77,7 +78,32 @@ export async function wikiStatus(cwd: string): Promise<WikiStatusResult> {
     })),
     lastIndexGeneratedAt: await readIndexGeneratedAt(cwd),
     lastLinkCheck: await readLinkCheckState(cwd),
+    pagesWithThinkTags: await findPagesWithThinkTags(pages),
   };
+}
+
+/**
+ * Flow 268 T9: pages already on disk that still contain a leaked
+ * `<think>`/`<thinking>` reasoning tag — most likely written by `wiki
+ * enrich` before the stripping guard in `enrich.ts` existed. `wiki status`
+ * surfaces these so an operator knows which pages to re-run
+ * `keryx wiki enrich --force --page <path>` on. Best-effort: a page that
+ * cannot be read here (e.g. removed between `collectPages` and this read) is
+ * silently skipped rather than failing the whole status call.
+ */
+async function findPagesWithThinkTags(pages: readonly WikiPage[]): Promise<string[]> {
+  const flagged: string[] = [];
+  for (const page of pages) {
+    try {
+      const content = await readFile(page.absolutePath, "utf8");
+      if (containsThinkTags(content)) {
+        flagged.push(page.relativePath);
+      }
+    } catch {
+      // best-effort — see doc comment above.
+    }
+  }
+  return flagged;
 }
 
 export async function wikiCreatePage(
