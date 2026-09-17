@@ -17,6 +17,13 @@ export interface ShellConfig {
   baseUrl?: string;
   /** Per-provider endpoint overrides selected in the TUI. */
   baseUrls?: Record<string, string>;
+  /**
+   * Per-provider sampling/budget/timeout overrides for a BUILT-IN
+   * OpenAI-compatible provider (flow 268). Keyed by provider name, same shape
+   * `baseUrls` uses. A custom provider (`llm-providers.json`) carries these
+   * fields on its own record instead — see `CustomCompatProvider`.
+   */
+  modelParams?: Record<string, { temperature?: number; maxOutputTokens?: number; timeoutMs?: number }>;
   /** Legacy single OpenRouter key (flow 080); migrated into `apiKeys` on read. */
   openrouterKey?: string;
   /**
@@ -167,6 +174,22 @@ export function saveApiKey(envKey: string, value: string, dir?: string): void {
 export function saveProviderBaseUrl(provider: string, baseUrl: string, dir?: string): void {
   const existing = loadShellConfig(dir).baseUrls ?? {};
   saveShellConfig({ baseUrls: { ...existing, [provider]: baseUrl } }, dir);
+}
+
+/**
+ * Merge a `{temperature?, maxOutputTokens?, timeoutMs?}` patch into `provider`'s
+ * entry under `modelParams`, WITHOUT overwriting other providers' entries or
+ * the rest of this provider's own patch history (flow 268, mirrors
+ * `saveProviderBaseUrl`). Best-effort; never throws.
+ */
+export function saveProviderModelParams(
+  provider: string,
+  patch: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number },
+  dir?: string,
+): void {
+  const existing = loadShellConfig(dir).modelParams ?? {};
+  const merged = { ...(existing[provider] ?? {}), ...patch };
+  saveShellConfig({ modelParams: { ...existing, [provider]: merged } }, dir);
 }
 
 /**

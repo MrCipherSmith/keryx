@@ -509,6 +509,33 @@ interface CustomProviderWizardResult {
   baseUrl: string;
   apiKey?: string;
   models: string[];
+  /** flow 268: optional per-provider defaults, all skippable (empty = unset). */
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}
+
+/** Empty (skipped) -> `undefined`; a non-finite entry is also treated as skipped, never throws. */
+function parseOptionalWizardNumber(raw: string): number | undefined {
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
+ * Same as {@link parseOptionalWizardNumber}, but a value `<= 0` is ALSO
+ * treated as skipped (never saved). For `maxOutputTokens`/`timeoutMs` —
+ * unlike `temperature`, where `0` is a meaningful setting — a `0` here would
+ * silently request a budget of zero output tokens on every request (the
+ * request-construction `?? 1024` fallback only triggers on `undefined`, not
+ * `0`), and a `0`/negative `timeoutMs` would abort every stream instantly.
+ */
+function parseOptionalPositiveWizardNumber(raw: string): number | undefined {
+  const parsed = parseOptionalWizardNumber(raw);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
 }
 
 /**
@@ -569,7 +596,42 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
         continue; // → re-enter the key
       }
       const models = modelsStep.value.split(",").map((m) => m.trim()).filter((m) => m.length > 0);
-      return { name, baseUrl, ...(apiKey !== undefined ? { apiKey } : {}), models };
+      // flow 268: optional, skippable model-param defaults. Same "restart this
+      // card from the URL step" back-navigation the key/models steps above
+      // already use — not a per-field back-stack.
+      const temperatureStep = await promptCustomFieldStep(otui, r, {
+        title: "Temperature (optional)",
+        note: "empty = provider default · e.g. 0.2",
+      });
+      if (temperatureStep.kind === "back") {
+        continue;
+      }
+      const temperature = parseOptionalWizardNumber(temperatureStep.value);
+      const maxOutputTokensStep = await promptCustomFieldStep(otui, r, {
+        title: "Max output tokens (optional)",
+        note: "empty = default 1024 · e.g. 4096",
+      });
+      if (maxOutputTokensStep.kind === "back") {
+        continue;
+      }
+      const maxOutputTokens = parseOptionalPositiveWizardNumber(maxOutputTokensStep.value);
+      const timeoutMsStep = await promptCustomFieldStep(otui, r, {
+        title: "Request timeout ms (optional)",
+        note: "empty = no engine-internal timeout · e.g. 180000",
+      });
+      if (timeoutMsStep.kind === "back") {
+        continue;
+      }
+      const timeoutMs = parseOptionalPositiveWizardNumber(timeoutMsStep.value);
+      return {
+        name,
+        baseUrl,
+        ...(apiKey !== undefined ? { apiKey } : {}),
+        models,
+        ...(temperature !== undefined ? { temperature } : {}),
+        ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+        ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+      };
     }
   }
 }
@@ -2020,6 +2082,9 @@ export function selectProviderModelInTui(
               ...(created.apiKey !== undefined ? { apiKey: created.apiKey } : {}),
               models: created.models,
               requiresApiKey: false,
+              ...(created.temperature !== undefined ? { temperature: created.temperature } : {}),
+              ...(created.maxOutputTokens !== undefined ? { maxOutputTokens: created.maxOutputTokens } : {}),
+              ...(created.timeoutMs !== undefined ? { timeoutMs: created.timeoutMs } : {}),
             });
             allCandidates.push({
               name: created.name,

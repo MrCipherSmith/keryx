@@ -141,6 +141,27 @@ describe("AC9 — request body only carries reasoning/include/store when effort 
     expect(body.max_output_tokens).toBe(1024);
   });
 
+  // flow 268 merge (reasoning + temperature coexistence): the Responses API
+  // 400s a reasoning-effort request that also carries a sampling
+  // `temperature` — an operator-configured `options.temperature` must never
+  // reach the wire on a reasoning-requested turn, even though it DOES reach
+  // it on a non-reasoning turn (see `openai-provider.test.ts`'s
+  // "flow 268 — max_output_tokens/temperature reach the Responses API
+  // payload" describe block).
+  test("options.reasoning set + options.temperature configured -> temperature is omitted, reasoning still sent", async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(REASONING_TOOL_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+    await collectEvents(
+      provider.stream(buildRequest("req-medium-temp", { options: { reasoning: "medium", temperature: 0.2 } }), {
+        attemptId: "att-medium-temp",
+      }),
+    );
+
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.reasoning).toEqual({ effort: "medium", summary: "auto" });
+    expect("temperature" in body).toBe(false);
+  });
+
   test('flow 268 T16: options.reasoning "xhigh"/"max" -> reasoning.effort clamps to "high" (OpenAI has no xhigh/max)', async () => {
     const { fetch: fetchXhigh, calls: callsXhigh } = makeFixtureFetchMock(REASONING_TOOL_FIXTURE_PATH);
     const providerXhigh = new OpenAiProvider({ fetch: fetchXhigh, grant: validGrant() });

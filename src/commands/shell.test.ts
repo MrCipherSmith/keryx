@@ -1388,10 +1388,12 @@ describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sw
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
   // Widened from 4200 (flow 173) to 4600 to fit T23's `maxOutputTokens`
-  // resolution, then to 5300 to fit T16's `reasoningEffort` resolution —
-  // both added ahead of `sweepBackgroundJobs` in the same `agentDepsBase`
-  // object — still just past that field, well short of the next declaration.
-  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 5300);
+  // resolution, then to 5300 to fit T16's `reasoningEffort` resolution, then
+  // to 5450 for the flow 268 merge's `resolvedModelParams.maxOutputTokens`
+  // routing comment on the same `maxOutputTokens` field — all added ahead of
+  // `sweepBackgroundJobs` in the same `agentDepsBase` object — still just
+  // past that field, well short of the next declaration.
+  const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 5450);
   const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
   const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
 

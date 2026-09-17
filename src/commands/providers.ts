@@ -16,6 +16,7 @@
 import {
   type ConfiguredProvider,
   type CrossFamilyReviewDecision,
+  type CustomCompatProvider,
   decideCrossFamilyReview,
   familyOf,
   loadCustomCompatProviders,
@@ -23,7 +24,7 @@ import {
 import { extraRequestHeaders } from "../lib/oauth/catalog";
 import { envWithOAuthAccess } from "../lib/oauth/grants";
 import { resolveCallerSession } from "../lib/caller-session";
-import { envWithSavedApiKeys } from "../lib/shell-config";
+import { type ShellConfig, envWithSavedApiKeys, loadShellConfig } from "../lib/shell-config";
 import { optionValue } from "../lib/args";
 
 /** A hosted OpenAI-compatible provider offered in the picker. */
@@ -82,12 +83,30 @@ export interface OpenAiCompatProvider {
   balanceKind?: "deepseek" | "openrouter";
   /**
    * Custom-provider-only override of the main agent turn's output-token
-   * budget; mirrors `CustomCompatProvider.maxOutputTokens`
+   * budget (flow 268); mirrors `CustomCompatProvider.maxOutputTokens`
    * (`src/lib/provider-config.ts`), which is its sole source — a built-in
    * entry never sets this. Read by `resolveAgentMaxOutputTokens`'s callers
-   * (e.g. `commands/shell.ts`'s `makeAgentDeps`) via `providerByName`.
+   * (e.g. `commands/shell.ts`'s `makeAgentDeps`) via
+   * `resolveProviderModelParams`/`resolveProviderModelParamsByName` below —
+   * which also let an operator override it per-provider via
+   * `ShellConfig.modelParams` without editing `llm-providers.json`.
    */
   maxOutputTokens?: number;
+  /**
+   * Default sampling temperature for this provider (flow 268). For a custom
+   * provider this is copied straight from its `CustomCompatProvider` record
+   * (`customCompatProviders` below); a built-in has no default of its own —
+   * see `resolveProviderModelParams`'s `ShellConfig.modelParams` override.
+   * Folded into `request.options.temperature` by `commands/agent.ts`'s
+   * `buildRequestOptions` (and by `runShell`'s own chat-mode request).
+   */
+  temperature?: number;
+  /**
+   * Default abort timeout (ms) for the actual chat/completions call to this
+   * provider (flow 268), independent of the `/models` discovery probe's own
+   * timeout. Threaded into `StreamOptions.timeoutMs`.
+   */
+  timeoutMs?: number;
   /**
    * Custom-provider-only reasoning configuration; mirrors
    * `CustomCompatProvider.reasoning` (`src/lib/provider-config.ts`), which is
@@ -206,6 +225,70 @@ export function resolveCompatReasoningPreset(
     return { format: "field", replay: "deepseek" };
   }
   return undefined;
+}
+
+/** Resolved per-provider sampling/budget/timeout overrides (flow 268). Every field absent when unconfigured. */
+export interface ResolvedProviderModelParams {
+  temperature?: number;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
+}
+
+/**
+ * Resolve `temperature`/`maxOutputTokens`/`timeoutMs` for one provider.
+ *
+ * Precedence: `shellConfig.modelParams[provider.name]` (an operator override
+ * saved for a BUILT-IN provider, `saveProviderModelParams`) wins when present,
+ * else the provider record's OWN fields — which is how a custom provider's
+ * `llm-providers.json` entry (already carrying these per `CustomCompatProvider`)
+ * supplies its defaults, since a built-in `OpenAiCompatProvider` has none of
+ * its own. Absent everywhere -> every field `undefined`, matching AC3's
+ * byte-identical-when-unconfigured requirement; this function never invents a
+ * default — the fallback lives at the request-construction call sites, same
+ * as today (the agent turn's `?? DEFAULT_MAX_OUTPUT_TOKENS` in
+ * `resolveAgentMaxOutputTokens`, `commands/agent.ts`; `runShell`'s own
+ * chat-mode loop's `?? 1024`).
+ */
+export function resolveProviderModelParams(
+  provider: OpenAiCompatProvider | CustomCompatProvider,
+  shellConfig: Pick<ShellConfig, "modelParams"> = loadShellConfig(),
+): ResolvedProviderModelParams {
+  const override = shellConfig.modelParams?.[provider.name];
+  const temperature = override?.temperature ?? provider.temperature;
+  const maxOutputTokens = override?.maxOutputTokens ?? provider.maxOutputTokens;
+  const timeoutMs = override?.timeoutMs ?? provider.timeoutMs;
+  return {
+    ...(temperature !== undefined ? { temperature } : {}),
+    ...(maxOutputTokens !== undefined ? { maxOutputTokens } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  };
+}
+
+/**
+ * Convenience wrapper over {@link resolveProviderModelParams} for a caller that
+ * only has a provider NAME (e.g. a shell's current `providerName` string, not
+ * an `OpenAiCompatProvider` object) — model-selection call sites in
+ * `commands/shell.ts`/`tui/tui-shell.ts` use this. Returns every field
+ * `undefined` for a name with no OpenAI-compatible registry entry (the native
+ * anthropic/openai/gemini adapters, `ollama`-as-native, `fake`) — scope
+ * discipline: this flow only covers OpenAI-compatible gateways (see
+ * `docs requirements` for flow 268), so a native adapter's config surface is
+ * simply untouched rather than guessed at.
+ *
+ * `dir`, when given, MUST be the same directory `shellConfig` was loaded
+ * from (`loadShellConfig(dir)`) — it scopes the CUSTOM-provider lookup
+ * (`providerByName`/`llm-providers.json`), the half of this resolution
+ * `shellConfig` alone cannot reach, since a custom provider's own
+ * `temperature`/`maxOutputTokens`/`timeoutMs` live on its `llm-providers.json`
+ * record, not in `ShellConfig.modelParams`.
+ */
+export function resolveProviderModelParamsByName(
+  name: string,
+  shellConfig: Pick<ShellConfig, "modelParams"> = loadShellConfig(),
+  dir?: string,
+): ResolvedProviderModelParams {
+  const provider = providerByName(name, dir);
+  return provider === undefined ? {} : resolveProviderModelParams(provider, shellConfig);
 }
 
 /**
@@ -336,9 +419,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
   },
 ];
 
-/** Look up a registry provider by its `name`. */
-export function providerByName(name: string): OpenAiCompatProvider | undefined {
-  return allOpenAiCompatProviders().find((p) => p.name === name);
+/** Look up a registry provider by its `name`. `dir` scopes the custom-provider lookup, same as {@link allOpenAiCompatProviders}. */
+export function providerByName(name: string, dir?: string): OpenAiCompatProvider | undefined {
+  return allOpenAiCompatProviders(dir).find((p) => p.name === name);
 }
 
 /**
@@ -366,7 +449,9 @@ export function customCompatProviders(dir?: string): OpenAiCompatProvider[] {
       ...(p.modelsPath !== undefined ? { modelsPath: p.modelsPath } : {}),
       models: p.models,
       ...(p.note !== undefined ? { note: p.note } : {}),
+      ...(p.temperature !== undefined ? { temperature: p.temperature } : {}),
       ...(p.maxOutputTokens !== undefined ? { maxOutputTokens: p.maxOutputTokens } : {}),
+      ...(p.timeoutMs !== undefined ? { timeoutMs: p.timeoutMs } : {}),
       ...(p.reasoning !== undefined ? { reasoning: p.reasoning } : {}),
     }));
 }

@@ -28,6 +28,7 @@ import type {
   NormalizedError,
   NormalizedMessage,
   NormalizedRequest,
+  NormalizedRequestOptions,
   NormalizedToolCall,
   NormalizedUsage,
   ProviderPort,
@@ -392,6 +393,29 @@ export interface AgentDeps {
    * regardless, only the persistence/UX side-effect is skipped.
    */
   onContextCompaction?: (r: { removed: number; context: NormalizedMessage[]; estimate: number }) => void;
+  /**
+   * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
+   * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
+   * in `commands/providers.ts`), resolved once at model-selection time by the
+   * caller and re-resolved on every `/model`/`/provider`/`/connect` rebuild —
+   * same lifecycle as `providerId`/`modelId` above. Only `temperature`
+   * (folded into `request.options.temperature` by {@link buildRequestOptions})
+   * and `timeoutMs` (an internal chat-call abort timer, threaded straight into
+   * `StreamOptions.timeoutMs`) are read from this field by `runAgentTurnCore`/
+   * `finishWithBudgetSummary`. `maxOutputTokens` on this object is NOT read
+   * here — the caller is expected to fold a provider's own override into
+   * {@link AgentDeps.maxOutputTokens} itself, via
+   * {@link resolveAgentMaxOutputTokens}'s `providerMaxOutputTokens` input, so
+   * there remains exactly one resolved output-token budget rather than two
+   * that could drift apart; the field stays on this type only so a caller can
+   * pass through the SAME `ResolvedProviderModelParams`/`ShellModelParams`
+   * object it already built for `temperature`/`timeoutMs` without stripping
+   * it. Every field absent (the default) reproduces exactly today's request
+   * shape: `budget.maxOutputTokens` falls back to
+   * {@link resolveAgentMaxOutputTokens}'s own default, `runReservation`
+   * mirrors it, and no `options.temperature` is set (AC3).
+   */
+  modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
 }
 
 export interface RunAgentTurnOptions {
@@ -713,6 +737,41 @@ export function describeReasoningEffortSource(
     return { effort: options.globalEffort, source: "global" };
   }
   return { effort: "off", source: "default" };
+}
+
+/**
+ * Build the optional `NormalizedRequest.options` for a main-turn/wrap-up
+ * request (flow 268): `temperature` (an operator's per-provider override,
+ * `deps.modelParams.temperature` — see `AgentDeps.modelParams`'s doc comment)
+ * and `reasoning` (the ALREADY-RESOLVED `reasoningEffort` level — see
+ * {@link resolveReasoningEffort}'s precedence doc) are independent fields on
+ * the same `options` object; either, both, or neither may be present.
+ * `maxOutputTokens` is deliberately NOT read from `deps.modelParams` here —
+ * unlike `temperature`/`timeoutMs`, it has its own single resolved value on
+ * `AgentDeps.maxOutputTokens` (via {@link resolveAgentMaxOutputTokens}, whose
+ * `providerMaxOutputTokens` input already folds in a provider's own default),
+ * so reading `deps.modelParams.maxOutputTokens` here as well would be a
+ * second, independently-drifting computation of the same budget.
+ * `"off"` and absent are the same "not requested" signal for
+ * `reasoningEffort`, matching `AgentDeps.reasoningEffort`'s doc comment.
+ * Absent everywhere -> `{}` (no `options` key at all), reproducing today's
+ * request byte-for-byte (AC3).
+ */
+function buildRequestOptions(
+  deps: Pick<AgentDeps, "modelParams">,
+  reasoningEffort: string | undefined,
+): { options: NormalizedRequestOptions } | Record<string, never> {
+  const temperature = deps.modelParams?.temperature;
+  const reasoning = reasoningEffort !== undefined && reasoningEffort !== "off" ? reasoningEffort : undefined;
+  if (temperature === undefined && reasoning === undefined) {
+    return {};
+  }
+  return {
+    options: {
+      ...(temperature !== undefined ? { temperature } : {}),
+      ...(reasoning !== undefined ? { reasoning } : {}),
+    },
+  };
 }
 
 /**
@@ -1852,10 +1911,8 @@ async function runAgentTurnCore(
       systemInstruction: deps.systemInstruction,
       messages: [...history],
       tools: toolDefs,
-      ...(reasoningEffort !== undefined && reasoningEffort !== "off"
-        ? { options: { reasoning: reasoningEffort } }
-        : {}),
       budget: { maxOutputTokens, runReservation: maxOutputTokens },
+      ...buildRequestOptions(deps, reasoningEffort),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -1910,7 +1967,11 @@ async function runAgentTurnCore(
     let errored = false;
 
     try {
-      const streamOptions = signal === undefined ? { attemptId: deps.idSeq() } : { attemptId: deps.idSeq(), signal };
+      const streamOptions = {
+        attemptId: deps.idSeq(),
+        ...(signal === undefined ? {} : { signal }),
+        ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+      };
       for await (const event of deps.provider.stream(request, streamOptions)) {
         if (isAborted()) {
           // flow 268 T26: fire `onReasoningEnd` for a round that started
@@ -2625,17 +2686,14 @@ async function finishWithBudgetSummary(
       });
     }
   }
-
   const request: NormalizedRequest = {
     providerId: deps.providerId,
     modelId: deps.modelId,
     systemInstruction: deps.systemInstruction,
     messages: [...history],
     // No tools — force a text wrap-up.
-    ...(reasoningEffort !== undefined && reasoningEffort !== "off"
-      ? { options: { reasoning: reasoningEffort } }
-      : {}),
     budget: { maxOutputTokens, runReservation: maxOutputTokens },
+    ...buildRequestOptions(deps, reasoningEffort),
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -2669,7 +2727,11 @@ async function finishWithBudgetSummary(
     }
   };
   try {
-    for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
+    const wrapUpStreamOptions = {
+      attemptId: deps.idSeq(),
+      ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+    };
+    for await (const event of deps.provider.stream(request, wrapUpStreamOptions)) {
       if (
         reasoningStartedAt !== undefined &&
         reasoningEndedAt === undefined &&

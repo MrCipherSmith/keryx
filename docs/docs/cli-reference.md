@@ -250,17 +250,30 @@ session state and still see recent context about the busy main turn.
   defaults to 8192 — the tightest hard ceiling among currently supported
   providers (DeepSeek's OpenAI-compatible `max_tokens` cap). Precedence,
   highest first: the `KERYX_MAX_OUTPUT_TOKENS` env var, a custom provider's
-  own `maxOutputTokens` in `llm-providers.json`, the operator's global
+  own `maxOutputTokens` in `llm-providers.json` (set via the "add custom
+  provider" wizard, or by hand — a positive integer), the operator's global
   `maxOutputTokens` shell-config setting, then the 8192 default. No upper
-  ceiling is enforced on an override.
+  ceiling is enforced on an override. A configured `temperature` (same
+  wizard, any finite number) is sent on every request to that provider once
+  one is set — absent, no `temperature` is sent at all, unchanged from
+  before this setting existed.
 - **Streaming and timeouts.** Every provider adapter (Anthropic, OpenAI,
   Gemini, and the OpenAI-compatible engine) streams the reply incrementally
   instead of waiting for the full response. Two independent deadlines guard
   a stalled connection: a first-byte timeout (no byte at all since the
   request was sent) and an idle timeout (no further chunk since the last
-  one) — both default to 120 seconds. A timeout surfaces as a retryable
-  `unavailable` provider error, the same class as a dropped connection.
-  There is no user-facing setting for either timeout today.
+  one) — both default to 120 seconds and have no user-facing setting today.
+  Separately, a custom OpenAI-compatible provider may also set an opt-in
+  overall `timeoutMs` (same wizard, or by hand in `llm-providers.json` — a
+  positive integer) that bounds the WHOLE chat/completions call from the
+  moment it starts, independent of the first-byte/idle deadlines above;
+  absent, no such overall timer runs and only the two deadlines above (and
+  the caller's own cancellation) can end a stalled call. A first-byte/idle
+  timeout surfaces as a retryable `unavailable` provider error, the same
+  class as a dropped connection; the configured `timeoutMs` firing (like an
+  operator/UI cancellation) surfaces as a `cancelled` error instead. Whichever
+  fires first ends the call with exactly that one terminal error — never a
+  second, duplicate error alongside it.
 - Tab or Right accepts the next-step hint shown under the composer;
   starting a new turn, or typing or pasting into the composer, cancels an
   in-flight or already-shown hint. Enter on an empty composer no longer
@@ -308,10 +321,22 @@ lists each provider with the environment variable it reads.
 Operator-defined OpenAI-compatible providers can be added on top of that list
 by registering them in `~/.local/share/keryx/llm-providers.json`; the
 `/provider` wizard in `keryx shell` has an "add custom provider" entry that
-writes this file for you (name → URL → key → models). A custom name colliding
-with a built-in provider is rejected. Custom providers may target private LAN
-hosts (RFC1918/CGNAT) — an explicit opt-in that built-in providers never get;
-loopback and link-local metadata addresses stay denied regardless.
+writes this file for you (name → URL → key → models → temperature (optional)
+→ max output tokens (optional) → request timeout ms (optional)). A custom
+name colliding with a built-in provider is rejected. Custom providers may
+target private LAN hosts (RFC1918/CGNAT) — an explicit opt-in that built-in
+providers never get; loopback and link-local metadata addresses stay denied
+regardless.
+
+The three optional wizard fields persist straight onto the provider's
+`llm-providers.json` entry and are consulted on every request: `temperature`
+(any finite number, including `0`) is sent verbatim; `maxOutputTokens` and
+`timeoutMs` must each be a positive integer when set — a `0`, negative, or
+fractional value is rejected by the wizard and by a hand-edited file (the
+whole entry is dropped rather than accepted). See "Output budget" and
+"Streaming and timeouts" under
+[Reasoning effort and output budget](#reasoning-effort-and-output-budget)
+above for how each is applied.
 
 | `exec` | Run a subprocess under the containment options below. |
 | `extension` | Run a declared extension from a spec file. |
@@ -404,9 +429,11 @@ Two worked examples, alongside the inline-tags one above:
   { "format": "field", "replay": "deepseek" }
   ```
 
-**Per-provider output budget.** `maxOutputTokens` (a sibling field of
-`reasoning`, not inside it) overrides the main turn's output-token budget
-for just this provider — see
+**Per-provider output budget, temperature, and timeout.** `maxOutputTokens`,
+`temperature`, and `timeoutMs` are sibling fields of `reasoning` (not inside
+it, and each independent of it): `maxOutputTokens` overrides the main turn's
+output-token budget for just this provider, `temperature` is sent on every
+request to it, and `timeoutMs` bounds the whole chat/completions call — see
 [Reasoning effort and output budget](#reasoning-effort-and-output-budget)
 above.
 

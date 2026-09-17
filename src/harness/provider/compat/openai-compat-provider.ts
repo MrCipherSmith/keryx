@@ -581,6 +581,37 @@ export class OpenAiCompatEngine implements ProviderPort {
       return;
     }
 
+    // flow 268 (AC5): an internal timer races the caller's own `opts.signal` —
+    // whichever fires first aborts the in-flight request — mirroring
+    // `timedFetch` (`commands/model-limits.ts`) but ALSO forwarding an
+    // external signal into the combined one, which that helper never
+    // receives. Absent `opts.timeoutMs` (the default, unconfigured case),
+    // `signal` is `opts.signal` verbatim and behavior is byte-identical to
+    // before this flow.
+    let signal = opts.signal;
+    let timeoutTimer: ReturnType<typeof setTimeout> | undefined;
+    let timeoutController: AbortController | undefined;
+    const onExternalAbort = (): void => timeoutController?.abort();
+    if (opts.timeoutMs !== undefined) {
+      timeoutController = new AbortController();
+      if (opts.signal !== undefined) {
+        if (opts.signal.aborted) {
+          timeoutController.abort();
+        } else {
+          opts.signal.addEventListener("abort", onExternalAbort);
+        }
+      }
+      timeoutTimer = setTimeout(() => timeoutController?.abort(), opts.timeoutMs);
+      signal = timeoutController.signal;
+    }
+    const cleanupTimeout = (): void => {
+      if (timeoutTimer !== undefined) {
+        clearTimeout(timeoutTimer);
+      }
+      opts.signal?.removeEventListener("abort", onExternalAbort);
+    };
+
+    try {
     const url = `${baseUrl.replace(/\/+$/, "")}${grant.chatPath ?? "/v1/chat/completions"}`;
     // DeepSeek's thinking-mode `reasoning_content` echo (flow 268 T12 / AC7)
     // only applies "when the request carries tools" (protocol fact) — an
@@ -642,12 +673,21 @@ export class OpenAiCompatEngine implements ProviderPort {
       // default across OpenAI-compat gateways (Ollama, OpenRouter, DeepSeek,
       // Z.AI, Cerebras, Groq, Moonshot, Grok, vLLM). Some gateways (MiniMax)
       // also accept `max_completion_tokens`, but no provider-specific switching
-      // is done here — a later task adds per-provider `requestParams` overrides.
+      // is done here — a later task adds per-provider `requestParams`
+      // overrides. `budget.maxOutputTokens` is a required, always-populated
+      // field on every `NormalizedRequest` (every call site defaults it —
+      // see `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode
+      // fallback), but this engine used to silently drop it rather than
+      // serialize it — always send it, unconditionally, so a configured
+      // override actually reaches the wire.
       max_tokens: request.budget.maxOutputTokens,
       // See `OpenAiCompatCapabilityGrant.streamUsage`: without this the stream
       // reports no token usage whatsoever.
       ...(this.deps.grant?.streamUsage === true ? { stream_options: { include_usage: true } } : {}),
       messages,
+      // `temperature` stays conditional: it is genuinely absent (not merely
+      // defaulted) on every request until an operator configures one (AC3).
+      ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({
@@ -687,14 +727,14 @@ export class OpenAiCompatEngine implements ProviderPort {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
-      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      ...(signal !== undefined ? { signal } : {}),
     };
 
     let response: Response;
     try {
       response = await this.deps.fetch(url, init);
     } catch (cause) {
-      if (opts.signal?.aborted === true) {
+      if (signal?.aborted === true) {
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
         return;
       }
@@ -738,7 +778,11 @@ export class OpenAiCompatEngine implements ProviderPort {
     // 120s, configurable via `deps`. A timeout cancels the reader and yields
     // exactly one retryable `unavailable` provider_error, never a model_end.
     // An abort mid-read still fails closed to the SAME terminal `cancelled`
-    // error the fetch()-level abort path yields (flow-019 contract).
+    // error the fetch()-level abort path yields (flow-019 contract) — this
+    // now also covers the flow 268 `opts.timeoutMs`-driven internal abort
+    // (`signal` above is the combined internal-timeout/external-signal one),
+    // so a configured `timeoutMs` firing mid-read yields the same single
+    // `cancelled` terminal error, never a duplicate/second error.
     if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
@@ -945,7 +989,7 @@ export class OpenAiCompatEngine implements ProviderPort {
       } catch (cause) {
         cancelReader();
         const aborted =
-          opts.signal?.aborted === true ||
+          signal?.aborted === true ||
           (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
         if (aborted) {
           yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
@@ -998,7 +1042,7 @@ export class OpenAiCompatEngine implements ProviderPort {
           if (sawStart) {
             bodies.push({ kind: "model_end" });
           }
-          const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+          const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
           cancelReader();
           if (aborted) {
             yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
@@ -1188,7 +1232,7 @@ export class OpenAiCompatEngine implements ProviderPort {
       // Drain whatever this chunk produced before reading the next one, so a
       // caller observes each event as soon as it is parsed (AC1) rather than
       // only once the whole body has arrived.
-      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
       if (aborted) {
         cancelReader();
         yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
@@ -1241,13 +1285,20 @@ export class OpenAiCompatEngine implements ProviderPort {
 
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output (AC1).
-    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    // Drains against the COMBINED `signal` (external `opts.signal` OR the
+    // internal flow 268 `timeoutMs` timer, whichever fired) so a configured
+    // `timeoutMs` elapsing mid-drain also yields exactly one `cancelled`,
+    // never a queue's worth of events followed by a stray error.
+    const aborted = yield* drainAndCheckAbort(bodies, signal, stamp);
     if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }
     if (malformed !== undefined) {
       yield stamp({ kind: "provider_error", error: malformed });
+    }
+    } finally {
+      cleanupTimeout();
     }
   }
 }

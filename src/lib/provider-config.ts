@@ -34,13 +34,34 @@ export interface CustomCompatProvider {
   /**
    * Per-provider override of the main agent turn's output-token budget
    * (`request.budget.maxOutputTokens`/`runReservation`). Must be a positive
-   * integer when present. Consulted by `resolveAgentMaxOutputTokens`
-   * (`src/commands/agent.ts`) BELOW the `KERYX_MAX_OUTPUT_TOKENS` env
-   * override and ABOVE the operator's global `ShellConfig.maxOutputTokens`
-   * setting — see that function's precedence doc. Absent leaves the global
-   * setting (or the built-in default) in effect for this provider.
+   * safe integer when present (see {@link isCustomCompatProvider}'s
+   * `OPTIONAL_POSITIVE_INTEGER_FIELDS` guard — a 0/negative/fractional value
+   * would request a budget of zero-or-nonsensical output tokens, so the whole
+   * entry is dropped rather than accepted). Consulted by
+   * `resolveAgentMaxOutputTokens` (`src/commands/agent.ts`) BELOW the
+   * `KERYX_MAX_OUTPUT_TOKENS` env override and ABOVE the operator's global
+   * `ShellConfig.maxOutputTokens` setting — see that function's precedence
+   * doc — and also folded into `resolveProviderModelParams`'s
+   * `ResolvedProviderModelParams.maxOutputTokens` (`src/commands/providers.ts`)
+   * for `runShell`'s own chat-mode request. Absent leaves the global setting
+   * (or the built-in default) in effect for this provider.
    */
   maxOutputTokens?: number;
+  /**
+   * Default sampling temperature sent on every request to this provider
+   * (flow 268). Absent means no `temperature` is sent — unchanged behavior.
+   * Unlike `maxOutputTokens`/`timeoutMs`, `0` is a meaningful value here and
+   * is never rejected.
+   */
+  temperature?: number;
+  /**
+   * Default abort timeout (ms) for the actual chat/completions call to this
+   * provider (flow 268), independent of the `/models` discovery probe's own
+   * `MODELS_FETCH_TIMEOUT_MS`. Absent means no engine-internal timer — the
+   * caller's own `AbortSignal` is still respected either way. Must be a
+   * positive safe integer when present, same as `maxOutputTokens`.
+   */
+  timeoutMs?: number;
   /**
    * Custom-provider-only reasoning configuration (flow 268 T10 / AC4-AC5).
    * Threaded verbatim to `OpenAiCompatProvider.reasoning`
@@ -117,21 +138,56 @@ function readJson(file: string): unknown | undefined {
   }
 }
 
+/** Fields validated as finite numbers ONLY when present (never required). `0` is a meaningful temperature. */
+const OPTIONAL_FINITE_NUMBER_FIELDS = ["temperature"] as const;
+/**
+ * Fields validated as finite AND strictly positive when present. Unlike
+ * `temperature`, `0` here is not a real setting: it would request a budget of
+ * zero output tokens (the `?? 1024` request-construction fallback only
+ * triggers on `undefined`, not `0`) or abort every stream instantly.
+ */
+const OPTIONAL_POSITIVE_NUMBER_FIELDS = ["maxOutputTokens", "timeoutMs"] as const;
+
 /** Loose runtime shape guard for hand-edited files (never throws). */
 export function isCustomCompatProvider(value: unknown): value is CustomCompatProvider {
   if (value === null || typeof value !== "object") return false;
   const p = value as Record<string, unknown>;
-  return (
-    typeof p.name === "string" &&
-    p.name.length > 0 &&
-    typeof p.baseUrl === "string" &&
-    p.baseUrl.length > 0 &&
-    Array.isArray(p.models) &&
-    p.models.every((m) => typeof m === "string") &&
-    (p.maxOutputTokens === undefined ||
-      (typeof p.maxOutputTokens === "number" && Number.isSafeInteger(p.maxOutputTokens) && p.maxOutputTokens > 0)) &&
-    isValidReasoningConfig(p.reasoning)
-  );
+  if (
+    !(
+      typeof p.name === "string" &&
+      p.name.length > 0 &&
+      typeof p.baseUrl === "string" &&
+      p.baseUrl.length > 0 &&
+      Array.isArray(p.models) &&
+      p.models.every((m) => typeof m === "string")
+    )
+  ) {
+    return false;
+  }
+  // flow 268: `temperature`/`maxOutputTokens`/`timeoutMs` are never required —
+  // a file missing them still validates (AC1) — but a PRESENT value that is
+  // not a finite number silently rejects the whole entry, matching this
+  // guard's existing "never throw on a hand-edited file" contract rather than
+  // accepting a garbage value that would later reach the wire.
+  for (const field of OPTIONAL_FINITE_NUMBER_FIELDS) {
+    const raw = p[field];
+    if (raw !== undefined && !(typeof raw === "number" && Number.isFinite(raw))) {
+      return false;
+    }
+  }
+  // `maxOutputTokens`/`timeoutMs`: unlike `temperature` (any finite number,
+  // `0` included, is a real setting), these must be positive SAFE INTEGERS —
+  // a 0/negative/fractional value is not a real setting (it would request a
+  // budget of zero-or-fractional output tokens, since the `?? DEFAULT_*`
+  // request-construction fallbacks only trigger on `undefined`, never `0`; or
+  // configure a fractional-millisecond/instant abort timer).
+  for (const field of OPTIONAL_POSITIVE_NUMBER_FIELDS) {
+    const raw = p[field];
+    if (raw !== undefined && !(typeof raw === "number" && Number.isSafeInteger(raw) && raw > 0)) {
+      return false;
+    }
+  }
+  return isValidReasoningConfig(p.reasoning);
 }
 
 /**

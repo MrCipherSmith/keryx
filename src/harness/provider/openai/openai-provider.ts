@@ -534,7 +534,25 @@ export class OpenAiProvider implements ProviderPort {
       stream: true,
       // Output token limit (flow 268 T6): the Responses API field is
       // `max_output_tokens`, distinct from Chat Completions' `max_tokens`.
+      // `budget.maxOutputTokens` is required/always-populated on every
+      // `NormalizedRequest` (every call site defaults it — see
+      // `resolveAgentMaxOutputTokens`/`runShell`'s own chat-mode fallback),
+      // but this engine used to silently drop it rather than serialize it —
+      // always send it, unconditionally, so a configured override actually
+      // reaches the wire.
       max_output_tokens: request.budget.maxOutputTokens,
+      // `temperature` stays conditional: genuinely absent (not merely
+      // defaulted) on every request until an operator configures one (AC3).
+      // NEVER sent alongside `reasoning` below — the Responses API 400s a
+      // reasoning-effort request that also carries a sampling temperature
+      // (confirmed: reasoning is accepted only by o-series/gpt-5* reasoning
+      // models, and those same models reject `temperature` outright) — so an
+      // operator-configured temperature is silently omitted whenever
+      // `reasoningRequested`, rather than sent on a request guaranteed to
+      // fail with a 400.
+      ...(request.options?.temperature !== undefined && !reasoningRequested
+        ? { temperature: request.options.temperature }
+        : {}),
       ...(reasoningRequested
         ? {
             // `summary: "auto"` asks for the reasoning-summary text stream

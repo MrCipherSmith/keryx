@@ -21,7 +21,7 @@
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
 import { loadOAuthGrant } from "../lib/oauth/grants";
-import { providerByName } from "./providers";
+import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
 import type {
   NormalizedMessage,
@@ -124,7 +124,7 @@ import {
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
-import type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
+import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./shell-types";
 import {
   compactSession,
   createSession,
@@ -214,6 +214,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let providerName = deps.initial.provider;
   let modelName = deps.initial.model;
   let baseUrl = deps.initial.baseUrl;
+  // flow 268: resolved per-provider `temperature`/`maxOutputTokens`/
+  // `timeoutMs` overrides; `{}` (the default) reproduces today's request
+  // byte-for-byte (AC3).
+  let modelParams = deps.initial.modelParams ?? {};
   const parentRunId = deps.idSeq();
 
   // Every NON-token line goes through `onSystem` when a rich wrapper supplies it,
@@ -290,14 +294,21 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let provider = makeActive();
 
   /**
-   * Apply a `{provider, model, baseUrl?}` selection from the interactive picker
-   * (shared by the `/models` and no-arg `/provider` commands): update the active
-   * selection and recreate the provider. Behavior-preserving extraction.
+   * Apply a `{provider, model, baseUrl?, modelParams?}` selection from the
+   * interactive picker (shared by the `/models` and no-arg `/provider`
+   * commands): update the active selection and recreate the provider.
+   * Behavior-preserving extraction.
    */
-  const applySelection = (picked: { provider: string; model: string; baseUrl?: string }): void => {
+  const applySelection = (picked: {
+    provider: string;
+    model: string;
+    baseUrl?: string;
+    modelParams?: ShellModelParams;
+  }): void => {
     providerName = picked.provider;
     modelName = picked.model;
     baseUrl = picked.baseUrl;
+    modelParams = picked.modelParams ?? {};
     provider = makeActive();
   };
 
@@ -464,12 +475,16 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     // A normal line is one turn: push the user message, then stream a reply.
     history.push({ role: "user", content: line, provenance: "project" });
 
+    // flow 268: absent `modelParams` (the default) reproduces today's request
+    // byte-for-byte (AC3).
+    const resolvedMaxOutputTokens = modelParams.maxOutputTokens ?? 1024;
     const request: NormalizedRequest = {
       providerId: providerName,
       modelId: modelName,
       systemInstruction: SYSTEM_INSTRUCTION,
       messages: [...history],
-      budget: { maxOutputTokens: 1024, runReservation: 1024 },
+      budget: { maxOutputTokens: resolvedMaxOutputTokens, runReservation: resolvedMaxOutputTokens },
+      ...(modelParams.temperature !== undefined ? { options: { temperature: modelParams.temperature } } : {}),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -481,7 +496,11 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     // label + spinner; a no-op (no output) when no wrapper is attached.
     io.onTurnStart?.();
     try {
-      for await (const event of provider.stream(request, { attemptId: deps.idSeq() })) {
+      const streamOptions = {
+        attemptId: deps.idSeq(),
+        ...(modelParams.timeoutMs !== undefined ? { timeoutMs: modelParams.timeoutMs } : {}),
+      };
+      for await (const event of provider.stream(request, streamOptions)) {
         if (event.kind === "text_delta") {
           const text = event.text ?? "";
           io.write(text);
@@ -596,7 +615,10 @@ function oauthCredentialsFor(name: string): { credentials?: Record<string, strin
 }
 
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
-function realSelectProviderModel(baseUrl: string | undefined): NonNullable<ShellDeps["selectProviderModel"]> {
+function realSelectProviderModel(
+  baseUrl: string | undefined,
+  cacheDir: string | undefined,
+): NonNullable<ShellDeps["selectProviderModel"]> {
   return async (io, opts) => {
     // Saved keys count toward detection. They used to reach `process.env` only as a
     // side effect of the first `shell_exec`, which no longer loads them (K-015).
@@ -611,7 +633,15 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
       opts?.onlyProvider !== undefined ? detected.filter((d) => d.name === opts.onlyProvider) : detected;
     const list = filtered.length > 0 ? filtered : detected;
     // Always re-probe live `/models` (when online) inside pickProviderModel.
-    return pickProviderModel(io, list, { fetch: globalThis.fetch, env });
+    const picked = await pickProviderModel(io, list, { fetch: globalThis.fetch, env });
+    // flow 268: resolved once per selection, same moment `baseUrl` above is
+    // already fixed for this session — `{}` (every field absent) for a native
+    // adapter with no OpenAI-compatible registry entry. `cacheDir` matches
+    // every other resolution call site in this file (startup, TUI rebuilds) —
+    // omitting it here would silently resolve against the default config dir
+    // instead of a caller-supplied one (e.g. `--config-dir`/sandboxed runs).
+    const modelParams = resolveProviderModelParamsByName(picked.provider, loadShellConfig(cacheDir), cacheDir);
+    return Object.keys(modelParams).length > 0 ? { ...picked, modelParams } : picked;
   };
 }
 
@@ -2377,6 +2407,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // Rebuilt on launch and on every `/model` switch, so this is the live session.
       exportCallerSession(sel.provider, sel.model);
       const agentProvider = tuiProviderFactory(sel.provider, sel.model, sel.baseUrl);
+      // flow 268: resolved fresh on every `makeAgentDeps` call (launch,
+      // `/model`, `/connect`) — same lifecycle as `agentProvider` above. `{}`
+      // for a native adapter with no OpenAI-compatible registry entry.
+      const resolvedModelParams = resolveProviderModelParamsByName(
+        sel.provider,
+        loadShellConfig(runtime.cacheDir),
+        runtime.cacheDir,
+      );
       let orient: string;
       try {
         orient = await buildOrientation(cwd);
@@ -2494,12 +2532,19 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // Generous default so multi-step operator prompts do not hit the
         // loop-safety round budget mid-task; override with KERYX_AGENT_MAX_ROUNDS.
         maxRounds: resolveAgentMaxRounds(),
-        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's custom
-        // compat provider's own `maxOutputTokens` (absent for a built-in) >
-        // the operator's persisted global setting > DEFAULT_MAX_OUTPUT_TOKENS.
-        // See `resolveAgentMaxOutputTokens`'s doc comment.
+        // Precedence: KERYX_MAX_OUTPUT_TOKENS env > this session's
+        // per-provider override (`resolvedModelParams.maxOutputTokens`,
+        // resolved above via `resolveProviderModelParamsByName` — an
+        // operator-saved `ShellConfig.modelParams[provider]` override, else
+        // the provider's own `CustomCompatProvider.maxOutputTokens`; absent
+        // for a built-in with no override) > the operator's persisted global
+        // setting > DEFAULT_MAX_OUTPUT_TOKENS. Routed through
+        // `resolvedModelParams` (rather than a second, independent
+        // `providerByName(...).maxOutputTokens` lookup) so there is exactly
+        // one computation of the provider's effective override — see
+        // `resolveAgentMaxOutputTokens`'s doc comment.
         maxOutputTokens: resolveAgentMaxOutputTokens({
-          providerMaxOutputTokens: providerByName(sel.provider)?.maxOutputTokens,
+          providerMaxOutputTokens: resolvedModelParams.maxOutputTokens,
           globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
         }),
         // Precedence: this session's `/reasoning` override (set below, via
@@ -2516,6 +2561,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         jobRegistry,
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
         ...(contextWindow !== undefined ? { contextWindow } : {}),
+        ...(Object.keys(resolvedModelParams).length > 0 ? { modelParams: resolvedModelParams } : {}),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.
@@ -2563,17 +2609,27 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           redetect,
           ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
           runShell,
-          makeShellDeps: (sel) => ({
-            makeProvider: chatFactory,
-            clock: () => new Date().toISOString(),
-            idSeq: () => randomUUID(),
-            initial: sel,
-            session: {
-              cwd,
-              ...(flags.continueLast === true ? { continueLast: true } : {}),
-              ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
-            },
-          }),
+          makeShellDeps: (sel) => {
+            // flow 268: resolved fresh on every chat `/model`/`/connect`
+            // rebuild, same as the agent-mode `makeAgentDeps` above.
+            const resolvedModelParams = resolveProviderModelParamsByName(
+              sel.provider,
+              loadShellConfig(runtime.cacheDir),
+              runtime.cacheDir,
+            );
+            return {
+              makeProvider: chatFactory,
+              clock: () => new Date().toISOString(),
+              idSeq: () => randomUUID(),
+              initial:
+                Object.keys(resolvedModelParams).length > 0 ? { ...sel, modelParams: resolvedModelParams } : sel,
+              session: {
+                cwd,
+                ...(flags.continueLast === true ? { continueLast: true } : {}),
+                ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
+              },
+            };
+          },
           versionCheck,
         })
       ) {
@@ -2716,12 +2772,25 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     }
 
     const baseFactory = realMakeProvider(emitSystem);
+    // flow 268: resolved once at readline startup, same as the TUI branches
+    // above; re-resolved on every `/model`/`/provider`/`/connect` re-selection
+    // by `realSelectProviderModel`'s own wrapping (see its definition).
+    const initialModelParams = resolveProviderModelParamsByName(
+      provider,
+      loadShellConfig(runtime.cacheDir),
+      runtime.cacheDir,
+    );
     const deps: ShellDeps = {
       makeProvider: baseFactory,
       clock: () => new Date().toISOString(),
       idSeq: () => randomUUID(),
-      initial: baseUrl === undefined ? { provider, model } : { provider, model, baseUrl },
-      selectProviderModel: realSelectProviderModel(baseUrl),
+      initial: {
+        provider,
+        model,
+        ...(baseUrl === undefined ? {} : { baseUrl }),
+        ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
+      },
+      selectProviderModel: realSelectProviderModel(baseUrl, runtime.cacheDir),
     };
 
     // Resolve the mode: explicit flag wins; otherwise default to agent.
@@ -2809,9 +2878,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
         }),
         maxRounds: resolveAgentMaxRounds(),
-        // Same precedence as the TUI's `makeAgentDeps` above.
+        // Same precedence as the TUI's `makeAgentDeps` above — routed through
+        // `initialModelParams.maxOutputTokens` (resolved once above) rather
+        // than a second, independent `providerByName(...).maxOutputTokens`
+        // lookup, so there is exactly one computation of the provider's
+        // effective override.
         maxOutputTokens: resolveAgentMaxOutputTokens({
-          providerMaxOutputTokens: providerByName(provider)?.maxOutputTokens,
+          providerMaxOutputTokens: initialModelParams.maxOutputTokens,
           globalMaxOutputTokens: loadShellConfig(runtime.cacheDir).maxOutputTokens,
         }),
         // Same precedence as the TUI's `makeAgentDeps` above. The readline
@@ -2829,6 +2902,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         askUser: invokeAskUserHost,
         sweepBackgroundJobs: () => jobRegistry.sweepAll(),
         ...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),
+        // flow 268: `initialModelParams` is resolved once above (same
+        // provider/model this whole readline session was started with — no
+        // rebuild-on-switch path exists in this branch, unlike the TUI).
+        ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
       };
       // The instruction is built from the roster it describes, so it never
       // names a tool this session was not given.
