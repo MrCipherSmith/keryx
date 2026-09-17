@@ -118,7 +118,7 @@ import {
   runAgentTurn,
 } from "./agent";
 import { type DetectedProvider, detectProviders, pickAgentMode, pickProviderModel } from "./select";
-import type { ShellDeps, ShellIO, ShellSessionOpts } from "./shell-types";
+import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./shell-types";
 import {
   compactSession,
   createSession,
@@ -294,7 +294,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     provider: string;
     model: string;
     baseUrl?: string;
-    modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
+    modelParams?: ShellModelParams;
   }): void => {
     providerName = picked.provider;
     modelName = picked.model;
@@ -606,7 +606,10 @@ function oauthCredentialsFor(name: string): { credentials?: Record<string, strin
 }
 
 /** Build the bundled detect+pick selector wired to real `fetch` + `process.env`. */
-function realSelectProviderModel(baseUrl: string | undefined): NonNullable<ShellDeps["selectProviderModel"]> {
+function realSelectProviderModel(
+  baseUrl: string | undefined,
+  cacheDir: string | undefined,
+): NonNullable<ShellDeps["selectProviderModel"]> {
   return async (io, opts) => {
     // Saved keys count toward detection. They used to reach `process.env` only as a
     // side effect of the first `shell_exec`, which no longer loads them (K-015).
@@ -624,8 +627,11 @@ function realSelectProviderModel(baseUrl: string | undefined): NonNullable<Shell
     const picked = await pickProviderModel(io, list, { fetch: globalThis.fetch, env });
     // flow 268: resolved once per selection, same moment `baseUrl` above is
     // already fixed for this session — `{}` (every field absent) for a native
-    // adapter with no OpenAI-compatible registry entry.
-    const modelParams = resolveProviderModelParamsByName(picked.provider);
+    // adapter with no OpenAI-compatible registry entry. `cacheDir` matches
+    // every other resolution call site in this file (startup, TUI rebuilds) —
+    // omitting it here would silently resolve against the default config dir
+    // instead of a caller-supplied one (e.g. `--config-dir`/sandboxed runs).
+    const modelParams = resolveProviderModelParamsByName(picked.provider, loadShellConfig(cacheDir));
     return Object.keys(modelParams).length > 0 ? { ...picked, modelParams } : picked;
   };
 }
@@ -2569,7 +2575,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         ...(baseUrl === undefined ? {} : { baseUrl }),
         ...(Object.keys(initialModelParams).length > 0 ? { modelParams: initialModelParams } : {}),
       },
-      selectProviderModel: realSelectProviderModel(baseUrl),
+      selectProviderModel: realSelectProviderModel(baseUrl, runtime.cacheDir),
     };
 
     // Resolve the mode: explicit flag wins; otherwise default to agent.
