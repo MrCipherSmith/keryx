@@ -133,6 +133,18 @@ export interface NormalizedMessage {
   toolCalls?: NormalizedToolCall[];
   /** Tool only: the id of the assistant call this message answers. */
   toolCallId?: string;
+  /**
+   * ISO timestamp of when this message first entered history (set at the
+   * `history.push(...)` call site, not at whatever checkpoint later flushes
+   * it to disk). Optional and store-only bookkeeping: no request builder
+   * reads it (they construct provider payloads field by field — see
+   * `toAnthropicMessages`/`toGeminiContents`/`toResponsesInput`/the compat
+   * provider's inline builder — so an extra field here never reaches the
+   * wire), and a caller that omits it is unaffected: `session/store.ts`
+   * falls back to the checkpoint-flush time for any message without one,
+   * which is the pre-existing behavior.
+   */
+  ts?: string;
 }
 
 /** A neutral tool definition surfaced to the provider. */

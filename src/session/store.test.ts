@@ -139,6 +139,101 @@ test("a transcript line with malformed tool-call fields drops them instead of re
   }
 });
 
+// --- T7 / AC15: per-message append ts, not a shared checkpoint-flush ts ---
+
+test("AC15: each message keeps the ts it was appended with; messages of one turn no longer share the checkpoint time", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-append-"));
+  try {
+    const handle = createSession({ cwd: proj, dataDir });
+    // Two messages "appended" at distinct, injected times (as agent.ts's
+    // push sites do via `deps.now`), and a third with no ts at all — as a
+    // push site this change did not touch would still produce.
+    persistHistory(handle, [
+      { role: "user", content: "first", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+      { role: "assistant", content: "second", provenance: "model", ts: "2020-01-01T00:00:05.000Z" },
+      { role: "tool", content: "third", provenance: "tool" },
+    ]);
+
+    const raw = readFileSync(path.join(handle.dir, "context.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { ts: string });
+    expect(raw).toHaveLength(3);
+    expect(raw[0]!.ts).toBe("2020-01-01T00:00:00.000Z");
+    expect(raw[1]!.ts).toBe("2020-01-01T00:00:05.000Z");
+    // Distinct from both explicit times above — messages of the same
+    // checkpoint no longer collapse onto a single shared ts.
+    expect(raw[2]!.ts).not.toBe(raw[0]!.ts);
+    expect(raw[2]!.ts).not.toBe(raw[1]!.ts);
+    // The no-ts message still falls back to a real ISO timestamp (the
+    // checkpoint flush time), rather than being left blank.
+    expect(() => new Date(raw[2]!.ts).toISOString()).not.toThrow();
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("AC15: re-persisting an already-seen message keeps its original ts, even across a resumed session", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-reflush-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    persistHistory(
+      created.handle,
+      [{ role: "user", content: "hi", provenance: "project", ts: "2020-06-01T00:00:00.000Z" }],
+      { provider: "p", model: "m" },
+    );
+
+    // Resume in a fresh load: readJsonl must carry the original ts back onto
+    // the reconstructed NormalizedMessage, not drop it.
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history[0]?.ts).toBe("2020-06-01T00:00:00.000Z");
+
+    // Flush again (a later checkpoint, e.g. after an assistant reply is
+    // appended) — the original message's ts on disk must be UNCHANGED, not
+    // bumped to this second flush's time.
+    persistHistory(resumed.handle, [
+      ...resumed.history,
+      { role: "assistant", content: "reply", provenance: "model", ts: "2020-06-01T00:05:00.000Z" },
+    ]);
+    const raw = readFileSync(path.join(resumed.handle.dir, "context.jsonl"), "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { ts: string });
+    expect(raw[0]!.ts).toBe("2020-06-01T00:00:00.000Z");
+    expect(raw[1]!.ts).toBe("2020-06-01T00:05:00.000Z");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("AC15: a session written by an older version (one shared ts per line, no per-message field) still loads", () => {
+  const dataDir = tempData();
+  const proj = mkdtempSync(path.join(tmpdir(), "keryx-ts-legacy-"));
+  try {
+    const created = openSession({ cwd: proj, dataDir, provider: "p", model: "m" });
+    // Exactly the pre-this-change on-disk shape: `writeJsonl` used to stamp
+    // ONE shared `ts` across every row of a flush.
+    const contextFile = path.join(created.handle.dir, "context.jsonl");
+    const lines = [
+      JSON.stringify({ role: "user", content: "old turn", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+      JSON.stringify({ role: "assistant", content: "old reply", ts: "2019-01-01T00:00:00.000Z", kind: "message" }),
+    ];
+    writeFileSync(contextFile, `${lines.join("\n")}\n`);
+
+    const resumed = openSession({ cwd: proj, dataDir, continueLast: true });
+    expect(resumed.history.map((m) => m.role)).toEqual(["user", "assistant"]);
+    expect(resumed.history[0]?.ts).toBe("2019-01-01T00:00:00.000Z");
+    expect(resumed.history[1]?.ts).toBe("2019-01-01T00:00:00.000Z");
+  } finally {
+    rmSync(proj, { recursive: true, force: true });
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("openSession continue/resume and dual context/archive roundtrip", () => {
   const dataDir = tempData();
   const proj = mkdtempSync(path.join(tmpdir(), "keryx-pr-"));

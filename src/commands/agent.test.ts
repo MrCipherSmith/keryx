@@ -576,12 +576,13 @@ test("runAgentTurn keeps an interrupted streamed assistant draft in history", as
     tools: [],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
   };
   await runAgentTurn(io, deps, history, "save this", { signal: controller.signal });
 
   expect(history).toEqual([
-    { role: "user", content: "save this", provenance: "project" },
-    { role: "assistant", content: "partial answer", provenance: "model" },
+    { role: "user", content: "save this", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+    { role: "assistant", content: "partial answer", provenance: "model", ts: "2020-01-01T00:00:00.000Z" },
   ]);
   expect(system.join("")).toContain("[stopped]");
 });
@@ -698,6 +699,7 @@ test("runAgentTurn checkpoints the user and each streamed assistant delta", asyn
     tools: builtinReadOnlyTools(tmpdir()),
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
   };
   await runAgentTurn(io, deps, history, "persist this");
 
@@ -710,8 +712,8 @@ test("runAgentTurn checkpoints the user and each streamed assistant delta", asyn
   expect(checkpoints[1]?.messages).toEqual(["persist this", "first "]);
   expect(checkpoints[2]?.messages).toEqual(["persist this", "first second"]);
   expect(history).toEqual([
-    { role: "user", content: "persist this", provenance: "project" },
-    { role: "assistant", content: "first second", provenance: "model" },
+    { role: "user", content: "persist this", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+    { role: "assistant", content: "first second", provenance: "model", ts: "2020-01-01T00:00:00.000Z" },
   ]);
 });
 
@@ -2198,6 +2200,7 @@ test("SLATE-11: interactive zero-round budget stops locally without a TerminalSt
     tools: [probeTool()],
     systemInstruction: "sys",
     idSeq: fixedIdSeq(),
+    now: fixedNow("2020-01-01T00:00:00.000Z"),
     maxRounds: 0,
     // `unattended` deliberately OMITTED — every existing call site's shape.
   };
@@ -2207,7 +2210,9 @@ test("SLATE-11: interactive zero-round budget stops locally without a TerminalSt
   await runAgentTurn(io, deps, history, "run the tests");
 
   expect(requests.length).toBe(0);
-  expect(history).toEqual([{ role: "user", content: "run the tests", provenance: "project" }]);
+  expect(history).toEqual([
+    { role: "user", content: "run the tests", provenance: "project", ts: "2020-01-01T00:00:00.000Z" },
+  ]);
   expect(history.some((m) => m.content.includes("Do NOT call tools."))).toBe(false);
   expect(history.some((m) => m.content === "Here is what happened.")).toBe(false);
   expect(terminalStates.length).toBe(0);

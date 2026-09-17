@@ -1270,6 +1270,17 @@ async function runAgentTurnCore(
   userLine: string,
   options: RunAgentTurnOptions = {},
 ): Promise<RunAgentTurnResult> {
+  // Session-store append time (T7, AC15): each message pushed below is
+  // stamped with the time it entered `history` HERE, not with whatever
+  // checkpoint later flushes it to disk — `session/store.ts`'s `writeJsonl`
+  // prefers a message's own `ts` and only falls back to the flush time when
+  // one is absent. Reuses the SAME narrowly-scoped `deps.now` clock exception
+  // `emitTerminalState` already established (defaults to
+  // `() => new Date().toISOString()`), rather than a new `Date.now()` call —
+  // this module's determinism contract is "uses ONLY `deps.idSeq`" for
+  // provider/tool I/O, and `now` is the one documented, injectable exception
+  // to it.
+  const now = deps.now ?? (() => new Date().toISOString());
   const maxRounds = validateDirectBudget("maxRounds", deps.maxRounds, 0) ?? resolveAgentMaxRounds();
   const maxToolCalls = validateDirectBudget("maxToolCalls", deps.maxToolCalls, 0);
   // Flow 265 (AC7): a turn the shell started because a task finished has no
@@ -1286,10 +1297,10 @@ async function runAgentTurnCore(
     if (woken.length === 0) {
       return {};
     }
-    history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool" });
+    history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
   } else {
-    history.push({ role: "user", content: userLine, provenance: "project" });
+    history.push({ role: "user", content: userLine, provenance: "project", ts: now() });
     io.onHistoryChange?.("user");
   }
   const signal = options.signal;
@@ -1350,7 +1361,7 @@ async function runAgentTurnCore(
         if (!wasOpened && options.slateSession.opened) {
           const freshSlate = await readSlate(options.slateSession.dir);
           if (freshSlate !== undefined) {
-            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
+            history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project", ts: now() });
             io.onHistoryChange?.("tool");
             // Flow 200: NO auto resolve-or-create here anymore. The slate
             // opens with workspaceId unset; the agent binds/creates a
@@ -1502,7 +1513,7 @@ async function runAgentTurnCore(
           io.write(text);
           assistantText += text;
           if (assistantMessage === undefined) {
-            assistantMessage = { role: "assistant", content: text, provenance: "model" };
+            assistantMessage = { role: "assistant", content: text, provenance: "model", ts: now() };
             history.push(assistantMessage);
           } else {
             assistantMessage.content += text;
@@ -1575,6 +1586,7 @@ async function runAgentTurnCore(
           role: "user",
           content: buildToollessReprompt(toollessReprompts),
           provenance: "project",
+          ts: now(),
         });
         io.onHistoryChange?.("tool");
         continue;
@@ -1610,7 +1622,7 @@ async function runAgentTurnCore(
       // its own test), so a turn with no tasks still ends in one request.
       const alreadyFinished = taskRegistry?.drainUndelivered() ?? [];
       if (alreadyFinished.length > 0) {
-        history.push({ role: "user", content: buildTaskNotification(alreadyFinished), provenance: "tool" });
+        history.push({ role: "user", content: buildTaskNotification(alreadyFinished), provenance: "tool", ts: now() });
         io.onHistoryChange?.("tool");
         continue;
       }
@@ -1664,7 +1676,7 @@ async function runAgentTurnCore(
         // round in which to react to what finished.
         const held = taskRegistry.drainUndelivered();
         if (held.length > 0) {
-          history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool" });
+          history.push({ role: "user", content: buildTaskNotification(held), provenance: "tool", ts: now() });
           io.onHistoryChange?.("tool");
         }
         continue;
@@ -1692,7 +1704,7 @@ async function runAgentTurnCore(
     if (assistantMessage !== undefined) {
       assistantMessage.toolCalls = emittedCalls;
     } else {
-      history.push({ role: "assistant", content: "", provenance: "model", toolCalls: emittedCalls });
+      history.push({ role: "assistant", content: "", provenance: "model", toolCalls: emittedCalls, ts: now() });
     }
 
     // Execute each tool call and append its result, then loop to re-request.
@@ -1818,7 +1830,7 @@ async function runAgentTurnCore(
           isError: true,
         };
         io.onToolResult?.(call.name, result);
-        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id });
+        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
         io.onHistoryChange?.("tool");
         continue;
       }
@@ -1834,7 +1846,7 @@ async function runAgentTurnCore(
       if (!reservation.ok) {
         const result: InteractiveToolResult = { output: reservation.reason, isError: true };
         io.onToolResult?.(call.name, result);
-        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id });
+        history.push({ role: "tool", content: result.output, provenance: "tool", toolCallId: call.id, ts: now() });
         io.onHistoryChange?.("tool");
         toolLog.push(`${call.name}: skipped (${reservation.reason.split(";")[0] ?? "budget"})`);
         continue;
@@ -1888,6 +1900,7 @@ async function runAgentTurnCore(
           : modelOutput,
         provenance: "tool",
         toolCallId: call.id,
+        ts: now(),
       });
       io.onHistoryChange?.("tool");
       if (untrusted) {
@@ -1950,11 +1963,11 @@ async function runAgentTurnCore(
     // Both pushed here, AFTER every call in this batch has its `tool` result
     // in `history` — never mid-loop (see the two comments above the loop).
     if (anchorsToAnnounce !== undefined) {
-      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project" });
+      history.push({ role: "user", content: renderAnchorsBlock(anchorsToAnnounce), provenance: "project", ts: now() });
       io.onHistoryChange?.("tool");
     }
     if (repeatedFailureHint !== undefined) {
-      history.push({ role: "user", content: repeatedFailureHint, provenance: "project" });
+      history.push({ role: "user", content: repeatedFailureHint, provenance: "project", ts: now() });
       io.onHistoryChange?.("tool");
     }
 
@@ -1969,7 +1982,7 @@ async function runAgentTurnCore(
     // command, not out of the operator's own words.
     const completions = deps.jobRegistry?.drainUndelivered() ?? [];
     if (completions.length > 0) {
-      history.push({ role: "user", content: buildTaskNotification(completions), provenance: "tool" });
+      history.push({ role: "user", content: buildTaskNotification(completions), provenance: "tool", ts: now() });
       io.onHistoryChange?.("tool");
     }
 
@@ -2089,6 +2102,7 @@ async function finishWithBudgetSummary(
       io.write(text);
     }
   };
+  const now = deps.now ?? (() => new Date().toISOString());
 
   const maxAttempts = info.maxAttempts ?? MAX_ATTEMPTS_PER_HASH;
   const why = `no progress (only repeated/exhausted tool signatures; max ${maxAttempts} attempts each)`;
@@ -2112,6 +2126,7 @@ async function finishWithBudgetSummary(
       `(3) 1–3 concrete next steps (commands to re-run, fixes, or “send the same request again”). ` +
       `Do NOT call tools.`,
     provenance: "project",
+    ts: now(),
   });
 
   const request: NormalizedRequest = {
@@ -2160,7 +2175,7 @@ async function finishWithBudgetSummary(
     io.onReasoning?.(reasoningText);
   }
   if (assistantText.length > 0) {
-    history.push({ role: "assistant", content: assistantText, provenance: "model" });
+    history.push({ role: "assistant", content: assistantText, provenance: "model", ts: now() });
     io.onAssistantText?.(assistantText);
   } else {
     system(

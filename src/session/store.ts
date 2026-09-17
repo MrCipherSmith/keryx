@@ -270,13 +270,23 @@ export function shortSessionId(id: string): string {
   return clean.length >= 8 ? clean.slice(-8) : id.slice(0, 8);
 }
 
-function writeJsonl(file: string, history: readonly NormalizedMessage[], ts: string): void {
+/**
+ * `checkpointTs` is the FALLBACK, not the value: each row gets `m.ts` when the
+ * message carries one (stamped at its `history.push(...)` call site — see
+ * `commands/agent.ts`) so messages appended across a whole turn keep their own
+ * distinct times instead of all landing on this flush's timestamp. A message
+ * with no `ts` (pushed by a call site this change did not touch, or loaded
+ * from a pre-this-change transcript that never carried the field) still gets
+ * `checkpointTs`, exactly as every row did before — so old and untouched
+ * producers are unaffected.
+ */
+function writeJsonl(file: string, history: readonly NormalizedMessage[], checkpointTs: string): void {
   const lines: string[] = [];
   for (const m of history) {
     const row: TranscriptLine = {
       role: m.role,
       content: m.content,
-      ts,
+      ts: m.ts ?? checkpointTs,
       kind: "message",
       ...(m.provenance !== undefined ? { provenance: m.provenance } : {}),
       ...(m.toolCalls !== undefined && m.toolCalls.length > 0 ? { toolCalls: m.toolCalls } : {}),
@@ -385,6 +395,13 @@ function readJsonl(file: string): NormalizedMessage[] {
         ...(typeof o.toolCallId === "string" && o.toolCallId.length > 0
           ? { toolCallId: o.toolCallId }
           : {}),
+        // Carried forward so a resumed session's next flush reuses the
+        // message's ORIGINAL append time instead of re-stamping it with the
+        // resume's checkpoint time (`writeJsonl`'s `m.ts ?? checkpointTs`
+        // fallback only fires when this is absent). Every row on disk —
+        // old-format (one shared ts) or new (per-message) — already carries a
+        // `ts` string, so this is always present for a well-formed line.
+        ...(typeof o.ts === "string" && o.ts.length > 0 ? { ts: o.ts } : {}),
       });
     } catch {
       // skip corrupt line
