@@ -4,7 +4,9 @@
 has three permission modes that decide whether a mutating tool call
 (`shell_exec`, `spawn_subagent`, or any tool declaring risk `destructive`)
 stops to ask you first. This page is the full reference: what each mode does,
-how to set it, and exactly where every piece of state lives on disk.
+how to set it, and exactly where every piece of state lives on disk. It also
+covers the separate, orthogonal read-only `/plan` toggle, further down, for
+when nothing should be reachable at all.
 
 !!! note "Not the same thing as the policy engine"
     This is a session-level convenience layer for the interactive shell. It is
@@ -54,6 +56,35 @@ There is no flag or setting that skips that confirmation; the mode can only
 ever be changed by you, directly, in the running session. Nothing a tool or
 the model outputs can set it — that is a deliberate boundary, not an
 oversight.
+
+## Read-only mode: `/plan`
+
+`readOnly` is a separate, **orthogonal** toggle — not a fourth mode. Where
+`ask`/`trust`/`auto` decide *how much confirmation* a mutating call needs,
+`readOnly` decides *whether mutating tools are reachable at all*. The two
+combine freely: `trust` + `readOnly` still confirms nothing extra, but every
+non-read action is refused outright regardless.
+
+```text
+/plan                  # show the current state (TUI: opens a picker)
+/plan on               # deny every non-read tool call for this session
+/plan off              # back to whatever the current mode allows
+```
+
+When `readOnly` is on, a denied call gets an immediate refusal — never a
+confirmation prompt, and never auto-approved, even under `auto`. It is a hard
+floor: no mode lifts it.
+
+**Scope of what "read" means today.** `shell_exec` is denied entirely under
+`readOnly` — there is no per-command allowlist (`git diff`/`git log`/`git
+status` are unavailable through the agent while it is on). The agent still
+has `read_file`, `list_dir`, `get_cwd`, and `search_code`. This is a
+deliberate v1 scope, not an oversight — a read-only git surface may follow if
+it proves painful in practice.
+
+**Not persisted.** Unlike the mode's `save` flag, `readOnly` is always
+in-memory, always starts `false` on a new session. There is no
+`/plan on save` and no config file for it.
 
 ## Where it's stored
 
