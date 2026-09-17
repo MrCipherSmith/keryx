@@ -136,6 +136,37 @@ describe("AC1 — clean text-stream SYNTHETIC fixture normalizes to the exact No
   });
 });
 
+// flow 268 (AC4-equivalent for the native Responses API adapter)
+describe("flow 268 — max_output_tokens/temperature reach the Responses API payload", () => {
+  test("a configured budget.maxOutputTokens/options.temperature serializes as max_output_tokens/temperature", async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(TEXT_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request: NormalizedRequest = {
+      ...buildRequest("request-model-params"),
+      budget: { maxOutputTokens: 4096, runReservation: 4096 },
+      options: { temperature: 0.2 },
+    };
+    await collectEvents(provider.stream(request, { attemptId: "attempt-model-params" }));
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.max_output_tokens).toBe(4096);
+    expect(body.temperature).toBe(0.2);
+  });
+
+  test("byte-identical when unconfigured: max_output_tokens is still 1024, no temperature key at all", async () => {
+    const { fetch: fetchMock, calls } = makeFixtureFetchMock(TEXT_FIXTURE_PATH);
+    const provider = new OpenAiProvider({ fetch: fetchMock, grant: validGrant() });
+    const request = buildRequest("request-model-params-default");
+    await collectEvents(provider.stream(request, { attemptId: "attempt-model-params-default" }));
+
+    expect(calls).toHaveLength(1);
+    const body = JSON.parse(String(calls[0]?.init?.body)) as Record<string, unknown>;
+    expect(body.max_output_tokens).toBe(1024);
+    expect("temperature" in body).toBe(false);
+  });
+});
+
 describe("AC1 — tool-call round-trip SYNTHETIC fixture normalizes correctly, keyed on call_id", () => {
   test("stream() yields tool_call_start/delta/end keyed by call_id (not the item's own id)", async () => {
     const { fetch: fetchMock } = makeFixtureFetchMock(TOOL_FIXTURE_PATH);

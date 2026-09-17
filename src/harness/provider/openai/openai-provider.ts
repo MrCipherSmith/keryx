@@ -381,6 +381,13 @@ export class OpenAiProvider implements ProviderPort {
       instructions: request.systemInstruction,
       input: toResponsesInput(request.messages),
       stream: true,
+      // flow 268: the same wire-serialization gap `openai-compat-provider.ts`
+      // had — `budget.maxOutputTokens` is required/always-populated, so it is
+      // always sent (the Responses API field is `max_output_tokens`, not
+      // `max_tokens`); `temperature` stays conditional since it is genuinely
+      // absent until an operator configures one.
+      max_output_tokens: request.budget.maxOutputTokens,
+      ...(request.options?.temperature !== undefined ? { temperature: request.options.temperature } : {}),
       ...(request.tools !== undefined
         ? {
             tools: request.tools.map((tool) => ({

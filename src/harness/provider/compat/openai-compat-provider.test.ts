@@ -100,6 +100,50 @@ test("K-005: the reason is redacted, flattened and bounded", async () => {
   expect(reason.startsWith("line one x")).toBe(true);
 });
 
+// flow 268 (AC4)
+test("a configured maxOutputTokens/temperature serializes as max_tokens/temperature on the wire", async () => {
+  const calls: RequestInit[] = [];
+  const fetchMock = Object.assign(
+    (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    }) as typeof fetch,
+    { preconnect: (_input: string | URL) => {} },
+  );
+  const provider = new OpenAiCompatEngine({ grant, fetch: fetchMock }, identity);
+  const configuredRequest: NormalizedRequest = {
+    ...request,
+    budget: { maxOutputTokens: 4096, runReservation: 4096 },
+    options: { temperature: 0.2 },
+  };
+  const events: NormalizedEvent[] = [];
+  for await (const event of provider.stream(configuredRequest, { attemptId: "flow-268-ac4" })) events.push(event);
+
+  expect(calls).toHaveLength(1);
+  const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+  expect(body.max_tokens).toBe(4096);
+  expect(body.temperature).toBe(0.2);
+});
+
+test("byte-identical when unconfigured: max_tokens is still the default 1024, no temperature key at all", async () => {
+  const calls: RequestInit[] = [];
+  const fetchMock = Object.assign(
+    (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init ?? {});
+      return new Response('data: [DONE]\n\n', { status: 200 });
+    }) as typeof fetch,
+    { preconnect: (_input: string | URL) => {} },
+  );
+  const provider = new OpenAiCompatEngine({ grant, fetch: fetchMock }, identity);
+  const events: NormalizedEvent[] = [];
+  for await (const event of provider.stream({ ...request, budget: { maxOutputTokens: 1024, runReservation: 1024 } }, { attemptId: "flow-268-ac3" })) events.push(event);
+
+  expect(calls).toHaveLength(1);
+  const body = JSON.parse(String(calls[0]?.body)) as Record<string, unknown>;
+  expect(body.max_tokens).toBe(1024);
+  expect("temperature" in body).toBe(false);
+});
+
 test("K-005: 401/403 are authentication, 429 is a retryable rate limit that honours Retry-After", async () => {
   // Every 4xx used to be invalid_request — a refused account and a malformed field
   // were the same error, and a rate limit was never retried.

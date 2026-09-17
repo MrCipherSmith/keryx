@@ -338,6 +338,17 @@ export interface AgentDeps {
    * regardless, only the persistence/UX side-effect is skipped.
    */
   onContextCompaction?: (r: { removed: number; context: NormalizedMessage[]; estimate: number }) => void;
+  /**
+   * Flow 268: resolved per-provider `temperature`/`maxOutputTokens`/`timeoutMs`
+   * overrides (`resolveProviderModelParams`/`resolveProviderModelParamsByName`
+   * in `commands/providers.ts`), resolved once at model-selection time by the
+   * caller and re-resolved on every `/model`/`/provider`/`/connect` rebuild —
+   * same lifecycle as `providerId`/`modelId` above. Every field absent (the
+   * default) reproduces exactly today's request shape: `budget.maxOutputTokens`
+   * stays `1024`, `runReservation` mirrors it, and no `options.temperature` is
+   * set (AC3).
+   */
+  modelParams?: { temperature?: number; maxOutputTokens?: number; timeoutMs?: number };
 }
 
 export interface RunAgentTurnOptions {
@@ -1542,13 +1553,19 @@ async function runAgentTurnCore(
         });
       }
     }
+    // flow 268: `deps.modelParams` is absent by default, so `?? 1024` and the
+    // `options` omission below reproduce today's request byte-for-byte (AC3).
+    const resolvedMaxOutputTokens = deps.modelParams?.maxOutputTokens ?? 1024;
     const baseRequest: Omit<NormalizedRequest, "signal"> = {
       providerId: deps.providerId,
       modelId: deps.modelId,
       systemInstruction: deps.systemInstruction,
       messages: [...history],
       tools: toolDefs,
-      budget: { maxOutputTokens: 1024, runReservation: 1024 },
+      budget: { maxOutputTokens: resolvedMaxOutputTokens, runReservation: resolvedMaxOutputTokens },
+      ...(deps.modelParams?.temperature !== undefined
+        ? { options: { temperature: deps.modelParams.temperature } }
+        : {}),
       stream: true,
       requestId: deps.idSeq(),
       parentRunId,
@@ -1571,7 +1588,11 @@ async function runAgentTurnCore(
     let errored = false;
 
     try {
-      const streamOptions = signal === undefined ? { attemptId: deps.idSeq() } : { attemptId: deps.idSeq(), signal };
+      const streamOptions = {
+        attemptId: deps.idSeq(),
+        ...(signal === undefined ? {} : { signal }),
+        ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+      };
       for await (const event of deps.provider.stream(request, streamOptions)) {
         if (isAborted()) {
           system("\n[stopped] Model turn interrupted by user.\n");
@@ -2213,14 +2234,19 @@ async function finishWithBudgetSummary(
       });
     }
   }
-
+  // flow 268: same resolution as the main loop above — absent `modelParams`
+  // reproduces today's request byte-for-byte (AC3).
+  const wrapUpMaxOutputTokens = deps.modelParams?.maxOutputTokens ?? 1024;
   const request: NormalizedRequest = {
     providerId: deps.providerId,
     modelId: deps.modelId,
     systemInstruction: deps.systemInstruction,
     messages: [...history],
     // No tools — force a text wrap-up.
-    budget: { maxOutputTokens: 1024, runReservation: 1024 },
+    budget: { maxOutputTokens: wrapUpMaxOutputTokens, runReservation: wrapUpMaxOutputTokens },
+    ...(deps.modelParams?.temperature !== undefined
+      ? { options: { temperature: deps.modelParams.temperature } }
+      : {}),
     stream: true,
     requestId: deps.idSeq(),
     parentRunId,
@@ -2230,7 +2256,11 @@ async function finishWithBudgetSummary(
   let reasoningText = "";
   let reasoningFlushed = false;
   try {
-    for await (const event of deps.provider.stream(request, { attemptId: deps.idSeq() })) {
+    const wrapUpStreamOptions = {
+      attemptId: deps.idSeq(),
+      ...(deps.modelParams?.timeoutMs !== undefined ? { timeoutMs: deps.modelParams.timeoutMs } : {}),
+    };
+    for await (const event of deps.provider.stream(request, wrapUpStreamOptions)) {
       if (event.kind === "reasoning_delta") {
         reasoningText += event.text ?? "";
       } else if (event.kind === "text_delta") {
