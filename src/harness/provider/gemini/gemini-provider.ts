@@ -87,6 +87,18 @@ export interface GeminiProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: GeminiCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the API accepted but never started
+   * answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link GeminiProvider.descriptorDocument}. */
@@ -325,6 +337,64 @@ function classifyGeminiError(httpStatus: number, rpcStatus: string | undefined):
   return { kind: "unknown", retryable: retryableFor("unknown", false), message: "" };
 }
 
+/** Default first-byte / idle stream deadline (flow 268 T22), overridable via {@link GeminiProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("gemini-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
+}
+
 /**
  * Thin Gemini `generateContent`/`streamGenerateContent` {@link ProviderPort}.
  * Constructed with an injected `fetch` and an optional explicit capability
@@ -514,35 +584,35 @@ export class GeminiProvider implements ProviderPort {
       return;
     }
 
-    // Happy path: read the SSE body (offline, fully in-memory) and normalize.
-    // Fail-closed body read (mirrors AnthropicProvider/compat engine): an
-    // abort mid-read yields the SAME terminal `cancelled` error the
-    // fetch()-level abort path yields; any OTHER read failure fails closed as
-    // `malformed`. No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        opts.signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: redact(`Gemini SSE body read failed: ${String(cause)}`),
-      });
-      return;
-    }
-
-    // Zero-byte / empty body: a 200 with no SSE bytes parses to zero records
-    // and never yields a first chunk, indistinguishable from a legitimate
-    // no-output attempt. Fail closed with a terminal `malformed` error (no
-    // model_end) instead.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T22): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta`/`reasoning_delta`
+    // while the model is still generating rather than only once the
+    // connection closes. Two independent deadlines guard a stalled
+    // connection: `firstByteTimeoutMs` (no byte at all since the response
+    // headers arrived) and `idleTimeoutMs` (no further chunk since the last
+    // one) — both default to 120s, configurable via `deps`. A timeout cancels
+    // the reader and yields exactly one retryable `unavailable`
+    // provider_error, never a model_end. An abort mid-read still fails closed
+    // to the SAME terminal `cancelled` error the fetch()-level abort path
+    // yields (mirrors AnthropicProvider/compat engine).
+    //
+    // TERMINAL DETECTION: unlike Anthropic's dedicated `message_stop` event
+    // or the OpenAI Responses API's `response.completed`, this legacy
+    // `generateContent` format has no distinct terminal-event type — the SAME
+    // `GenerateContentResponse` JSON shape is used for every chunk, and
+    // completion is signalled by a `finishReason` field appearing on the
+    // first candidate of the LAST chunk. That IS detectable incrementally
+    // (confirmed per-record, not merely "stream end"): the read loop stops as
+    // soon as a record carries a non-empty `finishReason`, exactly the same
+    // "stop on terminal event, don't wait for socket close" contract as the
+    // other two adapters. Only if the stream closes WITHOUT ever reporting a
+    // `finishReason` does this adapter fall back to relying on stream end
+    // (EOF) plus the idle-timeout deadline above to detect a stalled/dropped
+    // connection — that path yields a truncated-stream `malformed`, per the
+    // existing truncation handling below, never a silent model_end.
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -551,18 +621,26 @@ export class GeminiProvider implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     // Gemini's `alt=sse` framing is `data: <complete GenerateContentResponse
     // JSON>` per record, no `event:` line — exactly what AnthropicSSEParser
     // already parses (a generic `data:`-line framer tolerant of an absent
     // `event`). Reused UNCHANGED, no adaptation needed (confirmed via
     // research, see module header).
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     let sawFirstChunk = false;
     let sawFinish = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
     let promptTokens: number | undefined;
     let candidatesTokens: number | undefined;
@@ -570,124 +648,215 @@ export class GeminiProvider implements ProviderPort {
     let cachedContentTokens: number | undefined;
     let thoughtsTokens: number | undefined;
 
-    for (const record of records) {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(record.data);
-      } catch {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE data line was not valid JSON"),
-        };
-        break;
-      }
-      const chunk = asRecord(parsed);
-
-      if (!sawFirstChunk) {
-        sawFirstChunk = true;
-        bodies.push({ kind: "model_start" });
-      }
-
-      const candidates = asArray(chunk.candidates);
-      const firstCandidate = asRecord(candidates[0]);
-      const content = asRecord(firstCandidate.content);
-      const parts = asArray(content.parts);
-      for (const rawPart of parts) {
-        const part = asRecord(rawPart);
-        const text = asString(part.text);
-        if (text !== undefined) {
-          // A `thought: true` part is chain-of-thought reasoning text, never
-          // ordinary output (confirmed via research, see module header).
-          if (asBoolean(part.thought)) {
-            bodies.push({ kind: "reasoning_delta", text });
-          } else {
-            bodies.push({ kind: "text_delta", text });
-          }
-          continue;
+    const pushUsageAndFinish = (): void => {
+      // usage_update precedes model_end, once, using the LAST-seen
+      // usageMetadata values folded progressively across chunks (research:
+      // unclear whether usageMetadata appears per-chunk or only on the final
+      // chunk — folding progressively is correct either way).
+      if (promptTokens !== undefined || candidatesTokens !== undefined || totalTokens !== undefined) {
+        const usage = mergeUsage(promptTokens, candidatesTokens, totalTokens);
+        const unknownExtensions: Record<string, unknown> = {};
+        if (cachedContentTokens !== undefined) {
+          unknownExtensions["gemini.cached_content_tokens"] = cachedContentTokens;
         }
-        const functionCall = asRecord(part.functionCall);
-        const callName = asString(functionCall.name);
-        if (callName !== undefined) {
-          // Gemini does NOT stream partial function-call arguments by
-          // default (confirmed via research: incremental streaming is a
-          // distinct, newer, model-gated opt-in this adapter does not
-          // enable) — args arrive whole in this one chunk, so this maps to
-          // tool_call_start immediately followed by tool_call_end, no
-          // tool_call_delta in between.
-          const callId = asString(functionCall.id) ?? callName;
-          const argsInput = JSON.stringify(asRecord(functionCall.args));
-          bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
-          bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });
+        if (thoughtsTokens !== undefined) {
+          unknownExtensions["gemini.thoughts_tokens"] = thoughtsTokens;
         }
+        bodies.push({
+          kind: "usage_update",
+          usage,
+          ...(Object.keys(unknownExtensions).length > 0 ? { unknownExtensions } : {}),
+        });
       }
-
-      const usageMetadata = asRecord(chunk.usageMetadata);
-      if (Object.keys(usageMetadata).length > 0) {
-        promptTokens = asNumber(usageMetadata.promptTokenCount) ?? promptTokens;
-        candidatesTokens = asNumber(usageMetadata.candidatesTokenCount) ?? candidatesTokens;
-        totalTokens = asNumber(usageMetadata.totalTokenCount) ?? totalTokens;
-        cachedContentTokens = asNumber(usageMetadata.cachedContentTokenCount) ?? cachedContentTokens;
-        thoughtsTokens = asNumber(usageMetadata.thoughtsTokenCount) ?? thoughtsTokens;
-      }
-
-      const finishReason = asString(firstCandidate.finishReason);
-      if (finishReason !== undefined && finishReason.length > 0) {
-        sawFinish = true;
-      }
-    }
-
-    // usage_update precedes model_end, once, using the LAST-seen usageMetadata
-    // values (research: unclear whether usageMetadata appears per-chunk or
-    // only on the final chunk — folding progressively and emitting once at
-    // the end is correct either way).
-    if (promptTokens !== undefined || candidatesTokens !== undefined || totalTokens !== undefined) {
-      const usage = mergeUsage(promptTokens, candidatesTokens, totalTokens);
-      const unknownExtensions: Record<string, unknown> = {};
-      if (cachedContentTokens !== undefined) {
-        unknownExtensions["gemini.cached_content_tokens"] = cachedContentTokens;
-      }
-      if (thoughtsTokens !== undefined) {
-        unknownExtensions["gemini.thoughts_tokens"] = thoughtsTokens;
-      }
-      bodies.push({
-        kind: "usage_update",
-        usage,
-        ...(Object.keys(unknownExtensions).length > 0 ? { unknownExtensions } : {}),
-      });
-    }
-    if (sawFinish) {
       bodies.push({ kind: "model_end" });
+    };
+
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
+      try {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          opts.signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
+          kind: "malformed",
+          retryable: retryableFor("malformed", false),
+          message: redact(`Gemini SSE body read failed: ${String(cause)}`),
+        });
+        return;
+      }
+
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `Gemini stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const chunkText = decoder.decode(value, { stream: true });
+      for (const record of parser.push(chunkText)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: redact("Gemini SSE data line was not valid JSON"),
+          };
+          break;
+        }
+        const chunk = asRecord(parsed);
+
+        if (!sawFirstChunk) {
+          sawFirstChunk = true;
+          bodies.push({ kind: "model_start" });
+        }
+
+        const candidates = asArray(chunk.candidates);
+        const firstCandidate = asRecord(candidates[0]);
+        const content = asRecord(firstCandidate.content);
+        const parts = asArray(content.parts);
+        for (const rawPart of parts) {
+          const part = asRecord(rawPart);
+          const text = asString(part.text);
+          if (text !== undefined) {
+            // A `thought: true` part is chain-of-thought reasoning text, never
+            // ordinary output (confirmed via research, see module header).
+            if (asBoolean(part.thought)) {
+              bodies.push({ kind: "reasoning_delta", text });
+            } else {
+              bodies.push({ kind: "text_delta", text });
+            }
+            continue;
+          }
+          const functionCall = asRecord(part.functionCall);
+          const callName = asString(functionCall.name);
+          if (callName !== undefined) {
+            // Gemini does NOT stream partial function-call arguments by
+            // default (confirmed via research: incremental streaming is a
+            // distinct, newer, model-gated opt-in this adapter does not
+            // enable) — args arrive whole in this one chunk, so this maps to
+            // tool_call_start immediately followed by tool_call_end, no
+            // tool_call_delta in between.
+            const callId = asString(functionCall.id) ?? callName;
+            const argsInput = JSON.stringify(asRecord(functionCall.args));
+            bodies.push({ kind: "tool_call_start", toolCallId: callId, toolName: callName });
+            bodies.push({ kind: "tool_call_end", toolCallId: callId, input: argsInput });
+          }
+        }
+
+        const usageMetadata = asRecord(chunk.usageMetadata);
+        if (Object.keys(usageMetadata).length > 0) {
+          promptTokens = asNumber(usageMetadata.promptTokenCount) ?? promptTokens;
+          candidatesTokens = asNumber(usageMetadata.candidatesTokenCount) ?? candidatesTokens;
+          totalTokens = asNumber(usageMetadata.totalTokenCount) ?? totalTokens;
+          cachedContentTokens = asNumber(usageMetadata.cachedContentTokenCount) ?? cachedContentTokens;
+          thoughtsTokens = asNumber(usageMetadata.thoughtsTokenCount) ?? thoughtsTokens;
+        }
+
+        const finishReason = asString(firstCandidate.finishReason);
+        if (finishReason !== undefined && finishReason.length > 0) {
+          sawFinish = true;
+          pushUsageAndFinish();
+        }
+        if (malformed !== undefined || sawFinish) {
+          break;
+        }
+      }
+
+      // A terminal record (`finishReason` present) or a malformed record ends
+      // the attempt right here (AC1): stop reading immediately rather than
+      // waiting for the socket to close — a permissive endpoint may keep it
+      // open past the last real chunk.
+      if (malformed !== undefined || sawFinish) {
+        cancelReader();
+        const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        if (malformed !== undefined) {
+          yield stamp({ kind: "provider_error", error: malformed });
+        }
+        return;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
+      }
     }
 
-    // Torn trailing record or a stream that produced chunks but never
-    // reported a finishReason is a truncated/malformed attempt: no model_end.
-    if (malformed === undefined) {
-      if (torn.length > 0) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE stream ended mid-record (torn stream)"),
-        };
-      } else if (sawFirstChunk && !sawFinish) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Gemini SSE stream ended before a finishReason was reported (truncated stream)"),
-        };
-      }
+    // Reached only via a natural EOF (reader signalled `done`) — a
+    // `finishReason` or a malformed record always returns from inside the
+    // loop above. No detectable terminal event was ever seen, so the only
+    // signal this adapter has is the stream simply ending: rely on that plus
+    // the idle-timeout deadline above (already elapsed by definition if we
+    // got here) to distinguish a clean-but-unreported completion from a
+    // dropped connection — treated as a truncated/malformed attempt below,
+    // per module header.
+    const trailing = decoder.decode();
+    if (trailing.length > 0) {
+      parser.push(trailing);
+    }
+    const torn = parser.flush();
+    if (torn.length > 0) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Gemini SSE stream ended mid-record (torn stream)"),
+      };
+    } else if (!receivedAnyChunk) {
+      // A 200 with literally zero bytes never sets `sawFirstChunk` and would
+      // otherwise yield nothing — fail closed with a terminal `malformed`
+      // rather than a silent-success empty iterable.
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("empty response body"),
+      };
+    } else if (sawFirstChunk && !sawFinish) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Gemini SSE stream ended before a finishReason was reported (truncated stream)"),
+      };
     }
 
     // Emit, checking cancellation before every event so an aborted attempt
     // ends with exactly one trailing `cancelled` error and no further output.
-    for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (opts.signal?.aborted === true) {
+    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }

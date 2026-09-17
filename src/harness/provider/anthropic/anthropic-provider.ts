@@ -42,6 +42,18 @@ export interface AnthropicProviderDeps {
   readonly fetch: typeof fetch;
   readonly grant?: AnthropicCapabilityGrant;
   readonly clock?: () => number;
+  /**
+   * Deadline (ms) for the first stream byte to arrive after the response
+   * headers resolve. Guards a connection the API accepted but never started
+   * answering. Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly firstByteTimeoutMs?: number;
+  /**
+   * Deadline (ms) between successive stream chunks once the first byte has
+   * arrived. Guards a connection that started answering and then stalled.
+   * Defaults to {@link DEFAULT_STREAM_TIMEOUT_MS} (120s).
+   */
+  readonly idleTimeoutMs?: number;
 }
 
 /** One model advertised by {@link AnthropicProvider.descriptorDocument}. */
@@ -222,6 +234,92 @@ function classifyHttpError(status: number, headers: Headers): NormalizedError {
 }
 
 /**
+ * Classify a mid-stream SSE `error` event's `error.type` string (e.g.
+ * `overloaded_error`, `rate_limit_error`) into the neutral error taxonomy.
+ * This event arrives on an already-200'd connection (distinct from the
+ * `classifyHttpError` non-2xx path above) — Anthropic's documented streaming
+ * contract allows the server to abandon an in-progress stream with a
+ * terminal `event: error` record rather than a normal `message_stop`, most
+ * commonly for `overloaded_error` under load.
+ */
+function classifySseErrorType(errorType: string | undefined): ProviderErrorKind {
+  switch (errorType) {
+    case "overloaded_error":
+      return "overloaded";
+    case "rate_limit_error":
+      return "rate_limit";
+    case "authentication_error":
+    case "permission_error":
+      return "authentication";
+    case "invalid_request_error":
+    case "not_found_error":
+      return "invalid_request";
+    case "api_error":
+      return "unavailable";
+    default:
+      return "unknown";
+  }
+}
+
+/** Default first-byte / idle stream deadline (flow 268 T22), overridable via {@link AnthropicProviderDeps}. */
+const DEFAULT_STREAM_TIMEOUT_MS = 120_000;
+
+/** Sentinel returned by {@link raceReadAgainstDeadline} when the deadline elapses first. */
+const READ_TIMED_OUT = Symbol("anthropic-read-timed-out");
+
+/** The resolved type of `reader.read()`, derived rather than named (lib.dom's exact type differs across TS/bun-types versions). */
+type ReadChunkResult = Awaited<ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>>;
+
+/**
+ * Race one `reader.read()` against a deadline timer. Resolves to the read
+ * result, or the timeout sentinel when `ms` elapses first. The timer is
+ * ALWAYS cleared before returning — on a successful read, a timeout, or a
+ * rejected read (abort/torn socket) — so no timer outlives this call.
+ */
+async function raceReadAgainstDeadline(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  ms: number,
+): Promise<ReadChunkResult | typeof READ_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<typeof READ_TIMED_OUT>((resolve) => {
+    timer = setTimeout(() => resolve(READ_TIMED_OUT), ms);
+  });
+  try {
+    return await Promise.race([reader.read(), deadline]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
+
+/**
+ * Drain a FIFO queue of pending event bodies, yielding each as a stamped
+ * `NormalizedEvent` and checking cancellation BEFORE every yield (AC1: an
+ * aborted attempt ends with exactly one trailing `cancelled` error and no
+ * further output). Returns `true` when the caller observed the signal
+ * aborted (queue may be left partially drained) — the caller yields the
+ * terminal `cancelled` error itself, since only it holds `errorEvent`.
+ */
+async function* drainAndCheckAbort(
+  queue: EventBody[],
+  signal: AbortSignal | undefined,
+  stamp: (body: EventBody) => NormalizedEvent,
+): AsyncGenerator<NormalizedEvent, boolean> {
+  while (queue.length > 0) {
+    if (signal?.aborted === true) {
+      return true;
+    }
+    const body = queue.shift();
+    if (body === undefined) {
+      break;
+    }
+    yield stamp(body);
+  }
+  return signal?.aborted === true;
+}
+
+/**
  * Thin Anthropic Messages-API {@link ProviderPort}. Constructed with an injected
  * `fetch` and an optional explicit capability `grant`; `stream()` performs one
  * guarded, credential-redacted, storage-off attempt and normalizes its SSE into
@@ -377,41 +475,21 @@ export class AnthropicProvider implements ProviderPort {
       return;
     }
 
-    // Happy path: read the SSE body (offline, fully in-memory) and normalize.
-    //
-    // Fail-closed body read (H-01 T5): `fetch()` has already resolved (headers
-    // received), but the body can still stall until a deadline abort fires the
-    // SHARED `opts.signal` mid-read — the abort-triggered rejection from
-    // `response.text()` must yield the SAME terminal `cancelled` error the
-    // fetch()-level abort path yields, never escape as an uncaught exception out
-    // of this generator. Any OTHER read-time failure (a torn/errored body stream)
-    // fails closed as `malformed`, matching the truncated-stream taxonomy below.
-    // No model_end on either path.
-    let bodyText: string;
-    try {
-      bodyText = await response.text();
-    } catch (cause) {
-      const aborted =
-        opts.signal?.aborted === true ||
-        (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
-      if (aborted) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield errorEvent({
-        kind: "malformed",
-        retryable: retryableFor("malformed", false),
-        message: redact(`Anthropic SSE body read failed: ${String(cause)}`),
-      });
-      return;
-    }
-
-    // Zero-byte / empty body (H-01 T5): a 200 with no SSE bytes parses to zero
-    // records and never sets `sawStart`, so neither the torn nor truncated
-    // `malformed` branch below fires and the generator would otherwise yield
-    // NOTHING — indistinguishable from a legitimate no-output attempt. Fail
-    // closed with a terminal `malformed` error (no model_end) instead.
-    if (bodyText.length === 0) {
+    // Streaming body read (flow 268 T22): the SSE body is read INCREMENTALLY
+    // via `response.body.getReader()`, not buffered whole with
+    // `response.text()` — each record the parser completes is normalized and
+    // yielded immediately, so a caller observes `text_delta`/`tool_call_delta`
+    // while the model is still generating rather than only once the
+    // connection closes. Two independent deadlines guard a stalled
+    // connection: `firstByteTimeoutMs` (no byte at all since the response
+    // headers arrived) and `idleTimeoutMs` (no further chunk since the last
+    // one) — both default to 120s, configurable via `deps`. A timeout cancels
+    // the reader and yields exactly one retryable `unavailable`
+    // provider_error, never a model_end. An abort mid-read still fails closed
+    // to the SAME terminal `cancelled` error the fetch()-level abort path
+    // yields (flow-019 contract, mirrored from H-01 T5's `response.text()`
+    // guard).
+    if (response.body === null) {
       yield errorEvent({
         kind: "malformed",
         retryable: retryableFor("malformed", false),
@@ -420,143 +498,259 @@ export class AnthropicProvider implements ProviderPort {
       return;
     }
 
+    const firstByteTimeoutMs = this.deps.firstByteTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const idleTimeoutMs = this.deps.idleTimeoutMs ?? DEFAULT_STREAM_TIMEOUT_MS;
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
     const parser = new AnthropicSSEParser();
-    const records = parser.push(bodyText);
-    const torn = parser.flush();
+    const cancelReader = (): void => {
+      // Best-effort cleanup: the socket may already be closed/errored, and a
+      // cancel() rejection here is never a second failure mode.
+      reader.cancel().catch(() => undefined);
+    };
 
     const bodies: EventBody[] = [];
     const blocks = new Map<number, BlockState>();
     let inputTokens: number | undefined;
     let sawStart = false;
     let sawStop = false;
+    let receivedAnyChunk = false;
     let malformed: NormalizedError | undefined;
+    let terminalError: NormalizedError | undefined;
 
-    for (const record of records) {
-      let parsed: unknown;
+    readLoop: while (true) {
+      const timeoutMs = receivedAnyChunk ? idleTimeoutMs : firstByteTimeoutMs;
+      let readResult: ReadChunkResult | typeof READ_TIMED_OUT;
       try {
-        parsed = JSON.parse(record.data);
-      } catch {
-        malformed = {
+        readResult = await raceReadAgainstDeadline(reader, timeoutMs);
+      } catch (cause) {
+        cancelReader();
+        const aborted =
+          opts.signal?.aborted === true ||
+          (typeof cause === "object" && cause !== null && (cause as { name?: unknown }).name === "AbortError");
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
+        }
+        yield errorEvent({
           kind: "malformed",
           retryable: retryableFor("malformed", false),
-          message: redact("Anthropic SSE data line was not valid JSON"),
-        };
-        break;
+          message: redact(`Anthropic SSE body read failed: ${String(cause)}`),
+        });
+        return;
       }
-      const data = asRecord(parsed);
-      switch (asString(data.type)) {
-        case "message_start": {
-          sawStart = true;
-          inputTokens = asNumber(asRecord(asRecord(data.message).usage).input_tokens);
-          bodies.push({ kind: "model_start" });
+
+      if (readResult === READ_TIMED_OUT) {
+        cancelReader();
+        yield errorEvent({
+          kind: "unavailable",
+          retryable: retryableFor("unavailable", true),
+          message: `Anthropic stream timed out waiting for ${
+            receivedAnyChunk ? "the next chunk" : "the first byte"
+          } (limit ${timeoutMs}ms)`,
+        });
+        return;
+      }
+
+      const { done, value } = readResult;
+      if (done) {
+        break readLoop;
+      }
+      if (value.length > 0) {
+        // Only a non-empty chunk counts as "the first byte arrived": an
+        // empty, non-final read (degenerate but spec-legal) must not silently
+        // satisfy the first-byte deadline or flip the zero-byte-body check
+        // below.
+        receivedAnyChunk = true;
+      }
+
+      const chunkText = decoder.decode(value, { stream: true });
+      for (const record of parser.push(chunkText)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(record.data);
+        } catch {
+          malformed = {
+            kind: "malformed",
+            retryable: retryableFor("malformed", false),
+            message: redact("Anthropic SSE data line was not valid JSON"),
+          };
           break;
         }
-        case "content_block_start": {
-          const index = asNumber(data.index) ?? -1;
-          const block = asRecord(data.content_block);
-          if (asString(block.type) === "tool_use") {
-            const state: BlockState = { type: "tool", input: "" };
-            const toolCallId = asString(block.id);
-            if (toolCallId !== undefined) {
-              state.toolCallId = toolCallId;
-            }
-            blocks.set(index, state);
-            const startBody: EventBody = { kind: "tool_call_start" };
-            if (toolCallId !== undefined) {
-              startBody.toolCallId = toolCallId;
-            }
-            const toolName = asString(block.name);
-            if (toolName !== undefined) {
-              startBody.toolName = toolName;
-            }
-            bodies.push(startBody);
-          } else {
-            blocks.set(index, { type: "text", input: "" });
+        const data = asRecord(parsed);
+        switch (asString(data.type)) {
+          case "message_start": {
+            sawStart = true;
+            inputTokens = asNumber(asRecord(asRecord(data.message).usage).input_tokens);
+            bodies.push({ kind: "model_start" });
+            break;
           }
-          break;
-        }
-        case "content_block_delta": {
-          const index = asNumber(data.index) ?? -1;
-          const delta = asRecord(data.delta);
-          const deltaType = asString(delta.type);
-          if (deltaType === "text_delta") {
-            const body: EventBody = { kind: "text_delta" };
-            const text = asString(delta.text);
-            if (text !== undefined) {
-              body.text = text;
+          case "content_block_start": {
+            const index = asNumber(data.index) ?? -1;
+            const block = asRecord(data.content_block);
+            if (asString(block.type) === "tool_use") {
+              const state: BlockState = { type: "tool", input: "" };
+              const toolCallId = asString(block.id);
+              if (toolCallId !== undefined) {
+                state.toolCallId = toolCallId;
+              }
+              blocks.set(index, state);
+              const startBody: EventBody = { kind: "tool_call_start" };
+              if (toolCallId !== undefined) {
+                startBody.toolCallId = toolCallId;
+              }
+              const toolName = asString(block.name);
+              if (toolName !== undefined) {
+                startBody.toolName = toolName;
+              }
+              bodies.push(startBody);
+            } else {
+              blocks.set(index, { type: "text", input: "" });
             }
-            bodies.push(body);
-          } else if (deltaType === "input_json_delta") {
-            const fragment = asString(delta.partial_json) ?? "";
+            break;
+          }
+          case "content_block_delta": {
+            const index = asNumber(data.index) ?? -1;
+            const delta = asRecord(data.delta);
+            const deltaType = asString(delta.type);
+            if (deltaType === "text_delta") {
+              const body: EventBody = { kind: "text_delta" };
+              const text = asString(delta.text);
+              if (text !== undefined) {
+                body.text = text;
+              }
+              bodies.push(body);
+            } else if (deltaType === "input_json_delta") {
+              const fragment = asString(delta.partial_json) ?? "";
+              const block = blocks.get(index);
+              if (block !== undefined) {
+                block.input += fragment;
+              }
+              const body: EventBody = { kind: "tool_call_delta", inputDelta: fragment };
+              if (block?.toolCallId !== undefined) {
+                body.toolCallId = block.toolCallId;
+              }
+              bodies.push(body);
+            }
+            break;
+          }
+          case "content_block_stop": {
+            const index = asNumber(data.index) ?? -1;
             const block = blocks.get(index);
-            if (block !== undefined) {
-              block.input += fragment;
+            if (block !== undefined && block.type === "tool") {
+              const endBody: EventBody = { kind: "tool_call_end", input: block.input };
+              if (block.toolCallId !== undefined) {
+                endBody.toolCallId = block.toolCallId;
+              }
+              bodies.push(endBody);
             }
-            const body: EventBody = { kind: "tool_call_delta", inputDelta: fragment };
-            if (block?.toolCallId !== undefined) {
-              body.toolCallId = block.toolCallId;
-            }
-            bodies.push(body);
+            break;
           }
-          break;
-        }
-        case "content_block_stop": {
-          const index = asNumber(data.index) ?? -1;
-          const block = blocks.get(index);
-          if (block !== undefined && block.type === "tool") {
-            const endBody: EventBody = { kind: "tool_call_end", input: block.input };
-            if (block.toolCallId !== undefined) {
-              endBody.toolCallId = block.toolCallId;
-            }
-            bodies.push(endBody);
+          case "message_delta": {
+            const outputTokens = asNumber(asRecord(data.usage).output_tokens);
+            bodies.push({ kind: "usage_update", usage: mergeUsage(inputTokens, outputTokens) });
+            break;
           }
+          case "message_stop": {
+            sawStop = true;
+            bodies.push({ kind: "model_end" });
+            break;
+          }
+          case "error": {
+            // A terminal SSE `error` event (e.g. `overloaded_error` under
+            // load) — Anthropic's documented streaming contract allows the
+            // server to abandon an in-progress stream this way instead of a
+            // normal `message_stop`. Ends the attempt the same way a
+            // malformed record does: stop reading, drain what is already
+            // queued, then yield this as the terminal event (no model_end).
+            const errorObj = asRecord(data.error);
+            const kind = classifySseErrorType(asString(errorObj.type));
+            const message = asString(errorObj.message);
+            terminalError = {
+              kind,
+              retryable: retryableFor(kind, false),
+              message: redact(message !== undefined && message.length > 0 ? message : "Anthropic API returned a stream error with no message"),
+            };
+            break;
+          }
+          default:
+            // `ping`, `content_block_start` for non-tool blocks handled above, and
+            // any unknown event carry no neutral mapping.
+            break;
+        }
+        if (terminalError !== undefined) {
           break;
         }
-        case "message_delta": {
-          const outputTokens = asNumber(asRecord(data.usage).output_tokens);
-          bodies.push({ kind: "usage_update", usage: mergeUsage(inputTokens, outputTokens) });
-          break;
+      }
+
+      // A terminal event (`message_stop`, `error`) or a malformed record ends
+      // the attempt right here (AC1): stop reading immediately rather than
+      // waiting for the socket to close — a permissive endpoint may keep it
+      // open past its own terminal event.
+      if (malformed !== undefined || terminalError !== undefined || sawStop) {
+        cancelReader();
+        const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+        if (aborted) {
+          yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+          return;
         }
-        case "message_stop": {
-          sawStop = true;
-          bodies.push({ kind: "model_end" });
-          break;
+        if (terminalError !== undefined) {
+          yield stamp({ kind: "provider_error", error: terminalError });
+          return;
         }
-        default:
-          // `ping`, `content_block_start` for non-tool blocks handled above, and
-          // any unknown event carry no neutral mapping.
-          break;
+        if (malformed !== undefined) {
+          yield stamp({ kind: "provider_error", error: malformed });
+        }
+        return;
+      }
+
+      // Drain whatever this chunk produced before reading the next one, so a
+      // caller observes each event as soon as it is parsed (AC1) rather than
+      // only once the whole body has arrived.
+      const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+      if (aborted) {
+        cancelReader();
+        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
+        return;
       }
     }
 
+    // Reached only via a natural EOF (reader signalled `done`) — a terminal
+    // event or a malformed record always returns from inside the loop above.
+    const trailing = decoder.decode();
+    if (trailing.length > 0) {
+      parser.push(trailing);
+    }
+    const torn = parser.flush();
     // Torn trailing record or a stream that started but never reached
     // `message_stop` is a truncated/malformed attempt (AC4): no model_end.
-    if (malformed === undefined) {
-      if (torn.length > 0) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Anthropic SSE stream ended mid-record (torn stream)"),
-        };
-      } else if (sawStart && !sawStop) {
-        malformed = {
-          kind: "malformed",
-          retryable: retryableFor("malformed", false),
-          message: redact("Anthropic SSE stream ended before message_stop (truncated stream)"),
-        };
-      }
+    if (torn.length > 0) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Anthropic SSE stream ended mid-record (torn stream)"),
+      };
+    } else if (!receivedAnyChunk) {
+      // A 200 with literally zero bytes never sets `sawStart` and would
+      // otherwise yield nothing — fail closed with a terminal `malformed`
+      // rather than a silent-success empty iterable.
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("empty response body"),
+      };
+    } else if (sawStart && !sawStop) {
+      malformed = {
+        kind: "malformed",
+        retryable: retryableFor("malformed", false),
+        message: redact("Anthropic SSE stream ended before message_stop (truncated stream)"),
+      };
     }
 
     // Emit, checking cancellation before every event so an aborted attempt ends
     // with exactly one trailing `cancelled` error and no further output (AC1).
-    for (const body of bodies) {
-      if (opts.signal?.aborted === true) {
-        yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
-        return;
-      }
-      yield stamp(body);
-    }
-    if (opts.signal?.aborted === true) {
+    const aborted = yield* drainAndCheckAbort(bodies, opts.signal, stamp);
+    if (aborted) {
       yield errorEvent({ kind: "cancelled", retryable: retryableFor("cancelled", false), message: "attempt cancelled" });
       return;
     }
