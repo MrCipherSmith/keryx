@@ -71,8 +71,15 @@ function readJson(file: string): unknown | undefined {
   }
 }
 
-/** Fields validated as finite numbers ONLY when present (never required). */
-const OPTIONAL_FINITE_NUMBER_FIELDS = ["temperature", "maxOutputTokens", "timeoutMs"] as const;
+/** Fields validated as finite numbers ONLY when present (never required). `0` is a meaningful temperature. */
+const OPTIONAL_FINITE_NUMBER_FIELDS = ["temperature"] as const;
+/**
+ * Fields validated as finite AND strictly positive when present. Unlike
+ * `temperature`, `0` here is not a real setting: it would request a budget of
+ * zero output tokens (the `?? 1024` request-construction fallback only
+ * triggers on `undefined`, not `0`) or abort every stream instantly.
+ */
+const OPTIONAL_POSITIVE_NUMBER_FIELDS = ["maxOutputTokens", "timeoutMs"] as const;
 
 /** Loose runtime shape guard for hand-edited files (never throws). */
 export function isCustomCompatProvider(value: unknown): value is CustomCompatProvider {
@@ -98,6 +105,12 @@ export function isCustomCompatProvider(value: unknown): value is CustomCompatPro
   for (const field of OPTIONAL_FINITE_NUMBER_FIELDS) {
     const raw = p[field];
     if (raw !== undefined && !(typeof raw === "number" && Number.isFinite(raw))) {
+      return false;
+    }
+  }
+  for (const field of OPTIONAL_POSITIVE_NUMBER_FIELDS) {
+    const raw = p[field];
+    if (raw !== undefined && !(typeof raw === "number" && Number.isFinite(raw) && raw > 0)) {
       return false;
     }
   }

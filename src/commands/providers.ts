@@ -180,12 +180,20 @@ export function resolveProviderModelParams(
  * discipline: this flow only covers OpenAI-compatible gateways (see
  * `docs requirements` for flow 268), so a native adapter's config surface is
  * simply untouched rather than guessed at.
+ *
+ * `dir`, when given, MUST be the same directory `shellConfig` was loaded
+ * from (`loadShellConfig(dir)`) — it scopes the CUSTOM-provider lookup
+ * (`providerByName`/`llm-providers.json`), the half of this resolution
+ * `shellConfig` alone cannot reach, since a custom provider's own
+ * `temperature`/`maxOutputTokens`/`timeoutMs` live on its `llm-providers.json`
+ * record, not in `ShellConfig.modelParams`.
  */
 export function resolveProviderModelParamsByName(
   name: string,
   shellConfig: Pick<ShellConfig, "modelParams"> = loadShellConfig(),
+  dir?: string,
 ): ResolvedProviderModelParams {
-  const provider = providerByName(name);
+  const provider = providerByName(name, dir);
   return provider === undefined ? {} : resolveProviderModelParams(provider, shellConfig);
 }
 
@@ -317,9 +325,9 @@ export const OPENAI_COMPAT_PROVIDERS: readonly OpenAiCompatProvider[] = [
   },
 ];
 
-/** Look up a registry provider by its `name`. */
-export function providerByName(name: string): OpenAiCompatProvider | undefined {
-  return allOpenAiCompatProviders().find((p) => p.name === name);
+/** Look up a registry provider by its `name`. `dir` scopes the custom-provider lookup, same as {@link allOpenAiCompatProviders}. */
+export function providerByName(name: string, dir?: string): OpenAiCompatProvider | undefined {
+  return allOpenAiCompatProviders(dir).find((p) => p.name === name);
 }
 
 /**

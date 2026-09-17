@@ -507,6 +507,19 @@ function parseOptionalWizardNumber(raw: string): number | undefined {
 }
 
 /**
+ * Same as {@link parseOptionalWizardNumber}, but a value `<= 0` is ALSO
+ * treated as skipped (never saved). For `maxOutputTokens`/`timeoutMs` —
+ * unlike `temperature`, where `0` is a meaningful setting — a `0` here would
+ * silently request a budget of zero output tokens on every request (the
+ * request-construction `?? 1024` fallback only triggers on `undefined`, not
+ * `0`), and a `0`/negative `timeoutMs` would abort every stream instantly.
+ */
+function parseOptionalPositiveWizardNumber(raw: string): number | undefined {
+  const parsed = parseOptionalWizardNumber(raw);
+  return parsed !== undefined && parsed > 0 ? parsed : undefined;
+}
+
+/**
  * The "add custom provider" mini-wizard: name → base URL → API key (optional) →
  * models (optional). Saves nothing itself — returns the definition for the
  * caller to persist. Esc at any step backs up one step; Esc at the first step
@@ -582,7 +595,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
       if (maxOutputTokensStep.kind === "back") {
         continue;
       }
-      const maxOutputTokens = parseOptionalWizardNumber(maxOutputTokensStep.value);
+      const maxOutputTokens = parseOptionalPositiveWizardNumber(maxOutputTokensStep.value);
       const timeoutMsStep = await promptCustomFieldStep(otui, r, {
         title: "Request timeout ms (optional)",
         note: "empty = no engine-internal timeout · e.g. 180000",
@@ -590,7 +603,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
       if (timeoutMsStep.kind === "back") {
         continue;
       }
-      const timeoutMs = parseOptionalWizardNumber(timeoutMsStep.value);
+      const timeoutMs = parseOptionalPositiveWizardNumber(timeoutMsStep.value);
       return {
         name,
         baseUrl,

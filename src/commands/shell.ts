@@ -631,7 +631,7 @@ function realSelectProviderModel(
     // every other resolution call site in this file (startup, TUI rebuilds) —
     // omitting it here would silently resolve against the default config dir
     // instead of a caller-supplied one (e.g. `--config-dir`/sandboxed runs).
-    const modelParams = resolveProviderModelParamsByName(picked.provider, loadShellConfig(cacheDir));
+    const modelParams = resolveProviderModelParamsByName(picked.provider, loadShellConfig(cacheDir), cacheDir);
     return Object.keys(modelParams).length > 0 ? { ...picked, modelParams } : picked;
   };
 }
@@ -2254,6 +2254,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       const resolvedModelParams = resolveProviderModelParamsByName(
         sel.provider,
         loadShellConfig(runtime.cacheDir),
+        runtime.cacheDir,
       );
       let orient: string;
       try {
@@ -2411,6 +2412,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             const resolvedModelParams = resolveProviderModelParamsByName(
               sel.provider,
               loadShellConfig(runtime.cacheDir),
+              runtime.cacheDir,
             );
             return {
               makeProvider: chatFactory,
@@ -2564,7 +2566,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // flow 268: resolved once at readline startup, same as the TUI branches
     // above; re-resolved on every `/model`/`/provider`/`/connect` re-selection
     // by `realSelectProviderModel`'s own wrapping (see its definition).
-    const initialModelParams = resolveProviderModelParamsByName(provider, loadShellConfig(runtime.cacheDir));
+    const initialModelParams = resolveProviderModelParamsByName(
+      provider,
+      loadShellConfig(runtime.cacheDir),
+      runtime.cacheDir,
+    );
     const deps: ShellDeps = {
       makeProvider: baseFactory,
       clock: () => new Date().toISOString(),

@@ -109,6 +109,27 @@ describe("llm-providers.json custom provider registry", () => {
     ).toBe(false);
   });
 
+  test("isCustomCompatProvider rejects zero/negative maxOutputTokens or timeoutMs, but allows temperature 0", () => {
+    // A 0/negative output-token cap or timeout is not a real setting (it would
+    // request a budget of zero output tokens, or abort every stream
+    // instantly) — unlike temperature, where 0 is a meaningful value.
+    expect(
+      isCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [], maxOutputTokens: 0 }),
+    ).toBe(false);
+    expect(
+      isCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [], maxOutputTokens: -1 }),
+    ).toBe(false);
+    expect(
+      isCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [], timeoutMs: 0 }),
+    ).toBe(false);
+    expect(
+      isCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [], timeoutMs: -60_000 }),
+    ).toBe(false);
+    expect(
+      isCustomCompatProvider({ name: "a", baseUrl: "http://localhost:1", models: [], temperature: 0 }),
+    ).toBe(true);
+  });
+
   test("a hand-edited file with a bad model-param value drops that entry, never throws", () => {
     const dir = tempDir();
     writeFileSync(
