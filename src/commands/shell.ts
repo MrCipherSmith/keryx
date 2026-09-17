@@ -178,6 +178,7 @@ const READLINE_AGENT_COMMANDS: readonly string[] = [
   "/flows",
   "/theme",
   "/mode",
+  "/plan",
   "/exit",
 ];
 
@@ -1251,6 +1252,11 @@ async function runAgentRepl(
   let permissionMode: PermissionMode =
     initialPermissionMode ?? getProjectPermissionMode(sessionCwd) ?? DEFAULT_PERMISSION_MODE;
   agentIo.permissionMode = () => permissionMode;
+  // Read-only ("plan") posture — orthogonal to `permissionMode` (see
+  // `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring). Never
+  // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
+  let readOnly = false;
+  agentIo.readOnly = () => readOnly;
   agentIo.onAutoApproved = (tool, input, meta) => {
     stopSpinner();
     // NOT dimmed (see `AgentIO.onAutoApproved`'s docstring): unlike the shell
@@ -1521,6 +1527,26 @@ async function runAgentRepl(
               agentIo.onSystem?.(saved ? "Saved as this project's default.\n" : "Could not save the project default.\n");
             }
           }
+        }
+      } else if (command === "/plan") {
+        const planArgs = rest.split(/\s+/).filter((p) => p.length > 0);
+        const wanted = planArgs[0] ?? "";
+
+        if (wanted.length === 0) {
+          agentIo.onSystem?.(
+            `Read-only mode: ${readOnly ? "on" : "off"}\n` + `Usage: /plan [on|off]\n`,
+          );
+        } else if (wanted === "on") {
+          // Going read-only is the safe direction — no confirmation needed
+          // (unlike `/mode auto`, which can skip confirmation for destructive
+          // actions).
+          readOnly = true;
+          agentIo.onSystem?.("Read-only mode: on\n");
+        } else if (wanted === "off") {
+          readOnly = false;
+          agentIo.onSystem?.(`Read-only mode: off (permission mode stays: ${permissionMode})\n`);
+        } else {
+          agentIo.onSystem?.("Usage: /plan [on|off]\n");
         }
       } else if (command === "/search-provider") {
         const args = parseSearchProviderArgs(parts.slice(1));
