@@ -152,6 +152,16 @@ export interface AgentIO {
    * getter, never a missing `requestApproval`.
    */
   permissionMode?: () => PermissionMode;
+  /**
+   * The session's current read-only ("plan") posture (see
+   * `permission-mode.ts`'s `ApprovalGateInput.readOnly` docstring for the
+   * full orthogonality rationale). Read fresh on every gated call, never
+   * cached — this is how a live `/plan` toggle takes effect on the very next
+   * tool call. Absent (or `undefined`) behaves exactly as `false`: today's
+   * unchanged behavior for every caller that doesn't wire it. When `true`,
+   * every non-`read`-risk call is denied regardless of `permissionMode`.
+   */
+  readOnly?: () => boolean;
 }
 
 /** Injected dependencies keeping `runAgentTurn` deterministic + offline. */
@@ -1621,6 +1631,7 @@ async function runAgentTurnCore(
           toolByName,
           io.requestApproval,
           io.permissionMode,
+          io.readOnly,
           io.onAutoApproved,
           hasInvocationCapacity,
           reserveInvocation,
@@ -1995,6 +2006,7 @@ async function runConcurrentSpawnBatch(
       toolByName,
       io.requestApproval,
       io.permissionMode,
+      io.readOnly,
       io.onAutoApproved,
       hasInvocationCapacity,
       reserveInvocation,
@@ -2101,6 +2113,7 @@ async function executeCall(
   toolByName: Map<string, InteractiveTool>,
   requestApproval: AgentIO["requestApproval"],
   permissionMode: AgentIO["permissionMode"],
+  readOnly: AgentIO["readOnly"],
   onAutoApproved: AgentIO["onAutoApproved"],
   hasInvocationCapacity: () => boolean,
   reserveInvocation: () => boolean,
@@ -2143,6 +2156,7 @@ async function executeCall(
   // - anything else is denied
   const risk = tool.definition.risk;
   const mode: PermissionMode = permissionMode?.() ?? DEFAULT_PERMISSION_MODE;
+  const isReadOnly = readOnly?.() ?? false;
   if (risk === "shell" || risk === "destructive") {
     // Per-command escalation. A tool carries ONE static risk, so `shell_exec` is
     // `shell` whether it runs `ls` or `rm -rf /`; the classifier supplies the
@@ -2152,7 +2166,17 @@ async function executeCall(
     const destructive = risk === "destructive" || isDestructiveCommand(command);
     const credentials = touchesAgentCredentials(command);
     const sacReviewConfirmation = touchesSacConfirmReview(command);
-    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive,
+      credentials,
+      sacReviewConfirmation,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {
@@ -2174,7 +2198,17 @@ async function executeCall(
     // never silently invoked (F6). The three MAE containment invariants
     // (read-only child tools, child policy deny, hard-false child approver)
     // still hold, but the gate no longer relies on them to stay safe.
-    const decision = resolveApprovalDecision({ mode, risk, destructive: false, credentials: false, sacReviewConfirmation: false });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive: false, credentials: false });
     } else {
@@ -2194,7 +2228,17 @@ async function executeCall(
     // escalation only, per ADR-0009's posture; it never denies on its own.
     const patch = typeof input.patch === "string" ? input.patch : "";
     const { destructive, credentials } = classifyPatchRisk(patch);
-    const decision = resolveApprovalDecision({ mode, risk, destructive, credentials, sacReviewConfirmation: false });
+    const decision = resolveApprovalDecision({
+      mode,
+      risk,
+      destructive,
+      credentials,
+      sacReviewConfirmation: false,
+      readOnly: isReadOnly,
+    });
+    if (decision === "deny") {
+      return { output: `tool "${call.name}" is not permitted while read-only mode (/plan) is on`, isError: true };
+    }
     if (decision === "auto") {
       onAutoApproved?.(call.name, call.input, { destructive, credentials });
     } else {

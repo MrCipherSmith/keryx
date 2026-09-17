@@ -2184,6 +2184,61 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
   });
 });
 
+// --- flow 265 T2: /plan (read-only toggle) in the TUI ----------------------
+//
+// `launchTuiAgentShell` has no headless injection seam (same precedent as
+// every audit in this file) — source-text audit. `runPlanCommand`'s shape
+// (no confirmation dialog, no picker overlay — those are TUI cosmetics,
+// explicitly out of scope for this pass) is proven by reading the real
+// source rather than driving the OpenTUI REPL end-to-end.
+describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
+  const tuiSourcePlan = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnStartPlan = tuiSourcePlan.indexOf("export async function launchTuiAgentShell(opts: {");
+  const fnBodyPlan = tuiSourcePlan.slice(fnStartPlan);
+
+  test("declares its own `readOnly` let, independent of `permissionMode`", () => {
+    expect(fnBodyPlan).toMatch(/let\s+readOnly\s*=\s*false;/);
+  });
+
+  test("io.readOnly is wired to the closure, mirroring io.permissionMode", () => {
+    expect(fnBodyPlan).toContain("io.readOnly = () => readOnly;");
+    expect(fnBodyPlan).toContain("io.permissionMode = () => permissionMode;");
+  });
+
+  test("runPlanCommand exists and has no confirmation dialog / picker overlay (TUI cosmetics out of scope)", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    expect(fnIndex).toBeGreaterThanOrEqual(0);
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).not.toContain("withOverlay");
+    expect(fnBlock).not.toContain("showComposerChoice");
+  });
+
+  test("no-arg reports current state via chrome.showToast; on/off toggle readOnly + toast; anything else is a usage message", () => {
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd > 0 ? fnEnd : fnIndex + 1200);
+    expect(fnBlock).toContain("chrome.showToast(`Read-only mode: ${readOnly ? \"on\" : \"off\"}`)");
+    expect(fnBlock).toContain('"on"');
+    expect(fnBlock).toContain("readOnly = true;");
+    expect(fnBlock).toContain('"off"');
+    expect(fnBlock).toContain("readOnly = false;");
+    expect(fnBlock).toContain("Usage: /plan [on|off]");
+  });
+
+  test("the command switch has a /plan branch calling runPlanCommand, and the busy-branch switch has a matching case", () => {
+    const branchIndex = fnBodyPlan.indexOf('command.name === "/plan"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+    const branchBlock = fnBodyPlan.slice(branchIndex, branchIndex + 200);
+    expect(branchBlock).toContain("runPlanCommand(line);");
+
+    const caseIndex = fnBodyPlan.indexOf('case "plan": {');
+    expect(caseIndex).toBeGreaterThanOrEqual(0);
+    const caseBlock = fnBodyPlan.slice(caseIndex, caseIndex + 100);
+    expect(caseBlock).toContain("runPlanCommand(line);");
+  });
+});
+
 // --- flow 163 AC8: the TUI's OpenTUI REPL never triggers the Track B
 // wrap-up composer this way either — the same invariant shell.test.ts's own
 // "flow 163 AC8" source-text audit proves for the readline REPL, mirrored

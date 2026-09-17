@@ -1090,6 +1090,74 @@ describe("SLATE-15 — /goal wiring in shell.ts's readline agent-mode command sw
   });
 });
 
+// --- flow 265 T2 — /plan (read-only toggle) wiring in shell.ts --------------
+//
+// `runAgentRepl` is NOT unit-tested directly (see the doc comment above its
+// definition), so — same as SLATE-15's `/goal` block above — this is a
+// source-text audit: it asserts the actual branch/closure shape exists,
+// rather than driving the REPL end-to-end.
+
+describe("flow 265 — /plan (read-only toggle) wiring in shell.ts (source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
+
+  test("runAgentRepl declares its own `readOnly` let, independent of `permissionMode`", () => {
+    expect(replBody).toMatch(/let\s+readOnly\s*=\s*false;/);
+  });
+
+  test("agentIo.readOnly is wired to the closure, mirroring agentIo.permissionMode", () => {
+    expect(replBody).toContain("agentIo.readOnly = () => readOnly;");
+    expect(replBody).toContain("agentIo.permissionMode = () => permissionMode;");
+  });
+
+  test("the readline command switch has a /plan branch", () => {
+    const branchIndex = replBody.indexOf('command === "/plan"');
+    expect(branchIndex).toBeGreaterThanOrEqual(0);
+  });
+
+  test("/plan no-arg reports the current state", () => {
+    const branchIndex = replBody.indexOf('command === "/plan"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
+    expect(branchBlock).toContain("Read-only mode:");
+  });
+
+  test("/plan on sets readOnly = true, /plan off sets readOnly = false", () => {
+    const branchIndex = replBody.indexOf('command === "/plan"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
+    expect(branchBlock).toContain('"on"');
+    expect(branchBlock).toContain("readOnly = true;");
+    expect(branchBlock).toContain('"off"');
+    expect(branchBlock).toContain("readOnly = false;");
+  });
+
+  test("an unrecognized /plan argument gets a usage message, not a silent no-op", () => {
+    const branchIndex = replBody.indexOf('command === "/plan"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
+    expect(branchBlock).toContain("Usage: /plan [on|off]");
+  });
+
+  test("/plan does NOT gate itself behind a confirmation prompt (unlike /mode auto)", () => {
+    const branchIndex = replBody.indexOf('command === "/plan"');
+    const modeBranchIndex = replBody.indexOf('command === "/mode"');
+    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
+    // The /mode branch (which DOES confirm before `auto`, via `readLine()`)
+    // comes before /plan in source order.
+    expect(modeBranchIndex).toBeGreaterThanOrEqual(0);
+    expect(modeBranchIndex).toBeLessThan(branchIndex);
+    expect(branchBlock).not.toContain("readLine()");
+  });
+
+  test("/plan appears in the readline agent REPL's own advertised command list (READLINE_AGENT_COMMANDS)", () => {
+    const start = shellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const end = shellSource.indexOf("];", start);
+    const block = shellSource.slice(start, end);
+    expect(block).toContain('"/plan"');
+  });
+});
+
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----
 
 describe("expandedToolOutput (readline /expand, AC10)", () => {
