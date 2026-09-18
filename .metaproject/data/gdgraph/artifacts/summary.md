@@ -2,31 +2,31 @@
 
 ## Stats
 
-- Source files indexed: 1470
+- Source files indexed: 1507
 - Imported asset files indexed: 4
-- Total nodes: 1474
-- Edges: 4397
-- Import edges: 4324
-- Asset edges: 10
+- Total nodes: 1511
+- Edges: 4483
+- Import edges: 4409
+- Asset edges: 11
 - Unresolved imports: 63
 - Import resolution: 98.6%
-- Skipped generated/static directories: 8
+- Skipped generated/static directories: 34
 
 ## Top Modules
 
 | Module | Source Files |
 |---|---:|
-| harness | 264 |
-| commands | 169 |
-| lib | 118 |
-| tui | 104 |
-| sac | 58 |
-| wiki | 57 |
+| harness | 281 |
+| commands | 172 |
+| lib | 120 |
+| tui | 112 |
+| wiki | 60 |
+| sac | 59 |
 | mcp-servers | 53 |
 | health | 52 |
 | security | 52 |
+| gdskills | 51 |
 | scripts | 50 |
-| gdskills | 50 |
 | gdgraph | 48 |
 | memory | 45 |
 | review | 44 |
@@ -52,13 +52,35 @@
 ## Skipped Directories
 
 - `.claude`
+- `.git`
 - `.metaproject`
-- `dist`
+- `.turbo`
+- `apps/sandbox-worker/.turbo`
+- `apps/sandbox-worker/dist`
+- `apps/sandbox-worker/node_modules`
+- `apps/server/.turbo`
+- `apps/server/dist`
+- `apps/server/node_modules`
+- `apps/web/.turbo`
+- `apps/web/dist`
+- `apps/web/node_modules`
+- `coverage`
 - `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
 - `fixtures/temporal/.metaproject`
 - `node_modules`
+- `packages/agent-presets/.turbo`
+- `packages/agent-presets/node_modules`
+- `packages/cli/.turbo`
+- `packages/cli/node_modules`
+- `packages/config/.turbo`
+- `packages/config/dist`
+- `packages/config/node_modules`
+- `packages/orchestrator/.turbo`
+- `packages/orchestrator/dist`
+- `packages/orchestrator/node_modules`
+- `packages/shared/.turbo`
 
 ## Generated Files
 
