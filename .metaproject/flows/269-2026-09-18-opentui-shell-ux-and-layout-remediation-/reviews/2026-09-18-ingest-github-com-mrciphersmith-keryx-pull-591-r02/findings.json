@@ -1,0 +1,215 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "session-review",
+    "severity": "blocker",
+    "problem": "The new picker test imports type SessionSummary from ./tui-shell, which does not export it, so tsc fails (TS2459).",
+    "impact": "CI job typecheck-and-tests is red at the PR head, so the PR cannot merge and the flow's AC10 claim (all checks green) is false.",
+    "suggested_fix": "Import SessionSummary from its home module src/session/store.ts and build complete fixtures.",
+    "evidence": "bunx tsc --noEmit at 466183e4: src/tui/model-session-picker-modal.test.ts(2,49): error TS2459: Module './tui-shell' declares 'SessionSummary' locally, but it is not exported. Same error in CI run 35352026993, job typecheck-and-tests. tsc on origin/main is clean.",
+    "confidence": "high",
+    "file": "src/tui/model-session-picker-modal.test.ts",
+    "line": 2,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/tui/model-session-picker-modal.test.ts:2"
+      ],
+      "enumeration_method": "Every tsc error at 466183e4 was listed: exactly two, this one and F-002."
+    },
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `bunx tsc --noEmit -p .` -> no output, exit 0. The test now imports SessionSummary from ../session/store and builds complete fixtures via a session() helper. Pre-fix tree 466183e4, same command: `src/tui/model-session-picker-modal.test.ts(2,49): error TS2459: Module './tui-shell' declares 'SessionSummary' locally, but it is not exported.`",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — test imports SessionSummary from src/session/store with complete fixtures; tsc clean; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "session-review",
+    "severity": "blocker",
+    "problem": "presentReview passes contentRows: undefined to openModal, which exactOptionalPropertyTypes rejects (TS2379).",
+    "impact": "Second of the two type errors that keep typecheck-and-tests red at the PR head.",
+    "suggested_fix": "Pass contentRows through a conditional spread only when the review is empty.",
+    "evidence": "bunx tsc --noEmit at 466183e4: src/tui/review-inspector.ts(497,42): error TS2379 ... Types of property 'contentRows' are incompatible. Type 'number | undefined' is not assignable to type 'number'.",
+    "confidence": "high",
+    "file": "src/tui/review-inspector.ts",
+    "line": 497,
+    "blocking_merge": true,
+    "class_scope": {
+      "sites": [
+        "src/tui/review-inspector.ts:497"
+      ],
+      "enumeration_method": "Every tsc error at 466183e4 was listed: exactly two, this one and F-001; contentRows has no other caller at that head."
+    },
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `bunx tsc --noEmit -p .` -> no output, exit 0; review-inspector.ts:506 now reads `...(isCompactEmpty ? { contentRows: 3 } : {})`. Pre-fix tree 466183e4, same command: `src/tui/review-inspector.ts(497,42): error TS2379 ... Types of property 'contentRows' are incompatible. Type 'number | undefined' is not assignable to type 'number'.`",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — contentRows passed via conditional spread in review-inspector.ts; tsc clean; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "session-review",
+    "severity": "major",
+    "problem": "pickModelInTui and pickSessionInTui each gained a ModalChrome branch that duplicates the overlay branch's filter state, apply(), key handling and placeholder rows.",
+    "impact": "Two parallel copies per picker (four filter lists in total) must be fixed in lockstep; the modal copies already diverged in key handling (manual up/down, a second Enter path beside ITEM_SELECTED).",
+    "suggested_fix": "Extract one type-to-filter list body that mounts into either the overlay box or a ModalHost tab body.",
+    "evidence": "git diff origin/main...466183e4 -- src/tui/tui-shell.ts: +319 lines, of which the ModalChrome branches of pickModelInTui (2278-2414) and pickSessionInTui (2515-2663) restate the overlay code below each of them; the overlay branches remain reachable from chat-shell.ts:623-653 and tui-shell.ts:2947.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 2269,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:2269 (pickModelInTui)",
+        "src/tui/tui-shell.ts:2507 (pickSessionInTui)"
+      ],
+      "enumeration_method": "grep for SelectRenderable pickers that gained an isModalChrome branch in the diff: exactly these two functions; selectProviderModelInTui only forwards chrome to pickModelInTui."
+    },
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `keryx ctx rg -n \"filter \\+= ch|mountFilterList\\(\" src/tui` -> one filter-editing site (tui-shell.ts:2454, inside the new shared mountFilterList<T>) and four mountFilterList calls (pickModelInTui modal :2315 and overlay :2352, pickSessionInTui modal and overlay); the per-branch apply()/onKey/manual up-down/second Enter path are gone (git diff 466183e4 38a13c30 -- src/tui/tui-shell.ts: 598 lines changed, net -380 in the pickers). Pre-fix tree 466183e4, same search: four `filter += ch` copies at tui-shell.ts:2394, 2470, 2644, 2742. `bun test src/tui` on 38a13c30 -> 728 pass, 0 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — shared mountFilterList<T> used by both pickers in both hosts; verifier refuted by site-check"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "session-review",
+    "severity": "major",
+    "problem": "AC7 (modals compute adaptive height from content rows, capped at 85%) is met only by the empty /review modal; the /model and /sessions modals pass no contentRows and still take 95% of the terminal.",
+    "impact": "A frozen acceptance criterion is confirmed while two of the three modals this flow touched do not satisfy it.",
+    "suggested_fix": "Pass contentRows from both pickers (filter line plus list rows), or narrow AC7 through keryx flow ac update.",
+    "evidence": "At 466183e4 the only caller passing contentRows to openModal is review-inspector.ts:505; the openModal calls at tui-shell.ts:2307 and :2558 pass none, so resolveModalPanelSize takes its 95% branch.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 2307,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:2308 (model picker openModal)",
+        "src/tui/tui-shell.ts:2558 (session picker openModal)",
+        "src/tui/review-inspector.ts:505"
+      ],
+      "enumeration_method": "grep -n 'contentRows' src at 466183e4 plus every openModal( call site in files this PR changed."
+    },
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `bun test src/tui/model-session-picker-modal.test.ts` -> 4 pass, 0 fail, 38 expect() calls, including new test 'AC7: the /model modal sizes to its list' asserting panel.height === resolveModalPanelSize(120,40,1+3).height (9) and < 85% of 40. Site-check: both picker openModal calls pass contentRows (tui-shell.ts:2309 `fixedRows + Math.max(1, models.length)`; session picker `1 + Math.max(1, all.length) * ROWS_PER_SESSION`). Pre-fix tree 466183e4 with the fix tree's test file copied in: that test fails `Expected: 9 Received: 38` (95% branch) -> 3 pass, 1 fail. The session modal height was site-checked only, not executed.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — both picker modals pass contentRows; test AC7 in model-session-picker-modal.test.ts; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-005",
+    "reviewer": "session-review",
+    "severity": "minor",
+    "problem": "The /model modal's filter line repeats the footer's key hints, and its footer says esc close although Esc at the model step of the provider wizard goes back to the provider step.",
+    "impact": "The duplication AC4 removed from /sessions remains in /model, and the /connect and /provider flows describe Esc wrongly.",
+    "suggested_fix": "Keep only the filter prompt on the filter line and let the wizard pass an Esc label of back.",
+    "evidence": "At 466183e4 the filter line reads 'type to filter · ↑/↓ Enter · Esc to close' while the footer reads '↑/↓ select · Enter confirm · esc close'; selectProviderModelInTui continues to the provider step when pickModelInTui resolves undefined.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 2307,
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `bun test src/tui/model-session-picker-modal.test.ts -t AC7` passes; it captures the modal frame and asserts it contains 'esc back' and 'type to filter by name' and does NOT contain '↑/↓ Enter'. selectProviderModelInTui passes `{ escLabel: \"back\" }` to pickModelInTui at the model step (site-checked in diff). Pre-fix tree 466183e4 with the same test (height asserts removed): fails `Expected to contain: \"esc back\"`; the captured frame shows filter line 'type to filter · ↑/↓ Enter · Esc to close' and footer '↑/↓ select · Enter confirm · esc close'.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — filter line 'type to filter by name', wizard passes escLabel back; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-006",
+    "reviewer": "session-review",
+    "severity": "minor",
+    "problem": "The AC5 jump-to-bottom runs on every composer submit, including a bare Enter on an empty composer that sends nothing.",
+    "impact": "An operator scrolled up reading history loses their place by pressing Enter on an empty composer.",
+    "suggested_fix": "Scroll only when the submitted line is non-empty, in the one place both submit paths share.",
+    "evidence": "textarea.onSubmit at 466183e4 sets scroll.scrollTop = scroll.scrollHeight and stickyScroll = true before emitSubmit(line), with no check on line.",
+    "confidence": "high",
+    "file": "src/tui/shell-chrome.ts",
+    "line": 1059,
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): `bun test src/tui/shell-chrome.test.ts -t AC5` -> 4 pass, 0 fail, 34 expect() calls, including new 'AC5: a bare Enter on an empty composer leaves a scrolled-up transcript where it is' (scrollTop stays 0, stickyScroll false); the jump now lives in emitSubmit behind `if (line.length > 0)`. Pre-fix tree 466183e4 with the fix tree's test file copied in: that test fails `Expected: 0 Received: 25` -> 3 pass, 1 fail.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — scroll moved into emitSubmit behind line.length > 0; test in shell-chrome.test.ts; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-007",
+    "reviewer": "session-review",
+    "severity": "minor",
+    "problem": "renderCommandHelp emits indent-only lines for empty description lines, and helpText sizes the wrap with bare - 4 and - 34.",
+    "impact": "Trailing whitespace in /help output, and a wrap width whose derivation is not written down.",
+    "suggested_fix": "trimEnd each rendered row, factor out the word wrap, and name the width constants.",
+    "evidence": "At 466183e4, an empty rawLine with words.length === 0 pushes `${indent}` (width + 4 spaces); tui-shell.ts:3966 uses chrome.main.width - 4 and r.width - 34.",
+    "confidence": "medium",
+    "file": "src/commands/agent-commands.ts",
+    "line": 465,
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-007",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): scratch script injecting description 'first line\\n\\nthird line after a blank' into AGENT_SLASH_COMMANDS[agent #0] and calling renderCommandHelp('agent',[name],w) for w=undefined and 80 -> 0 trailing-whitespace lines. Pre-fix tree 466183e4, same script -> 1 trailing-whitespace line (\"         \") for each width. (The repo's own new test 'renderCommandHelp never leaves trailing whitespace' passes on both trees because no registry description has a blank line, so it is not decisive; the injected script is.) Magic numbers: `keryx ctx rg` finds no `- 34`; widths are named MIN_HELP_WRAP_COLUMNS (agent-commands.ts:454), TRANSCRIPT_CHROME_COLS / HELP_MIN_COLS / SIDEBAR_WIDTH (tui-shell.ts:3775-3779); wrap factored into wrapWords().",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — rows trimEnd'ed, wrapWords() factored out, width constants named; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-008",
+    "reviewer": "session-review",
+    "severity": "info",
+    "problem": "BACKDROP_ALPHA's comment contradicts its value 1.0, the AC1 test is still named translucent, resolveModalAvailableWidth casts typed Box values, and the once-per-renderer mount point is undocumented.",
+    "impact": "Misleading documentation for the next change to modal-host.",
+    "suggested_fix": "Reword the comment, rename the test, drop the casts and document the mount point.",
+    "evidence": "modal-host.ts:78-84 and :141-159 at 466183e4; modal-host.test.ts AC1 title contains 'translucent backdrop'.",
+    "confidence": "high",
+    "file": "src/tui/modal-host.ts",
+    "line": 84,
+    "global_id": "2026-09-18-ingest-github-com-mrciphersmith-keryx-pull-591-r02#F-008",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "Tree 38a13c30 (merge of PR #591, fix commit 12b01eb4): BACKDROP_ALPHA doc now 'Alpha of the backdrop's fill, 0 (transparent) to 1 (opaque). Fully opaque ...'; `keryx ctx rg \"as \\{ width\" src/tui/modal-host.ts` -> 0 matches (pre-fix 466183e4: 6); modal-host.test.ts AC1 title now says 'opaque backdrop' (`translucent` no longer in the test file; pre-fix: present at :171); mount point documented at ensureHost ('created once per renderer ... fixed by the first openModal'), 0 matches pre-fix. Residual not in the finding's named sites: modal-host.ts:351 comment still says 'A translucent FILL COLOR' when describing the alpha-channel mechanism.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "12b01eb4 (merged as 38a13c30, PR #591) — BACKDROP_ALPHA comment, AC1 test name, casts removed, mount point documented; verifier refuted by site-check"
+    }
+  }
+]
