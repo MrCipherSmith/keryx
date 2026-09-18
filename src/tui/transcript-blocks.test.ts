@@ -436,6 +436,64 @@ describe("createBlockNavController: copy", () => {
   });
 });
 
+describe("createBlockNavController: exit and scroll behavior (AC6)", () => {
+  test("exiting block-nav does not force scrollTop back to savedScrollTop when user scrolled", () => {
+    const registry = createBlockRegistry();
+    registry.register(block(1));
+    const scroll = { scrollTop: 10, stickyScroll: true, height: 20, scrollHeight: 100 };
+    const nav = createBlockNavController({
+      registry,
+      view: () => undefined,
+      scroll,
+      isBlocked: () => false,
+      focusComposer: () => {},
+      blurComposer: () => {},
+      copyText: () => {},
+      toast: () => {},
+      schedule: (run) => run(),
+    });
+
+    nav.enter();
+    expect(nav.active()).toBe(true);
+    expect(scroll.stickyScroll).toBe(false);
+
+    // Simulate user scrolling to row 45 while in block navigation mode
+    scroll.scrollTop = 45;
+
+    nav.exit();
+    expect(nav.active()).toBe(false);
+    // User's scroll position must be preserved, not forced back to 10
+    expect(scroll.scrollTop).toBe(45);
+    // Not at bottom (45 < 100 - 20 - 3), so stickyScroll remains false
+    expect(scroll.stickyScroll).toBe(false);
+  });
+
+  test("exiting block-nav restores stickyScroll when user scrolled near bottom", () => {
+    const registry = createBlockRegistry();
+    registry.register(block(1));
+    const scroll = { scrollTop: 10, stickyScroll: true, height: 20, scrollHeight: 100 };
+    const nav = createBlockNavController({
+      registry,
+      view: () => undefined,
+      scroll,
+      isBlocked: () => false,
+      focusComposer: () => {},
+      blurComposer: () => {},
+      copyText: () => {},
+      toast: () => {},
+      schedule: (run) => run(),
+    });
+
+    nav.enter();
+    // Scroll down to near bottom (scrollTop 78 >= 100 - 20 - 3 = 77)
+    scroll.scrollTop = 78;
+
+    nav.exit();
+    expect(scroll.scrollTop).toBe(78);
+    expect(scroll.stickyScroll).toBe(true);
+  });
+});
+
 // --- streaming segmentation (risk R1 — T6/F4) ------------------------------
 
 describe("createStreamSegmenter", () => {

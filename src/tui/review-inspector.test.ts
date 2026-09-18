@@ -464,3 +464,34 @@ test("[ ]/p n switch the selected item; detail scroll (j/k) never changes select
     },
   );
 });
+
+test("AC8: empty /review modal renders a compact dialog and hides action hotkeys (a, d, y, arm) from footer hints", () => {
+  let capturedInput: any;
+  presentReview(
+    (_otui, _chrome, input) => {
+      capturedInput = input;
+      return {
+        close: () => {},
+        setTab: () => {},
+        activeTab: () => "list",
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      items: [],
+      visibleRows: 20,
+    },
+  );
+
+  expect(capturedInput).toBeDefined();
+  expect(capturedInput.contentRows).toBe(3);
+  const footerStr = capturedInput.footer?.map((f: any) => `${f.key} ${f.label}`).join(" ") ?? "";
+  // Must hide action hotkeys (a, d, y, arm)
+  expect(footerStr).not.toContain(" a ");
+  expect(footerStr).not.toContain(" d ");
+  expect(footerStr).not.toContain(" y ");
+  expect(footerStr).not.toContain("arm");
+  expect(footerStr).toContain("esc");
+});
+

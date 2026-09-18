@@ -1156,3 +1156,49 @@ otuiTest("next-step suggestion: stored but hidden while the composer has text; r
   expect(h.captureCharFrame()).toContain("does not appear");
   h.destroy();
 });
+
+otuiTest("AC5: submitting text in composer scrolls transcript to bottom and enables stickyScroll", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const scroll = h.chrome.scroll;
+  for (let i = 0; i < 40; i++) {
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { content: `line ${i}` }));
+  }
+  await h.flush();
+  expect(scroll.scrollHeight).toBeGreaterThan(scroll.height ?? 0);
+
+  // Artificially scroll away from bottom and disable stickyScroll
+  scroll.scrollTop = 0;
+  scroll.stickyScroll = false;
+  expect(scroll.scrollTop).toBe(0);
+  expect(scroll.stickyScroll).toBe(false);
+
+  h.chrome.input.value = "test message";
+  await h.flush();
+  h.mockInput.pressEnter();
+  await h.flush();
+
+  expect(scroll.stickyScroll).toBe(true);
+  expect(scroll.scrollTop).toBeGreaterThan(0);
+  h.destroy();
+});
+
+
+otuiTest("AC5: a bare Enter on an empty composer leaves a scrolled-up transcript where it is", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const scroll = h.chrome.scroll;
+  for (let i = 0; i < 40; i++) {
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { content: `line ${i}` }));
+  }
+  await h.flush();
+  scroll.scrollTop = 0;
+  scroll.stickyScroll = false;
+
+  h.mockInput.pressEnter();
+  await h.flush();
+
+  expect(scroll.scrollTop).toBe(0);
+  expect(scroll.stickyScroll).toBe(false);
+  h.destroy();
+});

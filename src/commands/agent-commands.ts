@@ -425,14 +425,46 @@ export function describeUnavailableCommand(line: string, mode: ShellMode): strin
  * Render `mode`'s commands as an aligned `Commands:` block. `only` restricts the
  * list to the given names (a surface that implements a subset of the mode —
  * the readline agent REPL — must not advertise what it cannot run), keeping the
- * registry's wording either way. Pure.
+ * registry's wording either way. Multi-line descriptions render with hanging
+ * indentation aligning with the description column (AC9); given `maxColumns`,
+ * each description line also word-wraps into that column. Pure.
  */
-export function renderCommandHelp(mode: ShellMode, only?: readonly string[]): string {
+export function renderCommandHelp(
+  mode: ShellMode,
+  only?: readonly string[],
+  maxColumns?: number,
+): string {
   const allow = only === undefined ? undefined : new Set(only);
   const options = commandsForMode(mode).filter((c) => allow === undefined || allow.has(c.name));
   const width = options.reduce((w, c) => Math.max(w, c.name.length), 0);
-  return (
-    ["Commands:", ...options.map((c) => `  ${c.name.padEnd(width)}  ${c.description}`)].join("\n") +
-    "\n"
-  );
+  const descColumn = width + 4;
+  // Too narrow a budget would stack one word per line; print the lines as-is then.
+  const wrapBudget =
+    maxColumns !== undefined && maxColumns - descColumn >= MIN_HELP_WRAP_COLUMNS ? maxColumns - descColumn : undefined;
+  const rows = options.flatMap((c) => {
+    const lines = c.description.split("\n").flatMap((line) => (wrapBudget === undefined ? [line] : wrapWords(line, wrapBudget)));
+    return lines.map((line, i) =>
+      (i === 0 ? `  ${c.name.padEnd(width)}  ${line}` : `${" ".repeat(descColumn)}${line}`).trimEnd(),
+    );
+  });
+  return ["Commands:", ...rows].join("\n") + "\n";
+}
+
+/** Narrowest description column `renderCommandHelp` still word-wraps into. */
+const MIN_HELP_WRAP_COLUMNS = 10;
+
+/** Greedy word wrap; a word longer than `budget` keeps its own line. An empty line stays one empty line. */
+function wrapWords(line: string, budget: number): string[] {
+  const out: string[] = [];
+  let cur = "";
+  for (const word of line.split(/\s+/).filter(Boolean)) {
+    if (cur.length > 0 && cur.length + 1 + word.length > budget) {
+      out.push(cur);
+      cur = word;
+    } else {
+      cur = cur.length > 0 ? `${cur} ${word}` : word;
+    }
+  }
+  out.push(cur);
+  return out;
 }

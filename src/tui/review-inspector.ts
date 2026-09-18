@@ -31,6 +31,11 @@ export const REVIEW_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
+export const REVIEW_EMPTY_FOOTER = [
+  { key: "←/→", label: "tabs" },
+  { key: "esc", label: "close" },
+] as const;
+
 export type ModalTab = { id: string; label: string };
 
 export type OpenModalInput = {
@@ -42,6 +47,7 @@ export type OpenModalInput = {
   /** Claim `←`/`→` before modal-host's tab switch (review buttons). */
   onArrowKeys?: (key: { name: string; sequence: string }, direction: "left" | "right") => boolean | undefined;
   onClose?: () => void;
+  contentRows?: number;
 };
 
 export type ModalHandle = {
@@ -485,6 +491,10 @@ export function presentReview(
     });
   };
 
+  // An empty review is one line of text: a compact panel whose footer offers no
+  // item actions (AC7/AC8).
+  const isCompactEmpty = items.length === 0;
+
   const handle = openModal(otui, chrome, {
     title: REVIEW_COMMAND,
     tabs: [
@@ -492,7 +502,8 @@ export function presentReview(
       { id: "detail", label: "Detail" },
     ],
     initialTab: "list",
-    footer: REVIEW_FOOTER,
+    footer: isCompactEmpty ? REVIEW_EMPTY_FOOTER : REVIEW_FOOTER,
+    ...(isCompactEmpty ? { contentRows: 3 } : {}),
     onArrowKeys: (key, direction) => {
       // Claim the arrow on a proposal's Detail tab so it moves the button
       // highlight instead of switching tabs; everywhere else modal-host's

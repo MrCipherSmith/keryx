@@ -103,6 +103,7 @@ import {
   isSessionInfoCommand,
   openSessionInfo,
 } from "./session-info";
+import { openModal, type ModalChrome } from "./modal-host";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
@@ -191,7 +192,7 @@ import {
 import { setAskUserHost } from "./ask-user-bridge";
 import { createHerdrReporter, herdrStateFor } from "./herdr-report";
 import { showComposerChoice, type ChoiceOption } from "./composer-choice";
-import { createShellChrome, createShellRenderer, SIDEBAR_TEXT_WIDTH, type ShellChrome } from "./shell-chrome";
+import { createShellChrome, createShellRenderer, SIDEBAR_TEXT_WIDTH, SIDEBAR_WIDTH, type ShellChrome } from "./shell-chrome";
 import {
   buildSideWorkerPrompt,
   buildSideWorkerSystemInstruction,
@@ -2015,6 +2016,16 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
   });
 }
 
+/** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
+function isModalChrome(target: unknown): target is ModalChrome {
+  return (
+    target !== null &&
+    typeof target === "object" &&
+    "renderer" in target &&
+    "focusComposer" in target
+  );
+}
+
 /**
  * In-TUI provider → model → key wizard with BACK navigation. `/provider` and
  * startup prompt + persist a key and may edit a local endpoint. `/connect`
@@ -2028,10 +2039,12 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
  */
 export function selectProviderModelInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   detected: DetectedProvider[],
   options: SelectProviderModelOptions = {},
 ): Promise<TuiSelection | undefined> {
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   return new Promise((resolve) => {
     if (detected.length === 0) {
       resolve(undefined);
@@ -2216,7 +2229,10 @@ export function selectProviderModelInTui(
             models = await modelsForPicker(selectedProvider, modelDeps);
           }
         }
-        const model = await pickModelInTui(otui, r, models.models, modelPickerNotice(label, models));
+        // Esc here returns to the provider step, so the modal footer says "back".
+        const model = await pickModelInTui(otui, chrome ?? r, models.models, modelPickerNotice(label, models), {
+          escLabel: "back",
+        });
         if (model === undefined) {
           continue; // Esc at the model step → re-pick the provider
         }
@@ -2244,8 +2260,9 @@ export function adaptiveSelectHeight(count: number, available: number, per = 1):
 }
 
 /**
- * In-TUI model picker with TYPE-TO-FILTER (search by name, e.g. `free`). Absolute
- * overlay; the SelectRenderable is focused (↑/↓/Enter native) while printable keys
+ * In-TUI model picker with TYPE-TO-FILTER (search by name, e.g. `free`). Given the
+ * shell chrome it opens in ModalHost (flow 269 AC3); given a bare renderer, as a
+ * full-screen overlay. The SelectRenderable is focused (↑/↓/Enter native) while printable keys
  * and Backspace edit a live filter over the (potentially large) model list. Resolves
  * the chosen model, or `undefined` on Esc / no match. Removes its key handler on close.
  * Exported since flow 112: chat's `/models` opens this same picker.
@@ -2256,56 +2273,175 @@ export function adaptiveSelectHeight(count: number, available: number, per = 1):
  */
 export function pickModelInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   models: string[],
   notice?: string,
+  options: PickModelOptions = {},
 ): Promise<string | undefined> {
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
+  const showNotice = models.length === 0 && notice !== undefined;
+  const noticeText = (): InstanceType<OpenTui["TextRenderable"]> =>
+    new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${otui.red("✗")} ${notice ?? ""}` });
+  const listSpec = {
+    idPrefix: "mp",
+    items: models,
+    toOption: (m: string) => ({ name: m, description: "" }),
+    matches: (m: string, q: string) => m.toLowerCase().includes(q),
+    emptyLabel: notice ?? "(no models found)",
+    filterHint: (filter: string, shown: number, total: number) => `filter: ${filter}  (${shown}/${total})`,
+    showDescription: false,
+  };
+  // The filter line (+ the notice line, when shown) sits above the list.
+  const fixedRows = 1 + (showNotice ? 1 : 0);
+
+  if (chrome !== undefined) {
+    return new Promise((resolve) => {
+      let chosen: string | undefined;
+      const handle = openModal(otui, chrome, {
+        title: "Select a model",
+        tabs: [{ id: "models", label: "Models" }],
+        footer: [
+          { key: "↑/↓", label: "select" },
+          { key: "Enter", label: "confirm" },
+          { key: "esc", label: options.escLabel ?? "close" },
+        ],
+        contentRows: fixedRows + Math.max(1, models.length),
+        renderTab: (_tabId, body, ctx) => {
+          const parent = body as Box;
+          if (showNotice) {
+            parent.add(noticeText());
+          }
+          const list = mountFilterList(otui, r, parent, {
+            ...listSpec,
+            idleHint: "type to filter by name",
+            width: "100%",
+            height: adaptiveSelectHeight(models.length, Math.max(1, ctx.height - fixedRows)),
+            onPick: (m) => {
+              chosen = m;
+              handle?.close();
+            },
+          });
+          return onKeypress(r, list.onKey);
+        },
+        onClose: () => resolve(chosen),
+      });
+      if (handle === undefined) {
+        resolve(undefined);
+      }
+    });
+  }
+
   return new Promise((resolve) => {
-    const all = models;
-    const NO_MODELS = notice ?? "(no models found)";
     const box = overlayBox(otui, r, "model-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "mp-title", content: otui.t`${otui.bold("Select a model")}` }));
-    if (all.length === 0 && notice !== undefined) {
-      box.add(new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${otui.red("✗")} ${notice}` }));
+    if (showNotice) {
+      box.add(noticeText());
     }
-    const filterLine = new otui.TextRenderable(r, { id: "mp-filter", content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to go back")}` });
-    box.add(filterLine);
-    const NO_MATCH = "(no match)";
     // Adaptive height: the overlay is full-screen (overlayBox), so "parent height"
     // = renderer height minus the title + filter + padding rows it consumes.
     const rHeight = (r as { height?: number }).height;
     const available = typeof rHeight === "number" && rHeight > 0 ? Math.max(4, rHeight - 4) : 16;
-    const height = adaptiveSelectHeight(all.length, available);
-    const sel = new otui.SelectRenderable(r, {
-      id: "mp-sel",
-      width: 72,
-      showDescription: false,
-      height,
-      showScrollIndicator: true,
-      wrapSelection: true,
-      options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
-      selectedTextColor: "#ffd166",
-    });
-    box.add(sel);
-    sel.focus();
-
-    let filter = "";
-    const apply = (): void => {
-      const q = filter.trim().toLowerCase();
-      const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
-      sel.options = matches.length > 0 ? matches.map((m) => ({ name: m, description: "" })) : [{ name: NO_MATCH, description: "" }];
-      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length}/${all.length})` : "type to filter · ↑/↓ Enter · Esc to go back")}`;
+    let unsub = (): void => {};
+    const finish = (m: string | undefined): void => {
+      unsub();
+      r.root.remove(box);
+      resolve(m);
     };
-
-    const onKey = (key: { name: string; ctrl: boolean; meta: boolean; sequence: string; preventDefault: () => void; stopPropagation: () => void }): void => {
+    const list = mountFilterList(otui, r, box, {
+      ...listSpec,
+      idleHint: "type to filter · ↑/↓ Enter · Esc to go back",
+      width: 72,
+      height: adaptiveSelectHeight(models.length, available),
+      onPick: finish,
+    });
+    unsub = onKeypress(r, (key) => {
       if (key.name === "escape") {
-        cleanup();
-        resolve(undefined);
+        finish(undefined);
         key.preventDefault();
         key.stopPropagation();
         return;
       }
+      list.onKey(key);
+    });
+  });
+}
+
+/** Options for {@link pickModelInTui}. */
+export type PickModelOptions = {
+  /** Footer label for Esc in the modal form: "back" when Esc returns to a previous step. */
+  escLabel?: string;
+};
+
+/** What {@link mountFilterList} renders: `items`, narrowed by a typed filter. */
+interface FilterListSpec<T> {
+  idPrefix: string;
+  items: readonly T[];
+  toOption: (item: T) => { name: string; description: string };
+  /** `query` is already trimmed and lower-cased. */
+  matches: (item: T, query: string) => boolean;
+  /** The placeholder row when `items` itself is empty. */
+  emptyLabel: string;
+  /** Filter-line text while no filter is typed. */
+  idleHint: string;
+  filterHint: (filter: string, shown: number, total: number) => string;
+  showDescription: boolean;
+  width: number | "100%";
+  height: number;
+  /** Enter on a row: the item, or `undefined` on a placeholder row. */
+  onPick: (item: T | undefined) => void;
+}
+
+/**
+ * The type-to-filter list both pickers share, in either host (the full-screen
+ * overlay or a ModalHost tab body): a filter line over a focused
+ * `SelectRenderable`. ↑/↓/Enter stay native to the select; the returned `onKey`
+ * edits the filter on printable keys and Backspace. Esc belongs to the host.
+ */
+function mountFilterList<T>(
+  otui: OpenTui,
+  r: Renderer,
+  parent: Box,
+  spec: FilterListSpec<T>,
+): { onKey: (key: KeypressEvent) => void } {
+  const filterLine = new otui.TextRenderable(r, { id: `${spec.idPrefix}-filter`, content: "" });
+  parent.add(filterLine);
+  const sel = new otui.SelectRenderable(r, {
+    id: `${spec.idPrefix}-sel`,
+    width: spec.width,
+    showDescription: spec.showDescription,
+    height: spec.height,
+    showScrollIndicator: true,
+    wrapSelection: true,
+    options: [],
+    selectedTextColor: "#ffd166",
+  });
+  parent.add(sel);
+  sel.focus();
+
+  let filter = "";
+  let shown: readonly T[] = spec.items;
+  const apply = (): void => {
+    const q = filter.trim().toLowerCase();
+    shown = q.length > 0 ? spec.items.filter((item) => spec.matches(item, q)) : spec.items;
+    sel.options =
+      shown.length > 0
+        ? shown.map(spec.toOption)
+        : [{ name: spec.items.length === 0 ? spec.emptyLabel : "(no match)", description: "" }];
+    sel.selectedIndex = 0;
+    filterLine.content = otui.t`${otui.dim(
+      q.length > 0 ? spec.filterHint(filter, shown.length, spec.items.length) : spec.idleHint,
+    )}`;
+  };
+  apply();
+
+  sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+    spec.onPick(shown[sel.getSelectedIndex()]);
+  });
+
+  return {
+    onKey: (key) => {
       if (key.name === "backspace") {
         filter = filter.slice(0, -1);
         apply();
@@ -2320,20 +2456,8 @@ export function pickModelInTui(
         key.preventDefault();
         key.stopPropagation();
       }
-      // ↑/↓/Enter fall through to the focused SelectRenderable.
-    };
-    const unsub = onKeypress(r, onKey);
-    const cleanup = (): void => {
-      unsub();
-      r.root.remove(box);
-    };
-
-    sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-      const chosen = sel.getSelectedOption();
-      cleanup();
-      resolve(chosen === null || chosen.name === NO_MATCH || chosen.name === NO_MODELS ? undefined : chosen.name);
-    });
-  });
+    },
+  };
 }
 
 interface SessionPickerOption {
@@ -2351,112 +2475,98 @@ function formatSessionDate(iso: string): string {
 /**
  * In-TUI session picker with TYPE-TO-FILTER. Shows id / project / title / created / updated
  * in one list, and resolves the selected session id, or `undefined` on Esc / no match.
+ * Given the shell chrome it opens in ModalHost (flow 269 AC4); given a bare renderer, as a
+ * full-screen overlay.
  */
 export function pickSessionInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   sessions: SessionSummary[],
 ): Promise<string | undefined> {
-  return new Promise((resolve) => {
-    const all: SessionPickerOption[] = sessions.map((s) => {
-      const created = formatSessionDate(s.createdAt);
-      const updated = formatSessionDate(s.updatedAt);
-      const short = shortSessionId(s.id);
-      const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
-      return {
-        value: s.id,
-        label: `${short} · ${title}`,
-        description: `${s.projectPath} · created ${created} · updated ${updated}`,
-        search: `${s.id} ${short} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
-      };
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
+  const all: SessionPickerOption[] = sessions.map((s) => {
+    const created = formatSessionDate(s.createdAt);
+    const updated = formatSessionDate(s.updatedAt);
+    const short = shortSessionId(s.id);
+    const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
+    return {
+      value: s.id,
+      label: `${short} · ${title}`,
+      description: `${s.projectPath} · created ${created} · updated ${updated}`,
+      search: `${s.id} ${short} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
+    };
+  });
+  const listSpec = {
+    idPrefix: "sp",
+    items: all,
+    toOption: (row: SessionPickerOption) => ({ name: row.label, description: row.description }),
+    matches: (row: SessionPickerOption, q: string) => row.search.includes(q),
+    emptyLabel: "(no match)",
+    filterHint: (filter: string, shown: number) => `filter: ${filter}  (${shown})`,
+    showDescription: true,
+  };
+  // A row with its description line takes two rows.
+  const ROWS_PER_SESSION = 2;
+
+  if (chrome !== undefined) {
+    return new Promise((resolve) => {
+      let chosen: string | undefined;
+      const handle = openModal(otui, chrome, {
+        title: "Session Switcher",
+        tabs: [{ id: "sessions", label: "Sessions" }],
+        footer: [
+          { key: "↑/↓", label: "select" },
+          { key: "Enter", label: "open" },
+          { key: "esc", label: "cancel" },
+        ],
+        contentRows: 1 + Math.max(1, all.length) * ROWS_PER_SESSION,
+        renderTab: (_tabId, body, ctx) => {
+          const list = mountFilterList(otui, r, body as Box, {
+            ...listSpec,
+            idleHint: "type to filter by id, title, project, created, updated",
+            width: "100%",
+            height: adaptiveSelectHeight(all.length, Math.max(1, ctx.height - 1), ROWS_PER_SESSION),
+            onPick: (row) => {
+              chosen = row?.value;
+              handle?.close();
+            },
+          });
+          return onKeypress(r, list.onKey);
+        },
+        onClose: () => resolve(chosen),
+      });
+      if (handle === undefined) {
+        resolve(undefined);
+      }
     });
+  }
+
+  return new Promise((resolve) => {
     const box = overlayBox(otui, r, "session-picker");
     r.root.add(box);
     box.add(new otui.TextRenderable(r, { id: "sp-title", content: otui.t`${otui.bold("Open session")} ${otui.dim("↑/↓ Enter · Esc to cancel")}` }));
-    const filterLine = new otui.TextRenderable(r, {
-      id: "sp-filter",
-      content: otui.t`${otui.dim("type to filter by id, title, project, created, updated")}`,
-    });
-    box.add(filterLine);
-    const NO_MATCH = "(no match)";
-    const sel = new otui.SelectRenderable(r, {
-      id: "sp-sel",
-      width: "100%",
-      showDescription: true,
-      height: 14,
-      showScrollIndicator: true,
-      wrapSelection: true,
-      options: [],
-      selectedTextColor: "#ffd166",
-    });
-    box.add(sel);
-    sel.focus();
-
-    let filter = "";
-    let matches: SessionPickerOption[] = all;
-    const apply = (): void => {
-      const q = filter.trim().toLowerCase();
-      matches = q.length > 0 ? all.filter((row) => row.search.includes(q)) : all;
-      const items = matches.length > 0 ? matches : [
-        {
-          value: "",
-          label: NO_MATCH,
-          description: "",
-          search: "",
-        },
-      ];
-      sel.options = items.map((row) => ({ name: row.label, description: row.description, value: row.value }));
-      filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter · ↑/↓ Enter · Esc to cancel")}`;
-      sel.selectedIndex = 0;
-    };
-    apply();
-
-    const onKey = (key: {
-      name: string;
-      ctrl: boolean;
-      meta: boolean;
-      sequence: string;
-      preventDefault: () => void;
-      stopPropagation: () => void;
-    }): void => {
-      if (key.name === "escape") {
-        cleanup();
-        resolve(undefined);
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      if (key.name === "backspace") {
-        filter = filter.slice(0, -1);
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-        return;
-      }
-      const ch = key.sequence;
-      if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
-        filter += ch;
-        apply();
-        key.preventDefault();
-        key.stopPropagation();
-      }
-      // ↑/↓/Enter fall through to the focused SelectRenderable.
-    };
-    const unsub = onKeypress(r, onKey);
-    const cleanup = (): void => {
+    let unsub = (): void => {};
+    const finish = (row: SessionPickerOption | undefined): void => {
       unsub();
       r.root.remove(box);
+      resolve(row?.value);
     };
-
-    sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
-      const chosen = sel.getSelectedOption();
-      cleanup();
-      if (chosen === null || chosen.value === "" || chosen.name === NO_MATCH) {
-        resolve(undefined);
+    const list = mountFilterList(otui, r, box, {
+      ...listSpec,
+      idleHint: "type to filter · ↑/↓ Enter · Esc to cancel",
+      width: "100%",
+      height: 14,
+      onPick: finish,
+    });
+    unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        finish(undefined);
+        key.preventDefault();
+        key.stopPropagation();
         return;
       }
-      const matched = matches.find((row) => row.value === chosen.value);
-      resolve(matched?.value);
+      list.onKey(key);
     });
   });
 }
@@ -3659,7 +3769,15 @@ export async function launchTuiAgentShell(opts: {
     };
     setAskUserHost(askUserInteractive);
 
-    const helpText = (): string => renderCommandHelp("agent");
+    // `/help` wraps to the transcript's text width (AC9): the main column (or,
+    // before its first layout, the terminal less the sidebar) minus the
+    // transcript's left/right padding, its scrollbar and one spare column.
+    const TRANSCRIPT_CHROME_COLS = 4;
+    const HELP_MIN_COLS = 40;
+    const helpText = (): string => {
+      const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
+      return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
+    };
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -3763,7 +3881,7 @@ export async function launchTuiAgentShell(opts: {
         return undefined;
       }
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, r, rows));
+      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows));
       input.focus();
       if (pickId === undefined) {
         return undefined;
@@ -5381,7 +5499,7 @@ export async function launchTuiAgentShell(opts: {
               prov === undefined || models === undefined
                 ? undefined
                 : modelPickerNotice(prov.label ?? prov.name, models);
-            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models?.models ?? [], notice));
+            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, chrome, models?.models ?? [], notice));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined
@@ -5435,8 +5553,8 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() =>
               command.name === "/connect"
-                ? selectProviderModelInTui(otui, r, detected, { onlyConnected: true, env: process.env })
-                : selectProviderModelInTui(otui, r, detected),
+                ? selectProviderModelInTui(otui, chrome, detected, { onlyConnected: true, env: process.env })
+                : selectProviderModelInTui(otui, chrome, detected),
             );
             if (ns !== undefined) {
               await switchTo(ns);
