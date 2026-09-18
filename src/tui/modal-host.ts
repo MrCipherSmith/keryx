@@ -77,9 +77,8 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
 /**
- * How much of the transcript stays visible through the backdrop, 0-1.
- * Opaque (1.0) so underlying transcript text and sidebar borders do not
- * bleed into the modal margins (flow 269 AC1).
+ * Alpha of the backdrop's fill, 0 (transparent) to 1 (opaque). Fully opaque so
+ * underlying transcript text does not bleed into the modal margins (flow 269 AC1).
  */
 export const BACKDROP_ALPHA = 1.0;
 
@@ -138,22 +137,24 @@ export function modalBodyRows(panelHeight: number): number {
 }
 const CLOSE_HINT = "[x] esc";
 
+/** Sidebar width assumed before the first layout pass has measured it. */
+const UNMEASURED_SIDEBAR_WIDTH = 30;
+
+/**
+ * Columns the panel may occupy (flow 269 AC2): the main column when the chrome
+ * has one — the backdrop mounts there, so the panel never reaches the sidebar —
+ * else the whole terminal. Before the first layout pass `main` measures 0, so
+ * fall back to the terminal less the sidebar.
+ */
 export function resolveModalAvailableWidth(chrome: ModalChrome): number {
   const rWidth = chrome.renderer.width;
-  if (
-    chrome.main !== undefined &&
-    typeof (chrome.main as { width?: number }).width === "number" &&
-    (chrome.main as { width: number }).width > 0
-  ) {
-    return Math.min(rWidth, (chrome.main as { width: number }).width);
+  const mainWidth = chrome.main?.width ?? 0;
+  if (mainWidth > 0) {
+    return Math.min(rWidth, mainWidth);
   }
   if (chrome.sidebar !== undefined) {
-    const sbWidth =
-      typeof (chrome.sidebar as { width?: number }).width === "number" &&
-      (chrome.sidebar as { width: number }).width > 0
-        ? (chrome.sidebar as { width: number }).width
-        : 30;
-    return Math.max(20, rWidth - sbWidth);
+    const sidebarWidth = chrome.sidebar.width > 0 ? chrome.sidebar.width : UNMEASURED_SIDEBAR_WIDTH;
+    return Math.max(20, rWidth - sidebarWidth);
   }
   return rWidth;
 }
@@ -445,6 +446,9 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   panel.add(scroll);
   panel.add(footer);
   backdrop.add(panel);
+  // The host is created once per renderer and reused, so its mount point is
+  // fixed by the first `openModal`: the shell chrome's `main` column when it has
+  // one (the sidebar stays visible, AC2), the renderer root otherwise.
   const mountTarget = chrome.main ?? r.root;
   mountTarget.add(backdrop);
 

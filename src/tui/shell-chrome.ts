@@ -92,7 +92,7 @@ const COMPOSER_BORDER_ROWS = 2;
 /** Rows the `/` dropdown occupies when open (a described option costs two). */
 const MENU_HEIGHT = 10;
 /** Sidebar is a fixed column so the transcript width does not jump. */
-const SIDEBAR_WIDTH = 30;
+export const SIDEBAR_WIDTH = 30;
 const SIDEBAR_BORDER_LEFT = 1;
 const SIDEBAR_PADDING_LEFT = 2;
 const SIDEBAR_PADDING_RIGHT = 1;
@@ -1035,6 +1035,13 @@ export async function createShellChrome(
   // --- submit hook --------------------------------------------------------
   const submitHandlers = new Set<(line: string) => void>();
   const emitSubmit = (line: string): void => {
+    // Flow 269 AC5: sending something jumps the transcript to its end and
+    // re-arms auto-follow, so the reply is on screen. A bare Enter on an empty
+    // composer sends nothing and leaves an operator reading history in place.
+    if (line.length > 0) {
+      scroll.scrollTop = scroll.scrollHeight;
+      scroll.stickyScroll = true;
+    }
     for (const handler of [...submitHandlers]) {
       handler(line);
     }
@@ -1046,8 +1053,6 @@ export async function createShellChrome(
     const opt = menu.getSelectedOption();
     closeMenu();
     if (opt !== null) {
-      scroll.scrollTop = scroll.scrollHeight;
-      scroll.stickyScroll = true;
       emitSubmit(opt.name);
     }
   });
@@ -1056,9 +1061,6 @@ export async function createShellChrome(
     input.value = "";
     hideMenu();
     syncComposerHeight();
-    // AC5: Submitting text in the composer automatically scrolls transcript viewport to the bottom and sets stickyScroll to true.
-    scroll.scrollTop = scroll.scrollHeight;
-    scroll.stickyScroll = true;
     // AC14 (flow 268): a bare Enter on an empty composer does NOT accept an
     // active placeholder suggestion — it behaves exactly like Enter on an
     // empty composer with no suggestion at all (`emitSubmit("")`, which

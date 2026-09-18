@@ -491,8 +491,9 @@ export function presentReview(
     });
   };
 
+  // An empty review is one line of text: a compact panel whose footer offers no
+  // item actions (AC7/AC8).
   const isCompactEmpty = items.length === 0;
-  const contentRows = isCompactEmpty ? 3 : undefined;
 
   const handle = openModal(otui, chrome, {
     title: REVIEW_COMMAND,
@@ -502,7 +503,7 @@ export function presentReview(
     ],
     initialTab: "list",
     footer: isCompactEmpty ? REVIEW_EMPTY_FOOTER : REVIEW_FOOTER,
-    contentRows,
+    ...(isCompactEmpty ? { contentRows: 3 } : {}),
     onArrowKeys: (key, direction) => {
       // Claim the arrow on a proposal's Detail tab so it moves the button
       // highlight instead of switching tabs; everywhere else modal-host's

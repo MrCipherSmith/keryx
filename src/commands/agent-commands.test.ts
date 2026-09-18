@@ -404,6 +404,15 @@ test("AC9: renderCommandHelp renders multi-line descriptions with hanging indent
   }
 });
 
+test("renderCommandHelp never leaves trailing whitespace, wrapped or not", () => {
+  for (const help of [renderCommandHelp("agent"), renderCommandHelp("agent", undefined, 60)]) {
+    for (const line of help.split("\n")) {
+      expect(line).toBe(line.trimEnd());
+    }
+  }
+});
+
+
 // --- /delegate (flow 176 T18) ----------------------------------------------
 // Package: docs/requirements/keryx-external-agent-runtime §8.2, prd R25.
 // Pure parsing against the registry TABLE — nothing here starts a process.

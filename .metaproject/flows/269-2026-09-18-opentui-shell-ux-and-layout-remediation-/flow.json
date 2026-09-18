@@ -9,7 +9,7 @@
   "title": "OpenTUI shell UX and layout remediation: modal bleed, pickers, scroll and typography",
   "status": "implemented",
   "createdAt": "2026-09-18T11:50:50.453Z",
-  "updatedAt": "2026-09-18T13:44:31.250Z",
+  "updatedAt": "2026-09-18T20:43:59.976Z",
   "source": {
     "type": "description",
     "ref": null
@@ -35,7 +35,8 @@
       "at": "2026-09-18T12:21:13.853Z"
     },
     "AC7": {
-      "at": "2026-09-18T12:27:21.207Z"
+      "at": "2026-09-18T20:43:59.867Z",
+      "note": "Review fix round: /model and /sessions modals now pass contentRows (list-sized, 85% cap); review-empty uses a typed optional spread"
     },
     "AC8": {
       "at": "2026-09-18T12:27:29.297Z"
@@ -44,7 +45,8 @@
       "at": "2026-09-18T12:27:29.388Z"
     },
     "AC10": {
-      "at": "2026-09-18T12:31:07.430Z"
+      "at": "2026-09-18T20:43:59.976Z",
+      "note": "Review fix round: tsc (was red in CI), typecheck:scripts, lint clean; bun test src/tui 763 pass incl. new AC5/AC7/picker tests"
     }
   },
   "pr": {
@@ -395,6 +397,16 @@
       "at": "2026-09-18T13:44:31.250Z",
       "event": "implemented",
       "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/591"
+    },
+    {
+      "at": "2026-09-18T20:43:59.867Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: Review fix round: /model and /sessions modals now pass contentRows (list-sized, 85% cap); review-empty uses a typed optional spread"
+    },
+    {
+      "at": "2026-09-18T20:43:59.976Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: Review fix round: tsc (was red in CI), typecheck:scripts, lint clean; bun test src/tui 763 pass incl. new AC5/AC7/picker tests"
     }
   ]
 }

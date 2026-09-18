@@ -168,7 +168,7 @@ otuiTest("renderTab receives the resolved panel-body size, not the pre-layout fl
   h.destroy();
 });
 
-otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent backdrop; slash menu stays closed on /", async () => {
+otuiTest("AC1: one tab paints a titled near-fullscreen panel over an opaque backdrop; slash menu stays closed on /", async () => {
   const otui = requireOtui();
   // A 95%-of-terminal panel leaves only a thin backdrop margin on a normal
   // terminal — by design, this is what "near-fullscreen" means. A very wide

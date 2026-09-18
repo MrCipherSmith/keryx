@@ -33,3 +33,5 @@
 - 2026-09-18T12:31:07.430Z - ac-confirmed: AC10
 - 2026-09-18T12:31:15.303Z - task-done: T9: Full verification: run test suite and verify via live tmux PTY session (AC10)
 - 2026-09-18T13:44:31.250Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/591
+- 2026-09-18T20:43:59.867Z - ac-confirmed: AC7: Review fix round: /model and /sessions modals now pass contentRows (list-sized, 85% cap); review-empty uses a typed optional spread
+- 2026-09-18T20:43:59.976Z - ac-confirmed: AC10: Review fix round: tsc (was red in CI), typecheck:scripts, lint clean; bun test src/tui 763 pass incl. new AC5/AC7/picker tests

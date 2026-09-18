@@ -1183,3 +1183,22 @@ otuiTest("AC5: submitting text in composer scrolls transcript to bottom and enab
   h.destroy();
 });
 
+
+otuiTest("AC5: a bare Enter on an empty composer leaves a scrolled-up transcript where it is", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 20 });
+  const scroll = h.chrome.scroll;
+  for (let i = 0; i < 40; i++) {
+    h.chrome.transcript.add(new otui.core.TextRenderable(h.renderer, { content: `line ${i}` }));
+  }
+  await h.flush();
+  scroll.scrollTop = 0;
+  scroll.stickyScroll = false;
+
+  h.mockInput.pressEnter();
+  await h.flush();
+
+  expect(scroll.scrollTop).toBe(0);
+  expect(scroll.stickyScroll).toBe(false);
+  h.destroy();
+});

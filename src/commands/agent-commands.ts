@@ -426,7 +426,8 @@ export function describeUnavailableCommand(line: string, mode: ShellMode): strin
  * list to the given names (a surface that implements a subset of the mode —
  * the readline agent REPL — must not advertise what it cannot run), keeping the
  * registry's wording either way. Multi-line descriptions render with hanging
- * indentation aligning with the description column (AC9). Pure.
+ * indentation aligning with the description column (AC9); given `maxColumns`,
+ * each description line also word-wraps into that column. Pure.
  */
 export function renderCommandHelp(
   mode: ShellMode,
@@ -436,39 +437,34 @@ export function renderCommandHelp(
   const allow = only === undefined ? undefined : new Set(only);
   const options = commandsForMode(mode).filter((c) => allow === undefined || allow.has(c.name));
   const width = options.reduce((w, c) => Math.max(w, c.name.length), 0);
-  const indent = " ".repeat(width + 4);
-
+  const descColumn = width + 4;
+  // Too narrow a budget would stack one word per line; print the lines as-is then.
+  const wrapBudget =
+    maxColumns !== undefined && maxColumns - descColumn >= MIN_HELP_WRAP_COLUMNS ? maxColumns - descColumn : undefined;
   const rows = options.flatMap((c) => {
-    const rawLines = c.description.split("\n");
-    const formatted: string[] = [];
-
-    for (let i = 0; i < rawLines.length; i++) {
-      const line = rawLines[i] ?? "";
-      if (typeof maxColumns === "number" && maxColumns > width + 14) {
-        const wrapBudget = maxColumns - (width + 4);
-        const words = line.split(/\s+/).filter(Boolean);
-        let cur = "";
-        for (const word of words) {
-          if (!cur) {
-            cur = word;
-          } else if (cur.length + 1 + word.length <= wrapBudget) {
-            cur += " " + word;
-          } else {
-            formatted.push(formatted.length === 0 ? `  ${c.name.padEnd(width)}  ${cur}` : `${indent}${cur}`);
-            cur = word;
-          }
-        }
-        if (cur || words.length === 0) {
-          formatted.push(formatted.length === 0 ? `  ${c.name.padEnd(width)}  ${cur}` : `${indent}${cur}`);
-        }
-      } else {
-        formatted.push(i === 0 ? `  ${c.name.padEnd(width)}  ${line}` : `${indent}${line}`);
-      }
-    }
-
-    return formatted.length > 0 ? formatted : [`  ${c.name.padEnd(width)}  `];
+    const lines = c.description.split("\n").flatMap((line) => (wrapBudget === undefined ? [line] : wrapWords(line, wrapBudget)));
+    return lines.map((line, i) =>
+      (i === 0 ? `  ${c.name.padEnd(width)}  ${line}` : `${" ".repeat(descColumn)}${line}`).trimEnd(),
+    );
   });
-
   return ["Commands:", ...rows].join("\n") + "\n";
 }
 
+/** Narrowest description column `renderCommandHelp` still word-wraps into. */
+const MIN_HELP_WRAP_COLUMNS = 10;
+
+/** Greedy word wrap; a word longer than `budget` keeps its own line. An empty line stays one empty line. */
+function wrapWords(line: string, budget: number): string[] {
+  const out: string[] = [];
+  let cur = "";
+  for (const word of line.split(/\s+/).filter(Boolean)) {
+    if (cur.length > 0 && cur.length + 1 + word.length > budget) {
+      out.push(cur);
+      cur = word;
+    } else {
+      cur = cur.length > 0 ? `${cur} ${word}` : word;
+    }
+  }
+  out.push(cur);
+  return out;
+}

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { pickModelInTui, pickSessionInTui, type SessionSummary } from "./tui-shell";
+import { pickModelInTui, pickSessionInTui } from "./tui-shell";
+import { SESSION_SCHEMA_VERSION, type SessionSummary } from "../session/store";
+import { resolveModalPanelSize } from "./modal-host";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import { commandsForMode } from "../commands/agent-commands";
 
@@ -58,6 +60,17 @@ async function mountChrome(
   };
 }
 
+function session(fields: Pick<SessionSummary, "id" | "title" | "createdAt" | "updatedAt" | "messageCount">): SessionSummary {
+  return {
+    schemaVersion: SESSION_SCHEMA_VERSION,
+    projectKey: "keryx",
+    projectPath: "/projects/keryx",
+    archiveMessageCount: fields.messageCount,
+    compactCount: 0,
+    ...fields,
+  };
+}
+
 describe("Flow 269: Phase 2 Pickers in ModalHost", () => {
   otuiTest("AC3: The /model picker mounts inside ModalHost preserving shell chrome, with filter and navigation", async () => {
     const otui = requireOtui();
@@ -112,22 +125,20 @@ describe("Flow 269: Phase 2 Pickers in ModalHost", () => {
     const h = await mountChrome(otui, { width: 120, height: 40 });
 
     const sessions: SessionSummary[] = [
-      {
+      session({
         id: "sess-abc-12345678",
         title: "Fix compiler warning in parser",
-        projectPath: "/projects/keryx",
         createdAt: "2026-09-18T10:00:00.000Z",
         updatedAt: "2026-09-18T11:00:00.000Z",
         messageCount: 8,
-      },
-      {
+      }),
+      session({
         id: "sess-def-87654321",
         title: "Implement new dashboard feature",
-        projectPath: "/projects/keryx",
         createdAt: "2026-09-18T12:00:00.000Z",
         updatedAt: "2026-09-18T13:00:00.000Z",
         messageCount: 3,
-      },
+      }),
     ];
 
     const resultPromise = pickSessionInTui(otui.core, h.chrome, sessions);
@@ -173,6 +184,54 @@ describe("Flow 269: Phase 2 Pickers in ModalHost", () => {
     expect(h.chrome.overlayActive()).toBe(false);
     expect(h.renderer.root.findDescendantById("modal-backdrop")?.visible).toBe(false);
 
+    h.destroy();
+  });
+
+  otuiTest("AC7: the /model modal sizes to its list and Esc resolves undefined", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui, { width: 120, height: 40 });
+    const models = ["a-model", "b-model", "c-model"];
+    const resultPromise = pickModelInTui(otui.core, h.chrome, models, undefined, { escLabel: "back" });
+    await h.flush();
+
+    // filter line + 3 rows of content, plus the modal's own chrome rows.
+    const panel = h.renderer.root.findDescendantById("modal-panel") as { height: number };
+    expect(panel.height).toBe(resolveModalPanelSize(120, 40, 1 + models.length).height);
+    expect(panel.height).toBeLessThan(Math.round(40 * 0.85));
+
+    const frame = h.captureCharFrame();
+    expect(frame).toContain("esc back");
+    // The filter line does not repeat the footer's key hints.
+    expect(frame).toContain("type to filter by name");
+    expect(frame).not.toContain("↑/↓ Enter");
+
+    h.mockInput.pressEscape();
+    await h.flush();
+    expect(await resultPromise).toBeUndefined();
+    expect(h.chrome.overlayActive()).toBe(false);
+    h.destroy();
+  });
+
+  otuiTest("the /sessions modal resolves undefined on Enter over a no-match row", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui, { width: 120, height: 40 });
+    const resultPromise = pickSessionInTui(otui.core, h.chrome, [
+      session({
+        id: "sess-abc-12345678",
+        title: "Only session",
+        createdAt: "2026-09-18T10:00:00.000Z",
+        updatedAt: "2026-09-18T11:00:00.000Z",
+        messageCount: 1,
+      }),
+    ]);
+    await h.flush();
+    await h.mockInput.pressKeys(["z", "z", "z"]);
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("(no match)");
+
+    h.mockInput.pressEnter();
+    await h.flush();
+    expect(await resultPromise).toBeUndefined();
     h.destroy();
   });
 });
