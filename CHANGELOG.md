@@ -3,6 +3,34 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.116] — 2026-09-19
+Dialogs in the OpenTUI shell stay inside the chat column and size to what they
+show, and the transcript follows what you send (PR #591, flow 269).
+
+### Changed
+
+- **`/model` and `/sessions` open as dialogs in the shell** instead of a
+  full-screen overlay: the header, sidebar and status bar stay visible, typing
+  still filters the list, and the footer is the only place the keys are listed.
+  In the `/provider` and `/connect` wizard, Esc on the model step is labelled
+  "back", because it returns to the provider list.
+- **Dialogs size to their content.** The model and session pickers and the
+  empty `/review` take the rows they need, up to 85% of the terminal height.
+  An empty `/review` is a compact box whose footer offers no item actions.
+- **Dialogs no longer bleed or overlap.** The backdrop is opaque, and a dialog
+  stays within the chat column, so its border no longer runs into the sidebar.
+- **`/help` wraps** long command descriptions to the transcript width, with
+  continuation lines aligned under the description column.
+
+### Fixed
+
+- **Sending a message scrolls to the end** and resumes following new output,
+  even if you had scrolled up. A bare Enter on an empty composer sends nothing
+  and leaves the transcript where it is.
+- **Leaving block navigation** (Ctrl+O, then Esc) keeps the scroll position
+  instead of jumping back to where navigation began. New output is followed
+  again only when you are at the bottom or within three rows of it.
+
 ## [0.2.115] — 2026-09-17
 The shell no longer looks hung on a slow or reasoning-heavy model: responses
 stream, stalled connections end with an error, and model reasoning is requested,
