@@ -7,9 +7,9 @@
   "id": "269",
   "slug": "opentui-shell-ux-and-layout-remediation-",
   "title": "OpenTUI shell UX and layout remediation: modal bleed, pickers, scroll and typography",
-  "status": "in-progress",
+  "status": "implemented",
   "createdAt": "2026-09-18T11:50:50.453Z",
-  "updatedAt": "2026-09-18T12:31:15.303Z",
+  "updatedAt": "2026-09-18T13:44:31.250Z",
   "source": {
     "type": "description",
     "ref": null
@@ -48,7 +48,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/591"
   },
   "baseBranch": "main",
   "tasks": [
@@ -390,6 +390,11 @@
       "at": "2026-09-18T12:31:15.303Z",
       "event": "task-done",
       "detail": "T9: Full verification: run test suite and verify via live tmux PTY session (AC10)"
+    },
+    {
+      "at": "2026-09-18T13:44:31.250Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/591"
     }
   ]
 }
