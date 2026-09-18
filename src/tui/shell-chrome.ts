@@ -1046,6 +1046,8 @@ export async function createShellChrome(
     const opt = menu.getSelectedOption();
     closeMenu();
     if (opt !== null) {
+      scroll.scrollTop = scroll.scrollHeight;
+      scroll.stickyScroll = true;
       emitSubmit(opt.name);
     }
   });
@@ -1054,6 +1056,9 @@ export async function createShellChrome(
     input.value = "";
     hideMenu();
     syncComposerHeight();
+    // AC5: Submitting text in the composer automatically scrolls transcript viewport to the bottom and sets stickyScroll to true.
+    scroll.scrollTop = scroll.scrollHeight;
+    scroll.stickyScroll = true;
     // AC14 (flow 268): a bare Enter on an empty composer does NOT accept an
     // active placeholder suggestion — it behaves exactly like Enter on an
     // empty composer with no suggestion at all (`emitSubmit("")`, which

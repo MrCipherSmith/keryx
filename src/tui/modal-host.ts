@@ -41,6 +41,8 @@ export type OpenModalInput = {
   /** Claim left/right arrows before modal-host's tab switch. */
   onArrowKeys?: (key: KeypressEvent, direction: "left" | "right") => boolean | undefined;
   onClose?: () => void;
+  /** Content row count for adaptive modal height (AC7). */
+  contentRows?: number;
 };
 
 export type ModalHandle = {
@@ -52,7 +54,10 @@ export type ModalHandle = {
 export type ModalChrome = Pick<
   ShellChrome,
   "renderer" | "overlayActive" | "addOverlaySource" | "focusComposer" | "blurComposer" | "hideMenu" | "scroll"
->;
+> & {
+  main?: Box;
+  sidebar?: Box;
+};
 
 type KeypressEvent = {
   name: string;
@@ -71,12 +76,16 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
 
 const BACKDROP_ID = "modal-backdrop";
 const PANEL_ID = "modal-panel";
-/** How much of the transcript stays visible through the backdrop, 0-1. */
-export const BACKDROP_ALPHA = 0.85;
+/**
+ * How much of the transcript stays visible through the backdrop, 0-1.
+ * Opaque (1.0) so underlying transcript text and sidebar borders do not
+ * bleed into the modal margins (flow 269 AC1).
+ */
+export const BACKDROP_ALPHA = 1.0;
 
 /**
- * The backdrop's fill: the theme's own background hex, alpha-reduced so the
- * transcript peeks through around the (fully opaque) panel. `RGBA` comes off
+ * The backdrop's fill: the theme's own background hex, fully opaque so the
+ * transcript and sidebar do not bleed through around the panel. `RGBA` comes off
  * the runtime `otui` parameter, never a top-level `@opentui/core` import —
  * this module's own optional-dependency rule (see the file header).
  */
@@ -94,6 +103,8 @@ export const MODAL_PANEL_MIN_WIDTH = 72;
 export const MODAL_PANEL_MIN_HEIGHT = 18;
 /** The panel occupies this fraction of the terminal — not a fixed target size — so it stays a small box in the middle of a large terminal instead of one that fills it. */
 export const MODAL_PANEL_SIZE_RATIO = 0.95;
+/** Maximum height ratio of terminal rows for adaptive modals (AC7). */
+export const MODAL_PANEL_MAX_HEIGHT_RATIO = 0.85;
 /** Header + tab strip + footer + rounded border. */
 export const MODAL_CHROME_ROWS = 5;
 /** @deprecated Use resolveModalPanelSize; kept as the floor for footer-fit tests. */
@@ -102,9 +113,22 @@ export const MODAL_PANEL_HEIGHT = MODAL_PANEL_MIN_HEIGHT;
 /** Fallback wrap budget before the panel has a measured width. */
 export const MODAL_PANEL_INNER_WIDTH = MODAL_PANEL_MIN_WIDTH - MODAL_PANEL_CHROME_X;
 
-export function resolveModalPanelSize(cols: number, rows: number): { width: number; height: number } {
+export function resolveModalPanelSize(
+  cols: number,
+  rows: number,
+  contentRows?: number,
+): { width: number; height: number } {
+  const width = Math.max(MODAL_PANEL_MIN_WIDTH, Math.round(cols * MODAL_PANEL_SIZE_RATIO));
+  if (contentRows !== undefined) {
+    const maxHeight = Math.max(6, Math.round(rows * MODAL_PANEL_MAX_HEIGHT_RATIO));
+    const needed = Math.max(6, contentRows + MODAL_CHROME_ROWS);
+    return {
+      width,
+      height: Math.min(maxHeight, needed),
+    };
+  }
   return {
-    width: Math.max(MODAL_PANEL_MIN_WIDTH, Math.round(cols * MODAL_PANEL_SIZE_RATIO)),
+    width,
     height: Math.max(MODAL_PANEL_MIN_HEIGHT, Math.round(rows * MODAL_PANEL_SIZE_RATIO)),
   };
 }
@@ -113,6 +137,26 @@ export function modalBodyRows(panelHeight: number): number {
   return Math.max(1, panelHeight - MODAL_CHROME_ROWS);
 }
 const CLOSE_HINT = "[x] esc";
+
+export function resolveModalAvailableWidth(chrome: ModalChrome): number {
+  const rWidth = chrome.renderer.width;
+  if (
+    chrome.main !== undefined &&
+    typeof (chrome.main as { width?: number }).width === "number" &&
+    (chrome.main as { width: number }).width > 0
+  ) {
+    return Math.min(rWidth, (chrome.main as { width: number }).width);
+  }
+  if (chrome.sidebar !== undefined) {
+    const sbWidth =
+      typeof (chrome.sidebar as { width?: number }).width === "number" &&
+      (chrome.sidebar as { width: number }).width > 0
+        ? (chrome.sidebar as { width: number }).width
+        : 30;
+    return Math.max(20, rWidth - sbWidth);
+  }
+  return rWidth;
+}
 
 export function resolveModalInnerWidth(availableWidth: number): number {
   return Math.max(20, availableWidth - MODAL_PANEL_CHROME_X);
@@ -258,9 +302,11 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   // resolved 95%-of-terminal size — tab bodies would see a stale 68x13
   // viewport instead of the real one (the /game board/prompt budget depends
   // on ctx.height and must not be sized from that floor).
-  const size = resolveModalPanelSize(state.chrome.renderer.width, state.chrome.renderer.height);
+  const availWidth = resolveModalAvailableWidth(state.chrome);
+  const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
+  const panelWidth = Math.min(availWidth, size.width);
   const cleanup = input.renderTab(tabId, state.body, {
-    width: resolveModalInnerWidth(size.width),
+    width: resolveModalInnerWidth(panelWidth),
     height: modalBodyRows(size.height),
   });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
@@ -399,7 +445,8 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
   panel.add(scroll);
   panel.add(footer);
   backdrop.add(panel);
-  r.root.add(backdrop);
+  const mountTarget = chrome.main ?? r.root;
+  mountTarget.add(backdrop);
 
   const state: HostState = {
     otui,
@@ -543,8 +590,9 @@ export function openModal(
   }
 
   const state = ensureHost(otui, chrome);
-  const size = resolveModalPanelSize(chrome.renderer.width, chrome.renderer.height);
-  state.panel.width = size.width;
+  const availWidth = resolveModalAvailableWidth(chrome);
+  const size = resolveModalPanelSize(availWidth, chrome.renderer.height, input.contentRows);
+  state.panel.width = Math.min(availWidth, size.width);
   state.panel.height = size.height;
 
   if (state.open) {
@@ -568,6 +616,9 @@ export function openModal(
   paintHeader(state, input.title);
   paintFooter(state, input.footer);
   mountTab(state, input, resolveInitialTab(input.tabs, input.initialTab));
-  state.tabStrip.focus();
+  const focused = chrome.renderer.currentFocusedRenderable;
+  if (focused === null || !containsNode(state.scroll, focused)) {
+    state.tabStrip.focus();
+  }
   return makeHandle(state, generation);
 }

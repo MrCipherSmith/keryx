@@ -103,6 +103,7 @@ import {
   isSessionInfoCommand,
   openSessionInfo,
 } from "./session-info";
+import { openModal, type ModalChrome } from "./modal-host";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
@@ -2026,12 +2027,23 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
  * `pickProviderModel`'s numbered text menu, which would read the next composer
  * submissions as its answers.
  */
+function isModalChrome(target: unknown): target is ModalChrome {
+  return (
+    target !== null &&
+    typeof target === "object" &&
+    "renderer" in target &&
+    "focusComposer" in target
+  );
+}
+
 export function selectProviderModelInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   detected: DetectedProvider[],
   options: SelectProviderModelOptions = {},
 ): Promise<TuiSelection | undefined> {
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   return new Promise((resolve) => {
     if (detected.length === 0) {
       resolve(undefined);
@@ -2216,7 +2228,7 @@ export function selectProviderModelInTui(
             models = await modelsForPicker(selectedProvider, modelDeps);
           }
         }
-        const model = await pickModelInTui(otui, r, models.models, modelPickerNotice(label, models));
+        const model = await pickModelInTui(otui, chrome ?? r, models.models, modelPickerNotice(label, models));
         if (model === undefined) {
           continue; // Esc at the model step → re-pick the provider
         }
@@ -2256,10 +2268,150 @@ export function adaptiveSelectHeight(count: number, available: number, per = 1):
  */
 export function pickModelInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   models: string[],
   notice?: string,
 ): Promise<string | undefined> {
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
+
+  if (chrome !== undefined) {
+    return new Promise((resolve) => {
+      const all = models;
+      const NO_MODELS = notice ?? "(no models found)";
+      const NO_MATCH = "(no match)";
+      let chosen: string | undefined = undefined;
+      let filter = "";
+
+      let sel: InstanceType<OpenTui["SelectRenderable"]> | undefined;
+      let filterLine: InstanceType<OpenTui["TextRenderable"]> | undefined;
+
+      const apply = (): void => {
+        const q = filter.trim().toLowerCase();
+        const matches = q.length > 0 ? all.filter((m) => m.toLowerCase().includes(q)) : all;
+        if (sel !== undefined) {
+          sel.options = matches.length > 0
+            ? matches.map((m) => ({ name: m, description: "" }))
+            : [{ name: NO_MATCH, description: "" }];
+          sel.selectedIndex = 0;
+        }
+        if (filterLine !== undefined) {
+          filterLine.content = otui.t`${otui.dim(
+            q.length > 0
+              ? `filter: ${filter}  (${matches.length}/${all.length})`
+              : "type to filter · ↑/↓ Enter · Esc to close",
+          )}`;
+        }
+      };
+
+      const handle = openModal(otui, chrome, {
+        title: "Select a model",
+        tabs: [{ id: "models", label: "Models" }],
+        footer: [
+          { key: "↑/↓", label: "select" },
+          { key: "Enter", label: "confirm" },
+          { key: "esc", label: "close" },
+        ],
+        renderTab: (_tabId, body, ctx) => {
+          const parent = body as { add: (child: unknown) => void };
+          if (all.length === 0 && notice !== undefined) {
+            parent.add(new otui.TextRenderable(r, { id: "mp-notice", content: otui.t`${otui.red("✗")} ${notice}` }));
+          }
+          filterLine = new otui.TextRenderable(r, {
+            id: "mp-filter",
+            content: otui.t`${otui.dim("type to filter · ↑/↓ Enter · Esc to close")}`,
+          });
+          parent.add(filterLine);
+
+          const available = Math.max(4, ctx.height - (all.length === 0 && notice !== undefined ? 3 : 2));
+          const height = adaptiveSelectHeight(all.length, available);
+          sel = new otui.SelectRenderable(r, {
+            id: "mp-sel",
+            width: "100%",
+            showDescription: false,
+            height,
+            showScrollIndicator: true,
+            wrapSelection: true,
+            options: (all.length > 0 ? all : [NO_MODELS]).map((m) => ({ name: m, description: "" })),
+            selectedTextColor: "#ffd166",
+          });
+          parent.add(sel);
+          sel.focus();
+
+          sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+            const opt = sel?.getSelectedOption();
+            if (opt !== null && opt !== undefined && opt.name !== NO_MATCH && opt.name !== NO_MODELS) {
+              chosen = opt.name;
+            }
+            handle?.close();
+          });
+
+          apply();
+
+          const onKey = (key: {
+            name: string;
+            ctrl: boolean;
+            meta: boolean;
+            sequence: string;
+            preventDefault: () => void;
+            stopPropagation: () => void;
+          }): void => {
+            if (key.name === "return" || key.name === "enter") {
+              const opt = sel?.getSelectedOption();
+              if (opt !== null && opt !== undefined && opt.name !== NO_MATCH && opt.name !== NO_MODELS) {
+                chosen = opt.name;
+              }
+              handle?.close();
+              key.preventDefault();
+              key.stopPropagation();
+              return;
+            }
+            if (key.name === "up") {
+              if (sel !== undefined && sel.selectedIndex > 0) {
+                sel.selectedIndex -= 1;
+                key.preventDefault();
+                key.stopPropagation();
+              }
+              return;
+            }
+            if (key.name === "down") {
+              if (sel !== undefined && sel.options.length > 0 && sel.selectedIndex < sel.options.length - 1) {
+                sel.selectedIndex += 1;
+                key.preventDefault();
+                key.stopPropagation();
+              }
+              return;
+            }
+            if (key.name === "backspace") {
+              filter = filter.slice(0, -1);
+              apply();
+              key.preventDefault();
+              key.stopPropagation();
+              return;
+            }
+            const ch = key.sequence;
+            if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+              filter += ch;
+              apply();
+              key.preventDefault();
+              key.stopPropagation();
+            }
+          };
+          const unsub = onKeypress(r, onKey);
+          return () => {
+            unsub();
+          };
+        },
+        onClose: () => {
+          resolve(chosen);
+        },
+      });
+      if (handle === undefined) {
+        resolve(undefined);
+      }
+    });
+  }
+
   return new Promise((resolve) => {
     const all = models;
     const NO_MODELS = notice ?? "(no models found)";
@@ -2354,9 +2506,161 @@ function formatSessionDate(iso: string): string {
  */
 export function pickSessionInTui(
   otui: OpenTui,
-  r: Renderer,
+  rOrChrome: Renderer | ModalChrome,
   sessions: SessionSummary[],
 ): Promise<string | undefined> {
+  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
+  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
+
+  if (chrome !== undefined) {
+    return new Promise((resolve) => {
+      const all: SessionPickerOption[] = sessions.map((s) => {
+        const created = formatSessionDate(s.createdAt);
+        const updated = formatSessionDate(s.updatedAt);
+        const short = shortSessionId(s.id);
+        const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
+        return {
+          value: s.id,
+          label: `${short} · ${title}`,
+          description: `${s.projectPath} · created ${created} · updated ${updated}`,
+          search: `${s.id} ${short} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
+        };
+      });
+
+      let chosen: string | undefined = undefined;
+      let filter = "";
+      let matches: SessionPickerOption[] = all;
+      const NO_MATCH = "(no match)";
+
+      let sel: InstanceType<OpenTui["SelectRenderable"]> | undefined;
+      let filterLine: InstanceType<OpenTui["TextRenderable"]> | undefined;
+
+      const apply = (): void => {
+        const q = filter.trim().toLowerCase();
+        matches = q.length > 0 ? all.filter((row) => row.search.includes(q)) : all;
+        const items = matches.length > 0 ? matches : [
+          {
+            value: "",
+            label: NO_MATCH,
+            description: "",
+            search: "",
+          },
+        ];
+        if (sel !== undefined) {
+          sel.options = items.map((row) => ({ name: row.label, description: row.description, value: row.value }));
+          sel.selectedIndex = 0;
+        }
+        if (filterLine !== undefined) {
+          filterLine.content = otui.t`${otui.dim(q.length > 0 ? `filter: ${filter}  (${matches.length})` : "type to filter by id, title, project, created, updated")}`;
+        }
+      };
+
+      const handle = openModal(otui, chrome, {
+        title: "Session Switcher",
+        tabs: [{ id: "sessions", label: "Sessions" }],
+        footer: [
+          { key: "↑/↓", label: "select" },
+          { key: "Enter", label: "open" },
+          { key: "esc", label: "cancel" },
+        ],
+        renderTab: (_tabId, body, ctx) => {
+          const parent = body as { add: (child: unknown) => void };
+          filterLine = new otui.TextRenderable(r, {
+            id: "sp-filter",
+            content: otui.t`${otui.dim("type to filter by id, title, project, created, updated")}`,
+          });
+          parent.add(filterLine);
+
+          const available = Math.max(4, ctx.height - 2);
+          const height = adaptiveSelectHeight(all.length * 2, available);
+          sel = new otui.SelectRenderable(r, {
+            id: "sp-sel",
+            width: "100%",
+            showDescription: true,
+            height,
+            showScrollIndicator: true,
+            wrapSelection: true,
+            options: [],
+            selectedTextColor: "#ffd166",
+          });
+          parent.add(sel);
+          sel.focus();
+
+          sel.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
+            const opt = sel?.getSelectedOption() as { value?: string } | null;
+            if (opt !== null && opt !== undefined && typeof opt.value === "string" && opt.value.length > 0 && opt.value !== NO_MATCH) {
+              const matched = matches.find((row) => row.value === opt.value);
+              chosen = matched?.value ?? opt.value;
+            }
+            handle?.close();
+          });
+
+          apply();
+
+          const onKey = (key: {
+            name: string;
+            ctrl: boolean;
+            meta: boolean;
+            sequence: string;
+            preventDefault: () => void;
+            stopPropagation: () => void;
+          }): void => {
+            if (key.name === "return" || key.name === "enter") {
+              const opt = sel?.getSelectedOption() as { value?: string } | null;
+              if (opt !== null && opt !== undefined && typeof opt.value === "string" && opt.value.length > 0 && opt.value !== NO_MATCH) {
+                const matched = matches.find((row) => row.value === opt.value);
+                chosen = matched?.value ?? opt.value;
+              }
+              handle?.close();
+              key.preventDefault();
+              key.stopPropagation();
+              return;
+            }
+            if (key.name === "up") {
+              if (sel !== undefined && sel.selectedIndex > 0) {
+                sel.selectedIndex -= 1;
+                key.preventDefault();
+                key.stopPropagation();
+              }
+              return;
+            }
+            if (key.name === "down") {
+              if (sel !== undefined && sel.options.length > 0 && sel.selectedIndex < sel.options.length - 1) {
+                sel.selectedIndex += 1;
+                key.preventDefault();
+                key.stopPropagation();
+              }
+              return;
+            }
+            if (key.name === "backspace") {
+              filter = filter.slice(0, -1);
+              apply();
+              key.preventDefault();
+              key.stopPropagation();
+              return;
+            }
+            const ch = key.sequence;
+            if (!key.ctrl && !key.meta && typeof ch === "string" && ch.length === 1 && ch >= " ") {
+              filter += ch;
+              apply();
+              key.preventDefault();
+              key.stopPropagation();
+            }
+          };
+          const unsub = onKeypress(r, onKey);
+          return () => {
+            unsub();
+          };
+        },
+        onClose: () => {
+          resolve(chosen);
+        },
+      });
+      if (handle === undefined) {
+        resolve(undefined);
+      }
+    });
+  }
   return new Promise((resolve) => {
     const all: SessionPickerOption[] = sessions.map((s) => {
       const created = formatSessionDate(s.createdAt);
@@ -3659,7 +3963,13 @@ export async function launchTuiAgentShell(opts: {
     };
     setAskUserHost(askUserInteractive);
 
-    const helpText = (): string => renderCommandHelp("agent");
+    const helpText = (): string => {
+      const avail =
+        chrome.main !== undefined && typeof chrome.main.width === "number" && chrome.main.width > 0
+          ? chrome.main.width - 4
+          : r.width - 34;
+      return renderCommandHelp("agent", undefined, Math.max(40, avail));
+    };
 
     // --- Per-project session (isolated by git root / cwd) --------------------
     const sessionCwd = opts.session?.cwd ?? process.cwd();
@@ -3763,7 +4073,7 @@ export async function launchTuiAgentShell(opts: {
         return undefined;
       }
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, r, rows));
+      const pickId = await chrome.withOverlay(() => pickSessionInTui(otui, chrome, rows));
       input.focus();
       if (pickId === undefined) {
         return undefined;
@@ -5381,7 +5691,7 @@ export async function launchTuiAgentShell(opts: {
               prov === undefined || models === undefined
                 ? undefined
                 : modelPickerNotice(prov.label ?? prov.name, models);
-            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, r, models?.models ?? [], notice));
+            const chosen = await chrome.withOverlay(() => pickModelInTui(otui, chrome, models?.models ?? [], notice));
             if (chosen !== undefined) {
               await switchTo(
                 currentSel.baseUrl === undefined
@@ -5435,8 +5745,8 @@ export async function launchTuiAgentShell(opts: {
             const detected = opts.redetect !== undefined ? await opts.redetect() : opts.detected;
             const ns = await chrome.withOverlay(() =>
               command.name === "/connect"
-                ? selectProviderModelInTui(otui, r, detected, { onlyConnected: true, env: process.env })
-                : selectProviderModelInTui(otui, r, detected),
+                ? selectProviderModelInTui(otui, chrome, detected, { onlyConnected: true, env: process.env })
+                : selectProviderModelInTui(otui, chrome, detected),
             );
             if (ns !== undefined) {
               await switchTo(ns);

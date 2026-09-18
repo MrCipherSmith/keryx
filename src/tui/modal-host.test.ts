@@ -21,6 +21,7 @@ import {
   formatModalFooter,
   modalBodyRows,
   openModal,
+  resolveModalAvailableWidth,
   resolveModalInnerWidth,
   resolveModalPanelSize,
   type ModalTabContext,
@@ -158,7 +159,7 @@ otuiTest("renderTab receives the resolved panel-body size, not the pre-layout fl
     },
   });
   await h.flush();
-  const sized = resolveModalPanelSize(120, 40);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), 40);
   expect(ctx).toEqual({
     width: resolveModalInnerWidth(sized.width),
     height: modalBodyRows(sized.height),
@@ -202,7 +203,7 @@ otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent 
   const panel = h.renderer.root.findDescendantById("modal-panel");
   expect(backdrop).toBeDefined();
   expect(panel).toBeDefined();
-  const sized = resolveModalPanelSize(h.renderer.width, h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
   expect((panel as { width: number }).width).toBe(sized.width);
   expect((panel as { height: number }).height).toBe(sized.height);
   expect(frame).toContain("[x] esc");
@@ -212,9 +213,9 @@ otuiTest("AC1: one tab paints a titled near-fullscreen panel over a translucent 
   // (which composes onto every descendant, including `panel`; see
   // `backdropFillColor`'s docstring in modal-host.ts).
   expect((backdrop as { opacity?: number }).opacity ?? 1).toBe(1);
-  // The backdrop is translucent by design (BACKDROP_ALPHA): the transcript
-  // now peeks through around the panel instead of being fully hidden.
-  expect(frame).toContain("transcript stays mounted");
+  // The backdrop is opaque by design (BACKDROP_ALPHA = 1.0, AC1):
+  // underlying transcript text is masked so it does not bleed through.
+  expect(frame).not.toContain("transcript stays mounted");
   // The panel itself stays fully opaque regardless: its own content is
   // unmixed with whatever is behind it.
   const panelLines = frame.split("\n").filter((line) => line.includes("Inspector") || line.includes("body:info"));
@@ -304,7 +305,7 @@ otuiTest("panel size does not change when switching short and long tab bodies", 
   });
   await h.flush();
   const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number; height: number };
-  const sized = resolveModalPanelSize(h.renderer.width, h.renderer.height);
+  const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), h.renderer.height);
   expect(panel.width).toBe(sized.width);
   expect(panel.height).toBe(sized.height);
   const first = { width: panel.width, height: panel.height };
@@ -569,3 +570,61 @@ otuiTest("AC6: unknown initialTab falls back to the first tab", async () => {
   handle?.close();
   h.destroy();
 });
+
+otuiTest("Flow 269 AC2: ModalHost bounds dialog width strictly within main pane width, preventing right border collision with sidebar separator", async () => {
+  const otui = requireOtui();
+  // Standard 120x40 terminal with 30-col sidebar -> main pane width is 90 cols
+  const h = await mountChrome(otui, { width: 120, height: 40 });
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Clamping Test",
+    tabs: [{ id: "tab", label: "Tab" }],
+    renderTab: (_tabId, body) => {
+      const parent = body as { add: (c: unknown) => void };
+      parent.add(new otui.core.TextRenderable(h.renderer, { id: "clamping-body", content: "main pane clamped" }));
+    },
+  });
+  await h.flush();
+
+  const mainWidth = resolveModalAvailableWidth(h.chrome);
+  expect(mainWidth).toBe(90);
+
+  const panel = h.renderer.root.findDescendantById("modal-panel") as { width: number };
+  expect(panel).toBeDefined();
+  expect(panel.width).toBeLessThanOrEqual(mainWidth);
+  expect(panel.width).toBe(86);
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Clamping Test");
+  expect(frame).toContain("main pane clamped");
+
+  handle?.close();
+  h.destroy();
+});
+
+test("AC7: resolveModalPanelSize computes adaptive height based on contentRows + chrome padding capped at 85%", () => {
+  // 120 cols x 40 rows: 85% ceiling is 34 rows (40 * 0.85 = 34). Chrome padding is 5 rows.
+  // 5 content rows: 5 + 5 = 10 rows.
+  expect(resolveModalPanelSize(120, 40, 5)).toEqual({ width: 114, height: 10 });
+  // 1 content row: 1 + 5 = 6 rows (clamped to min floor 6).
+  expect(resolveModalPanelSize(120, 40, 1)).toEqual({ width: 114, height: 6 });
+  // 40 content rows: 40 + 5 = 45 > 34, so capped at 85% ceiling (34).
+  expect(resolveModalPanelSize(120, 40, 40)).toEqual({ width: 114, height: 34 });
+});
+
+otuiTest("AC7: openModal applies adaptive panel height from input.contentRows", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 120, height: 40 });
+  const handle = openModal(otui.core, h.chrome, {
+    title: "Compact Modal",
+    tabs: [{ id: "t", label: "T" }],
+    contentRows: 3,
+    renderTab: () => {},
+  });
+  await h.flush();
+  const panel = h.renderer.root.findDescendantById("modal-panel") as { height: number };
+  // 3 content rows + 5 chrome rows = 8 rows height
+  expect(panel?.height).toBe(8);
+  handle?.close();
+  h.destroy();
+});
+

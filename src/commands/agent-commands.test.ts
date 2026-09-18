@@ -385,6 +385,25 @@ test("renderCommandHelp `only` restricts the list to a surface's subset", () => 
   expect(help).not.toContain("/compact");
 });
 
+test("AC9: renderCommandHelp renders multi-line descriptions with hanging indent matching description column", () => {
+  const help = renderCommandHelp("agent", ["/model"]);
+  const lines = help.trim().split("\n");
+  expect(lines[0]).toBe("Commands:");
+  expect(lines[1]?.startsWith("  /model")).toBe(true);
+
+  // When rendered with narrow maxColumns that forces wrapping:
+  const narrow = renderCommandHelp("agent", ["/model"], 35);
+  const narrowLines = narrow.trim().split("\n").slice(1);
+  expect(narrowLines.length).toBeGreaterThan(1);
+  const firstCol = narrowLines[0]!.indexOf("Switch");
+  // Continuation lines must indent exactly to match description column
+  for (let i = 1; i < narrowLines.length; i++) {
+    const line = narrowLines[i]!;
+    const descStart = line.search(/\S/);
+    expect(descStart).toBe(firstCol);
+  }
+});
+
 // --- /delegate (flow 176 T18) ----------------------------------------------
 // Package: docs/requirements/keryx-external-agent-runtime §8.2, prd R25.
 // Pure parsing against the registry TABLE — nothing here starts a process.

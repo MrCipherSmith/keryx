@@ -1,0 +1,34 @@
+# Flow Journal
+
+- 2026-09-18T11:50:50.453Z - flow created
+- 2026-09-18T11:54:05.522Z - frozen: 10 criteria; checksum recorded
+- 2026-09-18T11:54:05.621Z - started
+- 2026-09-18T11:54:20.852Z - task-added: T5: Phase 1: Fix ModalHost backdrop fill and boundary clamping (AC1, AC2)
+- 2026-09-18T11:54:20.950Z - task-added: T6: Phase 2: Migrate /model and /sessions into ModalHost (AC3, AC4)
+- 2026-09-18T11:54:21.044Z - task-added: T7: Phase 3: Fix scroll auto-follow on submit and non-destructive block-nav exit (AC5, AC6)
+- 2026-09-18T11:54:21.138Z - task-added: T8: Phase 4: Implement adaptive modal height, contextual empty states, and hanging indents (AC7, AC8, AC9)
+- 2026-09-18T11:54:21.229Z - task-added: T9: Full verification: run test suite and verify via live tmux PTY session (AC10)
+- 2026-09-18T11:54:27.634Z - task-done: T2: Implement per plan
+- 2026-09-18T11:54:27.732Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-18T11:54:27.836Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-18T11:54:33.078Z - task-done: T1: Collect remaining context
+- 2026-09-18T11:54:45.725Z - task-attempt: T5: started (attempt 1) — Starting Phase 1: ModalHost backdrop fill and boundary clamping
+- 2026-09-18T12:04:51.298Z - ac-confirmed: AC1
+- 2026-09-18T12:04:55.576Z - ac-confirmed: AC2
+- 2026-09-18T12:04:59.301Z - task-done: T5: Phase 1: Fix ModalHost backdrop fill and boundary clamping (AC1, AC2)
+- 2026-09-18T12:05:14.276Z - task-attempt: T6: started (attempt 1)
+- 2026-09-18T12:16:06.488Z - ac-confirmed: AC3
+- 2026-09-18T12:16:13.322Z - ac-confirmed: AC4
+- 2026-09-18T12:16:21.987Z - task-done: T6: Phase 2: Migrate /model and /sessions into ModalHost (AC3, AC4)
+- 2026-09-18T12:16:36.669Z - task-attempt: T7: started (attempt 1)
+- 2026-09-18T12:21:11.068Z - ac-confirmed: AC5
+- 2026-09-18T12:21:13.853Z - ac-confirmed: AC6
+- 2026-09-18T12:21:16.317Z - task-done: T7: Phase 3: Fix scroll auto-follow on submit and non-destructive block-nav exit (AC5, AC6)
+- 2026-09-18T12:21:32.008Z - task-attempt: T8: started (attempt 1)
+- 2026-09-18T12:27:21.207Z - ac-confirmed: AC7
+- 2026-09-18T12:27:29.297Z - ac-confirmed: AC8
+- 2026-09-18T12:27:29.388Z - ac-confirmed: AC9
+- 2026-09-18T12:27:33.461Z - task-done: T8: Phase 4: Implement adaptive modal height, contextual empty states, and hanging indents (AC7, AC8, AC9)
+- 2026-09-18T12:27:41.577Z - task-attempt: T9: started (attempt 1)
+- 2026-09-18T12:31:07.430Z - ac-confirmed: AC10
+- 2026-09-18T12:31:15.303Z - task-done: T9: Full verification: run test suite and verify via live tmux PTY session (AC10)

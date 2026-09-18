@@ -425,14 +425,50 @@ export function describeUnavailableCommand(line: string, mode: ShellMode): strin
  * Render `mode`'s commands as an aligned `Commands:` block. `only` restricts the
  * list to the given names (a surface that implements a subset of the mode —
  * the readline agent REPL — must not advertise what it cannot run), keeping the
- * registry's wording either way. Pure.
+ * registry's wording either way. Multi-line descriptions render with hanging
+ * indentation aligning with the description column (AC9). Pure.
  */
-export function renderCommandHelp(mode: ShellMode, only?: readonly string[]): string {
+export function renderCommandHelp(
+  mode: ShellMode,
+  only?: readonly string[],
+  maxColumns?: number,
+): string {
   const allow = only === undefined ? undefined : new Set(only);
   const options = commandsForMode(mode).filter((c) => allow === undefined || allow.has(c.name));
   const width = options.reduce((w, c) => Math.max(w, c.name.length), 0);
-  return (
-    ["Commands:", ...options.map((c) => `  ${c.name.padEnd(width)}  ${c.description}`)].join("\n") +
-    "\n"
-  );
+  const indent = " ".repeat(width + 4);
+
+  const rows = options.flatMap((c) => {
+    const rawLines = c.description.split("\n");
+    const formatted: string[] = [];
+
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i] ?? "";
+      if (typeof maxColumns === "number" && maxColumns > width + 14) {
+        const wrapBudget = maxColumns - (width + 4);
+        const words = line.split(/\s+/).filter(Boolean);
+        let cur = "";
+        for (const word of words) {
+          if (!cur) {
+            cur = word;
+          } else if (cur.length + 1 + word.length <= wrapBudget) {
+            cur += " " + word;
+          } else {
+            formatted.push(formatted.length === 0 ? `  ${c.name.padEnd(width)}  ${cur}` : `${indent}${cur}`);
+            cur = word;
+          }
+        }
+        if (cur || words.length === 0) {
+          formatted.push(formatted.length === 0 ? `  ${c.name.padEnd(width)}  ${cur}` : `${indent}${cur}`);
+        }
+      } else {
+        formatted.push(i === 0 ? `  ${c.name.padEnd(width)}  ${line}` : `${indent}${line}`);
+      }
+    }
+
+    return formatted.length > 0 ? formatted : [`  ${c.name.padEnd(width)}  `];
+  });
+
+  return ["Commands:", ...rows].join("\n") + "\n";
 }
+

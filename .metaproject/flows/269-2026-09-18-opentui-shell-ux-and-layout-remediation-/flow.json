@@ -1,0 +1,395 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "269",
+  "slug": "opentui-shell-ux-and-layout-remediation-",
+  "title": "OpenTUI shell UX and layout remediation: modal bleed, pickers, scroll and typography",
+  "status": "in-progress",
+  "createdAt": "2026-09-18T11:50:50.453Z",
+  "updatedAt": "2026-09-18T12:31:15.303Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:808fc9a7f3f130e40d67dbd228df918706e4338048909c6e7136fefb0475bba5",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-18T12:04:51.298Z"
+    },
+    "AC2": {
+      "at": "2026-09-18T12:04:55.576Z"
+    },
+    "AC3": {
+      "at": "2026-09-18T12:16:06.488Z"
+    },
+    "AC4": {
+      "at": "2026-09-18T12:16:13.322Z"
+    },
+    "AC5": {
+      "at": "2026-09-18T12:21:11.068Z"
+    },
+    "AC6": {
+      "at": "2026-09-18T12:21:13.853Z"
+    },
+    "AC7": {
+      "at": "2026-09-18T12:27:21.207Z"
+    },
+    "AC8": {
+      "at": "2026-09-18T12:27:29.297Z"
+    },
+    "AC9": {
+      "at": "2026-09-18T12:27:29.388Z"
+    },
+    "AC10": {
+      "at": "2026-09-18T12:31:07.430Z"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "Requirements package docs/requirements/keryx-tui-ux-remediation/ compiled from live tmux exploratory session"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by fine-grained tasks T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by fine-grained tasks T5-T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by fine-grained task T9"
+    },
+    {
+      "id": "T5",
+      "title": "Phase 1: Fix ModalHost backdrop fill and boundary clamping (AC1, AC2)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-18T11:54:45.724Z",
+            "outcome": "started",
+            "detail": "Starting Phase 1: ModalHost backdrop fill and boundary clamping"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Phase 2: Migrate /model and /sessions into ModalHost (AC3, AC4)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-18T12:05:14.276Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Phase 3: Fix scroll auto-follow on submit and non-destructive block-nav exit (AC5, AC6)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-18T12:16:36.669Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Phase 4: Implement adaptive modal height, contextual empty states, and hanging indents (AC7, AC8, AC9)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-18T12:21:32.008Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Full verification: run test suite and verify via live tmux PTY session (AC10)",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-18T12:27:41.577Z",
+            "outcome": "started"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-18T11:50:50.453Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-18T11:54:05.522Z",
+      "event": "frozen",
+      "detail": "10 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-18T11:54:05.621Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-18T11:54:20.852Z",
+      "event": "task-added",
+      "detail": "T5: Phase 1: Fix ModalHost backdrop fill and boundary clamping (AC1, AC2)"
+    },
+    {
+      "at": "2026-09-18T11:54:20.950Z",
+      "event": "task-added",
+      "detail": "T6: Phase 2: Migrate /model and /sessions into ModalHost (AC3, AC4)"
+    },
+    {
+      "at": "2026-09-18T11:54:21.044Z",
+      "event": "task-added",
+      "detail": "T7: Phase 3: Fix scroll auto-follow on submit and non-destructive block-nav exit (AC5, AC6)"
+    },
+    {
+      "at": "2026-09-18T11:54:21.138Z",
+      "event": "task-added",
+      "detail": "T8: Phase 4: Implement adaptive modal height, contextual empty states, and hanging indents (AC7, AC8, AC9)"
+    },
+    {
+      "at": "2026-09-18T11:54:21.229Z",
+      "event": "task-added",
+      "detail": "T9: Full verification: run test suite and verify via live tmux PTY session (AC10)"
+    },
+    {
+      "at": "2026-09-18T11:54:27.634Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-18T11:54:27.732Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-18T11:54:27.836Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-18T11:54:33.078Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-18T11:54:45.725Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — Starting Phase 1: ModalHost backdrop fill and boundary clamping"
+    },
+    {
+      "at": "2026-09-18T12:04:51.298Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-18T12:04:55.576Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-18T12:04:59.301Z",
+      "event": "task-done",
+      "detail": "T5: Phase 1: Fix ModalHost backdrop fill and boundary clamping (AC1, AC2)"
+    },
+    {
+      "at": "2026-09-18T12:05:14.276Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-18T12:16:06.488Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-18T12:16:13.322Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-18T12:16:21.987Z",
+      "event": "task-done",
+      "detail": "T6: Phase 2: Migrate /model and /sessions into ModalHost (AC3, AC4)"
+    },
+    {
+      "at": "2026-09-18T12:16:36.669Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-18T12:21:11.068Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-18T12:21:13.853Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-18T12:21:16.317Z",
+      "event": "task-done",
+      "detail": "T7: Phase 3: Fix scroll auto-follow on submit and non-destructive block-nav exit (AC5, AC6)"
+    },
+    {
+      "at": "2026-09-18T12:21:32.008Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-18T12:27:21.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-18T12:27:29.297Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-18T12:27:29.388Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-09-18T12:27:33.461Z",
+      "event": "task-done",
+      "detail": "T8: Phase 4: Implement adaptive modal height, contextual empty states, and hanging indents (AC7, AC8, AC9)"
+    },
+    {
+      "at": "2026-09-18T12:27:41.577Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1)"
+    },
+    {
+      "at": "2026-09-18T12:31:07.430Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-09-18T12:31:15.303Z",
+      "event": "task-done",
+      "detail": "T9: Full verification: run test suite and verify via live tmux PTY session (AC10)"
+    }
+  ]
+}

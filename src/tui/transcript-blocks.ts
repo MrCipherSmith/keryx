@@ -1120,6 +1120,8 @@ export interface NavScroll {
   stickyScroll: boolean;
   /** Visible height of the transcript viewport. Missing → reveal is a no-op. */
   height?: number;
+  /** Scrollable content height of the transcript viewport. */
+  scrollHeight?: number;
 }
 
 /**
@@ -1230,8 +1232,6 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
 
   /** THE focus guard (risk R3): who owns the keyboard right now. */
   let focusOwner: "composer" | "blocks" = "composer";
-  /** Scroll offset saved on entering nav mode, restored on exit. */
-  let savedScrollTop = 0;
 
   const active = (): boolean => focusOwner === "blocks";
 
@@ -1338,7 +1338,6 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     }
     focusOwner = "blocks";
     registry.focus(target.id);
-    savedScrollTop = scroll.scrollTop;
     scroll.stickyScroll = false; // expanding must not yank the viewport (AC12)
     blurComposer();
     paintAll();
@@ -1352,8 +1351,16 @@ export function createBlockNavController(options: BlockNavOptions): BlockNavCont
     }
     focusOwner = "composer";
     paintAll(); // drop the focus highlight
-    scroll.scrollTop = savedScrollTop;
-    scroll.stickyScroll = true;
+    // AC6: Exiting block navigation mode (Ctrl+O -> Esc) does not force
+    // scrollTop back to savedScrollTop when user intentionally scrolled.
+    // If at or near bottom (within 3 rows), re-enable stickyScroll so incoming
+    // streaming output auto-follows. Otherwise preserve deliberate scroll position.
+    if (typeof scroll.scrollHeight === "number" && typeof scroll.height === "number") {
+      const atBottom = scroll.scrollTop >= scroll.scrollHeight - scroll.height - 3;
+      scroll.stickyScroll = atBottom;
+    } else {
+      scroll.stickyScroll = true;
+    }
     focusComposer();
     onChange();
   };
