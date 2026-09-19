@@ -3,6 +3,7 @@ import type { McpRuntimeStatus } from "../mcp/client-config";
 import type { NormalizedToolDefinition } from "../harness/provider/types";
 import {
   approvalLabel,
+  fitRowsByLines,
   formatMcpListLines,
   formatToolRowLines,
   formatToolsListLines,
@@ -546,4 +547,54 @@ test("/integrations opens this view and /mcp no longer does", () => {
   // And `/mcps` is still nobody's command — it would differ from `/mcp` by one
   // character while meaning the opposite, with no flags to say which ran.
   expect(isMcpToolsCommand("/mcps")).toBe(false);
+});
+
+// --- flow 270 review F-003: paging by screen lines, not by item count ------
+
+describe("fitRowsByLines — wrapped rows page by the lines they take", () => {
+  test("fills the window from start and clamps start so the last window is full", () => {
+    expect(fitRowsByLines([2, 2, 2, 2], 0, 5)).toEqual({ start: 0, end: 2 });
+    expect(fitRowsByLines([2, 2, 2, 2], 3, 5)).toEqual({ start: 2, end: 4 });
+    expect(fitRowsByLines([1, 1, 1], 99, 10)).toEqual({ start: 0, end: 3 });
+  });
+
+  test("an item taller than the window is still shown on its own", () => {
+    expect(fitRowsByLines([7, 1], 0, 3)).toEqual({ start: 0, end: 1 });
+    expect(fitRowsByLines([], 4, 3)).toEqual({ start: 0, end: 0 });
+  });
+});
+
+test("the last of many wrapped tools is reachable with the down arrow", () => {
+  const many: NormalizedToolDefinition[] = Array.from({ length: 40 }, (_, i) => ({
+    name: `tool_number_${i}`,
+    description: "a long description ".repeat(10).trim(),
+    inputSchema: { type: "object" },
+    risk: "read",
+  }));
+  const body = fakeBody();
+  let press: ((key: { name: string; sequence: string }) => void) | undefined;
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("tools", body, { width: 100 });
+      return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "tools" };
+    },
+    fakeOtui(),
+    {},
+    {
+      tools: many,
+      runtimes: RUNTIMES,
+      visibleRows: 20,
+      connect: async () => ({ ok: true }),
+      disconnect: async () => ({ ok: true }),
+      onKeypress: (handler) => {
+        press = handler;
+        return () => {};
+      },
+    },
+  );
+  for (let i = 0; i < 60; i++) press?.({ name: "down", sequence: "" });
+  const shown = body.rows().map((row) => row.content).join("\n");
+  expect(shown).toContain("tool_number_39");
+  // And the window holds no more lines than the body has rows.
+  expect(shown.split("\n").length).toBeLessThanOrEqual(20);
 });

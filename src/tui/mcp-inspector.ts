@@ -225,6 +225,37 @@ export function formatToolRowLines(tool: NormalizedToolDefinition, width?: numbe
   return wrapHangingRow(head, tool.description ?? "", width, TOOL_NAME_COLUMN + TOOL_APPROVAL_COLUMN + 2);
 }
 
+/**
+ * The window of wrapped rows that fits `rows` screen lines, starting at item
+ * `start` (flow 270): items wrap to several lines, so paging by item count
+ * left the last tools unreachable. `start` is clamped so the final window is
+ * full; at least one item is always shown, even one taller than `rows`.
+ */
+export function fitRowsByLines(
+  lineCounts: readonly number[],
+  start: number,
+  rows: number,
+): { start: number; end: number } {
+  if (lineCounts.length === 0) {
+    return { start: 0, end: 0 };
+  }
+  // The furthest start whose tail still fills the window.
+  let maxStart = lineCounts.length - 1;
+  let tail = lineCounts[maxStart] ?? 1;
+  while (maxStart > 0 && tail + (lineCounts[maxStart - 1] ?? 1) <= rows) {
+    maxStart -= 1;
+    tail += lineCounts[maxStart] ?? 1;
+  }
+  const from = Math.min(maxStart, Math.max(0, start));
+  let end = from + 1;
+  let used = lineCounts[from] ?? 1;
+  while (end < lineCounts.length && used + (lineCounts[end] ?? 1) <= rows) {
+    used += lineCounts[end] ?? 1;
+    end += 1;
+  }
+  return { start: from, end };
+}
+
 /** One entry per tool; a wrapped tool's lines are joined with `\n`, since each tool is one renderable. */
 export function formatToolsListLines(tools: readonly NormalizedToolDefinition[], width?: number): string[] {
   if (tools.length === 0) {
@@ -370,16 +401,28 @@ export function presentMcpTools(
       return;
     }
     toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-columns", content: TOOLS_COLUMN_HEADER }));
-    const start = clampScroll(toolsScroll, options.tools.length, bodyRows);
-    for (const [i, tool] of options.tools.slice(start, start + bodyRows).entries()) {
+    const rows = options.tools.map((tool) => formatToolRowLines(tool, bodyWidth));
+    const window = toolsWindow(rows);
+    toolsScroll = window.start;
+    for (let index = window.start; index < window.end; index++) {
       toolsBody.add(
         new rowCtor(activeRenderer, {
-          id: `mcp-tool-row-${start + i}`,
-          content: formatToolRowLines(tool, bodyWidth).join("\n"),
+          id: `mcp-tool-row-${index}`,
+          content: (rows[index] ?? []).join("\n"),
         }),
       );
     }
   };
+
+  /** Rows left for tools under the caption (which may wrap) and the column header. */
+  const toolsRowBudget = (): number => {
+    const captionLines = wrapHangingRow("", TOOLS_TAB_HEADER, bodyWidth, 0).length;
+    return Math.max(1, bodyRows - captionLines - 1);
+  };
+  // `toolsScroll` is the first tool shown; painting clamps it to the window
+  // that fits, so the key handlers below only move it.
+  const toolsWindow = (rows: readonly string[][]): { start: number; end: number } =>
+    fitRowsByLines(rows.map((lines) => lines.length), toolsScroll, toolsRowBudget());
 
   const paintMcpRows = (): void => {
     if (mcpBody === undefined || rowCtor === undefined) {
@@ -407,7 +450,7 @@ export function presentMcpTools(
   };
 
   const paint = (): void => {
-    toolsScroll = clampScroll(toolsScroll, options.tools.length, bodyRows);
+    toolsScroll = Math.max(0, toolsScroll);
     mcpScroll = scrollToReveal(mcpSelected, mcpScroll, bodyRows);
     mcpScroll = clampScroll(mcpScroll, runtimes.length, bodyRows);
     paintToolsRows();
@@ -500,7 +543,7 @@ export function presentMcpTools(
       bodyWidth = ctx?.width;
       if (tabId === "tools") {
         toolsBody = target;
-        toolsScroll = clampScroll(toolsScroll, options.tools.length, bodyRows);
+        toolsScroll = Math.max(0, toolsScroll);
         paintToolsRows();
         return;
       }
@@ -553,7 +596,7 @@ export function presentMcpTools(
         if (onMcp) {
           moveMcpSelection(mcpSelected - 1);
         } else {
-          toolsScroll = clampScroll(toolsScroll - 1, options.tools.length, bodyRows);
+          toolsScroll = Math.max(0, toolsScroll - 1);
           paint();
         }
         return;
@@ -562,7 +605,7 @@ export function presentMcpTools(
         if (onMcp) {
           moveMcpSelection(mcpSelected + 1);
         } else {
-          toolsScroll = clampScroll(toolsScroll + 1, options.tools.length, bodyRows);
+          toolsScroll += 1;
           paint();
         }
         return;
@@ -572,7 +615,7 @@ export function presentMcpTools(
         if (onMcp) {
           mcpScroll = clampScroll(mcpScroll + step, runtimes.length, bodyRows);
         } else {
-          toolsScroll = clampScroll(toolsScroll + step, options.tools.length, bodyRows);
+          toolsScroll = Math.max(0, toolsScroll + step);
         }
         paint();
       }

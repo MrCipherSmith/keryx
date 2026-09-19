@@ -545,6 +545,16 @@ describe("an unrecognised bracket line closes the current table", () => {
     expect(problems.map((p) => p.message).join()).toContain("not a table header");
   });
 
+  // Flow 270 review F-004: TOML also has literal ('single-quoted') keys.
+  test("BOUNDARY — a literal-quoted [['mcp_servers'.x]] is refused too, and leaks nothing", () => {
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      "[mcp_servers.a]\ncommand = \"x\"\n[['mcp_servers'.x]]\ncommand = \"y\"\n",
+    );
+    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(servers.a?.command).toBe("x");
+  });
+
   test("BOUNDARY — a recognised header still opens its table", () => {
     const { servers } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x"\n[mcp_servers.b]\ncommand = "y"\n');
     expect(servers.a?.command).toBe("x");

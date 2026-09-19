@@ -267,7 +267,7 @@ export function parseGrokToml(file: string, text: string): CompatServers {
     // closes the table so nothing after it lands in the previous server.
     const arrayHeader = /^\[\[([^[\]]+)\]\]$/.exec(line);
     if (arrayHeader !== null) {
-      const first = (arrayHeader[1] as string).split(".")[0]?.trim().replace(/^"(.*)"$/, "$1");
+      const first = (arrayHeader[1] as string).split(".")[0]?.trim().replace(/^(["'])(.*)\1$/, "$2");
       current = undefined;
       if (first === "mcp_servers") {
         problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });

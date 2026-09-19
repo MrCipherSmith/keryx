@@ -46,7 +46,12 @@ export type OpenModalInput = {
 };
 
 export type ModalHandle = {
-  close(): void;
+  /**
+   * `restoreFocus: false` leaves the composer unfocused: a wizard closing one
+   * step's dialog while it still awaits work before the next must not hand the
+   * operator a live composer in between (flow 270). Default `true`.
+   */
+  close(opts?: { restoreFocus?: boolean }): void;
   setTab(id: string): void;
   activeTab(): string;
 };
@@ -570,11 +575,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
 
 function makeHandle(state: HostState, generation: number): ModalHandle {
   return {
-    close(): void {
+    close(opts?: { restoreFocus?: boolean }): void {
       if (state.generation !== generation) {
         return;
       }
-      closeHost(state, { restoreFocus: true, runOnClose: true });
+      closeHost(state, { restoreFocus: opts?.restoreFocus ?? true, runOnClose: true });
     },
     setTab(id: string): void {
       if (state.generation !== generation || !state.open || state.input === undefined) {

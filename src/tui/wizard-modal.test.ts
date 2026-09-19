@@ -276,3 +276,91 @@ describe("flow 270: /search-provider wizard steps render in ModalHost", () => {
     h.destroy();
   });
 });
+
+// --- flow 270 review round 1 ------------------------------------------------
+
+describe("flow 270 review: nothing leaks out of a wizard between or after steps", () => {
+  // F-001: each step's dialog used to close with focus restored to the
+  // composer, so text typed while the wizard awaited the network was
+  // submitted as a turn.
+  otuiTest("while the wizard awaits the model list, the composer is not focused and Enter submits nothing", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui);
+    configDir = mkdtempSync(join(tmpdir(), "keryx-f270-"));
+    const submitted: string[] = [];
+    h.chrome.onSubmit((line) => submitted.push(line));
+    const deepseek: DetectedProvider = {
+      name: "deepseek",
+      label: "DeepSeek",
+      models: ["deepseek-chat"],
+      baseUrl: "https://api.deepseek.test",
+      envKey: "DEEPSEEK_API_KEY",
+    };
+    const neverAnswers = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
+
+    void selectProviderModelInTui(otui.core, h.chrome, [deepseek], {
+      env: { DEEPSEEK_API_KEY: "k" },
+      fetch: neverAnswers,
+      configDir,
+    });
+    await h.flush();
+    h.mockInput.pressEnter(); // provider
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("endpoint URL");
+    h.mockInput.pressEnter(); // keep the URL → the model list is now being fetched
+    await h.flush();
+
+    expect(h.renderer.currentFocusedRenderable?.id).not.toBe("prompt");
+    await h.mockInput.typeText("hello");
+    h.mockInput.pressEnter();
+    await h.flush();
+    expect(submitted).toEqual([]);
+    h.destroy();
+  });
+
+  // F-002: Esc while the connection test was running went back to the
+  // fields, but the test carried on and set the provider active anyway.
+  otuiTest("Esc during a running search-provider test leaves it inactive and throws nothing", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui);
+    const calls: string[] = [];
+    let finishTest: ((result: { ok: true }) => void) | undefined;
+    const controller = {
+      configurable: () => [BRAVE],
+      configure: (id: string) => {
+        calls.push(`configure:${id}`);
+      },
+      test: (id: string) => {
+        calls.push(`test:${id}`);
+        return new Promise<{ ok: true }>((resolve) => {
+          finishTest = resolve;
+        });
+      },
+      select: async (id: string) => {
+        calls.push(`select:${id}`);
+        return { ok: true };
+      },
+    } as unknown as SearchProviderController;
+
+    void searchProviderWizardInTui(otui.core, h.chrome, controller);
+    await h.flush();
+    h.mockInput.pressEnter(); // brave
+    await h.flush();
+    await h.mockInput.typeText("secret");
+    h.mockInput.pressEnter(); // credential
+    await h.flush();
+    h.mockInput.pressEnter(); // "Yes" → the test starts
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("Testing 'brave'");
+
+    await pressEscape(h); // back out mid-test
+    finishTest?.({ ok: true });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await h.flush();
+
+    expect(calls).toEqual(["configure:brave", "test:brave"]); // no select()
+    // "retry" restarts the fields from their first sub-step — brave's credential.
+    expect(h.captureCharFrame()).toContain("Paste your Brave Search API key");
+    h.destroy();
+  });
+});

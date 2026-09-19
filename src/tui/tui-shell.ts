@@ -1497,7 +1497,11 @@ function openStepSurface(
     close: () => {
       if (closedByStep) return;
       closedByStep = true;
-      handle.close();
+      // A step that finished is followed by more of the wizard — often a
+      // network call first (models, device login). Handing focus back to the
+      // composer here let the operator type and submit a turn mid-wizard; the
+      // caller refocuses the composer once the whole wizard resolves.
+      handle.close({ restoreFocus: false });
     },
   };
 }
@@ -1826,6 +1830,10 @@ function runSearchProviderTestStep(
   const r = stepRenderer(target);
   return new Promise((resolve) => {
     let settled: "success" | "failure" | undefined;
+    // Set once the step is gone. The test below keeps running after an Esc in
+    // the dialog, and must neither make the provider active behind the
+    // operator's back nor write to a status line that no longer exists.
+    let left = false;
     const modal = isModalChrome(target);
     let surface: StepSurface | undefined;
     if (modal) {
@@ -1843,6 +1851,7 @@ function runSearchProviderTestStep(
         ],
         contentRows: 2,
         onEscape: () => {
+          left = true;
           unsub();
           resolve(settled === "success" ? "done" : "retry");
         },
@@ -1855,6 +1864,7 @@ function runSearchProviderTestStep(
     const status = new otui.TextRenderable(r, { id: "st-title", content: otui.t`${otui.bold(`Testing '${provider.id}'`)} ${otui.dim("...")}` });
     box.add(status);
     const cleanup = (): void => {
+      left = true;
       unsub();
       if (surface !== undefined) surface.close();
       else r.root.remove(box);
@@ -1875,6 +1885,9 @@ function runSearchProviderTestStep(
     void (async () => {
       controller.configure(provider.id, { ...provider.defaults, ...fields }, credential);
       const tested = await controller.test(provider.id);
+      if (left) {
+        return; // backed out mid-test: nothing to show, and no select()
+      }
       if (!tested.ok) {
         settled = "failure";
         const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
@@ -1887,6 +1900,9 @@ function runSearchProviderTestStep(
         return;
       }
       const selected = await controller.select(provider.id);
+      if (left) {
+        return;
+      }
       status.content = selected.ok
         ? otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured, tested, and set as active`)} ${otui.dim("(Enter to close)")}`
         : otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested`)} ${otui.dim(`but could not be set active (${selected.reason ?? "unknown"})`)} ${otui.dim("(Enter to close)")}`;
@@ -5789,12 +5805,12 @@ export async function launchTuiAgentShell(opts: {
             );
             if (ns !== undefined) {
               await switchTo(ns);
-            } else {
-              if (command.name === "/connect") {
-                chrome.showToast("No connected providers found. Run /provider to configure one first.");
-              }
-              input.focus();
+            } else if (command.name === "/connect") {
+              chrome.showToast("No connected providers found. Run /provider to configure one first.");
             }
+            // Wizard steps close without refocusing the composer (flow 270), so
+            // it comes back here, once, whichever way the wizard ended.
+            input.focus();
           })();
           return;
         }
