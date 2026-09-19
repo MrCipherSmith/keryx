@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { detectStall, parseEpollFdinfo, ttyReaderArmed, type WatchSample } from "./debug-watcher";
+import { decodeTermios, detectStall, parseEpollFdinfo, ttyReaderArmed, type WatchSample } from "./debug-watcher";
 
 // Real fdinfo captured from two keryx 0.2.121 shells on the same machine: one
 // healthy, one whose input had stopped (session 603f3171). fd 11/12/13 are the
@@ -68,5 +68,19 @@ describe("detectStall", () => {
   test("a dead target is not a stall", () => {
     const gone: WatchSample = { alive: false, readerArmed: false };
     expect(detectStall([gone, gone, gone])).toBeUndefined();
+  });
+});
+
+describe("decodeTermios", () => {
+  test("reads VMIN/VTIME and the canonical/echo bits from a glibc struct termios", () => {
+    const buf = new Uint8Array(60);
+    const view = new DataView(buf.buffer);
+    view.setUint32(12, 0o2 | 0o10, true); // ICANON | ECHO
+    buf[17 + 6] = 0; // VMIN
+    buf[17 + 5] = 3; // VTIME
+    expect(decodeTermios(buf)).toMatchObject({ vmin: 0, vtime: 3, icanon: true, echo: true });
+    view.setUint32(12, 0, true);
+    buf[17 + 6] = 1;
+    expect(decodeTermios(buf)).toMatchObject({ vmin: 1, icanon: false, echo: false });
   });
 });
