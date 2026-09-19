@@ -57,7 +57,7 @@ export function formatBusEventLine(event: RenderedBusEvent): string {
 }
 
 /** Where a bus background failure was observed. */
-export type BusErrorWhere = "poll" | "heartbeat" | "session";
+export type BusErrorWhere = "poll" | "heartbeat" | "session" | "ack";
 
 /**
  * A throttled `onError` printer (review r1 F10, F11): at most one

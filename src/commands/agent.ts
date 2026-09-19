@@ -23,6 +23,9 @@ import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/bui
 import type { McpRuntime } from "../mcp-servers/runtime";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
 import type { JobRegistry, TaskCompletion } from "../harness/tool/builtin/background-job-registry";
+import type { BusInbox } from "../bus/inbox";
+import type { RenderedBusEvent } from "../bus/client";
+import { buildPeerMessageNotification } from "../bus/peer-notification";
 import type {
   MessageReasoning,
   NormalizedError,
@@ -347,6 +350,23 @@ export interface AgentDeps {
    */
   jobRegistry?: JobRegistry;
   /**
+   * Flow 274: the session's bus inbox, fed by `BusClient.onEvent` (`../bus/
+   * client.ts`) through `createBusInbox` (`../bus/inbox.ts`). Drained at the
+   * same three points `jobRegistry` is: turn start when
+   * `options.origin === "bus-message"`, the round boundary, and the
+   * text-only-finish site. Optional and unused when absent — every caller
+   * that predates the bus (every test, `keryx shell --chat`) is unaffected.
+   */
+  busInbox?: BusInbox;
+  /**
+   * Flow 274 (D-10, AC4): called with exactly the events a non-empty
+   * `busInbox` drain just pushed into `history`, AFTER that push — an ack
+   * means "this reached the agent," never merely "this was read." Optional;
+   * absent is a silent no-op (a caller with no bus client has nothing to
+   * ack).
+   */
+  busAck?: (events: readonly RenderedBusEvent[]) => void;
+  /**
    * Flow 265: how a finished task reaches this session.
    *
    * `"wake"` — the shell is interactive and can start a turn of its own when a
@@ -428,8 +448,12 @@ export interface RunAgentTurnOptions {
    * shell began because a task finished, which is what the consecutive-wake cap
    * counts; an operator line resets that counter and is always `"operator"`.
    * Absent reads as `"operator"` — every pre-flow-265 call site.
+   *
+   * Flow 274: `"bus-message"` marks a turn the shell began because the
+   * busInbox holds a wake-eligible peer message — the same "no operator line,
+   * the input IS the notification" shape as `"task-notification"`.
    */
-  origin?: "operator" | "task-notification";
+  origin?: "operator" | "task-notification" | "bus-message";
   /**
    * SLATE-2/SLATE-5 open/close wiring (Phase 2). Absent whenever the caller
    * has no session dir to anchor a slate to (sessions disabled, or a caller
@@ -1721,6 +1745,17 @@ async function runAgentTurnCore(
     }
     history.push({ role: "user", content: buildTaskNotification(woken), provenance: "tool", ts: now() });
     io.onHistoryChange?.("user");
+  } else if (options.origin === "bus-message") {
+    // Flow 274 (AC2): same shape as the task-notification branch above — a
+    // wake that announces nothing must not cost a model call, so the drain
+    // decides whether this turn happens at all.
+    const delivered = deps.busInbox?.drainUndelivered() ?? [];
+    if (delivered.length === 0) {
+      return {};
+    }
+    history.push({ role: "user", content: buildPeerMessageNotification(delivered), provenance: "tool", ts: now() });
+    io.onHistoryChange?.("user");
+    deps.busAck?.(delivered);
   } else {
     history.push({ role: "user", content: userLine, provenance: "project", ts: now() });
     io.onHistoryChange?.("user");
@@ -2162,6 +2197,17 @@ async function runAgentTurnCore(
         io.onHistoryChange?.("tool");
         continue;
       }
+      // Flow 274 (AC2): same reasoning as the task drain immediately above —
+      // a text-only answer has no tool batch for the round-boundary drain
+      // (below) to ride on, so a peer message that arrived meanwhile is
+      // delivered here instead of being left until the operator's next line.
+      const deliveredBus = deps.busInbox?.drainUndelivered() ?? [];
+      if (deliveredBus.length > 0) {
+        history.push({ role: "user", content: buildPeerMessageNotification(deliveredBus), provenance: "tool", ts: now() });
+        io.onHistoryChange?.("tool");
+        deps.busAck?.(deliveredBus);
+        continue;
+      }
       const stillRunning =
         deliveryMode === "hold" && taskRegistry !== undefined
           ? taskRegistry.list().filter((t) => t.status === "running" && t.phase === "background")
@@ -2556,6 +2602,16 @@ async function runAgentTurnCore(
     if (completions.length > 0) {
       history.push({ role: "user", content: buildTaskNotification(completions), provenance: "tool", ts: now() });
       io.onHistoryChange?.("tool");
+    }
+
+    // Flow 274 (AC2): the busInbox is drained at this same round boundary,
+    // right next to the task drain above — after every `tool` result of this
+    // batch is already in `history`, never spliced between them.
+    const busDelivered = deps.busInbox?.drainUndelivered() ?? [];
+    if (busDelivered.length > 0) {
+      history.push({ role: "user", content: buildPeerMessageNotification(busDelivered), provenance: "tool", ts: now() });
+      io.onHistoryChange?.("tool");
+      deps.busAck?.(busDelivered);
     }
 
     if (
