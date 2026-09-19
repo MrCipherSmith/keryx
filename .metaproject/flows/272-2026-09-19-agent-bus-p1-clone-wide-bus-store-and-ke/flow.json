@@ -9,7 +9,7 @@
   "title": "Agent bus P1: clone-wide bus store and keryx bus CLI",
   "status": "in-progress",
   "createdAt": "2026-09-19T15:34:50.736Z",
-  "updatedAt": "2026-09-19T16:09:14.884Z",
+  "updatedAt": "2026-09-19T16:23:38.701Z",
   "source": {
     "type": "description",
     "ref": null
@@ -195,15 +195,22 @@
       "id": "T10",
       "title": "Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:10:03.575Z",
+            "outcome": "started",
+            "detail": "272-T10 docs status, PR #611"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -218,6 +225,27 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:14:56.288Z",
+            "outcome": "started",
+            "detail": "272-T12 review r1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -333,6 +361,31 @@
       "at": "2026-09-19T16:09:14.884Z",
       "event": "task-done",
       "detail": "T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other"
+    },
+    {
+      "at": "2026-09-19T16:10:03.575Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 272-T10 docs status, PR #611"
+    },
+    {
+      "at": "2026-09-19T16:11:38.316Z",
+      "event": "task-done",
+      "detail": "T10: Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap"
+    },
+    {
+      "at": "2026-09-19T16:14:56.200Z",
+      "event": "task-added",
+      "detail": "T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json"
+    },
+    {
+      "at": "2026-09-19T16:14:56.288Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 272-T12 review r1 fixes"
+    },
+    {
+      "at": "2026-09-19T16:23:38.701Z",
+      "event": "task-done",
+      "detail": "T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json"
     }
   ]
 }

@@ -903,6 +903,7 @@
     "src/lib/descriptor-read.ts",
     "src/lib/file-lock.ts",
     "src/lib/fs.lease.test.ts",
+    "src/lib/fs.lock-reclaim.test.ts",
     "src/lib/fs.test.ts",
     "src/lib/fs.ts",
     "src/lib/gdgraph-post-commit.test.ts",

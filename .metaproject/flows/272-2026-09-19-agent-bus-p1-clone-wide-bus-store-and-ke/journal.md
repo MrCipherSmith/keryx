@@ -35,3 +35,25 @@
 - 2026-09-19T16:05:58.592Z - task-done: T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference
 - 2026-09-19T16:05:58.678Z - task-attempt: T9: started (attempt 1) — 272-T9 multi-process verification
 - 2026-09-19T16:09:14.884Z - task-done: T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other
+- 2026-09-19T16:10:03.575Z - task-attempt: T10: started (attempt 1) — 272-T10 docs status, PR #611
+- 2026-09-19T16:11:38.316Z - task-done: T10: Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap
+- 2026-09-19T16:14:56.200Z - task-added: T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json
+- 2026-09-19T16:14:56.288Z - task-attempt: T12: started (attempt 1) — 272-T12 review r1 fixes
+- 2026-09-19T16:23:38.701Z - task-done: T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json
+- 2026-09-19T16:24Z - orchestrator summary: T8, T9, T10, review r1 and T12.
+  - **T8** was accepted.
+    - The rate-limit bypass requires two variables: a test context plus `KERYX_TEST_BUS_RATE=off`.
+    - A bad kind or bad usage is refused as `invalid-event`.
+  - **T9** found and fixed a real bug.
+    - A writer killed while holding `append.lock` stalled the next writer for 30 s. The cause was that `withFileLock`'s default stale time equals its timeout.
+    - The bus locks now use a 5 s stale time, so a live holder keeps the lock through its heartbeat and its pid check.
+  - **Review r1** (272-review-r1, head 3cf09b6d) found:
+    - F1 (major): a rotation during a read loses a segment.
+    - F2–F5 (minor): a torn fragment is revived as a duplicate `seq`; a check-then-rename race in `removeStaleLock`; a duplicate `lease-expired`; terminal escape injection.
+    - F6 (info): project-key slug collision (accepted) and missing `--json` docs (fixed).
+  - **T12** fixed F1–F5 and the docs part of F6 in c74f5a39.
+    - Each fix has a test that fails without it.
+    - Targeted tests: 164 pass. Process test: 4 pass. tsc and eslint clean.
+    - Accepted residuals:
+      - A third waiter arriving during the F3 rename-back window keeps the moved lock rather than deleting it. This is documented in the code.
+      - A failed lease delete makes `prune` exit with an error instead of a named refusal.
