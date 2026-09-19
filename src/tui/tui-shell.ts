@@ -3076,9 +3076,10 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
-    // Mode row (flow 270 AC9): the permission mode and the /plan read-only
-    // posture were only ever toasts. Painted by `paintModeRow` once both are known.
-    sidebar.add(new otui.TextRenderable(r, { id: "sb-mode-k", content: otui.t`${otui.dim("Mode")}`, marginTop: 1 }));
+    // Mode line (flow 270 AC9): the permission mode and the /plan read-only
+    // posture were only ever toasts. One line under the model, not a labelled
+    // block of its own: three more rows pushed Status off a 24-row terminal
+    // (the macOS pty smoke leg). Painted by `paintModeRow` once both are known.
     const sbModeV = new otui.TextRenderable(r, { id: "sb-mode-v", content: "" });
     sidebar.add(sbModeV);
     // Usage row under Model: cumulative in/out tokens this session, fed by
@@ -4017,8 +4018,8 @@ export async function launchTuiAgentShell(opts: {
       const row = describeModeRow(permissionMode, readOnly);
       // Read-only is the state an operator must not forget they are in.
       sbModeV.content = row.readOnly === undefined
-        ? otui.t`${otui.dim(row.mode)}`
-        : otui.t`${otui.dim(row.mode)} ${otui.yellow(row.readOnly)}`;
+        ? otui.t`${otui.dim(`mode ${row.mode}`)}`
+        : otui.t`${otui.dim(`mode ${row.mode}`)} ${otui.yellow(row.readOnly)}`;
     };
     paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
