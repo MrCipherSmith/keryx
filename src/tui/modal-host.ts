@@ -239,6 +239,9 @@ function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undef
   return first.id;
 }
 
+/** Columns the body scroll box's vertical scrollbar takes from the tab body. */
+export const MODAL_BODY_SCROLLBAR_COLS = 1;
+
 function innerWidthOf(state: HostState): number {
   const panelWidth = state.panel.width;
   if (typeof panelWidth === "number" && panelWidth > MODAL_PANEL_CHROME_X) {
@@ -307,7 +310,10 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
   const panelWidth = Math.min(availWidth, size.width);
   const cleanup = input.renderTab(tabId, state.body, {
-    width: resolveModalInnerWidth(panelWidth),
+    // The body sits in a scroll box whose scrollbar takes a column; a line
+    // wrapped to the full inner width lost its last characters to it and the
+    // renderer wrapped the rest onto a blank-looking extra row (flow 270).
+    width: resolveModalInnerWidth(panelWidth) - MODAL_BODY_SCROLLBAR_COLS,
     height: modalBodyRows(size.height),
   });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
@@ -629,5 +635,17 @@ export function openModal(
   if (focused === null || !containsNode(state.scroll, focused)) {
     state.tabStrip.focus();
   }
+  // A modal opened from a promise continuation — the next wizard step after
+  // Esc on the previous one closed it — lands while the renderer is still
+  // handling that keypress, and the redraw it asks for is dropped: the dialog
+  // was open, focused and invisible until some unrelated redraw (flow 270).
+  // Ask again on the next tick, which also covers a caller that fills the body
+  // right after this returns.
+  const r = chrome.renderer;
+  setTimeout(() => {
+    if (state.generation === generation && state.open) {
+      r.requestRender();
+    }
+  }, 0);
   return makeHandle(state, generation);
 }

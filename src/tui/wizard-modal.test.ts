@@ -159,6 +159,31 @@ describe("flow 270: /provider wizard steps render in ModalHost", () => {
     expect(h.chrome.overlayActive()).toBe(false);
     h.destroy();
   });
+
+  // Found on a live pty: the provider dialog re-opened after Esc on the URL
+  // step, focused and working, but nothing redrew the screen, so it was
+  // invisible and the next Esc closed a dialog nobody could see.
+  otuiTest("AC4: Esc on the URL step shows the provider list again without any other redraw", async () => {
+    const otui = requireOtui();
+    const h = await mountChrome(otui);
+    configDir = mkdtempSync(join(tmpdir(), "keryx-f270-"));
+
+    const withUrl: DetectedProvider = { ...PROVIDER, baseUrl: "http://localhost:9" };
+    const result = selectProviderModelInTui(otui.core, h.chrome, [withUrl], { env: {}, configDir });
+    await h.flush();
+    h.mockInput.pressEnter();
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("endpoint URL");
+
+    await pressEscape(h);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    await h.flush();
+    expect(h.captureCharFrame()).toContain("Select a provider");
+
+    await pressEscape(h);
+    expect(await result).toBeUndefined();
+    h.destroy();
+  });
 });
 
 const BRAVE: SearchProviderDescriptor = {

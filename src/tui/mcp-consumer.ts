@@ -202,11 +202,13 @@ export function buildConsumerModel(input: {
 
   return {
     rows,
-    problems: input.problems.map((p) => `${p.file}: ${sanitiseForDisplay(p.message)}`),
+    // Config file paths get the same `~` as the rows: a full home prefix is
+    // what pushed these lines past the modal width.
+    problems: input.problems.map((p) => `${collapseHome(p.file, home)}: ${sanitiseForDisplay(p.message)}`),
     emptyHint:
       rows.length > 0
         ? undefined
-        : `No MCP servers configured.\n  user:    ${input.userFile}\n  project: ${input.projectFile}`,
+        : `No MCP servers configured.\n  user:    ${collapseHome(input.userFile, home)}\n  project: ${collapseHome(input.projectFile, home)}`,
   };
 }
 
