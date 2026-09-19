@@ -58,6 +58,7 @@ import {
   resolveShellIdleMs,
   shellJobKillTool,
   shellJobOutputTool,
+  superviseSpawnedProcess,
 } from "./background-job-registry";
 import type { BackgroundJobEvent, BackgroundProcessHandle, BackgroundSpawner } from "./background-job-registry";
 
@@ -1425,4 +1426,84 @@ describe("flow 265 AC1: onCompletion fires once per terminal task", () => {
 
     expect(seen.length).toBe(1); // unchanged
   });
+});
+
+// =======================================================================
+// Exit is reported only after the output has drained (CI flake, release
+// run 35398760443: `echo FINISHED` completed with an empty transcript).
+// =======================================================================
+describe("exit is reported only after the process's output has drained", () => {
+  const encoder = new TextEncoder();
+
+  /**
+   * A process whose final chunk lands AFTER `exited` settles — the ordering a
+   * loaded Linux runner produced. `close: false` leaves the pipe open for good,
+   * as a backgrounded grandchild holding the write end would.
+   */
+  function lateOutputProcess(opts: { close: boolean }) {
+    let resolveExited!: (code: number) => void;
+    const exited = new Promise<number>((resolve) => {
+      resolveExited = resolve;
+    });
+    const stdout = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode("early\n"));
+        void exited.then(() =>
+          setTimeout(() => {
+            controller.enqueue(encoder.encode("FINISHED\n"));
+            if (opts.close) controller.close();
+          }, 50),
+        );
+      },
+    });
+    setTimeout(() => resolveExited(0), 10);
+    return { pid: 4242, stdout, exited };
+  }
+
+  function registryFor(proc: ReturnType<typeof lateOutputProcess>, drainMs?: number) {
+    return createJobRegistry({
+      cwd: tmpdir(),
+      idleMs: 0,
+      spawn: () =>
+        superviseSpawnedProcess(proc, { kill: () => {}, ...(drainMs !== undefined ? { drainMs } : {}) }),
+    });
+  }
+
+  test("a read right after waitForExit sees output written just before the exit", async () => {
+    const registry = registryFor(lateOutputProcess({ close: true }));
+    const started = await registry.start("fake", { phase: "foreground" });
+    if (!started.ok) throw new Error(started.error);
+    expect(await registry.waitForExit(started.jobId, 5_000)).toBe("exited");
+    const read = registry.readOutputSince(started.jobId, 0);
+    if (!read.ok) throw new Error(read.error);
+    expect(read.status).toBe("completed");
+    // `early` is readable before the registry subscribes, so this also pins
+    // that a chunk arriving ahead of `onOutput` is replayed, not dropped.
+    expect(read.output).toBe("early\nFINISHED\n");
+  });
+
+  test("a pipe held open past the exit delays the report by the bounded drain only", async () => {
+    const registry = registryFor(lateOutputProcess({ close: false }), 200);
+    const started = await registry.start("fake", { phase: "foreground" });
+    if (!started.ok) throw new Error(started.error);
+    const t0 = Date.now();
+    expect(await registry.waitForExit(started.jobId, 5_000)).toBe("exited");
+    expect(Date.now() - t0).toBeLessThan(2_000);
+    expect(registry.get(started.jobId)?.status).toBe("completed");
+  });
+
+  test("real subprocesses: the last bytes before exit are always in the transcript", async () => {
+    const registry = createJobRegistry({ cwd: tmpdir(), idleMs: 0 });
+    // A bulk write overflows the pipe buffer, so the final chunk is still in
+    // flight when the shell exits — the widest window for the race.
+    const command = "head -c 200000 /dev/zero | tr '\\0' a; printf LAST-LINE";
+    for (let i = 0; i < 40; i++) {
+      const started = await registry.start(command, { phase: "foreground" });
+      if (!started.ok) throw new Error(started.error);
+      expect(await registry.waitForExit(started.jobId, 10_000)).toBe("exited");
+      const read = registry.readOutputSince(started.jobId, 0);
+      if (!read.ok) throw new Error(read.error);
+      expect(read.output.endsWith("LAST-LINE")).toBe(true);
+    }
+  }, 60_000);
 });
