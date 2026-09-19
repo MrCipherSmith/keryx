@@ -306,6 +306,24 @@ describe("the printed lines — found by the mutation sweep", () => {
     });
     expect(renderConsumerLines(m).join("\n")).toContain("config problem — /cfg/x.json: bad json");
   });
+
+  // Flow 270, found on a live pty: the empty state and the config problems
+  // printed full home paths that ran past the modal width.
+  test("the empty hint and config problems show the home directory as ~", () => {
+    const m = buildConsumerModel({
+      configured: [],
+      states: [],
+      problems: [{ file: "/Users/al/.grok/config.toml", message: "bad" }],
+      userFile: "/Users/al/.local/share/keryx/mcp-servers.json",
+      projectFile: "/work/repo/.keryx/mcp-servers.json",
+      home: "/Users/al",
+    });
+    const text = renderConsumerLines(m).join("\n");
+    expect(text).toContain("config problem — ~/.grok/config.toml: bad");
+    expect(text).toContain("user:    ~/.local/share/keryx/mcp-servers.json");
+    expect(text).toContain("project: /work/repo/.keryx/mcp-servers.json");
+    expect(text).not.toContain("/Users/al");
+  });
 });
 
 describe("F3/F6 — the review findings on this view", () => {
