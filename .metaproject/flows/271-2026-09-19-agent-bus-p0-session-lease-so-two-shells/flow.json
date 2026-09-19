@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T14:12:17.834Z",
+  "updatedAt": "2026-09-19T14:38:26.687Z",
   "source": {
     "type": "description",
     "ref": null
@@ -243,18 +243,44 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 1,
+        "count": 2,
         "log": [
           {
             "at": "2026-09-19T14:12:17.834Z",
             "outcome": "started",
             "detail": "local lint+typecheck+full suite"
+          },
+          {
+            "at": "2026-09-19T14:13:57.684Z",
+            "outcome": "started",
+            "detail": "after rebase onto 6cafb990: lint+typecheck+full suite"
           }
         ]
       },
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T13",
+      "title": "Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T14:21:52.160Z",
+            "outcome": "started",
+            "detail": "271-T13 review r1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -400,6 +426,26 @@
       "at": "2026-09-19T14:12:17.834Z",
       "event": "task-attempt",
       "detail": "T12: started (attempt 1) — local lint+typecheck+full suite"
+    },
+    {
+      "at": "2026-09-19T14:13:57.684Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 2) — after rebase onto 6cafb990: lint+typecheck+full suite"
+    },
+    {
+      "at": "2026-09-19T14:18:12.839Z",
+      "event": "task-added",
+      "detail": "T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError"
+    },
+    {
+      "at": "2026-09-19T14:21:52.160Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 271-T13 review r1 fixes"
+    },
+    {
+      "at": "2026-09-19T14:38:26.687Z",
+      "event": "task-done",
+      "detail": "T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError"
     }
   ]
 }

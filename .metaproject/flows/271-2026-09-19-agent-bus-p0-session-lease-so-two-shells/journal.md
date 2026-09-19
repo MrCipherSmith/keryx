@@ -67,3 +67,26 @@
 - 2026-09-19T14:04:47.958Z - task-attempt: T10: started (attempt 1) — 271-T10 dispatch
 - 2026-09-19T14:12:09.730Z - task-done: T10: Subprocess verification: two -c shells (AC1), SIGKILL and SIGSTOP holders with short staleMs (AC5), SIGTERM release (AC7)
 - 2026-09-19T14:12:17.834Z - task-attempt: T12: started (attempt 1) — local lint+typecheck+full suite
+- 2026-09-19T14:13:57.684Z - task-attempt: T12: started (attempt 2) — after rebase onto 6cafb990: lint+typecheck+full suite
+- 2026-09-19T14:18:12.839Z - task-added: T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError
+- 2026-09-19T14:21:52.160Z - task-attempt: T13: started (attempt 1) — 271-T13 review r1 fixes
+- 2026-09-19T14:13Z - orchestrator: Rebased onto origin/main 6cafb990 (PR #605: serialise the composer-choice dock; it also touches tui-shell.ts). merge-tree was clean beforehand. During the rebase the post-commit hook regenerated the `.metaproject/data` artifacts. Those copies are generated, so I discarded them and continued the rebase.
+- 2026-09-19T14:18Z - orchestrator: T12 run after the rebase:
+  - lint exit 0, typecheck exit 0, typecheck:scripts exit 0.
+  - Full suite: 11012 tests, 162 fail across 32 files. Triage:
+    - 20 of those files print this machine's global git hook refusal (`refusing: author email …`) in their fixture commits.
+    - The other 12 files (test-command, ctx/orient, gdgraph/staleness, gdskills/install, health hotspot and tests source, security-pre-push, sync/provenance, testing coverage-map and service, wiki refresh and staleness) were re-run on the untouched main checkout: 121 pass, 51 fail. That is the same 51 as on this branch.
+    - No failing file touches lease, shell, tui or sessions code.
+  - Conclusion: every local failure comes from the environment. AC11 is decided by CI on the PR head. T12 stays open until T13 lands and CI reports.
+- 2026-09-19T14:18Z - orchestrator: Review round r1 (271-review-r1). Domains: logic, security, concurrency, testing.
+  - Verdict: approve with changes.
+  - Findings:
+    - F1 (major): a holder that lost its lease never learns it and keeps persisting.
+    - F2–F7 (minor): refresh/release can clobber another holder; create cleanup can clobber; openWith releases a `mine` handle; timing env vars are not clamped; sessions list crashes on an unreadable lease; AC5 test timing.
+    - F8, F9 (info).
+  - Decisions:
+    - The loop threshold is `minor`, so F1–F7 are fixed in T13.
+    - F9 is fixed too, because it is cheap.
+    - F8 is documented only.
+  - The report with its `keryx:findings` block is kept for `keryx review ingest`.
+- 2026-09-19T14:38:26.687Z - task-done: T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError
