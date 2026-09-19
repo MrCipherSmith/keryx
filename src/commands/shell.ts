@@ -1538,16 +1538,42 @@ function formatUsage(usage: NormalizedUsage | undefined): string {
 }
 
 /**
- * Agent-mode REPL (NOT unit-tested): reads lines and drives the `runAgentTurn`
- * driver. Assistant text is buffered under the "thinking…" spinner and rendered
- * as markdown once per round (via the driver's `onAssistantText` hook) — no
- * fragile in-place re-render (flow 048). Renders a styled assistant header, tool
- * calls (`⚙ name(args)`), dim tool-result summaries, a per-turn token line, and a
- * dim turn separator. `runShell`'s chat core is untouched.
+ * Agent-mode REPL: reads lines and drives the `runAgentTurn` driver. Assistant
+ * text is buffered under the "thinking…" spinner and rendered as markdown once
+ * per round (via the driver's `onAssistantText` hook) — no fragile in-place
+ * re-render (flow 048). Renders a styled assistant header, tool calls
+ * (`⚙ name(args)`), dim tool-result summaries, a per-turn token line, and a dim
+ * turn separator. `runShell`'s chat core is untouched.
+ *
+ * Exported for tests only — `shellCommand`'s agent-mode branch is the sole
+ * production caller (flow 277). It takes the same shape `runShell` already
+ * does: every dependency a test needs to observe arrives as a parameter or
+ * through `deps`. Until this was exported, the wiring below could only be
+ * checked by reading this file's TEXT, and a dozen `describe` blocks in
+ * `shell.test.ts` did exactly that — against a window that also swallowed
+ * ~1,080 lines of `shellCommand` (see
+ * `docs/requirements/keryx-shell-split/source-text-audit-inventory.md`).
+ *
+ * Two dependencies are still real, not injected, so a test that reaches them
+ * touches the operator's machine: `loadShellPermissions()` /
+ * `shellPermissionsFingerprint()` read the real permissions file with no
+ * directory parameter, and the spinner consults TTY state. Nothing converted
+ * so far needs either.
  */
-async function runAgentRepl(
+export async function runAgentRepl(
   lines: AsyncIterable<string>,
-  rich: { printPrompt: () => void; safeBoundary: (() => void) | undefined },
+  rich: {
+    printPrompt: () => void;
+    safeBoundary: (() => void) | undefined;
+    /**
+     * Where this REPL's rendered output goes. Omitted in production, which is
+     * `process.stdout` — the pre-flow-277 behaviour, and the reason every
+     * assertion about what the REPL prints used to be made against this
+     * file's source text instead of against the text it actually prints.
+     * `runShell` has always taken its writer this way (`io.write`).
+     */
+    write?: (s: string) => void;
+  },
   deps: AgentDeps,
   metaprojectPort: MetaprojectPort,
   sessionOpts?: ShellSessionOpts,
@@ -1603,9 +1629,11 @@ async function runAgentRepl(
    */
   orient?: string,
 ): Promise<void> {
-  const out = (s: string): void => {
-    process.stdout.write(s);
-  };
+  const out =
+    rich.write ??
+    ((s: string): void => {
+      process.stdout.write(s);
+    });
   const clearLine = `\r${String.fromCharCode(27)}[2K`;
   const spinnable = colorEnabled() && Boolean(process.stdout.isTTY);
   let spinner: ReturnType<typeof setInterval> | undefined;

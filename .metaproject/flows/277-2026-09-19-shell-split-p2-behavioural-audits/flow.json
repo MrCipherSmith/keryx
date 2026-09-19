@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "277",
+  "slug": "shell-split-p2-behavioural-audits",
+  "title": "Shell god-files P2: convert the source-text audits into behavioural tests, with seams where behaviour is not observable",
+  "status": "initializing",
+  "createdAt": "2026-09-19T23:52:23.299Z",
+  "updatedAt": "2026-09-19T23:52:23.299Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T23:52:23.299Z",
+      "event": "created"
+    }
+  ]
+}
