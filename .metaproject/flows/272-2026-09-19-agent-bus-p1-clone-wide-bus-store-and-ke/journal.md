@@ -63,3 +63,34 @@
 - 2026-09-19T16:35:27.761Z - task-added: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes
 - 2026-09-19T16:35:27.837Z - task-attempt: T14: started (attempt 1) — 272-T14 CI coverage fix
 - 2026-09-19T16:36:21.606Z - task-done: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes
+- 2026-09-19T16:40:38.059Z - task-done: T11: Verification: CI on the PR head green (typecheck, lint, full suite)
+- 2026-09-19T16:40:40.873Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/611 (warning: PR is not a draft)
+- 2026-09-19T16:41:04.096Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-19T16:41:04.179Z - ac-confirmed: AC1: src/lib/clone-scope.ts exports gitCommonDir/gitToplevel; allocation.ts imports them; allocation.test.ts unmodified and green in CI. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.254Z - ac-confirmed: AC2: src/bus/paths.test.ts: real temp repo + git worktree add; subdir and linked worktree resolve to the same <common>/keryx/bus/<key> (realpath-canonical), non-git -> data-dir fallback. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.334Z - ac-confirmed: AC3: src/bus/schema.test.ts and paths.test.ts: inline schemas validated on write/read, assertBusId refuses non-UUID before path build, torn/invalid/unknown-version skipped, reserved names all/cli/system refused, strict ISO timestamps. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.412Z - ac-confirmed: AC4: src/bus/log.process.test.ts: 8 real processes x100 appends -> seq 1..800 gap-free, no torn lines, head 800; killed writer after its line -> next append seq+1, no duplicate. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.499Z - ac-confirmed: AC5: log.test.ts + log.process.test.ts: rotation at the bound, <=2 rotated segments, >7d deleted; reader across >=3 rotations and with offset beyond the new segment sees every event exactly once; F1 rotation-during-read fixed (c74f5a39). CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.582Z - ac-confirmed: AC6: src/bus/presence.test.ts: atomic write mode 0600 in 0700 dirs, classifyPresence live/stale/gone with injected clock/pid/host, allocateName agent-<n> and <name>-2. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.666Z - ac-confirmed: AC7: src/bus/send.test.ts + commands/bus.test.ts: kinds notice/question/handoff/reply (reply needs --reply-to), @name live-only (unknown-recipient, recipient-not-live), @all -> [*], from cli/origin cli/fresh id, redacted body, body-too-large >2048, rate-limited >30/min/clone. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.744Z - ac-confirmed: AC8: shell-env.test.ts: KERYX_TOOL_CALL=1 in resolveShellEnv, absent from external and MCP child env; commands/bus.test.ts: send refuses use-agent-tool, list/log/prune allowed, KERYX_SESSION_* without marker not refused. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.823Z - ac-confirmed: AC9: commands/bus.test.ts: list shows live/stale peers (name,status,activity,checkout,branch) and active leases; log --since/--limit/--json; log.process.test.ts: two linked worktrees list each other via real CLI processes. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.901Z - ac-confirmed: AC10: src/bus/enabled.test.ts + commands/bus.test.ts: disabled with named reason for KERYX_BUS=off, bus.enabled false, CI; send/prune refuse bus-disabled, list/log read; busPollMs clamped 250-10000. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:04.974Z - ac-confirmed: AC11: src/bus/prune.test.ts: removes presence gone >24h, inactive leases (lease-expired exactly once, F4), rotated segments beyond the bound; keeps live and stale. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:05.052Z - ac-confirmed: AC12: src/bus/flow-isolation.test.ts source audit: nothing in src/bus or src/commands/bus.ts writes under .metaproject/flows or imports a flow-state writer. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:05.129Z - ac-confirmed: AC13: bus list/log/send/prune in src/cli.ts routes and help, four descriptors in command-registry.ts (module bus), ## bus section + top-level row in cli-reference.md; registry and cli-reference coverage tests green. CI green 18/18 on PR #611 head 1389fb9b, merged b5fcdfd2
+- 2026-09-19T16:41:05.210Z - ac-confirmed: AC14: CI on PR #611 head 1389fb9b: 18/18 green incl. typecheck-and-tests and the client matrix (bus tests run in the cancel-resume leg per the core-gate zoning rule); merged b5fcdfd2
+- 2026-09-19T16:41:05.292Z - ac-confirmed: AC15: agent-bus README 0.4.0, implementation-plan 0.4.0 and roadmap 0.29.10 mark P0 (flow 271, #607) and P1 (flow 272, #611) implemented and P2-P5 not implemented; merged b5fcdfd2
+- 2026-09-19T16:41:31.378Z - completing
+- 2026-09-19T16:41:39.857Z - done: all gates passed
+- 2026-09-19T16:42Z - orchestrator completion report.
+  - **PR and CI.** PR #611 was squash-merged as b5fcdfd2 at head 1389fb9b. CI passed 18 of 18 checks.
+  - **Review record.** `2026-09-19-ingest-main` holds 8 findings from rounds r1–r3: F1 (major), F2–F5 (minor), F6 (info), N1 and N2 (minor). Each has a `refuted` verdict that cites its fix commit (c74f5a39 or 0d27d6d3) and is dispositioned `acted-on`. There were no PR comments.
+  - **Review round r3.** It verified at 9740c068. The only later change is T14, a one-line CI leg in package.json that touches no reviewed code, and the round was ingested at the final head.
+  - **CI fix T14.** The first CI run failed exactly one test, the core-gate coverage check. `src/bus/` was not in any test leg. It is now in `test:client:cancel-resume`, because bus is a client zone: it imports session, and core must not select client-zone tests.
+  - **Known limitations carried forward.**
+    - `withFileLock` can end up with two holders in one residual window: a crashed holder, three waiters, and the third waiter writing `owner.json` inside the rename-back window. The worst case on the bus is a dropped duplicate seq. Closing it needs a kernel lock.
+    - Project-key slug collisions: `a/b` and `a-b` map to the same key.
+    - A failed lease delete makes prune exit with an error rather than a named refusal.
+    - A reader that falls more than two segments behind loses events through retention, by design.
+  - **Next.** P2: shell join, heartbeat, poller, `/bus`, and peers in the sidebar.
