@@ -12,6 +12,7 @@
 // serialized on a single promise chain and never block or throw into the shell.
 
 import net from "node:net";
+import { debugEvent } from "./debug-log";
 
 const SOURCE = "herdr:keryx";
 const AGENT = "keryx";
@@ -78,6 +79,7 @@ export function createHerdrReporter(
     report(state) {
       if (state === last) return;
       last = state;
+      debugEvent("herdr.report", { state });
       void send("pane.report_agent", { state });
     },
     release() {

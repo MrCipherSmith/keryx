@@ -75,3 +75,27 @@ test("actual CLI help and errors exit without credentials or Keryx file writes",
     rmSync(cwd, { recursive: true, force: true });
   }
 });
+
+describe("--debug", () => {
+  test("is parsed as a boolean and combines with other flags", () => {
+    expect(parseShellCliFlags(["--debug"])).toMatchObject({ debug: true });
+    expect(parseShellCliFlags(["--debug", "--ask", "-c"])).toMatchObject({ debug: true, permissionModeFlag: "ask", continueLast: true });
+    expect(parseShellCliFlags([]).debug).toBeUndefined();
+  });
+  test("the internal watcher entry refuses to run without a target", async () => {
+    const before = process.exitCode;
+    await shellCommand(["--debug-watcher"]);
+    expect(process.exitCode).toBe(2);
+    process.exitCode = before ?? 0;
+  });
+});
+
+describe("--debug with the session-lease flags (flow 271 merge of #608)", () => {
+  test("combines with -r <id> --fork / --take-over and is never read as the -r id", () => {
+    expect(parseShellCliFlags(["-r", "abc", "--fork", "--debug"])).toMatchObject({ resumeId: "abc", fork: true, debug: true });
+    expect(parseShellCliFlags(["--debug", "-r", "abc", "--take-over"])).toMatchObject({ resumeId: "abc", takeOver: true, debug: true });
+    const bare = parseShellCliFlags(["-r", "--debug"]);
+    expect(bare).toMatchObject({ resumePick: true, debug: true });
+    expect(bare.resumeId).toBeUndefined();
+  });
+});

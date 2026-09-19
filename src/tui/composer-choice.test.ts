@@ -206,3 +206,56 @@ otuiTest("abort signal resolves cancelId and hides the dock", async () => {
 
   h.destroy();
 });
+
+otuiTest("Enter right after the menu opens is ignored; a later Enter answers", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: string | undefined;
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    acceptDelayMs: 150,
+    options: [
+      { id: "once", label: "Allow once", description: "", recommended: true },
+      { id: "deny", label: "Deny", description: "" },
+    ],
+  }).then((id) => {
+    settled = id;
+    return id;
+  });
+  await h.flush();
+  // The Enter that was meant to send a message the user was typing.
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  expect(h.chrome.dock.visible).toBe(true);
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  h.mockInput.pressEnter();
+  expect(await pending).toBe("once");
+  h.destroy();
+});
+
+otuiTest("Enter while the user is still typing into the open menu is ignored; Esc never is", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  let settled: string | undefined;
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Allow shell command?",
+    cancelId: "deny",
+    acceptDelayMs: 150,
+    options: [{ id: "once", label: "Allow once", description: "", recommended: true }],
+  }).then((id) => {
+    settled = id;
+    return id;
+  });
+  await h.flush();
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  h.mockInput.pressKey("a");
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(settled).toBeUndefined();
+  h.mockInput.pressEscape();
+  expect(await pending).toBe("deny");
+  h.destroy();
+});

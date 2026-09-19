@@ -66,6 +66,7 @@ import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
+import { debugEvent } from "./debug-log";
 import { mountEmptyTranscriptSplash, playBootAnimation } from "./boot-animation";
 import {
   catchUpItems,
@@ -901,6 +902,7 @@ export function attachBlockIo(
     );
   };
   io.onToolCall = (name, input) => {
+    debugEvent("tool.call", { name, inputChars: input.length });
     chrome.onToolCall?.(name, input);
     const args = summarizeToolArgs(input);
     // The block retains the RAW input json; the header keeps the compact call.
@@ -915,6 +917,7 @@ export function attachBlockIo(
     );
   };
   io.onToolResult = (name, result) => {
+    debugEvent("tool.result", { name, isError: result.isError === true, outputChars: result.output.length });
     chrome.onToolResult?.(name, result);
     const { summary, lineCount, hidden } = collapseToolOutput(result.output);
     const more = hidden > 0 ? ` · +${hidden} more` : "";
@@ -3138,6 +3141,7 @@ export async function launchTuiAgentShell(opts: {
     let busyStartedAt = 0;
     const setBusyPhase = (phase: string): void => {
       busyPhase = phase;
+      debugEvent("busy.phase", { phase });
       chrome.setBusyPhase(phase);
     };
     const startBusy = (phase = "waiting for model"): void => {
@@ -3464,6 +3468,7 @@ export async function launchTuiAgentShell(opts: {
       status: "queued" | "running" | "done" | "failed" | "blocked",
       detail?: string,
     ): void => {
+      debugEvent("main-agent", { status, detail });
       fleet.upsert({
         id: MAIN_AGENT_ID,
         label: "main",
