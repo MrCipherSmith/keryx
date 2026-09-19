@@ -27,3 +27,4 @@
 - 2026-09-19T23:14:09.062Z - task-attempt: T9: started (attempt 1) — 275-T9 process tests (sonnet)
 - 2026-09-19T23:14:09.149Z - task-attempt: T10: started (attempt 1) — 275-T10 docs + backlog entry (haiku)
 - 2026-09-19T23:18:30.004Z - task-done: T10: Docs: P4 status and pause docs (haiku)
+- 2026-09-19T23:34:59.277Z - task-done: T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)

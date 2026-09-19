@@ -9,7 +9,7 @@
   "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
   "status": "in-progress",
   "createdAt": "2026-09-19T21:39:31.218Z",
-  "updatedAt": "2026-09-19T23:18:30.004Z",
+  "updatedAt": "2026-09-19T23:34:59.277Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,7 +174,7 @@
       "id": "T9",
       "title": "Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -188,7 +188,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -380,6 +381,11 @@
       "at": "2026-09-19T23:18:30.004Z",
       "event": "task-done",
       "detail": "T10: Docs: P4 status and pause docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T23:34:59.277Z",
+      "event": "task-done",
+      "detail": "T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)"
     }
   ]
 }
