@@ -16,6 +16,7 @@ import { createJobRegistry } from "../harness/tool/builtin/background-job-regist
 import type { BackgroundProcessHandle, JobRegistry } from "../harness/tool/builtin/background-job-registry";
 import type {
   NormalizedEvent,
+  NormalizedMessage,
   ProviderDescription,
   ProviderPort,
 } from "../harness/provider/types";
@@ -749,4 +750,284 @@ test("AC10: ask mode (default, no permissionMode getter) still prompts for a bac
   );
   expect(approvalCalls).toBe(1);
   expect(registry.list()).toHaveLength(1);
+});
+
+// --- flow 275 T6: `bus_pause` (risk write) goes through the SAME gate as any
+// other write-risk tool (AC7) — ask prompts, trust/auto skip the prompt,
+// readOnly (/plan) denies outright, never on its own escalation dimension.
+
+test("AC7: bus_pause prompts in ask mode (default)", async () => {
+  const { tool, ran } = fakeTool("bus_pause", "write");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    // no permissionMode getter — default is "ask"
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", '{"command":"anything"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(1);
+  expect(ran()).toBe(true);
+});
+
+test("AC7: bus_pause runs without a prompt in trust mode", async () => {
+  const { tool, ran } = fakeTool("bus_pause", "write");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "trust",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", '{"command":"anything"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(0);
+  expect(ran()).toBe(true);
+});
+
+test("AC7: bus_pause runs without a prompt in auto mode", async () => {
+  const { tool, ran } = fakeTool("bus_pause", "write");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", '{"command":"anything"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(approvalCalls).toBe(0);
+  expect(ran()).toBe(true);
+});
+
+test("AC7: bus_pause is denied under /plan (readOnly), even under auto mode", async () => {
+  const { tool, ran } = fakeTool("bus_pause", "write");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+    readOnly: () => true,
+  };
+  const history: NormalizedMessage[] = [];
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", '{"command":"anything"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(ran()).toBe(false);
+  expect(approvalCalls).toBe(0);
+  expect(history.find((m) => m.role === "tool")?.content).toMatch(/read-only/);
+});
+
+// --- flow 275 T6 (specification §4.4, AC6): the shell branch's publish-lease
+// floor — computed as `isPublishCommand(command) &&
+// deps.busLeases.appliesToMe("git-publish")` and threaded into BOTH the gate
+// (`resolveApprovalDecision`) and the `ApprovalMeta` given to the approver.
+
+test("AC6: a git-publish lease forces ask for git push even under auto mode, and the meta names the holder and reason", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const seen: { publishLease: boolean | undefined; publishLeaseDetail: string | undefined }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ publishLease: meta?.publishLease, publishLeaseDetail: meta?.publishLeaseDetail });
+      return false;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git push origin main"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      busLeases: {
+        appliesToMe: (scope) => scope === "git-publish",
+        heldBy: () => ({ name: "alice", reason: "cutting the release" }),
+      },
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([
+    { publishLease: true, publishLeaseDetail: 'held by @alice — "cutting the release"' },
+  ]);
+});
+
+test("AC6: without a git-publish lease, git push auto-approves under auto mode (unchanged)", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git push origin main"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      // no busLeases at all
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(approvalCalls).toBe(0);
+});
+
+test("AC6: a git-publish lease targeting a DIFFERENT scope (turns) does not force ask for git push", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git push origin main"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      busLeases: {
+        appliesToMe: (scope) => scope === "turns", // not git-publish
+      },
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(approvalCalls).toBe(0);
+});
+
+test("AC6: a git-publish lease does not affect a non-publish command (git status)", async () => {
+  const { tool, ran } = fakeTool("shell_exec", "shell");
+  let approvalCalls = 0;
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async () => {
+      approvalCalls += 1;
+      return true;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git status"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      busLeases: {
+        appliesToMe: (scope) => scope === "git-publish",
+        heldBy: () => ({ name: "alice", reason: "cutting the release" }),
+      },
+    },
+    [],
+    "go",
+  );
+  expect(ran()).toBe(true);
+  expect(approvalCalls).toBe(0);
+});
+
+test("AC6: publishLease still asks even when heldBy() has no detail to offer", async () => {
+  const { tool } = fakeTool("shell_exec", "shell");
+  const seen: { publishLease: boolean | undefined; publishLeaseDetail: string | undefined }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ publishLease: meta?.publishLease, publishLeaseDetail: meta?.publishLeaseDetail });
+      return false;
+    },
+    permissionMode: () => "auto",
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("shell_exec", '{"command":"git push origin main"}')),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+      busLeases: {
+        appliesToMe: (scope) => scope === "git-publish",
+        // no heldBy() at all
+      },
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ publishLease: true, publishLeaseDetail: undefined }]);
 });

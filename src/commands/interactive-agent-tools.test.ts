@@ -411,7 +411,10 @@ describe("K-flow-274: the bus option", () => {
   // review r1 F2: this used to pass `bus: { client: () => undefined }` and
   // still expect the tools to be offered — exactly the AC9 regression. A
   // joined bus is now required for inclusion at all.
-  test("with `bus` and a live client (joined), bus_list and bus_send are offered", async () => {
+  //
+  // flow 275 T6 (AC7): `bus_pause` joins `bus_list`/`bus_send` here — same
+  // inclusion rule, same gate.
+  test("with `bus` and a live client (joined), bus_list, bus_send and bus_pause are offered", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-with-bus-"));
     const tools = buildInteractiveAgentTools({
       cwd,
@@ -423,6 +426,7 @@ describe("K-flow-274: the bus option", () => {
     const names = interactiveAgentToolNames(tools);
     expect(names).toContain("bus_list");
     expect(names).toContain("bus_send");
+    expect(names).toContain("bus_pause");
   });
 
   // review r1 F2: previously asserted the OPPOSITE — that the tools were

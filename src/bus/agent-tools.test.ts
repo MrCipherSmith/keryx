@@ -351,3 +351,165 @@ describe("bus_send", () => {
     expect(called).toBe(false);
   });
 });
+
+// Flow 275 T6: `bus_pause` (specification §4.4, §7.1; AC7).
+describe("bus_pause", () => {
+  test("bus-disabled when there is no client (pause)", async () => {
+    const [, , busPause] = buildBusTools(() => undefined);
+    const result = await busPause!.invoke({ action: "pause", to: "@peer", reason: "release" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("bus_pause: bus-disabled:");
+  });
+
+  test("bus-disabled when there is no client (resume)", async () => {
+    const [, , busPause] = buildBusTools(() => undefined);
+    const result = await busPause!.invoke({ action: "resume", leaseId: pauseLease().leaseId });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain("bus_pause: bus-disabled:");
+  });
+
+  test("pause: calls client.pause(toLabel, scope, reason, ttlMs, 'agent') and returns { seq, leaseId }", async () => {
+    let calledWith: unknown;
+    const client = fakeClient({
+      pause: async (toLabel, scope, reason, ttlMs, origin) => {
+        calledWith = { toLabel, scope, reason, ttlMs, origin };
+        return pauseLease({ requestEventSeq: 7 });
+      },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({
+      action: "pause",
+      to: "@peer",
+      scope: "git-publish",
+      ttlMinutes: 15,
+      reason: "cutting the release",
+    });
+    expect(result.isError).toBe(false);
+    expect(calledWith).toEqual({
+      toLabel: "@peer",
+      scope: "git-publish",
+      reason: "cutting the release",
+      ttlMs: 15 * 60_000,
+      origin: "agent",
+    });
+    expect(JSON.parse(result.output)).toEqual({ seq: 7, leaseId: pauseLease().leaseId });
+  });
+
+  test("pause: scope defaults to 'turns' when omitted", async () => {
+    let sawScope: unknown;
+    const client = fakeClient({
+      pause: async (_to, scope) => {
+        sawScope = scope;
+        return pauseLease();
+      },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "pause", to: "@peer", reason: "hold on" });
+    expect(result.isError).toBe(false);
+    expect(sawScope).toBe("turns");
+  });
+
+  test("pause: ttlMinutes omitted leaves ttlMs undefined (client applies its own default)", async () => {
+    let sawTtlMs: unknown = "unset";
+    const client = fakeClient({
+      pause: async (_to, _scope, _reason, ttlMs) => {
+        sawTtlMs = ttlMs;
+        return pauseLease();
+      },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    await busPause!.invoke({ action: "pause", to: "@peer", reason: "hold on" });
+    expect(sawTtlMs).toBeUndefined();
+  });
+
+  test('pause: missing "to" is refused locally, client never called', async () => {
+    let called = false;
+    const client = fakeClient({ pause: async () => { called = true; return pauseLease(); } });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "pause", reason: "hold on" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('"to"');
+    expect(called).toBe(false);
+  });
+
+  test('pause: missing "reason" is refused locally, client never called', async () => {
+    let called = false;
+    const client = fakeClient({ pause: async () => { called = true; return pauseLease(); } });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "pause", to: "@peer" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('"reason"');
+    expect(called).toBe(false);
+  });
+
+  test("pause: an invalid scope is rejected before the client is ever consulted", async () => {
+    let called = false;
+    const client = fakeClient({ pause: async () => { called = true; return pauseLease(); } });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "pause", to: "@peer", reason: "x", scope: "bogus" });
+    expect(result.isError).toBe(true);
+    expect(called).toBe(false);
+  });
+
+  test("resume: calls client.resume(leaseId, 'agent') and returns { leaseId }", async () => {
+    let calledWith: unknown;
+    const client = fakeClient({
+      resume: async (leaseId, origin) => {
+        calledWith = { leaseId, origin };
+      },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "resume", leaseId: pauseLease().leaseId });
+    expect(result.isError).toBe(false);
+    expect(calledWith).toEqual({ leaseId: pauseLease().leaseId, origin: "agent" });
+    expect(JSON.parse(result.output)).toEqual({ leaseId: pauseLease().leaseId });
+  });
+
+  test('resume: missing "leaseId" is refused locally, client never called', async () => {
+    let called = false;
+    const client = fakeClient({ resume: async () => { called = true; } });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "resume" });
+    expect(result.isError).toBe(true);
+    expect(result.output).toContain('"leaseId"');
+    expect(called).toBe(false);
+  });
+
+  test("an unknown action is rejected before the client is ever consulted", async () => {
+    let called = false;
+    const client = fakeClient({
+      pause: async () => { called = true; return pauseLease(); },
+      resume: async () => { called = true; },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "bogus", to: "@peer", reason: "x", leaseId: "x" });
+    expect(result.isError).toBe(true);
+    expect(called).toBe(false);
+  });
+
+  for (const code of ["lease-already-held", "ttl-out-of-range", "unknown-recipient", "recipient-not-live", "recipient-is-self"] as const) {
+    test(`pause: maps BusRefusal(${code}) from client.pause to a named refusal`, async () => {
+      const client = fakeClient({
+        pause: async () => {
+          throw new BusRefusal(code, "from the client");
+        },
+      });
+      const [, , busPause] = buildBusTools(() => client);
+      const result = await busPause!.invoke({ action: "pause", to: "@peer", reason: "x" });
+      expect(result.isError).toBe(true);
+      expect(result.output).toBe(`bus_pause: ${code}: from the client`);
+    });
+  }
+
+  test("resume: maps BusRefusal(not-lease-holder) from client.resume to a named refusal", async () => {
+    const client = fakeClient({
+      resume: async () => {
+        throw new BusRefusal("not-lease-holder", "only the holder may resume this lease");
+      },
+    });
+    const [, , busPause] = buildBusTools(() => client);
+    const result = await busPause!.invoke({ action: "resume", leaseId: pauseLease().leaseId });
+    expect(result.isError).toBe(true);
+    expect(result.output).toBe("bus_pause: not-lease-holder: only the holder may resume this lease");
+  });
+});

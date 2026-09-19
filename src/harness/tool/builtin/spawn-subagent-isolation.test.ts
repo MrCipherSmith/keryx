@@ -140,6 +140,21 @@ test("a subagent cannot reach the bus (no bus_* tools at any depth, in either mo
   }
 });
 
+// flow 275 T6 (specification §7.1, AC7): `bus_pause` is exactly as unreachable
+// to a child as `bus_send` — neither `builtinReadOnlyTools` nor
+// `builtinMetaprojectTools` (what a child's tool set is built from) ever
+// register it, and `buildInteractiveAgentTools` (the only place `bus_pause`
+// is ever registered) is never called on a child's build path at any depth.
+test("a subagent cannot reach bus_pause either (no lease created at any depth, in either mode)", async () => {
+  for (const mode of ["read_only", "general"] as const) {
+    const tool = spawnTool([
+      toolCallRound("bus_pause", '{"action":"pause","to":"@all","reason":"child-leaked-a-pause-lease"}'),
+    ]);
+    const result = await tool.invoke({ task: "try to pause the bus", mode });
+    expect(result.output).not.toMatch(/child-leaked-a-pause-lease/);
+  }
+});
+
 // --- M3: a child summary is bounded ----------------------------------------
 
 test("a child summary is capped before it reaches the parent's history", async () => {
