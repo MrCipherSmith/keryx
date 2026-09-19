@@ -95,6 +95,12 @@ export const ZONE_TABLE: readonly ZoneEntry[] = [
   // state a core module could want.
   { segment: "mcp-servers", zone: "client" },
   { segment: "agents", zone: "client" },
+  // The agent bus (flow 272): presence, event log and pause leases shared by
+  // interactive shells of one clone. Client because it sits beside the session
+  // store it builds on (`src/session/paths.ts`) and is consumed by the TUI,
+  // readline and the turn loop; it is not an owner of project state, and a
+  // core zone could not import the session module it needs.
+  { segment: "bus", zone: "client" },
 
   // Shared primitives — independent, below both core and client.
   { segment: "lib", zone: "shared" },

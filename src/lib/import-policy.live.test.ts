@@ -212,8 +212,16 @@ const AVOIDABLE_BYPASS_CEILING = 150;
  */
 const AVOIDABLE_SLACK = 15;
 
-/** Source zones that bypass a facade, exact — a NEW zone joining is a real change. */
-const BYPASSING_ZONES = ["cli.ts", "commands", "harness", "mcp", "session", "tui"];
+/**
+ * Source zones that bypass a facade, exact — a NEW zone joining is a real change.
+ *
+ * `bus` joined in flow 272 with one unavoidable edge: `bus/enabled.ts` ->
+ * `capability/external-agents.ts` for `detectCi`, the one CI detector the spec
+ * requires it to reuse. `capability` has no `service.ts`, so the edge counts
+ * as unavoidable and does not move the ratchet above; every other core import
+ * in `src/bus` goes through a facade (`security/service.ts`).
+ */
+const BYPASSING_ZONES = ["bus", "cli.ts", "commands", "harness", "mcp", "session", "tui"];
 
 let cached: Awaited<ReturnType<typeof checkImportPolicy>> | undefined;
 async function report() {

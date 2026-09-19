@@ -10,7 +10,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import path from "node:path";
 
@@ -37,12 +37,27 @@ export function isPathInside(root: string, candidate: string): boolean {
   return relative === "" || (relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-export async function writeFileAtomic(filePath: string, content: string): Promise<void> {
+/**
+ * Write `content` to a temp file beside `filePath`, then rename it over. With
+ * `options.mode` the temp file is created with that mode and chmodded to it
+ * (creation modes are filtered by the umask), and the rename carries the mode
+ * over, so the file never exists at `filePath` with a wider one.
+ */
+export async function writeFileAtomic(
+  filePath: string,
+  content: string,
+  options: { mode?: number } = {},
+): Promise<void> {
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });
   const tmp = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
   try {
-    await writeFile(tmp, content, "utf8");
+    if (options.mode === undefined) {
+      await writeFile(tmp, content, "utf8");
+    } else {
+      await writeFile(tmp, content, { encoding: "utf8", mode: options.mode });
+      if (process.platform !== "win32") await chmod(tmp, options.mode);
+    }
     await rename(tmp, filePath);
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
