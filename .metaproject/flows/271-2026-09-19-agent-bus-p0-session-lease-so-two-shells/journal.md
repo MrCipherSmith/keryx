@@ -64,3 +64,6 @@
     3. The TUI half of AC7 is covered by source-text audits plus real-lease tests of `createTuiLeaseHolder`. The subprocess proof is T10.
     4. `openLeasedSession(` is not in the store.callers guard list. The one call sits inside `try`, and review checks it.
 - 2026-09-19T14:04:42.236Z - task-done: T8: TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r
+- 2026-09-19T14:04:47.958Z - task-attempt: T10: started (attempt 1) — 271-T10 dispatch
+- 2026-09-19T14:12:09.730Z - task-done: T10: Subprocess verification: two -c shells (AC1), SIGKILL and SIGSTOP holders with short staleMs (AC5), SIGTERM release (AC7)
+- 2026-09-19T14:12:17.834Z - task-attempt: T12: started (attempt 1) — local lint+typecheck+full suite
