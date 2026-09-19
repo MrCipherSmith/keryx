@@ -3,6 +3,48 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.118] — 2026-09-19
+Every step of the provider and search-provider wizards now opens as a dialog
+inside the shell. `/integrations` and `/mcp` are readable at any width. The
+sidebar shows the permission mode and read-only state, and a new session opens
+on the wordmark instead of a blank pane (PR #596, flow 270).
+
+### Changed
+
+- **`/provider`, `/connect` and `/search-provider` open as dialogs** in the
+  shell, like `/model`. This covers every step: provider, sign-in method,
+  endpoint URL, API key, device login, custom-provider fields, search
+  credential, the active-provider question and the connection test. The
+  sidebar stays visible. Esc goes back one step, or cancels on the first. The
+  startup picker and the chat shell keep the full-screen view.
+- **`/integrations` (Tools & MCP) and `/mcp` are readable.** Long descriptions
+  wrap under their own column. The first column is now "approval", with `none`
+  for tools that never ask, so `shell_task_kill` no longer reads as a
+  read-only tool. Paths show your home directory as `~`. The footer lists only
+  keys that work on the current tab, and ↑/↓ now reach the last tool.
+- **The sidebar shows the mode**: `mode ask`, or `mode ask · read-only`
+  highlighted while `/plan on` is active. It updates as soon as `/mode` or
+  `/plan` changes it.
+- **A new session opens on the KERYX wordmark**, centred in the empty
+  transcript until you send the first line. The startup animation no longer
+  shows loading steps that did no work.
+
+### Fixed
+
+- **A Grok `config.toml` with an array of tables** such as
+  `[[marketplace.sources]]` is no longer reported as a config problem in
+  `/mcp`. An `[[mcp_servers…]]` header, in either quote style, is still
+  refused.
+- **Text fields in dialogs keep ←/→** for moving the cursor instead of
+  switching tabs.
+- **A dialog that opens right after another closes is now drawn.** Esc on the
+  URL step used to return to a provider list that was open but invisible.
+- **Dialog text no longer loses its last column** to the scrollbar.
+- **Nothing typed between wizard steps is sent as a message** while the wizard
+  is still loading.
+- **Esc during a search-provider connection test** no longer lets the test set
+  that provider active afterwards.
+
 ## [0.2.117] — 2026-09-19
 A shell task no longer reports that it finished before its last output is
 readable (PR #594).
