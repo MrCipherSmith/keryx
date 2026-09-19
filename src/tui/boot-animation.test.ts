@@ -2,7 +2,9 @@
 // `@opentui/core` test renderer (mirrors `shell-chrome.test.ts`'s harness),
 // not a replica of its layout math.
 import { expect, test } from "bun:test";
-import { DEFAULT_BOOT_DURATION_MS, playBootAnimation } from "./boot-animation";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { DEFAULT_BOOT_DURATION_MS, mountEmptyTranscriptSplash, playBootAnimation, SPLASH_HINT } from "./boot-animation";
 import { onKeypress } from "./tui-shell";
 
 async function loadOpenTui(): Promise<
@@ -103,4 +105,57 @@ otuiTest("opts.skip=true resolves without mounting anything, independent of the 
   expect(setup.captureCharFrame()).not.toContain("K E R Y X");
 
   setup.renderer.destroy();
+});
+
+// --- flow 270 AC10 -----------------------------------------------------------
+
+otuiTest("the boot animation shows no loading steps: it did no work behind them", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 60, height: 12 });
+
+  const done = playBootAnimation(otui.core, setup.renderer, {
+    onKeypress: (handler) => onKeypress(setup.renderer, handler),
+    durationMs: 200,
+  });
+  await setup.flush();
+  const frame = setup.captureCharFrame();
+  expect(frame).toContain("K E R Y X");
+  for (const fake of ["Reading .metaproject index", "Connecting provider", "Warming graph"]) {
+    expect(frame).not.toContain(fake);
+  }
+  await done;
+  setup.renderer.destroy();
+});
+
+otuiTest("the empty-transcript wordmark stays until removed, centred, and removing twice is safe", async () => {
+  const otui = requireOtui();
+  const setup = await otui.testing.createTestRenderer({ width: 80, height: 30 });
+  const transcript = new otui.core.BoxRenderable(setup.renderer, { id: "transcript-fixture", width: "100%", flexDirection: "column" });
+  setup.renderer.root.add(transcript);
+
+  const remove = mountEmptyTranscriptSplash(otui.core, setup.renderer, transcript);
+  await setup.flush();
+  const lines = setup.captureCharFrame().split("\n");
+  const wordmarkRow = lines.findIndex((line) => line.includes("K E R Y X"));
+  expect(wordmarkRow).toBeGreaterThan(3); // pushed down from the top of the pane
+  const left = (lines[wordmarkRow] ?? "").indexOf("K E R Y X");
+  const right = 80 - (left + "K E R Y X".length);
+  expect(Math.abs(left - right)).toBeLessThanOrEqual(4); // horizontally centred in the 80-column pane
+  expect(setup.captureCharFrame()).toContain(SPLASH_HINT);
+
+  remove();
+  remove();
+  await setup.flush();
+  expect(setup.captureCharFrame()).not.toContain("K E R Y X");
+  setup.renderer.destroy();
+});
+
+test("the shell mounts the wordmark only for an empty session and removes it on the first operator line or a session with history", () => {
+  const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  expect(source).toContain("if (history.length === 0) {\n      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);");
+  expect(source).toMatch(/if \(opened\.history\.length > 0\) \{\n\s+removeSplash\?\.\(\);/);
+  const runLineStart = source.indexOf("const runLine = (line: string");
+  const operatorBlock = source.slice(runLineStart, runLineStart + 1400);
+  expect(operatorBlock).toContain("consecutiveAutoWakes = 0;");
+  expect(operatorBlock).toContain("removeSplash?.();");
 });

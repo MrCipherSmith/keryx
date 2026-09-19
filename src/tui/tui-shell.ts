@@ -65,7 +65,7 @@ import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
-import { playBootAnimation } from "./boot-animation";
+import { mountEmptyTranscriptSplash, playBootAnimation } from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -4070,6 +4070,13 @@ export async function launchTuiAgentShell(opts: {
     deps = { ...deps, onContextCompaction };
     liveDeps = deps;
 
+    /**
+     * Removes the empty-transcript wordmark (flow 270 AC10). Set once the
+     * startup session turns out to be empty; cleared by the first operator
+     * message, or by opening a session that already has messages.
+     */
+    let removeSplash: (() => void) | undefined;
+
     const applyOpened = (
       opened: {
         handle: SessionHandle;
@@ -4079,6 +4086,10 @@ export async function launchTuiAgentShell(opts: {
       },
       previewHistory?: boolean,
     ): void => {
+      if (opened.history.length > 0) {
+        removeSplash?.();
+        removeSplash = undefined;
+      }
       liveSession = opened.handle;
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -4212,6 +4223,9 @@ export async function launchTuiAgentShell(opts: {
       );
     }
     slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+    if (history.length === 0) {
+      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);
+    }
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
@@ -5139,6 +5153,9 @@ export async function launchTuiAgentShell(opts: {
       if (origin === "operator") {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
+        // ...and the first thing they send replaces the wordmark (AC10).
+        removeSplash?.();
+        removeSplash = undefined;
       }
       const displayLine = summarizeSubmittedLine(line);
 
