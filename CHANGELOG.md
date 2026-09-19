@@ -3,6 +3,20 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.117] — 2026-09-19
+A shell task no longer reports that it finished before its last output is
+readable (PR #594).
+
+### Fixed
+
+- **A finished task's output is complete when it is reported finished.** The
+  task supervisor settled a task as soon as its process exited, which could be
+  before the final bytes it wrote had been read from the pipe, so a read right
+  after the wait (`shell_task_output`, a completion notification) could miss
+  them. The exit is now reported once stdout and stderr have been drained,
+  waiting at most 2 seconds for a pipe a backgrounded child keeps open. Output
+  that arrived before the supervisor subscribed is no longer dropped.
+
 ## [0.2.116] — 2026-09-19
 Dialogs in the OpenTUI shell stay inside the chat column and size to what they
 show, and the transcript follows what you send (PR #591, flow 269).
