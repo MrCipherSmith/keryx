@@ -1,11 +1,18 @@
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import type { McpRuntimeStatus } from "../mcp/client-config";
 import type { NormalizedToolDefinition } from "../harness/provider/types";
 import {
+  approvalLabel,
+  fitRowsByLines,
   formatMcpListLines,
+  formatToolRowLines,
   formatToolsListLines,
   isMcpToolsCommand,
+  MCP_INSPECTOR_FOOTER,
+  MCP_TAB_KEYS,
   presentMcpTools,
+  TOOLS_COLUMN_HEADER,
+  wrapHangingRow,
 } from "./mcp-inspector";
 
 const TOOLS: readonly NormalizedToolDefinition[] = [
@@ -19,14 +26,149 @@ const RUNTIMES: readonly McpRuntimeStatus[] = [
   { id: "generic", filePath: null, connected: false, otherServers: [] },
 ];
 
-test("formatToolsListLines renders name, risk, and description; empty says so", () => {
+test("formatToolsListLines renders name, approval, and description; empty says so", () => {
   const lines = formatToolsListLines(TOOLS);
   expect(lines[0]).toContain("gdgraph_affected");
-  expect(lines[0]).toContain("read");
+  expect(lines[0]).toContain("none");
   expect(lines[0]).toContain("blast radius");
   expect(lines[1]).toContain("shell_exec");
   expect(lines[1]).toContain("shell");
   expect(formatToolsListLines([])).toEqual(["No tools available."]);
+});
+
+describe("AC5 — /tools rows wrap with a hanging indent under the description column", () => {
+  const LONG: NormalizedToolDefinition = {
+    name: "shell_task_kill",
+    description:
+      "Stop a background task this session started. Only tasks owned by the current session can be stopped; others are refused.",
+    inputSchema: {},
+    risk: "read",
+  };
+  // `tool` (28) + space + `approval` (8) + space.
+  const DESCRIPTION_COLUMN = 38;
+
+  test("at width 80 every line fits, and every continuation starts at the description column", () => {
+    const lines = formatToolRowLines(LONG, 80);
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(80);
+    expect(lines[0]?.startsWith("shell_task_kill ")).toBe(true);
+    expect(lines[0]?.slice(DESCRIPTION_COLUMN).startsWith("Stop a background")).toBe(true);
+    for (const line of lines.slice(1)) {
+      expect(line.slice(0, DESCRIPTION_COLUMN)).toBe(" ".repeat(DESCRIPTION_COLUMN));
+      expect(line[DESCRIPTION_COLUMN]).not.toBe(" ");
+    }
+    // Nothing lost or reordered by the wrap.
+    expect(lines.map((line) => line.slice(DESCRIPTION_COLUMN)).join(" ")).toBe(LONG.description ?? "");
+  });
+
+  test("exact layout at width 80", () => {
+    expect(formatToolRowLines(LONG, 80)).toEqual([
+      "shell_task_kill              none     Stop a background task this session",
+      "                                      started. Only tasks owned by the current",
+      "                                      session can be stopped; others are",
+      "                                      refused.",
+    ]);
+  });
+
+  test("a name longer than its column still hangs continuations under the description column", () => {
+    const lines = formatToolRowLines({ ...LONG, name: "an_extremely_long_tool_name_beyond_28" }, 80);
+    expect(lines[1]?.slice(0, DESCRIPTION_COLUMN)).toBe(" ".repeat(DESCRIPTION_COLUMN));
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(80);
+  });
+
+  test("a panel too narrow for the column falls back to a shallow indent instead of a one-word column", () => {
+    const lines = formatToolRowLines(LONG, 50);
+    for (const line of lines.slice(1)) expect(line.startsWith("    ") && line[4] !== " ").toBe(true);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(50);
+  });
+
+  test("the list joins a wrapped tool's lines into one entry, one per tool", () => {
+    const entries = formatToolsListLines([LONG, ...TOOLS], 80);
+    expect(entries).toHaveLength(3);
+    expect(entries[0]?.split("\n")).toEqual(formatToolRowLines(LONG, 80));
+  });
+
+  test("no width means no wrap — the single line a caller without a measured panel always got", () => {
+    expect(formatToolRowLines(LONG)).toHaveLength(1);
+  });
+});
+
+describe("AC5 — the hanging wrap helper", () => {
+  test("keeps the multi-space gaps between words that fit", () => {
+    expect(wrapHangingRow("> x ", "● on  [d] disconnect", 80)).toEqual(["> x ● on  [d] disconnect"]);
+  });
+
+  test("a path with a space stays one unit and breaks only before a slash", () => {
+    const lines = wrapHangingRow(
+      "head ",
+      "run ~/Library/Application Support/Cursor/extensions/some-server/dist/index.js",
+      40,
+      5,
+    );
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(40);
+    // The line that caught the link detector: a continuation opening on `Support/…`.
+    for (const line of lines.slice(1)) expect(line.trimStart().startsWith("Support/")).toBe(false);
+    for (const line of lines.slice(1)) expect(/^ {5}[/~]/.test(line)).toBe(true);
+  });
+});
+
+describe("AC5 — /integrations MCP client rows wrap the same way", () => {
+  test("at width 60 the tail hangs under the status column and no line overflows", () => {
+    const lines = formatMcpListLines(RUNTIMES, 0, { kind: "idle" }, 60)[0]?.split("\n") ?? [];
+    expect(lines.length).toBeGreaterThan(1);
+    // `> ` + label (20) + space.
+    for (const line of lines.slice(1)) expect(line.slice(0, 23)).toBe(" ".repeat(23));
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(60);
+    expect(lines.join(" ")).toContain("context7, playwright");
+  });
+});
+
+describe("AC7 — the risk column is labelled as the approval it causes", () => {
+  test("read means no approval; anything else names the risk that asks", () => {
+    expect(approvalLabel("read")).toBe("none");
+    expect(approvalLabel(undefined)).toBe("none");
+    expect(approvalLabel("shell")).toBe("shell");
+    expect(approvalLabel("write")).toBe("write");
+  });
+
+  test("shell_task_kill and shell_task_wait read as 'no approval needed', under an 'approval' header", () => {
+    expect(TOOLS_COLUMN_HEADER).toMatch(/^tool\s+approval\s+description$/);
+    const approvalAt = TOOLS_COLUMN_HEADER.indexOf("approval");
+    for (const name of ["shell_task_kill", "shell_task_wait"]) {
+      const [line] = formatToolRowLines({ name, description: "x", inputSchema: {}, risk: "read" }, 80);
+      expect(line?.slice(approvalAt, approvalAt + 8).trim()).toBe("none");
+      expect(line).not.toContain("read");
+    }
+  });
+});
+
+describe("AC6 — footer keys act on every tab; tab-only keys live on their tab", () => {
+  test("the shared footer promises nothing the Tools tab cannot do", () => {
+    const keys = MCP_INSPECTOR_FOOTER.map((action) => action.key);
+    expect(keys).toEqual(["↑/↓", "←/→", "esc"]);
+    expect(MCP_INSPECTOR_FOOTER.map((action) => action.label).join(" ")).not.toMatch(/connect|confirm/);
+  });
+
+  test("connect/disconnect/confirm hints appear on the MCP tab and not on the Tools tab", () => {
+    expect(MCP_TAB_KEYS).toContain("c/d connect/disconnect");
+    expect(MCP_TAB_KEYS).toContain("y confirm");
+    const renderTabs = (tabId: string): string => {
+      const body = fakeBody();
+      presentMcpTools(
+        (_otui, _chrome, input) => {
+          input.renderTab(tabId, body, { width: 100 });
+          return { close: () => {}, setTab: () => {}, activeTab: () => tabId };
+        },
+        fakeOtui(),
+        {},
+        { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+      );
+      return body.rows().map((row) => row.content).join("\n");
+    };
+    expect(renderTabs("mcp")).toContain(MCP_TAB_KEYS);
+    expect(renderTabs("tools")).not.toContain("connect/disconnect");
+    expect(renderTabs("tools")).not.toContain("confirm");
+  });
 });
 
 test("formatMcpListLines marks the selected row, shows status, and offers the opposite action", () => {
@@ -65,7 +207,7 @@ test("formatMcpListLines on an empty registry says so", () => {
   expect(formatMcpListLines([], 0, { kind: "idle" })).toEqual(["No MCP client runtimes registered."]);
 });
 
-test("presentMcpTools opens Tools+MCP tabs with the MCP footer", () => {
+test("presentMcpTools opens Tools+MCP tabs with the tab-agnostic footer", () => {
   const calls: { title: string; tabs: readonly { id: string }[]; footer?: readonly { key: string }[] }[] = [];
   let active = "tools";
   presentMcpTools(
@@ -90,8 +232,10 @@ test("presentMcpTools opens Tools+MCP tabs with the MCP footer", () => {
   );
   expect(calls[0]?.title).toBe("Tools & MCP");
   expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["tools", "mcp"]);
-  expect(calls[0]?.footer?.some((action) => action.key === "c/d")).toBe(true);
-  expect(calls[0]?.footer?.some((action) => action.key === "click")).toBe(true);
+  // AC6: `c/d`/`y` act only on the MCP tab, so they are that tab's first
+  // body line, not a footer promise shown on Tools too.
+  expect(calls[0]?.footer).toEqual(MCP_INSPECTOR_FOOTER);
+  expect(calls[0]?.footer?.some((action) => action.key === "c/d")).toBe(false);
 });
 
 /** Fake `TextRenderable`: one instance per row, each carrying its own `onMouseDown` — mirrors `background-job-inspector.test.ts`'s `FakeText`. */
@@ -142,7 +286,8 @@ test("Tools tab opens with an explanatory caption, then one clickable-free row p
     { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
   );
   const rows = body.rows();
-  expect(rows).toHaveLength(3); // caption + 2 tools
+  expect(rows).toHaveLength(4); // caption + column header + 2 tools
+  expect(findRow(rows, "mcp-tools-columns")?.content).toBe(TOOLS_COLUMN_HEADER);
   const caption = String(findRow(rows, "mcp-tools-header")?.content ?? "");
   expect(caption).toContain("Built into keryx");
   // Spec AC17, closed in P2. The caption originally ended "…keryx doesn't
@@ -157,9 +302,9 @@ test("Tools tab opens with an explanatory caption, then one clickable-free row p
   expect(caption).not.toContain("/mcps");
   expect(caption).not.toContain("doesn't consume");
   expect(caption).not.toContain("does not consume");
-  expect(rows[1]?.content).toContain("gdgraph_affected");
-  expect(rows[1]?.onMouseDown).toBeUndefined();
-  expect(rows[2]?.content).toContain("shell_exec");
+  expect(rows[2]?.content).toContain("gdgraph_affected");
+  expect(rows[2]?.onMouseDown).toBeUndefined();
+  expect(rows[3]?.content).toContain("shell_exec");
 });
 
 test("MCP tab opens with a two-line caption, then one clickable row per runtime, marking the selection", () => {
@@ -175,7 +320,8 @@ test("MCP tab opens with a two-line caption, then one clickable row per runtime,
     { tools: TOOLS, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
   );
   const rows = body.rows();
-  expect(rows).toHaveLength(5); // 2 caption lines + 3 runtimes
+  expect(rows).toHaveLength(6); // 2 caption lines + key hints + 3 runtimes
+  expect(findRow(rows, "mcp-mcp-keys")?.content).toBe(MCP_TAB_KEYS);
   expect(findRow(rows, "mcp-mcp-header-1")?.content).toContain("ONLY keryx's own MCP server");
   expect(findRow(rows, "mcp-mcp-header-2")?.content).toContain("read-only");
   expect(findRow(rows, "mcp-row-cursor")?.content).toContain(">");
@@ -401,4 +547,54 @@ test("/integrations opens this view and /mcp no longer does", () => {
   // And `/mcps` is still nobody's command — it would differ from `/mcp` by one
   // character while meaning the opposite, with no flags to say which ran.
   expect(isMcpToolsCommand("/mcps")).toBe(false);
+});
+
+// --- flow 270 review F-003: paging by screen lines, not by item count ------
+
+describe("fitRowsByLines — wrapped rows page by the lines they take", () => {
+  test("fills the window from start and clamps start so the last window is full", () => {
+    expect(fitRowsByLines([2, 2, 2, 2], 0, 5)).toEqual({ start: 0, end: 2 });
+    expect(fitRowsByLines([2, 2, 2, 2], 3, 5)).toEqual({ start: 2, end: 4 });
+    expect(fitRowsByLines([1, 1, 1], 99, 10)).toEqual({ start: 0, end: 3 });
+  });
+
+  test("an item taller than the window is still shown on its own", () => {
+    expect(fitRowsByLines([7, 1], 0, 3)).toEqual({ start: 0, end: 1 });
+    expect(fitRowsByLines([], 4, 3)).toEqual({ start: 0, end: 0 });
+  });
+});
+
+test("the last of many wrapped tools is reachable with the down arrow", () => {
+  const many: NormalizedToolDefinition[] = Array.from({ length: 40 }, (_, i) => ({
+    name: `tool_number_${i}`,
+    description: "a long description ".repeat(10).trim(),
+    inputSchema: { type: "object" },
+    risk: "read",
+  }));
+  const body = fakeBody();
+  let press: ((key: { name: string; sequence: string }) => void) | undefined;
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("tools", body, { width: 100 });
+      return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "tools" };
+    },
+    fakeOtui(),
+    {},
+    {
+      tools: many,
+      runtimes: RUNTIMES,
+      visibleRows: 20,
+      connect: async () => ({ ok: true }),
+      disconnect: async () => ({ ok: true }),
+      onKeypress: (handler) => {
+        press = handler;
+        return () => {};
+      },
+    },
+  );
+  for (let i = 0; i < 60; i++) press?.({ name: "down", sequence: "" });
+  const shown = body.rows().map((row) => row.content).join("\n");
+  expect(shown).toContain("tool_number_39");
+  // And the window holds no more lines than the body has rows.
+  expect(shown.split("\n").length).toBeLessThanOrEqual(20);
 });

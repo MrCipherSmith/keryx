@@ -10,6 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   buildConsumerModel,
+  collapseHome,
   consumerActionFor,
   formatConsumerModalRow,
   formatConsumerRow,
@@ -305,6 +306,24 @@ describe("the printed lines — found by the mutation sweep", () => {
     });
     expect(renderConsumerLines(m).join("\n")).toContain("config problem — /cfg/x.json: bad json");
   });
+
+  // Flow 270, found on a live pty: the empty state and the config problems
+  // printed full home paths that ran past the modal width.
+  test("the empty hint and config problems show the home directory as ~", () => {
+    const m = buildConsumerModel({
+      configured: [],
+      states: [],
+      problems: [{ file: "/Users/al/.grok/config.toml", message: "bad" }],
+      userFile: "/Users/al/.local/share/keryx/mcp-servers.json",
+      projectFile: "/work/repo/.keryx/mcp-servers.json",
+      home: "/Users/al",
+    });
+    const text = renderConsumerLines(m).join("\n");
+    expect(text).toContain("config problem — ~/.grok/config.toml: bad");
+    expect(text).toContain("user:    ~/.local/share/keryx/mcp-servers.json");
+    expect(text).toContain("project: /work/repo/.keryx/mcp-servers.json");
+    expect(text).not.toContain("/Users/al");
+  });
 });
 
 describe("F3/F6 — the review findings on this view", () => {
@@ -531,6 +550,102 @@ describe("the modal rows — name, status, connect/disconnect", () => {
 
   test("BOUNDARY — connecting is not actionable; the dial is already in flight", () => {
     expect(consumerActionFor("connecting")).toBeUndefined();
+  });
+});
+
+describe("AC5 — server rows wrap under their own column, with the home directory as ~", () => {
+  const HOME = "/Users/al";
+  const cursorServer = configured({
+    command: "node",
+    args: ["/Users/al/Library/Application Support/Cursor/extensions/some-mcp-server/dist/index.js", "--stdio"],
+  });
+  const rowOf = (server: ResolvedMcpServer) =>
+    buildConsumerModel({
+      configured: [server],
+      states: [{ name: "s", status: "connected", toolCount: 3 }],
+      problems: [],
+      userFile: "/cfg/mcp-servers.json",
+      projectFile: "/repo/.keryx/mcp-servers.json",
+      home: HOME,
+    }).rows[0]!;
+  // `> ` + name (18) + source (10) + transport (6) + glyph (18), space-separated.
+  const TAIL_COLUMN = 57;
+
+  test("the command line shows the home directory as ~, and is not cut mid-path", () => {
+    const row = rowOf(cursorServer);
+    expect(row.target).toBe("node ~/Library/Application Support/Cursor/extensions/some-mcp-server/dist/index.js --stdio");
+    expect(row.target).not.toContain("…");
+  });
+
+  test("collapseHome replaces only a whole home prefix at the start of a token", () => {
+    expect(collapseHome("node /Users/al/x.js", HOME)).toBe("node ~/x.js");
+    expect(collapseHome("--config=/Users/al/c.json", HOME)).toBe("--config=~/c.json");
+    expect(collapseHome("cd /Users/al", `${HOME}/`)).toBe("cd ~");
+    // A sibling user whose name merely starts with the home's last segment.
+    expect(collapseHome("node /Users/alice/x.js", HOME)).toBe("node /Users/alice/x.js");
+    // Not mid-token: `/srv/Users/al/x` is not the operator's home.
+    expect(collapseHome("/srv/Users/al/x", HOME)).toBe("/srv/Users/al/x");
+    expect(collapseHome("node /x", "")).toBe("node /x");
+  });
+
+  test("BOUNDARY — a url target is never rewritten", () => {
+    const row = rowOf(configured({ url: "https://api.test/Users/al/mcp" }));
+    expect(row.target).toContain("/Users/al/mcp");
+  });
+
+  test("at width 100 every line fits and every continuation hangs at the tail column", () => {
+    const lines = formatConsumerModalRow(rowOf(cursorServer), true, { kind: "idle" }, 100).split("\n");
+    expect(lines.length).toBeGreaterThan(1);
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(100);
+    expect(lines[0]?.startsWith("> s ")).toBe(true);
+    expect(lines[0]?.slice(TAIL_COLUMN)).toBe("3 tool(s)  [d] disconnect  node");
+    for (const line of lines.slice(1)) {
+      expect(line.slice(0, TAIL_COLUMN)).toBe(" ".repeat(TAIL_COLUMN));
+      expect(line[TAIL_COLUMN]).not.toBe(" ");
+    }
+  });
+
+  test("exact layout at width 100 — the path breaks only before a slash, never as `Support/…`", () => {
+    const pad = " ".repeat(TAIL_COLUMN);
+    expect(formatConsumerModalRow(rowOf(cursorServer), true, { kind: "idle" }, 100).split("\n")).toEqual([
+      "> s                  user       stdio  ● connected       3 tool(s)  [d] disconnect  node",
+      `${pad}~/Library/Application Support/Cursor`,
+      `${pad}/extensions/some-mcp-server/dist/index.js`,
+      `${pad}--stdio`,
+    ]);
+  });
+
+  test("no width keeps the single line (the no-context path)", () => {
+    expect(formatConsumerModalRow(rowOf(cursorServer), false, { kind: "idle" })).not.toContain("\n");
+  });
+
+  test("the modal paints wrapped rows at ModalHost's width", () => {
+    const body = fakeBody();
+    presentMcpConsumer(
+      (_otui, _chrome, input) => {
+        input.renderTab("servers", body, { width: 100 });
+        return { close: () => {}, setTab: () => {}, activeTab: () => "servers" };
+      },
+      fakeOtui(),
+      {},
+      {
+        snapshot: () =>
+          buildConsumerModel({
+            configured: [cursorServer],
+            states: [{ name: "s", status: "connected", toolCount: 3 }],
+            problems: [],
+            userFile: "/cfg/mcp-servers.json",
+            projectFile: "/repo/.keryx/mcp-servers.json",
+            home: HOME,
+          }),
+        visibleRows: 20,
+        connect: async () => ({ ok: true }),
+        disconnect: async () => ({ ok: true }),
+      },
+    );
+    const content = findRow(body.rows(), "mcp-consumer-row-s")?.content ?? "";
+    for (const line of content.split("\n")) expect(line.length).toBeLessThanOrEqual(100);
+    expect(content).toContain("~/Library");
   });
 });
 

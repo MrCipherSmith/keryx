@@ -65,7 +65,7 @@ import { estimateRequestTokens } from "../harness/provider/context-guard";
 import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
-import { playBootAnimation } from "./boot-animation";
+import { mountEmptyTranscriptSplash, playBootAnimation } from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -103,7 +103,7 @@ import {
   isSessionInfoCommand,
   openSessionInfo,
 } from "./session-info";
-import { openModal, type ModalChrome } from "./modal-host";
+import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
 import { createDefaultSearchProviderController } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
@@ -477,25 +477,32 @@ type CustomFieldStepResult = { kind: "value"; value: string } | { kind: "back" }
 /** One text-input step of the "add custom provider" wizard (name/url/key/models). */
 function promptCustomFieldStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   opts: { title: string; note?: string; value?: string },
 ): Promise<CustomFieldStepResult> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "custom-field-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "cf-title", content: otui.t`${otui.bold(opts.title)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "custom-field-picker",
+      title: opts.title,
+      tab: "Custom provider",
+      hint: "(Enter · Esc to go back)",
+      footer: inputStepFooter("back"),
+      contentRows: opts.note !== undefined ? 4 : 2,
+      onEscape: () => {
+        input.blur();
+        resolve({ kind: "back" });
+      },
+    });
     if (opts.note !== undefined) {
-      box.add(new otui.TextRenderable(r, { id: "cf-note", content: otui.t`${otui.dim(opts.note)}`, marginTop: 1 }));
+      surface.body.add(new otui.TextRenderable(r, { id: "cf-note", content: otui.t`${otui.dim(opts.note)}`, marginTop: 1 }));
     }
     const input = new otui.InputRenderable(r, { id: "cf-input", value: opts.value ?? "", marginTop: 1 });
-    box.add(input);
+    surface.body.add(input);
     input.focus();
     // Blur before detaching: a delayed duplicate ENTER can otherwise still reach
     // this input after the box is removed (see promptSearchFieldStep).
-    const cleanup = (): void => { unsub(); input.blur(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { input.blur(); surface.close(); };
     input.on(otui.InputRenderableEvents.ENTER, () => {
       const entered = input.value.trim();
       cleanup();
@@ -545,9 +552,9 @@ function parseOptionalPositiveWizardNumber(raw: string): number | undefined {
  * caller to persist. Esc at any step backs up one step; Esc at the first step
  * cancels the whole wizard. Invalid input re-opens the same step.
  */
-async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<CustomProviderWizardResult | undefined> {
+async function promptCustomProviderWizard(otui: OpenTui, target: StepTarget): Promise<CustomProviderWizardResult | undefined> {
   while (true) {
-    const nameStep = await promptCustomFieldStep(otui, r, {
+    const nameStep = await promptCustomFieldStep(otui, target, {
       title: "Provider name",
       note: "unique id used in /provider (letters, digits, - _)",
     });
@@ -559,7 +566,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
       continue; // invalid or colliding with an existing provider → re-prompt
     }
     while (true) {
-      const urlStep = await promptCustomFieldStep(otui, r, {
+      const urlStep = await promptCustomFieldStep(otui, target, {
         title: "Base URL",
         note: "before the chat path — /v1/chat/completions is appended, e.g. http://10.110.43.19:8080",
         value: "http://localhost:8000",
@@ -581,7 +588,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
         continue; // only plain http(s) URLs, no embedded credentials
       }
       const baseUrl = baseUrlRaw.replace(/\/+$/, "");
-      const keyStep = await promptCustomFieldStep(otui, r, {
+      const keyStep = await promptCustomFieldStep(otui, target, {
         title: "API key (optional)",
         note: "empty = no key · saved owner-only (0600) in your keryx config dir",
       });
@@ -589,7 +596,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
         continue; // → re-edit the base URL
       }
       const apiKey = keyStep.value.length > 0 ? keyStep.value : undefined;
-      const modelsStep = await promptCustomFieldStep(otui, r, {
+      const modelsStep = await promptCustomFieldStep(otui, target, {
         title: "Models (optional)",
         note: "comma-separated ids · empty = fetch the live /v1/models list",
       });
@@ -600,7 +607,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
       // flow 268: optional, skippable model-param defaults. Same "restart this
       // card from the URL step" back-navigation the key/models steps above
       // already use — not a per-field back-stack.
-      const temperatureStep = await promptCustomFieldStep(otui, r, {
+      const temperatureStep = await promptCustomFieldStep(otui, target, {
         title: "Temperature (optional)",
         note: "empty = provider default · e.g. 0.2",
       });
@@ -608,7 +615,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
         continue;
       }
       const temperature = parseOptionalWizardNumber(temperatureStep.value);
-      const maxOutputTokensStep = await promptCustomFieldStep(otui, r, {
+      const maxOutputTokensStep = await promptCustomFieldStep(otui, target, {
         title: "Max output tokens (optional)",
         note: "empty = default 1024 · e.g. 4096",
       });
@@ -616,7 +623,7 @@ async function promptCustomProviderWizard(otui: OpenTui, r: Renderer): Promise<C
         continue;
       }
       const maxOutputTokens = parseOptionalPositiveWizardNumber(maxOutputTokensStep.value);
-      const timeoutMsStep = await promptCustomFieldStep(otui, r, {
+      const timeoutMsStep = await promptCustomFieldStep(otui, target, {
         title: "Request timeout ms (optional)",
         note: "empty = no engine-internal timeout · e.g. 180000",
       });
@@ -1390,6 +1397,132 @@ export function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): 
   return () => r._internalKeyInput.offInternal("keypress", handler);
 }
 
+/**
+ * Where a wizard step renders: the shell chrome once it exists (a ModalHost
+ * dialog, so the header and sidebar stay on screen — flow 270), or a bare
+ * renderer before it does (the startup picker) and in the chat shell, which
+ * keep the full-screen overlay.
+ */
+type StepTarget = Renderer | ModalChrome;
+
+/** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
+function isModalChrome(target: unknown): target is ModalChrome {
+  return (
+    target !== null &&
+    typeof target === "object" &&
+    "renderer" in target &&
+    "focusComposer" in target
+  );
+}
+
+function stepRenderer(target: StepTarget): Renderer {
+  return isModalChrome(target) ? (target.renderer as Renderer) : target;
+}
+
+/** One wizard step's screen: its content goes into `body`. */
+interface StepSurface {
+  body: Box;
+  /** True in a ModalHost dialog; a step sizes its select to the body there. */
+  modal: boolean;
+  /** Remove the screen WITHOUT running `onEscape`. Idempotent. */
+  close(): void;
+}
+
+/**
+ * Open one wizard step's screen. On the overlay the title line carries
+ * `hint`, exactly as the steps always printed it; in a dialog the same keys go
+ * to the footer instead. Esc runs `onEscape` either way — in the dialog it is
+ * ModalHost that sees Esc first, closes, and reports it through `onClose`.
+ */
+function openStepSurface(
+  otui: OpenTui,
+  target: StepTarget,
+  opts: {
+    id: string;
+    title: string;
+    /** Short tab label for the dialog's tab strip. */
+    tab: string;
+    hint: string;
+    footer: readonly ModalFooterAction[];
+    /** Content rows below the title, so the dialog fits them (flow 269 AC7). */
+    contentRows: number;
+    onEscape: () => void;
+  },
+): StepSurface {
+  const r = stepRenderer(target);
+  if (!isModalChrome(target)) {
+    const box = overlayBox(otui, r, opts.id);
+    r.root.add(box);
+    box.add(new otui.TextRenderable(r, { id: `${opts.id}-title`, content: otui.t`${otui.bold(opts.title)} ${otui.dim(opts.hint)}` }));
+    let closed = false;
+    const close = (): void => {
+      if (closed) return;
+      closed = true;
+      unsub();
+      r.root.remove(box);
+    };
+    const unsub = onKeypress(r, (key) => {
+      if (key.name === "escape") {
+        close();
+        opts.onEscape();
+        key.preventDefault();
+        key.stopPropagation();
+      }
+    });
+    return { body: box, modal: false, close };
+  }
+
+  let body: Box | undefined;
+  let closedByStep = false;
+  const handle = openModal(otui, target, {
+    title: opts.title,
+    tabs: [{ id: opts.id, label: opts.tab }],
+    footer: opts.footer,
+    contentRows: opts.contentRows,
+    renderTab: (_tabId, tabBody) => {
+      body = tabBody as Box;
+    },
+    onClose: () => {
+      if (!closedByStep) opts.onEscape();
+    },
+  });
+  if (handle === undefined || body === undefined) {
+    // No host could open (no OpenTUI at runtime): fall back to the overlay
+    // rather than leaving the step with nowhere to render.
+    return openStepSurface(otui, r, opts);
+  }
+  return {
+    body,
+    modal: true,
+    close: () => {
+      if (closedByStep) return;
+      closedByStep = true;
+      // A step that finished is followed by more of the wizard — often a
+      // network call first (models, device login). Handing focus back to the
+      // composer here let the operator type and submit a turn mid-wizard; the
+      // caller refocuses the composer once the whole wizard resolves.
+      handle.close({ restoreFocus: false });
+    },
+  };
+}
+
+/** Footer for a list step: the keys the overlay hint names, in the dialog's footer. */
+function selectStepFooter(escLabel: "back" | "cancel"): ModalFooterAction[] {
+  return [
+    { key: "↑/↓", label: "select" },
+    { key: "Enter", label: "confirm" },
+    { key: "esc", label: escLabel },
+  ];
+}
+
+/** Footer for a text-entry step. */
+function inputStepFooter(escLabel: "back" | "cancel"): ModalFooterAction[] {
+  return [
+    { key: "Enter", label: "confirm" },
+    { key: "esc", label: escLabel },
+  ];
+}
+
 /** Result of the API-key step: a key to save, skip (proceed keyless), or go back. */
 type KeyStepResult = { kind: "key"; value: string } | { kind: "skip" } | { kind: "back" };
 
@@ -1461,23 +1594,30 @@ type SearchFieldStepResult = { kind: "value"; value: string } | { kind: "back" }
 /** One `descriptor.fields` entry, seeded with its current/default value. */
 function promptSearchFieldStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   field: SearchFieldDescriptor,
   value: string,
 ): Promise<SearchFieldStepResult> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "search-field-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "sf-title", content: otui.t`${otui.bold(field.label)} ${otui.dim(`${field.required ? "required" : "optional"} · Enter · Esc to go back`)}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "search-field-picker",
+      title: field.label,
+      tab: field.required ? "Required" : "Optional",
+      hint: `${field.required ? "required" : "optional"} · Enter · Esc to go back`,
+      footer: inputStepFooter("back"),
+      contentRows: 2,
+      onEscape: () => {
+        input.blur();
+        resolve({ kind: "back" });
+      },
+    });
     const input = new otui.InputRenderable(r, { id: "sf-input", value, marginTop: 1 });
-    box.add(input);
+    surface.body.add(input);
     input.focus();
     // Blur before detaching: a delayed duplicate ENTER can otherwise still
     // reach this input after the box is removed (see promptSetActiveProviderStep).
-    const cleanup = (): void => { unsub(); input.blur(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { input.blur(); surface.close(); };
     input.on(otui.InputRenderableEvents.ENTER, () => {
       const entered = input.value.trim();
       cleanup();
@@ -1487,12 +1627,22 @@ function promptSearchFieldStep(
 }
 
 /** Credential entry for `descriptor.credentialSchema`; same result shape as `promptApiKeyStep`. */
-function promptSearchCredentialStep(otui: OpenTui, r: Renderer, opts: { label: string }): Promise<KeyStepResult> {
+function promptSearchCredentialStep(otui: OpenTui, target: StepTarget, opts: { label: string }): Promise<KeyStepResult> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "search-credential-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "sc-title", content: otui.t`${otui.bold(`Paste your ${opts.label}`)} ${otui.dim("(Enter · Esc to go back)")}` }));
-    box.add(
+    const surface = openStepSurface(otui, target, {
+      id: "search-credential-picker",
+      title: `Paste your ${opts.label}`,
+      tab: "Credential",
+      hint: "(Enter · Esc to go back)",
+      footer: inputStepFooter("back"),
+      contentRows: 4,
+      onEscape: () => {
+        keyInput.blur();
+        resolve({ kind: "back" });
+      },
+    });
+    surface.body.add(
       new otui.TextRenderable(r, {
         id: "sc-note",
         content: otui.t`${otui.dim("Saved to your keryx config dir (owner-only, 0600)")}`,
@@ -1500,14 +1650,11 @@ function promptSearchCredentialStep(otui: OpenTui, r: Renderer, opts: { label: s
       }),
     );
     const keyInput = new otui.InputRenderable(r, { id: "sc-input", placeholder: "...", marginTop: 1 });
-    box.add(keyInput);
+    surface.body.add(keyInput);
     keyInput.focus();
     // Blur before detaching: a delayed duplicate ENTER can otherwise still
     // reach this input after the box is removed (see promptSetActiveProviderStep).
-    const cleanup = (): void => { unsub(); keyInput.blur(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve({ kind: "back" }); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { keyInput.blur(); surface.close(); };
     keyInput.on(otui.InputRenderableEvents.ENTER, () => {
       const value = keyInput.value.trim();
       cleanup();
@@ -1517,14 +1664,24 @@ function promptSearchCredentialStep(otui: OpenTui, r: Renderer, opts: { label: s
 }
 
 /** "Set as active provider after a successful test?" toggle; `undefined` on Esc (back). */
-function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolean | undefined> {
+function promptSetActiveProviderStep(otui: OpenTui, target: StepTarget): Promise<boolean | undefined> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "search-active-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "sa-title", content: otui.t`${otui.bold("Set as active provider after a successful test?")} ${otui.dim("(↑/↓, Enter · Esc to go back)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "search-active-picker",
+      title: "Set as active provider after a successful test?",
+      tab: "Active",
+      hint: "(↑/↓, Enter · Esc to go back)",
+      footer: selectStepFooter("back"),
+      contentRows: selectBoxHeight(2, true),
+      onEscape: () => {
+        select.blur();
+        resolve(undefined);
+      },
+    });
     const select = new otui.SelectRenderable(r, {
       id: "sa-select",
-      width: 60,
+      width: surface.modal ? "100%" : 60,
       height: selectBoxHeight(2, true),
       options: [
         { name: "Yes", description: "select it once the test passes" },
@@ -1532,15 +1689,12 @@ function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolea
       ],
       selectedTextColor: "#ffd166",
     });
-    box.add(select);
+    surface.body.add(select);
     select.focus();
     // Step 3 awaits `controller.test()` right after this step resolves, long
     // enough for a delayed duplicate ITEM_SELECTED to reach this already-removed
     // select if it stays the renderer's focus target — blur before detaching.
-    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { select.blur(); surface.close(); };
     select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = select.getSelectedOption();
       cleanup();
@@ -1552,31 +1706,38 @@ function promptSetActiveProviderStep(otui: OpenTui, r: Renderer): Promise<boolea
 /** Step 1: select a provider from `controller.configurable()`. `undefined` on Esc (cancel, AC4). */
 export function pickSearchProviderStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   providers: readonly SearchProviderDescriptor[],
 ): Promise<SearchProviderDescriptor | undefined> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "search-provider-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "spp-title", content: otui.t`${otui.bold("Select a search provider")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "search-provider-picker",
+      title: "Select a search provider",
+      tab: "Search providers",
+      hint: "(↑/↓, Enter · Esc to cancel)",
+      footer: selectStepFooter("cancel"),
+      contentRows: selectBoxHeight(providers.length, true),
+      onEscape: () => {
+        select.blur();
+        resolve(undefined);
+      },
+    });
     // Match by the composed label (unique via `id`), mirroring `pickProviderStep`.
     const labelOf = (p: SearchProviderDescriptor): string => `${p.id} (${p.displayName})`;
     const select = new otui.SelectRenderable(r, {
       id: "spp-select",
-      width: 60,
+      width: surface.modal ? "100%" : 60,
       height: selectBoxHeight(providers.length, true),
       showScrollIndicator: true,
       options: providers.map((p) => ({ name: labelOf(p), description: p.kind })),
       selectedTextColor: "#ffd166",
     });
-    box.add(select);
+    surface.body.add(select);
     select.focus();
     // Blur before detaching: a delayed duplicate ITEM_SELECTED can otherwise
     // still reach this select after the box is removed (see promptSetActiveProviderStep).
-    const cleanup = (): void => { unsub(); select.blur(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { select.blur(); surface.close(); };
     select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = select.getSelectedOption();
       cleanup();
@@ -1598,7 +1759,7 @@ type SearchProviderStep2Result = { kind: "back" } | ({ kind: "done" } & SearchPr
  */
 async function runSearchProviderFieldsStep(
   otui: OpenTui,
-  r: Renderer,
+  r: StepTarget,
   provider: SearchProviderDescriptor,
   seed: SearchProviderFieldsSeed,
 ): Promise<SearchProviderStep2Result> {
@@ -1659,22 +1820,57 @@ async function runSearchProviderFieldsStep(
  */
 function runSearchProviderTestStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   controller: SearchProviderController,
   provider: SearchProviderDescriptor,
   fields: Record<string, string>,
   credential: string | undefined,
   setActive: boolean,
 ): Promise<"done" | "retry"> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "search-test-picker");
-    r.root.add(box);
+    let settled: "success" | "failure" | undefined;
+    // Set once the step is gone. The test below keeps running after an Esc in
+    // the dialog, and must neither make the provider active behind the
+    // operator's back nor write to a status line that no longer exists.
+    let left = false;
+    const modal = isModalChrome(target);
+    let surface: StepSurface | undefined;
+    if (modal) {
+      // In the dialog ModalHost owns Esc and always closes. Closing mid-test or
+      // on a failure is a retry (back to the fields); after a success the result
+      // is already saved, so it is simply done.
+      surface = openStepSurface(otui, target, {
+        id: "search-test-picker",
+        title: `Test '${provider.id}'`,
+        tab: "Test",
+        hint: "",
+        footer: [
+          { key: "Enter", label: "close after success" },
+          { key: "esc", label: "back" },
+        ],
+        contentRows: 2,
+        onEscape: () => {
+          left = true;
+          unsub();
+          resolve(settled === "success" ? "done" : "retry");
+        },
+      });
+    }
+    // The overlay keeps its own box: its Esc only acts on a failure and its
+    // Enter only on a success, which the generic surface cannot express.
+    const box = surface?.body ?? overlayBox(otui, r, "search-test-picker");
+    if (surface === undefined) r.root.add(box);
     const status = new otui.TextRenderable(r, { id: "st-title", content: otui.t`${otui.bold(`Testing '${provider.id}'`)} ${otui.dim("...")}` });
     box.add(status);
-    let settled: "success" | "failure" | undefined;
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
+    const cleanup = (): void => {
+      left = true;
+      unsub();
+      if (surface !== undefined) surface.close();
+      else r.root.remove(box);
+    };
     const unsub = onKeypress(r, (key) => {
-      if (settled === "failure" && key.name === "escape") {
+      if (!modal && settled === "failure" && key.name === "escape") {
         cleanup();
         resolve("retry");
         key.preventDefault();
@@ -1689,6 +1885,9 @@ function runSearchProviderTestStep(
     void (async () => {
       controller.configure(provider.id, { ...provider.defaults, ...fields }, credential);
       const tested = await controller.test(provider.id);
+      if (left) {
+        return; // backed out mid-test: nothing to show, and no select()
+      }
       if (!tested.ok) {
         settled = "failure";
         const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
@@ -1701,6 +1900,9 @@ function runSearchProviderTestStep(
         return;
       }
       const selected = await controller.select(provider.id);
+      if (left) {
+        return;
+      }
       status.content = selected.ok
         ? otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured, tested, and set as active`)} ${otui.dim("(Enter to close)")}`
         : otui.t`${otui.green("✓")} ${otui.bold(`'${provider.id}' configured and tested`)} ${otui.dim(`but could not be set active (${selected.reason ?? "unknown"})`)} ${otui.dim("(Enter to close)")}`;
@@ -1718,7 +1920,7 @@ function runSearchProviderTestStep(
  */
 export async function searchProviderWizardInTui(
   otui: OpenTui,
-  r: Renderer,
+  r: StepTarget,
   controller: SearchProviderController,
 ): Promise<void> {
   const providers = controller.configurable();
@@ -1754,15 +1956,26 @@ export async function searchProviderWizardInTui(
  */
 function promptBaseUrlStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   label: string,
   baseUrl: string,
   notice?: string,
 ): Promise<string | undefined> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "base-url-picker");
-    r.root.add(box);
-  box.add(new otui.TextRenderable(r, { id: "bp-title", content: otui.t`${otui.bold(`${label} endpoint URL`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "base-url-picker",
+      title: `${label} endpoint URL`,
+      tab: "Endpoint",
+      hint: "(Enter · Esc to go back)",
+      footer: inputStepFooter("back"),
+      contentRows: notice !== undefined ? 6 : 4,
+      onEscape: () => {
+        input.blur();
+        resolve(undefined);
+      },
+    });
+    const box = surface.body;
     if (notice !== undefined) {
       box.add(new otui.TextRenderable(r, { id: "bp-notice", content: otui.t`${otui.red("✗")} ${notice}`, marginTop: 1 }));
     }
@@ -1770,10 +1983,7 @@ function promptBaseUrlStep(
     const input = new otui.InputRenderable(r, { id: "bp-input", value: baseUrl, marginTop: 1 });
     box.add(input);
     input.focus();
-    const cleanup = (): void => { unsub(); r.root.remove(box); };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") { cleanup(); resolve(undefined); key.preventDefault(); key.stopPropagation(); }
-    });
+    const cleanup = (): void => { input.blur(); surface.close(); };
     input.on(otui.InputRenderableEvents.ENTER, () => { const value = input.value.trim(); cleanup(); resolve(value.length > 0 ? value : undefined); });
   });
 }
@@ -1783,11 +1993,25 @@ function promptBaseUrlStep(
  * a key); Esc → `back` (return to the previous step). Absolute overlay; removes its
  * key handler on close.
  */
-function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; envKey: string; placeholder?: string; notice?: string }): Promise<KeyStepResult> {
+function promptApiKeyStep(otui: OpenTui, target: StepTarget, opts: { label: string; envKey: string; placeholder?: string; notice?: string }): Promise<KeyStepResult> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "key-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "kp-title", content: otui.t`${otui.bold(`Paste your ${opts.label} API key`)} ${otui.dim("(Enter · Esc to go back)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "key-picker",
+      title: `Paste your ${opts.label} API key`,
+      tab: "API key",
+      hint: "(Enter · Esc to go back)",
+      footer: [
+        { key: "Enter", label: "save (empty = skip)" },
+        { key: "esc", label: "back" },
+      ],
+      contentRows: opts.notice !== undefined ? 6 : 4,
+      onEscape: () => {
+        keyInput.blur();
+        resolve({ kind: "back" });
+      },
+    });
+    const box = surface.body;
     if (opts.notice !== undefined) {
       // Why they are being asked again, in the provider's own words.
       box.add(new otui.TextRenderable(r, { id: "kp-notice", content: otui.t`${otui.red("✗")} ${opts.notice}`, marginTop: 1 }));
@@ -1802,18 +2026,9 @@ function promptApiKeyStep(otui: OpenTui, r: Renderer, opts: { label: string; env
     const keyInput = new otui.InputRenderable(r, { id: "kp-input", placeholder: opts.placeholder ?? "sk-...", marginTop: 1 });
     box.add(keyInput);
     keyInput.focus();
-    const onKey = (key: { name: string; preventDefault: () => void; stopPropagation: () => void }): void => {
-      if (key.name === "escape") {
-        cleanup();
-        resolve({ kind: "back" });
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    };
-    const unsub = onKeypress(r, onKey);
     const cleanup = (): void => {
-      unsub();
-      r.root.remove(box);
+      keyInput.blur();
+      surface.close();
     };
     keyInput.on(otui.InputRenderableEvents.ENTER, () => {
       const value = keyInput.value.trim();
@@ -1827,41 +2042,42 @@ type AuthMethodChoice = "device-code" | "api-key";
 
 function pickAuthMethodStep(
   otui: OpenTui,
-  r: Renderer,
+  target: StepTarget,
   providerLabel: string,
   methods: readonly AuthMethodChoice[],
 ): Promise<AuthMethodChoice | undefined> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "auth-method-picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "amp-title", content: otui.t`${otui.bold(`How to connect ${providerLabel}`)} ${otui.dim("(↑/↓, Enter · Esc to go back)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "auth-method-picker",
+      title: `How to connect ${providerLabel}`,
+      tab: "Sign-in",
+      hint: "(↑/↓, Enter · Esc to go back)",
+      footer: selectStepFooter("back"),
+      contentRows: selectBoxHeight(methods.length, true),
+      onEscape: () => {
+        select.blur();
+        resolve(undefined);
+      },
+    });
     const descriptions: Record<AuthMethodChoice, string> = {
       "device-code": deviceCodeMethodLabel(providerLabel === "GitHub Copilot" ? "github-copilot" : providerLabel === "OpenAI" ? "openai" : "grok"),
       "api-key": "Manually enter API Key",
     };
     const select = new otui.SelectRenderable(r, {
       id: "amp-select",
-      width: 60,
+      width: surface.modal ? "100%" : 60,
       height: selectBoxHeight(methods.length, true),
       showScrollIndicator: true,
       options: methods.map((m) => ({ name: m, description: descriptions[m] })),
       selectedTextColor: "#ffd166",
     });
-    box.add(select);
+    surface.body.add(select);
     select.focus();
     const cleanup = (): void => {
-      unsub();
       select.blur();
-      r.root.remove(box);
+      surface.close();
     };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") {
-        cleanup();
-        resolve(undefined);
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    });
     select.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = select.getSelectedOption();
       cleanup();
@@ -1870,30 +2086,28 @@ function pickAuthMethodStep(
   });
 }
 
-function runDeviceLoginInTui(otui: OpenTui, r: Renderer, provider: string, dir?: string): Promise<boolean> {
+function runDeviceLoginInTui(otui: OpenTui, target: StepTarget, provider: string, dir?: string): Promise<boolean> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "device-login");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, {
-      id: "dl-title",
-      content: otui.t`${otui.bold(deviceCodeMethodLabel(provider))} ${otui.dim("(Esc to cancel)")}`,
-    }));
-    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${otui.dim("Requesting a device code…")}`, marginTop: 1 });
-    box.add(status);
     const controller = new AbortController();
-    const cleanup = (): void => {
-      unsub();
-      r.root.remove(box);
-    };
-    const unsub = onKeypress(r, (key) => {
-      if (key.name === "escape") {
+    const surface = openStepSurface(otui, target, {
+      id: "device-login",
+      title: deviceCodeMethodLabel(provider),
+      tab: "Device login",
+      hint: "(Esc to cancel)",
+      footer: [{ key: "esc", label: "cancel" }],
+      contentRows: 4,
+      onEscape: () => {
+        // Stops the authorization poll: closing the screen must not leave it running.
         controller.abort();
-        cleanup();
         resolve(false);
-        key.preventDefault();
-        key.stopPropagation();
-      }
+      },
     });
+    const status = new otui.TextRenderable(r, { id: "dl-status", content: otui.t`${otui.dim("Requesting a device code…")}`, marginTop: 1 });
+    surface.body.add(status);
+    const cleanup = (): void => {
+      surface.close();
+    };
     void loginDeviceCode({
       provider,
       fetch: (input, init) => globalThis.fetch(input, init),
@@ -1976,16 +2190,27 @@ export function modelPickerNotice(label: string, result: ModelsResolveResult): s
 }
 
 /** Provider-selection step. Resolves the chosen provider, or `undefined` on Esc/cancel. */
-function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
+function pickProviderStep(otui: OpenTui, target: StepTarget, detected: DetectedProvider[]): Promise<DetectedProvider | undefined> {
+  const r = stepRenderer(target);
   return new Promise((resolve) => {
-    const box = overlayBox(otui, r, "picker");
-    r.root.add(box);
-    box.add(new otui.TextRenderable(r, { id: "picker-title", content: otui.t`${otui.bold("Select a provider")} ${otui.dim("(↑/↓, Enter · Esc to cancel)")}` }));
+    const surface = openStepSurface(otui, target, {
+      id: "picker",
+      title: "Select a provider",
+      tab: "Providers",
+      hint: "(↑/↓, Enter · Esc to cancel)",
+      footer: selectStepFooter("cancel"),
+      contentRows: selectBoxHeight(detected.length, true),
+      onEscape: () => {
+        provSelect.blur();
+        resolve(undefined);
+      },
+    });
+    const box = surface.body;
     // Match by the displayed label (unique) so registry ids stay hidden but resolvable.
     const labelOf = (d: DetectedProvider): string => d.label ?? d.name;
     const provSelect = new otui.SelectRenderable(r, {
       id: "picker-provider",
-      width: 60,
+      width: surface.modal ? "100%" : 60,
       // Descriptions are shown → 2 rows per item, so height must be 2× the count
       // or only half the providers stay visible (flow 084 fix).
       height: selectBoxHeight(detected.length, true),
@@ -1995,18 +2220,9 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
     });
     box.add(provSelect);
     provSelect.focus();
-    const onKey = (key: { name: string; preventDefault: () => void; stopPropagation: () => void }): void => {
-      if (key.name === "escape") {
-        cleanup();
-        resolve(undefined);
-        key.preventDefault();
-        key.stopPropagation();
-      }
-    };
-    const unsub = onKeypress(r, onKey);
     const cleanup = (): void => {
-      unsub();
-      r.root.remove(box);
+      provSelect.blur();
+      surface.close();
     };
     provSelect.on(otui.SelectRenderableEvents.ITEM_SELECTED, () => {
       const chosen = provSelect.getSelectedOption();
@@ -2016,21 +2232,13 @@ function pickProviderStep(otui: OpenTui, r: Renderer, detected: DetectedProvider
   });
 }
 
-/** The pickers take either a bare renderer (full-screen overlay) or the shell chrome (ModalHost). */
-function isModalChrome(target: unknown): target is ModalChrome {
-  return (
-    target !== null &&
-    typeof target === "object" &&
-    "renderer" in target &&
-    "focusComposer" in target
-  );
-}
-
 /**
  * In-TUI provider → model → key wizard with BACK navigation. `/provider` and
  * startup prompt + persist a key and may edit a local endpoint. `/connect`
  * (`onlyConnected`) only lists live providers and their live `/models` list —
- * no key or URL setup. Absolute overlay. Resolves the selection or `undefined`.
+ * no key or URL setup. Every step renders in ModalHost given the shell chrome
+ * (flow 270), or as a full-screen overlay given a bare renderer (the startup
+ * picker, the chat shell). Resolves the selection or `undefined`.
  *
  * Exported since flow 112 so the CHAT shell injects this very wizard as
  * `ShellDeps.selectProviderModel`: `/provider` must open an overlay instead of
@@ -2039,12 +2247,10 @@ function isModalChrome(target: unknown): target is ModalChrome {
  */
 export function selectProviderModelInTui(
   otui: OpenTui,
-  rOrChrome: Renderer | ModalChrome,
+  rOrChrome: StepTarget,
   detected: DetectedProvider[],
   options: SelectProviderModelOptions = {},
 ): Promise<TuiSelection | undefined> {
-  const chrome = isModalChrome(rOrChrome) ? rOrChrome : undefined;
-  const r = chrome !== undefined ? (chrome.renderer as Renderer) : (rOrChrome as Renderer);
   return new Promise((resolve) => {
     if (detected.length === 0) {
       resolve(undefined);
@@ -2077,7 +2283,7 @@ export function selectProviderModelInTui(
       // OpenAI-compat gateways return 401 without a Bearer key, and we would
       // otherwise show only the short curated fallback (e.g. stale glm-4.5/4.6).
       while (true) {
-        const prov = await pickProviderStep(otui, r, allCandidates);
+        const prov = await pickProviderStep(otui, rOrChrome, allCandidates);
         if (prov === undefined) {
           resolve(undefined);
           return;
@@ -2086,7 +2292,7 @@ export function selectProviderModelInTui(
         // Synthetic "add custom provider" entry — run the mini-wizard, persist,
         // and loop back so the fresh provider appears in the picker.
         if (prov.name === CUSTOM_PROVIDER_ADD_ID) {
-          const created = await promptCustomProviderWizard(otui, r);
+          const created = await promptCustomProviderWizard(otui, rOrChrome);
           if (created !== undefined) {
             saveCustomCompatProvider({
               name: created.name,
@@ -2117,7 +2323,7 @@ export function selectProviderModelInTui(
         let selectedBaseUrl =
           options.onlyConnected || prov.baseUrl === undefined || lockDiscoveredHost
             ? prov.baseUrl
-            : await promptBaseUrlStep(otui, r, prov.label ?? prov.name, prov.baseUrl);
+            : await promptBaseUrlStep(otui, rOrChrome, prov.label ?? prov.name, prov.baseUrl);
         if (!options.onlyConnected && !lockDiscoveredHost && prov.baseUrl !== undefined && selectedBaseUrl === undefined) {
           continue;
         }
@@ -2151,13 +2357,13 @@ export function selectProviderModelInTui(
           if (catalogMethods(prov.name).includes("api-key")) offered.push("api-key");
           let method: AuthMethodChoice | undefined = offered.length === 1 ? offered[0] : undefined;
           if (offered.length > 1) {
-            method = await pickAuthMethodStep(otui, r, label, offered);
+            method = await pickAuthMethodStep(otui, rOrChrome, label, offered);
             if (method === undefined) {
               return "back";
             }
           }
           if (method === "device-code") {
-            if (!(await runDeviceLoginInTui(otui, r, prov.name, options.configDir))) {
+            if (!(await runDeviceLoginInTui(otui, rOrChrome, prov.name, options.configDir))) {
               return "back";
             }
             const saved = loadShellConfig(options.configDir).baseUrls?.[prov.name];
@@ -2167,7 +2373,7 @@ export function selectProviderModelInTui(
             }
             return "ok";
           }
-          const kr = await promptApiKeyStep(otui, r, {
+          const kr = await promptApiKeyStep(otui, rOrChrome, {
             label,
             envKey,
             ...(notice === undefined ? {} : { notice }),
@@ -2214,7 +2420,7 @@ export function selectProviderModelInTui(
         ) {
           const corrected = await promptBaseUrlStep(
             otui,
-            r,
+            rOrChrome,
             label,
             selectedProvider.baseUrl,
             modelsFailureLine(label, models.failure),
@@ -2230,7 +2436,7 @@ export function selectProviderModelInTui(
           }
         }
         // Esc here returns to the provider step, so the modal footer says "back".
-        const model = await pickModelInTui(otui, chrome ?? r, models.models, modelPickerNotice(label, models), {
+        const model = await pickModelInTui(otui, rOrChrome, models.models, modelPickerNotice(label, models), {
           escLabel: "back",
         });
         if (model === undefined) {
@@ -2571,6 +2777,14 @@ export function pickSessionInTui(
   });
 }
 
+/**
+ * The sidebar's Mode row (flow 270 AC9): the permission mode, plus a separate
+ * read-only part while `/plan on` holds, so it can be painted in its own colour.
+ */
+export function describeModeRow(mode: PermissionMode, readOnly: boolean): { mode: string; readOnly?: string } {
+  return readOnly ? { mode, readOnly: "· read-only" } : { mode };
+}
+
 /** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
 const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   ask: "Every mutating action asks first (today's default)",
@@ -2862,6 +3076,12 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
+    // Mode line (flow 270 AC9): the permission mode and the /plan read-only
+    // posture were only ever toasts. One line under the model, not a labelled
+    // block of its own: three more rows pushed Status off a 24-row terminal
+    // (the macOS pty smoke leg). Painted by `paintModeRow` once both are known.
+    const sbModeV = new otui.TextRenderable(r, { id: "sb-mode-v", content: "" });
+    sidebar.add(sbModeV);
     // Usage row under Model: cumulative in/out tokens this session, fed by
     // `attachUsageIo`'s setUsage chrome. Starts "↑0 ↓0"; real numbers replace
     // it the first time the provider reports usage.
@@ -3794,6 +4014,14 @@ export async function launchTuiAgentShell(opts: {
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
     let readOnly = false;
     io.readOnly = () => readOnly;
+    const paintModeRow = (): void => {
+      const row = describeModeRow(permissionMode, readOnly);
+      // Read-only is the state an operator must not forget they are in.
+      sbModeV.content = row.readOnly === undefined
+        ? otui.t`${otui.dim(`mode ${row.mode}`)}`
+        : otui.t`${otui.dim(`mode ${row.mode}`)} ${otui.yellow(row.readOnly)}`;
+    };
+    paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -3859,6 +4087,13 @@ export async function launchTuiAgentShell(opts: {
     deps = { ...deps, onContextCompaction };
     liveDeps = deps;
 
+    /**
+     * Removes the empty-transcript wordmark (flow 270 AC10). Set once the
+     * startup session turns out to be empty; cleared by the first operator
+     * message, or by opening a session that already has messages.
+     */
+    let removeSplash: (() => void) | undefined;
+
     const applyOpened = (
       opened: {
         handle: SessionHandle;
@@ -3868,6 +4103,10 @@ export async function launchTuiAgentShell(opts: {
       },
       previewHistory?: boolean,
     ): void => {
+      if (opened.history.length > 0) {
+        removeSplash?.();
+        removeSplash = undefined;
+      }
       liveSession = opened.handle;
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -4001,6 +4240,9 @@ export async function launchTuiAgentShell(opts: {
       );
     }
     slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+    if (history.length === 0) {
+      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);
+    }
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
@@ -4321,6 +4563,7 @@ export async function launchTuiAgentShell(opts: {
           }
         }
         permissionMode = next;
+        paintModeRow();
         chrome.showToast(`Permission mode: ${next}`);
         if (saveFlag) {
           const saved = setProjectPermissionMode(sessionCwd, next);
@@ -4387,11 +4630,13 @@ export async function launchTuiAgentShell(opts: {
       }
       if (wanted === "on") {
         readOnly = true;
+        paintModeRow();
         chrome.showToast("Read-only mode: on");
         return;
       }
       if (wanted === "off") {
         readOnly = false;
+        paintModeRow();
         chrome.showToast(`Read-only mode: off (permission mode stays: ${permissionMode})`);
         return;
       }
@@ -4925,6 +5170,9 @@ export async function launchTuiAgentShell(opts: {
       if (origin === "operator") {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
+        // ...and the first thing they send replaces the wordmark (AC10).
+        removeSplash?.();
+        removeSplash = undefined;
       }
       const displayLine = summarizeSubmittedLine(line);
 
@@ -5276,7 +5524,7 @@ export async function launchTuiAgentShell(opts: {
             const args = parseSearchProviderArgs(line.slice(16));
             const all = searchProviderController.configurable();
             if (args.providerId === undefined) {
-              await chrome.withOverlay(() => searchProviderWizardInTui(otui, r, searchProviderController));
+              await chrome.withOverlay(() => searchProviderWizardInTui(otui, chrome, searchProviderController));
               input.focus();
               return;
             }
@@ -5322,7 +5570,7 @@ export async function launchTuiAgentShell(opts: {
               }
               // AC1: single-step overlay picker over exactly `selectable()`,
               // mirroring `/connect`'s `chrome.withOverlay(() => ...)` shape.
-              const picked = await chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable));
+              const picked = await chrome.withOverlay(() => pickSearchProviderStep(otui, chrome, selectable));
               input.focus();
               if (picked === undefined) {
                 return; // Esc: cancel, no select() call made (AC2)
@@ -5558,12 +5806,12 @@ export async function launchTuiAgentShell(opts: {
             );
             if (ns !== undefined) {
               await switchTo(ns);
-            } else {
-              if (command.name === "/connect") {
-                chrome.showToast("No connected providers found. Run /provider to configure one first.");
-              }
-              input.focus();
+            } else if (command.name === "/connect") {
+              chrome.showToast("No connected providers found. Run /provider to configure one first.");
             }
+            // Wizard steps close without refocusing the composer (flow 270), so
+            // it comes back here, once, whichever way the wizard ended.
+            input.focus();
           })();
           return;
         }

@@ -12,6 +12,7 @@ import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import {
+  MODAL_BODY_SCROLLBAR_COLS,
   MODAL_PANEL_CHROME_X,
   MODAL_PANEL_INNER_WIDTH,
   MODAL_PANEL_MARGIN,
@@ -161,7 +162,7 @@ otuiTest("renderTab receives the resolved panel-body size, not the pre-layout fl
   await h.flush();
   const sized = resolveModalPanelSize(resolveModalAvailableWidth(h.chrome), 40);
   expect(ctx).toEqual({
-    width: resolveModalInnerWidth(sized.width),
+    width: resolveModalInnerWidth(sized.width) - MODAL_BODY_SCROLLBAR_COLS, // the body loses a column to the scrollbar
     height: modalBodyRows(sized.height),
   });
   expect(ctx?.width).not.toBe(MODAL_PANEL_INNER_WIDTH); // the floor

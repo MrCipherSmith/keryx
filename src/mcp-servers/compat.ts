@@ -256,8 +256,27 @@ export function parseGrokToml(file: string, text: string): CompatServers {
       continue;
     }
 
-    // ANY line that opens something bracketed and is not a header we
-    // recognised above closes the current table.
+    // `[[x]]` — a TOML array of tables. Grok's own config writes one
+    // (`[[marketplace.sources]]`), so reporting every such header as a
+    // problem put a permanent "config problem" on `/mcp` for a file that
+    // is perfectly fine. Outside `mcp_servers` it is another section,
+    // exactly like `[theme]` above: close the current table, say nothing.
+    //
+    // `[[mcp_servers...]]` is NOT the shape this reader claims — servers
+    // are named tables, never an array — so it stays a refusal, and still
+    // closes the table so nothing after it lands in the previous server.
+    const arrayHeader = /^\[\[([^[\]]+)\]\]$/.exec(line);
+    if (arrayHeader !== null) {
+      const first = (arrayHeader[1] as string).split(".")[0]?.trim().replace(/^(["'])(.*)\1$/, "$2");
+      current = undefined;
+      if (first === "mcp_servers") {
+        problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
+      }
+      continue;
+    }
+
+    // ANY other line that opens something bracketed and is not a header
+    // we recognised above closes the current table.
     //
     // `[[hooks]]` is standard TOML (an array of tables) and plausible in
     // a real Grok config. It does not match the header regex, so it fell
@@ -270,7 +289,8 @@ export function parseGrokToml(file: string, text: string): CompatServers {
     //
     // The module's own header promises this parser "REFUSES what it does
     // not understand instead of guessing". It guessed, and the guess was
-    // attacker-chosen.
+    // attacker-chosen. `[[hooks]]` itself now takes the array-of-tables
+    // branch above; closing the table is the property both branches keep.
     if (line.startsWith("[")) {
       problems.push({ file, message: `line ${lineNo}: "${line}" is not a table header this reader understands` });
       current = undefined;

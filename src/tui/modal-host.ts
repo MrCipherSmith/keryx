@@ -46,7 +46,12 @@ export type OpenModalInput = {
 };
 
 export type ModalHandle = {
-  close(): void;
+  /**
+   * `restoreFocus: false` leaves the composer unfocused: a wizard closing one
+   * step's dialog while it still awaits work before the next must not hand the
+   * operator a live composer in between (flow 270). Default `true`.
+   */
+  close(opts?: { restoreFocus?: boolean }): void;
   setTab(id: string): void;
   activeTab(): string;
 };
@@ -239,6 +244,9 @@ function resolveInitialTab(tabs: readonly ModalTab[], initialTab: string | undef
   return first.id;
 }
 
+/** Columns the body scroll box's vertical scrollbar takes from the tab body. */
+export const MODAL_BODY_SCROLLBAR_COLS = 1;
+
 function innerWidthOf(state: HostState): number {
   const panelWidth = state.panel.width;
   if (typeof panelWidth === "number" && panelWidth > MODAL_PANEL_CHROME_X) {
@@ -307,7 +315,10 @@ function mountTab(state: HostState, input: OpenModalInput, tabId: string): void 
   const size = resolveModalPanelSize(availWidth, state.chrome.renderer.height, input.contentRows);
   const panelWidth = Math.min(availWidth, size.width);
   const cleanup = input.renderTab(tabId, state.body, {
-    width: resolveModalInnerWidth(panelWidth),
+    // The body sits in a scroll box whose scrollbar takes a column; a line
+    // wrapped to the full inner width lost its last characters to it and the
+    // renderer wrapped the rest onto a blank-looking extra row (flow 270).
+    width: resolveModalInnerWidth(panelWidth) - MODAL_BODY_SCROLLBAR_COLS,
     height: modalBodyRows(size.height),
   });
   state.tabCleanup = typeof cleanup === "function" ? cleanup : undefined;
@@ -509,6 +520,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     if (key.name === "right" && claimArrow("right")) {
       return;
     }
+    // A single tab has nowhere to switch to, so the arrows stay with the body:
+    // a text field in a wizard step needs them to move its cursor (flow 270).
+    if (state.tabs.length < 2 && (key.name === "left" || key.name === "right")) {
+      return;
+    }
     if (key.name === "left" || (onStrip && key.name === "tab" && key.shift === true)) {
       const prev = idx > 0 ? state.tabs[idx - 1] : undefined;
       if (prev !== undefined) {
@@ -559,11 +575,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
 
 function makeHandle(state: HostState, generation: number): ModalHandle {
   return {
-    close(): void {
+    close(opts?: { restoreFocus?: boolean }): void {
       if (state.generation !== generation) {
         return;
       }
-      closeHost(state, { restoreFocus: true, runOnClose: true });
+      closeHost(state, { restoreFocus: opts?.restoreFocus ?? true, runOnClose: true });
     },
     setTab(id: string): void {
       if (state.generation !== generation || !state.open || state.input === undefined) {
@@ -624,5 +640,17 @@ export function openModal(
   if (focused === null || !containsNode(state.scroll, focused)) {
     state.tabStrip.focus();
   }
+  // A modal opened from a promise continuation — the next wizard step after
+  // Esc on the previous one closed it — lands while the renderer is still
+  // handling that keypress, and the redraw it asks for is dropped: the dialog
+  // was open, focused and invisible until some unrelated redraw (flow 270).
+  // Ask again on the next tick, which also covers a caller that fills the body
+  // right after this returns.
+  const r = chrome.renderer;
+  setTimeout(() => {
+    if (state.generation === generation && state.open) {
+      r.requestRender();
+    }
+  }, 0);
   return makeHandle(state, generation);
 }
