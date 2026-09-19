@@ -2230,8 +2230,11 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   // still needs just the string (see that file).
   test("opts.makeAgentDeps's type accepts a getSlateSession second parameter", () => {
     const optsTypeBlock = fnBody.slice(0, fnBody.indexOf("}): Promise<boolean> {"));
+    // Flow 274 (agent bus P3, T6/T7 contract): widened again with a third,
+    // optional `bus` live-getter parameter — see that file's own doc comment
+    // on this field.
     expect(optsTypeBlock).toContain(
-      "makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;",
+      "makeAgentDeps: (\n    sel: TuiSelection,\n    getSlateSession: () => SlateSessionRef | undefined,\n    bus?: { client: () => BusClient | undefined },\n  ) => Promise<AgentDeps>;",
     );
   });
 
@@ -2242,8 +2245,10 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     expect(declIndex).toBeGreaterThan(callIndex); // confirms the TDZ-shaped ordering this audit is about
     const call = fnBody.slice(callIndex, callIndex + 200);
     // Flow 271 review r2 N1: the live getter is `liveSlateSession`, which reads
-    // `slateSession` at call time through the lease gate.
-    expect(call).toContain("opts.makeAgentDeps(sel, liveSlateSession)");
+    // `slateSession` at call time through the lease gate. Flow 274 T7 adds a
+    // third argument, `busClientRef` — the SAME live-getter object every
+    // `opts.makeAgentDeps` call site below passes.
+    expect(call).toContain("opts.makeAgentDeps(sel, liveSlateSession, busClientRef)");
     expect(fnBody).toContain("whilePersisting(slateSession, () => sessionLease.canPersist())");
   });
 
@@ -2253,15 +2258,18 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     // Widened from 300 (flow 267): `deps` now wraps the call to merge in
     // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
     // onContextCompaction }`), pushing the closing `)` a bit further out.
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 340);
-    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, liveSlateSession)");
+    // Flow 274 T7 widens it again for `busInbox`/`busAck`.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 500);
+    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, liveSlateSession, busClientRef)");
   });
 
   test("switchTo refreshes the live balance panel for the NEW provider", () => {
     expect(fnBody).toContain("const balancePanel = mountBalancePanel(");
     const switchToIndex = fnBody.indexOf("const switchTo = async (ns: TuiSelection)");
     expect(switchToIndex).toBeGreaterThanOrEqual(0);
-    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 800);
+    // Flow 274 T7 widened the `deps = {...}` rebuild above (busInbox/busAck
+    // carry-over), pushing `balancePanel.setProvider` a bit further out.
+    const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 1400);
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
@@ -2269,12 +2277,18 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
     expect(baseIndex).toBeGreaterThanOrEqual(0);
     const baseBlock = fnBody.slice(baseIndex, baseIndex + 200);
-    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, liveSlateSession)");
+    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, liveSlateSession, busClientRef)");
   });
 
-  test("all three real call sites are updated — not fewer, not more", () => {
-    const occurrences = fnBody.split(", liveSlateSession)").length - 1;
-    expect(occurrences).toBe(3);
+  // Flow 274 T7: a FOURTH real call site was added — the one-time rebuild
+  // right after the bus join settles (`liveBus = joined;` in the `joinBus`
+  // callback), which folds `bus_list`/`bus_send`/the conduct block into
+  // `deps` for the first time (the earlier three all ran before any join
+  // could possibly have finished). Still exactly one shared getter object,
+  // `busClientRef`, at every one of the four.
+  test("all four real call sites are updated — not fewer, not more", () => {
+    const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
+    expect(occurrences).toBe(4);
     expect(fnBody).not.toContain("() => slateSession)");
   });
 });
@@ -2621,6 +2635,18 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
     const filterBlock = tuiSourceF003.slice(filterIdx, filterIdx + 300);
     expect(filterBlock).toContain('t.definition.risk === "read"');
     expect(filterBlock).toContain("SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name)");
+  });
+
+  // Flow 274 (agent bus P3, T7): `bus_send` is ALSO `risk: "read"`
+  // (specification §7.1, AC8) — the exact "read-risk-but-actually-mutating"
+  // shape this deny-list exists for (see `shell_job_kill` above). Without
+  // this, a side worker's `risk === "read"` filter would happily hand it
+  // `bus_send` and let it speak on the main session's bus identity.
+  test("bus_send is denied by name; bus_list stays available (genuinely read-only)", () => {
+    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
+    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
+    expect(declBlock).toContain('"bus_send"');
+    expect(declBlock).not.toContain('"bus_list"');
   });
 });
 
@@ -3270,7 +3296,16 @@ describe("flow 265 AC7/AC8 — TUI wakes on a task completion only when idle (so
   });
 
   test("a notification-started turn is marked with origin: 'task-notification'", () => {
-    expect(wakeSource).toMatch(/origin:\s*"task-notification"/);
+    // Flow 274 T7: `runLine`'s `origin` param widened to also carry
+    // `"bus-message"`, and the pass-through into `runAgentTurn`'s options
+    // collapsed from a literal `origin: "task-notification" as const` to a
+    // shorthand `{ origin }` (any non-"operator" origin, including
+    // "bus-message", flows through the same way) — so the literal call site
+    // that actually STARTS a task-notification turn (`runLine("",
+    // "task-notification")`) is what still proves this, not a literal
+    // `origin: "task-notification"` key/value pair in the pass-through.
+    expect(wakeSource).toContain('runLine("", "task-notification")');
+    expect(wakeSource).toMatch(/origin === "operator" \? \{\} : \{ origin \}/);
   });
 
   test("the settle handler still drains a queued operator item before anything else", () => {
@@ -3348,9 +3383,12 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
   });
 
   test("a new turn starting (runLine) cancels the suggestion gate before anything else runs", () => {
-    const runLineStart = nextStepSource.indexOf('const runLine = (line: string, origin: "operator"');
+    // Flow 274 T7: `runLine`'s signature wrapped onto multiple lines when its
+    // `origin` param widened to include `"bus-message"`.
+    const runLineStart = nextStepSource.indexOf("const runLine = (\n");
     expect(runLineStart).toBeGreaterThanOrEqual(0);
-    const block = nextStepSource.slice(runLineStart, runLineStart + 700);
+    const block = nextStepSource.slice(runLineStart, runLineStart + 900);
+    expect(block).toContain('origin: "operator" | "task-notification" | "bus-message" = "operator"');
     expect(block).toContain('suggestionGate.cancel("new turn started")');
   });
 

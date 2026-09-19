@@ -24,6 +24,9 @@ import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { isBusRefusal } from "../bus/errors";
 import { isAssignableBusName } from "../bus/schema";
+// Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent —
+// `createBusInbox`/`BusInbox` are T5's (`../bus/inbox.ts`).
+import { createBusInbox, type BusInbox } from "../bus/inbox";
 import { loadOAuthGrant } from "../lib/oauth/grants";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -1466,6 +1469,17 @@ async function runAgentRepl(
    * caller (tests) that does not pass one.
    */
   configDir?: string,
+  /**
+   * Flow 274 (agent bus P3, T6/T7 contract): the SAME `orient` block the
+   * caller already resolved for `deps.systemInstruction`'s FIRST build
+   * (`buildOrientation`, resolved once before this function is even called).
+   * Needed here ONLY to rebuild `deps.systemInstruction` with
+   * `busJoined: true` once the bus join actually settles — this REPL has no
+   * `/model`-style rebuild point to piggy-back on otherwise (see the bus-join
+   * block below). `undefined` reproduces the pre-flow-274 instruction text
+   * for any caller (tests) that omits it.
+   */
+  orient?: string,
 ): Promise<void> {
   const out = (s: string): void => {
     process.stdout.write(s);
@@ -2016,6 +2030,10 @@ async function runAgentRepl(
     status: busWorking ? "working" : "idle",
     activity: live?.summary.title ?? "keryx agent",
   });
+  // Flow 274 (agent bus P3, T7; specification §5.3): one inbox for this REPL,
+  // fed below regardless of whether the join ever succeeds (a disabled or
+  // never-attempted bus just never pushes into it).
+  const busInbox: BusInbox = createBusInbox();
   let bus: BusClient | undefined;
   if (sessionsOn && live !== undefined) {
     try {
@@ -2030,7 +2048,14 @@ async function runAgentRepl(
         // comment in `runShell`.
         sessionLease: () => lease,
         status: busStatus,
-        onEvent: (event) => agentIo.onSystem?.(`${formatBusEventLine(event)}\n`),
+        onEvent: (event) => {
+          agentIo.onSystem?.(`${formatBusEventLine(event)}\n`);
+          // Flow 274 T7 (specification §4.2): every event `onEvent` sees is
+          // already not `ack`/`override`/`lease-expired` (`BusClient`'s own
+          // `isRenderable` filter) — `body` is optional only on the type
+          // (pre-flow-274 fixtures); the real poll path always sets it.
+          busInbox.push({ ...event, body: event.body ?? "" });
+        },
         onPeers: () => {},
         // review r1 F10: throttled failure printer (see `runShell`).
         onError: makeBusErrorReporter((text) => agentIo.onSystem?.(text)),
@@ -2041,6 +2066,26 @@ async function runAgentRepl(
         bus = joined;
         if (sessionOpts?.busBox !== undefined) sessionOpts.busBox.current = bus;
         agentIo.onSystem?.(formatBusJoinLine(joined));
+        // Flow 274 T7: `deps` (this function's parameter) was built by the
+        // CALLER before this join even started — its `tools`/
+        // `systemInstruction` cannot yet reflect `bus_list`/`bus_send` or the
+        // conduct block (`AgentInstructionContext.busJoined`). `busInbox`/
+        // `busAck` are plain fields with no such baking problem, so they are
+        // just merged on; `systemInstruction` needs an actual rebuild (T6/T7
+        // contract — no `/model`-style rebuild point exists in THIS REPL to
+        // piggy-back on, so this runs once, right here, right after the join
+        // actually succeeds).
+        deps = {
+          ...deps,
+          busInbox,
+          busAck: (events) => joined.ack(events),
+          systemInstruction: buildAgentSystemInstruction(orient, {
+            providerId: deps.providerId,
+            modelId: deps.modelId,
+            toolNames: interactiveAgentToolNames(deps.tools),
+            busJoined: true,
+          }),
+        };
       }
     } catch (cause) {
       agentIo.onSystem?.(busErrorLine(cause));
@@ -2049,6 +2094,17 @@ async function runAgentRepl(
   const leaveBus = (): void => {
     bus?.leave();
     if (sessionOpts?.busBox !== undefined) sessionOpts.busBox.current = undefined;
+  };
+  // Flow 274 (agent bus P3, T7; specification §5.3): "no idle wake in v1" for
+  // the readline surface — `busInbox` is drained only from INSIDE a turn
+  // (`runAgentTurn`'s own three drain sites, via `deps.busInbox`/`busAck`
+  // above), never used here to start one. This just announces what is
+  // waiting, right before the prompt a human would otherwise type into.
+  const printPromptWithBusNotice = (): void => {
+    if (busInbox.size > 0) {
+      agentIo.onSystem?.(`bus: ${busInbox.size} message(s) pending — delivered with your next message\n`);
+    }
+    rich.printPrompt();
   };
 
   slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
@@ -2129,7 +2185,7 @@ async function runAgentRepl(
       }
       flushSessionCheckpoint();
       out(`\n${GUTTER}${turnSeparator()}\n\n`);
-      rich.printPrompt();
+      printPromptWithBusNotice();
       continue;
     }
     const line = input.kind === "line" ? input.line : undefined;
@@ -2212,7 +2268,7 @@ async function runAgentRepl(
         // the new session first; a refusal keeps session, slate and lease.
         const nextLive = sessionsOn ? switchNewSession() : undefined;
         if (nextLive === false) {
-          rich.printPrompt();
+          printPromptWithBusNotice();
           continue;
         }
         await closeSlateSession(slateSession, mintTimestampAttemptId);
@@ -2499,11 +2555,11 @@ async function runAgentRepl(
             `Unknown command: ${command}. Type /help.\n`,
         );
       }
-      rich.printPrompt();
+      printPromptWithBusNotice();
       continue;
     }
     if (line.trim().length === 0) {
-      rich.printPrompt();
+      printPromptWithBusNotice();
       continue;
     }
     out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
@@ -2543,7 +2599,7 @@ async function runAgentRepl(
     }
     out(`\n${GUTTER}${turnSeparator()}\n\n`);
     rich.safeBoundary?.();
-    rich.printPrompt();
+    printPromptWithBusNotice();
   }
 }
 
@@ -3110,6 +3166,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     const makeAgentDeps = async (
       sel: { provider: string; model: string; baseUrl?: string },
       getSlateSession: () => SlateSessionRef | undefined,
+      // Flow 274 (agent bus P3, T6/T7 contract): `tui-shell.ts`'s own live
+      // getter over ITS `liveBus` — see that file's widened `opts.makeAgentDeps`
+      // doc comment. Optional so every existing caller (tests) that predates
+      // the bus is unaffected.
+      bus?: { client: () => BusClient | undefined },
     ): Promise<AgentDeps> => {
       // Finding 1 fix (fix round, code review of PR #306): this parameter
       // used to be `getSessionDir: () => string | undefined`, matching only
@@ -3241,6 +3302,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           jobRegistry,
           mcp: getMcpRuntime(),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+          // Flow 274 (agent bus P3, T6/T7 contract): passed whenever the
+          // caller (`tui-shell.ts`) even attempts to join a bus, regardless
+          // of whether `bus.client()` currently resolves — T6's tools refuse
+          // `bus-disabled` at call time when it does not.
+          ...(bus !== undefined ? { bus } : {}),
         }),
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
         // view; opening it must not be the thing that spawns every
@@ -3289,6 +3355,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: sel.provider,
           modelId: sel.model,
           toolNames: interactiveAgentToolNames(deps.tools),
+          // Flow 274 (T6/T7 contract): true only once `bus.client()` actually
+          // resolves. `tui-shell.ts` rebuilds via this same function right
+          // after its own join settles, so a session that starts before the
+          // join finishes (always true for the FIRST call) still ends up
+          // with the conduct block once that rebuild runs.
+          busJoined: bus?.client() !== undefined,
         }),
       };
     };
@@ -3678,6 +3750,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           jobRegistry,
           mcp: mcpRuntime,
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
+          // Flow 274 (agent bus P3, T6/T7 contract): `busBox` (declared above,
+          // shared with `runAgentRepl`'s own join below via `sessionOpts.busBox`)
+          // is a LIVE box — `client()` reads whatever it currently holds, so
+          // this reflects the real join outcome even though the join itself
+          // happens later, inside `runAgentRepl`. T6's tools refuse
+          // `bus-disabled` at call time whenever `client()` is undefined
+          // (not yet joined, disabled, or sessions off).
+          bus: { client: () => busBox.current },
         }),
         maxRounds: resolveAgentMaxRounds(),
         // Same precedence as the TUI's `makeAgentDeps` above — routed through
@@ -3717,6 +3797,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
+          // Flow 274 (T6/T7 contract): almost always `false` here — the bus
+          // join happens later, inside `runAgentRepl` (`busBox.current` is
+          // still empty at this point) — `runAgentRepl` rebuilds this exact
+          // instruction with `busJoined: true` once its own join succeeds
+          // (see its own doc comment on the `orient` parameter below).
+          busJoined: busBox.current !== undefined,
         }),
       };
       // OpenTUI is handled EARLIER (default when TTY), before readline is
@@ -3740,7 +3826,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // One REPL run per session opts: `runWithLeaseChoice` re-runs it with
       // `fork`/`takeOver`, or as a new session, after a leased refusal.
       const runRepl = async (session: ShellSessionOpts): Promise<void> => {
-        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir);
+        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir, orient);
       };
       try {
         finishLeased(

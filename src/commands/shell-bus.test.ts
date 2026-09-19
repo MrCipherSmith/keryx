@@ -602,3 +602,77 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     expect(turnBlock).toContain("busWorking = true;");
   });
 });
+
+// Flow 274 (agent bus P3, T7; specification §5.3, AC1/AC7): delivery to the
+// agent in the readline REPL. `runAgentRepl` has no injection seam (see the
+// describe block above) — proven the same way as everything else in it.
+describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
+
+  test("a busInbox is created and every polled event is pushed into it, body defaulted", () => {
+    expect(replBody).toContain("const busInbox: BusInbox = createBusInbox();");
+    const joinIndex = replBody.indexOf("const joined = await joinBus({");
+    expect(joinIndex).toBeGreaterThan(0);
+    const eventIdx = replBody.indexOf("onEvent: (event) => {", joinIndex);
+    expect(eventIdx).toBeGreaterThan(joinIndex);
+    const eventBody = replBody.slice(eventIdx, replBody.indexOf("},", eventIdx));
+    expect(eventBody).toContain('busInbox.push({ ...event, body: event.body ?? "" });');
+  });
+
+  test("busInbox/busAck are merged onto deps only once the join succeeds, never for a disabled bus", () => {
+    const disabledIdx = replBody.indexOf('if ("disabled" in joined) {');
+    const successIdx = replBody.indexOf("bus = joined;", disabledIdx);
+    expect(disabledIdx).toBeGreaterThan(0);
+    expect(successIdx).toBeGreaterThan(disabledIdx);
+    const disabledBlock = replBody.slice(disabledIdx, successIdx);
+    expect(disabledBlock).not.toContain("busInbox");
+    const successBlock = replBody.slice(successIdx, successIdx + 900);
+    expect(successBlock).toContain("busInbox,");
+    expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
+  });
+
+  test("the join success rebuild folds in busJoined: true for the system instruction", () => {
+    const successIdx = replBody.indexOf("bus = joined;");
+    const successBlock = replBody.slice(successIdx, successIdx + 1300);
+    expect(successBlock).toContain("systemInstruction: buildAgentSystemInstruction(orient, {");
+    expect(successBlock).toContain("busJoined: true,");
+  });
+
+  test("no idle wake exists for this surface: readLineOrCompletion's completion race stays keyed to jobRegistry only", () => {
+    // Specification §5.3: "no idle wake in v1" for readline — `busInbox` is
+    // drained only from inside a turn, never used to resolve the
+    // `completionWaiters` race that `deps.jobRegistry?.onCompletion` feeds.
+    expect(replBody).toContain("deps.jobRegistry?.onCompletion(() => {");
+    expect(replBody).not.toContain("busInbox?.onCompletion");
+    expect(replBody).not.toMatch(/busInbox[^;]*completionWaiters/);
+  });
+
+  test("the prompt announces pending bus messages, replacing every raw rich.printPrompt() call in this REPL", () => {
+    const helperIdx = replBody.indexOf("const printPromptWithBusNotice = (): void => {");
+    expect(helperIdx).toBeGreaterThan(0);
+    const helperBlock = replBody.slice(helperIdx, helperIdx + 300);
+    expect(helperBlock).toContain("busInbox.size > 0");
+    expect(helperBlock).toContain("message(s) pending — delivered with your next message");
+    expect(helperBlock).toContain("rich.printPrompt();");
+    // Every OTHER printPrompt call in this REPL goes through the wrapper —
+    // the only raw `rich.printPrompt()` left is the one inside it, above.
+    const rawCalls = (replBody.match(/rich\.printPrompt\(\)/g) ?? []).length;
+    expect(rawCalls).toBe(1);
+    const wrapperCalls = (replBody.match(/(?<!const )printPromptWithBusNotice\(\)/g) ?? []).length;
+    expect(wrapperCalls).toBeGreaterThanOrEqual(5);
+  });
+
+  test("bus tools are wired through the SAME live busBox the join updates, not a one-time snapshot", () => {
+    // This wiring lives in the OUTER function (`shellCommand`'s agent-mode
+    // branch, where `agentDepsBase`/`agentDeps` are built) — BEFORE
+    // `runAgentRepl` is even called, so it is outside `replBody` (which
+    // stops at that branch's own start marker). `busBox` is the box both
+    // this construction site and `runAgentRepl`'s own join (above) share.
+    const agentModeBranch = shellSource.slice(agentModeBranchStart);
+    expect(agentModeBranch).toContain("bus: { client: () => busBox.current }");
+    expect(agentModeBranch).toContain("busJoined: busBox.current !== undefined,");
+  });
+});

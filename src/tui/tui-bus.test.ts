@@ -474,3 +474,89 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
     expect((source.match(/runBusCommand\(line\);/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// Flow 274 (agent bus P3, T7; specification §5.3, AC5/AC6): delivery to the
+// agent — pushing polled events into `busInbox` and waking an idle TUI on a
+// wake-eligible one. The OpenTUI REPL is not mountable under the unit harness
+// (same limitation the flow 265 task-notification wake audit documents in
+// `tui-shell.test.ts`), so this is a source-text audit; `decideBusWake`
+// itself (the pure decision table) is driven directly in `bus-wake.test.ts`.
+describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
+  test("onEvent pushes the rendered event into busInbox, body defaulted", () => {
+    const joinIndex = source.indexOf("await joinBus({");
+    expect(joinIndex).toBeGreaterThanOrEqual(0);
+    const eventIdx = source.indexOf("onEvent: (event) => {", joinIndex);
+    expect(eventIdx).toBeGreaterThan(joinIndex);
+    const eventBody = source.slice(eventIdx, source.indexOf("},", eventIdx));
+    expect(eventBody).toContain("busInbox.push({ ...event, body: event.body ?? \"\" });");
+  });
+
+  test("onPeers triggers the bus-wake check once per poll, after painting the fleet", () => {
+    const joinIndex = source.indexOf("await joinBus({");
+    const peersIdx = source.indexOf("onPeers: (peers: BusPeer[]) => {", joinIndex);
+    expect(peersIdx).toBeGreaterThan(joinIndex);
+    const peersBody = source.slice(peersIdx, source.indexOf("},", source.indexOf("paintFleet();", peersIdx)));
+    expect(peersBody).toContain("paintFleet();");
+    expect(peersBody.indexOf("onBusPollSettled?.();")).toBeGreaterThan(peersBody.indexOf("paintFleet();"));
+  });
+
+  test("decideBusWake is imported and used to decide the poll-time wake", () => {
+    expect(source).toContain('import { decideBusWake } from "./bus-wake";');
+    expect(source).toContain("decideBusWake({");
+  });
+
+  test("the bus-wake check uses the SAME idle test and the SAME consecutiveAutoWakes/resolveMaxAutoWake as the task-notification wake", () => {
+    const start = source.indexOf("onBusPollSettled = (): void => {");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = source.slice(start, start + 900);
+    expect(block).toContain("chrome.isBusy()");
+    expect(block).toContain("foregroundOperation.isActive");
+    expect(block).toContain("mainQueue.length === 0");
+    expect(block).toContain("busInbox.hasWakeEligible()");
+    expect(block).toContain("consecutiveAutoWakes");
+    expect(block).toContain("resolveMaxAutoWake()");
+    expect(block).toContain('runLine("", "bus-message")');
+    // Never a second, bus-only counter — the SAME variable the task
+    // notification wake increments/resets.
+    expect(block).not.toMatch(/consecutiveBusWakes|busWakeCount/);
+  });
+
+  test("the bus-wake check never fires once the destroyed guard is set (review r1 F6 pattern)", () => {
+    const start = source.indexOf("onBusPollSettled = (): void => {");
+    const block = source.slice(start, start + 200);
+    expect(block).toContain("if (destroyed) return;");
+  });
+
+  test("the capped bus-wake message mirrors the task-notification cap wording", () => {
+    expect(source).toContain(
+      "a peer message arrived; automatic wakes are capped, so it will be delivered with your next message",
+    );
+  });
+
+  test("turn settle also triggers the bus-wake check, only when no queued operator item ran instead", () => {
+    const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
+    expect(nextIdx).toBeGreaterThanOrEqual(0);
+    const block = source.slice(nextIdx, nextIdx + 700);
+    expect(block).toContain("runLine(next.question);");
+    expect(block).toContain("onBusPollSettled?.();");
+    // The queued item wins — bus-wake only runs in the `else` branch.
+    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf("runLine(next.question);"));
+  });
+
+  test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {
+    const disabledIdx = source.indexOf('if ("disabled" in joined) {');
+    const assignIdx = source.indexOf("liveBus = joined;");
+    expect(disabledIdx).toBeGreaterThanOrEqual(0);
+    expect(assignIdx).toBeGreaterThan(disabledIdx);
+    const disabledBlock = source.slice(disabledIdx, assignIdx);
+    expect(disabledBlock).not.toContain("busInbox");
+    const successBlock = source.slice(assignIdx, assignIdx + 2000);
+    expect(successBlock).toContain("busInbox,");
+    expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
+  });
+
+  test("busClientRef is a live getter, not a captured value, threaded through every opts.makeAgentDeps call", () => {
+    expect(source).toContain("const busClientRef = { client: (): BusClient | undefined => liveBus };");
+    expect((source.match(/opts\.makeAgentDeps\([^)]*busClientRef\)/g) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+});
