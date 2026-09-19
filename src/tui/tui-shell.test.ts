@@ -3479,6 +3479,15 @@ describe("session switch rebinds the slate (/resume, /sessions)", () => {
     expect(block.indexOf("bindSlateToLiveSession();", applied)).toBeGreaterThan(applied);
   });
 
+  test("resumeSessionInteractive refreshes the workspace sidebar from the rebound slate", () => {
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
+    const bound = block.indexOf("bindSlateToLiveSession();");
+    expect(bound).toBeGreaterThanOrEqual(0);
+    // refreshWorkspaceSidebar reads slateSession.dir, so it must run after the rebind.
+    expect(block.indexOf("void refreshWorkspaceSidebar();", bound)).toBeGreaterThan(bound);
+  });
+
   test("every session switch builds its slate ref through bindSlateToLiveSession, none by hand", () => {
     expect(fnBody).not.toMatch(/slateSession = \{/);
     // startup, /new|/clear, /resume|/sessions

@@ -4400,6 +4400,8 @@ export async function launchTuiAgentShell(opts: {
       // switch has already moved off it, and an unclosed slate is archived
       // the next time that session opens one (see `freshSlateSessionRef`).
       bindSlateToLiveSession();
+      // After the rebind: it reads the bound workspace from the slate ref.
+      void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
       paintSessionHeader();
       if (opened.archiveDegraded !== undefined) {
         io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
