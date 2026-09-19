@@ -551,13 +551,19 @@ export function presentMcpTools(
       rowCtor = ctor;
       activeRenderer = renderer;
       bodyWidth = ctx?.width;
+      // ModalHost hands every tab the SAME body container. Keeping the other
+      // tab's handle meant `paint()` — which repaints both — drew the MCP
+      // rows over the Tools list on the first ↓ after a visit to MCP Clients,
+      // under a tab strip still reading [Tools]. Only the mounted tab owns it.
       if (tabId === "tools") {
         toolsBody = target;
+        mcpBody = undefined;
         toolsScroll = Math.max(0, toolsScroll);
         paintToolsRows();
         return;
       }
       mcpBody = target;
+      toolsBody = undefined;
       mcpScroll = scrollToReveal(mcpSelected, mcpScroll, bodyRows);
       paintMcpRows();
     },

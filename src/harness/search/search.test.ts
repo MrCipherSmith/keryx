@@ -64,6 +64,15 @@ describe("search provider registry", () => {
     expect(registry.get("brave")?.credentialSchema.required).toBe(true);
   });
 
+  // The /search-provider wizard prints "Paste your <label>"; "Brave Search
+  // API" + " API key" read "Brave Search API API key".
+  test("credential labels name the key once, whatever the display name ends with", () => {
+    const registry = createSearchProviderRegistry(new FakeTransport());
+    expect(registry.get("brave")?.credentialSchema.label).toBe("Brave Search API key");
+    expect(registry.get("tavily")?.credentialSchema.label).toBe("Tavily API key");
+    expect(registry.get("exa")?.credentialSchema.label).toBe("Exa API key");
+  });
+
   test("uses only the injected sandboxed transport and returns the common normalized result", async () => {
     const transport = new FakeTransport();
     const registry = createSearchProviderRegistry(transport);
