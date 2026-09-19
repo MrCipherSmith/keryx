@@ -507,7 +507,12 @@ describe("TUI slate getters go through the lease gate (review r2 N1, source-text
     expect(source).toContain("whilePersisting(slateSession, () => sessionLease.canPersist())");
     expect(source).not.toContain("() => slateSession)");
     expect(source).not.toContain("slateSession?.dir");
-    expect(source.match(/makeAgentDeps\([^)]*, liveSlateSession\)/g)?.length).toBe(3);
+    // Flow 274 T7 threads `busClientRef` as a third argument through every
+    // `makeAgentDeps` call site, so `liveSlateSession` is no longer the last
+    // arg before the closing paren — match on it being the second arg
+    // instead. Flow 274 also added a 4th call site (~4658, the join-success
+    // rebuild of `joinedAgentDeps`), bringing the total from 3 to 4.
+    expect(source.match(/makeAgentDeps\([^,]+,\s*liveSlateSession,/g)?.length).toBe(4);
   });
 });
 

@@ -43,7 +43,19 @@ import type {
 
 const ROOTS: string[] = [];
 
+// `Peer.ack` below (unlike the real `BusClient.ack` in `./client.ts`) is a
+// bare fire-and-forget `appendEvent` — nothing in this file awaits it before
+// a test ends. `afterAll` removes every `ROOTS` temp dir as soon as the last
+// test resolves, which can race a still-in-flight ack's append and turn a
+// benign ENOENT (root already gone) into an unhandled rejection between
+// tests (CI: "client matrix (cancel-resume)"). Every ack write is pushed
+// here, with a handler attached at creation time (so a rejection is never
+// unhandled even before this array is awaited), and `afterAll` drains all of
+// them before removing any temp dir.
+const PENDING_ACKS: Promise<void>[] = [];
+
 afterAll(async () => {
+  await Promise.allSettled(PENDING_ACKS);
   await Promise.all(ROOTS.map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -228,7 +240,12 @@ async function makePeer(root: string, instanceId: string, name: string): Promise
     pollNow: async () => [],
     ack(events) {
       for (const event of events) {
-        void appendEvent(
+        // Mirrors the real `BusClient.ack` (`./client.ts`): fire-and-forget,
+        // but every write is tracked in `PENDING_ACKS` (with a rejection
+        // handler attached right here, not deferred) so `afterAll` can drain
+        // them before the temp dir is removed — see the comment on
+        // `PENDING_ACKS` above.
+        const write = appendEvent(
           root,
           {
             from: { instanceId, name, origin: "system" },
@@ -238,7 +255,15 @@ async function makePeer(root: string, instanceId: string, name: string): Promise
             refs: { replyTo: event.id },
           },
           { now },
+        ).then(
+          () => {},
+          () => {
+            // Swallowed, same as production routes an ack failure to
+            // `onError` instead of throwing (`./client.ts`); nothing here
+            // asserts on failure, only on the ack landing.
+          },
         );
+        PENDING_ACKS.push(write);
       }
     },
     leave() {},
