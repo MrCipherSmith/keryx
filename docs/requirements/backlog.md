@@ -143,6 +143,39 @@ were renumbered markdown lists or step headings.
 
 ---
 
+## Shell surfaces
+
+### 11. The two shell god-files cannot be split while their tests read them as text
+
+Measured on 2026-09-19 against `398acb4a`: **16 test files, 46 read sites** load
+`src/tui/tui-shell.ts` (6,853 lines) or `src/commands/shell.ts` (3,919) with
+`readFileSync` and assert over the text — exact substrings, `indexOf` offset
+comparisons, occurrence counts, and fixed character windows. So a mechanical,
+behaviour-preserving move fails a large number of tests, and the failures
+cannot distinguish "you moved the code" from "you broke the wiring".
+
+Two of those assertions are wrong today, not merely fragile:
+
+- Most audits in `shell.test.ts` bound their search to
+  `slice(indexOf("async function runAgentRepl("), indexOf("if (agentMode) {"))`.
+  `runAgentRepl`'s closing brace is `shell.ts:2625`; the window ends at
+  `:3705`. Roughly 1,080 lines of unrelated code — `resolveTuiStartup`,
+  `parseShellCliFlags`, `chooseShellSurface` and the whole TUI branch including
+  `makeAgentDeps` (`:3187`) — are inside a region labelled "the REPL body".
+- `mcp-servers/invariants.test.ts:114` bans `process.once` for teardown
+  handlers across a **hardcoded** file list naming `../commands/shell.ts`.
+  Moving the registration at `shell.ts:3588`/`:3593` into a submodule does not
+  fail it — it silently stops covering it.
+
+**Why not then:** found while scoping the split itself, and the fix is the
+split's own first step rather than a rider on it.
+
+**Size:** four PRs. Package: `docs/requirements/keryx-shell-split/`, inventory
+at `source-text-audit-inventory.md`, guarded by `src/shell-source-audits.test.ts`.
+Opened as flow 276.
+
+---
+
 ## Contracts
 
 ### 8. The `task-implementer` output contract has no reader

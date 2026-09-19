@@ -1,0 +1,27 @@
+# Flow Journal
+
+- 2026-09-19T23:14:14.579Z - flow created
+- 2026-09-19T23:33:28.325Z - task-added: T5: Record the roadmap row and the missing backlog entry
+- 2026-09-19T23:33:31.467Z - frozen: 9 criteria; checksum recorded
+- 2026-09-19T23:33:31.563Z - started
+- 2026-09-19T23:33:36.597Z - task-done: T1: Collect remaining context
+- 2026-09-19T23:33:36.685Z - task-done: T2: Implement per plan
+- 2026-09-19T23:33:36.773Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-19T23:33:36.856Z - task-done: T5: Record the roadmap row and the missing backlog entry
+- 2026-09-19T23:34:08.142Z - ac-confirmed: AC1: src/shell-source-audits.test.ts re-derives the scan; its manifest lists 16 files / 46 sites and the test fails on any disagreement
+- 2026-09-19T23:34:08.225Z - ac-confirmed: AC2: audits-tui-shell.md (14 blocks, ~75 tests), audits-tui-other.md (7 files), audits-commands.md (5 files, 71 tests), audits-cross-cutting.md (5 tests); one table row per test with all six columns
+- 2026-09-19T23:34:08.302Z - ac-confirmed: AC3: kind is read from the observable-today column (yes=behavioural, no/partial=seam) with structural ones listed by name in each detail file's Notes; mapping stated in the inventory's 'Each audit is one of three kinds'
+- 2026-09-19T23:34:08.379Z - ac-confirmed: AC4: mutation-checked: editing tui/tui-shell.test.ts's manifest count 14->13 failed the test naming that row; reverted and green
+- 2026-09-19T23:34:08.466Z - ac-confirmed: AC5: third test in shell-source-audits.test.ts asserts commands/goal-command.test.ts is excluded (names commands/shell.ts in a comment and reads files elsewhere); joined and helper forms both resolve
+- 2026-09-19T23:34:17.420Z - ac-confirmed: AC6: README.md states the four-PR table, why conversion precedes the split, cites bus-wake.ts/bus-command.ts, and records launchTuiAgentShell as one ~3,940-line closure P3 relocates but does not decompose
+- 2026-09-19T23:34:17.513Z - ac-confirmed: AC7: git status: M docs/requirements/backlog.md, M docs/requirements/roadmap.md, ?? .metaproject/flows/276-*/, ?? docs/requirements/keryx-shell-split/, ?? src/shell-source-audits.test.ts — no production file touched
+- 2026-09-19T23:34:17.605Z - ac-confirmed: AC8: roadmap.md gains a Keryx Shell Split row; backlog.md gains entry 11 under a new 'Shell surfaces' heading, in the file's measured house format — the entry the task cited did not exist
+- 2026-09-19T23:36:29.344Z - ac-updated: AC7 enumerated the changed paths; registering the new guard test in package.json's test:core is required because src/core-package.test.ts proves a root-level test matched by neither the core gate nor the client matrix runs in no CI job at all
+- 2026-09-19T23:36:46.450Z - ac-confirmed: AC1: src/shell-source-audits.test.ts re-derives the scan; manifest lists 16 files / 46 sites and the test fails on any disagreement
+- 2026-09-19T23:36:46.541Z - ac-confirmed: AC2: audits-tui-shell.md (14 blocks, ~75 tests), audits-tui-other.md (7 files), audits-commands.md (5 files, 71 tests), audits-cross-cutting.md (5 tests); one row per test, six columns
+- 2026-09-19T23:36:46.629Z - ac-confirmed: AC3: kind read from the observable-today column (yes=behavioural, no/partial=seam), structural ones listed by name in each detail file's Notes; mapping stated in the inventory
+- 2026-09-19T23:36:46.717Z - ac-confirmed: AC4: mutation-checked: manifest count 14->13 for tui/tui-shell.test.ts failed the test naming that row; reverted, green
+- 2026-09-19T23:36:46.805Z - ac-confirmed: AC5: boundary test asserts commands/goal-command.test.ts is excluded; joined form (shell-lease.test.ts:568) and helper form (approval-wiring) both resolve
+- 2026-09-19T23:36:46.889Z - ac-confirmed: AC6: README states the four-PR table, cites bus-wake.ts/bus-command.ts, records launchTuiAgentShell as a ~3,940-line closure P3 relocates but does not decompose
+- 2026-09-19T23:36:46.974Z - ac-confirmed: AC7: git status: M docs/requirements/{backlog,roadmap}.md, M package.json (one test:core entry), ?? flows/276-*/, ?? docs/requirements/keryx-shell-split/, ?? src/shell-source-audits.test.ts; src/core-package.test.ts green
+- 2026-09-19T23:36:47.062Z - ac-confirmed: AC8: roadmap gains a Keryx Shell Split row; backlog gains entry 11 under a new 'Shell surfaces' heading — the cited entry did not previously exist

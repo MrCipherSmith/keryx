@@ -2,15 +2,15 @@
 
 ## Stats
 
-- Source files indexed: 1571
+- Source files indexed: 1572
 - Imported asset files indexed: 4
-- Total nodes: 1575
+- Total nodes: 1576
 - Edges: 4757
 - Import edges: 4683
 - Asset edges: 11
 - Unresolved imports: 63
 - Import resolution: 98.7%
-- Skipped generated/static directories: 8
+- Skipped generated/static directories: 7
 
 ## Top Modules
 
@@ -53,7 +53,6 @@
 
 - `.claude`
 - `.metaproject`
-- `dist`
 - `docs/requirements/keryx-mcp-client/.metaproject`
 - `fixtures/memory-reliability-p0/.metaproject`
 - `fixtures/paraphrase/.metaproject`
