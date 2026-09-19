@@ -30,14 +30,20 @@ import { clearTranscriptChildren } from "./transcript-blocks";
 import type { McpRuntimeStatus } from "../mcp/client-config";
 import type { NormalizedToolDefinition } from "../harness/provider/types";
 
+/**
+ * Only keys that act on EVERY tab (flow 270 AC6). ModalHost paints one
+ * footer per modal, not per tab, and this footer used to promise
+ * `c/d connect/disconnect · y confirm` on the Tools tab, where both keys
+ * do nothing. The MCP tab's own keys are its first body line instead
+ * (`MCP_TAB_KEYS`), which is the only place they are true.
+ */
 export const MCP_INSPECTOR_FOOTER = [
-  { key: "↑/↓", label: "select" },
-  { key: "click", label: "row: select/act" },
-  { key: "c/d", label: "connect/disconnect" },
-  { key: "y", label: "confirm" },
+  { key: "↑/↓", label: "scroll/select" },
   { key: "←/→", label: "tabs" },
   { key: "esc", label: "close" },
 ] as const;
+
+export const MCP_TAB_KEYS = "keys: c/d connect/disconnect · y confirm · click a row to arm, again to confirm";
 
 export const MCP_TOOLS_COMMAND = "/integrations";
 
@@ -117,17 +123,114 @@ function runtimeLabel(id: string): string {
   return RUNTIME_LABELS[id] ?? id;
 }
 
-function formatToolRowLine(tool: NormalizedToolDefinition): string {
-  const risk = (tool.risk ?? "read").padEnd(6);
-  const name = tool.name.padEnd(28);
-  return `${name} ${risk} ${tool.description ?? ""}`.trimEnd();
+/** Below this many columns, hanging under the description column reads worse than a shallow indent. */
+const MIN_HANGING_BUDGET = 24;
+const FALLBACK_INDENT = 4;
+
+/**
+ * Break a word too long for any line. At the last `/` inside the budget,
+ * and BEFORE it, so the continuation starts `/Cursor/…` — read as a path
+ * — rather than `Cursor/…`, which a terminal's link detector took for a
+ * host (`http://Support/…` in the operator's screenshot).
+ */
+function splitLongWord(word: string, budget: number): string[] {
+  const pieces: string[] = [];
+  let rest = word;
+  while (rest.length > budget) {
+    const slash = rest.lastIndexOf("/", budget);
+    const cut = slash > 0 ? slash : budget;
+    pieces.push(rest.slice(0, cut));
+    rest = rest.slice(cut);
+  }
+  pieces.push(rest);
+  return pieces;
 }
 
-export function formatToolsListLines(tools: readonly NormalizedToolDefinition[]): string[] {
+/**
+ * One row as lines no wider than `width`, continuation lines hanging
+ * under column `indent` (flow 270 AC5).
+ *
+ * The rows used to be one string that the terminal wrapped at column 0,
+ * so a tool's description ran back under the NAME column and the table
+ * stopped being a table. Word-wrapped on spaces, keeping the run of
+ * spaces between words that fit (the `  [d] disconnect` gaps are layout).
+ * A narrow panel falls back to a shallow indent rather than a
+ * one-word-wide column. `width` undefined means "do not wrap" — a caller
+ * with no measured panel gets the old single line, not a guessed width.
+ */
+export function wrapHangingRow(head: string, text: string, width?: number, indent: number = head.length): string[] {
+  if (width === undefined) {
+    return [`${head}${text}`.trimEnd()];
+  }
+  const hang = width - indent >= MIN_HANGING_BUDGET ? indent : Math.min(indent, FALLBACK_INDENT);
+  const pad = " ".repeat(hang);
+  const budget = Math.max(1, width - hang);
+  const out: string[] = [];
+  let current = head;
+  let fresh = true;
+  // A path with a space in it (`~/Library/Application Support/Cursor/…`)
+  // is one unit, not two words: wrapping at that space started a line
+  // with `Support/Cursor/…`, the exact text the link detector grabbed.
+  // Glued, it can only break before a `/`.
+  const units: { word: string; gap: string }[] = [];
+  for (const match of text.matchAll(/(\S+)( *)/g)) {
+    const word = match[1] as string;
+    const last = units.at(-1);
+    if (last !== undefined && last.gap === " " && last.word.includes("/") && word.includes("/") && !/^[/~-]/.test(word)) {
+      last.word += ` ${word}`;
+      last.gap = match[2] as string;
+      continue;
+    }
+    units.push({ word, gap: match[2] as string });
+  }
+  let gap = "";
+  for (const unit of units) {
+    for (const [i, piece] of splitLongWord(unit.word, budget).entries()) {
+      const sep = fresh || i > 0 ? "" : gap;
+      if (current.length + sep.length + piece.length <= width || (fresh && current === pad)) {
+        current += sep + piece;
+      } else {
+        out.push(current.trimEnd());
+        current = pad + piece;
+      }
+      fresh = false;
+    }
+    gap = unit.gap;
+  }
+  out.push(current.trimEnd());
+  return out;
+}
+
+const TOOL_NAME_COLUMN = 28;
+const TOOL_APPROVAL_COLUMN = 8;
+
+/**
+ * The column is what the risk DOES here — decide whether a call is asked
+ * about (flow 270 AC7). Printed raw, `read` beside `shell_task_kill`
+ * read as a claim that killing a task is a read; it is `read` because it
+ * only touches this session's own tasks, so it needs no approval. `none`
+ * says that; any other risk is named, since it is the one that asks.
+ */
+export function approvalLabel(risk: string | undefined): string {
+  const value = risk ?? "read";
+  return value === "read" ? "none" : value;
+}
+
+export const TOOLS_COLUMN_HEADER = `${"tool".padEnd(TOOL_NAME_COLUMN)} ${"approval".padEnd(TOOL_APPROVAL_COLUMN)} description`;
+
+export function formatToolRowLines(tool: NormalizedToolDefinition, width?: number): string[] {
+  const head = `${tool.name.padEnd(TOOL_NAME_COLUMN)} ${approvalLabel(tool.risk).padEnd(TOOL_APPROVAL_COLUMN)} `;
+  // Hang under the description COLUMN, not under the end of this head: a
+  // name longer than the column pushes its own first line, not the table.
+  return wrapHangingRow(head, tool.description ?? "", width, TOOL_NAME_COLUMN + TOOL_APPROVAL_COLUMN + 2);
+}
+
+/** One entry per tool; a wrapped tool's lines are joined with `\n`, since each tool is one renderable. */
+export function formatToolsListLines(tools: readonly NormalizedToolDefinition[], width?: number): string[] {
   if (tools.length === 0) {
     return ["No tools available."];
   }
-  return tools.map(formatToolRowLine);
+  return tools.map((tool) => formatToolRowLines(tool, width).join("\n"));
 }
 
 export type McpArmedAction = { id: string; action: "connect" | "disconnect" };
@@ -156,7 +259,7 @@ function formatOtherServers(otherServers: readonly string[]): string {
   return `  · also has: ${list}`;
 }
 
-function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status: McpActionStatus): string {
+function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status: McpActionStatus, width?: number): string {
   const mark = isSelected ? ">" : " ";
   const label = runtimeLabel(runtime.id).padEnd(20);
   const statusText = runtime.connected ? "● keryx connected" : "○ keryx not connected";
@@ -172,18 +275,21 @@ function formatMcpRowLine(runtime: McpRuntimeStatus, isSelected: boolean, status
   } else {
     action = runtime.connected ? "  [d] disconnect" : "  [c] connect";
   }
-  return `${mark} ${label} ${statusText}${action}${formatOtherServers(runtime.otherServers)}`;
+  return wrapHangingRow(`${mark} ${label} `, `${statusText}${action}${formatOtherServers(runtime.otherServers)}`, width).join(
+    "\n",
+  );
 }
 
 export function formatMcpListLines(
   runtimes: readonly McpRuntimeStatus[],
   selected: number,
   status: McpActionStatus,
+  width?: number,
 ): string[] {
   if (runtimes.length === 0) {
     return ["No MCP client runtimes registered."];
   }
-  return runtimes.map((runtime, index) => formatMcpRowLine(runtime, index === selected, status));
+  return runtimes.map((runtime, index) => formatMcpRowLine(runtime, index === selected, status, width));
 }
 
 export type ConnectOutcome = { ok: true } | { ok: false; message: string };
@@ -244,6 +350,8 @@ export function presentMcpTools(
   let rowCtor: RowTextCtor | undefined;
   let activeRenderer: unknown;
   let unsubscribeKey: (() => void) | undefined;
+  /** The panel's inner width from ModalHost's render context; undefined until a tab is mounted with one. */
+  let bodyWidth: number | undefined;
   const rendererHint = options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
     options.visibleRows ??
@@ -261,9 +369,15 @@ export function presentMcpTools(
       toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-empty", content: "No tools available." }));
       return;
     }
+    toolsBody.add(new rowCtor(activeRenderer, { id: "mcp-tools-columns", content: TOOLS_COLUMN_HEADER }));
     const start = clampScroll(toolsScroll, options.tools.length, bodyRows);
     for (const [i, tool] of options.tools.slice(start, start + bodyRows).entries()) {
-      toolsBody.add(new rowCtor(activeRenderer, { id: `mcp-tool-row-${start + i}`, content: formatToolRowLine(tool) }));
+      toolsBody.add(
+        new rowCtor(activeRenderer, {
+          id: `mcp-tool-row-${start + i}`,
+          content: formatToolRowLines(tool, bodyWidth).join("\n"),
+        }),
+      );
     }
   };
 
@@ -278,13 +392,14 @@ export function presentMcpTools(
       mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-empty", content: "No MCP client runtimes registered." }));
       return;
     }
+    mcpBody.add(new rowCtor(activeRenderer, { id: "mcp-mcp-keys", content: MCP_TAB_KEYS }));
     const start = clampScroll(mcpScroll, runtimes.length, bodyRows);
     for (const [i, runtime] of runtimes.slice(start, start + bodyRows).entries()) {
       const index = start + i;
       mcpBody.add(
         new rowCtor(activeRenderer, {
           id: `mcp-row-${runtime.id}`,
-          content: formatMcpRowLine(runtime, index === mcpSelected, status),
+          content: formatMcpRowLine(runtime, index === mcpSelected, status, bodyWidth),
           onMouseDown: () => handleRowClick(runtime.id, index),
         }),
       );
@@ -382,6 +497,7 @@ export function presentMcpTools(
       }
       rowCtor = ctor;
       activeRenderer = renderer;
+      bodyWidth = ctx?.width;
       if (tabId === "tools") {
         toolsBody = target;
         toolsScroll = clampScroll(toolsScroll, options.tools.length, bodyRows);
@@ -391,9 +507,6 @@ export function presentMcpTools(
       mcpBody = target;
       mcpScroll = scrollToReveal(mcpSelected, mcpScroll, bodyRows);
       paintMcpRows();
-      // Rows are fixed-width columns already; `ctx?.width` wrapping would
-      // break mid-status-text, so it is deliberately unused here.
-      void ctx;
     },
     onClose: () => {
       unsubscribeKey?.();

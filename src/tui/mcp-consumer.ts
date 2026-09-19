@@ -20,6 +20,7 @@
 // approval rendering went untested for two phases precisely because it
 // only existed inside a TUI callback.
 
+import { homedir } from "node:os";
 import { displayUrl } from "../mcp-servers/http-headers";
 import { sanitiseForDisplay } from "../mcp-servers/tools";
 import { sanitiseIdentifier } from "../mcp-servers/approval-render";
@@ -29,6 +30,7 @@ import type { ServerState } from "../mcp-servers/manager";
 import { modalBodyRows, openModal, resolveModalPanelSize } from "./modal-host";
 import { clampScroll, scrollToReveal } from "./review-inspector";
 import { clearTranscriptChildren } from "./transcript-blocks";
+import { wrapHangingRow } from "./mcp-inspector";
 
 export const MCP_CONSUMER_COMMAND = "/mcp";
 
@@ -94,6 +96,29 @@ function credentialNames(server: ResolvedMcpServer): string[] {
 }
 
 /**
+ * Bound on the printed target. `sanitiseIdentifier`'s default (80) is for
+ * a NAME; a command line with an absolute path hit it routinely and was
+ * cut mid-path, and the row now wraps under its own column, so it can
+ * afford more. Still bounded: the reason for a cap — a hostile config
+ * scrolling the view away — has not changed.
+ */
+const MAX_TARGET_CHARS = 240;
+
+/**
+ * The operator's home directory as `~` (flow 270 AC5).
+ *
+ * Only as a whole path prefix — `/Users/al` must not turn `/Users/alice`
+ * into `~ice` — and only at the start of a token, which is where a path
+ * sits in a command line (`--config=/Users/al/x` included).
+ */
+export function collapseHome(text: string, home: string): string {
+  const trimmed = home.replace(/\/+$/, "");
+  if (trimmed === "") return text;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return text.replace(new RegExp(`(^|[\\s="'])${escaped}(?=/|$|[\\s"'])`, "g"), "$1~");
+}
+
+/**
  * What the row points at, safe to print.
  *
  * `displayUrl` for a remote server — the same function `keryx mcp list`
@@ -103,14 +128,15 @@ function credentialNames(server: ResolvedMcpServer): string[] {
  * third time.
  *
  * For stdio it is the RAW command line, so `--token=${GITHUB_TOKEN}`
- * shows the variable rather than its value.
+ * shows the variable rather than its value — with the home directory
+ * as `~`, which is shorter and says nothing a screen share should not.
  */
-function targetOf(server: ResolvedMcpServer): string {
+function targetOf(server: ResolvedMcpServer, home: string): string {
   const raw = server.raw;
   const target =
     typeof raw.url === "string" && raw.url.length > 0
       ? displayUrl(raw.url)
-      : [raw.command, ...(raw.args ?? [])].filter(Boolean).join(" ");
+      : collapseHome([raw.command, ...(raw.args ?? [])].filter(Boolean).join(" "), home);
   // SANITISED, and an identifier-grade sanitise at that. This came from
   // a committed `.keryx/mcp-servers.json` — a file in a repository
   // somebody else wrote, which `trust.ts` is explicit is not consent —
@@ -119,7 +145,7 @@ function targetOf(server: ResolvedMcpServer): string {
   // here and this was not, so the row reading `needs-approval` was
   // precisely the row that could print `\u001b[1A\u001b[2K✓ trusted`
   // over the line above it.
-  return sanitiseIdentifier(target);
+  return sanitiseIdentifier(target, MAX_TARGET_CHARS);
 }
 
 /**
@@ -137,7 +163,10 @@ export function buildConsumerModel(input: {
   readonly problems: readonly { file: string; message: string }[];
   readonly userFile: string;
   readonly projectFile: string;
+  /** Collapsed to `~` in command lines. Injected by tests; the real one otherwise. */
+  readonly home?: string;
 }): ConsumerModel {
+  const home = input.home ?? homedir();
   const stateByName = new Map(input.states.map((s) => [s.name, s]));
 
   const rows: ConsumerRow[] = input.configured.map((server) => {
@@ -159,7 +188,7 @@ export function buildConsumerModel(input: {
       transport: transportOf(server),
       status,
       toolCount: state?.toolCount ?? 0,
-      target: targetOf(server),
+      target: targetOf(server, home),
       credentials: credentialNames(server),
       detail,
       action:
@@ -274,7 +303,18 @@ function statusGlyph(status: string): string {
   return STATUS_GLYPH[status] ?? status;
 }
 
-export function formatConsumerModalRow(row: ConsumerRow, isSelected: boolean, status: ConsumerActionStatus): string {
+/**
+ * One server row. With a `width`, the tail — tools, action, target,
+ * credentials — wraps under its own column instead of back to column 0
+ * (flow 270 AC5), same helper as `/tools`; lines are joined with `\n`
+ * because the row is one clickable renderable.
+ */
+export function formatConsumerModalRow(
+  row: ConsumerRow,
+  isSelected: boolean,
+  status: ConsumerActionStatus,
+  width?: number,
+): string {
   const mark = isSelected ? ">" : " ";
   const name = row.name.padEnd(18);
   const source = row.source.padEnd(10);
@@ -299,7 +339,9 @@ export function formatConsumerModalRow(row: ConsumerRow, isSelected: boolean, st
     action = "";
   }
   const creds = row.credentials.length > 0 ? `  [reads ${row.credentials.join(", ")}]` : "";
-  return `${mark} ${name} ${source} ${transport} ${glyph}${tools}${action}  ${row.target}${creds}`.trimEnd();
+  return wrapHangingRow(`${mark} ${name} ${source} ${transport} ${glyph}`, `${tools}${action}  ${row.target}${creds}`, width).join(
+    "\n",
+  );
 }
 
 export function formatConsumerModalLines(
@@ -394,6 +436,7 @@ export function presentMcpConsumer(
   let rowCtor: RowTextCtor | undefined;
   let activeRenderer: unknown;
   let unsubscribeKey: (() => void) | undefined;
+  let bodyWidth: number | undefined;
   const rendererHint =
     options.renderer ?? (chrome as { renderer?: { width?: number; height?: number } } | undefined)?.renderer;
   const bodyRows =
@@ -435,7 +478,7 @@ export function presentMcpConsumer(
       body.add(
         new rowCtor(activeRenderer, {
           id: `mcp-consumer-row-${row.name}`,
-          content: formatConsumerModalRow(row, index === selected, status),
+          content: formatConsumerModalRow(row, index === selected, status, bodyWidth),
           onMouseDown: () => handleRowClick(row.name, index),
         }),
       );
@@ -506,8 +549,8 @@ export function presentMcpConsumer(
       rowCtor = ctor;
       activeRenderer = renderer;
       body = target;
+      bodyWidth = ctx?.width;
       paint();
-      void ctx;
     },
     onClose: () => {
       unsubscribeKey?.();
