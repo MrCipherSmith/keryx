@@ -553,7 +553,7 @@ test("/integrations opens this view and /mcp no longer does", () => {
 
 describe("fitRowsByLines — wrapped rows page by the lines they take", () => {
   test("fills the window from start and clamps start so the last window is full", () => {
-    expect(fitRowsByLines([2, 2, 2, 2], 0, 5)).toEqual({ start: 0, end: 2 });
+    expect(fitRowsByLines([2, 2, 2, 2], 0, 4)).toEqual({ start: 0, end: 2 });
     expect(fitRowsByLines([2, 2, 2, 2], 3, 5)).toEqual({ start: 2, end: 4 });
     expect(fitRowsByLines([1, 1, 1], 99, 10)).toEqual({ start: 0, end: 3 });
   });
@@ -562,6 +562,34 @@ describe("fitRowsByLines — wrapped rows page by the lines they take", () => {
     expect(fitRowsByLines([7, 1], 0, 3)).toEqual({ start: 0, end: 1 });
     expect(fitRowsByLines([], 4, 3)).toEqual({ start: 0, end: 0 });
   });
+
+  // Seen on 0.2.118: get_cwd (2), list_dir (3), read_file (11) left 8 of 24
+  // rows blank because search_code (9) did not fit whole.
+  test("the rows left under the last whole item go to the start of the next one", () => {
+    expect(fitRowsByLines([2, 3, 11, 9, 4], 0, 24)).toEqual({ start: 0, end: 4, lastLines: 8 });
+    expect(fitRowsByLines([2, 2, 2, 2], 0, 5)).toEqual({ start: 0, end: 3, lastLines: 1 });
+  });
+});
+
+test("the Tools tab fills its rows: no blank space under the list while more tools follow", () => {
+  const tall: NormalizedToolDefinition[] = Array.from({ length: 6 }, (_, i) => ({
+    name: `tool_${i}`,
+    description: "word ".repeat(40 + i * 7).trim(),
+    inputSchema: { type: "object" },
+    risk: "read",
+  }));
+  const body = fakeBody();
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      input.renderTab("tools", body, { width: 100 });
+      return { close: () => input.onClose?.(), setTab: () => {}, activeTab: () => "tools" };
+    },
+    fakeOtui(),
+    {},
+    { tools: tall, runtimes: RUNTIMES, visibleRows: 20, connect: async () => ({ ok: true }), disconnect: async () => ({ ok: true }) },
+  );
+  const lines = body.rows().map((row) => row.content).join("\n").split("\n");
+  expect(lines).toHaveLength(20); // caption + column header + tools, exactly the body
 });
 
 test("the last of many wrapped tools is reachable with the down arrow", () => {

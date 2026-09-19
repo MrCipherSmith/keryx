@@ -230,12 +230,17 @@ export function formatToolRowLines(tool: NormalizedToolDefinition, width?: numbe
  * `start` (flow 270): items wrap to several lines, so paging by item count
  * left the last tools unreachable. `start` is clamped so the final window is
  * full; at least one item is always shown, even one taller than `rows`.
+ *
+ * Lines left over after the last whole item go to the start of the next one,
+ * cut to `lastLines`: taking only whole items left up to a tall item's worth
+ * of blank rows under the list (a 9-line tool after 8 free rows). The next
+ * ↓ brings that item in whole.
  */
 export function fitRowsByLines(
   lineCounts: readonly number[],
   start: number,
   rows: number,
-): { start: number; end: number } {
+): { start: number; end: number; lastLines?: number } {
   if (lineCounts.length === 0) {
     return { start: 0, end: 0 };
   }
@@ -252,6 +257,9 @@ export function fitRowsByLines(
   while (end < lineCounts.length && used + (lineCounts[end] ?? 1) <= rows) {
     used += lineCounts[end] ?? 1;
     end += 1;
+  }
+  if (end < lineCounts.length && used < rows) {
+    return { start: from, end: end + 1, lastLines: rows - used };
   }
   return { start: from, end };
 }
@@ -405,10 +413,12 @@ export function presentMcpTools(
     const window = toolsWindow(rows);
     toolsScroll = window.start;
     for (let index = window.start; index < window.end; index++) {
+      const lines = rows[index] ?? [];
+      const cut = index === window.end - 1 && window.lastLines !== undefined;
       toolsBody.add(
         new rowCtor(activeRenderer, {
           id: `mcp-tool-row-${index}`,
-          content: (rows[index] ?? []).join("\n"),
+          content: (cut ? lines.slice(0, window.lastLines) : lines).join("\n"),
         }),
       );
     }
@@ -421,7 +431,7 @@ export function presentMcpTools(
   };
   // `toolsScroll` is the first tool shown; painting clamps it to the window
   // that fits, so the key handlers below only move it.
-  const toolsWindow = (rows: readonly string[][]): { start: number; end: number } =>
+  const toolsWindow = (rows: readonly string[][]): { start: number; end: number; lastLines?: number } =>
     fitRowsByLines(rows.map((lines) => lines.length), toolsScroll, toolsRowBudget());
 
   const paintMcpRows = (): void => {
