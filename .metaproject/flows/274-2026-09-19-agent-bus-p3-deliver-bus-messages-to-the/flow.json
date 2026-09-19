@@ -9,7 +9,7 @@
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
   "status": "in-progress",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T19:16:56.483Z",
+  "updatedAt": "2026-09-19T19:34:31.117Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,15 +90,22 @@
       "id": "T5",
       "title": "Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:16:57.118Z",
+            "outcome": "started",
+            "detail": "274-T5 delivery core (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -229,6 +236,16 @@
     {
       "at": "2026-09-19T19:16:56.483Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-19T19:16:57.118Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 274-T5 delivery core (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.117Z",
+      "event": "task-done",
+      "detail": "T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)"
     }
   ]
 }

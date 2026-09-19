@@ -12,3 +12,5 @@
 - 2026-09-19T19:16:56.312Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-19T19:16:56.399Z - frozen: 12 criteria; checksum recorded
 - 2026-09-19T19:16:56.483Z - started
+- 2026-09-19T19:16:57.118Z - task-attempt: T5: started (attempt 1) — 274-T5 delivery core (sonnet)
+- 2026-09-19T19:34:31.117Z - task-done: T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)
