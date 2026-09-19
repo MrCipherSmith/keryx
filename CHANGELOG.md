@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.124] — 2026-09-19
+
+### Fixed
+
+- **The input freeze is a Bun runtime fault, and the record now says so.**
+  Traced with `strace` under `keryx shell --debug`: the last terminal read
+  returned two bytes, the next one `EAGAIN`, and Bun's `process.stdin` emitted
+  `end` anyway. No read returned 0 and nothing changed termios. The runtime
+  intermittently ends a tty stdin on a would-block read while the event loop is
+  busy, which is why it hit as subagents started. The 0.2.123 entry blamed
+  `VMIN=0`; that was wrong. The reopen from 0.2.123 is the right recovery and
+  stays: in the traced run input came back 7 ms after the EOF, with nothing
+  lost and no repeat. The reopened descriptor is blocking, which Bun reads on a
+  thread rather than on the nonblocking path that misfires.
+  Upstream this is the Bun family of oven-sh/bun#29787 and #30565: a
+  concurrent native `ReadableStream` (a `Bun.file(...).stream()` read that is
+  cancelled part-way) ends a TTY `process.stdin`. A standalone repro closes
+  stdin on the first keypress under Bun 1.3.11 and does not reproduce under Bun
+  1.4.2. If `bun --version` is older than 1.3.14, `bun upgrade` removes the
+  cause; the reopen stays as the guard for older runtimes.
+- **`--debug` watcher: no more false stalls after a reopen.** The reopened
+  stream is not read through epoll, so the watcher reported "reader not
+  polled" every 15 s and sent SIGUSR2 for nothing. That condition now counts as
+  a stall only while input is actually waiting in the terminal queue.
+
 ## [0.2.123] — 2026-09-19
 
 ### Fixed

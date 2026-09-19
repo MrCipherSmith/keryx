@@ -70,7 +70,10 @@ export function detectStall(history: readonly WatchSample[], window = 3): StallR
     return undefined;
   }
   const recent = history.slice(-window);
-  if (recent.every((s) => s.alive && s.readerArmed === false)) {
+  // No tty fd in epoll is only a stall when input is actually waiting: after
+  // an EOF the shell reopens its terminal as a blocking stream that Bun reads on
+  // a thread, not through epoll, so "not polled" alone is normal from then on.
+  if (recent.every((s) => s.alive && s.readerArmed === false && (s.pending === undefined || s.pending > 0))) {
     return "reader-not-polled";
   }
   if (

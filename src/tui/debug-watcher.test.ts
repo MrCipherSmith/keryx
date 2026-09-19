@@ -50,9 +50,15 @@ describe("ttyReaderArmed", () => {
 describe("detectStall", () => {
   const ok: WatchSample = { alive: true, readerArmed: true, pending: 0, heartbeatAgeMs: 300 };
   test("needs the condition on three consecutive samples", () => {
-    const dead: WatchSample = { ...ok, readerArmed: false };
+    const dead: WatchSample = { ...ok, readerArmed: false, pending: 5 };
     expect(detectStall([ok, dead, dead])).toBeUndefined();
     expect(detectStall([dead, dead, dead])).toBe("reader-not-polled");
+  });
+  test("a reader outside epoll with nothing waiting is not a stall (reopened blocking stream)", () => {
+    const threaded: WatchSample = { ...ok, readerArmed: false, pending: 0 };
+    expect(detectStall([threaded, threaded, threaded])).toBeUndefined();
+    const unknown: WatchSample = { alive: true, readerArmed: false };
+    expect(detectStall([unknown, unknown, unknown])).toBe("reader-not-polled");
   });
   test("unread input that never drains", () => {
     const s = (pending: number): WatchSample => ({ ...ok, pending });
