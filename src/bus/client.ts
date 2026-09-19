@@ -336,6 +336,21 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       // Best effort: already gone, or the process cannot write here any more.
     }
   };
+  // Set once the join completes; `leave()` may run before then (see below).
+  const liveTimers: { heartbeat?: unknown; poll?: unknown } = {};
+
+  // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
+  const leave = (): void => {
+    if (left) return;
+    left = true;
+    if (liveTimers.heartbeat !== undefined) timers.clearInterval(liveTimers.heartbeat);
+    if (liveTimers.poll !== undefined) timers.clearInterval(liveTimers.poll);
+    process.off("exit", onExit);
+    removePresenceSync();
+  };
+  function onExit(): void {
+    leave();
+  }
 
   const classify = (record: PresenceRecord): PresenceLiveness => {
     const options: PresenceClassifyOptions = { now: now(), isAlive, host };
@@ -382,9 +397,14 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     if (left) removePresenceSync();
   };
 
-  await writeCurrentPresence();
+  // The exit hook goes in BEFORE the first presence write, not once the join
+  // returns: the caller cannot reach `leave()` until then, so a SIGINT/SIGTERM
+  // handler that ends the process with `process.exit` while the rest of the
+  // join is still awaited would otherwise leave the presence file behind.
+  process.on("exit", onExit);
   let cursor: BusCursor;
   try {
+    await writeCurrentPresence();
     // specification §5.1: the session lease learns this instance's bus name
     // right at join, not only from the first heartbeat.
     opts.sessionLease?.()?.refresh({ name: state.name });
@@ -392,8 +412,9 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
   } catch (error) {
     // review r1 F7: anything after the presence write that throws (a lease
     // refresh, `cursorAtEnd`) orphans that presence record unless it is
-    // unlinked here before the failure propagates.
-    removePresenceSync();
+    // unlinked here before the failure propagates; `leave()` also drops the
+    // exit hook.
+    leave();
     throw error;
   }
 
@@ -439,8 +460,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       }
     })();
   };
-  const heartbeatTimer = timers.setInterval(heartbeatTick, heartbeatMs);
-  unref(heartbeatTimer);
+  liveTimers.heartbeat = timers.setInterval(heartbeatTick, heartbeatMs);
+  unref(liveTimers.heartbeat);
 
   // ---- poll: read new events, render the addressed ones, refresh peers. ----
   const doPoll = async (): Promise<BusEvent[]> => {
@@ -493,22 +514,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         pollInFlight = false;
       });
   };
-  const pollTimer = timers.setInterval(pollTick, pollMs);
-  unref(pollTimer);
-
-  // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
-  const leave = (): void => {
-    if (left) return;
-    left = true;
-    timers.clearInterval(heartbeatTimer);
-    timers.clearInterval(pollTimer);
-    process.off("exit", onExit);
-    removePresenceSync();
-  };
-  function onExit(): void {
-    leave();
-  }
-  process.on("exit", onExit);
+  liveTimers.poll = timers.setInterval(pollTick, pollMs);
+  unref(liveTimers.poll);
 
   const client: BusClient = {
     instanceId,
