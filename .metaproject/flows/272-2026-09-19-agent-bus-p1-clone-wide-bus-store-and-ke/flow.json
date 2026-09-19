@@ -9,7 +9,7 @@
   "title": "Agent bus P1: clone-wide bus store and keryx bus CLI",
   "status": "in-progress",
   "createdAt": "2026-09-19T15:34:50.736Z",
-  "updatedAt": "2026-09-19T16:30:51.308Z",
+  "updatedAt": "2026-09-19T16:36:21.606Z",
   "source": {
     "type": "description",
     "ref": null
@@ -267,6 +267,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:35:27.837Z",
+            "outcome": "started",
+            "detail": "272-T14 CI coverage fix"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -422,6 +443,21 @@
       "at": "2026-09-19T16:30:51.308Z",
       "event": "task-done",
       "detail": "T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path"
+    },
+    {
+      "at": "2026-09-19T16:35:27.761Z",
+      "event": "task-added",
+      "detail": "T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes"
+    },
+    {
+      "at": "2026-09-19T16:35:27.837Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 272-T14 CI coverage fix"
+    },
+    {
+      "at": "2026-09-19T16:36:21.606Z",
+      "event": "task-done",
+      "detail": "T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes"
     }
   ]
 }

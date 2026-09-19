@@ -60,3 +60,6 @@
 - 2026-09-19T16:27:04.431Z - task-added: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path
 - 2026-09-19T16:27:04.508Z - task-attempt: T13: started (attempt 1) — 272-T13 review r2 fixes
 - 2026-09-19T16:30:51.308Z - task-done: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path
+- 2026-09-19T16:35:27.761Z - task-added: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes
+- 2026-09-19T16:35:27.837Z - task-attempt: T14: started (attempt 1) — 272-T14 CI coverage fix
+- 2026-09-19T16:36:21.606Z - task-done: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes
