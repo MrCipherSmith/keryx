@@ -126,7 +126,7 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
 
-An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ @from kind: preview`. The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <id>`, and `name <new>` (rename this shell). The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
+An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ [#<seq>] @from kind: preview` — the sequence number and the message's short id (its first 8 characters). The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <#seq|id-prefix> <text>`, and `name <new>` (rename this shell). `/bus reply` resolves its first argument against the last 200 rendered events — a bare or `#`-prefixed sequence number, or a unique prefix (at least 8 characters) of a message's id — and always replies to that sender's underlying instance, so it still reaches them even if they renamed since; an argument matching no rendered message is refused with one line. The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
 
 One shell holds a session at a time. `-r <id>` on a session a live shell holds
 offers fork, view or cancel in an interactive run, plus take over when the

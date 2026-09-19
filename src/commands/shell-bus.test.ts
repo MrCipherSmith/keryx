@@ -12,17 +12,18 @@
 // exist, in the required order, in the real source text.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import type { BusClient } from "../bus/client";
-import { presencePath, resolveBusRoot } from "../bus/paths";
+import { presenceDir, presencePath, resolveBusRoot } from "../bus/paths";
 import { listPresence, readPresence, writePresence } from "../bus/presence";
 import { readEvents, cursorAtStart } from "../bus/log";
 import { sendMessage } from "../bus/send";
 import type { PresenceRecord } from "../bus/schema";
 import { CI_ENV_VARS } from "../capability/external-agents";
 import type { ProviderPort } from "../harness/provider/types";
+import type { SessionLeaseHandle } from "../session/lease";
 import { parseShellCliFlags, runShell, ShellFlagError, shellCommand } from "./shell";
 import type { ShellDeps, ShellSessionOpts } from "./shell-types";
 
@@ -217,7 +218,7 @@ describe("runShell bus events and /bus (AC3, AC4, readline chat loop)", () => {
       },
       shellDeps({ cwd, busBox }),
     );
-    expect(output.join("")).toContain("⇄ @cli notice: hello from a peer");
+    expect(output.join("")).toContain("⇄ [#1] @cli notice: hello from a peer");
   });
 
   test("/bus send writes an event with origin operator, resolved to the named peer", async () => {
@@ -365,6 +366,190 @@ describe("runShell leave() and session switching (AC6, AC8, readline chat loop)"
   });
 });
 
+describe("runShell bus lease getter (F2, review r1)", () => {
+  test("/new refreshes the NEW lease's owner.json with the bus name, not a stale released handle", async () => {
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    let nameOnNewLeaseAfterNew: string | null | undefined;
+    let leaseChangedIdentity = false;
+    await runShell(
+      {
+        lines: (async function* () {
+          if (busBox.current === undefined) throw new Error("expected a joined bus");
+          const before = leaseBox.current;
+          yield "/new";
+          leaseChangedIdentity = leaseBox.current !== before;
+          // `setSession` (called by `/new`) refreshes the lease the getter
+          // reads NOW — before F2, the client held the OLD (already-swapped)
+          // `lease` value captured at join, so this would still read `null`.
+          nameOnNewLeaseAfterNew = leaseBox.current?.owner.name;
+          yield "/exit";
+        })(),
+        write: () => {},
+      },
+      shellDeps({ cwd, leaseBox, busBox }),
+    );
+    expect(leaseChangedIdentity).toBe(true);
+    expect(nameOnNewLeaseAfterNew).toBe("agent-1");
+  });
+});
+
+describe("runShell /bus reply (F4, review r1)", () => {
+  test("replies by #seq and by an id prefix, addressed to the sender's instance id", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const peerId = randomUUID();
+    const output: string[] = [];
+    let busRoot = "";
+    let firstId = "";
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          busRoot = bus.root;
+          await writePresence(busRoot, peerRecord({ instanceId: peerId, name: "peera" }));
+          await sendMessage(busRoot, {
+            toLabel: `@${bus.name}`,
+            kind: "notice",
+            body: "first",
+            origin: "operator",
+            from: { instanceId: peerId, name: "peera", origin: "operator" },
+            now: Date.now,
+            env: {},
+          });
+          await sendMessage(busRoot, {
+            toLabel: `@${bus.name}`,
+            kind: "notice",
+            body: "second",
+            origin: "operator",
+            from: { instanceId: peerId, name: "peera", origin: "operator" },
+            now: Date.now,
+            env: {},
+          });
+          await bus.pollNow();
+          const { events } = await readEvents(busRoot, await cursorAtStart(busRoot));
+          firstId = events.find((event) => event.body === "first")?.id ?? "";
+          yield "/bus reply 1 by seq";
+          yield `/bus reply ${firstId.slice(0, 8)} by prefix`;
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    const text = output.join("");
+    expect(text).toContain("bus: replied to @peera");
+    expect(text.split("bus: replied to @peera").length - 1).toBe(2);
+    const { events } = await readEvents(busRoot, await cursorAtStart(busRoot));
+    const replies = events.filter((event) => event.kind === "reply");
+    expect(replies).toHaveLength(2);
+    for (const reply of replies) expect(reply.to).toEqual([peerId]);
+  });
+
+  test("a reply still reaches a sender who renamed since; an unknown ref gets a one-line refusal", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const peerId = randomUUID();
+    const output: string[] = [];
+    let busRoot = "";
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          busRoot = bus.root;
+          await writePresence(busRoot, peerRecord({ instanceId: peerId, name: "peera" }));
+          await sendMessage(busRoot, {
+            toLabel: `@${bus.name}`,
+            kind: "notice",
+            body: "hello",
+            origin: "operator",
+            from: { instanceId: peerId, name: "peera", origin: "operator" },
+            now: Date.now,
+            env: {},
+          });
+          await bus.pollNow();
+          // The sender renames; still live, same instance id.
+          await writePresence(busRoot, peerRecord({ instanceId: peerId, name: "peerb" }));
+          yield "/bus reply 1 still reaches you";
+          // A ref matching no rendered message: refused, one line, loop continues.
+          yield "/bus reply zzzzzzzz nope";
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    const text = output.join("");
+    // Addressed by the ORIGINAL name/label — the reply itself is routed by
+    // instance id underneath, proven by `to` below.
+    expect(text).toContain("bus: replied to @peera");
+    expect(text).toContain('bus: unknown-message: no rendered message matches "zzzzzzzz"');
+    const { events } = await readEvents(busRoot, await cursorAtStart(busRoot));
+    const reply = events.find((event) => event.kind === "reply");
+    expect(reply?.to).toEqual([peerId]);
+  });
+});
+
+describe("runShell setSession never escapes the loop (F5, review r1)", () => {
+  test("a presence write failure during /new does not crash the loop", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const output: string[] = [];
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          const dir = presenceDir(bus.root);
+          chmodSync(dir, 0o000);
+          try {
+            yield "/new";
+          } finally {
+            chmodSync(dir, 0o700); // restore before cleanup removes `root`
+          }
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    // The loop survived the failed write: `/new` still completed and `/exit`
+    // still ran to a normal return (no exception escaped `runShell`).
+    expect(output.join("")).toContain("New session");
+  });
+});
+
+describe("runShell bus error reporting (F10, review r1)", () => {
+  test("a poll failure is reported once and throttled within the window", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const output: string[] = [];
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          // Two events in the SAME poll batch: `onEvent` throws for both
+          // (the injected `write` below throws on any rendered `⇄` line), so
+          // `onError` fires twice in the same tick — proving both the report
+          // AND the per-`where` throttle in one deterministic batch, with no
+          // reliance on real poll timing.
+          await sendMessage(bus.root, { toLabel: `@${bus.name}`, kind: "notice", body: "one", origin: "cli", now: Date.now, env: {} });
+          await sendMessage(bus.root, { toLabel: `@${bus.name}`, kind: "notice", body: "two", origin: "cli", now: Date.now, env: {} });
+          await bus.pollNow();
+          yield "/exit";
+        })(),
+        write: (s) => {
+          if (s.startsWith("⇄")) throw new Error("render failed");
+          output.push(s);
+        },
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    const failLines = output.filter((line) => line.includes("bus: poll failed"));
+    expect(failLines).toHaveLength(1);
+    expect(failLines[0]).toContain("render failed");
+  });
+});
+
 // `runAgentRepl` has no injection seam (see this file's own top-of-file doc
 // comment and `shell.test.ts`'s SLATE-3a/SLATE-5 audits) — its equivalent
 // wiring is proven the same way: by asserting the required literals exist, in
@@ -404,7 +589,7 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
 
   test("/bus is dispatched through the shared runBusSlashCommand helper", () => {
     expect(replBody).toContain('if (command === "/bus") {');
-    expect(replBody).toContain("await runBusSlashCommand(bus, rest, busRecentSenders,");
+    expect(replBody).toContain("await runBusSlashCommand(bus, rest,");
   });
 
   test("busWorking tracks both the task-notification turn and the operator turn", () => {

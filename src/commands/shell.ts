@@ -20,8 +20,8 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
-import { joinBus, type BusClient, type RenderedBusEvent, type BusPeer } from "../bus/client";
-import { displaySafe } from "../bus/display";
+import { joinBus, type BusClient, type BusPeer } from "../bus/client";
+import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { isBusRefusal } from "../bus/errors";
 import { isAssignableBusName } from "../bus/schema";
 import { loadOAuthGrant } from "../lib/oauth/grants";
@@ -250,11 +250,6 @@ function formatBusJoinLine(bus: BusClient): string {
   return `bus: joined as @${displaySafe(bus.name)} · ${bus.peers().length} peers${note}\n`;
 }
 
-/** One rendered line per inbound event (specification §5.2): `⇄ @from kind: preview`. */
-function formatBusEventLine(event: RenderedBusEvent): string {
-  return `⇄ @${displaySafe(event.fromName)} ${event.kind}: ${event.preview}\n`;
-}
-
 /** The `/bus [list]` peers table, for a surface with no fleet sidebar. */
 function formatBusPeersTable(peers: readonly BusPeer[]): string {
   if (peers.length === 0) return "bus: no live or stale peers.\n";
@@ -275,7 +270,7 @@ type BusSlashCommand =
   | { kind: "list" }
   | { kind: "send"; to: string; text: string }
   | { kind: "ask"; to: string; text: string }
-  | { kind: "reply"; replyTo: string; text: string }
+  | { kind: "reply"; ref: string; text: string }
   | { kind: "name"; name: string }
   | { kind: "usage"; message: string };
 
@@ -317,9 +312,9 @@ function parseBusSlashCommand(argument: string): BusSlashCommand {
     const restSpace = rest.indexOf(" ");
     const text = restSpace < 0 ? "" : rest.slice(restSpace + 1).trim();
     if (restSpace < 0 || text.length === 0) {
-      return { kind: "usage", message: "Usage: /bus reply <id> <text>\n" };
+      return { kind: "usage", message: "Usage: /bus reply <#seq|id-prefix> <text>\n" };
     }
-    return { kind: "reply", replyTo: rest.slice(0, restSpace), text };
+    return { kind: "reply", ref: rest.slice(0, restSpace), text };
   }
   if (sub === "name") {
     if (rest.length === 0) {
@@ -329,23 +324,20 @@ function parseBusSlashCommand(argument: string): BusSlashCommand {
   }
   return {
     kind: "usage",
-    message: `Unknown /bus subcommand '${sub}'. Usage: /bus [list|send @name|ask @name|reply <id>|name] <text>\n`,
+    message: `Unknown /bus subcommand '${sub}'. Usage: /bus [list|send @name|ask @name|reply <#seq|id-prefix>|name] <text>\n`,
   };
 }
 
 /**
- * `/bus` dispatch shared by both readline REPLs. `recentSenders` maps a
- * received event's id to its sender's name, so `/bus reply <id> text` can
- * resolve a recipient without the operator retyping `@name` (the id is all
- * `⇄ @from kind: preview` shows). A bus error is never thrown further — it
- * prints one line and the loop continues (specification §5.2).
+ * `/bus` dispatch shared by both readline REPLs. `/bus reply <ref> text`
+ * resolves `ref` (a `#seq`, bare seq, or an id/short-id prefix — whatever the
+ * `⇄ [#seq] @from kind: preview` line showed) and sends to the ORIGINAL
+ * sender's instance id through `BusClient.reply` (review r1 F4), so a sender
+ * who renamed since is still reached. A bus error — including an unresolved
+ * ref, a `BusRefusal("unknown-message")` — is never thrown further: it prints
+ * one line and the loop continues (specification §5.2).
  */
-async function runBusSlashCommand(
-  bus: BusClient | undefined,
-  argument: string,
-  recentSenders: ReadonlyMap<string, string>,
-  emit: (text: string) => void,
-): Promise<void> {
+async function runBusSlashCommand(bus: BusClient | undefined, argument: string, emit: (text: string) => void): Promise<void> {
   if (bus === undefined) {
     emit("bus: not joined for this session.\n");
     return;
@@ -361,13 +353,8 @@ async function runBusSlashCommand(
       await bus.send(parsed.to, "question", parsed.text);
       emit(`bus: asked ${parsed.to}\n`);
     } else if (parsed.kind === "reply") {
-      const to = recentSenders.get(parsed.replyTo);
-      if (to === undefined) {
-        emit(`bus: no known message ${parsed.replyTo} to reply to\n`);
-        return;
-      }
-      await bus.send(`@${to}`, "reply", parsed.text, parsed.replyTo);
-      emit(`bus: replied to @${to}\n`);
+      const result = await bus.reply(parsed.ref, parsed.text);
+      emit(`bus: replied to ${displaySafe(result.event.toLabel)}\n`);
     } else if (parsed.kind === "name") {
       await bus.rename(parsed.name);
       emit(`bus: renamed to @${parsed.name}\n`);
@@ -688,7 +675,6 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     status: busWorking ? "working" : "idle",
     activity: live?.summary.title ?? "keryx chat",
   });
-  const busRecentSenders = new Map<string, string>();
   let bus: BusClient | undefined;
   if (sessionsOn && live !== undefined) {
     try {
@@ -699,13 +685,18 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         ...(deps.session?.busName !== undefined ? { requestedName: deps.session.busName } : {}),
         shellConfig: loadShellConfig(),
         env: process.env,
-        ...(lease !== undefined ? { sessionLease: lease } : {}),
+        // review r1 F2: a GETTER, read at every use (join, each heartbeat,
+        // after rename, inside setSession) — never a captured value. `/new`
+        // swaps `lease` via `holdLease`; reading it here always sees the
+        // CURRENT lease, so the new lease's name is never left null.
+        sessionLease: () => lease,
         status: busStatus,
-        onEvent: (event) => {
-          busRecentSenders.set(event.id, event.fromName);
-          system(formatBusEventLine(event));
-        },
+        onEvent: (event) => system(`${formatBusEventLine(event)}\n`),
         onPeers: () => {},
+        // review r1 F10: a throttled printer, so a persistently failing poll
+        // or heartbeat prints at most one line per window instead of once
+        // per interval forever.
+        onError: makeBusErrorReporter(system),
       });
       if ("disabled" in joined) {
         system(`bus: off (${joined.disabled})\n`);
@@ -779,7 +770,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         return;
       }
       if (command === "/bus") {
-        await runBusSlashCommand(bus, argument, busRecentSenders, system);
+        await runBusSlashCommand(bus, argument, system);
         continue;
       }
       if (command === "/help") {
@@ -857,7 +848,14 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           history = [];
           archive = [];
           // AC8: presence.sessionId follows every in-process session switch.
-          await bus?.setSession(live.summary.id);
+          // review r1 F5: the client already reports a write failure through
+          // `onError` and never rejects; this catch is a defensive second
+          // layer so a failure can never escape into the REPL regardless.
+          try {
+            await bus?.setSession(live.summary.id);
+          } catch (cause) {
+            system(busErrorLine(cause));
+          }
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
         } else {
           history.length = 0;
@@ -2018,7 +2016,6 @@ async function runAgentRepl(
     status: busWorking ? "working" : "idle",
     activity: live?.summary.title ?? "keryx agent",
   });
-  const busRecentSenders = new Map<string, string>();
   let bus: BusClient | undefined;
   if (sessionsOn && live !== undefined) {
     try {
@@ -2029,13 +2026,14 @@ async function runAgentRepl(
         ...(sessionOpts?.busName !== undefined ? { requestedName: sessionOpts.busName } : {}),
         shellConfig: loadShellConfig(configDir),
         env: process.env,
-        ...(lease !== undefined ? { sessionLease: lease } : {}),
+        // review r1 F2: a getter, read at every use — see the matching
+        // comment in `runShell`.
+        sessionLease: () => lease,
         status: busStatus,
-        onEvent: (event) => {
-          busRecentSenders.set(event.id, event.fromName);
-          agentIo.onSystem?.(formatBusEventLine(event));
-        },
+        onEvent: (event) => agentIo.onSystem?.(`${formatBusEventLine(event)}\n`),
         onPeers: () => {},
+        // review r1 F10: throttled failure printer (see `runShell`).
+        onError: makeBusErrorReporter((text) => agentIo.onSystem?.(text)),
       });
       if ("disabled" in joined) {
         agentIo.onSystem?.(`bus: off (${joined.disabled})\n`);
@@ -2161,7 +2159,7 @@ async function runAgentRepl(
         return;
       }
       if (command === "/bus") {
-        await runBusSlashCommand(bus, rest, busRecentSenders, (text) => agentIo.onSystem?.(text));
+        await runBusSlashCommand(bus, rest, (text) => agentIo.onSystem?.(text));
       } else if (command === "/help") {
         agentIo.onSystem?.(readlineAgentHelpText());
       } else if (isSessionInfoCommand(command)) {
@@ -2226,7 +2224,13 @@ async function runAgentRepl(
           slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };
           slateSessionBox.current = slateSession;
           // AC8: presence.sessionId follows every in-process session switch.
-          await bus?.setSession(live.summary.id);
+          // review r1 F5: defensive second layer — see the matching comment
+          // in `runShell`.
+          try {
+            await bus?.setSession(live.summary.id);
+          } catch (cause) {
+            agentIo.onSystem?.(busErrorLine(cause));
+          }
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );

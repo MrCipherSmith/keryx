@@ -265,8 +265,11 @@ describe.skipIf(process.platform === "win32")("readline shell agent bus across p
       expect(fromWorktree.peers.map((peer) => peer.name).sort()).toEqual(["alpha", "beta"]);
 
       await writeLine(a, "/bus send @beta hello");
+      // review r1 F4: the shared `formatBusEventLine` (`../bus/display.ts`)
+      // now renders `⇄ [#seq] @from kind: preview` — seq and shortId, not
+      // just the bare `⇄ @from kind: preview` this line used to check for.
       await waitFor(`B to see alpha's line\n${b.output()}`, () =>
-        b.output().includes("⇄ @alpha notice: hello") ? true : undefined,
+        /⇄ \[#\d+\] @alpha notice: hello/.test(b.output()) ? true : undefined,
       );
 
       await writeLine(a, "/exit");
