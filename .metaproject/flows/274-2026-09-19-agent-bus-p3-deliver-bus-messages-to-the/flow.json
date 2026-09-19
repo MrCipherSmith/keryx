@@ -9,7 +9,7 @@
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
   "status": "in-progress",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T20:17:42.061Z",
+  "updatedAt": "2026-09-19T20:32:32.342Z",
   "source": {
     "type": "description",
     "ref": null
@@ -153,15 +153,22 @@
       "id": "T8",
       "title": "Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:17:42.481Z",
+            "outcome": "started",
+            "detail": "274-T8 integration tests (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -280,6 +287,16 @@
       "at": "2026-09-19T20:17:42.061Z",
       "event": "task-done",
       "detail": "T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:17:42.481Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 274-T8 integration tests (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:32:32.342Z",
+      "event": "task-done",
+      "detail": "T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)"
     }
   ]
 }

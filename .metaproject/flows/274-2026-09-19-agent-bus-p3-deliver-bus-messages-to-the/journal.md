@@ -18,3 +18,5 @@
 - 2026-09-19T19:34:31.532Z - task-attempt: T7: started (attempt 1) — 274-T7 surface wiring (sonnet), parallel
 - 2026-09-19T19:52:05.382Z - task-done: T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)
 - 2026-09-19T20:17:42.061Z - task-done: T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)
+- 2026-09-19T20:17:42.481Z - task-attempt: T8: started (attempt 1) — 274-T8 integration tests (sonnet)
+- 2026-09-19T20:32:32.342Z - task-done: T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)
