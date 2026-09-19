@@ -23,6 +23,7 @@ import {
   attachBlockIo,
   attachUsageIo,
   createTuiAgentIo,
+  describeModeRow,
   estimateContextTokens,
   fmtTokens,
   isShellApproved,
@@ -2387,6 +2388,24 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
     expect(caseIndex).toBeGreaterThanOrEqual(0);
     const caseBlock = fnBodyPlan.slice(caseIndex, caseIndex + 100);
     expect(caseBlock).toContain("runPlanCommand(line);");
+  });
+
+  // Flow 270 AC9: the state is on screen, not only in a toast.
+  test("describeModeRow: the mode alone, and a separate read-only part while /plan is on", () => {
+    expect(describeModeRow("ask", false)).toEqual({ mode: "ask" });
+    expect(describeModeRow("auto", true)).toEqual({ mode: "auto", readOnly: "· read-only" });
+  });
+
+  test("the sidebar Mode row is repainted by /plan on, /plan off and every /mode change", () => {
+    expect(fnBodyPlan).toContain('id: "sb-mode-v"');
+    const fnIndex = fnBodyPlan.indexOf("const runPlanCommand = (line: string): void => {");
+    const fnEnd = fnBodyPlan.indexOf("\n    };", fnIndex);
+    const fnBlock = fnBodyPlan.slice(fnIndex, fnEnd);
+    expect(fnBlock).toContain("readOnly = true;\n        paintModeRow();");
+    expect(fnBlock).toContain("readOnly = false;\n        paintModeRow();");
+    expect(fnBodyPlan).toContain("permissionMode = next;\n        paintModeRow();");
+    // Painted once at startup too, so the row is never blank.
+    expect(fnBodyPlan).toMatch(/const paintModeRow = [\s\S]*?\n {4}paintModeRow\(\);/);
   });
 });
 

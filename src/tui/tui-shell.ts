@@ -2761,6 +2761,14 @@ export function pickSessionInTui(
   });
 }
 
+/**
+ * The sidebar's Mode row (flow 270 AC9): the permission mode, plus a separate
+ * read-only part while `/plan on` holds, so it can be painted in its own colour.
+ */
+export function describeModeRow(mode: PermissionMode, readOnly: boolean): { mode: string; readOnly?: string } {
+  return readOnly ? { mode, readOnly: "· read-only" } : { mode };
+}
+
 /** `/mode` picker copy — one line per {@link PermissionMode}, kept beside the type it describes. */
 const MODE_PICKER_DESCRIPTIONS: Readonly<Record<PermissionMode, string>> = {
   ask: "Every mutating action asks first (today's default)",
@@ -3052,6 +3060,11 @@ export async function launchTuiAgentShell(opts: {
     sidebar.add(new otui.TextRenderable(r, { id: "sb-model-k", content: otui.t`${otui.dim("Model")}`, marginTop: 1 }));
     const sbModelV = new otui.TextRenderable(r, { id: "sb-model-v", content: otui.t`${otui.dim(`${sel.provider}/${sel.model}`)}` });
     sidebar.add(sbModelV);
+    // Mode row (flow 270 AC9): the permission mode and the /plan read-only
+    // posture were only ever toasts. Painted by `paintModeRow` once both are known.
+    sidebar.add(new otui.TextRenderable(r, { id: "sb-mode-k", content: otui.t`${otui.dim("Mode")}`, marginTop: 1 }));
+    const sbModeV = new otui.TextRenderable(r, { id: "sb-mode-v", content: "" });
+    sidebar.add(sbModeV);
     // Usage row under Model: cumulative in/out tokens this session, fed by
     // `attachUsageIo`'s setUsage chrome. Starts "↑0 ↓0"; real numbers replace
     // it the first time the provider reports usage.
@@ -3984,6 +3997,14 @@ export async function launchTuiAgentShell(opts: {
     // persisted; every session starts `false`, toggled only by `/plan [on|off]`.
     let readOnly = false;
     io.readOnly = () => readOnly;
+    const paintModeRow = (): void => {
+      const row = describeModeRow(permissionMode, readOnly);
+      // Read-only is the state an operator must not forget they are in.
+      sbModeV.content = row.readOnly === undefined
+        ? otui.t`${otui.dim(row.mode)}`
+        : otui.t`${otui.dim(row.mode)} ${otui.yellow(row.readOnly)}`;
+    };
+    paintModeRow();
     io.onAutoApproved = (tool, input, meta) => {
       // NOT dimmed — same principle as the read_only subagent auto-approval
       // above: a mode-driven auto-approval was never okayed action-by-action,
@@ -4511,6 +4532,7 @@ export async function launchTuiAgentShell(opts: {
           }
         }
         permissionMode = next;
+        paintModeRow();
         chrome.showToast(`Permission mode: ${next}`);
         if (saveFlag) {
           const saved = setProjectPermissionMode(sessionCwd, next);
@@ -4577,11 +4599,13 @@ export async function launchTuiAgentShell(opts: {
       }
       if (wanted === "on") {
         readOnly = true;
+        paintModeRow();
         chrome.showToast("Read-only mode: on");
         return;
       }
       if (wanted === "off") {
         readOnly = false;
+        paintModeRow();
         chrome.showToast(`Read-only mode: off (permission mode stays: ${permissionMode})`);
         return;
       }
