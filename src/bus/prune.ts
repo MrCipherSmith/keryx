@@ -12,7 +12,7 @@ import { randomUUID } from "node:crypto";
 import { pathExists, withFileLock } from "../lib/fs";
 import { removeFile } from "./files";
 import { holderLivenessFrom, isLeaseActive, listLeases, readLease } from "./leases";
-import { appendEvent, pruneRotatedSegments } from "./log";
+import { appendEvent, BUS_LOCK_STALE_MS, pruneRotatedSegments } from "./log";
 import { appendLockPath, leasePath } from "./paths";
 import { classifyPresence, listPresence, type PresenceClassifyOptions, removePresence } from "./presence";
 
@@ -90,6 +90,7 @@ export async function pruneBus(root: string, options: PruneOptions = {}): Promis
   if (await pathExists(root)) {
     result.segments = await withFileLock(appendLockPath(root), () => pruneRotatedSegments(root, { now }), {
       timeoutMs: 30_000,
+      staleMs: BUS_LOCK_STALE_MS,
     });
   }
   return result;

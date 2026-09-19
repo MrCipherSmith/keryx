@@ -45,6 +45,15 @@ export const MAX_SEGMENT_BYTES = 1024 * 1024;
 export const KEEP_ROTATED_SEGMENTS = 2;
 export const ROTATED_SEGMENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const APPEND_LOCK_TIMEOUT_MS = 30_000;
+/**
+ * `append.lock` staleness. `withFileLock`'s default (30 s) equals the append
+ * timeout, so a writer SIGKILLed while holding the lock stalled every other
+ * writer for ~30 s and could time them out (found by the T9 process test). A
+ * holder is only ever held for one append; its heartbeat (every staleMs / 3)
+ * keeps a live one fresh, and a live pid still wins over age, so only a dead
+ * holder is reclaimed, after 5 s.
+ */
+export const BUS_LOCK_STALE_MS = 5_000;
 /** How much of a segment's tail is read to find its last complete line. */
 const TAIL_BYTES = 64 * 1024;
 
@@ -88,6 +97,12 @@ export interface AppendOptions {
   underLock?: () => Promise<void> | void;
   /** Runs under the same lock hold after the line and head.json are written. */
   afterAppend?: (event: BusEvent) => Promise<void> | void;
+  /**
+   * TEST SEAM, never set in production: runs after the line is written and
+   * BEFORE head.json is updated — the window a crashed writer leaves behind.
+   * The process tests park a writer here and SIGKILL it.
+   */
+  afterLineWritten?: (event: BusEvent) => Promise<void> | void;
 }
 
 export interface RetentionOptions {
@@ -253,12 +268,13 @@ export async function appendEvent(root: string, draft: EventDraft, options: Appe
       const file = eventsPath(root);
       await appendFile(file, prefix + line, { encoding: "utf8", mode: BUS_FILE_MODE });
       if (process.platform !== "win32") await chmod(file, BUS_FILE_MODE);
+      await options.afterLineWritten?.(event);
       const { ino } = await stat(file);
       await writeBusFileAtomic(headPath(root), `${JSON.stringify({ seq: event.seq, segment, segmentInode: ino })}\n`);
       await options.afterAppend?.(event);
       return event;
     },
-    { timeoutMs: options.lockTimeoutMs ?? APPEND_LOCK_TIMEOUT_MS },
+    { timeoutMs: options.lockTimeoutMs ?? APPEND_LOCK_TIMEOUT_MS, staleMs: BUS_LOCK_STALE_MS },
   );
 }
 
