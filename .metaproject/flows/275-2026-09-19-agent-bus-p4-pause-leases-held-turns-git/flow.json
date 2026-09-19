@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "275",
+  "slug": "agent-bus-p4-pause-leases-held-turns-git",
+  "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T21:39:31.218Z",
+  "updatedAt": "2026-09-19T21:42:50.554Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f0af47bf4e9d8d418c9d6d6c529524f0bb11157f301b5c17963f5c4f867f18c7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by per-area implement tasks T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each task; process proofs are T9; full suite is T11 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Docs: P4 status and pause docs (haiku)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T21:39:31.218Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T21:42:49.567Z",
+      "event": "task-added",
+      "detail": "T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.654Z",
+      "event": "task-added",
+      "detail": "T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.744Z",
+      "event": "task-added",
+      "detail": "T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.829Z",
+      "event": "task-added",
+      "detail": "T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.926Z",
+      "event": "task-added",
+      "detail": "T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:50.013Z",
+      "event": "task-added",
+      "detail": "T10: Docs: P4 status and pause docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T21:42:50.106Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T21:42:50.190Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T21:42:50.275Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T21:42:50.364Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T21:42:50.457Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T21:42:50.554Z",
+      "event": "started"
+    }
+  ]
+}
