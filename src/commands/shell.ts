@@ -24,7 +24,7 @@ import { buildBusTools } from "../bus/agent-tools";
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { isBusRefusal } from "../bus/errors";
-import { isAssignableBusName } from "../bus/schema";
+import { isAssignableBusName, LEASE_SCOPES, type LeaseScope } from "../bus/schema";
 // Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent —
 // `createBusInbox`/`BusInbox` are T5's (`../bus/inbox.ts`).
 import { createBusInbox, type BusInbox } from "../bus/inbox";
@@ -275,15 +275,94 @@ function busErrorLine(error: unknown): string {
   return `bus: ${error instanceof Error ? error.message : String(error)}\n`;
 }
 
+/**
+ * Adapts `BusClient.leaseView()` (`PauseLeaseView`, `../bus/pause.ts`) to the
+ * narrower `AgentDeps.busLeases` shape (flow 275 T6/T8 contract,
+ * specification §4.4): `heldBy` there returns just `{name, reason}`, not the
+ * full `PauseLease`, so `executeCall`'s publish-lease floor never needs to
+ * import the lease schema itself.
+ */
+function busLeasesFromClient(bus: BusClient): NonNullable<AgentDeps["busLeases"]> {
+  return {
+    appliesToMe: (scope) => bus.leaseView().appliesToMe(scope),
+    heldBy: () => {
+      const lease = bus.leaseView().heldBy();
+      return lease === undefined ? undefined : { name: lease.holder.name, reason: lease.reason };
+    },
+  };
+}
+
 type BusSlashCommand =
   | { kind: "list" }
   | { kind: "send"; to: string; text: string }
   | { kind: "ask"; to: string; text: string }
   | { kind: "reply"; ref: string; text: string }
   | { kind: "name"; name: string }
+  | { kind: "pause"; toLabel: string; scope: LeaseScope; ttlMs?: number; reason: string }
+  | { kind: "resume"; leaseId?: string }
+  | { kind: "override"; leaseId?: string }
   | { kind: "usage"; message: string };
 
-/** Pure parse of `/bus <argument>` (specification §7.2's non-pause subset). */
+const PAUSE_USAGE = "usage: /bus pause [@name|@all] [--scope turns|git-publish|advisory] [--ttl 30m] <reason…>";
+
+/** `<value>` after `flag` in `tokens`, plus `tokens` with the flag and its value removed. */
+function extractFlag(tokens: readonly string[], flag: string): { value: string | undefined; rest: string[] } {
+  const index = tokens.indexOf(flag);
+  if (index < 0) return { value: undefined, rest: [...tokens] };
+  return { value: tokens[index + 1], rest: [...tokens.slice(0, index), ...tokens.slice(index + 2)] };
+}
+
+/** `30m` / `2h` / `45s` (no suffix defaults to minutes) → milliseconds; `undefined` when unparseable. */
+function parseLeaseTtl(raw: string): number | undefined {
+  const match = /^(\d+)(s|m|h)?$/.exec(raw.trim());
+  if (match === null) return undefined;
+  const amount = Number(match[1]);
+  const unitMs = match[2] === "s" ? 1000 : match[2] === "h" ? 3_600_000 : 60_000;
+  return amount * unitMs;
+}
+
+/**
+ * Parse `/bus pause`'s argument (specification §7.2): `[@name|@all]` is
+ * optional and defaults to `@all` (pausing without naming a target is the
+ * common "pause everyone" case); `--scope` defaults to `turns`, the scope the
+ * held-line notice below actually enforces. Everything left over, after the
+ * optional address and flags are stripped, is the reason — refused as empty.
+ */
+function parsePauseArgs(argument: string): { kind: "pause"; toLabel: string; scope: LeaseScope; ttlMs?: number; reason: string } | { kind: "usage"; message: string } {
+  let tokens = argument.split(/\s+/).filter((token) => token.length > 0);
+  const scopeFlag = extractFlag(tokens, "--scope");
+  tokens = scopeFlag.rest;
+  const ttlFlag = extractFlag(tokens, "--ttl");
+  tokens = ttlFlag.rest;
+
+  let scope: LeaseScope = "turns";
+  if (scopeFlag.value !== undefined) {
+    if (!(LEASE_SCOPES as readonly string[]).includes(scopeFlag.value)) {
+      return { kind: "usage", message: `--scope must be one of ${LEASE_SCOPES.join("|")}\n${PAUSE_USAGE}\n` };
+    }
+    scope = scopeFlag.value as LeaseScope;
+  }
+  let ttlMs: number | undefined;
+  if (ttlFlag.value !== undefined) {
+    const parsed = parseLeaseTtl(ttlFlag.value);
+    if (parsed === undefined) {
+      return { kind: "usage", message: `--ttl must look like 30m, 2h or 45s\n${PAUSE_USAGE}\n` };
+    }
+    ttlMs = parsed;
+  }
+  let toLabel = "@all";
+  if (tokens[0]?.startsWith("@")) {
+    toLabel = tokens[0];
+    tokens = tokens.slice(1);
+  }
+  const reason = tokens.join(" ").trim();
+  if (reason.length === 0) {
+    return { kind: "usage", message: `${PAUSE_USAGE}\n` };
+  }
+  return { kind: "pause", toLabel, scope, reason, ...(ttlMs !== undefined ? { ttlMs } : {}) };
+}
+
+/** Pure parse of `/bus <argument>` (specification §7.2). */
 function parseBusSlashCommand(argument: string): BusSlashCommand {
   const trimmed = argument.trim();
   if (trimmed.length === 0 || trimmed === "list") {
@@ -331,9 +410,21 @@ function parseBusSlashCommand(argument: string): BusSlashCommand {
     }
     return { kind: "name", name: rest };
   }
+  // Flow 275 (agent bus P4, T8; specification §4.3, §7.2): pause leases.
+  if (sub === "pause") {
+    return parsePauseArgs(rest);
+  }
+  if (sub === "resume") {
+    const leaseId = rest.split(/\s+/)[0];
+    return { kind: "resume", ...(leaseId !== undefined && leaseId.length > 0 ? { leaseId } : {}) };
+  }
+  if (sub === "override") {
+    const leaseId = rest.split(/\s+/)[0];
+    return { kind: "override", ...(leaseId !== undefined && leaseId.length > 0 ? { leaseId } : {}) };
+  }
   return {
     kind: "usage",
-    message: `Unknown /bus subcommand '${sub}'. Usage: /bus [list|send @name|ask @name|reply <#seq|id-prefix>|name] <text>\n`,
+    message: `Unknown /bus subcommand '${sub}'. Usage: /bus [list|send @name|ask @name|reply <#seq|id-prefix>|name|pause|resume|override] <text>\n`,
   };
 }
 
@@ -367,6 +458,27 @@ async function runBusSlashCommand(bus: BusClient | undefined, argument: string, 
     } else if (parsed.kind === "name") {
       await bus.rename(parsed.name);
       emit(`bus: renamed to @${parsed.name}\n`);
+    } else if (parsed.kind === "pause") {
+      const lease = await bus.pause(parsed.toLabel, parsed.scope, parsed.reason, parsed.ttlMs, "operator");
+      emit(`bus: paused ${parsed.scope} for ${parsed.toLabel} (lease ${lease.leaseId.slice(0, 8)}, expires ${lease.expiresAt})\n`);
+    } else if (parsed.kind === "resume") {
+      // No id: resume this instance's own lease (§4.3 — at most one per holder).
+      const leaseId = parsed.leaseId ?? bus.leaseView().myLeases()[0]?.leaseId;
+      if (leaseId === undefined) {
+        emit("bus: you hold no active pause lease.\n");
+      } else {
+        await bus.resume(leaseId, "operator");
+        emit(`bus: resumed lease ${leaseId.slice(0, 8)}\n`);
+      }
+    } else if (parsed.kind === "override") {
+      // No id: release this instance from whichever `turns` lease holds it.
+      const leaseId = parsed.leaseId ?? bus.leaseView().heldBy()?.leaseId;
+      if (leaseId === undefined) {
+        emit("bus: no lease is currently held against you.\n");
+      } else {
+        await bus.override(leaseId);
+        emit(`bus: overrode lease ${leaseId.slice(0, 8)}\n`);
+      }
     } else {
       emit(parsed.message);
     }
@@ -1791,14 +1903,22 @@ async function runAgentRepl(
       for (const hint of formatShellApprovalHints(evaled)) {
         out(`${GUTTER}${style.yellow(hint)}\n`);
       }
-      const rememberable = !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation;
+      // Flow 275 (agent bus P4, T8; specification §4.4): a `git-publish` pause
+      // lease that applies to this command must not be remembered, exactly
+      // like `destructive`/`credentials`/`sacReviewConfirmation` — a saved
+      // pattern from before the lease existed must not silently answer for it
+      // either (see `rememberExactShellGrant`'s own `publishLease` guard below).
+      const rememberable =
+        !evaled.destructive && !evaled.credentials && !evaled.sacReviewConfirmation && !evaled.publishLease;
       const prompt = rememberable ? "[y/N/A=always] " : "[y/N] ";
       out(`\n${GUTTER}${style.yellow(`Run: ${evaled.command}`)} ${style.dim(prompt)}`);
       const answer = ((await readLine()) ?? "").trim();
       const always = rememberable && /^a(lways)?$/i.test(answer);
       const approved = always || /^y(es)?$/i.test(answer);
       if (always && approved) {
-        const stored = rememberExactShellGrant(evaled.command, sessionShellAllow);
+        const stored = rememberExactShellGrant(evaled.command, sessionShellAllow, {
+          publishLease: evaled.publishLease,
+        });
         if (stored.length > 0) {
           fingerprintAtStart = shellPermissionsFingerprint();
         }
@@ -2100,6 +2220,9 @@ async function runAgentRepl(
           tools: rebuiltTools,
           busInbox,
           busAck: (events) => joined.ack(events),
+          // Flow 275 T8: the shell branch of `executeCall` reads this to
+          // compute the `git-publish` approval floor (specification §4.4).
+          busLeases: busLeasesFromClient(joined),
           systemInstruction: buildAgentSystemInstruction(orient, {
             providerId: deps.providerId,
             modelId: deps.modelId,
@@ -2176,9 +2299,71 @@ async function runAgentRepl(
     }
     flushSessionCheckpoint();
   };
+
+  /** One main-agent turn from an operator line — extracted so it can run either straight away or drained from `heldQueue` below. */
+  const runOperatorLine = async (operatorLine: string): Promise<void> => {
+    out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
+    lastUsage = undefined;
+    turnToolCalls = 0;
+    turnText = "";
+    turnError = undefined;
+    events?.emit({ type: "turn_start", prompt: operatorLine, provider: deps.providerId, model: deps.modelId });
+    deps.resetSubagentBudget?.();
+    startSpinner();
+    busWorking = true;
+    try {
+      await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession } : {});
+    } catch (error) {
+      // Recorded before it is rethrown. A turn that threw and a turn that
+      // answered nothing produce the same empty text in the transcript, and a
+      // reader that cannot tell them apart will score a crash as an answer.
+      turnError = error instanceof Error ? error.message : String(error);
+      throw error;
+    } finally {
+      busWorking = false;
+      endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
+      stopSpinner();
+      const end: ShellEvent = {
+        type: "turn_end",
+        text: turnText ?? "",
+        toolCalls: turnToolCalls,
+        ...(lastUsage === undefined ? {} : { usage: lastUsage }),
+        ...(turnError === undefined ? {} : { errorMessage: turnError }),
+      };
+      events?.emit(end);
+    }
+    flushSessionCheckpoint();
+    const usageLine = formatUsage(lastUsage);
+    if (usageLine.length > 0) {
+      out(`\n${GUTTER}${usageLine}\n`);
+    }
+    out(`\n${GUTTER}${turnSeparator()}\n\n`);
+    rich.safeBoundary?.();
+  };
+
+  // Flow 275 (agent bus P4, T8; specification §4.3 `turns` scope, AC5): while
+  // a `turns` pause lease applies to this instance, an operator line starts
+  // no main-agent turn. It is kept here and drained — in order — the next
+  // time this loop comes back around, "at the next prompt or poll": readline
+  // has no queue and no idle wake of its own (see the `busInbox` comment
+  // above), so there is nothing to actively poll on besides the next line,
+  // task-notification wake, or EOF this loop already blocks on.
+  const isHeld = (): boolean => bus?.leaseView().held() ?? false;
+  const heldQueue: string[] = [];
+  const heldNotice = (): string =>
+    `${bus?.leaseView().banner() ?? "bus: turns held."} Your line is queued and will run once released.\n`;
+  const drainHeldQueue = async (): Promise<void> => {
+    while (heldQueue.length > 0 && !isHeld()) {
+      const queued = heldQueue.shift() as string;
+      await runOperatorLine(queued);
+      printPromptWithBusNotice();
+    }
+  };
+
   // `printHeader` already emitted the first prompt — do NOT print another here
   // (that produced the duplicate `❯ ❯`). Only re-prompt after turns/commands.
   for (;;) {
+    await drainHeldQueue();
     const input = await readLineOrCompletion();
     if (input.kind === "completion") {
       // A task finished while nobody was typing. The cap is what keeps a chain
@@ -2583,43 +2768,15 @@ async function runAgentRepl(
       printPromptWithBusNotice();
       continue;
     }
-    out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
-    lastUsage = undefined;
-    turnToolCalls = 0;
-    turnText = "";
-    turnError = undefined;
-    events?.emit({ type: "turn_start", prompt: line, provider: deps.providerId, model: deps.modelId });
-    deps.resetSubagentBudget?.();
-    startSpinner();
-    busWorking = true;
-    try {
-      await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});
-    } catch (error) {
-      // Recorded before it is rethrown. A turn that threw and a turn that
-      // answered nothing produce the same empty text in the transcript, and a
-      // reader that cannot tell them apart will score a crash as an answer.
-      turnError = error instanceof Error ? error.message : String(error);
-      throw error;
-    } finally {
-      busWorking = false;
-      endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
-      stopSpinner();
-      const end: ShellEvent = {
-        type: "turn_end",
-        text: turnText ?? "",
-        toolCalls: turnToolCalls,
-        ...(lastUsage === undefined ? {} : { usage: lastUsage }),
-        ...(turnError === undefined ? {} : { errorMessage: turnError }),
-      };
-      events?.emit(end);
+    // Flow 275 T8 (AC5): a `turns` lease holds this line instead of starting
+    // a turn — `/bus` above is unaffected, it dispatched before this check.
+    if (isHeld()) {
+      heldQueue.push(line);
+      agentIo.onSystem?.(heldNotice());
+      printPromptWithBusNotice();
+      continue;
     }
-    flushSessionCheckpoint();
-    const usageLine = formatUsage(lastUsage);
-    if (usageLine.length > 0) {
-      out(`\n${GUTTER}${usageLine}\n`);
-    }
-    out(`\n${GUTTER}${turnSeparator()}\n\n`);
-    rich.safeBoundary?.();
+    await runOperatorLine(line);
     printPromptWithBusNotice();
   }
 }

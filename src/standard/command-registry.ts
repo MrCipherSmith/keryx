@@ -940,6 +940,46 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
   },
   {
     module: "bus",
+    command: "bus pause",
+    summary:
+      "Create a pause lease (default scope turns, default ttl 30m, max 4h) held by \"cli\" against a live @name or @all. " +
+      "Refused inside a keryx tool call (use-agent-tool), when the bus is disabled (bus-disabled), and when another " +
+      "CLI-origin lease is already active in the clone (lease-already-held).",
+    intent: ["останови агентов", "bus pause", "pause the other agents", "hold the bus", "поставь агентов на паузу"],
+    args: [
+      { name: "<to>", type: "string", required: true, desc: "@<name> of a live instance, or @all" },
+      { name: "reason", type: "string", required: true, desc: "why, shown to whoever is held" },
+      { name: "scope", type: "enum", values: ["turns", "git-publish", "advisory"], required: false, desc: "what the lease enforces; default turns" },
+      { name: "ttl", type: "string", required: false, desc: "e.g. 30m, 2h, 45s; default 30m, max 4h" },
+      { name: "json", type: "bool", required: false, desc: "structured { leaseId, scope, targets, expiresAt }" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "writes one pause-lease file plus its pause-request event under <git-common-dir>/keryx/bus/",
+      "held instances stop starting new main-agent turns from an operator line (turns scope) or must confirm git-publish commands (git-publish scope) until the lease ends",
+    ],
+  },
+  {
+    module: "bus",
+    command: "bus resume",
+    summary:
+      "End any pause lease by id, as \"cli\" (the operator's escape hatch from a terminal). Refused inside a keryx tool " +
+      "call (use-agent-tool) and when the bus is disabled (bus-disabled); resuming an already-gone lease is a silent no-op.",
+    intent: ["сними паузу", "bus resume", "resume the paused agents", "release the hold", "убери паузу"],
+    args: [
+      { name: "<leaseId>", type: "string", required: true, desc: "the lease id, from bus list or bus log" },
+      { name: "json", type: "bool", required: false, desc: "structured { leaseId }" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "appends one resume event and deletes the lease file under <git-common-dir>/keryx/bus/",
+      "every instance the lease targeted may start turns (or shell_exec git-publish commands) again",
+    ],
+  },
+  {
+    module: "bus",
     command: "bus prune",
     summary: "Remove presence records gone for more than 24 h, inactive pause leases, and rotated log segments beyond retention.",
     intent: ["почисти шину", "bus prune", "clean up the agent bus", "remove dead bus peers"],

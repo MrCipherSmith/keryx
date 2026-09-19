@@ -1311,8 +1311,12 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
   });
 
   test("the slate session ref is actually threaded into runAgentTurn for each turn", () => {
+    // Flow 275 T8: the operator turn runs through the extracted
+    // `runOperatorLine` helper now (parameter renamed `line` → `operatorLine`
+    // so it reads the same whether called directly or drained from the held
+    // queue) — the slate-session threading itself is unchanged.
     expect(replBody).toContain(
-      "await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});",
+      "await runAgentTurn(agentIo, deps, history, operatorLine, slateSession !== undefined ? { slateSession } : {});",
     );
   });
 });
@@ -1739,5 +1743,119 @@ describe("flow 268 T26 — runAgentRepl threads configDir into every loadShellCo
     expect(callIndex).toBeGreaterThanOrEqual(0);
     const callBlock = dirSource.slice(callIndex, dirSource.indexOf(";", callIndex));
     expect(callBlock).toContain("runtime.cacheDir");
+  });
+});
+
+// Flow 275 (agent bus P4, T8; specification §4.3 `turns` scope, AC5):
+// `runAgentRepl` has no injection seam (see `shell-bus.test.ts`'s own
+// top-of-file doc comment and the SLATE-3a/SLATE-5 audits above) — its held-
+// turn wiring is proven the same way: by asserting the required literals
+// exist, in the required order, in the real source text.
+describe("flow 275 T8 — runAgentRepl held-turn wiring (specification §4.3, AC5, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replStart, agentModeBranchStart);
+
+  test("isHeld/heldQueue/drainHeldQueue are defined before the loop, and the loop drains before every read", () => {
+    const isHeldIndex = replBody.indexOf("const isHeld = (): boolean => bus?.leaseView().held() ?? false;");
+    const drainDefIndex = replBody.indexOf("const drainHeldQueue = async (): Promise<void> => {");
+    const loopIndex = replBody.indexOf("for (;;) {");
+    expect(isHeldIndex).toBeGreaterThan(0);
+    expect(drainDefIndex).toBeGreaterThan(isHeldIndex);
+    expect(loopIndex).toBeGreaterThan(drainDefIndex);
+    const loopOpening = replBody.slice(loopIndex, loopIndex + 200);
+    expect(loopOpening).toContain("await drainHeldQueue();");
+    expect(loopOpening.indexOf("await drainHeldQueue();")).toBeLessThan(loopOpening.indexOf("readLineOrCompletion()"));
+  });
+
+  test("an operator line is queued instead of started when isHeld() is true, and the notice is printed", () => {
+    const heldCheckIndex = replBody.indexOf("if (isHeld()) {");
+    expect(heldCheckIndex).toBeGreaterThan(0);
+    const heldBlock = replBody.slice(heldCheckIndex, heldCheckIndex + 300);
+    expect(heldBlock).toContain("heldQueue.push(line);");
+    expect(heldBlock).toContain("agentIo.onSystem?.(heldNotice());");
+    expect(heldBlock).toContain("continue;");
+    // No `runOperatorLine`/turn start inside the held branch itself.
+    const heldBranch = heldBlock.slice(0, heldBlock.indexOf("continue;"));
+    expect(heldBranch).not.toContain("runOperatorLine(");
+  });
+
+  test("the held notice names the holder, reason and remaining TTL via the shared lease-view banner", () => {
+    const noticeIndex = replBody.indexOf("const heldNotice = (): string =>");
+    expect(noticeIndex).toBeGreaterThan(0);
+    const noticeBlock = replBody.slice(noticeIndex, noticeIndex + 300);
+    expect(noticeBlock).toContain("bus?.leaseView().banner()");
+  });
+
+  test("drainHeldQueue re-checks isHeld() and runs queued lines through the same runOperatorLine turn path", () => {
+    const drainIndex = replBody.indexOf("const drainHeldQueue = async (): Promise<void> => {");
+    const drainBlock = replBody.slice(drainIndex, drainIndex + 400);
+    expect(drainBlock).toContain("while (heldQueue.length > 0 && !isHeld())");
+    expect(drainBlock).toContain("await runOperatorLine(queued);");
+    expect(drainBlock).toContain("printPromptWithBusNotice();");
+  });
+
+  test("the direct (not-held) operator-line path still runs the very next line through runOperatorLine", () => {
+    const heldCheckIndex = replBody.indexOf("if (isHeld()) {");
+    const afterHeld = replBody.slice(heldCheckIndex, heldCheckIndex + 500);
+    expect(afterHeld).toContain("await runOperatorLine(line);");
+  });
+});
+
+// Flow 275 T8 (specification §4.4): the shell branch of `executeCall` reads
+// `AgentDeps.busLeases` (T6) to compute the `git-publish` approval floor; this
+// proves the readline surface actually threads its own `BusClient.leaseView()`
+// into it once the join succeeds — the same join-success rebuild the flow 274
+// T7 audits above already cover for `busInbox`/`busAck`/`tools`.
+describe("flow 275 T8 — runAgentRepl busLeases wiring (specification §4.4, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replStart, agentModeBranchStart);
+
+  test("busLeasesFromClient adapts PauseLeaseView.heldBy() (a full PauseLease) down to {name, reason}", () => {
+    const adapterIndex = shellSource.indexOf("function busLeasesFromClient(bus: BusClient)");
+    expect(adapterIndex).toBeGreaterThan(0);
+    const adapterBody = shellSource.slice(adapterIndex, adapterIndex + 500);
+    expect(adapterBody).toContain("appliesToMe: (scope) => bus.leaseView().appliesToMe(scope)");
+    expect(adapterBody).toContain("lease.holder.name");
+    expect(adapterBody).toContain("lease.reason");
+  });
+
+  test("the join-success rebuild folds busLeases: busLeasesFromClient(joined) onto deps, alongside busInbox/busAck", () => {
+    const successIdx = replBody.indexOf("bus = joined;");
+    expect(successIdx).toBeGreaterThan(0);
+    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    expect(successBlock).toContain("busLeases: busLeasesFromClient(joined),");
+  });
+});
+
+// Flow 275 T8 (specification §4.4): the `publishLease` floor must never be
+// remembered — mirrors the existing `destructive`/`credentials`/
+// `sacReviewConfirmation` exclusions this same prompt already enforces. The
+// underlying `evaluateShellApproval`/`rememberExactShellGrant` exclusion is
+// unit-tested directly in `shell-approval.test.ts` (flow 275 T5); this proves
+// the readline prompt built ON TOP of them actually wires it through, since
+// that prompt itself has no injection seam (same limitation as the rest of
+// `runAgentRepl` — see the audits above).
+describe("flow 275 T8 — no always-allow offer under publishLease (specification §4.4, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+
+  test("rememberable excludes evaled.publishLease, alongside destructive/credentials/sacReviewConfirmation", () => {
+    const index = shellSource.indexOf("const rememberable =");
+    expect(index).toBeGreaterThan(0);
+    const statement = shellSource.slice(index, shellSource.indexOf(";", index));
+    expect(statement).toContain("!evaled.destructive");
+    expect(statement).toContain("!evaled.credentials");
+    expect(statement).toContain("!evaled.sacReviewConfirmation");
+    expect(statement).toContain("!evaled.publishLease");
+  });
+
+  test("rememberExactShellGrant is called with { publishLease: evaled.publishLease } (defense in depth)", () => {
+    const callIndex = shellSource.indexOf("rememberExactShellGrant(evaled.command, sessionShellAllow,");
+    expect(callIndex).toBeGreaterThan(0);
+    const call = shellSource.slice(callIndex, shellSource.indexOf(");", callIndex) + 2);
+    expect(call).toContain("publishLease: evaled.publishLease");
   });
 });

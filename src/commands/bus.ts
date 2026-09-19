@@ -3,25 +3,39 @@
 //   list [--json]                                   peers and active pause leases
 //   log [--since <seq>] [--limit N] [--json]        events
 //   send <@name|@all> [--kind …] [--reply-to <id>] <text…>
+//   pause <@name|@all> --reason … [--scope …] [--ttl …] [--json]   create a pause lease
+//   resume <leaseId> [--json]                       end any lease
 //   prune                                           gone presence, inactive leases, old segments
 //
-// D-13: `send` refuses with `use-agent-tool` inside a keryx tool call
-// (`KERYX_TOOL_CALL=1`, set only on `shell_exec` children); the agent has its
-// own tools for that. `list`, `log` and `prune` stay available there. The
-// caller-session variables (`KERYX_SESSION_*`) are deliberately not consulted.
+// D-13: `send`, `pause` and `resume` refuse with `use-agent-tool` inside a
+// keryx tool call (`KERYX_TOOL_CALL=1`, set only on `shell_exec` children);
+// the agent has its own tools for that (`bus_send`, `bus_pause`). `list`,
+// `log` and `prune` stay available there. The caller-session variables
+// (`KERYX_SESSION_*`) are deliberately not consulted.
 //
 // A disabled bus (`KERYX_BUS=off`, shell config `bus.enabled: false`, CI)
-// refuses `send` and `prune` with `bus-disabled`; `list` and `log` still read.
+// refuses `send`, `pause`, `resume` and `prune` with `bus-disabled`; `list`
+// and `log` still read.
+//
+// `pause`'s holder is a CLI pseudo-instance (`origin: "cli"`, a fresh
+// instanceId, `name: "cli"` — the same shape `send` already uses): it has no
+// presence, so it is bounded by the lease's own TTL alone (specification
+// §7.3), and `createPauseLease` (D-12) refuses a second CLI-origin lease
+// active anywhere in the clone. `resume`'s `by.origin: "cli"` is
+// `resumePauseLease`'s documented operator escape hatch — it ends ANY lease,
+// not just one this CLI instance itself created (D-03).
 
+import { randomUUID } from "node:crypto";
 import { displaySafe } from "../bus/display";
 import { busEnabled } from "../bus/enabled";
 import { BusRefusal, isBusRefusal } from "../bus/errors";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { resolveBusRoot } from "../bus/paths";
+import { createPauseLease, resumePauseLease } from "../bus/pause";
 import { classifyPresence, listPresence, type PresenceClassifyOptions } from "../bus/presence";
 import { pruneBus } from "../bus/prune";
-import type { BusEvent } from "../bus/schema";
+import { LEASE_SCOPES, type BusEvent, type LeaseScope } from "../bus/schema";
 import { SENDABLE_KINDS, sendMessage } from "../bus/send";
 import { loadShellConfig } from "../lib/shell-config";
 
@@ -68,6 +82,22 @@ export async function runBusCommand(args: string[], deps: BusCommandDeps = {}): 
       }
       assertEnabled(env, deps);
       return await send(rest, await root(deps), { env, now, deps, out });
+    }
+    if (sub === "pause") {
+      if (env.KERYX_TOOL_CALL === "1") {
+        err("keryx bus: use-agent-tool: `keryx bus pause` is refused inside a keryx tool call; use the bus_pause tool instead");
+        return USE_AGENT_TOOL_EXIT;
+      }
+      assertEnabled(env, deps);
+      return await pause(rest, await root(deps), { now, deps, out });
+    }
+    if (sub === "resume") {
+      if (env.KERYX_TOOL_CALL === "1") {
+        err("keryx bus: use-agent-tool: `keryx bus resume` is refused inside a keryx tool call; use the bus_pause tool instead");
+        return USE_AGENT_TOOL_EXIT;
+      }
+      assertEnabled(env, deps);
+      return await resume(rest, await root(deps), { now, out });
     }
     if (sub === "prune") {
       assertEnabled(env, deps);
@@ -159,6 +189,93 @@ async function send(
   } else {
     const recipients = result.resolvedTo[0] === "*" ? "everyone" : `${result.resolvedTo.length} instance(s)`;
     ctx.out(`sent #${result.seq} ${result.event.kind} to ${toLabel} (${recipients}) id ${result.id}`);
+  }
+  return 0;
+}
+
+/** `30m` / `2h` / `45s` (no suffix defaults to minutes) → milliseconds; `undefined` when unparseable. */
+function parseLeaseTtl(raw: string): number | undefined {
+  const match = /^(\d+)(s|m|h)?$/.exec(raw.trim());
+  if (match === null) return undefined;
+  const amount = Number(match[1]);
+  const unitMs = match[2] === "s" ? 1000 : match[2] === "h" ? 3_600_000 : 60_000;
+  return amount * unitMs;
+}
+
+const PAUSE_USAGE =
+  "usage: keryx bus pause <@name|@all> --reason <text> [--scope turns|git-publish|advisory] [--ttl 30m] [--json]";
+
+async function pause(
+  args: string[],
+  busRoot: string,
+  ctx: { now: () => number; deps: BusCommandDeps; out: (line: string) => void },
+): Promise<number> {
+  const scopeRaw = flagValue(args, "--scope");
+  if (scopeRaw !== undefined && !(LEASE_SCOPES as readonly string[]).includes(scopeRaw)) {
+    throw new BusRefusal("invalid-event", `--scope must be one of ${LEASE_SCOPES.join("|")}\n${PAUSE_USAGE}`);
+  }
+  const scope = (scopeRaw ?? "turns") as LeaseScope;
+
+  const ttlRaw = flagValue(args, "--ttl");
+  let ttlMs: number | undefined;
+  if (ttlRaw !== undefined) {
+    const parsed = parseLeaseTtl(ttlRaw);
+    if (parsed === undefined) {
+      throw new BusRefusal("invalid-event", `--ttl must look like 30m, 2h or 45s\n${PAUSE_USAGE}`);
+    }
+    ttlMs = parsed;
+  }
+
+  const reason = flagValue(args, "--reason");
+  const [toLabel] = positionals(args, ["--scope", "--ttl", "--reason"]);
+  if (toLabel === undefined || reason === undefined || reason.length === 0) {
+    throw new BusRefusal("invalid-event", PAUSE_USAGE);
+  }
+
+  // specification §7.3: the CLI holder is a pseudo-instance with no presence
+  // (`origin: "cli"`, same shape `send` above already uses) — the lease's own
+  // TTL is what bounds it, and `createPauseLease` (D-12) refuses a second
+  // CLI-origin lease active anywhere in the clone.
+  const holder = { instanceId: randomUUID(), name: "cli", origin: "cli" as const };
+  const lease = await createPauseLease(busRoot, {
+    holder,
+    toLabel,
+    scope,
+    reason,
+    ...(ttlMs !== undefined ? { ttlMs } : {}),
+    now: ctx.now,
+    ...(ctx.deps.liveness !== undefined ? { liveness: ctx.deps.liveness } : {}),
+  });
+  if (args.includes("--json")) {
+    ctx.out(
+      JSON.stringify(
+        { schemaVersion: 1, leaseId: lease.leaseId, scope: lease.scope, targets: lease.targets, expiresAt: lease.expiresAt },
+        null,
+        2,
+      ),
+    );
+  } else {
+    ctx.out(`paused ${scope} for ${toLabel} — lease ${lease.leaseId.slice(0, 8)} expires ${lease.expiresAt}`);
+  }
+  return 0;
+}
+
+async function resume(
+  args: string[],
+  busRoot: string,
+  ctx: { now: () => number; out: (line: string) => void },
+): Promise<number> {
+  const [leaseId] = positionals(args, []);
+  if (leaseId === undefined) {
+    throw new BusRefusal("invalid-event", "usage: keryx bus resume <leaseId> [--json]");
+  }
+  // D-03's operator escape hatch: `origin: "cli"` may resume ANY lease, not
+  // only one this CLI instance itself created.
+  await resumePauseLease(busRoot, { leaseId, by: { instanceId: randomUUID(), name: "cli", origin: "cli" }, now: ctx.now });
+  if (args.includes("--json")) {
+    ctx.out(JSON.stringify({ schemaVersion: 1, leaseId }, null, 2));
+  } else {
+    ctx.out(`resumed lease ${leaseId.slice(0, 8)}`);
   }
   return 0;
 }
@@ -300,10 +417,15 @@ Usage:
                                                    Events, oldest first (--since: after that seq; --limit: last N)
   keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] [--json] <text…>
                                                    Send a message as "cli" (a reply needs --reply-to)
+  keryx bus pause <@name|@all> --reason <text> [--scope turns|git-publish|advisory] [--ttl 30m] [--json]
+                                                   Create a pause lease held by "cli" (default scope: turns, default ttl: 30m)
+  keryx bus resume <leaseId> [--json]              End any lease (the operator's escape hatch from a terminal)
   keryx bus prune [--json]                         Remove gone presence (>24 h), inactive leases, old log segments
 
-send refuses with use-agent-tool (exit 2) inside a keryx tool call
-(KERYX_TOOL_CALL=1); agents use their bus tools. send and prune refuse with
-bus-disabled when KERYX_BUS=off, shell config bus.enabled is false, or in CI.
-CLI sends are limited to 30 per minute across the clone (rate-limited).
+send, pause and resume refuse with use-agent-tool (exit 2) inside a keryx
+tool call (KERYX_TOOL_CALL=1); agents use their bus tools (bus_send,
+bus_pause) instead. send, pause, resume and prune refuse with bus-disabled
+when KERYX_BUS=off, shell config bus.enabled is false, or in CI.
+CLI sends are limited to 30 per minute across the clone (rate-limited). At
+most one CLI-origin pause lease can be active in the clone at a time.
 `;
