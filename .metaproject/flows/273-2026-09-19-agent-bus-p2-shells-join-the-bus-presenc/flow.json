@@ -9,7 +9,7 @@
   "title": "Agent bus P2: shells join the bus — presence, heartbeat, poller, /bus, peers",
   "status": "in-progress",
   "createdAt": "2026-09-19T16:46:59.516Z",
-  "updatedAt": "2026-09-19T16:50:58.848Z",
+  "updatedAt": "2026-09-19T17:10:31.839Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,15 +90,22 @@
       "id": "T5",
       "title": "Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:51:00.367Z",
+            "outcome": "started",
+            "detail": "273-T5 bus client (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -229,6 +236,16 @@
     {
       "at": "2026-09-19T16:50:58.848Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-19T16:51:00.367Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 273-T5 bus client (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:31.839Z",
+      "event": "task-done",
+      "detail": "T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)"
     }
   ]
 }

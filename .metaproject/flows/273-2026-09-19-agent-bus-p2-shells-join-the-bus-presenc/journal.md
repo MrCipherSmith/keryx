@@ -12,3 +12,5 @@
 - 2026-09-19T16:50:58.675Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-19T16:50:58.762Z - frozen: 13 criteria; checksum recorded
 - 2026-09-19T16:50:58.848Z - started
+- 2026-09-19T16:51:00.367Z - task-attempt: T5: started (attempt 1) — 273-T5 bus client (sonnet)
+- 2026-09-19T17:10:31.839Z - task-done: T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)
