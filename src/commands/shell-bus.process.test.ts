@@ -53,6 +53,24 @@ const POLL_ENV = { KERYX_BUS_POLL_MS: "250" };
 const STALE_MS = 300;
 const SHORT_BUS_STALE_ENV = { KERYX_TEST_BUS_TIMING: "1", KERYX_BUS_PRESENCE_STALE_MS: String(STALE_MS) };
 
+/**
+ * Review r1 F8: the SIGSTOP test below needs a heartbeat interval short
+ * enough that the record reads LIVE before SIGSTOP — proving the periodic
+ * write is actually happening — and a stale window short enough to observe
+ * it going STALE again soon after SIGSTOP stops that write. `STALE_MS`
+ * above (300ms) paired with the real 5s production heartbeat made the old
+ * version of that test pass even withOUT ever sending SIGSTOP, since a 5s
+ * heartbeat never refreshes inside a 300ms window regardless. Gated exactly
+ * like `SHORT_BUS_STALE_ENV`.
+ */
+const SIGSTOP_HEARTBEAT_MS = 100;
+const SIGSTOP_STALE_MS = 600;
+const SIGSTOP_ENV = {
+  KERYX_TEST_BUS_TIMING: "1",
+  KERYX_BUS_HEARTBEAT_MS: String(SIGSTOP_HEARTBEAT_MS),
+  KERYX_BUS_PRESENCE_STALE_MS: String(SIGSTOP_STALE_MS),
+};
+
 /** Isolated from the host's git config (hooks, signing, identity rules). */
 const GIT_ENV = {
   ...process.env,
@@ -302,13 +320,25 @@ describe.skipIf(process.platform === "win32")("readline shell agent bus across p
     }, 20_000);
 
     test("SIGSTOP reads stale in `bus list --json`; SIGCONT afterwards", async () => {
-      const sb = makeSandbox();
+      const sb = makeSandbox(SIGSTOP_ENV);
       const shell = startShell(sb.cwd, sb.env);
       const record = await waitForOnePresence(sb.cwd);
+
+      // review r1 F8: prove the record is genuinely live — refreshed by a
+      // fast real heartbeat — BEFORE sending SIGSTOP, so the "stale after
+      // SIGSTOP" assertion below actually demonstrates the signal stopped
+      // the writes, rather than the stale window merely being too tight to
+      // ever read live in the first place.
+      const livePeer = await waitFor("bus list --json to read the holder live before SIGSTOP", () => {
+        const listed = busListJson(sb.cwd, sb.env);
+        return listed.peers.find((peer) => peer.instanceId === record.instanceId && peer.state === "live");
+      });
+      expect(livePeer.state).toBe("live");
+
       kill(shell, "SIGSTOP");
 
       const stalePeer = await waitFor("bus list --json to read the stopped holder stale", () => {
-        const listed = busListJson(sb.cwd, { ...sb.env, ...SHORT_BUS_STALE_ENV });
+        const listed = busListJson(sb.cwd, sb.env);
         return listed.peers.find((peer) => peer.instanceId === record.instanceId && peer.state === "stale");
       });
       expect(stalePeer.state).toBe("stale");

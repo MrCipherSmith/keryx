@@ -16,6 +16,7 @@ export type BusRefusalCode =
   | "recipient-not-live"
   | "rate-limited"
   | "reply-without-replyTo"
+  | "unknown-message"
   | "use-agent-tool";
 
 export class BusRefusal extends Error {

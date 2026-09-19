@@ -28,7 +28,7 @@ export const OPERATOR_RATE_LIMIT_PER_MINUTE = 30;
 const RATE_WINDOW_MS = 60_000;
 
 export interface SendInput {
-  /** `@<name>` or `@all`. */
+  /** `@<name>` or `@all`. Always the event's display label, even when `toInstanceId` is set. */
   toLabel: string;
   kind: string;
   body: string;
@@ -41,6 +41,16 @@ export interface SendInput {
   liveness?: Omit<PresenceClassifyOptions, "now"> | undefined;
   /** Environment consulted for the test-only rate-limit bypass; defaults to `process.env`. */
   env?: Readonly<Record<string, string | undefined>> | undefined;
+  /**
+   * A `reply` addressed by instance id rather than by current name (review r1
+   * F4): bypasses `resolveRecipients`/name lookup entirely, so a sender who
+   * renamed between the original message and the reply is still reached.
+   * Still requires the instance to be live, else `recipient-not-live` —
+   * never `unknown-recipient`, since the id came from a message we actually
+   * received rather than from user-typed text. `toLabel` is unaffected: it
+   * stays the display label (`@<name at send time>`).
+   */
+  toInstanceId?: string | undefined;
 }
 
 export interface SendResult {
@@ -110,7 +120,21 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
     throw new BusRefusal("invalid-event", 'an operator send needs from: { instanceId, name, origin: "operator" }');
   }
 
-  const to = await resolveRecipients(root, input.toLabel, { ...input.liveness, now: now() });
+  let to: string[];
+  if (input.toInstanceId !== undefined) {
+    if (!isBusId(input.toInstanceId)) {
+      throw new BusRefusal("invalid-id", `toInstanceId ${JSON.stringify(input.toInstanceId)} is not a UUID`);
+    }
+    const holder = (await listPresence(root)).find((record) => record.instanceId === input.toInstanceId);
+    const options: PresenceClassifyOptions = { ...input.liveness, now: now() };
+    const isLive = holder !== undefined && classifyPresence(holder, options) === "live";
+    if (!isLive) {
+      throw new BusRefusal("recipient-not-live", `instance ${input.toInstanceId} is not live`);
+    }
+    to = [input.toInstanceId];
+  } else {
+    to = await resolveRecipients(root, input.toLabel, { ...input.liveness, now: now() });
+  }
   const env = input.env ?? process.env;
   const from: BusSender =
     input.origin === "operator" ? (input.from as BusSender) : { instanceId: randomUUID(), name: "cli", origin: "cli" };

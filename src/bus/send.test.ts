@@ -7,7 +7,7 @@ import { cursorAtStart, readEvents } from "./log";
 import { eventsPath } from "./paths";
 import { writePresence } from "./presence";
 import type { PresenceRecord } from "./schema";
-import { CLI_RATE_LIMIT_PER_MINUTE, rateLimitBypassed, sendMessage, type SendInput } from "./send";
+import { CLI_RATE_LIMIT_PER_MINUTE, OPERATOR_RATE_LIMIT_PER_MINUTE, rateLimitBypassed, sendMessage, type SendInput } from "./send";
 
 // AC7: send semantics and every refusal by its code.
 
@@ -138,6 +138,25 @@ describe("sendMessage", () => {
     );
   });
 
+  test("the 31st operator message within a minute from ONE instance is rate-limited (D-12); another instance is unaffected", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    for (let i = 0; i < OPERATOR_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "operator", from, body: `m${i}` }));
+    }
+    expect(await refusal(sendMessage(root, input({ origin: "operator", from })))).toBe("rate-limited");
+
+    // A second sender is bounded by its OWN budget, not the first's (D-12).
+    const otherFrom = { instanceId: LIVE_TWIN, name: "release", origin: "operator" as const };
+    const fromOther = await sendMessage(root, input({ origin: "operator", from: otherFrom }));
+    expect(fromOther.event.from.instanceId).toBe(LIVE_TWIN);
+
+    // The window then slides, like the CLI limit.
+    expect(await sendMessage(root, input({ origin: "operator", from, now: () => NOW + 61_000 }))).toEqual(
+      expect.objectContaining({ seq: OPERATOR_RATE_LIMIT_PER_MINUTE + 2 }),
+    );
+  });
+
   test("the test-only bypass lifts the limit, and only in a test context", async () => {
     expect(rateLimitBypassed({ NODE_ENV: "test", KERYX_TEST_BUS_RATE: "off" })).toBe(true);
     expect(rateLimitBypassed({ KERYX_TEST_BUS: "1", KERYX_TEST_BUS_RATE: "off" })).toBe(true);
@@ -149,5 +168,28 @@ describe("sendMessage", () => {
     const env = { NODE_ENV: "test", KERYX_TEST_BUS_RATE: "off" };
     for (let i = 0; i <= CLI_RATE_LIMIT_PER_MINUTE; i += 1) await sendMessage(root, input({ env }));
     expect((await readEvents(root, await cursorAtStart(root))).events.length).toBe(CLI_RATE_LIMIT_PER_MINUTE + 1);
+  });
+});
+
+describe("sendMessage: toInstanceId (review r1 F4 — reply addressed by instance, not by name)", () => {
+  test("bypasses name resolution: addresses the instance directly, and toLabel stays the display label", async () => {
+    const root = await seeded();
+    const sent = await sendMessage(root, input({ toLabel: "@ignored-for-routing", toInstanceId: LIVE }));
+    expect(sent.resolvedTo).toEqual([LIVE]);
+    expect(sent.event.to).toEqual([LIVE]);
+    expect(sent.event.toLabel).toBe("@ignored-for-routing");
+  });
+
+  test("recipient-not-live when the instance has no presence at all, or is stale/gone — never unknown-recipient", async () => {
+    const root = await seeded();
+    expect(await refusal(sendMessage(root, input({ toInstanceId: "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" })))).toBe(
+      "recipient-not-live",
+    );
+    expect(await refusal(sendMessage(root, input({ toInstanceId: STALE })))).toBe("recipient-not-live");
+  });
+
+  test("invalid-id for a malformed toInstanceId", async () => {
+    const root = await seeded();
+    expect(await refusal(sendMessage(root, input({ toInstanceId: "../not-a-uuid" })))).toBe("invalid-id");
   });
 });

@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import {
+  DEFAULT_HEARTBEAT_MS,
   joinBus,
   type BusClient,
   type BusPeer,
@@ -12,8 +13,9 @@ import {
   type RenderedBusEvent,
 } from "./client";
 import { displaySafe } from "./display";
+import { isBusRefusal } from "./errors";
 import { appendEvent } from "./log";
-import { presencePath, resolveBusRoot } from "./paths";
+import { eventsPath, presencePath, resolveBusRoot } from "./paths";
 import { readPresence, writePresence } from "./presence";
 import { processInstanceId } from "../session/lease";
 import type { PresenceRecord } from "./schema";
@@ -266,16 +268,18 @@ describe("joinBus: heartbeat (specification §5.1, §5.2)", () => {
         pollMs: 1500,
         now: () => clock,
         status: () => status,
-        sessionLease: {
+        // review r1 F2: a GETTER, called at each use — not a value captured once.
+        sessionLease: () => ({
           refresh(patch) {
             refreshCalls.push(patch);
             return true;
           },
-        },
+        }),
       }),
     );
     const { root } = await resolveBusRoot(cwd);
     const before = await readPresence(root, client.instanceId);
+    expect(refreshCalls).toEqual([{ name: client.name }]); // specification §5.1: refreshed right at join
 
     clock += 5000;
     status = { status: "working", activity: "flow 273" };
@@ -286,8 +290,73 @@ describe("joinBus: heartbeat (specification §5.1, §5.2)", () => {
     expect(after?.status).toBe("working");
     expect(after?.activity).toBe("flow 273");
     expect(after?.heartbeatAt).not.toBe(before?.heartbeatAt);
-    expect(refreshCalls).toEqual([{ name: client.name }]);
+    expect(refreshCalls).toEqual([{ name: client.name }, { name: client.name }]);
     client.leave();
+  });
+
+  test("review r1 F2: the getter is re-read on every heartbeat, so a swapped lease handle is refreshed, never a released one", async () => {
+    const cwd = await repo();
+    const { timers, tick } = fakeTimers();
+    const oldCalls: Array<{ name?: string | null } | undefined> = [];
+    const newCalls: Array<{ name?: string | null } | undefined> = [];
+    const oldLease = { refresh: (patch: { name?: string | null }) => oldCalls.push(patch) };
+    const newLease = { refresh: (patch: { name?: string | null }) => newCalls.push(patch) };
+    let current: typeof oldLease | typeof newLease | undefined = oldLease;
+    const client = asClient(await join(cwd, { timers, sessionLease: () => current }));
+    expect(oldCalls.length).toBe(1); // at join
+
+    current = newLease; // e.g. `/new` swaps the lease the shell holds
+    tick(DEFAULT_HEARTBEAT_MS);
+    await settle();
+
+    expect(oldCalls.length).toBe(1); // never refreshed again: it was released
+    expect(newCalls).toEqual([{ name: client.name }]);
+    client.leave();
+  });
+
+  test("review r1 F8: KERYX_BUS_HEARTBEAT_MS shortens the heartbeat interval in a test context, clamped to 50ms", async () => {
+    const cwd = await repo();
+    const savedNodeEnv = process.env.NODE_ENV;
+    const savedTiming = process.env.KERYX_TEST_BUS_TIMING;
+    const savedHeartbeat = process.env.KERYX_BUS_HEARTBEAT_MS;
+    try {
+      process.env.NODE_ENV = "production"; // the gate itself: env alone must not apply outside a test context
+      process.env.KERYX_TEST_BUS_TIMING = "1";
+      process.env.KERYX_BUS_HEARTBEAT_MS = "10"; // below the 50ms floor: ignored
+      // The heartbeat timer is always the FIRST `setInterval` call `joinBus`
+      // makes (the poller is the second, at a different `ms`) — the array is
+      // cleared before each join so `[0]` always names that join's heartbeat.
+      let seenMs: number[] = [];
+      const timers: BusTimers = {
+        setInterval(_cb, ms) {
+          seenMs.push(ms);
+          return {};
+        },
+        clearInterval() {},
+      };
+      const clamped = asClient(await join(cwd, { timers }));
+      expect(seenMs[0]).toBe(DEFAULT_HEARTBEAT_MS); // 10 < the 50ms floor
+      clamped.leave();
+
+      seenMs = [];
+      process.env.KERYX_BUS_HEARTBEAT_MS = "77";
+      const honoured = asClient(await join(cwd, { timers }));
+      expect(seenMs[0]).toBe(77);
+      honoured.leave();
+
+      seenMs = [];
+      delete process.env.KERYX_TEST_BUS_TIMING;
+      const outsideTestContext = asClient(await join(cwd, { timers }));
+      expect(seenMs[0]).toBe(DEFAULT_HEARTBEAT_MS); // gate off: env ignored
+      outsideTestContext.leave();
+    } finally {
+      if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedNodeEnv;
+      if (savedTiming === undefined) delete process.env.KERYX_TEST_BUS_TIMING;
+      else process.env.KERYX_TEST_BUS_TIMING = savedTiming;
+      if (savedHeartbeat === undefined) delete process.env.KERYX_BUS_HEARTBEAT_MS;
+      else process.env.KERYX_BUS_HEARTBEAT_MS = savedHeartbeat;
+    }
   });
 
   test("both the heartbeat and the poller are started unref'd", async () => {
@@ -349,6 +418,9 @@ describe("joinBus: poll (specification §5.2)", () => {
     expect(rendered[0]?.preview).toBe(displaySafe("hi [31mred[0m there"));
     expect(rendered[0]?.preview).toBe("hi red there");
     expect(rendered[0]?.fromName).toBe("release");
+    expect(rendered[0]?.fromInstanceId).toBe(OTHER);
+    expect(rendered[0]?.shortId).toBe(rendered[0]?.id.slice(0, 8));
+    expect(rendered[0]?.shortId.length).toBe(8);
     client.leave();
   });
 
@@ -378,23 +450,26 @@ describe("joinBus: rename (D-06)", () => {
     const refreshCalls: Array<{ name?: string | null } | undefined> = [];
     const client = asClient(
       await join(cwd, {
-        sessionLease: {
+        // review r1 F2: a GETTER — join() itself calls it once with the initial name.
+        sessionLease: () => ({
           refresh(patch) {
             refreshCalls.push(patch);
             return true;
           },
-        },
+        }),
       }),
     );
+    expect(refreshCalls).toEqual([{ name: "agent-1" }]);
 
     await expect(client.rename("release")).rejects.toThrow(/name-taken/);
     expect(client.name).toBe("agent-1");
+    expect(refreshCalls).toEqual([{ name: "agent-1" }]); // a refused rename never refreshes
 
     await client.rename("phoenix");
     expect(client.name).toBe("phoenix");
     const record = await readPresence(root, client.instanceId);
     expect(record?.name).toBe("phoenix");
-    expect(refreshCalls).toEqual([{ name: "phoenix" }]);
+    expect(refreshCalls).toEqual([{ name: "agent-1" }, { name: "phoenix" }]);
     client.leave();
   });
 
@@ -419,14 +494,265 @@ describe("joinBus: send (specification §4.2, D-12)", () => {
     client.leave();
   });
 
-  test("setSession(id) rewrites presence.sessionId immediately", async () => {
+  test("setSession(id) rewrites presence.sessionId immediately, and refreshes the lease (review r1 F2)", async () => {
     const cwd = await repo();
-    const client = asClient(await join(cwd, { sessionId: SESSION }));
+    const refreshCalls: Array<{ name?: string | null } | undefined> = [];
+    const client = asClient(
+      await join(cwd, {
+        sessionId: SESSION,
+        sessionLease: () => ({
+          refresh(patch) {
+            refreshCalls.push(patch);
+            return true;
+          },
+        }),
+      }),
+    );
     const { root } = await resolveBusRoot(cwd);
+    expect(refreshCalls).toEqual([{ name: client.name }]); // at join
 
     await client.setSession(SESSION_2);
 
     expect((await readPresence(root, client.instanceId))?.sessionId).toBe(SESSION_2);
+    expect(refreshCalls).toEqual([{ name: client.name }, { name: client.name }]);
+    client.leave();
+  });
+
+  describe("review r1 F10: setSession never rejects", () => {
+    test('a presence-write failure during setSession is reported via onError("session"), and setSession still resolves', async () => {
+      const cwd = await repo();
+      const { timers } = fakeTimers();
+      const errors: Array<[unknown, string]> = [];
+      const client = asClient(
+        await join(cwd, {
+          timers,
+          onError: (error, where) => errors.push([error, where]),
+        }),
+      );
+      const { root } = await resolveBusRoot(cwd);
+      // Corrupt presence/ into a plain file: the next write's ensureBusDir throws.
+      await rm(path.join(root, "presence"), { recursive: true, force: true });
+      await writeFile(path.join(root, "presence"), "not a directory", "utf8");
+
+      await client.setSession(SESSION_2); // must resolve even though the write underneath fails
+
+      expect(errors.length).toBe(1);
+      expect(errors[0]?.[1]).toBe("session");
+      client.leave();
+    });
+  });
+});
+
+describe("joinBus: review r1 F1 — no presence recreated after leave()", () => {
+  test("a heartbeat gated mid-flight, released after leave(), never recreates the presence file", async () => {
+    const cwd = await repo();
+    const { timers, tick } = fakeTimers();
+    let releaseGate: () => void = () => {};
+    const gate = new Promise<void>((resolve) => {
+      releaseGate = resolve;
+    });
+    let branchCalls = 0;
+    const client = asClient(
+      await join(cwd, {
+        timers,
+        resolveBranch: async () => {
+          branchCalls += 1;
+          // The FIRST call is join()'s own initial branch resolution and must
+          // resolve immediately, or `join()` itself would deadlock on the
+          // gate below before ever returning. Only the heartbeat's call (the
+          // second and later) is gated.
+          if (branchCalls > 1) await gate;
+          return null;
+        },
+      }),
+    );
+    const { root } = await resolveBusRoot(cwd);
+    expect(await readPresence(root, client.instanceId)).toBeDefined();
+    expect(branchCalls).toBe(1);
+
+    tick(DEFAULT_HEARTBEAT_MS); // starts heartbeatTick, which awaits the gated branch lookup
+    await settle(10); // let it begin and park on the gate
+    expect(branchCalls).toBe(2);
+
+    client.leave(); // presence removed synchronously, right here
+    expect(existsSync(presencePath(root, client.instanceId))).toBe(false);
+
+    releaseGate(); // let the parked heartbeat resume: it must not recreate the file
+    await settle();
+
+    expect(existsSync(presencePath(root, client.instanceId))).toBe(false);
+  });
+
+  test("setSession and rename no-op after leave()", async () => {
+    const cwd = await repo();
+    const client = asClient(await join(cwd));
+    const { root } = await resolveBusRoot(cwd);
+    client.leave();
+    expect(existsSync(presencePath(root, client.instanceId))).toBe(false);
+
+    await client.setSession(SESSION_2); // must not throw, must not recreate presence
+    expect(existsSync(presencePath(root, client.instanceId))).toBe(false);
+
+    await client.rename("phoenix"); // must not throw, must not recreate presence, must not change .name
+    expect(client.name).toBe("agent-1");
+    expect(existsSync(presencePath(root, client.instanceId))).toBe(false);
+  });
+});
+
+describe("joinBus: review r1 F7 — a half-failed join orphans no presence", () => {
+  test("cursorAtEnd throwing after the presence write is unlinked, and the error still propagates", async () => {
+    const cwd = await repo();
+    const { root } = await resolveBusRoot(cwd);
+    const instanceId = processInstanceId();
+    // events.jsonl exists as a DIRECTORY: opening it for read succeeds, but
+    // reading from it throws EISDIR — cursorAtEnd's own failure mode, induced
+    // without a test seam into `./log.ts`.
+    mkdirSync(eventsPath(root), { recursive: true });
+
+    await expect(join(cwd)).rejects.toThrow();
+    expect(await readPresence(root, instanceId)).toBeUndefined();
+    expect(existsSync(presencePath(root, instanceId))).toBe(false);
+  });
+});
+
+describe("joinBus: review r1 F10 — poll never drops a batch on a throwing onEvent", () => {
+  test("one throwing onEvent is reported via onError(\"poll\") and does not stop the rest of the batch, or the cursor", async () => {
+    const cwd = await repo();
+    const { root } = await resolveBusRoot(cwd);
+    const rendered: RenderedBusEvent[] = [];
+    const errors: Array<[unknown, string]> = [];
+    const client = asClient(
+      await join(cwd, {
+        onEvent: (event) => {
+          rendered.push(event);
+          if (event.kind === "question") throw new Error("render exploded");
+        },
+        onError: (error, where) => errors.push([error, where]),
+      }),
+    );
+    const other = { instanceId: OTHER, name: "release", origin: "operator" as const };
+    await appendEvent(root, { from: other, to: ["*"], toLabel: "@all", kind: "notice", body: "one" });
+    await appendEvent(root, { from: other, to: ["*"], toLabel: "@all", kind: "question", body: "two: throws" });
+    await appendEvent(root, { from: other, to: ["*"], toLabel: "@all", kind: "notice", body: "three" });
+
+    await client.pollNow();
+
+    expect(rendered.map((e) => e.preview)).toEqual(["one", "two: throws", "three"]);
+    expect(errors.length).toBe(1);
+    expect(errors[0]?.[1]).toBe("poll");
+    expect((errors[0]?.[0] as Error).message).toBe("render exploded");
+
+    // The cursor advanced past all three despite the throw: nothing is redelivered.
+    rendered.length = 0;
+    await client.pollNow();
+    expect(rendered).toEqual([]);
+    client.leave();
+  });
+});
+
+describe("joinBus: resolveRef and reply (review r1 F4)", () => {
+  async function joinWithOneMessage(cwd: string): Promise<{ client: BusClient; senderId: string; eventId: string; seq: number }> {
+    const { root } = await resolveBusRoot(cwd);
+    const client = asClient(await join(cwd));
+    // `appendEvent` directly, like the "poll" describe block above: it skips
+    // `sendMessage`'s `@name` liveness resolution entirely, which otherwise
+    // classifies this instance's OWN presence against `Date.now()` (the
+    // sender has none here) rather than the fixed `NOW` clock `join()` uses.
+    const event = await appendEvent(root, {
+      from: { instanceId: OTHER, name: "release", origin: "operator" },
+      to: [client.instanceId],
+      toLabel: `@${client.name}`,
+      kind: "notice",
+      body: "hello",
+    });
+    await client.pollNow();
+    return { client, senderId: OTHER, eventId: event.id, seq: event.seq };
+  }
+
+  test("resolveRef finds a message by #seq, bare seq, or an id prefix of at least 8 characters", async () => {
+    const cwd = await repo();
+    const { client, senderId, eventId, seq } = await joinWithOneMessage(cwd);
+
+    for (const ref of [`#${seq}`, `${seq}`, eventId.slice(0, 8), eventId]) {
+      const resolved = client.resolveRef(ref);
+      expect(resolved).toEqual({ id: eventId, seq, fromInstanceId: senderId, fromName: "release" });
+    }
+    client.leave();
+  });
+
+  test("an unmatched or too-short ref resolves to undefined, never a throw", async () => {
+    const cwd = await repo();
+    const { client } = await joinWithOneMessage(cwd);
+    expect(client.resolveRef("#999")).toBeUndefined();
+    expect(client.resolveRef("nope1234")).toBeUndefined();
+    expect(client.resolveRef("short")).toBeUndefined(); // < 8 chars and not a bare seq
+    client.leave();
+  });
+
+  test("an ambiguous id prefix resolves to undefined", async () => {
+    const cwd = await repo();
+    const { root } = await resolveBusRoot(cwd);
+    const client = asClient(await join(cwd));
+    const sameName = { instanceId: OTHER, name: "release", origin: "operator" as const };
+    // Two ids sharing their first 8 hex characters (a UUID's first hyphen-delimited group).
+    const idA = "aaaaaaaa-0000-4000-8000-000000000001";
+    const idB = "aaaaaaaa-0000-4000-8000-000000000002";
+    await appendEvent(root, { id: idA, from: sameName, to: [client.instanceId], toLabel: `@${client.name}`, kind: "notice", body: "a" });
+    await appendEvent(root, { id: idB, from: sameName, to: [client.instanceId], toLabel: `@${client.name}`, kind: "notice", body: "b" });
+    await client.pollNow();
+
+    expect(client.resolveRef("aaaaaaaa")).toBeUndefined();
+    expect(client.resolveRef(idA)).toEqual(expect.objectContaining({ id: idA }));
+    client.leave();
+  });
+
+  test("reply() sends kind reply, replyTo the resolved id, addressed to the sender's instanceId — not by name", async () => {
+    const cwd = await repo();
+    const { root } = await resolveBusRoot(cwd);
+    const { client, senderId, eventId, seq } = await joinWithOneMessage(cwd);
+    // The sender renamed since: reply must still reach them, by instanceId.
+    await writePresence(root, {
+      schemaVersion: 1,
+      instanceId: senderId,
+      name: "renamed",
+      pid: 4242,
+      host: "this-host",
+      sessionId: SESSION,
+      checkout: "/repo",
+      branch: null,
+      surface: "tui",
+      status: "idle",
+      activity: "",
+      startedAt: iso(NOW),
+      heartbeatAt: iso(NOW),
+      keryxVersion: "0.2.121",
+    });
+
+    const result = await client.reply(`#${seq}`, "on it");
+
+    expect(result.event.kind).toBe("reply");
+    expect(result.event.refs).toEqual({ replyTo: eventId });
+    expect(result.event.to).toEqual([senderId]);
+    expect(result.event.toLabel).toBe("@release"); // the name AT SEND TIME, not the live one
+    client.leave();
+  });
+
+  test("reply() to an unresolved ref throws BusRefusal(\"unknown-message\")", async () => {
+    const cwd = await repo();
+    const client = asClient(await join(cwd));
+    const thrown = await client.reply("#404", "?").catch((error: unknown) => error);
+    expect(isBusRefusal(thrown, "unknown-message")).toBe(true);
+    client.leave();
+  });
+
+  test("reply() refuses recipient-not-live when the original sender never held (or no longer holds) presence", async () => {
+    const cwd = await repo();
+    // `joinWithOneMessage`'s sender (OTHER) never writes its own presence
+    // record, so by construction it is not live: reply() must refuse rather
+    // than address an instance nobody can show is still there.
+    const { client, seq } = await joinWithOneMessage(cwd);
+    const thrown = await client.reply(`#${seq}`, "on it").catch((error: unknown) => error);
+    expect(isBusRefusal(thrown, "recipient-not-live")).toBe(true);
     client.leave();
   });
 });
