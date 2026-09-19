@@ -1,5 +1,6 @@
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { gitCommonDir, gitToplevel } from "../lib/clone-scope";
 import { pathExists } from "../lib/fs";
 import { flowsRoot, slugify } from "./store";
 
@@ -34,38 +35,9 @@ export type AllocationRecord = {
   retired?: boolean;
 };
 
-// `git rev-parse --git-common-dir` is the one path shared by all worktrees of a
-// clone. Absent git (or a non-repository directory) we keep the old behaviour.
-async function gitCommonDir(cwd: string): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(["git", "rev-parse", "--git-common-dir"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    const output = (await new Response(proc.stdout).text()).trim();
-    if ((await proc.exited) !== 0 || output.length === 0) {
-      return null;
-    }
-    return path.isAbsolute(output) ? output : path.resolve(cwd, output);
-  } catch {
-    return null; // git not installed / not executable
-  }
-}
-
-async function gitToplevel(cwd: string): Promise<string | null> {
-  try {
-    const proc = Bun.spawn(["git", "rev-parse", "--show-toplevel"], {
-      cwd,
-      stdout: "pipe",
-      stderr: "ignore",
-    });
-    const output = (await new Response(proc.stdout).text()).trim();
-    return (await proc.exited) === 0 && output.length > 0 ? output : null;
-  } catch {
-    return null;
-  }
-}
+// `gitCommonDir` / `gitToplevel` live in `src/lib/clone-scope.ts` (shared with
+// the agent bus). Absent git (or a non-repository directory) we keep the old
+// behaviour.
 
 // One repository can contain several metaprojects (monorepo). Key the ledger
 // and the lock by the project's path inside the repo so their id spaces stay

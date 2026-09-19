@@ -132,6 +132,12 @@ export async function resolveShellEnv(configDir?: string): Promise<Record<string
   for (const [key, value] of Object.entries(source)) {
     if (typeof value === "string" && !withheld.has(key)) env[key] = value;
   }
+  // Agent bus D-13: marks every `shell_exec` child (foreground and background
+  // both come through here) so `keryx bus send|pause|resume` can refuse with
+  // `use-agent-tool` instead of letting the agent route around its own tools.
+  // A marker, not configuration. External-agent and MCP children never carry
+  // it: their env builders sweep the whole `KERYX_` namespace.
+  env.KERYX_TOOL_CALL = "1";
   return env;
 }
 

@@ -9,6 +9,8 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { applySavedApiKeys, noteSavedCredentialEnv, saveShellConfig } from "../../lib/shell-config";
+import { buildMcpChildEnv } from "../../mcp-servers/spawn-env";
+import { buildExternalChildEnv } from "../external/env";
 import { resolveShellEnv } from "./shell-spawn";
 
 const TOUCHED = ["K015_SAVED_API_KEY", "K015_UNAPPLIED_API_KEY", "K015_OPERATOR_API_KEY", "KERYX_SHELL_PASS_SAVED_KEYS"];
@@ -53,6 +55,17 @@ test("a key recorded as set by keryx — the TUI picker's path — is withheld t
   const env = await resolveShellEnv(dir);
 
   expect(env.K015_OPERATOR_API_KEY).toBeUndefined();
+});
+
+test("agent bus D-13: every shell_exec env carries KERYX_TOOL_CALL=1; external and MCP child envs do not", async () => {
+  const dir = savedKeys({});
+
+  const env = await resolveShellEnv(dir);
+  expect(env.KERYX_TOOL_CALL).toBe("1");
+
+  // Even when the parent itself runs inside a tool call, the sweep drops it.
+  expect(buildExternalChildEnv({ parent: env, depth: 1 }).KERYX_TOOL_CALL).toBeUndefined();
+  expect(buildMcpChildEnv({ parent: env }).KERYX_TOOL_CALL).toBeUndefined();
 });
 
 test("KERYX_SHELL_PASS_SAVED_KEYS=1 hands the saved keys over, as before", async () => {
