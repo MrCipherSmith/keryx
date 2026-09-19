@@ -94,6 +94,13 @@ export interface ShellConfig {
    * read site.
    */
   thinkDisplay?: string;
+  /**
+   * Agent bus settings (flow 272; docs/requirements/keryx-agent-bus §7.4).
+   * `enabled: false` is the persistent opt-out read by `busEnabled`
+   * (`src/bus/enabled.ts`); `name` is the default instance name (P2). Not
+   * validated here, like every other field above.
+   */
+  bus?: { enabled?: boolean; name?: string };
 }
 
 /**

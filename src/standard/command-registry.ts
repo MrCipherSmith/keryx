@@ -892,6 +892,66 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
       "does not touch content already relayed to an agent, exported copies, or git history",
     ],
   },
+  // ---- bus ------------------------------------------------------------------
+  // The agent bus (flow 272; docs/requirements/keryx-agent-bus). It lives in the
+  // git common directory, outside `.metaproject/`, and never writes flow state.
+  {
+    module: "bus",
+    command: "bus list",
+    summary: "Live and stale keryx shells of this clone (name, status, activity, checkout, branch) and active pause leases.",
+    intent: ["кто ещё работает в этом репо", "bus list", "list bus peers", "which agents are running", "пиры шины"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured peers and leases" }],
+    json: true,
+    read: true,
+  },
+  {
+    module: "bus",
+    command: "bus log",
+    summary: "Read the agent bus event log, oldest first.",
+    intent: ["лог шины", "bus log", "show bus messages", "what did the agents say", "сообщения агентов"],
+    args: [
+      { name: "since", type: "number", required: false, desc: "only events after this seq" },
+      { name: "limit", type: "number", required: false, desc: "only the last N events" },
+      { name: "json", type: "bool", required: false, desc: "structured events" },
+    ],
+    json: true,
+    read: true,
+  },
+  {
+    module: "bus",
+    command: "bus send",
+    summary:
+      "Send a notice, question, handoff or reply to a live @name or @all as \"cli\". Refused inside a keryx tool call " +
+      "(use-agent-tool), when the bus is disabled (bus-disabled), and past 30 CLI messages per minute per clone (rate-limited).",
+    intent: ["отправь сообщение агенту", "bus send", "message another agent", "tell the other shell", "напиши агенту"],
+    args: [
+      { name: "<to>", type: "string", required: true, desc: "@<name> of a live instance, or @all" },
+      { name: "kind", type: "enum", values: ["notice", "question", "handoff", "reply"], required: false, desc: "message kind; default notice" },
+      { name: "reply-to", type: "string", required: false, desc: "event id being answered; required for --kind reply" },
+      { name: "<text>", type: "string", required: true, desc: "message body, at most 2048 bytes after redaction" },
+      { name: "json", type: "bool", required: false, desc: "structured { seq, id, resolvedTo }" },
+    ],
+    json: true,
+    read: false,
+    sideEffects: [
+      "appends one redacted event to the clone's bus log under <git-common-dir>/keryx/bus/",
+      "the message reaches the addressed agents' next turn (and may wake an idle one)",
+    ],
+  },
+  {
+    module: "bus",
+    command: "bus prune",
+    summary: "Remove presence records gone for more than 24 h, inactive pause leases, and rotated log segments beyond retention.",
+    intent: ["почисти шину", "bus prune", "clean up the agent bus", "remove dead bus peers"],
+    args: [{ name: "json", type: "bool", required: false, desc: "structured removal report" }],
+    json: true,
+    read: false,
+    sideEffects: [
+      "deletes gone presence records, inactive pause leases and old rotated segments under <git-common-dir>/keryx/bus/",
+      "appends one lease-expired event per removed lease",
+      "never touches live or stale peers, or anything under .metaproject/",
+    ],
+  },
   {
     module: "providers",
     command: "providers cross-family",

@@ -19,10 +19,10 @@ import { classifyPresence, listPresence, type PresenceClassifyOptions, removePre
 export const GONE_PRESENCE_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 export interface PruneOptions {
-  now?: () => number;
-  isAlive?: (pid: number) => boolean;
-  host?: string;
-  staleMs?: number;
+  now?: (() => number) | undefined;
+  isAlive?: ((pid: number) => boolean) | undefined;
+  host?: string | undefined;
+  staleMs?: number | undefined;
 }
 
 export interface PruneResult {
