@@ -7,9 +7,9 @@
   "id": "270",
   "slug": "tui-provider-and-search-provider-wizards",
   "title": "TUI: provider and search-provider wizards in ModalHost, /tools and /mcp layout, mode row in sidebar, persistent splash until first message",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-19T06:56:32.865Z",
-  "updatedAt": "2026-09-19T07:24:33.252Z",
+  "updatedAt": "2026-09-19T08:34:15.410Z",
   "source": {
     "type": "description",
     "ref": null
@@ -62,7 +62,7 @@
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/596"
   },
   "baseBranch": "main",
   "tasks": [
@@ -121,7 +121,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -129,7 +129,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -441,6 +442,40 @@
       "at": "2026-09-19T07:24:33.252Z",
       "event": "task-done",
       "detail": "T10: Verification: typecheck, lint, tui/mcp-servers tests, live pty walk of both wizards, /tools, /mcp, /plan, splash (AC11)"
+    },
+    {
+      "at": "2026-09-19T07:52:39.483Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-19T07:52:42.623Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/596 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-19T08:33:31.076Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-19T08:33:36.576Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — external-comments (violated): the external-comment record does not answer for this pull request: MrCipherSmith/keryx#596 was last collected against 360543caab89a12efb3fbebc2be7c4a310b6ff64 (round 1), but the PR head is c9a8a9b2be797181425d63a49ab02034d5fff7e6. Everything anyone said after 360543caab89a12efb3fbebc2be7c4a310b6ff64 is missing from this record, so \"nothing outstanding\" would be a statement about a pull request that no longer exists. Re-run `keryx review comments collect --repo MrCipherSmith/keryx --pr 596 --sha <pr-head>`. The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes. | health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-19T08:34:09.099Z",
+      "event": "completing",
+      "detail": "merged commit: e80db339dd0b632381c9193ebd253342429f1067"
+    },
+    {
+      "at": "2026-09-19T08:34:15.410Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "e80db339dd0b632381c9193ebd253342429f1067",
+    "ref": "origin/main",
+    "at": "2026-09-19T08:34:15.410Z"
+  }
 }
