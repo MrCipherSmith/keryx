@@ -21,6 +21,7 @@ import {
 import {
   applyRuntimeSwitchToSlate,
   attachBlockIo,
+  freshSlateSessionRef,
   attachUsageIo,
   createTuiAgentIo,
   describeModeRow,
@@ -60,7 +61,8 @@ import { builtinReadOnlyTools } from "../harness/tool/builtin/interactive-tools"
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
 import type { DetectedProvider } from "../commands/select";
 import { readSlate, writeSlate } from "../session/slate";
-import type { SlateSessionRef } from "../session/slate-lifecycle";
+import { ensureSlateOpened, recordSlateTouch, type SlateSessionRef } from "../session/slate-lifecycle";
+import { openSession } from "../session/store";
 import type {
   SearchConnectionResult,
   SearchProviderController,
@@ -3455,5 +3457,61 @@ describe("flow 268 T17 — tui-shell.ts /think display-mode wiring (source-text 
 
   test("thinkDisplayMode is loaded from ShellConfig at session start via resolveThinkDisplayMode", () => {
     expect(fnBodyThink).toContain("resolveThinkDisplayMode(loadShellConfig().thinkDisplay)");
+  });
+});
+
+// --- /resume rebinds the slate to the resumed session -------------------
+//
+// `resumeSessionInteractive` (behind `/resume` and `/sessions`) used to swap
+// `liveSession` through `applyOpened` and leave `slateSession` alone, so every
+// slate read and write after a resume still went to the session the operator
+// had left. Startup and `/new`/`/clear` rebuilt the ref; `/resume` did not.
+describe("session switch rebinds the slate (/resume, /sessions)", () => {
+  const tuiSource = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const fnBody = tuiSource.slice(tuiSource.indexOf("export async function launchTuiAgentShell(opts: {"));
+
+  test("resumeSessionInteractive rebinds the slate after it applies the resumed session", () => {
+    const start = fnBody.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = fnBody.slice(start, fnBody.indexOf("\n    };\n", start));
+    const applied = block.indexOf("applyOpened(opened, true);");
+    expect(applied).toBeGreaterThanOrEqual(0);
+    expect(block.indexOf("bindSlateToLiveSession();", applied)).toBeGreaterThan(applied);
+  });
+
+  test("every session switch builds its slate ref through bindSlateToLiveSession, none by hand", () => {
+    expect(fnBody).not.toMatch(/slateSession = \{/);
+    // startup, /new|/clear, /resume|/sessions
+    expect(fnBody.split("bindSlateToLiveSession();").length - 1).toBe(3);
+  });
+
+  test("resuming from session A to B sends slate writes to B's dir and leaves A's slate alone", async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), "keryx-tui-resume-data-"));
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-tui-resume-cwd-"));
+    try {
+      const b = openSession({ cwd, dataDir }).handle;
+      const a = openSession({ cwd, dataDir }).handle;
+      expect(a.dir).not.toBe(b.dir);
+
+      // Working in A: the first action turn opens A's slate and records a touch.
+      let slateSession = freshSlateSessionRef(a.dir, cwd);
+      await ensureSlateOpened(slateSession, () => "attempt-a");
+      await recordSlateTouch(slateSession.dir, ["src/a.ts"]);
+
+      // /resume B, then the next action turn in B.
+      const resumed = openSession({ cwd, dataDir, resumeId: b.summary.id });
+      expect(resumed.handle.dir).toBe(b.dir);
+      slateSession = freshSlateSessionRef(resumed.handle.dir, cwd);
+      expect(slateSession.dir).toBe(b.dir);
+      expect(slateSession.opened).toBe(false);
+      await ensureSlateOpened(slateSession, () => "attempt-b");
+      await recordSlateTouch(slateSession.dir, ["src/b.ts"]);
+
+      expect((await readSlate(b.dir))?.anchors.touched).toEqual(["src/b.ts"]);
+      expect((await readSlate(a.dir))?.anchors.touched).toEqual(["src/a.ts"]);
+    } finally {
+      await rm(dataDir, { recursive: true, force: true });
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });
