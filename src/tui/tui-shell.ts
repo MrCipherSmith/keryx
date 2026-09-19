@@ -4630,10 +4630,6 @@ export async function launchTuiAgentShell(opts: {
               description: MODE_PICKER_DESCRIPTIONS[m],
               recommended: m === permissionMode,
             })),
-            onBusy: () => {
-              blockedByOpenDialog = true;
-              chrome.showToast("Answer the open approval first, then retry /mode.");
-            },
           }),
         );
         input.focus();
