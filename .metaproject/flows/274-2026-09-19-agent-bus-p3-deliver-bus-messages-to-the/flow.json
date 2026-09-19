@@ -9,7 +9,7 @@
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
   "status": "in-progress",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T21:13:07.871Z",
+  "updatedAt": "2026-09-19T21:33:34.816Z",
   "source": {
     "type": "description",
     "ref": null
@@ -225,6 +225,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T21:23:59.768Z",
+            "outcome": "started",
+            "detail": "274-T12 CI fixes (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -350,6 +371,21 @@
       "at": "2026-09-19T21:13:07.871Z",
       "event": "task-done",
       "detail": "T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:23:59.684Z",
+      "event": "task-added",
+      "detail": "T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:23:59.768Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 274-T12 CI fixes (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:33:34.816Z",
+      "event": "task-done",
+      "detail": "T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)"
     }
   ]
 }
