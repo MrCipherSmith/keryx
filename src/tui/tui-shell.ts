@@ -1288,6 +1288,22 @@ export async function applyRuntimeSwitchToSlate(params: {
   return true;
 }
 
+/**
+ * The slate ref for a session the TUI has just switched to: that session's
+ * own dir, never opened in this process yet. Every switch (startup, `/new`,
+ * `/clear`, `/resume`, `/sessions`) must build a new ref through this. A
+ * switch that kept the previous ref sent every slate read and write, including
+ * `/goal`, tool touches and runtime-switch Anchors, into the session the
+ * operator had just left.
+ *
+ * `opened: false` also makes the new session's first action turn go through
+ * `openSlate`, which archives an unclosed `slate.json` a previous process left
+ * in that dir (AC3), the same as a fresh process resuming it.
+ */
+export function freshSlateSessionRef(sessionDir: string, cwd: string): SlateSessionRef {
+  return { dir: sessionDir, cwd, opened: false };
+}
+
 /** Compact token count for the header counter: 1234 → "1.2K", else the number. */
 export function fmtTokens(n: number): string {
   return n >= 1000 ? `${(n / 1000).toFixed(1)}K` : String(n);
@@ -4138,11 +4154,14 @@ export async function launchTuiAgentShell(opts: {
     /**
      * SLATE-5 open/close wiring (parity with `runAgentRepl` in
      * `src/commands/shell.ts`) — a fresh, never-opened ref per live session
-     * dir, reassigned on `/new`/`/clear`. The TUI always has a live session
-     * (no sessions-off path here, unlike the REPL), so this is unconditional
-     * once `liveSession` is set below.
+     * dir, reassigned on every session switch through `bindSlateToLiveSession`.
+     * The TUI always has a live session (no sessions-off path here, unlike the
+     * REPL), so this is unconditional once `liveSession` is set below.
      */
     let slateSession: SlateSessionRef | undefined;
+    const bindSlateToLiveSession = (): void => {
+      slateSession = freshSlateSessionRef(liveSession.dir, sessionCwd);
+    };
 
     /**
      * Flow 267: `agent.ts`'s round-loop guard already ran `compactMessages`
@@ -4385,7 +4404,7 @@ export async function launchTuiAgentShell(opts: {
       await done;
       return true;
     }
-    slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+    bindSlateToLiveSession();
     if (history.length === 0) {
       removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);
     }
@@ -4540,6 +4559,12 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       applyOpened(opened, true);
+      // The previous session's slate is left as it is, not closed: this
+      // switch has already moved off it, and an unclosed slate is archived
+      // the next time that session opens one (see `freshSlateSessionRef`).
+      bindSlateToLiveSession();
+      // After the rebind: it reads the bound workspace from the slate ref.
+      void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
       paintSessionHeader();
       if (opened.archiveDegraded !== undefined) {
         io.onSystem?.(`Archive unavailable — resumed from the active context (${opened.archiveDegraded})\n`);
@@ -5649,7 +5674,7 @@ export async function launchTuiAgentShell(opts: {
             if (!startNewSession()) {
               return;
             }
-            slateSession = { dir: liveSession.dir, cwd: sessionCwd, opened: false };
+            bindSlateToLiveSession();
             void refreshWorkspaceSidebar(); // new session: no bound workspace yet
             // The just-closed session's wrap-up may have just added a new
             // proposal/unbound-candidate — project-wide, so worth a refresh

@@ -13,13 +13,15 @@ import type { ShellDeps, ShellIO, ShellSessionOpts } from "../commands/shell-typ
 import {
   openLeasedSession,
   SessionLeasedError,
+  whilePersisting,
   type SessionLeaseOwner,
   type SessionLeaseState,
   sessionLeasePath,
 } from "../session/lease";
 import { leasedChoiceRows } from "../session/lease-choice";
+import { detachSlateSession, isSlateSessionDetached, type SlateSessionRef } from "../session/slate-lifecycle";
 import { createSession, type SessionHandle } from "../session/store";
-import { sessionPickerOptions, startupSessionChoices } from "./tui-shell";
+import { freshSlateSessionRef, sessionPickerOptions, startupSessionChoices } from "./tui-shell";
 import {
   createTuiLeaseHolder,
   leasedChoiceRequest,
@@ -506,5 +508,79 @@ describe("TUI slate getters go through the lease gate (review r2 N1, source-text
     expect(source).not.toContain("() => slateSession)");
     expect(source).not.toContain("slateSession?.dir");
     expect(source.match(/makeAgentDeps\([^)]*, liveSlateSession\)/g)?.length).toBe(3);
+  });
+});
+
+// Merge of #606 (/resume rebinds the slate) with flow 271 (leased switches):
+// the rebind runs only after the leased switch succeeded, and the loss
+// listener detaches the ref bound at that moment, never the old session's.
+describe("/resume composes the leased switch with the slate rebind", () => {
+  test("a refused resume leaves the slate ref as it was; an accepted one rebinds it, gated by the new lease", () => {
+    // The shell's wiring, reduced to the parts that compose (tui-shell.ts).
+    const holder = createTuiLeaseHolder();
+    let slateSession: SlateSessionRef | undefined;
+    holder.onLost(() => {
+      detachSlateSession(slateSession);
+      slateSession = undefined;
+    });
+    const liveSlateSession = (): SlateSessionRef | undefined => whilePersisting(slateSession, () => holder.canPersist());
+    const resume = (resumeId: string): boolean => {
+      let opened: ReturnType<typeof openLeasedSession>;
+      try {
+        opened = holder.switchTo(() => openLeasedSession({ cwd, dataDir, resumeId }));
+      } catch {
+        return false;
+      }
+      slateSession = freshSlateSessionRef(opened.handle.dir, cwd);
+      return true;
+    };
+
+    const a = holder.switchTo(() => openLeasedSession({ cwd, dataDir }));
+    slateSession = freshSlateSessionRef(a.handle.dir, cwd);
+    const refA = slateSession;
+
+    // Refused: the target is held by another shell.
+    const held = makeSession("held");
+    plantHolder(held.summary.id);
+    expect(resume(held.summary.id)).toBe(false);
+    expect(slateSession).toBe(refA);
+    expect(liveSlateSession()).toBe(refA);
+    expect(holder.current).toBe(a.lease);
+
+    // Accepted: a new ref for the resumed session's dir, live under its lease.
+    const b = makeSession("target");
+    expect(resume(b.summary.id)).toBe(true);
+    const refB = slateSession as SlateSessionRef | undefined;
+    expect(refB).not.toBe(refA);
+    expect(refB?.dir).toBe(b.dir);
+    expect(refB?.opened).toBe(false);
+    expect(liveSlateSession()).toBe(refB);
+    expect(a.lease.released).toBe(true);
+
+    // B is taken over: the listener detaches B's ref, the one bound now.
+    const leaseB = holder.current;
+    if (leaseB === undefined) throw new Error("expected a held lease");
+    rmSync(leaseB.lockPath, { recursive: true, force: true });
+    plantHolder(b.summary.id);
+    expect(liveSlateSession()).toBeUndefined();
+    expect(refB !== undefined && isSlateSessionDetached(refB)).toBe(true);
+    expect(isSlateSessionDetached(refA)).toBe(false);
+    expect(slateSession).toBeUndefined();
+  });
+
+  test("tui-shell's /resume rebinds and refreshes only after the refusal branch returned", () => {
+    const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
+    const start = source.indexOf("const resumeSessionInteractive = async (): Promise<void> => {");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = source.slice(start, source.indexOf("\n    };\n", start));
+    const leased = block.indexOf("opened = leasedOpen({ resumeId: found.id });");
+    const refused = block.indexOf("Staying in the current session.");
+    const bound = block.indexOf("bindSlateToLiveSession();");
+    const refreshed = block.indexOf("void refreshWorkspaceSidebar();");
+    expect(leased).toBeGreaterThanOrEqual(0);
+    expect(refused).toBeGreaterThan(leased);
+    expect(block.indexOf("return;", refused)).toBeLessThan(bound);
+    expect(bound).toBeGreaterThan(refused);
+    expect(refreshed).toBeGreaterThan(bound);
   });
 });
