@@ -2,11 +2,11 @@
 
 ## Stats
 
-- Source files indexed: 1558
+- Source files indexed: 1560
 - Imported asset files indexed: 4
-- Total nodes: 1562
-- Edges: 4693
-- Import edges: 4619
+- Total nodes: 1564
+- Edges: 4704
+- Import edges: 4630
 - Asset edges: 11
 - Unresolved imports: 63
 - Import resolution: 98.7%
@@ -35,7 +35,7 @@
 | fixtures | 31 |
 | mcp | 27 |
 | ctx | 26 |
-| bus | 23 |
+| bus | 25 |
 
 ## Unresolved By Type
 

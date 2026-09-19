@@ -20,3 +20,10 @@
 - 2026-09-19T17:42:48.510Z - task-done: T7: TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)
 - 2026-09-19T17:42:48.690Z - task-attempt: T8: started (attempt 1) — 273-T8 process tests (sonnet)
 - 2026-09-19T17:54:58.393Z - task-done: T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)
+- 2026-09-19T17:55:29.614Z - task-attempt: T9: started (attempt 1) — 273-T9 docs (haiku)
+- 2026-09-19T17:58:30.329Z - task-done: T9: Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)
+- 2026-09-19T18:00:16.697Z - task-added: T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)
+- 2026-09-19T18:00:16.781Z - task-attempt: T11: started (attempt 1) — 273-T11 review r1 fixes (sonnet)
+- 2026-09-19T18:10:18.227Z - task-attempt: T11: failed (attempt 2) — 273-T11 single worker made no edits; stopped by operator decision, re-dispatched as 3 lanes
+- 2026-09-19T18:10:26.847Z - task-attempt: T11: started (attempt 3) — 273-T11A client lane (sonnet); B readline and C TUI follow in parallel
+- 2026-09-19T19:02:43.737Z - task-done: T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)

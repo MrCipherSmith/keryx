@@ -9,7 +9,7 @@
   "title": "Agent bus P2: shells join the bus — presence, heartbeat, poller, /bus, peers",
   "status": "in-progress",
   "createdAt": "2026-09-19T16:46:59.516Z",
-  "updatedAt": "2026-09-19T17:54:58.393Z",
+  "updatedAt": "2026-09-19T19:02:43.737Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,15 +174,22 @@
       "id": "T9",
       "title": "Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:55:29.614Z",
+            "outcome": "started",
+            "detail": "273-T9 docs (haiku)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -197,6 +204,37 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-19T18:00:16.781Z",
+            "outcome": "started",
+            "detail": "273-T11 review r1 fixes (sonnet)"
+          },
+          {
+            "at": "2026-09-19T18:10:18.226Z",
+            "outcome": "failed",
+            "detail": "273-T11 single worker made no edits; stopped by operator decision, re-dispatched as 3 lanes"
+          },
+          {
+            "at": "2026-09-19T18:10:26.847Z",
+            "outcome": "started",
+            "detail": "273-T11A client lane (sonnet); B readline and C TUI follow in parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -297,6 +335,41 @@
       "at": "2026-09-19T17:54:58.393Z",
       "event": "task-done",
       "detail": "T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:55:29.614Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 273-T9 docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T17:58:30.329Z",
+      "event": "task-done",
+      "detail": "T9: Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)"
+    },
+    {
+      "at": "2026-09-19T18:00:16.697Z",
+      "event": "task-added",
+      "detail": "T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)"
+    },
+    {
+      "at": "2026-09-19T18:00:16.781Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 273-T11 review r1 fixes (sonnet)"
+    },
+    {
+      "at": "2026-09-19T18:10:18.227Z",
+      "event": "task-attempt",
+      "detail": "T11: failed (attempt 2) — 273-T11 single worker made no edits; stopped by operator decision, re-dispatched as 3 lanes"
+    },
+    {
+      "at": "2026-09-19T18:10:26.847Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 3) — 273-T11A client lane (sonnet); B readline and C TUI follow in parallel"
+    },
+    {
+      "at": "2026-09-19T19:02:43.737Z",
+      "event": "task-done",
+      "detail": "T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)"
     }
   ]
 }

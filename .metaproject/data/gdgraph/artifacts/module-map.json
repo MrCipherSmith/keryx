@@ -105,8 +105,10 @@
     "src/assets/seed.ts"
   ],
   "bus": [
+    "src/bus/ac10-child-env.test.ts",
     "src/bus/client.test.ts",
     "src/bus/client.ts",
+    "src/bus/display.test.ts",
     "src/bus/display.ts",
     "src/bus/enabled.test.ts",
     "src/bus/enabled.ts",
