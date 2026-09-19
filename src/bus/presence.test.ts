@@ -122,6 +122,43 @@ describe("classifyPresence (D-09)", () => {
   test("staleMs is injectable", () => {
     expect(classifyPresence(record(), { ...opts, now: T0 + 2_000, staleMs: 1_000 })).toBe("stale");
   });
+
+  describe("KERYX_BUS_PRESENCE_STALE_MS test knob (flow 273 T8)", () => {
+    const savedTiming = process.env.KERYX_TEST_BUS_TIMING;
+    const savedStale = process.env.KERYX_BUS_PRESENCE_STALE_MS;
+    // `NODE_ENV=test` (set by `bun test`) already gates the knob on; unset it
+    // for these cases so each one controls its own gate explicitly.
+    const savedNodeEnv = process.env.NODE_ENV;
+
+    afterAll(() => {
+      if (savedTiming === undefined) delete process.env.KERYX_TEST_BUS_TIMING;
+      else process.env.KERYX_TEST_BUS_TIMING = savedTiming;
+      if (savedStale === undefined) delete process.env.KERYX_BUS_PRESENCE_STALE_MS;
+      else process.env.KERYX_BUS_PRESENCE_STALE_MS = savedStale;
+      if (savedNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = savedNodeEnv;
+    });
+
+    test("honoured only in a test context, and only >= 100 ms", () => {
+      delete process.env.NODE_ENV;
+      delete process.env.KERYX_TEST_BUS_TIMING;
+      process.env.KERYX_BUS_PRESENCE_STALE_MS = "500";
+      // Not in a test context: the env knob is ignored, default 15 s stands.
+      expect(classifyPresence(record(), { ...opts, now: T0 + 501 })).toBe("live");
+
+      process.env.KERYX_TEST_BUS_TIMING = "1";
+      expect(classifyPresence(record(), { ...opts, now: T0 + 501 })).toBe("stale");
+
+      process.env.KERYX_BUS_PRESENCE_STALE_MS = "50"; // below the 100 ms floor: ignored
+      expect(classifyPresence(record(), { ...opts, now: T0 + 501 })).toBe("live");
+    });
+
+    test("an explicit options.staleMs always wins over the env knob", () => {
+      process.env.KERYX_TEST_BUS_TIMING = "1";
+      process.env.KERYX_BUS_PRESENCE_STALE_MS = "500";
+      expect(classifyPresence(record(), { ...opts, now: T0 + 501, staleMs: 100_000 })).toBe("live");
+    });
+  });
 });
 
 describe("allocateName (D-06)", () => {
