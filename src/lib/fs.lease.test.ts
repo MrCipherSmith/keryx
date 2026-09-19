@@ -182,6 +182,86 @@ describe("LeaseHandle", () => {
   });
 });
 
+/**
+ * A rival take-over, as `removeLeaseDirIfUnchanged` + `tryCreateLease` in
+ * another process would do it: whatever is at `lockPath` is replaced by a new
+ * directory carrying `rival`'s record.
+ */
+function rivalTakesOver(rival: TestOwner): void {
+  rmSync(lockPath, { recursive: true, force: true });
+  plant(rival);
+}
+
+describe("LeaseHandle races (review F2/F3)", () => {
+  test("refresh does not overwrite a rival that took over after the ownership check", () => {
+    const rival = owner({ pid: 424242 });
+    let armed = false;
+    const got = acquireLeaseSync(lockPath, owner(), {
+      staleMs: STALE_MS,
+      raceHook: (point) => {
+        if (point === "refresh" && armed) {
+          armed = false;
+          rivalTakesOver(rival);
+        }
+      },
+    });
+    if (!got.ok) throw new Error("expected to acquire");
+    armed = true;
+    expect(got.handle.refresh()).toBe(false);
+    expect(readLeaseOwnerSync(lockPath)?.token).toBe(rival.token);
+    // No temp file of ours is left in the rival's directory.
+    expect(readdirSync(lockPath)).toEqual(["owner.json"]);
+    expect(got.handle.holds()).toBe(false);
+  });
+
+  test("release does not delete a rival that took over after the ownership check", () => {
+    const rival = owner({ pid: 424242 });
+    const got = acquireLeaseSync(lockPath, owner(), {
+      staleMs: STALE_MS,
+      raceHook: (point) => {
+        if (point === "release") rivalTakesOver(rival);
+      },
+    });
+    if (!got.ok) throw new Error("expected to acquire");
+    got.handle.release();
+    expect(readLeaseOwnerSync(lockPath)?.token).toBe(rival.token);
+    // Nothing is left aside next to the lease.
+    expect(readdirSync(path.dirname(lockPath))).toEqual(["active.lease"]);
+  });
+
+  test("a failed create leaves alone a lease that replaced our empty directory", () => {
+    const rival = owner({ pid: 424242 });
+    const mine = owner();
+    let caught: unknown;
+    let result: ReturnType<typeof acquireLeaseSync<TestOwner>> | undefined;
+    try {
+      result = acquireLeaseSync(lockPath, mine, {
+        staleMs: STALE_MS,
+        raceHook: (point) => {
+          // A reclaimer's rename-back lands a live lease on our fresh, empty
+          // directory before our owner.json is written.
+          if (point === "create") rivalTakesOver(rival);
+        },
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(readLeaseOwnerSync(lockPath)?.token).toBe(rival.token);
+    // The rival is reported as the live holder, not as a crash.
+    expect(caught).toBeUndefined();
+    expect(result?.ok).toBe(false);
+  });
+
+  test("holds() is true for the holder and false once the directory is gone", () => {
+    const got = acquireLeaseSync(lockPath, owner(), { staleMs: STALE_MS });
+    if (!got.ok) throw new Error("expected to acquire");
+    expect(got.handle.holds()).toBe(true);
+    rmSync(lockPath, { recursive: true, force: true });
+    expect(got.handle.holds()).toBe(false);
+    expect(got.handle.refresh()).toBe(false);
+  });
+});
+
 describe("reclaimStaleLeaseSync", () => {
   test("refuses a live holder and leaves it in place", () => {
     const holder = owner({ pid: 424242 });

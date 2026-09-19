@@ -8,8 +8,10 @@
 //
 // Proves AC1 (two `-c` shells), AC2 (non-TTY `-r <id>` refusal and `--fork`),
 // AC5 (SIGSTOP → stale, `--take-over`; SIGKILL → silent reclaim, with the
-// test-only `KERYX_SESSION_LEASE_STALE_MS` / `_HEARTBEAT_MS` knobs) and AC7
-// (SIGTERM, SIGINT and `/exit` remove the lease directory).
+// test-only `KERYX_SESSION_LEASE_STALE_MS` / `_HEARTBEAT_MS` knobs, which the
+// shell honours only with `KERYX_TEST_LEASE_TIMING=1`), AC7 (SIGTERM, SIGINT
+// and `/exit` remove the lease directory) and review F1 (a woken holder that
+// lost its lease says so and writes nothing more).
 import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +24,18 @@ const CLI = path.join(REPO_ROOT, "src", "cli.ts");
 const SHELL_ARGS = ["shell", "--provider", "deepseek", "--model", "unused", "--no-tui", "--chat"];
 /** Short liveness for AC5: a stopped holder reads stale after 600 ms. */
 const STALE_MS = 600;
-const SHORT_LEASE_ENV = { KERYX_SESSION_LEASE_STALE_MS: String(STALE_MS), KERYX_SESSION_LEASE_HEARTBEAT_MS: "150" };
+const SHORT_LEASE_ENV = {
+  KERYX_TEST_LEASE_TIMING: "1",
+  KERYX_SESSION_LEASE_STALE_MS: String(STALE_MS),
+  KERYX_SESSION_LEASE_HEARTBEAT_MS: "150",
+};
+
+/** `env` without the short-lease knobs: the D-09 defaults (15 s stale). */
+function defaultTimingEnv(env: Record<string, string>): Record<string, string> {
+  const out = { ...env };
+  for (const key of Object.keys(SHORT_LEASE_ENV)) delete out[key];
+  return out;
+}
 /** Bound on waiting for a holder to read stale (polled, never slept). */
 const STALE_WAIT_MS = 10_000;
 const WAIT_MS = 15_000;
@@ -94,10 +107,14 @@ function startShell(sb: Sandbox, args: string[]): Shell {
 }
 
 /** Run a command to completion (stdin at EOF). */
-function runToExit(sb: Sandbox, argv: string[]): { code: number | null; stdout: string; stderr: string } {
+function runToExit(
+  sb: Sandbox,
+  argv: string[],
+  env: Record<string, string> = sb.env,
+): { code: number | null; stdout: string; stderr: string } {
   const proc = Bun.spawnSync(["bun", CLI, ...argv], {
     cwd: sb.cwd,
-    env: sb.env,
+    env,
     stdin: "ignore",
     stdout: "pipe",
     stderr: "pipe",
@@ -256,17 +273,33 @@ describe.skipIf(process.platform === "win32")("session lease across processes (f
     const taker = startShell(sb, ["-r", x, "--take-over"]);
     await waitFor(`--take-over to hold ${x}\n${taker.output()}`, () => ownerPid(sb, x) === taker.pid);
 
-    // The taker is live (heartbeating): a second --take-over is refused.
-    const refused = runToExit(sb, [...SHELL_ARGS, "-r", x, "--take-over"]);
+    // The taker is live (heartbeating every 150 ms): a second --take-over is
+    // refused. That second shell judges with the DEFAULT 15 s staleMs, not the
+    // short 600 ms, so a loaded runner delaying the taker's heartbeats cannot
+    // make it read stale (review F7).
+    const refused = runToExit(sb, [...SHELL_ARGS, "-r", x, "--take-over"], defaultTimingEnv(sb.env));
     expect(refused.code).not.toBe(0);
     expect(refused.stderr).toContain("--fork");
     expect(ownerPid(sb, x)).toBe(taker.pid);
 
-    // The stopped holder wakes and exits: it must not remove a lease it lost.
+    // The stopped holder wakes. Its next heartbeat finds the lease is not its
+    // own: it says so once, stops saving the session, and on exit leaves the
+    // taker's lease alone (review F1). No turn is sent (nothing is dialled in
+    // this test), so "writes nothing" is checked as the session files staying
+    // byte-identical while A is awake; the per-turn guard is unit-tested in
+    // shell-lease.test.ts.
+    const xDir = path.join(projectDir(sb) ?? "", x);
+    const beforeWake = snapshot(xDir);
     kill(a, "SIGCONT");
+    await waitFor(`the stopped holder to report the take-over\n${a.output()}`, () =>
+      a.output().includes(`session ${shortSessionId(x)} was taken over by`),
+    );
+    expect(a.output()).toContain(`(pid ${taker.pid})`);
+    expect(snapshot(xDir)).toEqual(beforeWake);
     kill(a, "SIGTERM");
     await a.proc.exited;
     expect(ownerPid(sb, x)).toBe(taker.pid);
+    expect(snapshot(xDir)).toEqual(beforeWake);
   }, 30_000);
 
   test("AC5: after SIGKILL the lease is reclaimed silently by a plain `-r <id>`", async () => {

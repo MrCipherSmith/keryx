@@ -8,7 +8,7 @@
 // Isolation: every test points `KERYX_DATA_DIR` at a fresh temp directory, so
 // nothing here reads or writes the developer's real sessions.
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -133,6 +133,31 @@ describe("keryx sessions list — LIVE (flow 271, AC10)", () => {
     expect(live.get(liveId)).toBe("live");
     expect(live.get(staleId)).toBe("stale");
     expect(live.get(freeId)).toBeNull();
+  });
+
+  test("an unreadable lease shows ? (null in --json) and does not fail the listing (review F6)", async () => {
+    const { liveId } = seedThree();
+    const brokenId = seedSession("unreadable lease");
+    // ENOTDIR: the lease path resolves through a regular file.
+    const blocker = path.join(projectDir, "not-a-dir");
+    writeFileSync(blocker, "");
+    symlinkSync(path.join(blocker, "active.lease"), sessionLeasePath(projectDir, brokenId));
+
+    await runSessions(["list"]);
+    const header = logged.find((line) => line.startsWith("ID")) as string;
+    const liveCol = header.indexOf("LIVE");
+    const modelCol = header.indexOf("MODEL");
+    const cell = (id: string): string =>
+      (logged.find((line) => line.startsWith(shortSessionId(id))) as string).slice(liveCol, modelCol).trim();
+    expect(cell(brokenId)).toBe("?");
+    expect(cell(liveId)).toBe("live");
+
+    logged = [];
+    await runSessions(["list", "--json"]);
+    const payload = JSON.parse(logged.join("\n")) as { sessions: { id: string; live: unknown }[] };
+    expect(payload.sessions.length).toBe(4);
+    expect(payload.sessions.find((s) => s.id === brokenId)?.live).toBeNull();
+    expect(process.exitCode).toBe(0);
   });
 
   test("help describes the LIVE column", async () => {

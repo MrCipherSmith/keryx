@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  rmdirSync,
   rmSync,
   statSync,
   utimesSync,
@@ -227,6 +228,14 @@ export interface LeaseOptions<T extends LeaseOwnerBase = LeaseOwnerBase> {
    * the handle any more. Never consulted for an unreadable `owner.json`.
    */
   reclaimIf?: (holder: T) => boolean;
+  /**
+   * TEST SEAM, never set in production. Called at the points where another
+   * process may interleave: `create` between the `mkdir` and the `owner.json`
+   * write, `refresh` and `release` right after the handle judged the lease its
+   * own and before it acts on that judgement. Tests use it to inject a rival's
+   * take-over deterministically instead of relying on timing.
+   */
+  raceHook?: (point: "create" | "refresh" | "release") => void;
 }
 
 export interface LeaseHandle<T extends LeaseOwnerBase = LeaseOwnerBase> {
@@ -240,6 +249,11 @@ export interface LeaseHandle<T extends LeaseOwnerBase = LeaseOwnerBase> {
    * handle's token on disk.
    */
   refresh(patch?: Partial<T>): boolean;
+  /**
+   * True while the lease directory on disk is the one this handle created
+   * (same inode) and still carries this handle's token. Read-only.
+   */
+  holds(): boolean;
   /** Remove the lease directory iff the token on disk is ours. Idempotent. */
   release(): void;
 }
@@ -298,6 +312,14 @@ export function inspectLeaseSync<T extends LeaseOwnerBase = LeaseOwnerBase>(
   if (opts.reclaimIf?.(holder) === true) {
     return { state: "gone", holder };
   }
+  // Known limit (clock skew): `heartbeatAt` is stamped by the HOLDER's clock
+  // and judged by OURS. On one host that is the same clock. Across hosts
+  // sharing a data dir, a holder whose clock runs ahead reads live for longer
+  // than staleMs after it died, and one whose clock runs more than staleMs
+  // behind reads as not live while it is still heartbeating — and, being on
+  // another host, as gone, so it is reclaimed silently. P0 does not correct
+  // for skew; a holder that loses its lease this way finds out on its next
+  // refresh (SessionLeaseHandle.onLost) and stops writing.
   if (now - Date.parse(holder.heartbeatAt) <= opts.staleMs) {
     return { state: "live", holder };
   }
@@ -342,8 +364,9 @@ function acquireOrReclaim<T extends LeaseOwnerBase>(
   const now = opts.now ?? Date.now;
   mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
   for (let attempt = 0; attempt < MAX_LEASE_ATTEMPTS; attempt += 1) {
-    if (tryCreateLease(lockPath, owner)) {
-      return { ok: true, handle: createLeaseHandle(lockPath, owner, now) };
+    const createdIno = tryCreateLease(lockPath, owner, opts.raceHook);
+    if (createdIno !== undefined) {
+      return { ok: true, handle: createLeaseHandle(lockPath, owner, createdIno, now, opts.raceHook) };
     }
     const seen = inspectLeaseSync(lockPath, opts);
     if (seen.state === "free") continue; // released between our mkdir and the look
@@ -361,71 +384,148 @@ function acquireOrReclaim<T extends LeaseOwnerBase>(
   };
 }
 
-/** mkdir + exclusive owner write. False when the directory already exists. */
-function tryCreateLease(lockPath: string, owner: LeaseOwnerBase): boolean {
+/**
+ * mkdir + exclusive owner write. Returns the new directory's inode, or
+ * undefined when the directory already exists (or, see below, was replaced
+ * before our record landed in it).
+ */
+function tryCreateLease(
+  lockPath: string,
+  owner: LeaseOwnerBase,
+  raceHook?: LeaseOptions["raceHook"],
+): number | undefined {
   try {
     mkdirSync(lockPath, { mode: 0o700 });
   } catch (error) {
-    if (isAlreadyExistsError(error)) return false;
+    if (isAlreadyExistsError(error)) return undefined;
     throw error;
   }
+  // Our directory, by identity. Everything below that removes something checks
+  // it first: between the mkdir and the write, a reclaimer's rename-back
+  // (`moveLeaseAside`) can land another holder's lease on this path, and a
+  // blind `rm -r lockPath` would then delete THEIR lease.
+  let createdIno: number;
+  try {
+    createdIno = statSync(lockPath).ino;
+  } catch (error) {
+    if (isNotFound(error)) return undefined; // already reclaimed from under us
+    throw error;
+  }
+  raceHook?.("create");
+  const ownerPath = path.join(lockPath, LEASE_OWNER_FILE);
   try {
     chmodSync(lockPath, 0o700); // mkdir's mode is filtered by the umask
-    writeFileSync(path.join(lockPath, LEASE_OWNER_FILE), JSON.stringify(owner), {
-      encoding: "utf8",
-      flag: "wx",
-      mode: 0o600,
-    });
+    writeFileSync(ownerPath, JSON.stringify(owner), { encoding: "utf8", flag: "wx", mode: 0o600 });
   } catch (error) {
-    rmSync(lockPath, { recursive: true, force: true });
+    const stillOurs = inodeOf(lockPath) === createdIno;
+    if (stillOurs) {
+      // Only a record we may have half-written is removed; `wx` failing with
+      // EEXIST means the file there is not ours, so it stays, and so does the
+      // (then non-empty) directory.
+      if (!isAlreadyExistsError(error)) rmSync(ownerPath, { force: true });
+      try {
+        rmdirSync(lockPath); // only when empty
+      } catch {
+        // Not empty: something that is not ours is in it; leave it.
+      }
+    }
+    // A lease that replaced our directory is another holder's: report the path
+    // as taken (the caller inspects it) instead of failing the acquire.
+    if (!stillOurs || isAlreadyExistsError(error)) return undefined;
     throw error;
   }
-  return true;
+  return createdIno;
+}
+
+/** The inode at `target`, or undefined when nothing (readable) is there. */
+function inodeOf(target: string): number | undefined {
+  try {
+    return statSync(target).ino;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
- * Remove a lease directory judged gone (or stale, on take-over), and only that
- * one. The directory is renamed aside first and its token re-read: when another
- * acquirer replaced it in between, the fresh lease is renamed back. The
- * remaining window (a third acquirer between the two renames) is the same one
- * `withFileLock`'s `removeStaleLock` accepts.
+ * Move the lease directory aside to a unique name, then either remove it
+ * (`removeIf` says the one moved is the one meant) or rename it back. The
+ * rename is atomic, so what is judged is exactly what is removed.
+ *
+ * When the rename-back fails, a newer lease has taken the path meanwhile. With
+ * `keepOnConflict` the moved directory is left where it is (its holder's data
+ * is kept; that holder's next refresh finds the path is not its lease and
+ * reports the lease lost); without it, the moved one is removed, as a
+ * reclaimer that judged it gone would have.
+ *
+ * Remaining window: a rename-back lands on an EMPTY directory that a third
+ * acquirer made between its `mkdir` and its `owner.json` write (POSIX rename
+ * replaces an empty directory). That acquirer's write then fails, and
+ * `tryCreateLease` sees the inode is no longer its own and leaves the lease.
  */
-function removeLeaseDirIfUnchanged(lockPath: string, expectedToken: string | undefined): void {
-  const aside = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
+function moveLeaseAside(
+  lockPath: string,
+  removeIf: (moved: LeaseOwnerBase | undefined) => boolean,
+  keepOnConflict: boolean,
+): void {
+  const aside = `${lockPath}.aside.${process.pid}.${randomUUID()}`;
   try {
     renameSync(lockPath, aside);
   } catch {
     return; // someone else already removed or reclaimed it
   }
-  const moved = readLeaseOwnerSync(aside);
-  if (moved !== undefined && moved.token !== expectedToken) {
+  if (!removeIf(readLeaseOwnerSync(aside))) {
     try {
       renameSync(aside, lockPath);
       return;
     } catch {
-      // A newer lease took the path. The one moved aside is lost to its holder,
-      // whose next refresh() fails and reports that it no longer holds it.
+      if (keepOnConflict) return;
     }
   }
   rmSync(aside, { recursive: true, force: true });
 }
 
-function createLeaseHandle<T extends LeaseOwnerBase>(lockPath: string, initial: T, now: () => number): LeaseHandle<T> {
+/**
+ * Remove a lease directory judged gone (or stale, on take-over), and only that
+ * one: when another acquirer replaced it after the judgement, the fresh lease
+ * is renamed back. A readable record with another token is someone else's.
+ */
+function removeLeaseDirIfUnchanged(lockPath: string, expectedToken: string | undefined): void {
+  moveLeaseAside(lockPath, (moved) => moved === undefined || moved.token === expectedToken, false);
+}
+
+function createLeaseHandle<T extends LeaseOwnerBase>(
+  lockPath: string,
+  initial: T,
+  createdIno: number,
+  now: () => number,
+  raceHook?: LeaseOptions["raceHook"],
+): LeaseHandle<T> {
   let current: T = { ...initial };
   let released = false;
   const ownerPath = path.join(lockPath, LEASE_OWNER_FILE);
-  const ownsIt = (): boolean => readLeaseOwnerSync(lockPath)?.token === initial.token;
+  // Ours means: the directory this handle created (inode) with our token in it.
+  const holds = (): boolean =>
+    inodeOf(lockPath) === createdIno && readLeaseOwnerSync(lockPath)?.token === initial.token;
 
   return {
     get owner(): T {
       return current;
     },
     refresh(patch?: Partial<T>): boolean {
-      if (released || !ownsIt()) return false;
+      if (released || !holds()) return false;
+      raceHook?.("refresh");
       const next: T = { ...current, ...patch, token: initial.token, heartbeatAt: new Date(now()).toISOString() };
       const tmp = path.join(lockPath, `.${LEASE_OWNER_FILE}.${randomUUID()}.tmp`);
       try {
         writeFileSync(tmp, JSON.stringify(next), { encoding: "utf8", flag: "wx", mode: 0o600 });
+        // Re-check immediately before the rename: a take-over since the check
+        // above must not have its record replaced by ours. The window left is
+        // the few instructions between this check and the rename; a
+        // directory lease without a kernel lock cannot close it entirely.
+        if (!holds()) {
+          rmSync(tmp, { force: true });
+          return false;
+        }
         renameSync(tmp, ownerPath);
       } catch {
         rmSync(tmp, { force: true });
@@ -440,12 +540,19 @@ function createLeaseHandle<T extends LeaseOwnerBase>(lockPath: string, initial: 
       }
       return true;
     },
+    holds,
     release(): void {
       if (released) return;
       released = true;
-      if (ownsIt()) {
-        rmSync(lockPath, { recursive: true, force: true });
-      }
+      // Cheap pre-check: never move a lease that is plainly someone else's (a
+      // lost lease is released on exit too), since moving it, even briefly,
+      // would make its holder's refresh fail.
+      if (!holds()) return;
+      raceHook?.("release");
+      // Then the authoritative, atomic check: move whatever is there aside,
+      // and remove it only if it is ours; otherwise put it back, and if that
+      // loses a race, keep the other holder's data where it is.
+      moveLeaseAside(lockPath, (moved) => moved?.token === initial.token, true);
     },
   };
 }

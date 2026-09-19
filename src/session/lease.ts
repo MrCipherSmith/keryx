@@ -22,6 +22,7 @@ import {
   inspectLeaseSync,
   type LeaseHandle,
   type LeaseOptions,
+  readLeaseOwnerSync,
   reclaimStaleLeaseSync,
 } from "../lib/fs";
 import { resolveProjectRoot, sessionDir } from "./paths";
@@ -63,8 +64,27 @@ export interface SessionLeaseHandle {
   readonly released: boolean;
   /** The unref'd heartbeat timer; undefined once released. Exposed for tests. */
   readonly heartbeatTimer: ReturnType<typeof setInterval> | undefined;
+  /**
+   * True once another owner took the lease (or its directory disappeared)
+   * while this handle still meant to hold it. A lost handle stops its
+   * heartbeat and never releases, since the lease on disk is not ours.
+   */
+  readonly lost: boolean;
+  /** The record found on disk when the loss was noticed; undefined if the directory was gone. */
+  readonly lostTo: SessionLeaseOwner | undefined;
   /** Refresh now, merging `patch`. False once released or lost. */
   refresh(patch?: Partial<Pick<SessionLeaseOwner, "name">>): boolean;
+  /**
+   * Check the disk now (not only at the next heartbeat) and return `lost`.
+   * Callers run it right before a persist, so a take-over since the last
+   * heartbeat is caught at the write. Released handles only report the flag.
+   */
+  checkLost(): boolean;
+  /**
+   * Call `cb` once when the lease is lost (at once when it already is).
+   * Returns an unsubscribe function.
+   */
+  onLost(cb: () => void): () => void;
   /** Same as `releaseSessionLease(this)`. */
   release(): void;
 }
@@ -86,29 +106,57 @@ export function processInstanceId(): string {
   return instanceId;
 }
 
+/** Smallest staleMs the test knob may set. */
+const MIN_ENV_STALE_MS = 250;
+/** Smallest heartbeatMs the test knob may set. */
+const MIN_ENV_HEARTBEAT_MS = 50;
+
+/** A whole number of milliseconds from an environment variable, if well-formed. */
+function envInt(name: string): number | undefined {
+  const raw = process.env[name];
+  return raw !== undefined && /^\d+$/.test(raw) ? Number(raw) : undefined;
+}
+
 /**
- * Positive integer from an environment variable, else `fallback`.
- *
  * TEST-ONLY knobs: `KERYX_SESSION_LEASE_STALE_MS` and
  * `KERYX_SESSION_LEASE_HEARTBEAT_MS` let the subprocess tests shorten D-09's
  * 15 s / 5 s so a stale holder can be produced without waiting. They are not
- * documented for users; an explicit option always wins over them.
+ * documented for users, and they are guarded because a tiny staleMs would let
+ * `--take-over` seize a live shell and silently reclaim remote holders:
+ *
+ * - honoured only in a test context: `NODE_ENV === "test"` (set by `bun test`)
+ *   or `KERYX_TEST_LEASE_TIMING === "1"` (set by the subprocess tests);
+ * - staleMs only when >= 250 ms; heartbeatMs only when >= 50 ms and at most
+ *   staleMs / 3, so the process's own lease cannot flap;
+ * - any other value is ignored and the default applies;
+ * - an explicit option always wins over them.
  */
-function envMs(name: string, fallback: number): number {
-  const raw = process.env[name];
-  if (raw === undefined || !/^\d+$/.test(raw)) return fallback;
-  const value = Number(raw);
-  return value > 0 ? value : fallback;
+function leaseTimingEnvEnabled(): boolean {
+  return process.env.NODE_ENV === "test" || process.env.KERYX_TEST_LEASE_TIMING === "1";
 }
 
-function resolveTiming(timing: SessionLeaseTiming = {}): Required<Pick<SessionLeaseTiming, "staleMs" | "heartbeatMs">> &
-  SessionLeaseTiming {
-  return {
-    ...timing,
-    staleMs: timing.staleMs ?? envMs("KERYX_SESSION_LEASE_STALE_MS", SESSION_LEASE_STALE_MS),
-    heartbeatMs: timing.heartbeatMs ?? envMs("KERYX_SESSION_LEASE_HEARTBEAT_MS", SESSION_LEASE_HEARTBEAT_MS),
-  };
+/**
+ * staleMs / heartbeatMs from the options, then the guarded test knobs, then
+ * the D-09 defaults. The default heartbeat never exceeds a third of staleMs.
+ * Exported for tests.
+ */
+export function resolveSessionLeaseTiming(
+  timing: SessionLeaseTiming = {},
+): Required<Pick<SessionLeaseTiming, "staleMs" | "heartbeatMs">> & SessionLeaseTiming {
+  const fromEnv = leaseTimingEnvEnabled();
+  const envStale = fromEnv ? envInt("KERYX_SESSION_LEASE_STALE_MS") : undefined;
+  const staleMs = timing.staleMs ?? (envStale !== undefined && envStale >= MIN_ENV_STALE_MS ? envStale : SESSION_LEASE_STALE_MS);
+  const maxHeartbeat = Math.floor(staleMs / 3);
+  const envHeartbeat = fromEnv ? envInt("KERYX_SESSION_LEASE_HEARTBEAT_MS") : undefined;
+  const heartbeatMs =
+    timing.heartbeatMs ??
+    (envHeartbeat !== undefined && envHeartbeat >= MIN_ENV_HEARTBEAT_MS && envHeartbeat <= maxHeartbeat
+      ? envHeartbeat
+      : Math.max(1, Math.min(SESSION_LEASE_HEARTBEAT_MS, maxHeartbeat)));
+  return { ...timing, staleMs, heartbeatMs };
 }
+
+const resolveTiming = resolveSessionLeaseTiming;
 
 function isMine(holder: Pick<SessionLeaseOwner, "instanceId" | "pid"> | undefined): boolean {
   return holder !== undefined && holder.instanceId === processInstanceId() && holder.pid === process.pid;
@@ -224,9 +272,33 @@ function wrapHandle(
   heartbeatMs: number,
 ): SessionLeaseHandle {
   let released = false;
+  let lost = false;
+  let lostTo: SessionLeaseOwner | undefined;
+  const lostListeners = new Set<() => void>();
   let timer: ReturnType<typeof setInterval> | undefined;
   const onExit = (): void => {
     handle.release();
+  };
+  const stopHeartbeat = (): void => {
+    if (timer !== undefined) clearInterval(timer);
+    timer = undefined;
+  };
+  /** Another owner has the lease: stop, forget the handle, tell the listeners once. */
+  const markLost = (): void => {
+    if (lost || released) return;
+    lost = true;
+    lostTo = readLeaseOwnerSync<SessionLeaseOwner>(lockPath);
+    stopHeartbeat();
+    if (heldByThisProcess.get(lockPath) === handle) heldByThisProcess.delete(lockPath);
+    const listeners = [...lostListeners];
+    lostListeners.clear();
+    for (const cb of listeners) {
+      try {
+        cb();
+      } catch {
+        // A listener's failure must not stop the others or the heartbeat path.
+      }
+    }
   };
 
   const handle: SessionLeaseHandle = {
@@ -241,27 +313,50 @@ function wrapHandle(
     get heartbeatTimer() {
       return timer;
     },
+    get lost() {
+      return lost;
+    },
+    get lostTo() {
+      return lostTo;
+    },
     refresh(patch) {
-      if (released) return false;
-      return inner.refresh(patch);
+      if (released || lost) return false;
+      if (inner.refresh(patch)) return true;
+      // A failed refresh is a loss only when the lease on disk is not ours any
+      // more; a transient write error (a full disk, say) is not.
+      if (!inner.holds()) markLost();
+      return false;
+    },
+    checkLost() {
+      if (!lost && !released && !inner.holds()) markLost();
+      return lost;
+    },
+    onLost(cb) {
+      if (lost) {
+        cb();
+        return () => {};
+      }
+      lostListeners.add(cb);
+      return () => {
+        lostListeners.delete(cb);
+      };
     },
     release() {
       if (released) return;
       released = true;
-      if (timer !== undefined) clearInterval(timer);
-      timer = undefined;
+      stopHeartbeat();
+      lostListeners.clear();
       process.off("exit", onExit);
       if (heldByThisProcess.get(lockPath) === handle) heldByThisProcess.delete(lockPath);
-      inner.release();
+      // A lost lease is someone else's now: leave it alone.
+      if (!lost) inner.release();
     },
   };
 
+  // A lost lease (someone took it over) stops refreshing and notifies; it
+  // never rewrites another holder's record (`inner.refresh` checks first).
   timer = setInterval(() => {
-    // A lost lease (someone took it over) stops refreshing; it never rewrites
-    // another holder's record because `inner.refresh` checks the token first.
-    if (!handle.refresh()) {
-      if (timer !== undefined) clearInterval(timer);
-    }
+    handle.refresh();
   }, heartbeatMs);
   timer.unref?.();
   process.on("exit", onExit);
@@ -293,10 +388,10 @@ function leaseSession(
   dataDir: string | undefined,
   timing: ReturnType<typeof resolveTiming>,
   takeOver: boolean,
-): SessionLeaseHandle {
+): LeasedHandle {
   const lockPath = sessionLeasePath(cwd, summary.id, dataDir);
   const existing = heldByThisProcess.get(lockPath);
-  if (existing !== undefined && !existing.released) return existing;
+  if (existing !== undefined && !existing.released && !existing.lost) return { handle: existing, minted: false };
 
   const owner = mintOwner(timing.now ?? Date.now);
   const opts: LeaseOptions<SessionLeaseOwner> = {
@@ -311,7 +406,63 @@ function leaseSession(
       takeOverRefused: takeOver && result.state === "live",
     });
   }
-  return wrapHandle(summary.id, lockPath, result.handle, timing.heartbeatMs);
+  return { handle: wrapHandle(summary.id, lockPath, result.handle, timing.heartbeatMs), minted: true };
+}
+
+/** A lease handle, and whether this call minted it (false: this process already held it). */
+interface LeasedHandle {
+  handle: SessionLeaseHandle;
+  minted: boolean;
+}
+
+/**
+ * The one line an operator sees when this shell's lease was taken (review F1):
+ * which session, by whom, that nothing more is saved, and the way out.
+ */
+export function describeLeaseLoss(handle: Pick<SessionLeaseHandle, "sessionId" | "lostTo">): string {
+  const short = shortSessionId(handle.sessionId);
+  const by = handle.lostTo !== undefined ? describeLeaseHolder(handle.lostTo) : "another instance";
+  return (
+    `session ${short} was taken over by ${by}; this shell no longer saves it. ` +
+    `Use /new, or restart with -r ${short} --fork to keep your turns.\n`
+  );
+}
+
+/** `/compact` after the lease was lost: compaction writes the session, so it is refused. */
+export const LOST_LEASE_COMPACT_REFUSAL =
+  "Not compacted: another shell took this session over, and this shell no longer saves it. Use /new.\n";
+
+/**
+ * The persist guard every interactive surface puts in front of its saves
+ * (review F1). `track` follows the lease the surface currently holds;
+ * `canPersist` is false once that lease is lost, checking the disk so a
+ * take-over since the last heartbeat is caught at the write; `notify` runs
+ * once per lost lease with the operator line.
+ */
+export interface LeaseLossWatch {
+  track(next: SessionLeaseHandle | undefined): void;
+  canPersist(): boolean;
+}
+
+export function watchLeaseLoss(notify: (message: string, lost: SessionLeaseHandle) => void): LeaseLossWatch {
+  let current: SessionLeaseHandle | undefined;
+  let unsubscribe: (() => void) | undefined;
+  return {
+    track(next) {
+      if (next === current) return;
+      unsubscribe?.();
+      unsubscribe = undefined;
+      current = next;
+      if (next !== undefined) {
+        unsubscribe = next.onLost(() => {
+          notify(describeLeaseLoss(next), next);
+        });
+      }
+    },
+    canPersist() {
+      return current === undefined || !current.checkLost();
+    },
+  };
 }
 
 /** Idempotent: stops the heartbeat, removes the exit hook, removes the lease if ours. */
@@ -362,14 +513,16 @@ export function openLeasedSession(opts: OpenLeasedSessionOptions): OpenLeasedSes
   const resumeId = rawResumeId !== undefined && rawResumeId.length > 0 ? rawResumeId : undefined;
 
   // The one `openSession` call. With `lease`, the lease was taken first (so a
-  // refused session is never read) and is released again if the open throws;
-  // without, the opened session is new and is leased right after.
-  const openWith = (target: string | undefined, lease?: SessionLeaseHandle): OpenLeasedSessionResult => {
+  // refused session is never read) and, if the open throws, released again —
+  // but only when THIS call minted it: a lease this process already held (a
+  // `/resume` of the current session) stays with its session. Without
+  // `lease`, the opened session is new and is leased right after.
+  const openWith = (target: string | undefined, lease?: LeasedHandle): OpenLeasedSessionResult => {
     try {
       const opened = openSession({ ...base, ...(target !== undefined ? { resumeId: target } : {}) });
-      return { ...opened, lease: lease ?? leaseSession(cwd, opened.handle.summary, dataDir, timing, false) };
+      return { ...opened, lease: lease?.handle ?? leaseSession(cwd, opened.handle.summary, dataDir, timing, false).handle };
     } catch (error) {
-      releaseSessionLease(lease);
+      if (lease?.minted === true) releaseSessionLease(lease.handle);
       throw error;
     }
   };
@@ -404,7 +557,7 @@ export function openLeasedSession(opts: OpenLeasedSessionOptions): OpenLeasedSes
       const pick = latestUnleasedSession(cwd, dataDir, timing);
       skipped ??= pick.skipped;
       if (pick.summary === undefined) break;
-      let lease: SessionLeaseHandle;
+      let lease: LeasedHandle;
       try {
         lease = leaseSession(cwd, pick.summary, dataDir, timing, false);
       } catch (error) {

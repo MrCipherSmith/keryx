@@ -473,3 +473,61 @@ describe("bare -r without a TTY (AC4, readline)", () => {
     expect(emitted).toEqual([]);
   });
 });
+
+describe("a shell that lost its lease stops saving (review F1)", () => {
+  /** A provider that answers every turn with `reply`, then ends the turn. */
+  function replyingDeps(session: ShellSessionOpts, reply: string): ShellDeps {
+    return {
+      ...shellDeps(session),
+      makeProvider: () =>
+        ({
+          stream: async function* () {
+            yield { kind: "text_delta", text: reply };
+            yield { kind: "model_end" };
+          },
+        }) as unknown as ProviderPort,
+    };
+  }
+
+  test("runShell: after a take-over no turn is persisted, and the operator is told once", async () => {
+    const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    const system: string[] = [];
+    let dir: string | undefined;
+    let afterFirstTurn: Record<string, string> | undefined;
+    let rival: SessionLeaseOwner | undefined;
+
+    await runShell(
+      {
+        lines: (async function* () {
+          yield "first turn";
+          const lease = leaseBox.current;
+          if (lease === undefined) throw new Error("expected a leased session");
+          dir = path.dirname(lease.lockPath);
+          afterFirstTurn = sessionFiles(dir);
+          // Another shell takes the session over between two turns (as
+          // `-r <id> --take-over` does after this one was SIGSTOPped).
+          rmSync(lease.lockPath, { recursive: true, force: true });
+          rival = holdElsewhere(lease.sessionId);
+          yield "second turn";
+          yield "third turn";
+          yield "/compact";
+        })(),
+        write: () => {},
+        onSystem: (text) => system.push(text),
+      },
+      replyingDeps({ cwd, leaseBox }, "answer"),
+    );
+
+    expect(afterFirstTurn?.["context.jsonl"]).toContain("first turn");
+    expect(sessionFiles(dir as string)).toEqual(afterFirstTurn as Record<string, string>);
+    const notices = system.filter((line) => line.includes("was taken over by"));
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toContain(`(pid ${process.pid})`);
+    expect(notices[0]).toContain("--fork to keep your turns");
+    expect(system.join("")).toContain("Not compacted");
+    // The shell exits without releasing the lease it lost: the rival keeps it.
+    expect(readFileSync(path.join(dir as string, "active.lease", "owner.json"), "utf8")).toContain(
+      (rival as SessionLeaseOwner).token,
+    );
+  });
+});

@@ -188,7 +188,7 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
-import { openLeasedSession, SessionLeasedError } from "../session/lease";
+import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError } from "../session/lease";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
   createTuiLeaseHolder,
@@ -4151,6 +4151,9 @@ export async function launchTuiAgentShell(opts: {
      * operator sees WHY the transcript just shrank.
      */
     const onContextCompaction = (r: { removed: number; context: NormalizedMessage[]; estimate: number }): void => {
+      if (!sessionLease.canPersist()) {
+        return; // review F1: another shell has this session now
+      }
       const persisted = persistCompacted(liveSession, r.context, archive, {
         provider: currentSel.provider,
         model: currentSel.model,
@@ -4399,7 +4402,22 @@ export async function launchTuiAgentShell(opts: {
       chrome.setTitle(`keryx · ${title} · ${sid}${cx} · ${label}`);
     };
 
+    // Review F1: the one guard in front of every session write in this shell
+    // (`saveSession`, both compactions). Once another shell takes the lease,
+    // nothing more is written here, the slate ref is dropped (so tools record
+    // no slate touches into the session), and the operator is told once.
+    sessionLease.onLost((message) => {
+      slateSession = undefined;
+      if (sessionPersistTimer !== undefined) {
+        clearTimeout(sessionPersistTimer);
+        sessionPersistTimer = undefined;
+      }
+      io.onSystem?.(message);
+    });
     const saveSession = (): void => {
+      if (!sessionLease.canPersist()) {
+        return;
+      }
       liveSession = persistHistory(liveSession, history, {
         archive,
         provider: currentSel.provider,
@@ -5665,6 +5683,10 @@ export async function launchTuiAgentShell(opts: {
           return;
         }
         if (command.name === "/compact") {
+          if (!sessionLease.canPersist()) {
+            io.onSystem?.(LOST_LEASE_COMPACT_REFUSAL);
+            return;
+          }
           const focus = line.trim().split(/\s+/).slice(1).join(" ").trim();
           const packed = compactSession(liveSession, history, archive, {
             keepLastUserTurns: 3,

@@ -140,7 +140,9 @@ import {
   releaseSessionLease,
   SessionLeasedError,
   type SessionLeaseHandle,
+  LOST_LEASE_COMPACT_REFUSAL,
   switchLeasedSession,
+  watchLeaseLoss,
 } from "../session/lease";
 import {
   describeLeasedSession,
@@ -462,8 +464,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   // The session lease this loop holds (specification §6). Mirrored into the
   // caller's `leaseBox` so a signal handler outside the loop can release it.
   let lease: SessionLeaseHandle | undefined;
+  // Review F1: once another shell takes this session's lease, this loop stops
+  // saving it (every persist below goes through `leaseWatch.canPersist()`) and
+  // says so once.
+  const leaseWatch = watchLeaseLoss((message) => system(message));
   const holdLease = (next: SessionLeaseHandle | undefined): void => {
     lease = next;
+    leaseWatch.track(next);
     if (deps.session?.leaseBox !== undefined) deps.session.leaseBox.current = next;
   };
   const openLeased = deps.session?.openLeased ?? openLeasedSession;
@@ -508,7 +515,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   };
 
   const save = (): void => {
-    if (live === undefined) {
+    if (live === undefined || !leaseWatch.canPersist()) {
       return;
     }
     try {
@@ -644,6 +651,10 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       if (command === "/compact") {
         if (live === undefined) {
           system("No persistent session in this mode.\n");
+          continue;
+        }
+        if (!leaseWatch.canPersist()) {
+          system(LOST_LEASE_COMPACT_REFUSAL);
           continue;
         }
         const focus = argument.trim();
@@ -1676,7 +1687,7 @@ async function runAgentRepl(
     // `live === undefined` (sessions off) just skips persistence; `history`
     // was already spliced in place by the guard regardless.
     onContextCompaction: (r) => {
-      if (live === undefined) {
+      if (live === undefined || !leaseWatch.canPersist()) {
         return;
       }
       const persisted = persistCompacted(live, r.context, archive, {
@@ -1691,8 +1702,17 @@ async function runAgentRepl(
   // The session lease this REPL holds (specification §6), mirrored into the
   // caller's `leaseBox` for the SIGINT/SIGTERM handler.
   let lease: SessionLeaseHandle | undefined;
+  // Review F1: once another shell takes this session's lease, nothing more is
+  // written to it: `save`, both compaction paths check `leaseWatch.canPersist()`,
+  // and the slate ref is dropped so no tool or turn records into it.
+  const leaseWatch = watchLeaseLoss((message) => {
+    slateSession = undefined;
+    slateSessionBox.current = undefined;
+    agentIo.onSystem?.(message);
+  });
   const holdLease = (next: SessionLeaseHandle | undefined): void => {
     lease = next;
+    leaseWatch.track(next);
     if (sessionOpts?.leaseBox !== undefined) sessionOpts.leaseBox.current = next;
   };
   const openLeased = sessionOpts?.openLeased ?? openLeasedSession;
@@ -1764,7 +1784,7 @@ async function runAgentRepl(
   slateSessionBox.current = slateSession;
 
   const save = (): void => {
-    if (live === undefined) {
+    if (live === undefined || !leaseWatch.canPersist()) {
       return;
     }
     try {
@@ -1937,6 +1957,8 @@ async function runAgentRepl(
       } else if (command === "/compact") {
         if (live === undefined) {
           agentIo.onSystem?.("No persistent session.\n");
+        } else if (!leaseWatch.canPersist()) {
+          agentIo.onSystem?.(LOST_LEASE_COMPACT_REFUSAL);
         } else {
           const packed = compactSession(live, history, archive, {
             keepLastUserTurns: 3,

@@ -17,6 +17,7 @@ import {
   type SessionLeaseState,
   sessionLeaseState,
   switchLeasedSession,
+  watchLeaseLoss,
 } from "../session/lease";
 import { describeLeasedSession, type LeasedChoice, leasedChoiceRows } from "../session/lease-choice";
 import type { ChoiceOption } from "./composer-choice";
@@ -152,16 +153,31 @@ export async function resolveLeasedStartup<R>(
  * every in-process switch goes through `switchTo` (target first, then the old
  * one is released; a refusal leaves the current lease held), and every exit
  * path calls `release`, which is idempotent.
+ *
+ * Review F1: the holder also watches the lease it holds. `canPersist` is the
+ * guard every session write in the shell goes through; it turns false once
+ * another shell took the lease over, and the listener set with `onLost` is
+ * told once, with the operator line.
  */
 export interface TuiLeaseHolder {
   readonly current: SessionLeaseHandle | undefined;
   hold(next: SessionLeaseHandle | undefined): void;
   switchTo<R extends { lease: SessionLeaseHandle }>(openTarget: () => R): R;
   release(): void;
+  /** False once the held lease is lost: skip the write. Checks the disk. */
+  canPersist(): boolean;
+  /** The one listener told (once per lost lease) that this shell stopped saving. */
+  onLost(listener: ((message: string) => void) | undefined): void;
 }
 
 export function createTuiLeaseHolder(): TuiLeaseHolder {
   let current: SessionLeaseHandle | undefined;
+  let lossListener: ((message: string) => void) | undefined;
+  const watch = watchLeaseLoss((message) => lossListener?.(message));
+  const set = (next: SessionLeaseHandle | undefined): void => {
+    current = next;
+    watch.track(next);
+  };
   return {
     get current() {
       return current;
@@ -170,18 +186,24 @@ export function createTuiLeaseHolder(): TuiLeaseHolder {
       if (current !== undefined && current !== next) {
         releaseSessionLease(current);
       }
-      current = next;
+      set(next);
     },
     switchTo(openTarget) {
       // Throws, with `current` untouched, when the target is refused.
       const next = switchLeasedSession(current, openTarget);
-      current = next.lease;
+      set(next.lease);
       return next;
     },
     release() {
       const held = current;
-      current = undefined;
+      set(undefined);
       releaseSessionLease(held);
+    },
+    canPersist() {
+      return watch.canPersist();
+    },
+    onLost(listener) {
+      lossListener = listener;
     },
   };
 }

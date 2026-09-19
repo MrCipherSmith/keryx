@@ -6,10 +6,12 @@ import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { readLeaseOwnerSync } from "../lib/fs";
 import {
+  describeLeaseLoss,
   latestUnleasedSession,
   openLeasedSession,
   processInstanceId,
   releaseSessionLease,
+  resolveSessionLeaseTiming,
   SESSION_LEASE_HEARTBEAT_MS,
   SESSION_LEASE_STALE_MS,
   SessionLeasedError,
@@ -17,8 +19,9 @@ import {
   sessionLeasePath,
   sessionLeaseState,
   switchLeasedSession,
+  watchLeaseLoss,
 } from "./lease";
-import { createSession, type SessionHandle } from "./store";
+import { createSession, type SessionHandle, shortSessionId } from "./store";
 
 const SCHEMA_PATH = path.join(
   import.meta.dir,
@@ -342,5 +345,175 @@ describe("switchLeasedSession", () => {
     );
     expect(next.lease).toBe(current.lease);
     expect(current.lease.released).toBe(false);
+  });
+});
+
+/** Another instance takes the lease: the directory is replaced, as a take-over does. */
+function takeOverOnDisk(sessionId: string): SessionLeaseOwner {
+  rmSync(sessionLeasePath(cwd, sessionId, dataDir), { recursive: true, force: true });
+  return plantHolder(sessionId);
+}
+
+describe("a lost lease (review F1)", () => {
+  test("the heartbeat notices a take-over: lost flips, onLost fires once, the heartbeat stops", () => {
+    const result = track(openLeasedSession({ cwd, dataDir }));
+    const fired: string[] = [];
+    result.lease.onLost(() => fired.push("a"));
+    expect(result.lease.lost).toBe(false);
+
+    const rival = takeOverOnDisk(result.handle.summary.id);
+    // What the heartbeat timer runs, invoked directly instead of waiting for it.
+    expect(result.lease.refresh()).toBe(false);
+    expect(result.lease.refresh()).toBe(false);
+
+    expect(result.lease.lost).toBe(true);
+    expect(result.lease.lostTo?.token).toBe(rival.token);
+    expect(fired).toEqual(["a"]);
+    expect(result.lease.heartbeatTimer).toBeUndefined();
+    // A late subscriber hears about it at once, and only once.
+    result.lease.onLost(() => fired.push("late"));
+    expect(fired).toEqual(["a", "late"]);
+  });
+
+  test("checkLost catches a take-over at the write, before any heartbeat", () => {
+    const result = track(openLeasedSession({ cwd, dataDir }));
+    expect(result.lease.checkLost()).toBe(false);
+    takeOverOnDisk(result.handle.summary.id);
+    expect(result.lease.checkLost()).toBe(true);
+    expect(result.lease.heartbeatTimer).toBeUndefined();
+  });
+
+  test("a vanished lease directory is a loss too", () => {
+    const result = track(openLeasedSession({ cwd, dataDir }));
+    rmSync(result.lease.lockPath, { recursive: true, force: true });
+    expect(result.lease.checkLost()).toBe(true);
+    expect(result.lease.lostTo).toBeUndefined();
+    expect(describeLeaseLoss(result.lease)).toContain("taken over by another instance");
+  });
+
+  test("a lost lease is not released: the new holder's lease stays on disk", () => {
+    const result = openLeasedSession({ cwd, dataDir });
+    const rival = takeOverOnDisk(result.handle.summary.id);
+    expect(result.lease.checkLost()).toBe(true);
+    result.lease.release();
+    expect(readLeaseOwnerSync(sessionLeasePath(cwd, result.handle.summary.id, dataDir))?.token).toBe(rival.token);
+  });
+
+  test("a lost handle is not reused: re-opening the session is refused against the new holder", () => {
+    const result = track(openLeasedSession({ cwd, dataDir }));
+    takeOverOnDisk(result.handle.summary.id);
+    expect(result.lease.checkLost()).toBe(true);
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: result.handle.summary.id })).toThrow(SessionLeasedError);
+  });
+
+  test("the operator line names the session, the holder, and the way out", () => {
+    const result = track(openLeasedSession({ cwd, dataDir }));
+    const rival = takeOverOnDisk(result.handle.summary.id);
+    result.lease.checkLost();
+    const short = shortSessionId(result.handle.summary.id);
+    const line = describeLeaseLoss(result.lease);
+    expect(line).toContain(`session ${short} was taken over by instance ${rival.instanceId.slice(0, 8)} (pid 424242)`);
+    expect(line).toContain("this shell no longer saves it");
+    expect(line).toContain(`Use /new, or restart with -r ${short} --fork to keep your turns.`);
+  });
+
+  test("watchLeaseLoss: canPersist turns false, notify fires once, and a new lease is watched afresh", () => {
+    const first = track(openLeasedSession({ cwd, dataDir }));
+    const notes: string[] = [];
+    const watch = watchLeaseLoss((message) => notes.push(message));
+    watch.track(first.lease);
+    expect(watch.canPersist()).toBe(true);
+
+    takeOverOnDisk(first.handle.summary.id);
+    expect(watch.canPersist()).toBe(false);
+    expect(watch.canPersist()).toBe(false);
+    expect(notes.length).toBe(1);
+
+    const second = track(openLeasedSession({ cwd, dataDir }));
+    watch.track(second.lease);
+    expect(watch.canPersist()).toBe(true);
+    watch.track(undefined);
+    expect(watch.canPersist()).toBe(true);
+    expect(notes.length).toBe(1);
+  });
+});
+
+describe("openLeasedSession error path (review F4)", () => {
+  test("a failed re-open of the session this process holds keeps its lease", () => {
+    const current = track(openLeasedSession({ cwd, dataDir }));
+    const id = current.handle.summary.id;
+    // An unreadable transcript: a directory where context.jsonl should be.
+    rmSync(path.join(current.handle.dir, "context.jsonl"), { force: true });
+    mkdirSync(path.join(current.handle.dir, "context.jsonl"));
+
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: id })).toThrow(/could not be read/);
+    expect(current.lease.released).toBe(false);
+    expect(sessionLeaseState(cwd, id, dataDir).state).toBe("mine");
+  });
+
+  test("a failed open of another session releases the lease that call took", () => {
+    const target = makeSession("unreadable");
+    rmSync(path.join(target.dir, "context.jsonl"), { force: true });
+    mkdirSync(path.join(target.dir, "context.jsonl"));
+    expect(() => openLeasedSession({ cwd, dataDir, resumeId: target.summary.id })).toThrow(/could not be read/);
+    expect(sessionLeaseState(cwd, target.summary.id, dataDir).state).toBe("free");
+  });
+});
+
+describe("test-only timing knobs (review F5)", () => {
+  const KEYS = ["NODE_ENV", "KERYX_TEST_LEASE_TIMING", "KERYX_SESSION_LEASE_STALE_MS", "KERYX_SESSION_LEASE_HEARTBEAT_MS"];
+  let saved: Record<string, string | undefined>;
+  beforeEach(() => {
+    saved = Object.fromEntries(KEYS.map((key) => [key, process.env[key]]));
+  });
+  afterEach(() => {
+    for (const key of KEYS) {
+      if (saved[key] === undefined) delete process.env[key];
+      else process.env[key] = saved[key];
+    }
+  });
+  function setEnv(values: Record<string, string | undefined>): void {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+
+  test("honoured in a test context within bounds", () => {
+    setEnv({ NODE_ENV: "test", KERYX_SESSION_LEASE_STALE_MS: "600", KERYX_SESSION_LEASE_HEARTBEAT_MS: "150" });
+    const timing = resolveSessionLeaseTiming();
+    expect(timing.staleMs).toBe(600);
+    expect(timing.heartbeatMs).toBe(150);
+  });
+
+  test("a staleMs below 250 is ignored", () => {
+    setEnv({ NODE_ENV: "test", KERYX_SESSION_LEASE_STALE_MS: "1", KERYX_SESSION_LEASE_HEARTBEAT_MS: undefined });
+    expect(resolveSessionLeaseTiming().staleMs).toBe(SESSION_LEASE_STALE_MS);
+    expect(resolveSessionLeaseTiming().heartbeatMs).toBe(SESSION_LEASE_HEARTBEAT_MS);
+  });
+
+  test("a heartbeat above staleMs / 3 or below 50 is ignored, and the default never exceeds staleMs / 3", () => {
+    setEnv({ NODE_ENV: "test", KERYX_SESSION_LEASE_STALE_MS: "600", KERYX_SESSION_LEASE_HEARTBEAT_MS: "5000" });
+    expect(resolveSessionLeaseTiming().heartbeatMs).toBe(200);
+    setEnv({ KERYX_SESSION_LEASE_HEARTBEAT_MS: "10" });
+    expect(resolveSessionLeaseTiming().heartbeatMs).toBe(200);
+  });
+
+  test("ignored outside a test context; KERYX_TEST_LEASE_TIMING=1 opts in", () => {
+    setEnv({
+      NODE_ENV: "production",
+      KERYX_TEST_LEASE_TIMING: undefined,
+      KERYX_SESSION_LEASE_STALE_MS: "600",
+      KERYX_SESSION_LEASE_HEARTBEAT_MS: "150",
+    });
+    expect(resolveSessionLeaseTiming().staleMs).toBe(SESSION_LEASE_STALE_MS);
+    expect(resolveSessionLeaseTiming().heartbeatMs).toBe(SESSION_LEASE_HEARTBEAT_MS);
+    setEnv({ KERYX_TEST_LEASE_TIMING: "1" });
+    expect(resolveSessionLeaseTiming().staleMs).toBe(600);
+  });
+
+  test("explicit options still win", () => {
+    setEnv({ NODE_ENV: "test", KERYX_SESSION_LEASE_STALE_MS: "600", KERYX_SESSION_LEASE_HEARTBEAT_MS: "150" });
+    expect(resolveSessionLeaseTiming({ staleMs: 30, heartbeatMs: 7 })).toMatchObject({ staleMs: 30, heartbeatMs: 7 });
   });
 });

@@ -24,12 +24,14 @@ export async function sessionsCommand(args: string[]): Promise<void> {
 
   if (sub === "list") {
     const asJson = args.includes("--json");
-    const rows = listSessions(cwd).map((s) => ({ ...s, live: leaseColumn(cwd, s.id) }));
+    const listed = listSessions(cwd).map((s) => ({ summary: s, lease: leaseColumn(cwd, s.id) }));
     if (asJson) {
+      // An unreadable lease is `null` in JSON (unknown), `?` in the table.
+      const rows = listed.map(({ summary, lease }) => ({ ...summary, live: lease === "?" ? null : lease }));
       console.log(JSON.stringify({ schemaVersion: 1, project: resolveProjectRoot(cwd), sessions: rows }, null, 2));
       return;
     }
-    if (rows.length === 0) {
+    if (listed.length === 0) {
       console.log(`No sessions for project ${resolveProjectRoot(cwd)}`);
       console.log(`(store: ${projectSessionsDir(cwd)})`);
       return;
@@ -40,7 +42,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
     console.log(
       pad("ID", 10) + pad("UPDATED", 22) + pad("MSGS", 6) + pad("LIVE", 7) + pad("MODEL", 24) + "TITLE",
     );
-    for (const s of rows) {
+    for (const { summary: s, lease } of listed) {
       const model =
         s.provider !== undefined && s.model !== undefined
           ? `${s.provider}/${s.model}`
@@ -49,7 +51,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
         pad(shortSessionId(s.id), 10) +
           pad(s.updatedAt.slice(0, 19).replace("T", " "), 22) +
           pad(String(s.messageCount), 6) +
-          pad(s.live ?? "", 7) +
+          pad(lease ?? "", 7) +
           pad(clip(model, 22), 24) +
           // A fork is marked in the listing rather than only in `--json`: the
           // ancestry is the whole point of the verb, and a row that looks
@@ -163,10 +165,17 @@ export async function sessionsCommand(args: string[]): Promise<void> {
 /**
  * The LIVE column (specification §6.1): `live` when a shell holds the session —
  * this process included (`mine`) — `stale` when its holder stopped
- * heartbeating, null when nobody holds it. A gone holder reads as free.
+ * heartbeating, null when nobody holds it. A gone holder reads as free. `?`
+ * when the lease cannot be read (EACCES, ENOTDIR, ...): one bad lease must not
+ * fail the whole listing (review F6).
  */
-function leaseColumn(cwd: string, sessionId: string): "live" | "stale" | null {
-  const { state } = sessionLeaseState(cwd, sessionId);
+function leaseColumn(cwd: string, sessionId: string): "live" | "stale" | "?" | null {
+  let state: ReturnType<typeof sessionLeaseState>["state"];
+  try {
+    state = sessionLeaseState(cwd, sessionId).state;
+  } catch {
+    return "?";
+  }
   if (state === "live" || state === "mine") return "live";
   if (state === "stale") return "stale";
   return null;

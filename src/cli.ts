@@ -27,7 +27,7 @@ import { serveMcpCommand } from "./commands/serve-mcp";
 import { integrateCommand } from "./commands/integrate";
 import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
-import { shellCommand } from "./commands/shell";
+import { ShellFlagError, shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
@@ -316,11 +316,20 @@ Commands:
 `);
 }
 
+/**
+ * The exit code for an error that escaped `main`: 1, except a shell usage
+ * error (`ShellFlagError`, e.g. `keryx shell --fork` without `-r <id>`), which
+ * carries its own. Only that class is trusted: any other error that happens to
+ * carry an `exitCode` (a Bun ShellError, an execa error) is a child process's
+ * code, not keryx's (review F9).
+ */
+export function exitCodeForError(error: unknown): number {
+  return error instanceof ShellFlagError ? error.exitCode : 1;
+}
+
 if (import.meta.main) {
   main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
-    // A usage error (e.g. `keryx shell --fork` without `-r <id>`) carries its own code.
-    const code = (error as { exitCode?: unknown } | null)?.exitCode;
-    process.exitCode = typeof code === "number" && Number.isInteger(code) && code > 0 ? code : 1;
+    process.exitCode = exitCodeForError(error);
   });
 }

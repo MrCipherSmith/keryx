@@ -470,3 +470,30 @@ describe("AC7 (TUI) — the lease is released on every exit path", () => {
     expect(source).not.toMatch(/[^.\w]createSession\(/);
   });
 });
+
+describe("the TUI lease holder after a take-over (review F1)", () => {
+  test("canPersist turns false and the listener hears it once; /new's lease is watched afresh", () => {
+    const holder = createTuiLeaseHolder();
+    const notes: string[] = [];
+    holder.onLost((message) => notes.push(message));
+    const first = holder.switchTo(() => openLeasedSession({ cwd, dataDir }));
+    expect(holder.canPersist()).toBe(true);
+
+    // Another shell takes the session over: the lease directory is replaced.
+    rmSync(first.lease.lockPath, { recursive: true, force: true });
+    plantHolder(first.handle.summary.id);
+
+    expect(holder.canPersist()).toBe(false);
+    expect(holder.canPersist()).toBe(false);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("this shell no longer saves it");
+
+    // Leaving the lost session for a new one: the lost lease is not released
+    // (it is not ours), and the new one persists.
+    const second = holder.switchTo(() => openLeasedSession({ cwd, dataDir }));
+    leases.push(second.lease);
+    expect(holder.canPersist()).toBe(true);
+    expect(existsSync(first.lease.lockPath)).toBe(true);
+    expect(notes).toHaveLength(1);
+  });
+});
