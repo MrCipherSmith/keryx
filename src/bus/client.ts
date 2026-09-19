@@ -299,15 +299,14 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     }
   };
   // Set once the join completes; `leave()` may run before then (see below).
-  let heartbeatTimer: unknown;
-  let pollTimer: unknown;
+  const liveTimers: { heartbeat?: unknown; poll?: unknown } = {};
 
   // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
   const leave = (): void => {
     if (left) return;
     left = true;
-    if (heartbeatTimer !== undefined) timers.clearInterval(heartbeatTimer);
-    if (pollTimer !== undefined) timers.clearInterval(pollTimer);
+    if (liveTimers.heartbeat !== undefined) timers.clearInterval(liveTimers.heartbeat);
+    if (liveTimers.poll !== undefined) timers.clearInterval(liveTimers.poll);
     process.off("exit", onExit);
     removePresenceSync();
   };
@@ -423,8 +422,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       }
     })();
   };
-  heartbeatTimer = timers.setInterval(heartbeatTick, heartbeatMs);
-  unref(heartbeatTimer);
+  liveTimers.heartbeat = timers.setInterval(heartbeatTick, heartbeatMs);
+  unref(liveTimers.heartbeat);
 
   // ---- poll: read new events, render the addressed ones, refresh peers. ----
   const doPoll = async (): Promise<BusEvent[]> => {
@@ -475,8 +474,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         pollInFlight = false;
       });
   };
-  pollTimer = timers.setInterval(pollTick, pollMs);
-  unref(pollTimer);
+  liveTimers.poll = timers.setInterval(pollTick, pollMs);
+  unref(liveTimers.poll);
 
   const client: BusClient = {
     instanceId,
