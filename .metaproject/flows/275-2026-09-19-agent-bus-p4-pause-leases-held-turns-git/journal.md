@@ -24,3 +24,6 @@
 - 2026-09-19T23:08:08.206Z - task-added: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
 - 2026-09-19T23:08:08.292Z - task-attempt: T12: started (attempt 1) — 275-T12 merge main #618 (sonnet)
 - 2026-09-19T23:13:32.529Z - task-done: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
+- 2026-09-19T23:14:09.062Z - task-attempt: T9: started (attempt 1) — 275-T9 process tests (sonnet)
+- 2026-09-19T23:14:09.149Z - task-attempt: T10: started (attempt 1) — 275-T10 docs + backlog entry (haiku)
+- 2026-09-19T23:18:30.004Z - task-done: T10: Docs: P4 status and pause docs (haiku)
