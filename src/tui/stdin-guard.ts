@@ -43,9 +43,15 @@ export function stdinIsDead(stdin: StdinLike): boolean {
  * recovery is a new stream. The path is the one fd 0 points at (so a shell under
  * herdr/tmux reopens its own pane), falling back to `/dev/tty`.
  *
- * The EOF itself comes from termios: with VMIN=0 a raw-mode read that finds no
- * data returns 0 bytes, which a stream can only read as end-of-file. Setting
- * `stty min 0` on the shell's pty from outside reproduces the freeze exactly.
+ * The EOF is not the kernel's. Under strace (debug run 2026-09-19T16-16, Bun
+ * 1.3.11) the last tty read returned 2 bytes, the next one EAGAIN, and the
+ * stream emitted `end` anyway — no read ever returned 0 and nothing changed
+ * termios. The runtime ends a tty stdin on a would-block read, intermittently,
+ * while the event loop is busy (it hit as subagents started). Nothing on
+ * keryx's side causes it, so it is recovered from rather than prevented. The
+ * reopened descriptor is blocking, which Bun reads on a thread instead of the
+ * nonblocking path that misfires. `stty min 0` on the pane produces the same
+ * symptom through the kernel and is a convenient way to reproduce it.
  */
 export function openTerminalInput(): (StdinLike & { fd?: number }) | undefined {
   let target = "/dev/tty";
@@ -64,8 +70,8 @@ export function openTerminalInput(): (StdinLike & { fd?: number }) | undefined {
     const stream = new tty.ReadStream(fd);
     // Off, then on: a plain setRawMode(true) on a fresh stream leaves termios
     // untouched when the runtime already believes the tty is raw, so a VMIN of 0
-    // someone else set survives and the new stream EOFs at once. Toggling
-    // re-applies raw mode with VMIN=1 (verified against Bun 1.3).
+    // left on the tty would survive and the new stream would EOF at once.
+    // Toggling re-applies raw mode with VMIN=1 (verified against Bun 1.3).
     stream.setRawMode(false);
     stream.setRawMode(true);
     debugEvent("stdin.reopened", { path: target, fd });
