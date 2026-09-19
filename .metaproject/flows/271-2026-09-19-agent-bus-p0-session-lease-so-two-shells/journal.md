@@ -146,3 +146,4 @@
 - 2026-09-19T15:15:37.302Z - task-done: T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)
 - 2026-09-19T15:17:11.039Z - task-added: T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent
 - 2026-09-19T15:17:11.135Z - task-attempt: T18: started (attempt 1) — 271-T18 merge main #608
+- 2026-09-19T15:19:25.404Z - task-done: T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent
