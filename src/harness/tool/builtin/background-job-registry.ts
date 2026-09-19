@@ -32,6 +32,11 @@ import { resolveShellEnv, resolveShellSpawn } from "../../process/shell-spawn";
 export interface BackgroundProcessHandle {
   pid: number;
   onOutput(cb: (chunk: string, stream: "stdout" | "stderr") => void): void;
+  /**
+   * Fires once the process has exited AND the output it wrote before exiting
+   * has been delivered through `onOutput` — the registry settles the task
+   * here, so a read right after `waitForExit` must see the whole transcript.
+   */
   onExit(cb: (info: { exitCode: number }) => void): void;
   kill(signal: "SIGTERM" | "SIGKILL"): void;
 }
@@ -460,9 +465,6 @@ function realSpawner(): BackgroundSpawner {
       detached: true,
     });
 
-    let dataCb: ((chunk: string, stream: "stdout" | "stderr") => void) | undefined;
-    let exitCb: ((info: { exitCode: number }) => void) | undefined;
-
     let netClosed = false;
     const closeNetOnce = async (): Promise<void> => {
       if (netClosed) return;
@@ -470,47 +472,7 @@ function realSpawner(): BackgroundSpawner {
       await netClose();
     };
 
-    // F-017: one decoder PER STREAM. A single shared decoder across both
-    // stdout/stderr pump loops retains streaming multi-byte state per call —
-    // interleaved stdout/stderr chunks can then corrupt multi-byte UTF-8
-    // (mirrors `shell-exec-tool.ts`'s own `readInto`, which already gets this
-    // right with one decoder per `readInto` call).
-    const outDecoder = new TextDecoder();
-    const errDecoder = new TextDecoder();
-
-    const pump = async (
-      stream: ReadableStream<Uint8Array> | undefined,
-      kind: "stdout" | "stderr",
-      decoder: TextDecoder,
-    ): Promise<void> => {
-      if (stream === undefined) return;
-      const reader = stream.getReader();
-      try {
-        for (;;) {
-          const chunk = await reader.read();
-          if (chunk.done) break;
-          if (chunk.value !== undefined) dataCb?.(decoder.decode(chunk.value, { stream: true }), kind);
-        }
-      } catch {
-        // pipe torn down by a kill — nothing further to read
-      } finally {
-        reader.releaseLock();
-      }
-    };
-    void Promise.all([pump(proc.stdout, "stdout", outDecoder), pump(proc.stderr, "stderr", errDecoder)]);
-    void proc.exited.then(async (exitCode) => {
-      exitCb?.({ exitCode });
-      await closeNetOnce();
-    });
-
-    return {
-      pid: proc.pid,
-      onOutput: (cb) => {
-        dataCb = cb;
-      },
-      onExit: (cb) => {
-        exitCb = cb;
-      },
+    return superviseSpawnedProcess(proc, {
       kill: (signal) => {
         try {
           // Negative PID: signal the whole process GROUP, not just this PID.
@@ -519,7 +481,123 @@ function realSpawner(): BackgroundSpawner {
           // already gone
         }
       },
-    };
+      afterExit: closeNetOnce,
+    });
+  };
+}
+
+/**
+ * How long the exit report waits for stdout/stderr to reach end-of-stream
+ * after the process itself has exited.
+ *
+ * Process exit and pipe EOF are separate events with no ordering between them:
+ * `proc.exited` can settle while the last chunk the process wrote is still
+ * sitting in the pipe, unread (seen on Linux CI as `echo FINISHED` reporting
+ * `completed` with an empty transcript). So the exit is held until both pumps
+ * have drained. The wait has to be bounded, because a grandchild the command
+ * backgrounded (`sh -c 'server &'`) inherits the write end and can keep the
+ * pipe open indefinitely. The shell's own exit still settles the task; what
+ * that grandchild writes later is appended as ordinary output.
+ */
+export const EXIT_OUTPUT_DRAIN_MS = 2_000;
+
+/** The slice of a spawned subprocess {@link superviseSpawnedProcess} needs. */
+export interface SpawnedProcessLike {
+  pid: number;
+  stdout?: ReadableStream<Uint8Array> | undefined;
+  stderr?: ReadableStream<Uint8Array> | undefined;
+  exited: Promise<number>;
+}
+
+/**
+ * Turn a spawned subprocess into a {@link BackgroundProcessHandle} whose
+ * `onExit` fires only AFTER every byte the process wrote has gone through
+ * `onOutput` (or {@link EXIT_OUTPUT_DRAIN_MS} has passed — see there). A caller
+ * that awaits the exit, as `waitForExit` does, can then read the complete
+ * transcript immediately.
+ *
+ * Exported so the ordering can be tested against a stream that delivers its
+ * last chunk after `exited` settles, which a real subprocess only does on a
+ * loaded machine.
+ */
+export function superviseSpawnedProcess(
+  proc: SpawnedProcessLike,
+  opts: {
+    kill: (signal: "SIGTERM" | "SIGKILL") => void;
+    afterExit?: () => Promise<void>;
+    drainMs?: number;
+  },
+): BackgroundProcessHandle {
+  const drainMs = opts.drainMs ?? EXIT_OUTPUT_DRAIN_MS;
+  let dataCb: ((chunk: string, stream: "stdout" | "stderr") => void) | undefined;
+  let exitCb: ((info: { exitCode: number }) => void) | undefined;
+  // The pumps start here, before the registry has had a chance to subscribe
+  // (it does so after `await spawn()`), so anything that arrives first is held
+  // and replayed on subscription instead of being dropped.
+  const pendingChunks: { chunk: string; stream: "stdout" | "stderr" }[] = [];
+  let pendingExit: { exitCode: number } | undefined;
+  const emitData = (chunk: string, stream: "stdout" | "stderr"): void => {
+    if (dataCb === undefined) pendingChunks.push({ chunk, stream });
+    else dataCb(chunk, stream);
+  };
+
+  // F-017: one decoder PER STREAM. A single shared decoder across both
+  // stdout/stderr pump loops retains streaming multi-byte state per call —
+  // interleaved stdout/stderr chunks can then corrupt multi-byte UTF-8
+  // (mirrors `shell-exec-tool.ts`'s own `readInto`, which already gets this
+  // right with one decoder per `readInto` call).
+  const outDecoder = new TextDecoder();
+  const errDecoder = new TextDecoder();
+
+  const pump = async (
+    stream: ReadableStream<Uint8Array> | undefined,
+    kind: "stdout" | "stderr",
+    decoder: TextDecoder,
+  ): Promise<void> => {
+    if (stream === undefined) return;
+    const reader = stream.getReader();
+    try {
+      for (;;) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        if (chunk.value !== undefined) emitData(decoder.decode(chunk.value, { stream: true }), kind);
+      }
+    } catch {
+      // pipe torn down by a kill — nothing further to read
+    } finally {
+      reader.releaseLock();
+    }
+  };
+  const drained = Promise.all([
+    pump(proc.stdout, "stdout", outDecoder),
+    pump(proc.stderr, "stderr", errDecoder),
+  ]);
+  void proc.exited.then(async (exitCode) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      drained,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, drainMs);
+        (timer as { unref?: () => void }).unref?.();
+      }),
+    ]);
+    if (timer !== undefined) clearTimeout(timer);
+    if (exitCb === undefined) pendingExit = { exitCode };
+    else exitCb({ exitCode });
+    await opts.afterExit?.();
+  });
+
+  return {
+    pid: proc.pid,
+    onOutput: (cb) => {
+      dataCb = cb;
+      for (const { chunk, stream } of pendingChunks.splice(0)) cb(chunk, stream);
+    },
+    onExit: (cb) => {
+      exitCb = cb;
+      if (pendingExit !== undefined) cb(pendingExit);
+    },
+    kill: opts.kill,
   };
 }
 
