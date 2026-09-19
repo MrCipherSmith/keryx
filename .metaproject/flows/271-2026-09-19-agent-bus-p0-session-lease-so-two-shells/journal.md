@@ -147,3 +147,37 @@
 - 2026-09-19T15:17:11.039Z - task-added: T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent
 - 2026-09-19T15:17:11.135Z - task-attempt: T18: started (attempt 1) — 271-T18 merge main #608
 - 2026-09-19T15:19:25.404Z - task-done: T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent
+- 2026-09-19T15:23:57.753Z - task-done: T12: Verification: typecheck, lint and full test suite green; record results
+- 2026-09-19T15:24:00.520Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/607 (warning: PR is not a draft)
+- 2026-09-19T15:26:02.054Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-19T15:26:02.147Z - ac-confirmed: AC1: shell-lease.process.test.ts AC1: two -c shells get different session ids, and B prints 'Skipped session <X> (pid <A>)'; green in CI on PR #607 head 86768cd5
+- 2026-09-19T15:26:02.230Z - ac-confirmed: AC2: shell-lease.process.test.ts AC2: non-TTY -r X exits non-zero with --fork in stderr, and context/archive/summary are byte- and mtime-identical; -r X --fork opens and leases a new fork; shell-lease.test.ts; CI green at 86768cd5
+- 2026-09-19T15:26:02.314Z - ac-confirmed: AC3: resolveLeasedChoice tests (shell-lease.test.ts) and resolveLeasedStartup tests (tui-session-lease.test.ts): fork/view/cancel on both surfaces, take-over offered only when the holder is stale, view renders read-only and then opens a new session, cancel opens nothing; CI green at 86768cd5
+- 2026-09-19T15:26:02.400Z - ac-confirmed: AC4: bareResumeTarget/latestUnleasedSession on the readline and chat-TUI bare -r paths (shell-lease.test.ts); startupSessionChoices/sessionPickerOptions label rows live/stale (tui-session-lease.test.ts); CI green at 86768cd5
+- 2026-09-19T15:26:02.483Z - ac-confirmed: AC5: shell-lease.process.test.ts AC5: after SIGSTOP the session reads stale in sessions list --json, -c skips it and --take-over succeeds; --take-over against a live holder is refused (default timing); after SIGKILL a plain -r reclaims silently; short staleMs set via KERYX_TEST_LEASE_TIMING; CI green at 86768cd5
+- 2026-09-19T15:26:02.568Z - ac-confirmed: AC6: switchLeasedSession acquires before it releases (lease.test.ts); readline /new refusal keeps the current lease (shell-lease.test.ts); TUI /resume and /new go through sessionLease.switchTo, refused /resume keeps the lease, successful switch releases the old one (tui-session-lease.test.ts, including the #606 composition test); CI green at 86768cd5
+- 2026-09-19T15:26:02.654Z - ac-confirmed: AC7: shell-lease.process.test.ts AC7: SIGTERM exit 143, SIGINT exit 130 and /exit over stdin each remove active.lease; TUI onDestroy, /exit, menu exit and finally release (tui-session-lease.test.ts plus source audits); CI green at 86768cd5
+- 2026-09-19T15:26:02.740Z - ac-confirmed: AC8: lease.test.ts schema check of owner.json against session-lease.schema.json (name null), modes 0600/0700, unref'd 5s heartbeat refresh, release is a no-op on token mismatch (fs.lease.test.ts); CI green at 86768cd5
+- 2026-09-19T15:26:02.825Z - ac-confirmed: AC9: src/session/store.test.ts and store.callers.test.ts not modified in PR #607 (diff touches neither); withFileLock/isLockHeld unchanged, only new lease functions added to fs.ts; both suites green in CI at 86768cd5
+- 2026-09-19T15:26:02.910Z - ac-confirmed: AC10: sessions.list.test.ts: LIVE column live/stale/blank/? and JSON live field; shell --help and docs/docs/cli-reference.md document --fork/--take-over and the new -c and bare -r meaning; flag refusals covered in shell-lease.test.ts and shell-cli-validation.test.ts (exit 2, ShellFlagError); CI green at 86768cd5
+- 2026-09-19T15:26:02.998Z - ac-confirmed: AC11: CI on PR #607 head 86768cd5: 18/18 checks green (typecheck-and-tests incl. lint, typecheck and test:core; client matrix terminal/streaming/cancel-resume/runtime; standard-pr; metrics-contract), mergeStateStatus CLEAN; merged as d29ac616
+- 2026-09-19T15:26:03.090Z - ac-confirmed: AC12: docs/requirements/keryx-agent-bus README 0.3.0 and implementation-plan 0.3.0 mark P0 implemented (flow 271, PR #607) and P1-P5 not implemented; roadmap 0.29.9 row and changelog updated; merged in d29ac616
+- 2026-09-19T15:26:21.111Z - completing
+- 2026-09-19T15:26:30.312Z - completion-failed: health: no report; run `keryx health run` first
+- 2026-09-19T15:27:22.462Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/607 (warning: PR is not a draft)
+- 2026-09-19T15:27:22.620Z - completing
+- 2026-09-19T15:27:31.981Z - done: all gates passed
+- 2026-09-19T15:28Z - orchestrator, completion report:
+  - PR #607 was squash-merged into main as d29ac616, pinned to head 86768cd5. CI on that head passed 18 of 18 checks.
+  - Review record: 2026-09-19-ingest-main, one ingested round at head 86768cd5, 13 findings from rounds r1–r4.
+    - Every finding carries a `refuted` verifier verdict (method: execution, or site-check for F8) that cites its fix commit (dbc45cd3, 612eb1eb, ed63f567, ee548bd2), plus an `acted-on` disposition.
+    - The first ingest truncated three findings at the default 10-per-reviewer cap. I re-ingested the same package with `--max-findings 20` before recording any dispositions.
+  - PR comments: collected at 86768cd5; there are none.
+  - Health: the first completion attempt failed. The closing worktree had no node_modules, so eslint and tsc were unavailable. After `bun install`, `keryx health run` reported PASS (score 94). No tests were run locally, per the operator's instruction.
+  - Known limitations carried forward:
+    - a new session exists for a moment before it is leased;
+    - an unreadable owner record reads as unknown rather than lost;
+    - clock skew across hosts is only documented;
+    - after a take-over, writes can continue for up to one heartbeat;
+    - a machine wrap-up that is already running when the lease is lost is not interrupted.
+  - Follow-up candidate: `/new` closes the slate before the new session opens (T8 concern 1).

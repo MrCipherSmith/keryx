@@ -1,0 +1,327 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "A holder that lost its lease is never told, and keeps writing the session",
+    "impact": "A is SIGSTOPped, B runs -r X --take-over, A gets SIGCONT and keeps persisting to X, so there are two writers",
+    "suggested_fix": "onLost from the heartbeat; stop persisting once the lease is lost",
+    "evidence": "src/session/lease.ts:259 at the round's head; scenario: A is SIGSTOPped, B runs -r X --take-over, A gets SIGCONT and keeps persisting to X, so there are two writers",
+    "confidence": "high",
+    "file": "src/session/lease.ts",
+    "line": 259,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts runShell save (readline chat and chat TUI)",
+        "src/commands/shell.ts runShell /compact and onContextCompaction",
+        "src/commands/shell.ts runAgentRepl turn save",
+        "src/commands/shell.ts runAgentRepl auto-compaction and /compact",
+        "src/tui/tui-shell.ts saveSession (debounced and turn-end)",
+        "src/tui/tui-shell.ts auto-compaction and /compact",
+        "slate writes via src/session/slate-lifecycle.ts entry points (ensureSlateOpened, writeSlateSession, recordSlateSessionTouch, closeSlateSession) reached from src/commands/agent.ts runAgentTurn and src/commands/goal-command.ts runGoalCommand",
+        "raw-dir slate tools (appendSeed, workspace_create bind, spawn-subagent parent fold) via lease-gated getters"
+      ],
+      "enumeration_method": "keryx ctx rg over src/commands/shell.ts and src/tui/tui-shell.ts for persistHistory(, persistCompacted(, compactSession( call sites, plus every exported write entry point of src/session/slate-lifecycle.ts and its callers; later rounds N1, R3-1 and R4-1 found the slate members of this class and each was fixed at the slate layer"
+    },
+    "global_id": "2026-09-19-ingest-main#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839 (carried to PR head 86768cd5): checkLost/onLost src/session/lease.ts:286-344, watchLeaseLoss :448-467, persist guards in shell.ts and tui-shell.ts; proven by lease.test.ts:359, shell-lease.test.ts:477, tui-session-lease.test.ts:474 and the SIGSTOP/SIGCONT process test. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Check-then-act race in refresh/release can clobber or delete the new holder's lease",
+    "impact": "A passes ownsIt() and stalls; B takes over; A resumes, then renames or rms over B's lease",
+    "suggested_fix": "re-check inode and token immediately before the rename; release via rename-aside",
+    "evidence": "src/lib/fs.ts:440 at the round's head; scenario: A passes ownsIt() and stalls; B takes over; A resumes, then renames or rms over B's lease",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 440,
+    "global_id": "2026-09-19-ingest-main#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: inode and token re-checked before the rename in src/lib/fs.ts:555-559; release uses rename-aside with keepOnConflict (fs.ts:575-587); proven by fs.lease.test.ts:195 (raceHook). refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "tryCreateLease failure cleanup removes whatever directory sits at lockPath",
+    "impact": "a reclaimer's rename-back replaces C's empty directory; C's cleanup deletes A's lease",
+    "suggested_fix": "remove only the directory's own inode, and only when it is empty",
+    "evidence": "src/lib/fs.ts:380 at the round's head; scenario: a reclaimer's rename-back replaces C's empty directory; C's cleanup deletes A's lease",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 380,
+    "global_id": "2026-09-19-ingest-main#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: tryCreateLease removes only its own inode and only when empty (src/lib/fs.ts:421-449); proven by fs.lease.test.ts:195. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "openWith releases a pre-existing mine handle when openSession throws",
+    "impact": "/resume of the current session with a corrupt transcript releases the current lease",
+    "suggested_fix": "release only a handle this call minted",
+    "evidence": "src/session/lease.ts:372 at the round's head; scenario: /resume of the current session with a corrupt transcript releases the current lease",
+    "confidence": "high",
+    "file": "src/session/lease.ts",
+    "line": 372,
+    "global_id": "2026-09-19-ingest-main#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: openWith releases only a handle it minted (src/session/lease.ts:549-556); proven by lease.test.ts:443. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Test-only timing env vars are unclamped and weaken the take-over guard",
+    "impact": "STALE_MS=1 lets --take-over seize a live shell",
+    "suggested_fix": "test-gated and clamped",
+    "evidence": "src/session/lease.ts:97 at the round's head; scenario: STALE_MS=1 lets --take-over seize a live shell",
+    "confidence": "high",
+    "file": "src/session/lease.ts",
+    "line": 97,
+    "global_id": "2026-09-19-ingest-main#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: timing env vars honoured only with NODE_ENV=test or KERYX_TEST_LEASE_TIMING=1, and clamped (src/session/lease.ts:109-157); proven by lease.test.ts:465. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "sessions list crashes on one unreadable lease",
+    "impact": "EACCES or ENOTDIR on one active.lease fails the whole listing",
+    "suggested_fix": "try/catch that shows ?",
+    "evidence": "src/commands/sessions.ts:168 at the round's head; scenario: EACCES or ENOTDIR on one active.lease fails the whole listing",
+    "confidence": "high",
+    "file": "src/commands/sessions.ts",
+    "line": 168,
+    "global_id": "2026-09-19-ingest-main#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: leaseColumn try/catch shows ? (src/commands/sessions.ts:172-178); proven by sessions.list.test.ts:138. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "600ms staleMs flakes on a loaded runner",
+    "impact": "the taker misses its heartbeats and reads stale",
+    "suggested_fix": "default timing for the live-refusal step",
+    "evidence": "src/commands/shell-lease.process.test.ts:260 at the round's head; scenario: the taker misses its heartbeats and reads stale",
+    "confidence": "high",
+    "file": "src/commands/shell-lease.process.test.ts",
+    "line": 260,
+    "global_id": "2026-09-19-ingest-main#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: the live-refusal step uses defaultTimingEnv (shell-lease.process.test.ts:276-283); the test passed in the r3 run. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F8",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Cross-host clock skew misjudges liveness",
+    "impact": "a skewed remote holder is misjudged",
+    "suggested_fix": "document the limit",
+    "evidence": "src/lib/fs.ts:301 at the round's head; scenario: a skewed remote holder is misjudged",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 301,
+    "global_id": "2026-09-19-ingest-main#F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "fix dbc45cd3 (documentation only); present at d3a8e839: the clock-skew known-limit comment at src/lib/fs.ts:329-336. Info finding; no code change was expected.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "F9",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Foreign errors carrying exitCode now set keryx's exit code",
+    "impact": "a ShellError propagates the child's exit code",
+    "suggested_fix": "honour exitCode only for ShellFlagError",
+    "evidence": "src/cli.ts:323 at the round's head; scenario: a ShellError propagates the child's exit code",
+    "confidence": "high",
+    "file": "src/cli.ts",
+    "line": 323,
+    "global_id": "2026-09-19-ingest-main#F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix dbc45cd3; no longer reproduces at d3a8e839: exitCodeForError honours exitCode only for ShellFlagError (src/cli.ts:326-328); proven by cli.test.ts:93. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "dbc45cd3"
+    }
+  },
+  {
+    "id": "N1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Slate tool writes are not gated by canPersist until the loss is noticed",
+    "impact": "after a take-over, slate tools write for up to one heartbeat",
+    "suggested_fix": "gate the slate getters by canPersist",
+    "evidence": "src/commands/shell.ts:3290 at the round's head; scenario: after a take-over, slate tools write for up to one heartbeat",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 3290,
+    "global_id": "2026-09-19-ingest-main#N1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 612eb1eb; no longer reproduces at d3a8e839: gateBoxByLease/whilePersisting (src/session/lease.ts:474-495) applied at shell.ts:1717 and tui-shell.ts:3057; proven by lease.test.ts:523, shell-lease.test.ts:535 and tui-session-lease.test.ts:501. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "612eb1eb"
+    }
+  },
+  {
+    "id": "N2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "A transient owner.json read failure marks the lease permanently lost",
+    "impact": "EMFILE makes holds() return false and the shell stops saving",
+    "suggested_fix": "unreadable counts as unknown, not lost",
+    "evidence": "src/lib/fs.ts:525 at the round's head; scenario: EMFILE makes holds() return false and the shell stops saving",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 525,
+    "global_id": "2026-09-19-ingest-main#N2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 612eb1eb; no longer reproduces at d3a8e839: ownership() returns unknown for an unreadable record (src/lib/fs.ts:523-535), and lost is only marked on 'lost' (lease.ts:325-328); proven by lease.test.ts:553. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "612eb1eb"
+    }
+  },
+  {
+    "id": "R3-1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "A running turn or /goal loop keeps writing the taken-over session's slate",
+    "impact": "the turn or goal loop captured the SlateSessionRef before the loss",
+    "suggested_fix": "detach the SlateSessionRef and refuse writes in the slate layer",
+    "evidence": "src/commands/agent.ts:2487 at the round's head; scenario: the turn or goal loop captured the SlateSessionRef before the loss",
+    "confidence": "high",
+    "file": "src/commands/agent.ts",
+    "line": 2487,
+    "global_id": "2026-09-19-ingest-main#R3-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix ed63f567; no longer reproduces at 1096d945: the SlateSessionRef.detached check is enforced in src/session/slate-lifecycle.ts, every writer in runAgentTurn and runGoalCommand goes through it, and the listeners detach it (shell.ts:1711, tui-shell.ts:4438); proven by slate-lifecycle.test.ts:405,431, agent.test.ts:3614, goal-command.test.ts:1801 and shell-lease.test.ts:546. refuted = no longer reproduces after the fix.",
+      "verifier": "271-review-r4-verify"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ed63f567"
+    }
+  },
+  {
+    "id": "R4-1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "/goal --auto post-verifier extra round skips the detach check",
+    "impact": "the lease is lost during the verifier; one more full turn runs in the taken-over session",
+    "suggested_fix": "re-check detach after runGoalVerifier",
+    "evidence": "src/commands/goal-command.ts:899 at the round's head; scenario: the lease is lost during the verifier; one more full turn runs in the taken-over session",
+    "confidence": "high",
+    "file": "src/commands/goal-command.ts",
+    "line": 899,
+    "global_id": "2026-09-19-ingest-main#R4-1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix ee548bd2; no longer reproduces at c90026d2 (carried to PR head 86768cd5): the isSlateSessionDetached re-check right after runGoalVerifier in src/commands/goal-command.ts:882-888; proven by goal-command.test.ts 'flow 271 R4-1' (verifier stub detaches; provider called 2 times, not 3; slate byte-identical). The orchestrator re-ran it independently and it passes. refuted = no longer reproduces after the fix.",
+      "verifier": "flow-orchestrator"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ee548bd2"
+    }
+  }
+]
