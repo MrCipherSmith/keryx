@@ -92,6 +92,15 @@ function settle(ms = 60): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/** Polls until `done()` holds, bounded by `timeoutMs` — for a fire-and-forget tick whose last observable step is known, so the wait ends on that step rather than on a guessed duration. */
+async function until(done: () => boolean, timeoutMs = 2000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!done()) {
+    if (Date.now() > deadline) throw new Error(`condition not met within ${timeoutMs}ms`);
+    await settle(5);
+  }
+}
+
 function asClient(result: BusClient | { disabled: string }): BusClient {
   if ("disabled" in result) throw new Error(`joinBus unexpectedly disabled: ${result.disabled}`);
   return result;
@@ -268,6 +277,7 @@ describe("joinBus: heartbeat (specification §5.1, §5.2)", () => {
         pollMs: 1500,
         now: () => clock,
         status: () => status,
+        resolveBranch: async () => "main", // no `git rev-parse` spawn inside the tick
         // review r1 F2: a GETTER, called at each use — not a value captured once.
         sessionLease: () => ({
           refresh(patch) {
@@ -284,7 +294,7 @@ describe("joinBus: heartbeat (specification §5.1, §5.2)", () => {
     clock += 5000;
     status = { status: "working", activity: "flow 273" };
     tick(5000); // the heartbeat only, never the poller
-    await settle();
+    await until(() => refreshCalls.length === 2); // the lease refresh is the tick's last step, after the presence write
 
     const after = await readPresence(root, client.instanceId);
     expect(after?.status).toBe("working");
@@ -302,12 +312,14 @@ describe("joinBus: heartbeat (specification §5.1, §5.2)", () => {
     const oldLease = { refresh: (patch: { name?: string | null }) => oldCalls.push(patch) };
     const newLease = { refresh: (patch: { name?: string | null }) => newCalls.push(patch) };
     let current: typeof oldLease | typeof newLease | undefined = oldLease;
-    const client = asClient(await join(cwd, { timers, sessionLease: () => current }));
+    const client = asClient(
+      await join(cwd, { timers, resolveBranch: async () => "main", sessionLease: () => current }),
+    );
     expect(oldCalls.length).toBe(1); // at join
 
     current = newLease; // e.g. `/new` swaps the lease the shell holds
     tick(DEFAULT_HEARTBEAT_MS);
-    await settle();
+    await until(() => newCalls.length > 0 || oldCalls.length > 1);
 
     expect(oldCalls.length).toBe(1); // never refreshed again: it was released
     expect(newCalls).toEqual([{ name: client.name }]);
