@@ -1,0 +1,109 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "openStepSurface's close() calls handle.close(), which runs ModalHost closeHost with restoreFocus:true and focuses the composer between wizard steps while the wizard still awaits network work.",
+    "impact": "Text typed during the gap (models fetch, key step, device login) lands in the composer and Enter submits it as a turn while the wizard is still running; main's overlay steps never refocused the composer.",
+    "suggested_fix": "Close step dialogs without restoring focus and refocus the composer once the whole wizard resolves.",
+    "evidence": "Scratch test with createShellChrome + selectProviderModelInTui(core, chrome, [deepseek with baseUrl], {env:{DEEPSEEK_API_KEY:'k'}, fetch: never-resolving}): after Enter on provider and on the endpoint step, currentFocusedRenderable.id === 'prompt', backdrop hidden, typing 'hello' + Enter made chrome.onSubmit receive ['hello'] while the wizard was pending.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1500,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:1500 openStepSurface close()",
+        "src/tui/modal-host.ts:337 closeHost focusComposer",
+        "every openStepSurface caller (11 wizard steps)"
+      ],
+      "enumeration_method": "Every openStepSurface caller in the tui-shell.ts diff, plus closeHost in modal-host.ts, which always focuses the composer when restoreFocus is true."
+    },
+    "global_id": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 360543ca (fix commit, PR #596 head), detached worktree keryx-wt-v270-fix: `bun test src/tui/wizard-modal.test.ts -t \"flow 270 review\"` -> 2 pass, 0 fail, 6 expect() calls. The test drives selectProviderModelInTui with deepseek+baseUrl and a never-resolving fetch, presses Enter on provider and endpoint, then asserts currentFocusedRenderable.id is not 'prompt' and that typing 'hello'+Enter leaves chrome.onSubmit empty. Pre-fix tree 55f8923b (worktree keryx-wt-v270-pre, fix tree's test file copied in): same command -> 0 pass, 2 fail; this test fails at wizard-modal.test.ts:313 `expect(...currentFocusedRenderable?.id).not.toBe(\"prompt\")` (received \"prompt\"), so the test does detect the defect. Site-check on the fix tree: `keryx ctx rg \"handle\\.close\\(|openStepSurface\\(|restoreFocus\" src/tui/tui-shell.ts src/tui/modal-host.ts` shows the only handle.close in tui-shell.ts is 1504 `handle.close({ restoreFocus: false })` inside openStepSurface, so every step caller goes through it.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "360543ca (PR #596 head) — step dialogs close with restoreFocus:false; /provider caller refocuses once; regression test in wizard-modal.test.ts; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-002",
+    "reviewer": "review-logic",
+    "severity": "major",
+    "problem": "In the dialog form of runSearchProviderTestStep, Esc while the test is pending resolves 'retry' but the async block keeps running, calls controller.select() when the toggle was Yes, and writes status.content on a destroyed TextRenderable.",
+    "impact": "The search provider is silently set active after the operator backed out, and an unhandled 'TextBuffer is destroyed' rejection is thrown; on main Esc was ignored until the test settled.",
+    "suggested_fix": "Set a cancelled flag in onEscape and check it after await controller.test() and before select() and every status write.",
+    "evidence": "Scratch test: fake controller whose test() returns a pending promise; Enter provider, Enter Yes, Esc while 'Testing' shown, then resolve test({ok:true}) -> bun reports 'TextBuffer is destroyed' at the status write after await controller.select(), proving select() ran.",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 1845,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:1845-1848 onEscape",
+        "src/tui/tui-shell.ts:1874-1892 configure/test/select block"
+      ],
+      "enumeration_method": "Every async continuation in the diff that outlives a step surface; runDeviceLoginInTui is guarded by controller.signal.aborted, runSearchProviderTestStep was not."
+    },
+    "global_id": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 360543ca (fix commit, PR #596 head): `bun test src/tui/wizard-modal.test.ts -t \"flow 270 review\"` -> 2 pass, 0 fail. The test \"Esc during a running search-provider test leaves it inactive and throws nothing\" uses a fake controller whose test() is pending. It presses Esc while 'Testing 'brave'' is shown, then resolves test({ok:true}). It asserts calls === ['configure:brave','test:brave'] (no select) and that the fields restart. Pre-fix tree 55f8923b (worktree keryx-wt-v270-pre, test copied in): the same test fails with `error: TextBuffer is destroyed` at tui-shell.ts:1890 (the status write after `await controller.select()`), which reproduces the finding there. On the fix tree the `left` flag is checked after both `await controller.test()` and `await controller.select()`.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "360543ca (PR #596 head) — 'left' flag checked after test() and select(); regression test in wizard-modal.test.ts; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-003",
+    "reviewer": "review-logic",
+    "severity": "minor",
+    "problem": "Tools and MCP tabs page by item count (clampScroll over bodyRows items) while rows are now multi-line hanging-indent wraps plus an extra header line.",
+    "impact": "Only a fraction of a page fits and keyboard scrolling stops at tools.length - bodyRows, so the last tools cannot be reached with ↑/↓.",
+    "suggested_fix": "Page by rendered line count, summing formatToolRowLines(...).length.",
+    "evidence": "Scratch test: presentMcpTools with 40 tools of ~200-char descriptions in a 120x40 renderer; each wrapped to 5 lines, ~6 visible; after 60 down presses the frame topped at tool_number_7..12 and tool_number_30/39 never appeared.",
+    "confidence": "medium",
+    "file": "src/tui/mcp-inspector.ts",
+    "line": 373,
+    "global_id": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 360543ca (fix commit, PR #596 head): `bun test src/tui/mcp-inspector.test.ts -t \"fitRowsByLines|last of many\"` -> 3 pass, 0 fail, 7 expect() calls. The test builds 40 tools with long descriptions, width 100 and visibleRows 20, then presses down 60 times. It asserts that tool_number_39 is shown and that the painted window is 20 lines or fewer. Pre-fix tree 55f8923b (worktree keryx-wt-v270-pre, 'last of many' test copied in; the fitRowsByLines import and describe were removed because that export does not exist there): `bun test src/tui/mcp-inspector.test.ts -t \"last of many\"` -> 0 pass, 1 fail, `expect(received).toBeLessThanOrEqual(20)` Received: 82. Item-count paging painted 82 wrapped lines into a 20-row body, which pushes the last tools off screen. The fix pages by the line count of each row.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "360543ca (PR #596 head) — Tools tab pages by rendered lines (fitRowsByLines); tests in mcp-inspector.test.ts; verifier refuted by execution"
+    }
+  },
+  {
+    "id": "F-004",
+    "reviewer": "review-logic",
+    "severity": "info",
+    "problem": "The array-of-tables branch strips only double quotes, so [['mcp_servers'.x]] is skipped silently instead of refused.",
+    "impact": "No keys leak (current is cleared); only the config-problem line is missing, matching pre-existing single-bracket behaviour.",
+    "suggested_fix": "Strip single quotes as well when computing the first key.",
+    "evidence": "parseGrokToml on 9 crafted headers: [[ mcp_servers.x ]], [[\"mcp_servers\"]], [[mcp_servers]] refused; [['mcp_servers'.x]], [[__proto__]], [[marketplace.sources]] give no problem and no leakage; Object.prototype.command undefined.",
+    "confidence": "high",
+    "file": "src/mcp-servers/compat.ts",
+    "line": 268,
+    "global_id": "2026-09-19-ingest-github-com-mrciphersmith-keryx-pull-596-r02#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Tree 360543ca (fix commit, PR #596 head): `bun test src/mcp-servers/compat.table.test.ts -t \"literal-quoted\"` -> 1 pass, 0 fail, 2 expect() calls. It parses \"[mcp_servers.a]\\ncommand = \\\"x\\\"\\n[['mcp_servers'.x]]\\ncommand = \\\"y\\\"\\n\" and asserts problems contain 'not a table header' and servers.a.command === 'x'. Pre-fix tree 55f8923b (worktree keryx-wt-v270-pre, test copied in): 0 pass, 1 fail, `expect(received).toContain(\"not a table header\")` Received: \"\", so the literal-quoted header was skipped silently there. compat.ts:270 now strips either quote kind with /^([\"'])(.*)\\1$/.",
+      "verifier": "review-verifier"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "360543ca (PR #596 head) — [[...]] branch strips either quote kind; test in compat.table.test.ts; verifier refuted by execution"
+    }
+  }
+]
