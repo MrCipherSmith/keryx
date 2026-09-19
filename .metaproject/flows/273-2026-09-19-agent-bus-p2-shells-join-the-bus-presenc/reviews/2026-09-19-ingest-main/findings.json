@@ -1,0 +1,301 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "In-flight heartbeat/setSession/rename can recreate presence after leave()",
+    "impact": "heartbeat mid-git-rev-parse when /exit leaves; atomic rename recreates file, exit hook already removed",
+    "suggested_fix": "guard writeCurrentPresence on left before and after write; unlink if left flipped",
+    "evidence": "src/bus/client.ts:260 at head 49c2a2fd; heartbeat mid-git-rev-parse when /exit leaves; atomic rename recreates file, exit hook already removed",
+    "confidence": "high",
+    "file": "src/bus/client.ts",
+    "line": 260,
+    "class_scope": {
+      "sites": [
+        "src/bus/client.ts:260-274 heartbeatTick",
+        "src/bus/client.ts:347 setSession",
+        "src/bus/client.ts:351 rename"
+      ],
+      "enumeration_method": "all callers of writeCurrentPresence in client.ts"
+    },
+    "global_id": "2026-09-19-ingest-main#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix ece841ed, no longer reproduces at head d1d9bf39: the left flag guards writeCurrentPresence before and after the write (client.ts:321-345); setSession and rename no-op after leave (client.ts:484,496); the F1 tests in src/bus/client.test.ts pass. refuted = no longer reproduces after the fix.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Bus client refreshes stale lease handle after session switch",
+    "impact": "/new swaps lease via holdLease; heartbeat refreshes released handle; new lease owner name stays null",
+    "suggested_fix": "pass lease getter or rebind lease in setSession and refresh immediately; refresh at join",
+    "evidence": "src/commands/shell.ts:702 at head 49c2a2fd; /new swaps lease via holdLease; heartbeat refreshes released handle; new lease owner name stays null",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 702,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:702",
+        "src/commands/shell.ts:2032",
+        "src/tui/tui-shell.ts:4481",
+        "src/tui/tui-bus.test.ts:254"
+      ],
+      "enumeration_method": "every joinBus call site's sessionLease argument vs lease reassignment paths"
+    },
+    "global_id": "2026-09-19-ingest-main#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "fixes ece841ed, 6d29f466 and 60db5613, present at head d1d9bf39: the BusSessionLeaseGetter is read at every use (client.ts:100,352,396,488,509); shell.ts:692 and :2031 pass () => lease, which holdLease reassigns; tui-shell.ts:4494 passes () => sessionLease.current. Tests in shell-bus.test.ts (F2 /new refreshes the NEW lease) and tui-bus.test.ts pass.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Unsanitised peer activity/checkout/branch/lease reason rendered in TUI",
+    "impact": "crafted presence activity with OSC/CSI paints into operator terminal",
+    "suggested_fix": "displaySafe every free-text field; add escape tests",
+    "evidence": "src/tui/worker-fleet.ts:219 at head 49c2a2fd; crafted presence activity with OSC/CSI paints into operator terminal",
+    "confidence": "high",
+    "file": "src/tui/worker-fleet.ts",
+    "line": 219,
+    "class_scope": {
+      "sites": [
+        "src/tui/worker-fleet.ts:219-224",
+        "src/tui/bus-panel.ts:50-54",
+        "src/tui/bus-panel.ts:63-65"
+      ],
+      "enumeration_method": "schema fields without pattern traced to every TUI formatter"
+    },
+    "global_id": "2026-09-19-ingest-main#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 60db5613, no longer reproduces at head d1d9bf39: displaySafe is applied at worker-fleet.ts:246-247 and bus-panel.ts:53-56, 72-73 and 92-94; the ESC/OSC injection tests in worker-fleet.test.ts and tui-bus.test.ts pass.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60db5613"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "/bus reply id never displayed; reply routed by name",
+    "impact": "operator sees only the event line or #seq, reply refused; renamed sender misrouted",
+    "suggested_fix": "show short id/seq, resolve by prefix/seq, send to from.instanceId",
+    "evidence": "src/commands/shell.ts:254 at head 49c2a2fd; operator sees only the event line or #seq, reply refused; renamed sender misrouted",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 254,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:254",
+        "src/commands/shell.ts:364",
+        "src/tui/bus-panel.ts:19",
+        "src/tui/bus-panel.ts:76",
+        "src/tui/tui-shell.ts runBusCommand reply"
+      ],
+      "enumeration_method": "all event renderers and reply resolvers on both surfaces"
+    },
+    "global_id": "2026-09-19-ingest-main#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixes ece841ed and 6d29f466/60db5613, no longer reproduces at head d1d9bf39: resolveRef and reply at client.ts:370-385 and 528-546 route through send.ts toInstanceId (124-134); client.test.ts:709 checks that a reply to a renamed sender arrives, and the reply-by-#seq and reply-by-prefix tests pass on both surfaces.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "setSession rejection escapes REPL / unhandled in TUI",
+    "impact": "presence write EACCES during /new crashes shell",
+    "suggested_fix": "catch, print a bus: line",
+    "evidence": "src/commands/shell.ts:860 at head 49c2a2fd; presence write EACCES during /new crashes shell",
+    "confidence": "high",
+    "file": "src/commands/shell.ts",
+    "line": 860,
+    "global_id": "2026-09-19-ingest-main#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "fixes ece841ed and 6d29f466, present at head d1d9bf39: the /new setSession call is wrapped in try/catch at shell.ts:850-858, and setSession catches and reports internally at client.ts:489-493.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "6d29f466"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Fire-and-forget TUI join races exit and session switch",
+    "impact": "Ctrl+C before join resolves: timers start, paint destroyed renderer",
+    "suggested_fix": "destroyed flag; leave after await; resync sessionId",
+    "evidence": "src/tui/tui-shell.ts:4503 at head 49c2a2fd; Ctrl+C before join resolves: timers start, paint destroyed renderer",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4503,
+    "global_id": "2026-09-19-ingest-main#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "fix 60db5613, present at head d1d9bf39: the destroyed flag is set in onDestroy (tui-shell.ts:3022) and checked in onEvent (4501), onPeers (4505) and after the join await (4519-4523), which calls joined.leave(); the F6 tests in tui-bus.test.ts pass.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60db5613"
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Half-failed join orphans presence",
+    "impact": "cursorAtEnd throws after presence write",
+    "suggested_fix": "try/unlink on post-write failure",
+    "evidence": "src/bus/client.ts:255 at head 49c2a2fd; cursorAtEnd throws after presence write",
+    "confidence": "high",
+    "file": "src/bus/client.ts",
+    "line": 255,
+    "global_id": "2026-09-19-ingest-main#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix ece841ed, no longer reproduces at head d1d9bf39: a post-write failure calls removePresenceSync before rethrowing (client.ts:347-360); the half-failed-join test in client.test.ts passes.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F8",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "SIGSTOP stale test tautological",
+    "impact": "300ms window < 5s heartbeat reads stale without SIGSTOP",
+    "suggested_fix": "assert live first with a window >5s or a shorter gated heartbeat",
+    "evidence": "src/commands/shell-bus.process.test.ts:304 at head 49c2a2fd; 300ms window < 5s heartbeat reads stale without SIGSTOP",
+    "confidence": "high",
+    "file": "src/commands/shell-bus.process.test.ts",
+    "line": 304,
+    "global_id": "2026-09-19-ingest-main#F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix ece841ed, no longer reproduces at head d1d9bf39: shell-bus.process.test.ts:66-71 and 335-343 assert LIVE (100ms heartbeat) before SIGSTOP and stale after, with a 600ms window; passed 3 of 3 reruns.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F9",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "TUI releases lease before presence",
+    "impact": "contradicts spec 5.4 order",
+    "suggested_fix": "leave() first",
+    "evidence": "src/tui/tui-shell.ts:3020 at head 49c2a2fd; contradicts spec 5.4 order",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 3020,
+    "global_id": "2026-09-19-ingest-main#F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "fix 60db5613, present at head d1d9bf39: liveBus?.leave() comes before sessionLease.release() at tui-shell.ts:3028-3029, 5640-5641, 5854 and 6637-6638; tui-shell.test.ts passes.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "60db5613"
+    }
+  },
+  {
+    "id": "F10",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "No onError wiring; cursor advanced before render; showBus uncaught; unbounded map",
+    "impact": "silent persistent failures; dropped batch on render throw",
+    "suggested_fix": "wire throttled onError; advance per event; catch; bound map",
+    "evidence": "src/bus/client.ts:281 at head 49c2a2fd; silent persistent failures; dropped batch on render throw",
+    "confidence": "high",
+    "file": "src/bus/client.ts",
+    "line": 281,
+    "global_id": "2026-09-19-ingest-main#F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixes ece841ed, 6d29f466 and 60db5613, no longer reproduces at head d1d9bf39: onError is wired through heartbeat, poll and setSession (client.ts:398,451,492); onEvent failures are caught per event before the cursor advances (425-439); showBus has a try/catch (tui-shell.ts:4802-4820); makeBusErrorReporter throttles per where (display.ts:69-82); display.test.ts and the throttled-reporter test in shell-bus.test.ts pass.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  },
+  {
+    "id": "F11",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Test/AC gaps: operator rate limit untested, AC10 partial, sidebar lacks status, display.ts binary",
+    "impact": "ACs asserted without proof",
+    "suggested_fix": "add tests; include status; use \\u escapes",
+    "evidence": "src/tui/worker-fleet.ts:219 at head 49c2a2fd; ACs asserted without proof",
+    "confidence": "high",
+    "file": "src/tui/worker-fleet.ts",
+    "line": 219,
+    "global_id": "2026-09-19-ingest-main#F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fixes ece841ed and 60db5613, no longer reproduces at head d1d9bf39: display.ts uses \\x1b escapes and git treats it as text; the operator rate limit is tested in send.test.ts; the bus identity is absent from the external and MCP child env (ac10-child-env.test.ts); the peer status glyph is at worker-fleet.ts:229-245; the tests pass.",
+      "verifier": "273-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "ece841ed"
+    }
+  }
+]

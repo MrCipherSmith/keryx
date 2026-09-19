@@ -7,17 +7,69 @@
   "id": "273",
   "slug": "agent-bus-p2-shells-join-the-bus-presenc",
   "title": "Agent bus P2: shells join the bus — presence, heartbeat, poller, /bus, peers",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-19T16:46:59.516Z",
-  "updatedAt": "2026-09-19T19:02:43.737Z",
+  "updatedAt": "2026-09-19T19:11:17.061Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:1e9d272bd12f66f6f25563e1bdda78246e59dad2e48353b59264b2ca3c785ec6",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-19T19:10:30.815Z",
+      "note": "joinBus wired after the leased open on all surfaces (shell.ts runShell covers readline chat + chat TUI, runAgentRepl, tui-shell.ts); name --name>bus.name>agent-n; §4.1 presence; cursor at end; join line — client.test.ts, shell-bus.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC2": {
+      "at": "2026-09-19T19:10:30.905Z",
+      "note": "unref'd 5s heartbeat rewrites presence and refreshes the CURRENT lease name via getter (F2 fix), poller at busPollMs; both stop on leave — client.test.ts with injected timers/clock; shell-bus.test.ts /new refresh test. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC3": {
+      "at": "2026-09-19T19:10:30.995Z",
+      "note": "addressed events (own id or * not self) render one '⇄ [#seq] @from kind: preview' line via formatBusEventLine/displaySafe, also while busy; not pushed into agent history — client.test.ts, shell-bus.test.ts, tui-bus.test.ts; process test AC7. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC4": {
+      "at": "2026-09-19T19:10:31.084Z",
+      "note": "/bus in TUI (modal Peers/Leases/Log) and readline: send/@name/ask/reply <#seq|prefix>/name with D-06 uniqueness, origin operator, from self; bus target in classifyBusyDispatch — tui-bus.test.ts, busy-dispatch.test.ts, shell-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC5": {
+      "at": "2026-09-19T19:10:31.178Z",
+      "note": "Peers group below local workers in the fleet sidebar with name, live/stale+status glyph, activity (displaySafe), refreshed on each onPeers — worker-fleet.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC6": {
+      "at": "2026-09-19T19:10:31.273Z",
+      "note": "presence removed on TUI onDestroy//exit/menu exit/finally (leave before release) and readline /exit/SIGINT/SIGTERM; SIGKILL -> gone, SIGSTOP -> stale after asserting live first — shell-bus.process.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC7": {
+      "at": "2026-09-19T19:10:31.367Z",
+      "note": "shell-bus.process.test.ts AC7: shells alpha (main) and beta (linked worktree) list each other in bus list --json; /bus send @beta hello appears in beta as '⇄ [#n] @alpha notice: hello'. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC8": {
+      "at": "2026-09-19T19:10:31.453Z",
+      "note": "setSession on /new (readline), applyOpened//new//clear//resume and startup picker (TUI); presence.sessionId follows — shell-bus.test.ts, tui-bus.test.ts, client.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC9": {
+      "at": "2026-09-19T19:10:31.574Z",
+      "note": "KERYX_BUS=off and CI=true print 'bus: off (<reason>)', write no presence, start no timers, /exit works — shell-bus.process.test.ts AC9 and client.test.ts disabled case; bus.enabled false via enabled.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC10": {
+      "at": "2026-09-19T19:10:31.696Z",
+      "note": "no bus instance id or name in process.env, resolveShellEnv, buildExternalChildEnv or the MCP spawn env after joinBus — ac10-child-env.test.ts and shell-bus.process.test.ts AC10. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    "AC11": {
+      "at": "2026-09-19T19:10:31.800Z"
+    },
+    "AC12": {
+      "at": "2026-09-19T19:10:31.910Z",
+      "note": "CI on PR #615 head d1d9bf39: 18/18 green incl. typecheck-and-tests and the client matrix; merged ce8772c9"
+    },
+    "AC13": {
+      "at": "2026-09-19T19:10:31.998Z",
+      "note": "agent-bus README 0.5.0, implementation-plan 0.5.0 and roadmap 0.29.11 mark P0-P2 implemented (flows 271-273, PRs #607/#611/#615) and P3-P5 not implemented; merged ce8772c9"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/615"
   },
   "baseBranch": "main",
   "tasks": [
@@ -76,7 +128,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +136,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -195,7 +248,7 @@
       "id": "T10",
       "title": "Verification: CI on the PR head green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -203,7 +256,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -370,6 +424,95 @@
       "at": "2026-09-19T19:02:43.737Z",
       "event": "task-done",
       "detail": "T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:10:05.641Z",
+      "event": "task-done",
+      "detail": "T10: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T19:10:08.594Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/615 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-19T19:10:30.725Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-19T19:10:30.815Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: joinBus wired after the leased open on all surfaces (shell.ts runShell covers readline chat + chat TUI, runAgentRepl, tui-shell.ts); name --name>bus.name>agent-n; §4.1 presence; cursor at end; join line — client.test.ts, shell-bus.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:30.905Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: unref'd 5s heartbeat rewrites presence and refreshes the CURRENT lease name via getter (F2 fix), poller at busPollMs; both stop on leave — client.test.ts with injected timers/clock; shell-bus.test.ts /new refresh test. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:30.995Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: addressed events (own id or * not self) render one '⇄ [#seq] @from kind: preview' line via formatBusEventLine/displaySafe, also while busy; not pushed into agent history — client.test.ts, shell-bus.test.ts, tui-bus.test.ts; process test AC7. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.084Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: /bus in TUI (modal Peers/Leases/Log) and readline: send/@name/ask/reply <#seq|prefix>/name with D-06 uniqueness, origin operator, from self; bus target in classifyBusyDispatch — tui-bus.test.ts, busy-dispatch.test.ts, shell-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.178Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: Peers group below local workers in the fleet sidebar with name, live/stale+status glyph, activity (displaySafe), refreshed on each onPeers — worker-fleet.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.274Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: presence removed on TUI onDestroy//exit/menu exit/finally (leave before release) and readline /exit/SIGINT/SIGTERM; SIGKILL -> gone, SIGSTOP -> stale after asserting live first — shell-bus.process.test.ts, tui-bus.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.367Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-bus.process.test.ts AC7: shells alpha (main) and beta (linked worktree) list each other in bus list --json; /bus send @beta hello appears in beta as '⇄ [#n] @alpha notice: hello'. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.453Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: setSession on /new (readline), applyOpened//new//clear//resume and startup picker (TUI); presence.sessionId follows — shell-bus.test.ts, tui-bus.test.ts, client.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.574Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: KERYX_BUS=off and CI=true print 'bus: off (<reason>)', write no presence, start no timers, /exit works — shell-bus.process.test.ts AC9 and client.test.ts disabled case; bus.enabled false via enabled.test.ts. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.696Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: no bus instance id or name in process.env, resolveShellEnv, buildExternalChildEnv or the MCP spawn env after joinBus — ac10-child-env.test.ts and shell-bus.process.test.ts AC10. CI green 18/18 on PR #615 head d1d9bf39, merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.800Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-09-19T19:10:31.910Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: CI on PR #615 head d1d9bf39: 18/18 green incl. typecheck-and-tests and the client matrix; merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:10:31.999Z",
+      "event": "ac-confirmed",
+      "detail": "AC13: agent-bus README 0.5.0, implementation-plan 0.5.0 and roadmap 0.29.11 mark P0-P2 implemented (flows 271-273, PRs #607/#611/#615) and P3-P5 not implemented; merged ce8772c9"
+    },
+    {
+      "at": "2026-09-19T19:11:08.113Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-19T19:11:17.061Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
