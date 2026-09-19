@@ -1,0 +1,260 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "276",
+  "slug": "shell-split-p1-audit-inventory",
+  "title": "Shell god-files P1: inventory the source-text audits that pin tui-shell.ts and commands/shell.ts",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T23:14:14.579Z",
+  "updatedAt": "2026-09-19T23:36:47.062Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:97bb6e9871d00a058283062cd483567c699f1b0804597c405fb24043bcca4f01",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-19T23:36:46.450Z",
+      "note": "src/shell-source-audits.test.ts re-derives the scan; manifest lists 16 files / 46 sites and the test fails on any disagreement"
+    },
+    "AC2": {
+      "at": "2026-09-19T23:36:46.541Z",
+      "note": "audits-tui-shell.md (14 blocks, ~75 tests), audits-tui-other.md (7 files), audits-commands.md (5 files, 71 tests), audits-cross-cutting.md (5 tests); one row per test, six columns"
+    },
+    "AC3": {
+      "at": "2026-09-19T23:36:46.629Z",
+      "note": "kind read from the observable-today column (yes=behavioural, no/partial=seam), structural ones listed by name in each detail file's Notes; mapping stated in the inventory"
+    },
+    "AC4": {
+      "at": "2026-09-19T23:36:46.717Z",
+      "note": "mutation-checked: manifest count 14->13 for tui/tui-shell.test.ts failed the test naming that row; reverted, green"
+    },
+    "AC5": {
+      "at": "2026-09-19T23:36:46.804Z",
+      "note": "boundary test asserts commands/goal-command.test.ts is excluded; joined form (shell-lease.test.ts:568) and helper form (approval-wiring) both resolve"
+    },
+    "AC6": {
+      "at": "2026-09-19T23:36:46.889Z",
+      "note": "README states the four-PR table, cites bus-wake.ts/bus-command.ts, records launchTuiAgentShell as a ~3,940-line closure P3 relocates but does not decompose"
+    },
+    "AC7": {
+      "at": "2026-09-19T23:36:46.974Z",
+      "note": "git status: M docs/requirements/{backlog,roadmap}.md, M package.json (one test:core entry), ?? flows/276-*/, ?? docs/requirements/keryx-shell-split/, ?? src/shell-source-audits.test.ts; src/core-package.test.ts green"
+    },
+    "AC8": {
+      "at": "2026-09-19T23:36:47.062Z",
+      "note": "roadmap gains a Keryx Shell Split row; backlog gains entry 11 under a new 'Shell surfaces' heading — the cited entry did not previously exist"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Record the roadmap row and the missing backlog entry",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T23:14:14.579Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T23:33:28.325Z",
+      "event": "task-added",
+      "detail": "T5: Record the roadmap row and the missing backlog entry"
+    },
+    {
+      "at": "2026-09-19T23:33:31.467Z",
+      "event": "frozen",
+      "detail": "9 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T23:33:31.563Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-19T23:33:36.597Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T23:33:36.685Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T23:33:36.773Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T23:33:36.856Z",
+      "event": "task-done",
+      "detail": "T5: Record the roadmap row and the missing backlog entry"
+    },
+    {
+      "at": "2026-09-19T23:34:08.142Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/shell-source-audits.test.ts re-derives the scan; its manifest lists 16 files / 46 sites and the test fails on any disagreement"
+    },
+    {
+      "at": "2026-09-19T23:34:08.225Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: audits-tui-shell.md (14 blocks, ~75 tests), audits-tui-other.md (7 files), audits-commands.md (5 files, 71 tests), audits-cross-cutting.md (5 tests); one table row per test with all six columns"
+    },
+    {
+      "at": "2026-09-19T23:34:08.302Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: kind is read from the observable-today column (yes=behavioural, no/partial=seam) with structural ones listed by name in each detail file's Notes; mapping stated in the inventory's 'Each audit is one of three kinds'"
+    },
+    {
+      "at": "2026-09-19T23:34:08.379Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mutation-checked: editing tui/tui-shell.test.ts's manifest count 14->13 failed the test naming that row; reverted and green"
+    },
+    {
+      "at": "2026-09-19T23:34:08.466Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: third test in shell-source-audits.test.ts asserts commands/goal-command.test.ts is excluded (names commands/shell.ts in a comment and reads files elsewhere); joined and helper forms both resolve"
+    },
+    {
+      "at": "2026-09-19T23:34:17.420Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: README.md states the four-PR table, why conversion precedes the split, cites bus-wake.ts/bus-command.ts, and records launchTuiAgentShell as one ~3,940-line closure P3 relocates but does not decompose"
+    },
+    {
+      "at": "2026-09-19T23:34:17.513Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: git status: M docs/requirements/backlog.md, M docs/requirements/roadmap.md, ?? .metaproject/flows/276-*/, ?? docs/requirements/keryx-shell-split/, ?? src/shell-source-audits.test.ts — no production file touched"
+    },
+    {
+      "at": "2026-09-19T23:34:17.605Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: roadmap.md gains a Keryx Shell Split row; backlog.md gains entry 11 under a new 'Shell surfaces' heading, in the file's measured house format — the entry the task cited did not exist"
+    },
+    {
+      "at": "2026-09-19T23:36:29.344Z",
+      "event": "ac-updated",
+      "detail": "AC7 enumerated the changed paths; registering the new guard test in package.json's test:core is required because src/core-package.test.ts proves a root-level test matched by neither the core gate nor the client matrix runs in no CI job at all"
+    },
+    {
+      "at": "2026-09-19T23:36:46.450Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: src/shell-source-audits.test.ts re-derives the scan; manifest lists 16 files / 46 sites and the test fails on any disagreement"
+    },
+    {
+      "at": "2026-09-19T23:36:46.541Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: audits-tui-shell.md (14 blocks, ~75 tests), audits-tui-other.md (7 files), audits-commands.md (5 files, 71 tests), audits-cross-cutting.md (5 tests); one row per test, six columns"
+    },
+    {
+      "at": "2026-09-19T23:36:46.629Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: kind read from the observable-today column (yes=behavioural, no/partial=seam), structural ones listed by name in each detail file's Notes; mapping stated in the inventory"
+    },
+    {
+      "at": "2026-09-19T23:36:46.717Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: mutation-checked: manifest count 14->13 for tui/tui-shell.test.ts failed the test naming that row; reverted, green"
+    },
+    {
+      "at": "2026-09-19T23:36:46.805Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: boundary test asserts commands/goal-command.test.ts is excluded; joined form (shell-lease.test.ts:568) and helper form (approval-wiring) both resolve"
+    },
+    {
+      "at": "2026-09-19T23:36:46.889Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: README states the four-PR table, cites bus-wake.ts/bus-command.ts, records launchTuiAgentShell as a ~3,940-line closure P3 relocates but does not decompose"
+    },
+    {
+      "at": "2026-09-19T23:36:46.974Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: git status: M docs/requirements/{backlog,roadmap}.md, M package.json (one test:core entry), ?? flows/276-*/, ?? docs/requirements/keryx-shell-split/, ?? src/shell-source-audits.test.ts; src/core-package.test.ts green"
+    },
+    {
+      "at": "2026-09-19T23:36:47.062Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: roadmap gains a Keryx Shell Split row; backlog gains entry 11 under a new 'Shell surfaces' heading — the cited entry did not previously exist"
+    }
+  ]
+}
