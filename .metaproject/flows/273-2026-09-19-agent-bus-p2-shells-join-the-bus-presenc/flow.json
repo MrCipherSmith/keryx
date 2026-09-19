@@ -9,7 +9,7 @@
   "title": "Agent bus P2: shells join the bus — presence, heartbeat, poller, /bus, peers",
   "status": "in-progress",
   "createdAt": "2026-09-19T16:46:59.516Z",
-  "updatedAt": "2026-09-19T17:10:31.839Z",
+  "updatedAt": "2026-09-19T17:54:58.393Z",
   "source": {
     "type": "description",
     "ref": null
@@ -111,43 +111,64 @@
       "id": "T6",
       "title": "Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:10:32.189Z",
+            "outcome": "started",
+            "detail": "273-T6 readline (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:10:32.276Z",
+            "outcome": "started",
+            "detail": "273-T7 TUI (sonnet), parallel with T6"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:42:48.690Z",
+            "outcome": "started",
+            "detail": "273-T8 process tests (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -246,6 +267,36 @@
       "at": "2026-09-19T17:10:31.839Z",
       "event": "task-done",
       "detail": "T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:32.189Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 273-T6 readline (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:32.276Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 273-T7 TUI (sonnet), parallel with T6"
+    },
+    {
+      "at": "2026-09-19T17:40:32.804Z",
+      "event": "task-done",
+      "detail": "T6: Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:42:48.510Z",
+      "event": "task-done",
+      "detail": "T7: TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:42:48.690Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 273-T8 process tests (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:54:58.393Z",
+      "event": "task-done",
+      "detail": "T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)"
     }
   ]
 }

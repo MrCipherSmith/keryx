@@ -14,3 +14,9 @@
 - 2026-09-19T16:50:58.848Z - started
 - 2026-09-19T16:51:00.367Z - task-attempt: T5: started (attempt 1) — 273-T5 bus client (sonnet)
 - 2026-09-19T17:10:31.839Z - task-done: T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)
+- 2026-09-19T17:10:32.189Z - task-attempt: T6: started (attempt 1) — 273-T6 readline (sonnet)
+- 2026-09-19T17:10:32.276Z - task-attempt: T7: started (attempt 1) — 273-T7 TUI (sonnet), parallel with T6
+- 2026-09-19T17:40:32.804Z - task-done: T6: Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)
+- 2026-09-19T17:42:48.510Z - task-done: T7: TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)
+- 2026-09-19T17:42:48.690Z - task-attempt: T8: started (attempt 1) — 273-T8 process tests (sonnet)
+- 2026-09-19T17:54:58.393Z - task-done: T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)
