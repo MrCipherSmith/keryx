@@ -767,6 +767,76 @@ describe("joinBus: resolveRef and reply (review r1 F4)", () => {
     expect(isBusRefusal(thrown, "recipient-not-live")).toBe(true);
     client.leave();
   });
+
+  describe("sendAsAgent and replyAsAgent (review r1 F3, F5)", () => {
+    test("sendAsAgent writes with from.origin agent, from set to this instance — not operator", async () => {
+      const cwd = await repo();
+      const client = asClient(await join(cwd));
+
+      const result = await client.sendAsAgent("@all", "notice", "hello everyone");
+
+      expect(result.event.from).toEqual({ instanceId: client.instanceId, name: client.name, origin: "agent" });
+      expect(result.event.kind).toBe("notice");
+      expect(result.resolvedTo).toEqual(["*"]);
+      client.leave();
+    });
+
+    test("replyAsAgent shares reply()'s ref resolution: same resolved id/instanceId, but from.origin agent", async () => {
+      const cwd = await repo();
+      const { root } = await resolveBusRoot(cwd);
+      const { client, senderId, eventId, seq } = await joinWithOneMessage(cwd);
+      // The sender renamed since: replyAsAgent must still reach them, by instanceId — exactly like reply().
+      await writePresence(root, {
+        schemaVersion: 1,
+        instanceId: senderId,
+        name: "renamed",
+        pid: 4242,
+        host: "this-host",
+        sessionId: SESSION,
+        checkout: "/repo",
+        branch: null,
+        surface: "tui",
+        status: "idle",
+        activity: "",
+        startedAt: iso(NOW),
+        heartbeatAt: iso(NOW),
+        keryxVersion: "0.2.121",
+      });
+
+      const result = await client.replyAsAgent(`#${seq}`, "on it");
+
+      expect(result.event.kind).toBe("reply");
+      expect(result.event.refs).toEqual({ replyTo: eventId });
+      expect(result.event.to).toEqual([senderId]);
+      expect(result.event.toLabel).toBe("@release"); // the name AT SEND TIME, not the live one
+      expect(result.event.from).toEqual({ instanceId: client.instanceId, name: client.name, origin: "agent" });
+      client.leave();
+    });
+
+    test("replyAsAgent() to an unresolved ref throws BusRefusal(\"unknown-message\")", async () => {
+      const cwd = await repo();
+      const client = asClient(await join(cwd));
+      const thrown = await client.replyAsAgent("#404", "?").catch((error: unknown) => error);
+      expect(isBusRefusal(thrown, "unknown-message")).toBe(true);
+      client.leave();
+    });
+
+    test("sendAsAgent and send() (operator) are counted against separate D-12 budgets for the same instance", async () => {
+      const cwd = await repo();
+      const client = asClient(await join(cwd));
+      for (let i = 0; i < 10; i++) {
+        const result = await client.sendAsAgent("@all", "notice", `agent ${i}`);
+        expect(result.event.from.origin).toBe("agent");
+      }
+      const agentBlocked = await client.sendAsAgent("@all", "notice", "one too many").catch((e: unknown) => e);
+      expect(isBusRefusal(agentBlocked, "rate-limited")).toBe(true);
+
+      // The operator budget is untouched: send() still works for this same instance.
+      const operatorResult = await client.send("@all", "notice", "operator still fine");
+      expect(operatorResult.event.from.origin).toBe("operator");
+      client.leave();
+    });
+  });
 });
 
 describe("joinBus: leave (specification §5.4)", () => {

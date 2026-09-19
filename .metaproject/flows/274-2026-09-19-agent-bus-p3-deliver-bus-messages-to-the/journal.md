@@ -1,0 +1,30 @@
+# Flow Journal
+
+- 2026-09-19T19:12:15.198Z - flow created
+- 2026-09-19T19:16:55.631Z - task-added: T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)
+- 2026-09-19T19:16:55.716Z - task-added: T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)
+- 2026-09-19T19:16:55.812Z - task-added: T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)
+- 2026-09-19T19:16:55.896Z - task-added: T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)
+- 2026-09-19T19:16:55.978Z - task-added: T9: Docs: P3 status and bus tools mention (haiku)
+- 2026-09-19T19:16:56.061Z - task-added: T10: Verification: CI on the PR head green
+- 2026-09-19T19:16:56.140Z - task-done: T1: Collect remaining context
+- 2026-09-19T19:16:56.228Z - task-done: T2: Implement per plan
+- 2026-09-19T19:16:56.312Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-19T19:16:56.399Z - frozen: 12 criteria; checksum recorded
+- 2026-09-19T19:16:56.483Z - started
+- 2026-09-19T19:16:57.118Z - task-attempt: T5: started (attempt 1) — 274-T5 delivery core (sonnet)
+- 2026-09-19T19:34:31.117Z - task-done: T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)
+- 2026-09-19T19:34:31.448Z - task-attempt: T6: started (attempt 1) — 274-T6 tools+conduct (sonnet)
+- 2026-09-19T19:34:31.532Z - task-attempt: T7: started (attempt 1) — 274-T7 surface wiring (sonnet), parallel
+- 2026-09-19T19:52:05.382Z - task-done: T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)
+- 2026-09-19T20:17:42.061Z - task-done: T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)
+- 2026-09-19T20:17:42.481Z - task-attempt: T8: started (attempt 1) — 274-T8 integration tests (sonnet)
+- 2026-09-19T20:32:32.342Z - task-done: T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)
+- 2026-09-19T20:33:04.591Z - task-attempt: T9: started (attempt 1) — 274-T9 docs (haiku)
+- 2026-09-19T20:36:00.050Z - task-done: T9: Docs: P3 status and bus tools mention (haiku)
+- 2026-09-19T20:40:12.800Z - task-added: T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)
+- 2026-09-19T20:40:12.877Z - task-attempt: T11: started (attempt 1) — 274-T11 lanes A+B in parallel (sonnet)
+- 2026-09-19T21:13:07.871Z - task-done: T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)
+- 2026-09-19T21:23:59.684Z - task-added: T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)
+- 2026-09-19T21:23:59.768Z - task-attempt: T12: started (attempt 1) — 274-T12 CI fixes (sonnet)
+- 2026-09-19T21:33:34.816Z - task-done: T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)

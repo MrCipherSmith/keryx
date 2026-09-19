@@ -385,10 +385,11 @@ describe("AC9/AC10: the side-worker roster is narrower AND never marks a task ob
     const tuiMod = await import("../tui/tui-shell");
     const denied = moduleValue(tuiMod, "SIDE_WORKER_DENIED_TOOL_NAMES") as ReadonlySet<string> | undefined;
     expect(denied).toBeInstanceOf(Set);
-    for (const name of ["shell_task_kill", "shell_job_kill", "shell_task_wait", "shell_job_output"]) {
+    for (const name of ["shell_task_kill", "shell_job_kill", "shell_task_wait", "shell_job_output", "bus_send"]) {
       expect(denied?.has(name)).toBe(true);
     }
     expect(denied?.has("shell_task_output")).toBe(false); // the explicit cursor stays available
+    expect(denied?.has("bus_list")).toBe(false); // genuinely read-only, stays available
   });
 
   test("a side worker's read of a FINISHED task leaves the main session's notification pending", async () => {

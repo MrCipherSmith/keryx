@@ -154,7 +154,11 @@ test("the shell mounts the wordmark only for an empty session and removes it on 
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
   expect(source).toContain("if (history.length === 0) {\n      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);");
   expect(source).toMatch(/if \(opened\.history\.length > 0\) \{\n\s+removeSplash\?\.\(\);/);
-  const runLineStart = source.indexOf("const runLine = (line: string");
+  // Flow 274 reformatted `runLine`'s signature onto several lines (adding the
+  // "bus-message" origin), so a plain indexOf on the single-line signature
+  // no longer matches — anchor on just the declaration instead.
+  const runLineMatch = source.match(/const runLine = \(/);
+  const runLineStart = runLineMatch ? runLineMatch.index! : -1;
   const operatorBlock = source.slice(runLineStart, runLineStart + 1400);
   expect(operatorBlock).toContain("consecutiveAutoWakes = 0;");
   expect(operatorBlock).toContain("removeSplash?.();");

@@ -1,15 +1,23 @@
 // Sending a message on the bus (specification §4.2, §7.3; decisions D-06, D-12).
 //
-// Two senders share this module: the `keryx bus send` CLI, origin `cli`, and
-// the interactive bus client (`./client.ts`), origin `operator`. The CLI has
-// no presence, so every call takes a fresh sender id, and the only bound that
-// can hold it is clone-wide: at most 30 CLI-origin messages per minute,
-// counted from the log itself under `append.lock` so concurrent senders
-// cannot both slip under the limit. An operator send carries the caller's own
-// `instanceId`/`name` and is bounded per instance instead (D-12): 30 per
-// minute from that one instanceId. Neither limit is shared with the other —
-// a busy operator cannot exhaust the clone-wide CLI budget, and the CLI
-// cannot exhaust any one instance's budget.
+// Three senders share this module: the `keryx bus send` CLI, origin `cli`;
+// the interactive bus client's own operator-authored sends (`./client.ts`'s
+// `send`/`reply`), origin `operator`; and the interactive agent's own tool
+// calls (`./client.ts`'s `sendAsAgent`/`replyAsAgent`, called from
+// `./agent-tools.ts`'s `bus_send`), origin `agent`. The CLI has no presence,
+// so every call takes a fresh sender id, and the only bound that can hold it
+// is clone-wide: at most 30 CLI-origin messages per minute, counted from the
+// log itself under `append.lock` so concurrent senders cannot both slip under
+// the limit. An operator send carries the caller's own `instanceId`/`name`
+// and is bounded per instance instead (D-12): 30 per minute from that one
+// instanceId. An agent-origin send is bounded per instance too, but with its
+// own, tighter budget (D-12): 10 per minute — counted from the log exactly
+// like the other two, so the window survives a `buildBusTools` rebuild
+// (review r1 F5) rather than resetting with every new closure. None of the
+// three limits is shared with another — a busy operator cannot exhaust the
+// clone-wide CLI budget, the CLI cannot exhaust any one instance's budget, and
+// the model's own agent-origin sends cannot exhaust (or be exhausted by) that
+// same instance's operator budget (review r1 F3).
 
 import { randomUUID } from "node:crypto";
 import { BusRefusal } from "./errors";
@@ -25,6 +33,15 @@ export type SendableKind = (typeof SENDABLE_KINDS)[number];
 export const CLI_RATE_LIMIT_PER_MINUTE = 30;
 /** D-12: operator-origin messages per minute, per sending instance. */
 export const OPERATOR_RATE_LIMIT_PER_MINUTE = 30;
+/**
+ * D-12: agent-origin messages per minute, per sending instance — the model's
+ * own `bus_send` tool calls (`./agent-tools.ts`), never the operator's own
+ * typed `/bus send`. Counted from the log under `append.lock`, exactly like
+ * the CLI/operator budgets above, so it survives a `buildBusTools` rebuild
+ * (review r1 F5) and is a property of this instance's send history rather
+ * than of any one in-memory closure.
+ */
+export const AGENT_RATE_LIMIT_PER_MINUTE = 10;
 const RATE_WINDOW_MS = 60_000;
 
 export interface SendInput {
@@ -33,8 +50,8 @@ export interface SendInput {
   kind: string;
   body: string;
   replyTo?: string | undefined;
-  origin: "cli" | "operator";
-  /** Required (and used) only for `origin: "operator"`; the CLI path always mints its own. */
+  origin: "cli" | "operator" | "agent";
+  /** Required (and used) for `origin: "operator"` and `origin: "agent"`; the CLI path always mints its own. */
   from?: BusSender | undefined;
   now?: (() => number) | undefined;
   /** D-09 inputs for recipient resolution; defaults to this host and `processIsAlive`. */
@@ -116,8 +133,8 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
   if (input.replyTo !== undefined && !isBusId(input.replyTo)) {
     throw new BusRefusal("invalid-id", `replyTo ${JSON.stringify(input.replyTo)} is not a UUID`);
   }
-  if (input.origin === "operator" && input.from === undefined) {
-    throw new BusRefusal("invalid-event", 'an operator send needs from: { instanceId, name, origin: "operator" }');
+  if ((input.origin === "operator" || input.origin === "agent") && input.from === undefined) {
+    throw new BusRefusal("invalid-event", `a ${input.origin} send needs from: { instanceId, name, origin: "${input.origin}" }`);
   }
 
   let to: string[];
@@ -135,9 +152,15 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
   } else {
     to = await resolveRecipients(root, input.toLabel, { ...input.liveness, now: now() });
   }
+  // review r1 F6: a send whose only resolved recipient is the sender itself
+  // (e.g. `@<own-name>`, or a reply addressed back to one's own instance) is
+  // refused rather than delivered — `@all` is unaffected, since it resolves
+  // to `["*"]`, never to a concrete instance id.
+  if (input.from !== undefined && to.length === 1 && to[0] === input.from.instanceId) {
+    throw new BusRefusal("recipient-is-self", `${input.toLabel} resolves only to this instance`);
+  }
   const env = input.env ?? process.env;
-  const from: BusSender =
-    input.origin === "operator" ? (input.from as BusSender) : { instanceId: randomUUID(), name: "cli", origin: "cli" };
+  const from: BusSender = input.origin === "cli" ? { instanceId: randomUUID(), name: "cli", origin: "cli" } : (input.from as BusSender);
   const event = await appendEvent(
     root,
     {
@@ -171,6 +194,22 @@ export async function sendMessage(root: string, input: SendInput): Promise<SendR
             throw new BusRefusal(
               "rate-limited",
               `${recent} operator messages from this instance in the last minute; the limit is ${OPERATOR_RATE_LIMIT_PER_MINUTE}`,
+            );
+          }
+        } else if (from.origin === "agent") {
+          // review r1 F3/F5: counted from the log, per instance, so the
+          // budget is a property of this instance's send history rather than
+          // of any one `buildBusTools` closure's lifetime.
+          const recent = await countRecent(root, {
+            origin: "agent",
+            sinceMs: RATE_WINDOW_MS,
+            now,
+            instanceId: from.instanceId,
+          });
+          if (recent >= AGENT_RATE_LIMIT_PER_MINUTE) {
+            throw new BusRefusal(
+              "rate-limited",
+              `${recent} agent messages from this instance in the last minute; the limit is ${AGENT_RATE_LIMIT_PER_MINUTE}`,
             );
           }
         }

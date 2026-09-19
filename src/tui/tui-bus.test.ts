@@ -474,3 +474,136 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
     expect((source.match(/runBusCommand\(line\);/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+// Flow 274 (agent bus P3, T7; specification §5.3, AC5/AC6): delivery to the
+// agent — pushing polled events into `busInbox` and waking an idle TUI on a
+// wake-eligible one. The OpenTUI REPL is not mountable under the unit harness
+// (same limitation the flow 265 task-notification wake audit documents in
+// `tui-shell.test.ts`), so wiring order/plumbing stays a source-text audit
+// here; the actual DECISION/print/wake behaviour (review r1 F11: what used to
+// be duplicated as source audits and a reimplemented loop) is driven directly
+// through the real `createBusWakeController` factory in `bus-wake.test.ts`
+// and `../bus/delivery.integration.test.ts`.
+describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
+  test("onEvent pushes the rendered event into busInbox, body defaulted, and marks the poll as having delivered something (review r1 F1)", () => {
+    const joinIndex = source.indexOf("await joinBus({");
+    expect(joinIndex).toBeGreaterThanOrEqual(0);
+    const eventIdx = source.indexOf("onEvent: (event) => {", joinIndex);
+    expect(eventIdx).toBeGreaterThan(joinIndex);
+    const eventBody = source.slice(eventIdx, source.indexOf("},", eventIdx));
+    expect(eventBody).toContain("busInbox.push({ ...event, body: event.body ?? \"\" });");
+    expect(eventBody).toContain("busPollDeliveredEvent = true;");
+  });
+
+  test("onPeers reports this poll's delivery to the wake controller once per poll, after painting the fleet, and resets for the next poll", () => {
+    const joinIndex = source.indexOf("await joinBus({");
+    const peersIdx = source.indexOf("onPeers: (peers: BusPeer[]) => {", joinIndex);
+    expect(peersIdx).toBeGreaterThan(joinIndex);
+    const peersBody = source.slice(peersIdx, source.indexOf("},", source.indexOf("paintFleet();", peersIdx)));
+    expect(peersBody).toContain("paintFleet();");
+    expect(peersBody.indexOf("busWakeController?.onPoll(busPollDeliveredEvent);")).toBeGreaterThan(
+      peersBody.indexOf("paintFleet();"),
+    );
+    // review r1 F1: reset AFTER reporting, so the next poll starts fresh.
+    expect(peersBody.indexOf("busPollDeliveredEvent = false;")).toBeGreaterThan(
+      peersBody.indexOf("busWakeController?.onPoll(busPollDeliveredEvent);"),
+    );
+    // review r1 F10: the drop notifier is also re-armed once the inbox empties.
+    expect(peersBody).toContain("busDropNotifier.onInboxSizeObserved(busInbox.size);");
+  });
+
+  test("createBusWakeController is imported and used to build the bus-wake controller (review r1 F11)", () => {
+    expect(source).toContain('createBusWakeController,\n  type BusDropNotifier,\n  type BusWakeController,\n} from "./bus-wake";');
+    expect(source).toContain("busWakeController = createBusWakeController({");
+  });
+
+  test("the bus-wake controller is built from the SAME idle test, inbox, consecutiveAutoWakes/resolveMaxAutoWake, and runLine as the task-notification wake", () => {
+    const start = source.indexOf("busWakeController = createBusWakeController({");
+    expect(start).toBeGreaterThanOrEqual(0);
+    const block = source.slice(start, start + 900);
+    expect(block).toContain("chrome.isBusy()");
+    expect(block).toContain("foregroundOperation.isActive");
+    expect(block).toContain("mainQueue.length === 0");
+    expect(block).toContain("inbox: busInbox,");
+    expect(block).toContain("consecutiveAutoWakes");
+    expect(block).toContain("resolveMaxAutoWake()");
+    expect(block).toContain('runLine("", "bus-message")');
+    // review r1 F4: no wake before this session's own deps carry busInbox/busAck.
+    expect(block).toContain("hasBusDeps: () => deps.busInbox !== undefined,");
+    // Never a second, bus-only counter — the SAME variable the task
+    // notification wake increments/resets.
+    expect(block).not.toMatch(/consecutiveBusWakes|busWakeCount/);
+  });
+
+  test("the bus-wake controller never treats the session as idle once the destroyed guard is set (review r1 F6 pattern)", () => {
+    const start = source.indexOf("busWakeController = createBusWakeController({");
+    const block = source.slice(start, start + 300);
+    expect(block).toContain("isIdle: () => !destroyed && !chrome.isBusy()");
+  });
+
+  test("the capped bus-wake message mirrors the task-notification cap wording", () => {
+    expect(source).toContain(
+      "a peer message arrived; automatic wakes are capped, so it will be delivered with your next message",
+    );
+  });
+
+  test("turn settle also triggers the bus-wake controller's onSettle, only when no queued operator item ran instead", () => {
+    const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");
+    expect(nextIdx).toBeGreaterThanOrEqual(0);
+    const block = source.slice(nextIdx, nextIdx + 700);
+    expect(block).toContain("runLine(next.question);");
+    expect(block).toContain("busWakeController?.onSettle();");
+    // The queued item wins — bus-wake only runs in the `else` branch.
+    expect(block.indexOf("} else {")).toBeGreaterThan(block.indexOf("runLine(next.question);"));
+  });
+
+  test("busInbox/busAck are merged onto deps only once the join actually succeeds — never for a disabled bus", () => {
+    const disabledIdx = source.indexOf('if ("disabled" in joined) {');
+    const assignIdx = source.indexOf("liveBus = joined;");
+    expect(disabledIdx).toBeGreaterThanOrEqual(0);
+    expect(assignIdx).toBeGreaterThan(disabledIdx);
+    const disabledBlock = source.slice(disabledIdx, assignIdx);
+    expect(disabledBlock).not.toContain("busInbox");
+    // Widened for review r1 F7's `selAtJoin`/comment ahead of these fields.
+    const successBlock = source.slice(assignIdx, assignIdx + 2600);
+    expect(successBlock).toContain("busInbox,");
+    expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
+  });
+
+  // review r1 F7: a concurrent `/model`/`/connect` must never be reverted by
+  // this rebuild finishing later with a stale `currentSel`.
+  test("the join-success rebuild captures currentSel as selAtJoin before its own await and only merges bus fields when a switch landed meanwhile", () => {
+    const assignIdx = source.indexOf("liveBus = joined;");
+    const block = source.slice(assignIdx, assignIdx + 2600);
+    expect(block).toContain("const selAtJoin = currentSel;");
+    expect(block).toContain("opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef)");
+    expect(block).toContain("currentSel === selAtJoin");
+  });
+
+  test("busClientRef is a live getter, not a captured value, threaded through every real opts.makeAgentDeps call that needs the bus", () => {
+    expect(source).toContain("const busClientRef = { client: (): BusClient | undefined => liveBus };");
+    // review r1 F9: the side-worker call site no longer passes busClientRef.
+    expect((source.match(/opts\.makeAgentDeps\([^)]*busClientRef\)/g) ?? []).length).toBeGreaterThanOrEqual(3);
+  });
+
+  // review r1 F9: a side worker must not even be told the session is
+  // bus-joined — it answers a transient status question and never speaks on
+  // the session's own bus identity.
+  test("the side-worker deps rebuild passes no bus getter at all (review r1 F9)", () => {
+    const baseIdx = source.indexOf("const base = await opts.makeAgentDeps(");
+    expect(baseIdx).toBeGreaterThanOrEqual(0);
+    const block = source.slice(baseIdx, baseIdx + 200);
+    expect(block).toContain("opts.makeAgentDeps(currentSel, liveSlateSession, undefined)");
+  });
+
+  // review r1 F10: an operator gets one notice per overflow episode, never
+  // one per dropped event.
+  test("the inbox is created with onDrop wired to the throttled drop notifier (review r1 F10)", () => {
+    expect(source).toContain(
+      "const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });",
+    );
+    expect(source).toContain(
+      "busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));",
+    );
+  });
+});

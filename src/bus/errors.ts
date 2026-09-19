@@ -14,6 +14,7 @@ export type BusRefusalCode =
   | "bus-disabled"
   | "unknown-recipient"
   | "recipient-not-live"
+  | "recipient-is-self"
   | "rate-limited"
   | "reply-without-replyTo"
   | "unknown-message"

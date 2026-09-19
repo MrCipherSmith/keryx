@@ -242,6 +242,19 @@ import type { VersionCheckResult } from "../lib/version-check";
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { listPresence } from "../bus/presence";
+// Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent.
+// `createBusInbox` and its drain contract are T5's (`../bus/inbox.ts`); this
+// file only feeds `BusClient.onEvent` into one and, via
+// `createBusWakeController` (review r1 F11 — the stateful wrapper around the
+// pure `decideBusWake`), decides whether to start a turn for it.
+import { createBusInbox, type BusInbox } from "../bus/inbox";
+import {
+  busInboxFullNotice,
+  createBusDropNotifier,
+  createBusWakeController,
+  type BusDropNotifier,
+  type BusWakeController,
+} from "./bus-wake";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
@@ -306,6 +319,21 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   "shell_task_kill",
   "shell_task_wait",
   "shell_job_output",
+  // Flow 274 (agent bus P3, T7): `bus_send` is ALSO `risk: "read"` (specification
+  // §7.1, AC8) — a classifier choice about tool-budget accounting, not an
+  // approval/trust signal (same FROZEN AC6 caveat as `shell_job_kill` above) —
+  // but sending a real peer message under the MAIN session's own bus identity is
+  // exactly the "read-risk-but-actually-mutating" hazard this list exists for. A
+  // side worker answers a transient status question; it must never speak on the
+  // session's behalf.
+  //
+  // review r1 F9: `bus_list` no longer reaches a side worker either — not
+  // because it is unsafe (it genuinely is read-only), but because the side
+  // worker's own `makeAgentDeps` call now passes no bus getter at all (see
+  // that call site's own doc comment), so `bus_list`/`bus_send` are never
+  // even built into `base.tools` for it to filter here. Named anyway, should
+  // that ever change.
+  "bus_send",
 ]);
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
@@ -2896,7 +2924,22 @@ export async function launchTuiAgentShell(opts: {
    * `slateSession` local — this just widens the contract to pass it
    * through instead of narrowing it to `.dir` first.
    */
-  makeAgentDeps: (sel: TuiSelection, getSlateSession: () => SlateSessionRef | undefined) => Promise<AgentDeps>;
+  /**
+   * Flow 274 (agent bus P3, T6/T7 contract): a LIVE getter for this
+   * session's bus client (never a captured value — the join resolves
+   * asynchronously, well after the FIRST `makeAgentDeps` call, and every
+   * `/model`/`/connect` rebuild must see whatever the join settled to by
+   * then). `commands/shell.ts`'s `makeAgentDeps` reads `bus?.client() !==
+   * undefined` to decide `AgentInstructionContext.busJoined` and whether to
+   * pass a `bus` option through to `buildInteractiveAgentTools` at all
+   * (never for a session that never even attempts to join). Optional so
+   * every existing caller (tests) that predates the bus is unaffected.
+   */
+  makeAgentDeps: (
+    sel: TuiSelection,
+    getSlateSession: () => SlateSessionRef | undefined,
+    bus?: { client: () => BusClient | undefined },
+  ) => Promise<AgentDeps>;
   /**
    * Flow 268 T16 (AC11): update the CALLER's `/reasoning` session-override
    * state (`commands/shell.ts`'s `reasoningSessionOverride`) so the NEXT
@@ -3009,6 +3052,41 @@ export async function launchTuiAgentShell(opts: {
   // immediately — never assigned to `liveBus`, never painted into — rather
   // than racing the already-destroyed renderer.
   let destroyed = false;
+  // review r1 F10: one "inbox full" notice per overflow episode, not one per
+  // dropped message (see `createBusDropNotifier`'s own doc comment).
+  // Declared here (before `io` exists) but only ASSIGNED once `io` does,
+  // below — same nullable-ref/TDZ idiom as `liveJobs`/`detachExternal`/
+  // `liveBus` above: `busInbox`'s own `onDrop` closure only ever fires once a
+  // real event is pushed, long after this function's synchronous setup (and
+  // so this assignment) completes.
+  let busDropNotifier: BusDropNotifier;
+  // Flow 274 (agent bus P3, T7; specification §5.3): one inbox per session,
+  // fed by `BusClient.onEvent` below regardless of when the join settles —
+  // safe to create up front even for a disabled bus (it simply never
+  // receives a push).
+  const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });
+  // Flow 274 T7 (review r1 F11: now `createBusWakeController`, from
+  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `mainQueue`
+  // and `consecutiveAutoWakes`, all declared much further down this
+  // function — but `onPeers` (which must trigger it once per poll,
+  // specification §5.3) is wired into `joinBus` right below, long before any
+  // of those exist. Same indirection `deps.jobRegistry?.onCompletion` avoids
+  // by being registered textually AFTER `runLine`: a mutable ref, assigned
+  // its real implementation next to that registration, so `onPeers` always
+  // calls through whatever is current — a safe no-op until then, since a real
+  // poll cannot fire until long after this function's synchronous setup (and
+  // so this assignment) has completed.
+  let busWakeController: BusWakeController | undefined;
+  // review r1 F1: whether the poll CURRENTLY being processed delivered at
+  // least one event to `busInbox` — set by `onEvent` (below, per event) and
+  // read/reset by `onPeers` once per poll, right after every event of that
+  // poll was already routed to `onEvent` (`BusClient`'s own `doPoll`).
+  let busPollDeliveredEvent = false;
+  // Flow 274 (agent bus P3, T6/T7 contract): the SAME live-getter object
+  // passed to every `opts.makeAgentDeps` call (initial build and every
+  // `/model`/`/connect`/side-worker rebuild) — `commands/shell.ts`'s
+  // `makeAgentDeps` reads `bus.client()` at call time, never a snapshot.
+  const busClientRef = { client: (): BusClient | undefined => liveBus };
   const foregroundOperation = createForegroundOperationOwner();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -3108,7 +3186,7 @@ export async function launchTuiAgentShell(opts: {
     // at the write) rather than writing into it until the next heartbeat.
     const liveSlateSession = (): SlateSessionRef | undefined =>
       whilePersisting(slateSession, () => sessionLease.canPersist());
-    let deps = await opts.makeAgentDeps(sel, liveSlateSession);
+    let deps = await opts.makeAgentDeps(sel, liveSlateSession, busClientRef);
     liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
     // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
     // target, so the `/reasoning` no-arg status line can name the source
@@ -3528,6 +3606,8 @@ export async function launchTuiAgentShell(opts: {
     setMainAgent("queued", "ready");
 
     const io = createTuiAgentIo(otui, r, transcript);
+    // review r1 F10: now that `io` exists, the drop notifier can actually print.
+    busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
     // EXACT `usage`; fall back to an estimate (see the turn `finally` below) for
     // providers that report nothing (e.g. local Ollama models). `attachUsageIo`
@@ -4500,6 +4580,14 @@ export async function launchTuiAgentShell(opts: {
           onEvent: (event) => {
             if (destroyed) return; // review r1 F6: never paint after Ctrl+C
             io.onSystem?.(`${formatBusEventLine(event)}\n`);
+            // Flow 274 (agent bus P3, T7; specification §4.2, §5.3): every
+            // event `onEvent` sees is already NOT `ack`/`override`/
+            // `lease-expired` (`BusClient`'s own `isRenderable` filter), so
+            // every one of them is a candidate for agent delivery. `body` is
+            // optional only on the TYPE (pre-flow-274 fixtures); the real
+            // poll path always sets it — `?? ""` just satisfies `BusInboxEvent`.
+            busInbox.push({ ...event, body: event.body ?? "" });
+            busPollDeliveredEvent = true; // review r1 F1: this poll delivered something
           },
           onPeers: (peers: BusPeer[]) => {
             if (destroyed) return; // review r1 F6: never paint after Ctrl+C
@@ -4510,6 +4598,19 @@ export async function launchTuiAgentShell(opts: {
               activity: peer.record.activity,
             }));
             paintFleet();
+            // review r1 F10: the inbox may have drained to empty since the
+            // last overflow notice — let the NEXT overflow episode print its
+            // own notice.
+            busDropNotifier.onInboxSizeObserved(busInbox.size);
+            // Flow 274 T7 (specification §5.3): "on the poll, when busInbox
+            // receives a wake-eligible kind" — `onPeers` fires exactly once
+            // per poll, AFTER every event of that poll was already routed to
+            // `onEvent` above (`BusClient`'s `doPoll`), so this is the poll's
+            // natural "events settled" point. review r1 F1: tell the
+            // controller whether THIS poll actually delivered anything, then
+            // reset the flag for the next poll cycle.
+            busWakeController?.onPoll(busPollDeliveredEvent);
+            busPollDeliveredEvent = false;
           },
         });
         if ("disabled" in joined) {
@@ -4533,6 +4634,44 @@ export async function launchTuiAgentShell(opts: {
         void joined.setSession(liveSession.summary.id).catch(() => {});
         const renamedNote = joined.nameWasTaken ? " (requested name was taken; renamed)" : "";
         io.onSystem?.(`bus: joined as @${joined.name} · ${joined.peers().length} peers${renamedNote}\n`);
+        // Flow 274 (agent bus P3, T6/T7 contract): the FIRST `makeAgentDeps`
+        // call (well above) necessarily ran before this join settled, so its
+        // `busClientRef.client()` read `undefined` and its `systemInstruction`/
+        // `tools` cannot yet name `bus_list`/`bus_send` or the conduct block
+        // (`AgentInstructionContext.busJoined`). One rebuild, right here,
+        // right after the join actually succeeds, folds those in — the same
+        // full-rebuild shape `/model`/`/connect` already use below, so a
+        // turn already in flight keeps running against the OLD `deps` object
+        // (this only replaces the closed-over reference for the NEXT turn).
+        //
+        // review r1 F7: `currentSel` is captured BEFORE this await as
+        // `selAtJoin`, and re-read AFTER it resolves. `switchTo` (below)
+        // reassigns `currentSel` synchronously, before its own await, so a
+        // `/model`/`/connect` that lands while THIS call is in flight can
+        // finish first and set `deps` to the NEW selection's build. Replacing
+        // `deps` wholesale here — built for the OLD `selAtJoin` — would
+        // silently revert that switch. When a concurrent switch is detected,
+        // only `busInbox`/`busAck` are folded onto whatever `deps` currently
+        // is; the provider/tools this call resolved for the now-superseded
+        // selection are discarded.
+        const selAtJoin = currentSel;
+        const joinedAgentDeps = await opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef);
+        deps =
+          currentSel === selAtJoin
+            ? {
+                ...joinedAgentDeps,
+                onContextCompaction,
+                busInbox,
+                busAck: (events) => joined.ack(events),
+              }
+            : {
+                // A concurrent `/model`/`/connect` already replaced `deps` —
+                // keep its provider/tools, only fold the bus wiring on.
+                ...deps,
+                busInbox,
+                busAck: (events) => joined.ack(events),
+              };
+        liveDeps = deps;
       } catch (error) {
         io.onSystem?.(`bus: off (${error instanceof Error ? error.message : String(error)})\n`);
       }
@@ -5069,7 +5208,15 @@ export async function launchTuiAgentShell(opts: {
       currentSel = ns;
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
-      deps = { ...(await opts.makeAgentDeps(ns, liveSlateSession)), onContextCompaction };
+      deps = {
+        ...(await opts.makeAgentDeps(ns, liveSlateSession, busClientRef)),
+        onContextCompaction,
+        // Flow 274 T7: a rebuild must not drop the bus-delivery wiring that
+        // `opts.makeAgentDeps` itself knows nothing about (it is attached
+        // once the join settles, see the `joinBus` callback below).
+        ...(deps.busInbox !== undefined ? { busInbox: deps.busInbox } : {}),
+        ...(deps.busAck !== undefined ? { busAck: deps.busAck } : {}),
+      };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
@@ -5487,8 +5634,20 @@ export async function launchTuiAgentShell(opts: {
             // Finding 1 fix: same widened contract as the other two
             // `opts.makeAgentDeps` call sites in this file — pass the live
             // `slateSession` ref, not just `.dir`.
-            const base = await opts.makeAgentDeps(currentSel, liveSlateSession);
-            // Read-only: never allow shell/mutations from a side worker.
+            //
+            // review r1 F9: NOT `busClientRef`. A side worker answers a
+            // transient status question with a snapshot and never speaks on
+            // the session's own bus identity (`bus_send` is denied by name
+            // below regardless), so it has no business being told the
+            // session is bus-joined at all — passing `busClientRef` here
+            // made `busJoined` true in `base`'s own (unused, but computed)
+            // system instruction and `bus_list` show up in `base.tools`
+            // purely because the MAIN session happened to be joined, not
+            // because this worker needs it.
+            const base = await opts.makeAgentDeps(currentSel, liveSlateSession, undefined);
+            // Read-only: never allow shell/mutations from a side worker. `bus_send`
+            // is excluded by name (`SIDE_WORKER_DENIED_TOOL_NAMES`) even though it
+            // is `risk: "read"` — see that list's own doc comment.
             // F-003: `risk === "read"` alone is not enough — see
             // `SIDE_WORKER_DENIED_TOOL_NAMES`'s doc comment above.
             const tools = base.tools.filter(
@@ -5574,7 +5733,14 @@ export async function launchTuiAgentShell(opts: {
     // carries no operator text, so it skips the empty-line guard and the user
     // echo — there is nobody to echo.
     let consecutiveAutoWakes = 0;
-    const runLine = (line: string, origin: "operator" | "task-notification" = "operator"): void => {
+    const runLine = (
+      line: string,
+      // Flow 274 T7: `"bus-message"` marks a turn started because the
+      // busInbox holds a wake-eligible peer message — same shape as
+      // `"task-notification"`, and shares the SAME `consecutiveAutoWakes`
+      // counter/cap (specification §5.3).
+      origin: "operator" | "task-notification" | "bus-message" = "operator",
+    ): void => {
       if (line.length === 0 && origin === "operator") {
         return;
       }
@@ -6528,7 +6694,7 @@ export async function launchTuiAgentShell(opts: {
       const foregroundIo = createForegroundAgentIoFacade(foregroundOperation, operation, io);
       void runAgentTurn(foregroundIo, deps, history, line, {
         signal: foregroundOperation.signal,
-        ...(origin === "task-notification" ? { origin: "task-notification" as const } : {}),
+        ...(origin === "operator" ? {} : { origin }),
         ...(slateSession !== undefined ? { slateSession } : {}),
       }).finally(() => {
         foregroundOperation.settle(operation);
@@ -6571,7 +6737,15 @@ export async function launchTuiAgentShell(opts: {
         if (!forceHandoff.isAwaitingSettlement) {
           const next = forceHandoff.takeNext() ?? mainQueue.shift();
           paintMainQueue();
-          if (next !== undefined) runLine(next.question);
+          if (next !== undefined) {
+            runLine(next.question);
+          } else {
+            // Flow 274 T7 (specification §5.3): "on turn settle, when
+            // busInbox still holds wake-eligible messages" — only once there
+            // is no queued operator item to run instead (same FIFO-first
+            // rule as the task-notification wake below).
+            busWakeController?.onSettle();
+          }
         }
       });
     };
@@ -6601,6 +6775,39 @@ export async function launchTuiAgentShell(opts: {
       }
       consecutiveAutoWakes += 1;
       runLine("", "task-notification");
+    });
+
+    // --- flow 274 (agent bus P3, T7; specification §5.3): wake on a bus
+    // message, only when idle — same idle test, same shared
+    // `consecutiveAutoWakes` counter/cap as the task-notification wake
+    // immediately above. Assigned here (not inline where `onPeers`/the
+    // turn-settle site call it) for the SAME reason that wake is subscribed
+    // here rather than earlier: `runLine`, `mainQueue` and
+    // `consecutiveAutoWakes` are all declared above this point, in scope now.
+    //
+    // review r1 F11: the decision/print/wake wiring itself now lives in
+    // `createBusWakeController` (`./bus-wake.ts`), unit-tested directly there
+    // (`bus-wake.test.ts`) instead of only through this file's source text.
+    // review r1 F4: `hasBusDeps` guards against waking while a poll lands
+    // during the join-success `deps` rebuild's own `await`, before
+    // `deps.busInbox`/`deps.busAck` are attached — a wake right then would
+    // start a turn with nothing to drain, burning the auto-wake budget on an
+    // empty round.
+    busWakeController = createBusWakeController({
+      isIdle: () => !destroyed && !chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0,
+      inbox: busInbox,
+      getWakes: () => consecutiveAutoWakes,
+      incWakes: () => {
+        consecutiveAutoWakes += 1;
+      },
+      cap: () => resolveMaxAutoWake(),
+      runWake: () => runLine("", "bus-message"),
+      printCapped: () => {
+        io.onSystem?.(
+          "◇ a peer message arrived; automatic wakes are capped, so it will be delivered with your next message.\n",
+        );
+      },
+      hasBusDeps: () => deps.busInbox !== undefined,
     });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------

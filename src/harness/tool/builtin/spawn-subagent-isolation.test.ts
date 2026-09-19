@@ -125,6 +125,21 @@ test("the reported mode is the requested mode — the transcript cannot understa
   expect(bogus.output).toMatch(/read_only/);
 });
 
+// --- flow 274 T6 / AC9: no child ever reaches the agent bus -----------------
+// (specification §7.1: "None of these tools is offered to subagents or
+// external children in v1.") A child's tool set is built from
+// `builtinReadOnlyTools`/`builtinMetaprojectTools` above — never
+// `buildInteractiveAgentTools`, the only place `bus_list`/`bus_send` are ever
+// registered — so a model-requested `bus_send` can only fail to resolve.
+
+test("a subagent cannot reach the bus (no bus_* tools at any depth, in either mode)", async () => {
+  for (const mode of ["read_only", "general"] as const) {
+    const tool = spawnTool([toolCallRound("bus_send", '{"to":"@all","kind":"notice","body":"child-leaked-onto-bus"}')]);
+    const result = await tool.invoke({ task: "try to reach the bus", mode });
+    expect(result.output).not.toMatch(/child-leaked-onto-bus/);
+  }
+});
+
 // --- M3: a child summary is bounded ----------------------------------------
 
 test("a child summary is capped before it reaches the parent's history", async () => {

@@ -128,6 +128,8 @@ off a TTY the shell is non-interactive by default.
 
 An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ [#<seq>] @from kind: preview` — the sequence number and the message's short id (its first 8 characters). The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <#seq|id-prefix> <text>`, and `name <new>` (rename this shell). `/bus reply` resolves its first argument against the last 200 rendered events — a bare or `#`-prefixed sequence number, or a unique prefix (at least 8 characters) of a message's id — and always replies to that sender's underlying instance, so it still reaches them even if they renamed since; an argument matching no rendered message is refused with one line. The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
 
+When the bus is joined, peer messages also reach the agent as tool-provenance context. An idle agent is woken by a question, reply, handoff or name-addressed notice, with the wake capped by the same auto-wake limit as task notifications; readline shows `bus: N message(s) pending` and delivers them on the next turn. The agent has two tools: `bus_list` (read peer names and message log) and `bus_send` (send a message to a peer or broadcast).
+
 One shell holds a session at a time. `-r <id>` on a session a live shell holds
 offers fork, view or cancel in an interactive run, plus take over when the
 holder is stale; a non-interactive run exits `1` with a `--fork` hint instead.

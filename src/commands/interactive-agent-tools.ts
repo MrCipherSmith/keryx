@@ -4,6 +4,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { buildBusTools } from "../bus/agent-tools";
+import type { BusClient } from "../bus/client";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
@@ -102,6 +104,30 @@ export type InteractiveAgentToolsInput = {
    * roster to be the same as another tool's.
    */
   denyTools?: readonly string[];
+  /**
+   * Flow 274 T6 (specification §7.1); review r1 F2: when `client()` resolves
+   * to a live `BusClient` AT THE MOMENT this factory runs, `bus_list` and
+   * `bus_send` are added to the roster, and `client` (the live getter, not a
+   * snapshot) is threaded into `buildBusTools` so a later disconnect within
+   * the SAME already-joined roster still reports `bus-disabled` at
+   * invoke-time rather than the tool vanishing mid-session.
+   *
+   * review r1 F2 (AC9): inclusion itself is gated on `client() !== undefined`
+   * at THIS call, not merely on `bus` being supplied — a session that has
+   * never joined (KERYX_BUS=off, sessions off, or a join still in flight)
+   * must not see `bus_*` in its tool roster at all. This means a caller whose
+   * bus join settles AFTER its first tool-list build (every real call site:
+   * `commands/shell.ts`'s `makeAgentDeps`, and the readline `agentDepsBase`)
+   * gets no `bus_*` tools from that first build — it must rebuild the roster
+   * once the join actually succeeds, the same way it already rebuilds
+   * `AgentInstructionContext.busJoined`'s conduct block.
+   *
+   * Omitted entirely (every subagent/child tool-build path, any surface that
+   * never joins the bus, and a side worker — review r1 F9) → no `bus_*` tool
+   * is offered at all, matching specification §7.1: "None of these tools is
+   * offered to subagents or external children in v1."
+   */
+  bus?: { client: () => BusClient | undefined };
 };
 
 /**
@@ -209,6 +235,14 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
+    // reached by a subagent or external child — neither tool-build path calls
+    // this factory (see `spawn-subagent-tool.ts`, which builds its own child
+    // roster from `builtinReadOnlyTools`/`builtinMetaprojectTools` only).
+    //
+    // review r1 F2 (AC9): gated on `client() !== undefined` AT THIS CALL, not
+    // merely on `input.bus` being present — see that field's own doc comment.
+    ...(input.bus?.client() === undefined ? [] : buildBusTools(input.bus.client)),
     // Two tools of fixed cost, whatever the operator has connected — never
     // one registered tool per MCP tool. That refusal is the package's whole
     // shape, and `mcp-tool-surface.test.ts` is what keeps it true from here.

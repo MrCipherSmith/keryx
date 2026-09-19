@@ -7,7 +7,14 @@ import { cursorAtStart, readEvents } from "./log";
 import { eventsPath } from "./paths";
 import { writePresence } from "./presence";
 import type { PresenceRecord } from "./schema";
-import { CLI_RATE_LIMIT_PER_MINUTE, OPERATOR_RATE_LIMIT_PER_MINUTE, rateLimitBypassed, sendMessage, type SendInput } from "./send";
+import {
+  AGENT_RATE_LIMIT_PER_MINUTE,
+  CLI_RATE_LIMIT_PER_MINUTE,
+  OPERATOR_RATE_LIMIT_PER_MINUTE,
+  rateLimitBypassed,
+  sendMessage,
+  type SendInput,
+} from "./send";
 
 // AC7: send semantics and every refusal by its code.
 
@@ -157,6 +164,69 @@ describe("sendMessage", () => {
     );
   });
 
+  test("agent-origin sends are written with from.origin agent (review r1 F3)", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "agent" as const };
+    const sent = await sendMessage(root, input({ origin: "agent", from, toLabel: "@all" }));
+    expect(sent.event.from.origin).toBe("agent");
+    expect(sent.event.from.instanceId).toBe(LIVE);
+  });
+
+  test("an agent send needs from, like an operator send", async () => {
+    const root = await seeded();
+    expect(await refusal(sendMessage(root, input({ origin: "agent", toLabel: "@all" })))).toBe("invalid-event");
+  });
+
+  test("the 11th agent message within a minute from ONE instance is rate-limited (D-12, review r1 F3/F5); the window then slides", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "agent" as const };
+    for (let i = 0; i < AGENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "agent", from, toLabel: "@all", body: `m${i}` }));
+    }
+    expect(await refusal(sendMessage(root, input({ origin: "agent", from, toLabel: "@all" })))).toBe("rate-limited");
+
+    expect(
+      await sendMessage(root, input({ origin: "agent", from, toLabel: "@all", now: () => NOW + 61_000 })),
+    ).toEqual(expect.objectContaining({ seq: AGENT_RATE_LIMIT_PER_MINUTE + 1 }));
+  });
+
+  test("the agent budget is separate from the operator budget for the SAME instance (review r1 F3): exhausting one leaves the other free", async () => {
+    const root = await seeded();
+    const agentFrom = { instanceId: LIVE, name: "release", origin: "agent" as const };
+    for (let i = 0; i < AGENT_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "agent", from: agentFrom, toLabel: "@all", body: `a${i}` }));
+    }
+    expect(await refusal(sendMessage(root, input({ origin: "agent", from: agentFrom, toLabel: "@all" })))).toBe(
+      "rate-limited",
+    );
+
+    // The operator budget for the SAME instance is untouched by the agent budget being spent.
+    const operatorFrom = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    const stillWorks = await sendMessage(root, input({ origin: "operator", from: operatorFrom, toLabel: "@all" }));
+    expect(stillWorks.event.from.origin).toBe("operator");
+
+    // And an agent send from a DIFFERENT instance is unaffected too.
+    const otherAgentFrom = { instanceId: LIVE_TWIN, name: "release", origin: "agent" as const };
+    await writePresence(root, presence(LIVE_TWIN, "release", NOW - 2_000));
+    const otherWorks = await sendMessage(root, input({ origin: "agent", from: otherAgentFrom, toLabel: "@all" }));
+    expect(otherWorks.event.from.instanceId).toBe(LIVE_TWIN);
+  });
+
+  test("the operator budget is separate from the agent budget for the SAME instance: exhausting the operator budget leaves agent sends free", async () => {
+    const root = await seeded();
+    const operatorFrom = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    for (let i = 0; i < OPERATOR_RATE_LIMIT_PER_MINUTE; i += 1) {
+      await sendMessage(root, input({ origin: "operator", from: operatorFrom, toLabel: "@all", body: `o${i}` }));
+    }
+    expect(await refusal(sendMessage(root, input({ origin: "operator", from: operatorFrom, toLabel: "@all" })))).toBe(
+      "rate-limited",
+    );
+
+    const agentFrom = { instanceId: LIVE, name: "release", origin: "agent" as const };
+    const stillWorks = await sendMessage(root, input({ origin: "agent", from: agentFrom, toLabel: "@all" }));
+    expect(stillWorks.event.from.origin).toBe("agent");
+  });
+
   test("the test-only bypass lifts the limit, and only in a test context", async () => {
     expect(rateLimitBypassed({ NODE_ENV: "test", KERYX_TEST_BUS_RATE: "off" })).toBe(true);
     expect(rateLimitBypassed({ KERYX_TEST_BUS: "1", KERYX_TEST_BUS_RATE: "off" })).toBe(true);
@@ -191,5 +261,54 @@ describe("sendMessage: toInstanceId (review r1 F4 — reply addressed by instanc
   test("invalid-id for a malformed toInstanceId", async () => {
     const root = await seeded();
     expect(await refusal(sendMessage(root, input({ toInstanceId: "../not-a-uuid" })))).toBe("invalid-id");
+  });
+});
+
+describe("sendMessage: recipient-is-self (review r1 F6)", () => {
+  test("an operator send to @<own-name> resolves only to self and is refused", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    expect(await refusal(sendMessage(root, input({ origin: "operator", from, toLabel: "@release" })))).toBe(
+      "recipient-is-self",
+    );
+  });
+
+  test("an agent send to @<own-name> resolves only to self and is refused", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "agent" as const };
+    expect(await refusal(sendMessage(root, input({ origin: "agent", from, toLabel: "@release" })))).toBe(
+      "recipient-is-self",
+    );
+  });
+
+  test("a reply addressed back to one's own instance via toInstanceId is refused", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    expect(
+      await refusal(
+        sendMessage(root, input({ origin: "operator", from, kind: "reply", replyTo: LIVE, toInstanceId: LIVE })),
+      ),
+    ).toBe("recipient-is-self");
+  });
+
+  test("@<name> held by self AND a live twin is NOT recipient-is-self (more than one live holder)", async () => {
+    const root = await seeded();
+    await writePresence(root, presence(LIVE_TWIN, "release", NOW - 2_000));
+    const from = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    const sent = await sendMessage(root, input({ origin: "operator", from, toLabel: "@release" }));
+    expect(sent.resolvedTo).toEqual([LIVE, LIVE_TWIN].sort());
+  });
+
+  test("@all is never recipient-is-self, even though the sender is itself a live instance", async () => {
+    const root = await seeded();
+    const from = { instanceId: LIVE, name: "release", origin: "operator" as const };
+    const sent = await sendMessage(root, input({ origin: "operator", from, toLabel: "@all" }));
+    expect(sent.resolvedTo).toEqual(["*"]);
+  });
+
+  test("a CLI send (no from.instanceId tied to a live instance) is never refused as recipient-is-self", async () => {
+    const root = await seeded();
+    const sent = await sendMessage(root, input({ origin: "cli", toLabel: "@release" }));
+    expect(sent.resolvedTo).toEqual([LIVE]);
   });
 });

@@ -602,3 +602,103 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     expect(turnBlock).toContain("busWorking = true;");
   });
 });
+
+// Flow 274 (agent bus P3, T7; specification §5.3, AC1/AC7): delivery to the
+// agent in the readline REPL. `runAgentRepl` has no injection seam (see the
+// describe block above) — proven the same way as everything else in it.
+describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
+
+  test("a busInbox is created and every polled event is pushed into it, body defaulted", () => {
+    // review r1 F10: `onDrop` is now wired to a throttled overflow notice.
+    expect(replBody).toContain(
+      "const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });",
+    );
+    const joinIndex = replBody.indexOf("const joined = await joinBus({");
+    expect(joinIndex).toBeGreaterThan(0);
+    const eventIdx = replBody.indexOf("onEvent: (event) => {", joinIndex);
+    expect(eventIdx).toBeGreaterThan(joinIndex);
+    const eventBody = replBody.slice(eventIdx, replBody.indexOf("},", eventIdx));
+    expect(eventBody).toContain('busInbox.push({ ...event, body: event.body ?? "" });');
+  });
+
+  test("busInbox/busAck are merged onto deps only once the join succeeds, never for a disabled bus", () => {
+    const disabledIdx = replBody.indexOf('if ("disabled" in joined) {');
+    const successIdx = replBody.indexOf("bus = joined;", disabledIdx);
+    expect(disabledIdx).toBeGreaterThan(0);
+    expect(successIdx).toBeGreaterThan(disabledIdx);
+    const disabledBlock = replBody.slice(disabledIdx, successIdx);
+    expect(disabledBlock).not.toContain("busInbox");
+    // Widened for review r1 F2's tools-rebuild comment/code ahead of these fields.
+    const successBlock = replBody.slice(successIdx, successIdx + 1700);
+    expect(successBlock).toContain("busInbox,");
+    expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
+  });
+
+  test("the join success rebuild folds in busJoined: true for the system instruction", () => {
+    const successIdx = replBody.indexOf("bus = joined;");
+    // Widened for review r1 F2's tools-rebuild comment/code ahead of these fields.
+    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    expect(successBlock).toContain("systemInstruction: buildAgentSystemInstruction(orient, {");
+    expect(successBlock).toContain("busJoined: true,");
+  });
+
+  // review r1 F2 (AC9): the join-success rebuild now also splices
+  // `bus_list`/`bus_send` into `deps.tools` — `agentDepsBase.tools` (built by
+  // the CALLER, before any join) never gets them, so this REPL's roster only
+  // ever grows them here, once, right after a real join succeeds.
+  test("the join success rebuild splices bus_list/bus_send into deps.tools via buildBusTools(() => bus)", () => {
+    const successIdx = replBody.indexOf("bus = joined;");
+    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    expect(successBlock).toContain("const rebuiltTools = [...deps.tools, ...buildBusTools(() => bus)];");
+    expect(successBlock).toContain("tools: rebuiltTools,");
+    expect(successBlock).toContain("toolNames: interactiveAgentToolNames(rebuiltTools),");
+  });
+
+  test("no idle wake exists for this surface: readLineOrCompletion's completion race stays keyed to jobRegistry only", () => {
+    // Specification §5.3: "no idle wake in v1" for readline — `busInbox` is
+    // drained only from inside a turn, never used to resolve the
+    // `completionWaiters` race that `deps.jobRegistry?.onCompletion` feeds.
+    expect(replBody).toContain("deps.jobRegistry?.onCompletion(() => {");
+    expect(replBody).not.toContain("busInbox?.onCompletion");
+    expect(replBody).not.toMatch(/busInbox[^;]*completionWaiters/);
+  });
+
+  test("the prompt announces pending bus messages, replacing every raw rich.printPrompt() call in this REPL", () => {
+    const helperIdx = replBody.indexOf("const printPromptWithBusNotice = (): void => {");
+    expect(helperIdx).toBeGreaterThan(0);
+    const helperBlock = replBody.slice(helperIdx, helperIdx + 300);
+    expect(helperBlock).toContain("busInbox.size > 0");
+    expect(helperBlock).toContain("message(s) pending — delivered with your next message");
+    expect(helperBlock).toContain("rich.printPrompt();");
+    // Every OTHER printPrompt call in this REPL goes through the wrapper —
+    // the only raw `rich.printPrompt()` left is the one inside it, above.
+    const rawCalls = (replBody.match(/rich\.printPrompt\(\)/g) ?? []).length;
+    expect(rawCalls).toBe(1);
+    const wrapperCalls = (replBody.match(/(?<!const )printPromptWithBusNotice\(\)/g) ?? []).length;
+    expect(wrapperCalls).toBeGreaterThanOrEqual(5);
+  });
+
+  // review r1 F2 (AC9): `agentDepsBase.tools` (built in the OUTER function,
+  // `shellCommand`'s agent-mode branch, BEFORE `runAgentRepl` is even
+  // called — outside `replBody`, which stops at that branch's own start
+  // marker) no longer passes a `bus` option at all, because `busBox.current`
+  // is always still empty at that point — passing it would (correctly) still
+  // omit `bus_list`/`bus_send` now that `buildInteractiveAgentTools` gates
+  // inclusion on `client() !== undefined` at build time, but leaving the
+  // wrapper there read as though it did something. `runAgentRepl`'s own join
+  // (tested above) is what actually adds the tools, once, right after it
+  // succeeds.
+  test("agentDepsBase passes no bus option at all — the tools-rebuild happens only in runAgentRepl's own join", () => {
+    const agentModeBranch = shellSource.slice(agentModeBranchStart);
+    const toolsIdx = agentModeBranch.indexOf("tools: buildInteractiveAgentTools({");
+    expect(toolsIdx).toBeGreaterThan(0);
+    const toolsBlock = agentModeBranch.slice(toolsIdx, agentModeBranch.indexOf("}),", toolsIdx));
+    expect(toolsBlock).not.toContain("bus:");
+    expect(toolsBlock).not.toContain("busBox.current");
+    expect(agentModeBranch).toContain("busJoined: busBox.current !== undefined,");
+  });
+});

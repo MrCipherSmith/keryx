@@ -22,7 +22,7 @@ import { resolveProjectRoot } from "../session/paths";
 import { displaySafe } from "./display";
 import { busEnabled, busPollMs, type BusEnabledInput } from "./enabled";
 import { BusRefusal } from "./errors";
-import { cursorAtEnd, readEvents, type BusCursor } from "./log";
+import { appendEvent, cursorAtEnd, readEvents, type BusCursor } from "./log";
 import { presencePath, resolveBusRoot } from "./paths";
 import {
   allocateName,
@@ -68,6 +68,19 @@ export interface RenderedBusEvent {
   /** `displaySafe`d, at most 160 characters. */
   preview: string;
   replyTo?: string;
+  /**
+   * The full, untruncated event body (redacted on write, same as `preview`'s
+   * source, but never cut to 160 characters): flow 274, so a busInbox can
+   * deliver the whole message into agent history rather than the display-only
+   * preview. Optional so every pre-flow-274 caller that builds a
+   * `RenderedBusEvent` fixture by hand (display/TUI tests) is unaffected;
+   * `doPoll` below always sets it on the real delivery path, and
+   * `../bus/inbox.ts`'s `BusInboxEvent` requires it of whatever is actually
+   * pushed.
+   */
+  body?: string;
+  /** True when addressed via `@all` (`to === ["*"]`); false/absent when addressed by name (flow 274). Optional for the same reason as `body`. */
+  toStar?: boolean;
 }
 
 /** `BusClient.resolveRef`'s result: enough to address a reply without a fresh name lookup. */
@@ -100,7 +113,7 @@ export interface BusClientSessionLease {
 export type BusSessionLeaseGetter = () => BusClientSessionLease | undefined;
 
 /** Where a bus background failure was observed; see `./display.ts`'s `makeBusErrorReporter`. */
-export type BusErrorWhere = "poll" | "heartbeat" | "session";
+export type BusErrorWhere = "poll" | "heartbeat" | "session" | "ack";
 
 /** Injectable timer source, so tests drive the heartbeat and the poller without a real wait. */
 export interface BusTimers {
@@ -172,8 +185,33 @@ export interface BusClient {
    * `BusRefusal("unknown-message")` when `ref` does not resolve.
    */
   reply(ref: string, body: string): Promise<SendResult>;
+  /**
+   * Like {@link send}, but writes `from.origin: "agent"` (specification §4.2,
+   * D-12): the model's own `bus_send` tool call (`./agent-tools.ts`), never
+   * the operator's own typed input. Shares every other refusal `send` has
+   * (`unknown-recipient`, `recipient-not-live`, `recipient-is-self`,
+   * `body-too-large`, …) plus its own, separately-counted 10/minute budget
+   * (review r1 F3, F5).
+   */
+  sendAsAgent(toLabel: string, kind: SendableKind, body: string): Promise<SendResult>;
+  /**
+   * Like {@link reply} — same `resolveRef` lookup, same ORIGINAL-sender
+   * addressing (review r1 F4) — but writes `from.origin: "agent"` (review r1
+   * F3) and is counted against the agent budget, not the operator's.
+   */
+  replyAsAgent(ref: string, body: string): Promise<SendResult>;
   /** One poll cycle now, awaited; for tests. Returns every event addressed to this instance. */
   pollNow(): Promise<BusEvent[]>;
+  /**
+   * Mark the given delivered events acknowledged (flow 274, D-10): appends one
+   * `ack` event per input, addressed to that event's sender, `refs.replyTo`
+   * set to the delivered event's id. Fire-and-forget — never throws; a failed
+   * append is reported via `onError("ack")`, same as a failed poll/heartbeat.
+   * Call this AFTER the event has actually been placed in agent history, never
+   * merely on read, so an ack is a durable "this reached the agent," not "this
+   * was seen."
+   */
+  ack(events: readonly RenderedBusEvent[]): void;
   /** Idempotent and synchronous-safe: stops both timers and removes presence. */
   leave(): void;
 }
@@ -419,6 +457,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         fromInstanceId: event.from.instanceId,
         kind,
         preview: preview(event.body),
+        body: event.body ?? "",
+        toStar: event.to.length === 1 && event.to[0] === "*",
         ...(event.refs?.replyTo !== undefined ? { replyTo: event.refs.replyTo } : {}),
       };
       rememberRendered(rendered);
@@ -544,8 +584,63 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         env: opts.env,
       });
     },
+    async sendAsAgent(toLabel, kind, body) {
+      const from: BusSender = { instanceId, name: state.name, origin: "agent" };
+      return sendMessage(root, {
+        toLabel,
+        kind,
+        body,
+        origin: "agent",
+        from,
+        now,
+        liveness: { isAlive, host },
+        env: opts.env,
+      });
+    },
+    async replyAsAgent(ref, body) {
+      const resolved = resolveRefImpl(ref);
+      if (resolved === undefined) {
+        throw new BusRefusal("unknown-message", `no rendered message matches ${JSON.stringify(ref)}`);
+      }
+      const from: BusSender = { instanceId, name: state.name, origin: "agent" };
+      return sendMessage(root, {
+        toLabel: `@${resolved.fromName}`,
+        kind: "reply",
+        body,
+        replyTo: resolved.id,
+        toInstanceId: resolved.fromInstanceId,
+        origin: "agent",
+        from,
+        now,
+        liveness: { isAlive, host },
+        env: opts.env,
+      });
+    },
     pollNow() {
       return doPoll();
+    },
+    ack(events) {
+      if (left) return; // review r1 F1 pattern: no-op after leave()
+      for (const event of events) {
+        void (async () => {
+          try {
+            const from: BusSender = { instanceId, name: state.name, origin: "system" };
+            await appendEvent(
+              root,
+              {
+                from,
+                to: [event.fromInstanceId],
+                toLabel: `@${event.fromName}`,
+                kind: "ack",
+                refs: { replyTo: event.id },
+              },
+              { now },
+            );
+          } catch (error) {
+            opts.onError?.(error, "ack");
+          }
+        })();
+      }
     },
     leave,
   };

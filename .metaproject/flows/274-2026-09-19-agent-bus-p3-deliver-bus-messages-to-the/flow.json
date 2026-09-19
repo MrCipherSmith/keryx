@@ -1,0 +1,391 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "274",
+  "slug": "agent-bus-p3-deliver-bus-messages-to-the",
+  "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T19:12:15.198Z",
+  "updatedAt": "2026-09-19T21:33:34.816Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:970ba824480bfea771f5e690ecfbf7b4faf8813471635096430e0e6a80d5a327",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by per-area implement tasks T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each task; integration proofs are T8; full suite is T10 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:16:57.118Z",
+            "outcome": "started",
+            "detail": "274-T5 delivery core (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:34:31.448Z",
+            "outcome": "started",
+            "detail": "274-T6 tools+conduct (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:34:31.532Z",
+            "outcome": "started",
+            "detail": "274-T7 surface wiring (sonnet), parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:17:42.481Z",
+            "outcome": "started",
+            "detail": "274-T8 integration tests (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: P3 status and bus tools mention (haiku)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:33:04.591Z",
+            "outcome": "started",
+            "detail": "274-T9 docs (haiku)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:40:12.877Z",
+            "outcome": "started",
+            "detail": "274-T11 lanes A+B in parallel (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T21:23:59.768Z",
+            "outcome": "started",
+            "detail": "274-T12 CI fixes (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T19:12:15.198Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T19:16:55.631Z",
+      "event": "task-added",
+      "detail": "T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.716Z",
+      "event": "task-added",
+      "detail": "T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.812Z",
+      "event": "task-added",
+      "detail": "T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.896Z",
+      "event": "task-added",
+      "detail": "T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.978Z",
+      "event": "task-added",
+      "detail": "T9: Docs: P3 status and bus tools mention (haiku)"
+    },
+    {
+      "at": "2026-09-19T19:16:56.061Z",
+      "event": "task-added",
+      "detail": "T10: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T19:16:56.140Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T19:16:56.228Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T19:16:56.312Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T19:16:56.399Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T19:16:56.483Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-19T19:16:57.118Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 274-T5 delivery core (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.117Z",
+      "event": "task-done",
+      "detail": "T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.448Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 274-T6 tools+conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.532Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 274-T7 surface wiring (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T19:52:05.382Z",
+      "event": "task-done",
+      "detail": "T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:17:42.061Z",
+      "event": "task-done",
+      "detail": "T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:17:42.481Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 274-T8 integration tests (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:32:32.342Z",
+      "event": "task-done",
+      "detail": "T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:33:04.591Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 274-T9 docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T20:36:00.050Z",
+      "event": "task-done",
+      "detail": "T9: Docs: P3 status and bus tools mention (haiku)"
+    },
+    {
+      "at": "2026-09-19T20:40:12.800Z",
+      "event": "task-added",
+      "detail": "T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:40:12.877Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 274-T11 lanes A+B in parallel (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:13:07.871Z",
+      "event": "task-done",
+      "detail": "T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:23:59.684Z",
+      "event": "task-added",
+      "detail": "T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:23:59.768Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 274-T12 CI fixes (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:33:34.816Z",
+      "event": "task-done",
+      "detail": "T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)"
+    }
+  ]
+}

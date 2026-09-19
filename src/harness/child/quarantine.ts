@@ -25,9 +25,16 @@ interface QuarantinePattern {
 
 const PATTERNS: readonly QuarantinePattern[] = [
   {
-    // Imitations of harness control tags (e.g. <system-reminder>, </system>).
+    // Imitations of harness control tags (e.g. <system-reminder>, </system>),
+    // including the agent-bus/child-notification wrappers a forged summary or
+    // peer message could imitate to look like a real delivery (review r1 F8):
+    // <peer-message> (agent.ts's bus-delivery wrapper) and
+    // <task-notification> (its task-completion-inbox counterpart).
     name: "control-tag",
-    test: (t) => /<\/?\s*(system-reminder|system|important|assistant|human|tool_result|function_calls)\b[^>]*>/i.test(t),
+    test: (t) =>
+      /<\/?\s*(system-reminder|system|important|assistant|human|tool_result|function_calls|peer-message|task-notification)\b[^>]*>/i.test(
+        t,
+      ),
   },
   {
     // Conversation turn markers that try to inject a new role turn.
@@ -63,15 +70,37 @@ export interface QuarantineResult {
 }
 
 /**
+ * Scan `text` for instruction-shaped patterns (shared by every quarantine
+ * entry point below). When any match, prepend a
+ * `[keryx: quarantined <label> — instruction-shaped patterns: ...]` marker
+ * line and return `flagged: true`; otherwise return the text unchanged. Pure.
+ */
+function quarantine(text: string, label: string): QuarantineResult {
+  const markers = PATTERNS.filter((p) => p.test(text)).map((p) => p.name);
+  if (markers.length === 0) {
+    return { flagged: false, markers: [], text };
+  }
+  const marker = `[keryx: quarantined ${label} — instruction-shaped patterns: ${markers.join(", ")}]`;
+  return { flagged: true, markers, text: `${marker}\n${text}` };
+}
+
+/**
  * Scan a child summary for instruction-shaped patterns. When any match, prepend a
  * `[keryx: quarantined child summary — instruction-shaped patterns: ...]` marker
  * line and return `flagged: true`; otherwise return the text unchanged. Pure.
  */
 export function quarantineChildSummary(summary: string): QuarantineResult {
-  const markers = PATTERNS.filter((p) => p.test(summary)).map((p) => p.name);
-  if (markers.length === 0) {
-    return { flagged: false, markers: [], text: summary };
-  }
-  const marker = `[keryx: quarantined child summary — instruction-shaped patterns: ${markers.join(", ")}]`;
-  return { flagged: true, markers, text: `${marker}\n${summary}` };
+  return quarantine(summary, "child summary");
+}
+
+/**
+ * Scan a bus peer message body for the same instruction-shaped patterns
+ * `quarantineChildSummary` looks for (flow 274, D-10): a peer agent's message
+ * is free text from another process and can equally embed fake control tags,
+ * turn markers, or permission-config mentions to try to steer the reading
+ * agent. Shares {@link PATTERNS} so the two entry points can never drift
+ * apart; only the marker's label differs ("peer message" vs "child summary").
+ */
+export function quarantinePeerMessage(body: string): QuarantineResult {
+  return quarantine(body, "peer message");
 }
