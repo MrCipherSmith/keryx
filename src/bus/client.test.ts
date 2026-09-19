@@ -873,6 +873,49 @@ describe("joinBus: leave (specification §5.4)", () => {
     client.leave(); // idempotent: removes nothing more
     expect(process.listenerCount("exit")).toBe(before);
   });
+
+  test("the exit hook is in place as soon as presence is on disk, before joinBus resolves", async () => {
+    // A signal handler that `process.exit`s while the join is still awaited
+    // cannot reach `leave()` yet: only the exit hook can remove presence then.
+    const cwd = await repo();
+    const { root } = await resolveBusRoot(cwd);
+    const before = process.listenerCount("exit");
+    let seenMidJoin: { presence: boolean; hooks: number } | undefined;
+
+    const client = asClient(
+      await join(cwd, {
+        // Called right after the join's presence write, before joinBus resolves.
+        sessionLease: () => {
+          seenMidJoin ??= {
+            presence: existsSync(presencePath(root, processInstanceId())),
+            hooks: process.listenerCount("exit"),
+          };
+          return undefined;
+        },
+      }),
+    );
+    client.leave();
+
+    expect(seenMidJoin).toEqual({ presence: true, hooks: before + 1 });
+    expect(process.listenerCount("exit")).toBe(before);
+  });
+
+  test("a join that fails after the presence write drops its exit hook along with the file", async () => {
+    const cwd = await repo();
+    const before = process.listenerCount("exit");
+
+    await expect(
+      join(cwd, {
+        sessionLease: () => ({
+          refresh: () => {
+            throw new Error("lease refresh failed");
+          },
+        }),
+      }),
+    ).rejects.toThrow("lease refresh failed");
+
+    expect(process.listenerCount("exit")).toBe(before);
+  });
 });
 
 describe("joinBus: leave resumes own leases (specification §5.4, AC9, flow 275 T5)", () => {

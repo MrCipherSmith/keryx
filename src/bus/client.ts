@@ -385,6 +385,106 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       // Best effort: already gone, or the process cannot write here any more.
     }
   };
+  /**
+   * Best-effort seq for the synchronous resume append below: the highest
+   * `seq` claimed by any complete, parseable line currently in the CURRENT
+   * segment, plus one. Mirrors `./log.ts`'s own crash recovery (it tail-scans
+   * the segment rather than trusting `head.json` alone) rather than
+   * `head.json` directly, so this fallback agrees with what the next real
+   * `appendEvent` call would derive if `head.json` itself is stale. Never
+   * throws: an unreadable or absent segment is worth exactly the same as "no
+   * events yet" here — this whole path is a best-effort fallback, and the
+   * lease FILE deletion below is what actually makes the lease inactive for
+   * every peer.
+   */
+  const bestEffortSyncSeq = (): number => {
+    try {
+      const content = readFileSync(eventsPath(root), "utf8");
+      let last = 0;
+      for (const line of content.split("\n")) {
+        if (line.trim().length === 0) continue;
+        try {
+          const value = JSON.parse(line) as { seq?: unknown };
+          if (typeof value.seq === "number" && value.seq > last) last = value.seq;
+        } catch {
+          // torn or foreign line: ignore, exactly like `./log.ts`'s reader.
+        }
+      }
+      return last + 1;
+    } catch {
+      return 1;
+    }
+  };
+
+  /**
+   * Synchronous, best-effort resume of every lease this instance holds (see
+   * {@link BusClient.leave}'s doc comment for why this must be synchronous
+   * and why it bypasses `append.lock`). Never throws. Declared before
+   * `leave()`, and before `leaseViewInstance` even exists, because the exit
+   * hook now registers before the join's first write (#618): a crash in that
+   * window calls `leave()` before `leaseViewInstance` is initialized, and
+   * `leaseViewInstance.myLeases()` hitting that not-yet-initialized binding
+   * is caught right here and treated as "nothing to resume yet" — exactly
+   * right, since no lease could have been created by this instance before
+   * join even started.
+   */
+  const syncResumeOwnLeases = (): void => {
+    let mine: readonly PauseLease[];
+    try {
+      mine = leaseViewInstance.myLeases();
+    } catch {
+      return;
+    }
+    for (const lease of mine) {
+      try {
+        unlinkSync(leasePath(root, lease.leaseId));
+      } catch {
+        // best effort: already gone, or this process cannot write here any more.
+      }
+      try {
+        // Addressed like the lease's own `targets` (§4.2's `resume` row:
+        // "wakes: yes" — whoever was held is exactly who should wake up now),
+        // mirroring the async `resumePauseLease`. `toLabel` is always "@all"
+        // here rather than resolving a concrete target's current name: doing
+        // that synchronously would mean a second sync directory read in an
+        // exit-time fallback that is already documented as best-effort, for
+        // a field `to` (not `toLabel`) is what actually routes the event.
+        const event = {
+          schemaVersion: BUS_SCHEMA_VERSION,
+          seq: bestEffortSyncSeq(),
+          id: randomUUID(),
+          ts: new Date(now()).toISOString(),
+          from: { instanceId: lease.holder.instanceId, name: lease.holder.name, origin: lease.holder.origin },
+          to: lease.targets,
+          toLabel: "@all",
+          kind: "resume" as const,
+          refs: { leaseId: lease.leaseId },
+        };
+        appendFileSync(eventsPath(root), `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: BUS_FILE_MODE });
+      } catch {
+        // Best effort only: the lease FILE above is already gone, which is
+        // enough for every peer (§4.3's "active" rule is file-existence
+        // based) — this `resume` event is purely informational.
+      }
+    }
+  };
+
+  // Set once the join completes; `leave()` may run before then (see below).
+  const liveTimers: { heartbeat?: unknown; poll?: unknown } = {};
+
+  // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
+  const leave = (): void => {
+    if (left) return;
+    left = true;
+    if (liveTimers.heartbeat !== undefined) timers.clearInterval(liveTimers.heartbeat);
+    if (liveTimers.poll !== undefined) timers.clearInterval(liveTimers.poll);
+    process.off("exit", onExit);
+    syncResumeOwnLeases();
+    removePresenceSync();
+  };
+  function onExit(): void {
+    leave();
+  }
 
   const classify = (record: PresenceRecord): PresenceLiveness => {
     const options: PresenceClassifyOptions = { now: now(), isAlive, host };
@@ -431,13 +531,18 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     if (left) removePresenceSync();
   };
 
-  await writeCurrentPresence();
+  // The exit hook goes in BEFORE the first presence write, not once the join
+  // returns: the caller cannot reach `leave()` until then, so a SIGINT/SIGTERM
+  // handler that ends the process with `process.exit` while the rest of the
+  // join is still awaited would otherwise leave the presence file behind.
+  process.on("exit", onExit);
   let cursor: BusCursor;
   // `./pause.ts`'s cached reader for this instance: refreshed on every poll
   // (below) and right after pause/resume/override, so `leaseView()` always
   // reflects the last-known state without a caller ever awaiting a refresh.
   const leaseViewInstance = createLeaseView({ root, instanceId, now, liveness: { isAlive, host } });
   try {
+    await writeCurrentPresence();
     // specification §5.1: the session lease learns this instance's bus name
     // right at join, not only from the first heartbeat.
     opts.sessionLease?.()?.refresh({ name: state.name });
@@ -446,8 +551,9 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
   } catch (error) {
     // review r1 F7: anything after the presence write that throws (a lease
     // refresh, `cursorAtEnd`) orphans that presence record unless it is
-    // unlinked here before the failure propagates.
-    removePresenceSync();
+    // unlinked here before the failure propagates; `leave()` also drops the
+    // exit hook.
+    leave();
     throw error;
   }
 
@@ -493,8 +599,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
       }
     })();
   };
-  const heartbeatTimer = timers.setInterval(heartbeatTick, heartbeatMs);
-  unref(heartbeatTimer);
+  liveTimers.heartbeat = timers.setInterval(heartbeatTick, heartbeatMs);
+  unref(liveTimers.heartbeat);
 
   // ---- poll: read new events, render the addressed ones, refresh peers. ----
   const doPoll = async (): Promise<BusEvent[]> => {
@@ -548,100 +654,8 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         pollInFlight = false;
       });
   };
-  const pollTimer = timers.setInterval(pollTick, pollMs);
-  unref(pollTimer);
-
-  /**
-   * Best-effort seq for the synchronous resume append below: the highest
-   * `seq` claimed by any complete, parseable line currently in the CURRENT
-   * segment, plus one. Mirrors `./log.ts`'s own crash recovery (it tail-scans
-   * the segment rather than trusting `head.json` alone) rather than
-   * `head.json` directly, so this fallback agrees with what the next real
-   * `appendEvent` call would derive if `head.json` itself is stale. Never
-   * throws: an unreadable or absent segment is worth exactly the same as "no
-   * events yet" here — this whole path is a best-effort fallback, and the
-   * lease FILE deletion below is what actually makes the lease inactive for
-   * every peer.
-   */
-  const bestEffortSyncSeq = (): number => {
-    try {
-      const content = readFileSync(eventsPath(root), "utf8");
-      let last = 0;
-      for (const line of content.split("\n")) {
-        if (line.trim().length === 0) continue;
-        try {
-          const value = JSON.parse(line) as { seq?: unknown };
-          if (typeof value.seq === "number" && value.seq > last) last = value.seq;
-        } catch {
-          // torn or foreign line: ignore, exactly like `./log.ts`'s reader.
-        }
-      }
-      return last + 1;
-    } catch {
-      return 1;
-    }
-  };
-
-  /**
-   * Synchronous, best-effort resume of every lease this instance holds (see
-   * {@link BusClient.leave}'s doc comment for why this must be synchronous
-   * and why it bypasses `append.lock`). Never throws.
-   */
-  const syncResumeOwnLeases = (): void => {
-    let mine: readonly PauseLease[];
-    try {
-      mine = leaseViewInstance.myLeases();
-    } catch {
-      return;
-    }
-    for (const lease of mine) {
-      try {
-        unlinkSync(leasePath(root, lease.leaseId));
-      } catch {
-        // best effort: already gone, or this process cannot write here any more.
-      }
-      try {
-        // Addressed like the lease's own `targets` (§4.2's `resume` row:
-        // "wakes: yes" — whoever was held is exactly who should wake up now),
-        // mirroring the async `resumePauseLease`. `toLabel` is always "@all"
-        // here rather than resolving a concrete target's current name: doing
-        // that synchronously would mean a second sync directory read in an
-        // exit-time fallback that is already documented as best-effort, for
-        // a field `to` (not `toLabel`) is what actually routes the event.
-        const event = {
-          schemaVersion: BUS_SCHEMA_VERSION,
-          seq: bestEffortSyncSeq(),
-          id: randomUUID(),
-          ts: new Date(now()).toISOString(),
-          from: { instanceId: lease.holder.instanceId, name: lease.holder.name, origin: lease.holder.origin },
-          to: lease.targets,
-          toLabel: "@all",
-          kind: "resume" as const,
-          refs: { leaseId: lease.leaseId },
-        };
-        appendFileSync(eventsPath(root), `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: BUS_FILE_MODE });
-      } catch {
-        // Best effort only: the lease FILE above is already gone, which is
-        // enough for every peer (§4.3's "active" rule is file-existence
-        // based) — this `resume` event is purely informational.
-      }
-    }
-  };
-
-  // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
-  const leave = (): void => {
-    if (left) return;
-    left = true;
-    timers.clearInterval(heartbeatTimer);
-    timers.clearInterval(pollTimer);
-    process.off("exit", onExit);
-    syncResumeOwnLeases();
-    removePresenceSync();
-  };
-  function onExit(): void {
-    leave();
-  }
-  process.on("exit", onExit);
+  liveTimers.poll = timers.setInterval(pollTick, pollMs);
+  unref(liveTimers.poll);
 
   const client: BusClient = {
     instanceId,

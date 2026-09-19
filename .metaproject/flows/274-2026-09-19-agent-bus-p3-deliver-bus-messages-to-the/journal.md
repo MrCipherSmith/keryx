@@ -28,3 +28,37 @@
 - 2026-09-19T21:23:59.684Z - task-added: T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)
 - 2026-09-19T21:23:59.768Z - task-attempt: T12: started (attempt 1) — 274-T12 CI fixes (sonnet)
 - 2026-09-19T21:33:34.816Z - task-done: T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)
+- 2026-09-19T21:37:50.216Z - task-done: T10: Verification: CI on the PR head green
+- 2026-09-19T21:37:52.822Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/620 (warning: PR is not a draft)
+- 2026-09-19T21:38:11.789Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-19T21:38:11.875Z - ac-confirmed: AC1: busInbox exactly-once drain, system kinds excluded, 200 bound with onDrop — inbox.test.ts, client.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:11.960Z - ac-confirmed: AC2: runAgentTurn drains at bus-message turn start (empty -> no model call), round boundary and post-answer; one user/tool message per drain; never inside a tool_calls batch — agent-bus-notification.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.043Z - ac-confirmed: AC3: buildPeerMessageNotification banner, <peer-message> blocks with id/seq/from/kind, quarantinePeerMessage sharing PATTERNS (now also flags forged peer-message/task-notification tags), escaped markup, empty -> '' — peer-notification.test.ts, quarantine.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.126Z - ac-confirmed: AC4: ack (origin system, to sender instance, refs.replyTo) written only after the history push; errors routed to onError — client-ack.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.207Z - ac-confirmed: AC5: createBusWakeController: idle + wake-eligible -> runLine('', 'bus-message') on poll with new events and on settle; broadcast notice never wakes; shared consecutiveAutoWakes and resolveMaxAutoWake with a once-per-batch capped notice — bus-wake.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.290Z - ac-confirmed: AC6: two agents that always reply stop waking at the cap, driven through the real createBusWakeController — delivery.integration.test.ts AC6. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.369Z - ac-confirmed: AC7: readline never wakes; 'bus: N message(s) pending' shown at the prompt; delivered within the next turn — shell-bus.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.452Z - ac-confirmed: AC8: bus_list (peers with quarantined status/activity, leases) and bus_send (notice/question/reply/handoff, origin agent, log-counted 10/min) with named refusals incl. recipient-is-self — agent-tools.test.ts, send.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.532Z - ac-confirmed: AC9: bus_* offered only when joined (bus.client() at build time); never to subagents/external children (spawn-subagent-isolation.test.ts) or side workers; absent when the bus is disabled — interactive-agent-tools.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.615Z - ac-confirmed: AC10: conduct block from agent-protocol in the system prompt only when busJoined; side workers get busJoined false — agent.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a
+- 2026-09-19T21:38:12.693Z - ac-confirmed: AC11: CI on PR #620 head 1756ce70: 18/18 green incl. typecheck-and-tests, the client matrix and opentui native; merged a84c561a
+- 2026-09-19T21:38:12.774Z - ac-confirmed: AC12: agent-bus README 0.6.0, implementation-plan 0.6.0 and roadmap 0.29.12 mark P0-P3 implemented (flows 271-274, PRs #607/#611/#615/#620) and P4-P5 not implemented; merged a84c561a
+- 2026-09-19T21:38:31.139Z - completing
+- 2026-09-19T21:38:39.658Z - done: all gates passed
+- 2026-09-19T21:39Z - orchestrator completion report.
+  - **Merge.** PR #620 was squash-merged as a84c561a. The PR head was 1756ce70, and CI passed 18/18.
+  - **Models.** Implementation ran on sonnet. Context gathering, docs and CI triage ran on haiku. Review r1 ran on opus; r2 was a verification round on sonnet.
+  - **Review record 2026-09-19-ingest-main.** It holds F1–F12 from r1 (opus, head 6f01bdde): 3 majors, 8 minors and 1 info.
+    - F1: the capped wake notice reprinted on every poll.
+    - F2: the bus tools were offered while the bus was disabled.
+    - F3: agent sends were written with origin `operator`.
+    - Each finding has a `refuted` verdict from r2 (sonnet, head 8b02cca0) that cites its fix commit: 66faa292 for the library lane, 36866fd9 for the surface lane. Each is dispositioned `acted-on`.
+    - There were no PR comments.
+  - **First CI run at 8b02cca0 failed on 6 checks, all caused by this flow.** T12 fixed them in tests only; no production code changed.
+    - Two source-text audit tests broke because `tui-shell.ts` changed: `boot-animation.test.ts` anchored on the old `runLine` signature, and `tui-session-lease.test.ts` had a `makeAgentDeps` regex that no longer matched.
+    - The integration test's own mock ack was not awaited, so an unhandled ENOENT was raised between tests. Production `BusClient.ack` already catches its errors.
+    - Memory rule updated: when `tui-shell.ts` or `shell.ts` changes, run the source-audit tests that read them.
+  - **Known limitations.**
+    - F7 (/model race) is covered only by a source audit.
+    - Side workers get no `bus_*` tools at all. This intentionally narrows the earlier plan, which still let them use `bus_list`.
+  - **Next.** P4: pause leases.
