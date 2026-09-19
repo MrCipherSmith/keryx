@@ -244,10 +244,17 @@ import { formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { listPresence } from "../bus/presence";
 // Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent.
 // `createBusInbox` and its drain contract are T5's (`../bus/inbox.ts`); this
-// file only feeds `BusClient.onEvent` into one and decides, via the pure
-// `decideBusWake`, whether to start a turn for it.
+// file only feeds `BusClient.onEvent` into one and, via
+// `createBusWakeController` (review r1 F11 — the stateful wrapper around the
+// pure `decideBusWake`), decides whether to start a turn for it.
 import { createBusInbox, type BusInbox } from "../bus/inbox";
-import { decideBusWake } from "./bus-wake";
+import {
+  busInboxFullNotice,
+  createBusDropNotifier,
+  createBusWakeController,
+  type BusDropNotifier,
+  type BusWakeController,
+} from "./bus-wake";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
@@ -318,7 +325,14 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   // but sending a real peer message under the MAIN session's own bus identity is
   // exactly the "read-risk-but-actually-mutating" hazard this list exists for. A
   // side worker answers a transient status question; it must never speak on the
-  // session's behalf. `bus_list` stays available — genuinely read-only.
+  // session's behalf.
+  //
+  // review r1 F9: `bus_list` no longer reaches a side worker either — not
+  // because it is unsafe (it genuinely is read-only), but because the side
+  // worker's own `makeAgentDeps` call now passes no bus getter at all (see
+  // that call site's own doc comment), so `bus_list`/`bus_send` are never
+  // even built into `base.tools` for it to filter here. Named anyway, should
+  // that ever change.
   "bus_send",
 ]);
 
@@ -3038,14 +3052,23 @@ export async function launchTuiAgentShell(opts: {
   // immediately — never assigned to `liveBus`, never painted into — rather
   // than racing the already-destroyed renderer.
   let destroyed = false;
+  // review r1 F10: one "inbox full" notice per overflow episode, not one per
+  // dropped message (see `createBusDropNotifier`'s own doc comment).
+  // Declared here (before `io` exists) but only ASSIGNED once `io` does,
+  // below — same nullable-ref/TDZ idiom as `liveJobs`/`detachExternal`/
+  // `liveBus` above: `busInbox`'s own `onDrop` closure only ever fires once a
+  // real event is pushed, long after this function's synchronous setup (and
+  // so this assignment) completes.
+  let busDropNotifier: BusDropNotifier;
   // Flow 274 (agent bus P3, T7; specification §5.3): one inbox per session,
   // fed by `BusClient.onEvent` below regardless of when the join settles —
   // safe to create up front even for a disabled bus (it simply never
   // receives a push).
-  const busInbox: BusInbox = createBusInbox();
-  // Flow 274 T7: the actual bus-wake check (`decideBusWake`) needs `runLine`,
-  // `mainQueue` and `consecutiveAutoWakes`, all declared much further down
-  // this function — but `onPeers` (which must trigger it once per poll,
+  const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });
+  // Flow 274 T7 (review r1 F11: now `createBusWakeController`, from
+  // `./bus-wake.ts`) — the actual bus-wake check needs `runLine`, `mainQueue`
+  // and `consecutiveAutoWakes`, all declared much further down this
+  // function — but `onPeers` (which must trigger it once per poll,
   // specification §5.3) is wired into `joinBus` right below, long before any
   // of those exist. Same indirection `deps.jobRegistry?.onCompletion` avoids
   // by being registered textually AFTER `runLine`: a mutable ref, assigned
@@ -3053,7 +3076,12 @@ export async function launchTuiAgentShell(opts: {
   // calls through whatever is current — a safe no-op until then, since a real
   // poll cannot fire until long after this function's synchronous setup (and
   // so this assignment) has completed.
-  let onBusPollSettled: (() => void) | undefined;
+  let busWakeController: BusWakeController | undefined;
+  // review r1 F1: whether the poll CURRENTLY being processed delivered at
+  // least one event to `busInbox` — set by `onEvent` (below, per event) and
+  // read/reset by `onPeers` once per poll, right after every event of that
+  // poll was already routed to `onEvent` (`BusClient`'s own `doPoll`).
+  let busPollDeliveredEvent = false;
   // Flow 274 (agent bus P3, T6/T7 contract): the SAME live-getter object
   // passed to every `opts.makeAgentDeps` call (initial build and every
   // `/model`/`/connect`/side-worker rebuild) — `commands/shell.ts`'s
@@ -3578,6 +3606,8 @@ export async function launchTuiAgentShell(opts: {
     setMainAgent("queued", "ready");
 
     const io = createTuiAgentIo(otui, r, transcript);
+    // review r1 F10: now that `io` exists, the drop notifier can actually print.
+    busDropNotifier = createBusDropNotifier((droppedTotal) => io.onSystem?.(busInboxFullNotice(droppedTotal)));
     // Cumulative token usage → the header counter + sidebar. Prefer the provider's
     // EXACT `usage`; fall back to an estimate (see the turn `finally` below) for
     // providers that report nothing (e.g. local Ollama models). `attachUsageIo`
@@ -4557,6 +4587,7 @@ export async function launchTuiAgentShell(opts: {
             // optional only on the TYPE (pre-flow-274 fixtures); the real
             // poll path always sets it — `?? ""` just satisfies `BusInboxEvent`.
             busInbox.push({ ...event, body: event.body ?? "" });
+            busPollDeliveredEvent = true; // review r1 F1: this poll delivered something
           },
           onPeers: (peers: BusPeer[]) => {
             if (destroyed) return; // review r1 F6: never paint after Ctrl+C
@@ -4567,12 +4598,19 @@ export async function launchTuiAgentShell(opts: {
               activity: peer.record.activity,
             }));
             paintFleet();
+            // review r1 F10: the inbox may have drained to empty since the
+            // last overflow notice — let the NEXT overflow episode print its
+            // own notice.
+            busDropNotifier.onInboxSizeObserved(busInbox.size);
             // Flow 274 T7 (specification §5.3): "on the poll, when busInbox
             // receives a wake-eligible kind" — `onPeers` fires exactly once
             // per poll, AFTER every event of that poll was already routed to
             // `onEvent` above (`BusClient`'s `doPoll`), so this is the poll's
-            // natural "events settled" point.
-            onBusPollSettled?.();
+            // natural "events settled" point. review r1 F1: tell the
+            // controller whether THIS poll actually delivered anything, then
+            // reset the flag for the next poll cycle.
+            busWakeController?.onPoll(busPollDeliveredEvent);
+            busPollDeliveredEvent = false;
           },
         });
         if ("disabled" in joined) {
@@ -4605,12 +4643,34 @@ export async function launchTuiAgentShell(opts: {
         // full-rebuild shape `/model`/`/connect` already use below, so a
         // turn already in flight keeps running against the OLD `deps` object
         // (this only replaces the closed-over reference for the NEXT turn).
-        deps = {
-          ...(await opts.makeAgentDeps(currentSel, liveSlateSession, busClientRef)),
-          onContextCompaction,
-          busInbox,
-          busAck: (events) => joined.ack(events),
-        };
+        //
+        // review r1 F7: `currentSel` is captured BEFORE this await as
+        // `selAtJoin`, and re-read AFTER it resolves. `switchTo` (below)
+        // reassigns `currentSel` synchronously, before its own await, so a
+        // `/model`/`/connect` that lands while THIS call is in flight can
+        // finish first and set `deps` to the NEW selection's build. Replacing
+        // `deps` wholesale here — built for the OLD `selAtJoin` — would
+        // silently revert that switch. When a concurrent switch is detected,
+        // only `busInbox`/`busAck` are folded onto whatever `deps` currently
+        // is; the provider/tools this call resolved for the now-superseded
+        // selection are discarded.
+        const selAtJoin = currentSel;
+        const joinedAgentDeps = await opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef);
+        deps =
+          currentSel === selAtJoin
+            ? {
+                ...joinedAgentDeps,
+                onContextCompaction,
+                busInbox,
+                busAck: (events) => joined.ack(events),
+              }
+            : {
+                // A concurrent `/model`/`/connect` already replaced `deps` —
+                // keep its provider/tools, only fold the bus wiring on.
+                ...deps,
+                busInbox,
+                busAck: (events) => joined.ack(events),
+              };
         liveDeps = deps;
       } catch (error) {
         io.onSystem?.(`bus: off (${error instanceof Error ? error.message : String(error)})\n`);
@@ -5574,7 +5634,17 @@ export async function launchTuiAgentShell(opts: {
             // Finding 1 fix: same widened contract as the other two
             // `opts.makeAgentDeps` call sites in this file — pass the live
             // `slateSession` ref, not just `.dir`.
-            const base = await opts.makeAgentDeps(currentSel, liveSlateSession, busClientRef);
+            //
+            // review r1 F9: NOT `busClientRef`. A side worker answers a
+            // transient status question with a snapshot and never speaks on
+            // the session's own bus identity (`bus_send` is denied by name
+            // below regardless), so it has no business being told the
+            // session is bus-joined at all — passing `busClientRef` here
+            // made `busJoined` true in `base`'s own (unused, but computed)
+            // system instruction and `bus_list` show up in `base.tools`
+            // purely because the MAIN session happened to be joined, not
+            // because this worker needs it.
+            const base = await opts.makeAgentDeps(currentSel, liveSlateSession, undefined);
             // Read-only: never allow shell/mutations from a side worker. `bus_send`
             // is excluded by name (`SIDE_WORKER_DENIED_TOOL_NAMES`) even though it
             // is `risk: "read"` — see that list's own doc comment.
@@ -6674,7 +6744,7 @@ export async function launchTuiAgentShell(opts: {
             // busInbox still holds wake-eligible messages" — only once there
             // is no queued operator item to run instead (same FIFO-first
             // rule as the task-notification wake below).
-            onBusPollSettled?.();
+            busWakeController?.onSettle();
           }
         }
       });
@@ -6714,25 +6784,31 @@ export async function launchTuiAgentShell(opts: {
     // turn-settle site call it) for the SAME reason that wake is subscribed
     // here rather than earlier: `runLine`, `mainQueue` and
     // `consecutiveAutoWakes` are all declared above this point, in scope now.
-    onBusPollSettled = (): void => {
-      if (destroyed) return; // review r1 F6: never start a turn after Ctrl+C
-      const idle = !chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0;
-      const decision = decideBusWake({
-        idle,
-        eligible: busInbox.hasWakeEligible(),
-        wakes: consecutiveAutoWakes,
-        cap: resolveMaxAutoWake(),
-      });
-      if (decision === "none") return;
-      if (decision === "capped") {
+    //
+    // review r1 F11: the decision/print/wake wiring itself now lives in
+    // `createBusWakeController` (`./bus-wake.ts`), unit-tested directly there
+    // (`bus-wake.test.ts`) instead of only through this file's source text.
+    // review r1 F4: `hasBusDeps` guards against waking while a poll lands
+    // during the join-success `deps` rebuild's own `await`, before
+    // `deps.busInbox`/`deps.busAck` are attached — a wake right then would
+    // start a turn with nothing to drain, burning the auto-wake budget on an
+    // empty round.
+    busWakeController = createBusWakeController({
+      isIdle: () => !destroyed && !chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0,
+      inbox: busInbox,
+      getWakes: () => consecutiveAutoWakes,
+      incWakes: () => {
+        consecutiveAutoWakes += 1;
+      },
+      cap: () => resolveMaxAutoWake(),
+      runWake: () => runLine("", "bus-message"),
+      printCapped: () => {
         io.onSystem?.(
           "◇ a peer message arrived; automatic wakes are capped, so it will be delivered with your next message.\n",
         );
-        return;
-      }
-      consecutiveAutoWakes += 1;
-      runLine("", "bus-message");
-    };
+      },
+      hasBusDeps: () => deps.busInbox !== undefined,
+    });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------
     // The mode itself is `createBlockNavController` (transcript-blocks.ts); all

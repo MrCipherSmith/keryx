@@ -20,6 +20,7 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
+import { buildBusTools } from "../bus/agent-tools";
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
 import { displaySafe, formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { isBusRefusal } from "../bus/errors";
@@ -27,6 +28,11 @@ import { isAssignableBusName } from "../bus/schema";
 // Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent —
 // `createBusInbox`/`BusInbox` are T5's (`../bus/inbox.ts`).
 import { createBusInbox, type BusInbox } from "../bus/inbox";
+// review r1 F1/F10: the throttled drop notifier shared by both surfaces
+// (`../tui/bus-wake.ts` also hosts the TUI's bus-wake controller — this
+// readline surface has no wake of its own, specification §5.3, but the
+// inbox-overflow notice is the SAME fix for both).
+import { busInboxFullNotice, createBusDropNotifier } from "../tui/bus-wake";
 import { loadOAuthGrant } from "../lib/oauth/grants";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -2030,10 +2036,13 @@ async function runAgentRepl(
     status: busWorking ? "working" : "idle",
     activity: live?.summary.title ?? "keryx agent",
   });
+  // review r1 F10: one "inbox full" notice per overflow episode (see
+  // `createBusDropNotifier`'s own doc comment) — shared shape with the TUI.
+  const busDropNotifier = createBusDropNotifier((droppedTotal) => agentIo.onSystem?.(busInboxFullNotice(droppedTotal)));
   // Flow 274 (agent bus P3, T7; specification §5.3): one inbox for this REPL,
   // fed below regardless of whether the join ever succeeds (a disabled or
   // never-attempted bus just never pushes into it).
-  const busInbox: BusInbox = createBusInbox();
+  const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });
   let bus: BusClient | undefined;
   if (sessionsOn && live !== undefined) {
     try {
@@ -2056,7 +2065,9 @@ async function runAgentRepl(
           // (pre-flow-274 fixtures); the real poll path always sets it.
           busInbox.push({ ...event, body: event.body ?? "" });
         },
-        onPeers: () => {},
+        // review r1 F10: the inbox may have drained to empty since the last
+        // overflow notice — let the NEXT overflow episode print its own.
+        onPeers: () => busDropNotifier.onInboxSizeObserved(busInbox.size),
         // review r1 F10: throttled failure printer (see `runShell`).
         onError: makeBusErrorReporter((text) => agentIo.onSystem?.(text)),
       });
@@ -2075,14 +2086,24 @@ async function runAgentRepl(
         // contract — no `/model`-style rebuild point exists in THIS REPL to
         // piggy-back on, so this runs once, right here, right after the join
         // actually succeeds).
+        //
+        // review r1 F2 (AC9): the CALLER's `agentDepsBase.tools` was built
+        // with no `bus` option at all (a session that has not joined yet
+        // must not see `bus_*`) — so `bus_list`/`bus_send` are added HERE,
+        // now that `bus` is a real, joined `BusClient`, mirroring the SAME
+        // one-time rebuild `busJoined` already needed. `() => bus` is a live
+        // getter over this closure's own `bus`, not a snapshot of `joined`,
+        // matching `buildBusTools`'s own "read at every call" contract.
+        const rebuiltTools = [...deps.tools, ...buildBusTools(() => bus)];
         deps = {
           ...deps,
+          tools: rebuiltTools,
           busInbox,
           busAck: (events) => joined.ack(events),
           systemInstruction: buildAgentSystemInstruction(orient, {
             providerId: deps.providerId,
             modelId: deps.modelId,
-            toolNames: interactiveAgentToolNames(deps.tools),
+            toolNames: interactiveAgentToolNames(rebuiltTools),
             busJoined: true,
           }),
         };
@@ -3302,10 +3323,15 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           jobRegistry,
           mcp: getMcpRuntime(),
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-          // Flow 274 (agent bus P3, T6/T7 contract): passed whenever the
-          // caller (`tui-shell.ts`) even attempts to join a bus, regardless
-          // of whether `bus.client()` currently resolves — T6's tools refuse
-          // `bus-disabled` at call time when it does not.
+          // Flow 274 (agent bus P3, T6/T7 contract); review r1 F2 (AC9): the
+          // wrapper is passed whenever the caller (`tui-shell.ts`) even
+          // attempts to join a bus — side workers pass `undefined` instead
+          // (review r1 F9) — but `buildInteractiveAgentTools` itself now
+          // gates actual INCLUSION on `bus.client() !== undefined` at build
+          // time, so `bus_list`/`bus_send` are absent from the very first
+          // call (before any join has settled) and only appear once
+          // `tui-shell.ts`'s join-success rebuild calls this again with
+          // `busClientRef.client()` finally resolving.
           ...(bus !== undefined ? { bus } : {}),
         }),
         // The EXISTING runtime, never a new one. `/mcp` is a read-only
@@ -3750,14 +3776,14 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           jobRegistry,
           mcp: mcpRuntime,
           ...(flags.denyTools !== undefined ? { denyTools: flags.denyTools } : {}),
-          // Flow 274 (agent bus P3, T6/T7 contract): `busBox` (declared above,
-          // shared with `runAgentRepl`'s own join below via `sessionOpts.busBox`)
-          // is a LIVE box — `client()` reads whatever it currently holds, so
-          // this reflects the real join outcome even though the join itself
-          // happens later, inside `runAgentRepl`. T6's tools refuse
-          // `bus-disabled` at call time whenever `client()` is undefined
-          // (not yet joined, disabled, or sessions off).
-          bus: { client: () => busBox.current },
+          // review r1 F2 (AC9): NO `bus` option here. `busBox` (declared
+          // above) is always still empty at THIS point — the join itself
+          // happens later, inside `runAgentRepl` — and `buildInteractiveAgentTools`
+          // now gates inclusion on `client() !== undefined` AT BUILD TIME, so
+          // passing the box here would (correctly) still omit the tools; the
+          // comment claiming otherwise was itself the AC9 regression this
+          // review fixed. `runAgentRepl` splices `bus_list`/`bus_send` in
+          // directly (`buildBusTools`) right after its own join succeeds.
         }),
         maxRounds: resolveAgentMaxRounds(),
         // Same precedence as the TUI's `makeAgentDeps` above — routed through
@@ -3797,11 +3823,13 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           providerId: provider,
           modelId: model,
           toolNames: interactiveAgentToolNames(agentDepsBase.tools),
-          // Flow 274 (T6/T7 contract): almost always `false` here — the bus
-          // join happens later, inside `runAgentRepl` (`busBox.current` is
-          // still empty at this point) — `runAgentRepl` rebuilds this exact
-          // instruction with `busJoined: true` once its own join succeeds
-          // (see its own doc comment on the `orient` parameter below).
+          // Flow 274 (T6/T7 contract): always `false` here — the bus join
+          // happens later, inside `runAgentRepl` (`busBox.current` is still
+          // empty at this point, and `agentDepsBase.tools` above was built
+          // with no `bus` option at all, review r1 F2) — `runAgentRepl`
+          // rebuilds this exact instruction (AND the tool roster) with
+          // `busJoined: true` once its own join succeeds (see its own doc
+          // comment on the `orient` parameter below).
           busJoined: busBox.current !== undefined,
         }),
       };

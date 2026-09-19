@@ -613,7 +613,10 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
   const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
 
   test("a busInbox is created and every polled event is pushed into it, body defaulted", () => {
-    expect(replBody).toContain("const busInbox: BusInbox = createBusInbox();");
+    // review r1 F10: `onDrop` is now wired to a throttled overflow notice.
+    expect(replBody).toContain(
+      "const busInbox: BusInbox = createBusInbox({ onDrop: (droppedTotal) => busDropNotifier.onDrop(droppedTotal) });",
+    );
     const joinIndex = replBody.indexOf("const joined = await joinBus({");
     expect(joinIndex).toBeGreaterThan(0);
     const eventIdx = replBody.indexOf("onEvent: (event) => {", joinIndex);
@@ -629,16 +632,30 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
     expect(successIdx).toBeGreaterThan(disabledIdx);
     const disabledBlock = replBody.slice(disabledIdx, successIdx);
     expect(disabledBlock).not.toContain("busInbox");
-    const successBlock = replBody.slice(successIdx, successIdx + 900);
+    // Widened for review r1 F2's tools-rebuild comment/code ahead of these fields.
+    const successBlock = replBody.slice(successIdx, successIdx + 1700);
     expect(successBlock).toContain("busInbox,");
     expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
   });
 
   test("the join success rebuild folds in busJoined: true for the system instruction", () => {
     const successIdx = replBody.indexOf("bus = joined;");
-    const successBlock = replBody.slice(successIdx, successIdx + 1300);
+    // Widened for review r1 F2's tools-rebuild comment/code ahead of these fields.
+    const successBlock = replBody.slice(successIdx, successIdx + 1900);
     expect(successBlock).toContain("systemInstruction: buildAgentSystemInstruction(orient, {");
     expect(successBlock).toContain("busJoined: true,");
+  });
+
+  // review r1 F2 (AC9): the join-success rebuild now also splices
+  // `bus_list`/`bus_send` into `deps.tools` — `agentDepsBase.tools` (built by
+  // the CALLER, before any join) never gets them, so this REPL's roster only
+  // ever grows them here, once, right after a real join succeeds.
+  test("the join success rebuild splices bus_list/bus_send into deps.tools via buildBusTools(() => bus)", () => {
+    const successIdx = replBody.indexOf("bus = joined;");
+    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    expect(successBlock).toContain("const rebuiltTools = [...deps.tools, ...buildBusTools(() => bus)];");
+    expect(successBlock).toContain("tools: rebuiltTools,");
+    expect(successBlock).toContain("toolNames: interactiveAgentToolNames(rebuiltTools),");
   });
 
   test("no idle wake exists for this surface: readLineOrCompletion's completion race stays keyed to jobRegistry only", () => {
@@ -665,14 +682,23 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
     expect(wrapperCalls).toBeGreaterThanOrEqual(5);
   });
 
-  test("bus tools are wired through the SAME live busBox the join updates, not a one-time snapshot", () => {
-    // This wiring lives in the OUTER function (`shellCommand`'s agent-mode
-    // branch, where `agentDepsBase`/`agentDeps` are built) — BEFORE
-    // `runAgentRepl` is even called, so it is outside `replBody` (which
-    // stops at that branch's own start marker). `busBox` is the box both
-    // this construction site and `runAgentRepl`'s own join (above) share.
+  // review r1 F2 (AC9): `agentDepsBase.tools` (built in the OUTER function,
+  // `shellCommand`'s agent-mode branch, BEFORE `runAgentRepl` is even
+  // called — outside `replBody`, which stops at that branch's own start
+  // marker) no longer passes a `bus` option at all, because `busBox.current`
+  // is always still empty at that point — passing it would (correctly) still
+  // omit `bus_list`/`bus_send` now that `buildInteractiveAgentTools` gates
+  // inclusion on `client() !== undefined` at build time, but leaving the
+  // wrapper there read as though it did something. `runAgentRepl`'s own join
+  // (tested above) is what actually adds the tools, once, right after it
+  // succeeds.
+  test("agentDepsBase passes no bus option at all — the tools-rebuild happens only in runAgentRepl's own join", () => {
     const agentModeBranch = shellSource.slice(agentModeBranchStart);
-    expect(agentModeBranch).toContain("bus: { client: () => busBox.current }");
+    const toolsIdx = agentModeBranch.indexOf("tools: buildInteractiveAgentTools({");
+    expect(toolsIdx).toBeGreaterThan(0);
+    const toolsBlock = agentModeBranch.slice(toolsIdx, agentModeBranch.indexOf("}),", toolsIdx));
+    expect(toolsBlock).not.toContain("bus:");
+    expect(toolsBlock).not.toContain("busBox.current");
     expect(agentModeBranch).toContain("busJoined: busBox.current !== undefined,");
   });
 });

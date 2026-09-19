@@ -2273,22 +2273,42 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     expect(switchToBlock).toContain("void balancePanel.setProvider(ns.provider)");
   });
 
-  test("the read-only side-worker deps rebuild passes the same live getter", () => {
+  test("the read-only side-worker deps rebuild passes the same live getter, but NOT busClientRef (review r1 F9)", () => {
     const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
     expect(baseIndex).toBeGreaterThanOrEqual(0);
     const baseBlock = fnBody.slice(baseIndex, baseIndex + 200);
-    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, liveSlateSession, busClientRef)");
+    // review r1 F9: a side worker never speaks on the session's bus identity
+    // and has no business even being told the session is bus-joined — its
+    // own `makeAgentDeps` call passes no bus getter at all.
+    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, liveSlateSession, undefined)");
+    expect(baseBlock).not.toContain("busClientRef");
+  });
+
+  // review r1 F7: `currentSel` is captured as `selAtJoin` BEFORE the join
+  // rebuild's own `await`, and re-read afterward — a concurrent `/model`/
+  // `/connect` that lands while this call is in flight must never be
+  // reverted by this rebuild finishing later with a stale selection.
+  test("the join-success rebuild captures currentSel as selAtJoin before its own await (review r1 F7)", () => {
+    const joinedIdx = fnBody.indexOf("liveBus = joined;");
+    expect(joinedIdx).toBeGreaterThanOrEqual(0);
+    const joinBlock = fnBody.slice(joinedIdx, joinedIdx + 2600);
+    expect(joinBlock).toContain("const selAtJoin = currentSel;");
+    expect(joinBlock).toContain("opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef)");
+    expect(joinBlock).toContain("currentSel === selAtJoin");
   });
 
   // Flow 274 T7: a FOURTH real call site was added — the one-time rebuild
   // right after the bus join settles (`liveBus = joined;` in the `joinBus`
   // callback), which folds `bus_list`/`bus_send`/the conduct block into
   // `deps` for the first time (the earlier three all ran before any join
-  // could possibly have finished). Still exactly one shared getter object,
-  // `busClientRef`, at every one of the four.
-  test("all four real call sites are updated — not fewer, not more", () => {
+  // could possibly have finished). review r1 F9 then REMOVED `busClientRef`
+  // from the side-worker call site (above), so exactly THREE real call sites
+  // now share `busClientRef`: the initial build, `switchTo`, and this
+  // join-success rebuild (which passes `selAtJoin`, not `currentSel`,
+  // review r1 F7).
+  test("exactly three real call sites share busClientRef — not fewer, not more", () => {
     const occurrences = fnBody.split(", liveSlateSession, busClientRef)").length - 1;
-    expect(occurrences).toBe(4);
+    expect(occurrences).toBe(3);
     expect(fnBody).not.toContain("() => slateSession)");
   });
 });

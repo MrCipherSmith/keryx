@@ -6,12 +6,16 @@ import { createDefaultSearchProviderController } from "../harness/search";
 import { createMetaprojectAdapter } from "../harness/tool/metaproject-adapter";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { JobRegistry } from "../harness/tool/builtin/background-job-registry";
+import type { BusClient } from "../bus/client";
 import {
   assertDeniableTools,
   buildInteractiveAgentTools,
   denyInteractiveTools,
   interactiveAgentToolNames,
 } from "./interactive-agent-tools";
+
+/** A stub `BusClient` — only enough shape for `buildBusTools` to build tool definitions; never invoked in these tests. */
+const stubBusClient = {} as BusClient;
 
 /**
  * A minimal, fully injectable fake `JobRegistry` — no real subprocess, no
@@ -379,13 +383,17 @@ describe("--deny-tools withholds a capability rather than gating it", () => {
 });
 
 // --- flow 274 T6: bus_list/bus_send are offered only with the `bus` option ---
+// review r1 F2 (AC9): and only once that option's `client()` actually
+// resolves AT BUILD TIME — a session that has not joined (yet, or ever) must
+// not see `bus_*` in its tool roster at all, not merely see it refuse.
 //
 // AC9: bus_* tools reach the main interactive agent only when the bus is
 // joined, never a subagent or external child. Neither of THOSE build paths
 // calls `buildInteractiveAgentTools` at all (see
 // `spawn-subagent-isolation.test.ts`), so the property this suite pins is
 // narrower and complementary: the factory itself must not hand out `bus_*`
-// unless a caller explicitly opts in with `bus`.
+// unless a caller explicitly opts in with `bus` AND that bus is actually
+// joined.
 
 describe("K-flow-274: the bus option", () => {
   test("without `bus`, no bus_* tool is offered", async () => {
@@ -400,21 +408,28 @@ describe("K-flow-274: the bus option", () => {
     expect(names.some((name) => name.startsWith("bus_"))).toBe(false);
   });
 
-  test("with `bus`, bus_list and bus_send are offered", async () => {
+  // review r1 F2: this used to pass `bus: { client: () => undefined }` and
+  // still expect the tools to be offered — exactly the AC9 regression. A
+  // joined bus is now required for inclusion at all.
+  test("with `bus` and a live client (joined), bus_list and bus_send are offered", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-with-bus-"));
     const tools = buildInteractiveAgentTools({
       cwd,
       metaprojectPort: createMetaprojectAdapter(cwd),
       searchController: createDefaultSearchProviderController(),
       spawnTool: stubSpawn,
-      bus: { client: () => undefined },
+      bus: { client: () => stubBusClient },
     });
     const names = interactiveAgentToolNames(tools);
     expect(names).toContain("bus_list");
     expect(names).toContain("bus_send");
   });
 
-  test("with `bus` but no live client (not yet joined / left), the tools refuse with bus-disabled rather than being absent", async () => {
+  // review r1 F2: previously asserted the OPPOSITE — that the tools were
+  // present but refused with `bus-disabled`. AC9 requires the model to see no
+  // `bus_*` tool at all until the bus is actually joined; a caller whose join
+  // succeeds LATER must rebuild the roster (the fix at every real call site).
+  test("with `bus` but no live client (not yet joined / left), the tools are absent, not present-and-refusing", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-bus-no-client-"));
     const tools = buildInteractiveAgentTools({
       cwd,
@@ -423,6 +438,24 @@ describe("K-flow-274: the bus option", () => {
       spawnTool: stubSpawn,
       bus: { client: () => undefined },
     });
+    const names = interactiveAgentToolNames(tools);
+    expect(names.some((name) => name.startsWith("bus_"))).toBe(false);
+  });
+
+  test("bus_list still refuses with bus-disabled if the client later disconnects within an already-joined roster", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-bus-drops-"));
+    let client: BusClient | undefined = stubBusClient;
+    const tools = buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+      // A LIVE getter, per the field's own contract — included because
+      // `client()` resolved at build time, but still read fresh at invoke
+      // time so a later drop is reported, not silently ignored.
+      bus: { client: () => client },
+    });
+    client = undefined;
     const busList = tools.find((tool) => tool.definition.name === "bus_list");
     const result = await busList?.invoke({});
     expect(result?.isError).toBe(true);

@@ -32,7 +32,7 @@ import { appendEvent, cursorAtEnd, cursorAtStart, readEvents, type BusCursor } f
 import { resolveBusRoot } from "./paths";
 import { writePresence } from "./presence";
 import { sendMessage, type SendableKind } from "./send";
-import { decideBusWake } from "../tui/bus-wake";
+import { createBusWakeController } from "../tui/bus-wake";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type {
   NormalizedEvent,
@@ -190,6 +190,36 @@ async function makePeer(root: string, instanceId: string, name: string): Promise
         toInstanceId: resolved.fromInstanceId,
         origin: "operator",
         from: { instanceId, name, origin: "operator" },
+        now,
+        liveness: { isAlive: () => true, host: "test-host" },
+        env: {},
+      });
+    },
+    async sendAsAgent(toLabel, kind, body) {
+      return sendMessage(root, {
+        toLabel,
+        kind,
+        body,
+        origin: "agent",
+        from: { instanceId, name, origin: "agent" },
+        now,
+        liveness: { isAlive: () => true, host: "test-host" },
+        env: {},
+      });
+    },
+    async replyAsAgent(ref, body) {
+      const resolved = resolveRefImpl(ref);
+      if (resolved === undefined) {
+        throw new BusRefusal("unknown-message", `no rendered message matches ${JSON.stringify(ref)}`);
+      }
+      return sendMessage(root, {
+        toLabel: `@${resolved.fromName}`,
+        kind: "reply",
+        body,
+        replyTo: resolved.id,
+        toInstanceId: resolved.fromInstanceId,
+        origin: "agent",
+        from: { instanceId, name, origin: "agent" },
         now,
         liveness: { isAlive: () => true, host: "test-host" },
         env: {},
@@ -419,7 +449,7 @@ describe("delivery: A sends a question via bus_send, B drains it exactly once an
 // 2. Reply loop at the auto-wake cap (AC6).
 // ===========================================================================
 describe("delivery: two always-answer agents stop waking at the auto-wake cap (AC6)", () => {
-  test("each side's own consecutiveAutoWakes reaches resolveMaxAutoWake() and the exchange halts via the capped path", async () => {
+  test("each side's own consecutiveAutoWakes reaches resolveMaxAutoWake() and the exchange halts via the capped path — driven through createBusWakeController (review r1 F11), not a reimplemented decision loop", async () => {
     const cwd = await repo();
     const { root } = await resolveBusRoot(cwd);
     const a = await makePeer(root, PEER_A_ID, "alpha");
@@ -451,33 +481,51 @@ describe("delivery: two always-answer agents stop waking at the auto-wake cap (A
 
     let wakesA = 0;
     let wakesB = 0;
-    let active: "A" | "B" = "B"; // B is the one holding the opening question
-    let cappedReached = false;
     let cappedSide: "A" | "B" | undefined;
+    let pendingRunSide: "A" | "B" | undefined;
 
+    // review r1 F11: the real stateful wake wiring (`createBusWakeController`,
+    // `../tui/bus-wake.ts`) drives this loop — not a second, hand-rolled copy
+    // of `decideBusWake`'s call shape. `runWake`/`printCapped` only RECORD
+    // what the controller decided; this loop performs the actual (async)
+    // work, since the controller's own contract is fire-and-forget, same as
+    // the real `runLine("", "bus-message")` call site.
+    const controllerFor = (side: "A" | "B") =>
+      createBusWakeController({
+        isIdle: () => true,
+        inbox: side === "A" ? a.busInbox : b.busInbox,
+        getWakes: () => (side === "A" ? wakesA : wakesB),
+        incWakes: () => {
+          if (side === "A") wakesA += 1;
+          else wakesB += 1;
+        },
+        cap: () => cap,
+        runWake: () => {
+          pendingRunSide = side;
+        },
+        printCapped: () => {
+          cappedSide = side;
+        },
+        hasBusDeps: () => true,
+      });
+    const controllers = { A: controllerFor("A"), B: controllerFor("B") };
+
+    let active: "A" | "B" = "B"; // B is the one holding the opening question
     for (let round = 0; round < 20; round += 1) {
       const peer = active === "A" ? a : b;
-      const wakes = active === "A" ? wakesA : wakesB;
-      await peer.poll();
-      const eligible = peer.busInbox.hasWakeEligible();
-      const decision = decideBusWake({ idle: true, eligible, wakes, cap });
-      if (decision === "none") break;
-      if (decision === "capped") {
-        cappedReached = true;
-        cappedSide = active;
-        break;
-      }
-      if (active === "A") {
-        wakesA += 1;
+      const delivered = await peer.poll();
+      pendingRunSide = undefined;
+      controllers[active].onPoll(delivered.length > 0);
+      if (cappedSide !== undefined) break;
+      if (pendingRunSide === undefined) break; // not idle / not eligible — nothing to do
+      if (pendingRunSide === "A") {
         await runAgentTurn(io, aDeps, aHistory, "", { origin: "bus-message" });
       } else {
-        wakesB += 1;
         await runAgentTurn(io, bDeps, bHistory, "", { origin: "bus-message" });
       }
       active = active === "A" ? "B" : "A";
     }
 
-    expect(cappedReached).toBe(true);
     expect(cappedSide).toBeDefined();
     expect(wakesA).toBe(cap);
     expect(wakesB).toBe(cap);
