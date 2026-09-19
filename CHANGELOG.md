@@ -5,6 +5,19 @@ All notable changes to `keryx` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.49] — 2026-09-19
+
+### Fixed
+
+- **TUI choice dock no longer hangs the agent turn.** Parallel `spawn_subagent`
+  approvals (and `ask_user`) shared one composer dock and raced two key
+  listeners into the same menu, so Enter/click could leave a picker on screen
+  with the busy timer still running. Concurrent choices now serialize on the
+  dock; `/mode` and the busy-recipient selector cancel instead of stacking;
+  composer Enter is ignored while the dock is open; `/interrupt` aborts the
+  picker; interrupting after a concurrent spawn batch still writes tool
+  results so the next provider round is not stuck on orphaned `tool_calls`.
+
 ## [0.2.48] — 2026-08-19
 
 ### Added
