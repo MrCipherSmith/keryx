@@ -35,7 +35,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
-import { closeSlateSession, openSlate } from "../session/slate-lifecycle";
+import { closeSlateSession, detachSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import type { AskUserFn } from "../harness/tool/builtin/ask-user-tool";
@@ -3609,4 +3609,65 @@ test("AC6: shell_job_output and shell_job_kill are both classified risk:\"read\"
   const registry = createJobRegistry();
   expect(shellJobOutputTool(registry).definition.risk).toBe("read");
   expect(shellJobKillTool(registry).definition.risk).toBe("read");
+});
+
+test("flow 271 R3-1: a lease lost between two tool calls of one turn stops that turn's slate writes", async () => {
+  const dir = await tempSlateDir();
+  const cwd = await tempProjectCwd();
+  await openSlate({ dir, cwd, mintAttemptId: () => "attempt-0" });
+  // The same object the shell hands to runAgentTurn and later detaches.
+  const slateSession: SlateSessionRef = { dir, cwd, opened: true };
+  let invocations = 0;
+  let slateAtLoss: string | undefined;
+  const probe: InteractiveTool = {
+    definition: {
+      name: "probe",
+      description: "",
+      inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      risk: "read",
+    },
+    invoke: async () => {
+      invocations += 1;
+      if (invocations === 2) {
+        // Between the first call's touch and the second's: another shell takes
+        // the session over and the lease-loss listener detaches the ref.
+        slateAtLoss = await readFile(path.join(dir, "slate.json"), "utf8");
+        detachSlateSession(slateSession);
+      }
+      return { output: "probed", isError: false };
+    },
+  };
+  const { provider } = scriptedProvider([
+    [
+      { kind: "tool_call_start", toolCallId: "c1", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c1", input: JSON.stringify({ path: "src/before.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "tool_call_start", toolCallId: "c2", toolName: "probe" },
+      { kind: "tool_call_end", toolCallId: "c2", input: JSON.stringify({ path: "src/after.ts" }) },
+      { kind: "model_end" },
+    ],
+    [
+      { kind: "text_delta", text: "done" },
+      { kind: "model_end" },
+    ],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probe],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io } = collectingIo();
+
+  await runAgentTurn(io, deps, [], "hello", { slateSession });
+
+  expect(invocations).toBe(2);
+  expect(slateAtLoss).toContain("src/before.ts");
+  // No slate write after the loss: the file is byte-for-byte what it was.
+  expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
+  expect((await readSlate(dir))?.anchors.touched).not.toContain("src/after.ts");
 });

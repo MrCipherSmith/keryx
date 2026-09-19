@@ -168,6 +168,67 @@ export interface SlateSessionRef {
    * carry an armed loop across a process boundary.
    */
   autoGoalRounds?: number;
+  /**
+   * Flow 271 R3-1: set by {@link detachSlateSession} when this shell loses the
+   * session's lease to another shell. A turn or a `/goal --auto` loop that is
+   * already running keeps its own reference to this object, so clearing the
+   * shell's variable does not reach it; this flag does. Every ref-level write
+   * below (`ensureSlateOpened`, `closeSlateSession`, `recordSlateSessionTouch`,
+   * `writeSlateSession`) and `readSlateSession` refuse once it is set. It is
+   * never cleared: a shell that gets the session back builds a fresh ref.
+   */
+  detached?: boolean;
+}
+
+/**
+ * Mark `ref` detached (flow 271 R3-1): from now on nothing is written, opened,
+ * closed or archived through it. Called by the shells' lease-loss listeners on
+ * the same object every running turn and `/goal` loop holds. Safe on `undefined`.
+ */
+export function detachSlateSession(ref: SlateSessionRef | undefined): void {
+  if (ref !== undefined) {
+    ref.detached = true;
+  }
+}
+
+/** True once {@link detachSlateSession} ran on `ref`. */
+export function isSlateSessionDetached(ref: SlateSessionRef): boolean {
+  return ref.detached === true;
+}
+
+/**
+ * `ref.dir`, or `undefined` once the ref is detached. For writers that live
+ * outside this module and take a dir (the terminal-state file next to
+ * `slate.json`): resolve the dir through this, never read `ref.dir` directly.
+ */
+export function slateSessionDir(ref: SlateSessionRef): string | undefined {
+  return isSlateSessionDetached(ref) ? undefined : ref.dir;
+}
+
+/**
+ * `writeSlate` through a ref: `undefined`, and nothing written, when the ref
+ * is detached (flow 271 R3-1). Otherwise `writeSlate(ref.dir, update)`.
+ */
+export async function writeSlateSession(
+  ref: SlateSessionRef,
+  update: (prev: Slate | undefined) => Slate,
+): Promise<Slate | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return writeSlate(ref.dir, update);
+}
+
+/**
+ * `readSlate` through a ref: `undefined` when the ref is detached, so a caller
+ * that acts on what it reads (the wrap-up dispatch before a close) sees no live
+ * slate in a session this shell no longer holds.
+ */
+export async function readSlateSession(ref: SlateSessionRef): Promise<Slate | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return readSlate(ref.dir);
 }
 
 /**
@@ -189,6 +250,9 @@ export async function ensureSlateOpened(
   mintAttemptId: () => string,
   runtime?: { provider: string; model: string },
 ): Promise<void> {
+  if (isSlateSessionDetached(ref)) {
+    return;
+  }
   if (ref.opened) {
     const live = await readSlate(ref.dir);
     if (live !== undefined) {
@@ -196,21 +260,27 @@ export async function ensureSlateOpened(
     }
     // Stale flag: another process archived this session's slate already.
   }
-  await openSlate({
-    dir: ref.dir,
-    cwd: ref.cwd,
-    mintAttemptId,
-    ...(runtime !== undefined ? { runtime } : {}),
-  });
+  // Same steps as `openSlate`, with the detach check repeated after the
+  // awaits: the lease can be lost while `git` resolves the tree, and the open
+  // archives whatever slate is live, which by then is the new holder's.
+  const anchors = await computeAnchors({ cwd: ref.cwd, ...(runtime !== undefined ? { runtime } : {}) });
+  if (isSlateSessionDetached(ref)) {
+    return;
+  }
+  await openSlateAtomic(ref.dir, mintAttemptId, () => ({ anchors, course: {}, seeds: [] }));
   ref.opened = true;
 }
 
-/** Close and reset `ref.opened` so a later action-intent opens a genuinely fresh slate. Safe on `undefined`. */
+/**
+ * Close and reset `ref.opened` so a later action-intent opens a genuinely fresh
+ * slate. Safe on `undefined`. A no-op on a detached ref: the slate belongs to
+ * the shell that took the session over, and archiving it would destroy its work.
+ */
 export async function closeSlateSession(
   ref: SlateSessionRef | undefined,
   mintAttemptId: () => string,
 ): Promise<void> {
-  if (ref === undefined) {
+  if (ref === undefined || isSlateSessionDetached(ref)) {
     return;
   }
   await closeSlate(ref.dir, mintAttemptId);
@@ -380,6 +450,22 @@ export async function recordSlateTouch(
     return { ...prev, anchors: nextAnchors };
   });
   return { changed, slate };
+}
+
+/**
+ * {@link recordSlateTouch} through a ref: `undefined`, and nothing written, when
+ * the ref is detached (flow 271 R3-1). The per-tool-call touch in `agent.ts` and
+ * the `/model`-switch touch in `tui-shell.ts` go through this, never the raw dir.
+ */
+export async function recordSlateSessionTouch(
+  ref: SlateSessionRef,
+  touched: readonly string[],
+  extra?: { tree?: string; runtime?: { provider: string; model: string } },
+): Promise<{ changed: boolean; slate: Slate } | undefined> {
+  if (isSlateSessionDetached(ref)) {
+    return undefined;
+  }
+  return recordSlateTouch(ref.dir, touched, extra);
 }
 
 /**

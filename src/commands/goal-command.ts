@@ -15,8 +15,14 @@ import { readFile } from "node:fs/promises";
 import type { AgentDeps, AgentIO } from "./agent";
 import { runAgentTurn } from "./agent";
 import type { NormalizedMessage } from "../harness/provider/types";
-import { ensureSlateOpened, type SlateSessionRef } from "../session/slate-lifecycle";
-import { readSlate, renderAnchorsBlock, writeSlate, type Slate, type SlateSeed } from "../session/slate";
+import {
+  ensureSlateOpened,
+  isSlateSessionDetached,
+  readSlateSession,
+  writeSlateSession,
+  type SlateSessionRef,
+} from "../session/slate-lifecycle";
+import { readSlate, renderAnchorsBlock, type Slate, type SlateSeed } from "../session/slate";
 import { resolveWorkspaceForActor } from "../sac/workspace-service";
 import { createFlowService } from "../flow/service";
 import type { FlowService } from "../flow/types";
@@ -733,7 +739,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       const wasOpened = slateSession.opened;
       await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
       if (!wasOpened && slateSession.opened) {
-        const freshSlate = await readSlate(slateSession.dir);
+        const freshSlate = await readSlateSession(slateSession);
         if (freshSlate !== undefined) {
           history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project" });
           io.onHistoryChange?.("tool");
@@ -741,7 +747,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       }
       if (parsed.workspaceId !== undefined) {
         const workspaceId = parsed.workspaceId;
-        await writeSlate(slateSession.dir, (prev) => {
+        await writeSlateSession(slateSession, (prev) => {
           const base: Slate = prev ?? { anchors: { root: "", touched: [] }, course: {}, seeds: [] };
           return { ...base, workspaceId };
         });
@@ -760,7 +766,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
       // failure already does (log, skip, let the turn run) rather than
       // needing a second, parallel degrade-safe wrapper.
       if (parsed.auto !== undefined) {
-        const forCourse = await readSlate(slateSession.dir);
+        const forCourse = await readSlateSession(slateSession);
         // T10 (review finding BOSS-003): derive the binding to snapshot from
         // values ALREADY in scope — `forCourse`'s own read above, and
         // `flowId` when a new flow is provisioned below — rather than a
@@ -772,7 +778,7 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
         let flowRefForBinding = forCourse?.course.flowRef;
         if (forCourse !== undefined && forCourse.course.flowRef === undefined) {
           const flowId = await autoProvisionFlow(cwd, parsed.text);
-          await writeSlate(slateSession.dir, (prev) => {
+          await writeSlateSession(slateSession, (prev) => {
             if (!prev) throw new Error(`SLATE-27 bind: no open slate in ${slateSession.dir}`);
             return { ...prev, course: { ...prev.course, flowRef: flowId } };
           });
@@ -834,7 +840,10 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     delete slateSession.autoGoalRounds;
     let roundsLeft = roundsCap;
     let round = 1;
-    while (roundsLeft > 0 && slateSession.opened) {
+    // Flow 271 R3-1: a detached ref means another shell took this session
+    // over. Its slate writes already refuse; the loop also stops, because the
+    // goal it advances lives in a slate this shell no longer holds.
+    while (roundsLeft > 0 && slateSession.opened && !isSlateSessionDetached(slateSession)) {
       roundsLeft -= 1;
       round += 1;
       const continuationText = await buildContinuationMessage(cwd, slateSession, round, roundsCap);
@@ -864,8 +873,19 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     // "keep looping until the verifier is satisfied" — an unresolvable
     // disagreement between the verifier and the course tracker must still
     // terminate, not spin).
+    if (isSlateSessionDetached(slateSession)) {
+      systemLine(io, "/goal --auto: stopped — another shell took this session over.\n");
+      return;
+    }
     const wasOpenBeforeVerifier = slateSession.opened;
     const verdict = await runGoalVerifier(deps, parsed.text, cwd, slateSession, history, io, mintAttemptId);
+    // Flow 271 R4-1: the lease can be lost while the verifier runs. Check
+    // again, or a not-achieved verdict runs one more full turn in a session
+    // another shell now owns.
+    if (isSlateSessionDetached(slateSession)) {
+      systemLine(io, "/goal --auto: stopped — another shell took this session over.\n");
+      return;
+    }
     // #389: every outcome — achieved, not achieved, unavailable — is now
     // observable, not only the "not achieved" branch. "Unavailable" covers
     // every reason `runGoalVerifier` returns `undefined` (no `spawn_subagent`
@@ -905,12 +925,12 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
           // rather than risk propagating an uncaught rejection.
           try {
             await ensureSlateOpened(slateSession, mintAttemptId, { provider: deps.providerId, model: deps.modelId });
-            const reopened = await readSlate(slateSession.dir);
+            const reopened = await readSlateSession(slateSession);
             if (reopened !== undefined) {
               history.push({ role: "user", content: renderAnchorsBlock(reopened.anchors), provenance: "project" });
               io.onHistoryChange?.("tool");
             }
-            await writeSlate(slateSession.dir, (prev) => {
+            await writeSlateSession(slateSession, (prev) => {
               if (!prev) throw new Error(`SLATE-27 verifier-reopen: no open slate in ${slateSession.dir}`);
               return {
                 ...prev,

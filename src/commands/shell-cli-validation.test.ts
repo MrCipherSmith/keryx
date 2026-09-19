@@ -89,3 +89,13 @@ describe("--debug", () => {
     process.exitCode = before ?? 0;
   });
 });
+
+describe("--debug with the session-lease flags (flow 271 merge of #608)", () => {
+  test("combines with -r <id> --fork / --take-over and is never read as the -r id", () => {
+    expect(parseShellCliFlags(["-r", "abc", "--fork", "--debug"])).toMatchObject({ resumeId: "abc", fork: true, debug: true });
+    expect(parseShellCliFlags(["--debug", "-r", "abc", "--take-over"])).toMatchObject({ resumeId: "abc", takeOver: true, debug: true });
+    const bare = parseShellCliFlags(["-r", "--debug"]);
+    expect(bare).toMatchObject({ resumePick: true, debug: true });
+    expect(bare.resumeId).toBeUndefined();
+  });
+});

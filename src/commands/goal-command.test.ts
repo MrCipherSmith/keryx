@@ -64,7 +64,7 @@ import type { AgentDeps, AgentIO } from "./agent";
 import { DEFAULT_AUTO_GOAL_ROUNDS, ROUND_DONE_MARKER, parseGoalArgs, parseVerifierVerdict, runGoalCommand } from "./goal-command";
 import type { GoalArgsError, GoalVerifierVerdict, ParsedGoalArgs } from "./goal-command";
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
-import type { SlateSessionRef } from "../session/slate-lifecycle";
+import { detachSlateSession, type SlateSessionRef } from "../session/slate-lifecycle";
 import { appendSeed, readSlate } from "../session/slate";
 import { WorkspaceService, localWorkspaceAuthorizationServer } from "../sac/workspace-service";
 import type { NormalizedEvent, NormalizedMessage, ProviderDescription } from "../harness/provider/types";
@@ -1796,4 +1796,161 @@ test("#394: with no done-signal, the round loop still runs the full --auto budge
   // the loop runs to full budget exhaustion exactly as before this fix.
   expect(callCount()).toBe(3);
   expect(system.some((line) => line.includes("model signaled this round's work is complete"))).toBe(false);
+});
+
+test("flow 271 R3-1: once the lease is lost after round 1, a running /goal --auto loop writes no slate in rounds 2+", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  const probe: InteractiveTool = {
+    definition: {
+      name: "probe",
+      description: "",
+      inputSchema: { type: "object", properties: { path: { type: "string" } } },
+      risk: "read",
+    },
+    invoke: async () => ({ output: "probed", isError: false }),
+  };
+  let calls = 0;
+  let turn = 0;
+  let slateAtLoss: string | undefined;
+  // Every turn is two requests: one tool call on `src/round-<turn>.ts`, then text.
+  const provider: AgentDeps["provider"] = {
+    describe: () => description,
+    stream: (_request, opts) => {
+      calls += 1;
+      const toolRequest = calls % 2 === 1;
+      if (toolRequest) turn += 1;
+      const thisTurn = turn;
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        if (toolRequest && thisTurn === 2) {
+          // Round 1 is over and the loop has started round 2: another shell
+          // takes the session over, and this shell's lease-loss listener
+          // detaches the ref that the loop and its turn already hold.
+          slateAtLoss = await readFile(path.join(dir, "slate.json"), "utf8");
+          detachSlateSession(slateSession);
+        }
+        if (toolRequest) {
+          yield { sequence: 0, attemptId: opts.attemptId, kind: "tool_call_start", toolCallId: `c${thisTurn}`, toolName: "probe" } as NormalizedEvent;
+          yield {
+            sequence: 1,
+            attemptId: opts.attemptId,
+            kind: "tool_call_end",
+            toolCallId: `c${thisTurn}`,
+            input: JSON.stringify({ path: `src/round-${thisTurn}.ts` }),
+          } as NormalizedEvent;
+        } else {
+          yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text: "still working" } as NormalizedEvent;
+        }
+        yield { sequence: 2, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [probe],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 3",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  // Round 1 wrote its touch before the loss.
+  expect(slateAtLoss).toContain("src/round-1.ts");
+  // Nothing after the loss: not round 2's touch, no archive, no later round.
+  expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
+  expect(await readdir(path.join(dir, "slate-archive")).catch(() => [])).toEqual([]);
+  expect(turn).toBe(2);
+  expect(system.join("")).toContain("another shell took this session over");
+});
+
+test("flow 271 R4-1: a lease lost while the verifier runs stops the loop — no extra round on a not-achieved verdict, no slate change", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  let calls = 0;
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  // Round 2 claims done early, so the verifier runs with round budget left.
+  const provider: AgentDeps["provider"] = {
+    describe: () => description,
+    stream: (_request, opts) => {
+      calls += 1;
+      const text = calls === 2 ? `All done here. ${ROUND_DONE_MARKER}` : "still working";
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  let slateAtLoss: string | undefined;
+  const spawnSubagent = fakeSpawnSubagentTool(async () => {
+    // Another shell takes the session over while the verifier runs.
+    slateAtLoss = await readFile(path.join(dir, "slate.json"), "utf8");
+    detachSlateSession(slateSession);
+    return { output: '{"achieved": false, "gaps": ["tests missing"]}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 3",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(slateAtLoss).toBeDefined();
+  // First turn + round 2 only: no verifier-triggered extra round.
+  expect(calls).toBe(2);
+  expect(system.join("")).toContain("another shell took this session over");
+  expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
+  expect(await readdir(path.join(dir, "slate-archive")).catch(() => [])).toEqual([]);
 });

@@ -103,15 +103,18 @@ Start the interactive agent shell. This is the TUI agent harness; bare `keryx`
 prints CLI usage and does **not** start it. Sessions are per-project.
 
 ```
-keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
-            [--base-url <url>] [--agent|--chat] [--tui|--no-tui] [--debug]
+keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
+            [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
+            [--tui|--no-tui] [--debug]
 ```
 
 | Flag | Description |
 |---|---|
 | _(default)_ | Full-screen OpenTUI renderer plus the agent, whenever `stdout` is a TTY. |
-| `-c`, `--continue` | Resume the most recent session for this project. |
-| `-r`, `--resume [id]` | Resume a specific session; without an id, pick one interactively. |
+| `-c`, `--continue` | Resume the most recent session for this project that no other shell has open. When it skips a newer session, it prints that session and its holder. |
+| `-r`, `--resume [id]` | Resume a specific session; without an id, pick one interactively. Without a TTY, bare `-r` uses the latest session no other shell has open. |
+| `--fork` | With `-r <id>`: fork a session another shell has open, and continue in the fork. |
+| `--take-over` | With `-r <id>`: take over a session whose holder is stale — on this host, process alive, but no longer heartbeating. Refused while the holder is live. |
 | `--provider <p>`, `--model <m>` | Skip the provider/model picker. |
 | `--base-url <url>` | Point the provider at a custom endpoint. |
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
@@ -120,6 +123,12 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
+
+One shell holds a session at a time. `-r <id>` on a session a live shell holds
+offers fork, view or cancel in an interactive run, plus take over when the
+holder is stale; a non-interactive run exits `1` with a `--fork` hint instead.
+Invalid combinations are refused: `--fork` or `--take-over` without `-r <id>`,
+both together, or either with `-c`.
 
 If a TUI session stops reacting to the keyboard and mouse while it still draws
 (spinner and timer running), run `kill -USR2 <keryx pid>` from another
@@ -137,7 +146,7 @@ keryx sessions list | fork <id> | export <id> | path
 
 | Subcommand | Description |
 |---|---|
-| `list` | Print the sessions recorded for this project, newest first. Forks are marked `↳`. |
+| `list` | Print the sessions recorded for this project, newest first. Forks are marked `↳`. The `LIVE` column reads `live` when a shell has the session open, `stale` when its holder stopped heartbeating, and is blank when no shell holds it. `--json` prints the rows as JSON, each with a `live` field: `"live"`, `"stale"` or `null`. |
 | `fork <id>` | Branch a session: a new session with the same history and `parentSessionId` set to the original. `--title "<t>"` names it, `--json` prints the result as JSON. Writing to the fork never touches its source. |
 | `export <id>` | Emit one session in full, for archiving or review. |
 | `path` | Print the directory sessions are stored under. |

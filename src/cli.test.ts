@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { expect, test } from "bun:test";
 import { spawn } from "node:child_process";
 import path from "node:path";
-import { CLI_ROUTES } from "./cli";
-import { shellCommand } from "./commands/shell";
+import { CLI_ROUTES, exitCodeForError } from "./cli";
+import { ShellFlagError, shellCommand } from "./commands/shell";
 
 // RED tests for flow 021 (interactive `keryx` shell), T5 / AC3.
 //
@@ -89,3 +89,12 @@ function runBun(args: string[]): Promise<string> {
     });
   });
 }
+
+test("only a ShellFlagError sets its own exit code; any other error exits 1 (review F9)", () => {
+  expect(exitCodeForError(new ShellFlagError("--fork needs an explicit session id"))).toBe(2);
+  // A child-process error (Bun ShellError, execa) carries the CHILD's code.
+  expect(exitCodeForError(Object.assign(new Error("child failed"), { exitCode: 7 }))).toBe(1);
+  expect(exitCodeForError({ exitCode: 3 })).toBe(1);
+  expect(exitCodeForError("boom")).toBe(1);
+  expect(exitCodeForError(null)).toBe(1);
+});

@@ -11,6 +11,7 @@ import {
   resolveProjectRoot,
   shortSessionId,
 } from "../session";
+import { sessionLeaseState } from "../session/lease";
 
 export async function sessionsCommand(args: string[]): Promise<void> {
   const sub = args[0] ?? "list";
@@ -23,12 +24,14 @@ export async function sessionsCommand(args: string[]): Promise<void> {
 
   if (sub === "list") {
     const asJson = args.includes("--json");
-    const rows = listSessions(cwd);
+    const listed = listSessions(cwd).map((s) => ({ summary: s, lease: leaseColumn(cwd, s.id) }));
     if (asJson) {
+      // An unreadable lease is `null` in JSON (unknown), `?` in the table.
+      const rows = listed.map(({ summary, lease }) => ({ ...summary, live: lease === "?" ? null : lease }));
       console.log(JSON.stringify({ schemaVersion: 1, project: resolveProjectRoot(cwd), sessions: rows }, null, 2));
       return;
     }
-    if (rows.length === 0) {
+    if (listed.length === 0) {
       console.log(`No sessions for project ${resolveProjectRoot(cwd)}`);
       console.log(`(store: ${projectSessionsDir(cwd)})`);
       return;
@@ -37,9 +40,9 @@ export async function sessionsCommand(args: string[]): Promise<void> {
     console.log(`Store:   ${projectSessionsDir(cwd)}`);
     console.log("");
     console.log(
-      pad("ID", 10) + pad("UPDATED", 22) + pad("MSGS", 6) + pad("MODEL", 24) + "TITLE",
+      pad("ID", 10) + pad("UPDATED", 22) + pad("MSGS", 6) + pad("LIVE", 7) + pad("MODEL", 24) + "TITLE",
     );
-    for (const s of rows) {
+    for (const { summary: s, lease } of listed) {
       const model =
         s.provider !== undefined && s.model !== undefined
           ? `${s.provider}/${s.model}`
@@ -48,6 +51,7 @@ export async function sessionsCommand(args: string[]): Promise<void> {
         pad(shortSessionId(s.id), 10) +
           pad(s.updatedAt.slice(0, 19).replace("T", " "), 22) +
           pad(String(s.messageCount), 6) +
+          pad(lease ?? "", 7) +
           pad(clip(model, 22), 24) +
           // A fork is marked in the listing rather than only in `--json`: the
           // ancestry is the whole point of the verb, and a row that looks
@@ -158,6 +162,25 @@ export async function sessionsCommand(args: string[]): Promise<void> {
   process.exitCode = 1;
 }
 
+/**
+ * The LIVE column (specification §6.1): `live` when a shell holds the session —
+ * this process included (`mine`) — `stale` when its holder stopped
+ * heartbeating, null when nobody holds it. A gone holder reads as free. `?`
+ * when the lease cannot be read (EACCES, ENOTDIR, ...): one bad lease must not
+ * fail the whole listing (review F6).
+ */
+function leaseColumn(cwd: string, sessionId: string): "live" | "stale" | "?" | null {
+  let state: ReturnType<typeof sessionLeaseState>["state"];
+  try {
+    state = sessionLeaseState(cwd, sessionId).state;
+  } catch {
+    return "?";
+  }
+  if (state === "live" || state === "mine") return "live";
+  if (state === "stale") return "stale";
+  return null;
+}
+
 function pad(s: string, n: number): string {
   return s.length >= n ? `${s.slice(0, n - 1)} ` : s + " ".repeat(n - s.length);
 }
@@ -177,8 +200,15 @@ Usage:
   keryx sessions export <id>       Export transcript as Markdown
   keryx sessions path              Print the on-disk sessions directory
 
+List columns: ID, UPDATED, MSGS, LIVE, MODEL, TITLE. LIVE is "live" when a
+shell has the session open, "stale" when its holder stopped heartbeating, and
+blank when no shell holds it. In --json every row carries "live": "live" |
+"stale" | null.
+
 Shell:
-  keryx shell -c                   Continue last session in this project
+  keryx shell -c                   Continue the last session no other shell has open
   keryx shell -r [id]              Resume session (id / short id / title)
+  keryx shell -r <id> --fork       Fork a session another shell has open
+  keryx shell -r <id> --take-over  Take over a session whose holder is stale
 `);
 }
