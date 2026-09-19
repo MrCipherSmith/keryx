@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T13:12:27.745Z",
+  "updatedAt": "2026-09-19T13:12:42.981Z",
   "source": {
     "type": "description",
     "ref": null
@@ -93,8 +93,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T13:12:42.904Z",
+            "outcome": "started",
+            "detail": "271-T5T6 dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -107,8 +113,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T13:12:42.981Z",
+            "outcome": "started",
+            "detail": "271-T5T6 dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -267,6 +279,16 @@
     {
       "at": "2026-09-19T13:12:27.745Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-19T13:12:42.904Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 271-T5T6 dispatch"
+    },
+    {
+      "at": "2026-09-19T13:12:42.981Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 271-T5T6 dispatch"
     }
   ]
 }
