@@ -234,8 +234,17 @@ import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
-import { formatFleetSidebar, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet } from "./worker-fleet";
+import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
+// Flow 273 (agent bus P2, T7): join/heartbeat/poll/leave all live in the
+// surface-independent client; this file only wires status/activity in and
+// renders what it hands back (specification §5.1, §5.2, §7.2).
+import { joinBus, type BusClient, type BusPeer } from "../bus/client";
+import { listPresence } from "../bus/presence";
+import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
+import { cursorAtStart, readEvents } from "../bus/log";
+import { parseBusCommand } from "./bus-command";
+import { formatBusEventLine, openBus } from "./bus-panel";
 import {
   appendUserEcho,
   clearTranscriptChildren,
@@ -2916,6 +2925,14 @@ export async function launchTuiAgentShell(opts: {
     fork?: boolean;
     /** `--take-over` (with `resumeId`): reclaim a STALE holder's lease (flow 271). */
     takeOver?: boolean;
+    /**
+     * Flow 273 (specification §5.1, §7.4): `keryx shell --name <name>`. Takes
+     * priority over the persisted `bus.name` shell config, which `joinBus`
+     * falls back to on its own when this is absent. Declared here (not on
+     * `commands/shell.ts`'s own opts type) so this TUI wiring needs no import
+     * from that file — `runShell`/`runAgentRepl` spread the same field in.
+     */
+    busName?: string;
   };
   /**
    * The CLI-flag override only (`--permission-mode` / `--ask`/`--trust`/
@@ -2980,6 +2997,13 @@ export async function launchTuiAgentShell(opts: {
   // external bridge pointing at a destroyed shell would let a still-settling
   // vendor run repaint a renderer that is gone.
   let detachExternal: (() => void) | undefined;
+  // Flow 273 (agent bus P2, T7): same nullable-ref/TDZ idiom as `liveJobs` and
+  // `detachExternal` above — `onDestroy` is installed before the session (and
+  // so the bus join, which needs the session id) exists, and every exit path
+  // must call `leave()` even when Ctrl+C lands before the join ever ran.
+  let liveBus: BusClient | undefined;
+  /** `event.id → fromName`, so `/bus reply <id>` can resolve `@name` without asking the operator to retype it. */
+  const recentBusSenders = new Map<string, string>();
   const foregroundOperation = createForegroundOperationOwner();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -2994,6 +3018,7 @@ export async function launchTuiAgentShell(opts: {
         foregroundOperation.dispose();
         // Flow 271 (AC7): synchronously, before anything that may block.
         sessionLease.release();
+        liveBus?.leave(); // flow 273 (specification §5.4): idempotent, synchronous-safe
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -3313,9 +3338,12 @@ export async function launchTuiAgentShell(opts: {
     const sessions = new SubagentSessionStore();
     const jobs = new BackgroundJobStore();
     liveJobs = jobs; // F-002: onDestroy reads this ref (TDZ-safe, see above)
+    // Flow 273 (specification §7.2): the bus's own peer list, mapped down to
+    // the sidebar's small shape (`onPeers` below repaints on every poll).
+    let busFleetPeers: FleetPeer[] = [];
     const paintFleet = (): void => {
       const list = fleet.list();
-      const text = formatFleetSidebar(list, 12);
+      const text = formatFleetSidebarWithPeers(list, busFleetPeers, 12);
       const main = list.find((w) => w.id === MAIN_AGENT_ID);
       if (main?.status === "blocked") {
         sbWorkers.content = otui.t`${otui.yellow(text)}`;
@@ -3463,12 +3491,22 @@ export async function launchTuiAgentShell(opts: {
       })();
     };
 
+    // Flow 273 (specification §5.1): the bus join's `status()` callback reads
+    // these on every heartbeat/poll rather than re-deriving them — the SAME
+    // status/detail the Activity panel and herdr already track, so the bus
+    // presence record can never say something different from what the
+    // operator's own sidebar shows.
+    let lastMainAgentStatus: "queued" | "running" | "done" | "failed" | "blocked" = "queued";
+    let lastMainAgentDetail: string | undefined;
+
     /** Update the pinned main-agent slot (Activity panel). */
     const setMainAgent = (
       status: "queued" | "running" | "done" | "failed" | "blocked",
       detail?: string,
     ): void => {
       debugEvent("main-agent", { status, detail });
+      lastMainAgentStatus = status;
+      lastMainAgentDetail = detail;
       fleet.upsert({
         id: MAIN_AGENT_ID,
         label: "main",
@@ -4224,6 +4262,11 @@ export async function launchTuiAgentShell(opts: {
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
       nextArchiveIndex = history.length;
+      // Flow 273 (specification §6.2, AC8): every path that lands here — the
+      // startup picker (fork/view/cancel included) and `/resume` — is a live
+      // session switch. Undefined before the bus has joined (every startup
+      // call), so this is a safe no-op until then.
+      void liveBus?.setSession(opened.handle.summary.id);
     };
 
     const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
@@ -4421,6 +4464,50 @@ export async function launchTuiAgentShell(opts: {
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
 
+    // Flow 273 (agent bus P2, T7; specification §5.1): join right after the
+    // leased startup open succeeds. Fire-and-forget, like the two sidebar
+    // refreshes above — a bus error must never break the TUI (`joinBus`
+    // itself never throws; this `catch` is only for something failing before
+    // that, e.g. resolving the bus root).
+    void (async () => {
+      try {
+        const joined = await joinBus({
+          cwd: sessionCwd,
+          sessionId: liveSession.summary.id,
+          surface: "tui",
+          ...(opts.session?.busName !== undefined ? { requestedName: opts.session.busName } : {}),
+          shellConfig: loadShellConfig(),
+          env: process.env,
+          sessionLease: sessionLease.current,
+          status: () => ({
+            status: herdrStateFor(lastMainAgentStatus),
+            activity: lastMainAgentDetail ?? liveSession.summary.title,
+          }),
+          onEvent: (event) => {
+            recentBusSenders.set(event.id, event.fromName);
+            if (recentBusSenders.size > 200) {
+              const oldest = recentBusSenders.keys().next().value;
+              if (oldest !== undefined) recentBusSenders.delete(oldest);
+            }
+            io.onSystem?.(`${formatBusEventLine(event.fromName, event.kind, event.preview)}\n`);
+          },
+          onPeers: (peers: BusPeer[]) => {
+            busFleetPeers = peers.map((peer) => ({ name: peer.record.name, state: peer.state, activity: peer.record.activity }));
+            paintFleet();
+          },
+        });
+        if ("disabled" in joined) {
+          io.onSystem?.(`bus: off (${joined.disabled})\n`);
+          return;
+        }
+        liveBus = joined;
+        const renamedNote = joined.nameWasTaken ? " (requested name was taken; renamed)" : "";
+        io.onSystem?.(`bus: joined as @${joined.name} · ${joined.peers().length} peers${renamedNote}\n`);
+      } catch (error) {
+        io.onSystem?.(`bus: off (${error instanceof Error ? error.message : String(error)})\n`);
+      }
+    })();
+
     const paintSessionHeader = (): void => {
       const label = `${currentSel.provider}/${currentSel.model}`;
       const sid = shortSessionId(liveSession.summary.id);
@@ -4526,6 +4613,10 @@ export async function launchTuiAgentShell(opts: {
       history = [];
       archive = [];
       nextArchiveIndex = 0;
+      // Flow 273 (specification §6.2, AC8): `/new` and `/clear` switch the
+      // live session outside `applyOpened` (they reset the whole transcript
+      // surface instead), so this is its own hook.
+      void liveBus?.setSession(liveSession.summary.id);
       paintSessionHeader();
       if (note !== undefined && note.length > 0) {
         io.onSystem?.(`${note}\n`);
@@ -4670,6 +4761,75 @@ export async function launchTuiAgentShell(opts: {
           ...inspectorKeys,
         });
       })();
+    };
+    /** `/bus` with no arguments (specification §7.2): Peers/Leases/Log, a snapshot taken at open time. */
+    const showBus = (): void => {
+      if (liveBus === undefined) {
+        io.onSystem?.("bus: off (not joined)\n");
+        return;
+      }
+      const client = liveBus;
+      void (async () => {
+        const now = Date.now();
+        const presence = await listPresence(client.root);
+        const leases = await listActiveLeases(client.root, { now, holderLiveness: holderLivenessFrom(presence, { now }) });
+        const { events } = await readEvents(client.root, await cursorAtStart(client.root));
+        openBus(otui, chrome, {
+          peers: client.peers(),
+          leases,
+          events,
+          renderer: r,
+          ...inspectorKeys,
+        });
+      })();
+    };
+    /**
+     * `/bus` subcommands (specification §7.2): `send`/the `@name` shorthand,
+     * `ask`, `reply <id>` and `name <new>`. `pause`/`resume`/`override` are
+     * P4 (writing leases — see `src/bus/leases.ts`) and are not wired here.
+     */
+    const runBusCommand = (line: string): void => {
+      const parsed = parseBusCommand(line);
+      if (parsed.kind === "error") {
+        io.onSystem?.(`bus: ${parsed.reason}\n`);
+        return;
+      }
+      if (parsed.kind === "modal") {
+        showBus();
+        return;
+      }
+      if (liveBus === undefined) {
+        io.onSystem?.("bus: off (not joined)\n");
+        return;
+      }
+      const client = liveBus;
+      const reportRefusal = (error: unknown): void => {
+        io.onSystem?.(`bus: ${error instanceof Error ? error.message : String(error)}\n`);
+      };
+      if (parsed.kind === "name") {
+        void client
+          .rename(parsed.name)
+          .then(() => io.onSystem?.(`bus: renamed to @${client.name}\n`))
+          .catch(reportRefusal);
+        return;
+      }
+      if (parsed.kind === "reply") {
+        const toName = recentBusSenders.get(parsed.id);
+        if (toName === undefined) {
+          io.onSystem?.(`bus: reply: unknown message id ${parsed.id} (only recently received messages can be replied to)\n`);
+          return;
+        }
+        void client
+          .send(`@${toName}`, "reply", parsed.text, parsed.id)
+          .then((result) => io.onSystem?.(`bus: sent (#${result.seq}) to @${toName}\n`))
+          .catch(reportRefusal);
+        return;
+      }
+      // send | ask
+      void client
+        .send(parsed.toLabel, parsed.kind === "ask" ? "question" : "notice", parsed.text)
+        .then((result) => io.onSystem?.(`bus: sent (#${result.seq}) to ${parsed.toLabel}\n`))
+        .catch(reportRefusal);
     };
     /**
      * `/mcp` — the servers keryx CONNECTS TO.
@@ -5442,6 +5602,7 @@ export async function launchTuiAgentShell(opts: {
               await deps.sweepBackgroundJobs?.();
               jobs.removeAll();
               sessionLease.release(); // flow 271 (AC7): after the slate close wrote its last file
+              liveBus?.leave(); // flow 273
               r.off("theme_mode", onThemeMode);
               r.destroy();
             })();
@@ -5554,6 +5715,13 @@ export async function launchTuiAgentShell(opts: {
             showGame(line);
             return;
           }
+          case "bus": {
+            // Flow 273 (specification §7.2): messaging/viewing the project
+            // agent bus never waits for the main turn — an operator override
+            // of a `turns` lease has to be reachable from a held instance.
+            runBusCommand(line);
+            return;
+          }
           case "deferred": {
             // /new /resume /sessions /compact /model while busy: refuse (avoid racing main session).
             transcript.add(
@@ -5647,7 +5815,7 @@ export async function launchTuiAgentShell(opts: {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
             await deps.sweepBackgroundJobs?.();
             jobs.removeAll(); // F-002: purge the sidebar/store list too, not just the OS-level registry
-            sessionLease.release(); // flow 271 AC7
+            sessionLease.release(); liveBus?.leave(); // flow 271/273
             r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
@@ -5875,6 +6043,10 @@ export async function launchTuiAgentShell(opts: {
         }
         if (isMcpToolsCommand(command.name)) {
           showTools();
+          return;
+        }
+        if (command.name === "/bus") {
+          runBusCommand(line);
           return;
         }
         if (command.name === "/copy") {
@@ -6424,6 +6596,7 @@ export async function launchTuiAgentShell(opts: {
     return false;
   } finally {
     sessionLease.release(); // flow 271: idempotent; the exit paths above usually released it already
+    liveBus?.leave(); // flow 273 (specification §5.4): idempotent, same reasoning
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
     try {
       renderer?.destroy();

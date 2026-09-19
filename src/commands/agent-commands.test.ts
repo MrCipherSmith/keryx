@@ -52,6 +52,7 @@ test("AGENT_SLASH_COMMANDS lists the expected commands", () => {
     "/queue",
     "/delegate",
     "/demote",
+    "/bus",
     "/exit",
   ]);
 });
@@ -139,6 +140,7 @@ test("commandsForMode: agent lists its commands in stable order", () => {
     "/queue",
     "/delegate",
     "/demote",
+    "/bus",
     "/exit",
   ]);
 });
@@ -157,11 +159,21 @@ test("commandsForMode: chat gets its commands and none of the agent-only trio", 
     "/compact",
     "/theme",
     "/clear",
+    "/bus",
     "/exit",
   ]);
   expect(chat).not.toContain("/think");
   expect(chat).not.toContain("/expand");
   expect(chat).not.toContain("/copy");
+});
+
+// Flow 273 (agent bus P2): /bus is a presence/messaging command, not a tool,
+// so it is available in both modes exactly like /status and /flows above.
+test("/bus is available in both modes", () => {
+  const bus = AGENT_SLASH_COMMANDS.find((c) => c.name === "/bus");
+  expect(bus?.modes).toEqual(["chat", "agent"]);
+  expect(findAgentCommand("/bus", "chat")?.name).toBe("/bus");
+  expect(findAgentCommand("/bus @release hi", "agent")?.name).toBe("/bus");
 });
 
 test("/status and /flows are available in both modes; old aliases are gone", () => {
@@ -248,6 +260,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/queue",
     "/delegate",
     "/demote",
+    "/bus",
     "/exit",
   ]);
   expect(filterCommands("/", "chat").map((c) => c.name)).toEqual([
@@ -262,6 +275,7 @@ test("filterCommands: `/` returns all of the mode's commands", () => {
     "/compact",
     "/theme",
     "/clear",
+    "/bus",
     "/exit",
   ]);
 });

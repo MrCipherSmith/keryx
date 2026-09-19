@@ -179,3 +179,15 @@ test("classifyBusyDispatch: /delegate routes to delegate even while main is busy
     classifyBusyDispatch({ line: "/delegate codex-cli find the flake", commandName: "/delegate", ...base }),
   ).toBe("delegate");
 });
+
+// Flow 273 T7: messaging or viewing the project agent bus must not wait for
+// the main turn to finish — the same reasoning /status and /flows get.
+test("classifyBusyDispatch: /bus routes to bus even while main is busy", () => {
+  expect(
+    classifyBusyDispatch({ line: "/bus @release hi", commandName: "/bus", ...base }),
+  ).toBe("bus");
+});
+
+test("classifyBusyDispatch: bare /bus (opening the modal) also routes to bus while busy", () => {
+  expect(classifyBusyDispatch({ line: "/bus", commandName: "/bus", ...base })).toBe("bus");
+});

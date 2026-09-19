@@ -242,6 +242,16 @@ export const AGENT_SLASH_COMMANDS: readonly AgentSlashCommand[] = [
     modes: AGENT_ONLY,
   },
   {
+    // Flow 273 (agent bus P2; specification §7.2, §7.3): messaging and
+    // viewing peers on the project's agent bus. BOTH modes because it is a
+    // presence/messaging command, not a tool — chat mode has no tools but
+    // still joins the bus (specification §5.1 lists "TUI chat"/"readline
+    // chat" as interactive surfaces alongside the two agent-mode ones).
+    name: "/bus",
+    description: "Message or view peers on the project agent bus — /bus, /bus @<name> <text>, /bus send|ask|reply|name",
+    modes: BOTH,
+  },
+  {
     name: "/exit",
     description: "Leave the shell (/quit works too)",
     modes: BOTH,

@@ -201,6 +201,52 @@ export function formatFleetSidebar(workers: readonly FleetWorker[], maxLines = 1
   return lines.join("\n");
 }
 
+// --- Bus peers (flow 273 T7; specification §7.2) ---------------------------
+//
+// A peer is not a `FleetWorker` — it is another shell instance on the project
+// bus, not a job this shell tracks — so it gets its OWN group below the local
+// fleet rather than being merged into it. Decoupled from `../bus/client`'s
+// `BusPeer`/`PresenceRecord` on purpose: this module stays free of the bus
+// module dependency, and the caller maps the one field it actually renders.
+
+export interface FleetPeer {
+  name: string;
+  state: "live" | "stale";
+  activity: string;
+}
+
+/** Truncate for the sidebar's ~28-char width, same budget `clip` uses above. */
+function formatPeerLine(peer: FleetPeer): string {
+  const marker = peer.state === "live" ? "●" : "◌";
+  const activity = peer.activity.trim();
+  const detail = activity.length > 0 ? ` ${clip(activity, 14)}` : "";
+  return `${marker} @${clip(peer.name, 10)}${detail}`;
+}
+
+/**
+ * `formatFleetSidebar`'s output with a "Peers" group appended below the local
+ * fleet — never merged into it, so `formatFleetSidebar`'s own tested logic is
+ * unchanged (T7 dispatch: "pass them as a second input"). Empty `peers`
+ * (the default) reproduces `formatFleetSidebar`'s output exactly.
+ */
+export function formatFleetSidebarWithPeers(
+  workers: readonly FleetWorker[],
+  peers: readonly FleetPeer[] = [],
+  maxLines = 14,
+): string {
+  const base = formatFleetSidebar(workers, maxLines);
+  if (peers.length === 0) {
+    return base;
+  }
+  const room = Math.max(1, maxLines - 1);
+  const shown = peers.slice(0, room);
+  const lines = ["", "Peers", ...shown.map(formatPeerLine)];
+  if (peers.length > shown.length) {
+    lines.push(`… +${peers.length - shown.length} more`);
+  }
+  return `${base}\n${lines.join("\n")}`;
+}
+
 /** Short path for sidebar labels: `components/src-foo.md` → `src-foo`. */
 export function shortWorkerLabel(pathOrId: string): string {
   const base = pathOrId.split("/").pop() ?? pathOrId;
