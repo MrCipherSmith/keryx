@@ -1,5 +1,16 @@
 import { randomUUID } from "node:crypto";
+import {
+  chmodSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  statSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { access, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { hostname } from "node:os";
 import path from "node:path";
 
 export async function pathExists(filePath: string): Promise<boolean> {
@@ -155,7 +166,8 @@ async function ownsLock(ownerPath: string, token: string): Promise<boolean> {
   return (await readLockOwner(ownerPath))?.token === token;
 }
 
-function processIsAlive(pid: number): boolean {
+/** True when a process with `pid` exists (EPERM counts: it exists, it just is not ours). */
+export function processIsAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
     return true;
@@ -166,4 +178,274 @@ function processIsAlive(pid: number): boolean {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Long-held lease (agent bus P0, specification §3.1, decisions D-07 / D-09).
+//
+// `withFileLock` covers one callback; a lease outlives it and is held for the
+// lifetime of an interactive session. It shares the on-disk shape (a directory
+// plus `owner.json`) and nothing else. In particular it does NOT use
+// `withFileLock`'s "a live pid wins over age" rule: a reused pid would keep a
+// crashed holder alive forever. D-09 instead says:
+//
+//   live   `heartbeatAt` is at most `staleMs` old;
+//   stale  older than that, the holder is on THIS host and its pid is alive
+//          (hung, or its event loop stalled) — reclaimed only by an explicit
+//          take-over (`reclaimStaleLeaseSync`);
+//   gone   anything else — reclaimed silently by `acquireLeaseSync`.
+//
+// A missing, partial or corrupt `owner.json` is judged by the directory mtime
+// instead: fresh means live (the acquisition window between `mkdirSync` and the
+// `wx` write, mirroring `isLockHeld`), older than `staleMs` means gone.
+//
+// Everything here is synchronous because `openSession` and its callers are.
+// ---------------------------------------------------------------------------
+
+/** The fields the lease primitive itself relies on. Callers add their own. */
+export interface LeaseOwnerBase {
+  token: string;
+  pid: number;
+  host: string;
+  /** ISO-8601 timestamp of the latest heartbeat. */
+  heartbeatAt: string;
+}
+
+export type LeaseLiveness = "live" | "stale" | "gone";
+
+export interface LeaseOptions<T extends LeaseOwnerBase = LeaseOwnerBase> {
+  staleMs: number;
+  /** Clock, injectable for tests. Defaults to `Date.now`. Also stamps `refresh()`. */
+  now?: () => number;
+  /** Pid probe, injectable for tests. Defaults to `processIsAlive`. */
+  isAlive?: (pid: number) => boolean;
+  /** This host's name. Defaults to `os.hostname()`. */
+  host?: string;
+  /**
+   * Treat a holder for which this returns true as gone, whatever its liveness.
+   * Lets a caller reclaim a lease its own process left behind without having
+   * the handle any more. Never consulted for an unreadable `owner.json`.
+   */
+  reclaimIf?: (holder: T) => boolean;
+}
+
+export interface LeaseHandle<T extends LeaseOwnerBase = LeaseOwnerBase> {
+  /** The owner record as last written by this handle. */
+  readonly owner: T;
+  /**
+   * Rewrite `owner.json` atomically (temp file in the lease directory, then
+   * rename) with a fresh `heartbeatAt` and `patch` merged in (`token` in a
+   * patch is ignored), then touch the directory mtime. Returns false, and
+   * writes nothing, once the lease is released or no longer carries this
+   * handle's token on disk.
+   */
+  refresh(patch?: Partial<T>): boolean;
+  /** Remove the lease directory iff the token on disk is ours. Idempotent. */
+  release(): void;
+}
+
+export type AcquireLeaseResult<T extends LeaseOwnerBase = LeaseOwnerBase> =
+  | { ok: true; handle: LeaseHandle<T> }
+  | { ok: false; holder: T | undefined; state: "live" | "stale" };
+
+export type LeaseInspection<T extends LeaseOwnerBase = LeaseOwnerBase> =
+  | { state: "free" }
+  | { state: LeaseLiveness; holder: T | undefined };
+
+const LEASE_OWNER_FILE = "owner.json";
+const MAX_LEASE_ATTEMPTS = 3;
+
+/**
+ * The lease's `owner.json`, or undefined when it is missing, unreadable, not
+ * JSON, or lacks a well-formed `token`/`pid`/`host`/`heartbeatAt`.
+ */
+export function readLeaseOwnerSync<T extends LeaseOwnerBase = LeaseOwnerBase>(lockPath: string): T | undefined {
+  try {
+    const value = JSON.parse(readFileSync(path.join(lockPath, LEASE_OWNER_FILE), "utf8")) as unknown;
+    if (value === null || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    const wellFormed =
+      typeof record.token === "string" &&
+      record.token.length > 0 &&
+      Number.isSafeInteger(record.pid) &&
+      Number(record.pid) > 0 &&
+      typeof record.host === "string" &&
+      typeof record.heartbeatAt === "string" &&
+      !Number.isNaN(Date.parse(record.heartbeatAt));
+    return wellFormed ? (record as unknown as T) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Classify a lease directory by the D-09 rule without touching it. */
+export function inspectLeaseSync<T extends LeaseOwnerBase = LeaseOwnerBase>(
+  lockPath: string,
+  opts: LeaseOptions<T>,
+): LeaseInspection<T> {
+  const now = (opts.now ?? Date.now)();
+  let dirMtimeMs: number;
+  try {
+    dirMtimeMs = statSync(lockPath).mtimeMs;
+  } catch (error) {
+    if (isNotFound(error)) return { state: "free" };
+    throw error;
+  }
+  const holder = readLeaseOwnerSync<T>(lockPath);
+  if (holder === undefined) {
+    return { state: now - dirMtimeMs <= opts.staleMs ? "live" : "gone", holder: undefined };
+  }
+  if (opts.reclaimIf?.(holder) === true) {
+    return { state: "gone", holder };
+  }
+  if (now - Date.parse(holder.heartbeatAt) <= opts.staleMs) {
+    return { state: "live", holder };
+  }
+  const thisHost = opts.host ?? hostname();
+  const isAlive = opts.isAlive ?? processIsAlive;
+  return { state: holder.host === thisHost && isAlive(holder.pid) ? "stale" : "gone", holder };
+}
+
+/**
+ * Acquire the lease at `lockPath` for `owner`. A **gone** holder is reclaimed
+ * silently and acquisition retried; a **live** or **stale** one is reported
+ * and left alone. Creates the directory 0700 and `owner.json` 0600.
+ */
+export function acquireLeaseSync<T extends LeaseOwnerBase>(
+  lockPath: string,
+  owner: T,
+  opts: LeaseOptions<T>,
+): AcquireLeaseResult<T> {
+  return acquireOrReclaim(lockPath, owner, opts, false);
+}
+
+/**
+ * Explicit take-over (`--take-over`): acquire the lease at `lockPath` for
+ * `owner`, reclaiming a **stale** holder as well as a gone one. A **live**
+ * holder is refused (`{ ok: false, state: "live" }`) and left untouched. A free
+ * lease is simply acquired.
+ */
+export function reclaimStaleLeaseSync<T extends LeaseOwnerBase>(
+  lockPath: string,
+  owner: T,
+  opts: LeaseOptions<T>,
+): AcquireLeaseResult<T> {
+  return acquireOrReclaim(lockPath, owner, opts, true);
+}
+
+function acquireOrReclaim<T extends LeaseOwnerBase>(
+  lockPath: string,
+  owner: T,
+  opts: LeaseOptions<T>,
+  takeStale: boolean,
+): AcquireLeaseResult<T> {
+  const now = opts.now ?? Date.now;
+  mkdirSync(path.dirname(lockPath), { recursive: true, mode: 0o700 });
+  for (let attempt = 0; attempt < MAX_LEASE_ATTEMPTS; attempt += 1) {
+    if (tryCreateLease(lockPath, owner)) {
+      return { ok: true, handle: createLeaseHandle(lockPath, owner, now) };
+    }
+    const seen = inspectLeaseSync(lockPath, opts);
+    if (seen.state === "free") continue; // released between our mkdir and the look
+    if (seen.state === "live" || (seen.state === "stale" && !takeStale)) {
+      return { ok: false, holder: seen.holder, state: seen.state };
+    }
+    removeLeaseDirIfUnchanged(lockPath, seen.holder?.token);
+  }
+  // Every attempt lost a race to another acquirer. Report what is there now.
+  const last = inspectLeaseSync(lockPath, opts);
+  return {
+    ok: false,
+    holder: last.state === "free" ? undefined : last.holder,
+    state: last.state === "stale" ? "stale" : "live",
+  };
+}
+
+/** mkdir + exclusive owner write. False when the directory already exists. */
+function tryCreateLease(lockPath: string, owner: LeaseOwnerBase): boolean {
+  try {
+    mkdirSync(lockPath, { mode: 0o700 });
+  } catch (error) {
+    if (isAlreadyExistsError(error)) return false;
+    throw error;
+  }
+  try {
+    chmodSync(lockPath, 0o700); // mkdir's mode is filtered by the umask
+    writeFileSync(path.join(lockPath, LEASE_OWNER_FILE), JSON.stringify(owner), {
+      encoding: "utf8",
+      flag: "wx",
+      mode: 0o600,
+    });
+  } catch (error) {
+    rmSync(lockPath, { recursive: true, force: true });
+    throw error;
+  }
+  return true;
+}
+
+/**
+ * Remove a lease directory judged gone (or stale, on take-over), and only that
+ * one. The directory is renamed aside first and its token re-read: when another
+ * acquirer replaced it in between, the fresh lease is renamed back. The
+ * remaining window (a third acquirer between the two renames) is the same one
+ * `withFileLock`'s `removeStaleLock` accepts.
+ */
+function removeLeaseDirIfUnchanged(lockPath: string, expectedToken: string | undefined): void {
+  const aside = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
+  try {
+    renameSync(lockPath, aside);
+  } catch {
+    return; // someone else already removed or reclaimed it
+  }
+  const moved = readLeaseOwnerSync(aside);
+  if (moved !== undefined && moved.token !== expectedToken) {
+    try {
+      renameSync(aside, lockPath);
+      return;
+    } catch {
+      // A newer lease took the path. The one moved aside is lost to its holder,
+      // whose next refresh() fails and reports that it no longer holds it.
+    }
+  }
+  rmSync(aside, { recursive: true, force: true });
+}
+
+function createLeaseHandle<T extends LeaseOwnerBase>(lockPath: string, initial: T, now: () => number): LeaseHandle<T> {
+  let current: T = { ...initial };
+  let released = false;
+  const ownerPath = path.join(lockPath, LEASE_OWNER_FILE);
+  const ownsIt = (): boolean => readLeaseOwnerSync(lockPath)?.token === initial.token;
+
+  return {
+    get owner(): T {
+      return current;
+    },
+    refresh(patch?: Partial<T>): boolean {
+      if (released || !ownsIt()) return false;
+      const next: T = { ...current, ...patch, token: initial.token, heartbeatAt: new Date(now()).toISOString() };
+      const tmp = path.join(lockPath, `.${LEASE_OWNER_FILE}.${randomUUID()}.tmp`);
+      try {
+        writeFileSync(tmp, JSON.stringify(next), { encoding: "utf8", flag: "wx", mode: 0o600 });
+        renameSync(tmp, ownerPath);
+      } catch {
+        rmSync(tmp, { force: true });
+        return false;
+      }
+      current = next;
+      try {
+        const touched = new Date();
+        utimesSync(lockPath, touched, touched);
+      } catch {
+        // The owner record carries the heartbeat; the mtime is a secondary signal.
+      }
+      return true;
+    },
+    release(): void {
+      if (released) return;
+      released = true;
+      if (ownsIt()) {
+        rmSync(lockPath, { recursive: true, force: true });
+      }
+    },
+  };
 }
