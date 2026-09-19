@@ -9,7 +9,7 @@
   "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
   "status": "in-progress",
   "createdAt": "2026-09-19T21:39:31.218Z",
-  "updatedAt": "2026-09-19T21:42:50.554Z",
+  "updatedAt": "2026-09-19T23:06:49.104Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,57 +90,85 @@
       "id": "T5",
       "title": "Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T21:42:51.640Z",
+            "outcome": "started",
+            "detail": "275-T5 lease lib + gate (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.684Z",
+            "outcome": "started",
+            "detail": "275-T6 lane (sonnet), parallel"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.763Z",
+            "outcome": "started",
+            "detail": "275-T7 lane (sonnet), parallel"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.848Z",
+            "outcome": "started",
+            "detail": "275-T8 lane (sonnet), parallel"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -248,6 +276,46 @@
     {
       "at": "2026-09-19T21:42:50.554Z",
       "event": "started"
+    },
+    {
+      "at": "2026-09-19T21:42:51.640Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 275-T5 lease lib + gate (sonnet)"
+    },
+    {
+      "at": "2026-09-19T22:32:49.602Z",
+      "event": "task-done",
+      "detail": "T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)"
+    },
+    {
+      "at": "2026-09-19T22:32:49.684Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 275-T6 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:32:49.763Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 275-T7 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:32:49.848Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 275-T8 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:53:10.022Z",
+      "event": "task-done",
+      "detail": "T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:06:20.758Z",
+      "event": "task-done",
+      "detail": "T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:06:49.104Z",
+      "event": "task-done",
+      "detail": "T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)"
     }
   ]
 }

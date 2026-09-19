@@ -13,3 +13,11 @@
 - 2026-09-19T21:42:50.364Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-19T21:42:50.457Z - frozen: 13 criteria; checksum recorded
 - 2026-09-19T21:42:50.554Z - started
+- 2026-09-19T21:42:51.640Z - task-attempt: T5: started (attempt 1) — 275-T5 lease lib + gate (sonnet)
+- 2026-09-19T22:32:49.602Z - task-done: T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)
+- 2026-09-19T22:32:49.684Z - task-attempt: T6: started (attempt 1) — 275-T6 lane (sonnet), parallel
+- 2026-09-19T22:32:49.763Z - task-attempt: T7: started (attempt 1) — 275-T7 lane (sonnet), parallel
+- 2026-09-19T22:32:49.848Z - task-attempt: T8: started (attempt 1) — 275-T8 lane (sonnet), parallel
+- 2026-09-19T22:53:10.022Z - task-done: T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)
+- 2026-09-19T23:06:20.758Z - task-done: T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)
+- 2026-09-19T23:06:49.104Z - task-done: T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)
