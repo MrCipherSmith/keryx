@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T13:12:42.981Z",
+  "updatedAt": "2026-09-19T13:50:57.655Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,7 +90,7 @@
       "id": "T5",
       "title": "Lease primitive in src/lib/fs.ts: acquireLeaseSync, reclaimStaleLeaseSync, D-09 liveness, exported processIsAlive, unit tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -104,13 +104,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Session lease module src/session/lease.ts: instance id, lease state, latestUnleasedSession, SessionLeasedError, openLeasedSession, switchLeasedSession, release, heartbeat, unit tests",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -124,21 +125,39 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-19T13:24:14.417Z",
+            "outcome": "started",
+            "detail": "271-T7 dispatch"
+          },
+          {
+            "at": "2026-09-19T13:40:19.636Z",
+            "outcome": "failed",
+            "detail": "dispatch 271-T7 interrupted by operator mid-run; partial edits in shell.ts/shell-types.ts kept"
+          },
+          {
+            "at": "2026-09-19T13:40:19.734Z",
+            "outcome": "started",
+            "detail": "271-T7b resume over partial edits"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -158,15 +177,22 @@
       "id": "T9",
       "title": "keryx sessions list LIVE column and --json live field; cli-reference for shell flags and sessions list",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T13:40:55.605Z",
+            "outcome": "started",
+            "detail": "271-T9 dispatch (parallel with T7b, disjoint files)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -289,6 +315,46 @@
       "at": "2026-09-19T13:12:42.981Z",
       "event": "task-attempt",
       "detail": "T6: started (attempt 1) — 271-T5T6 dispatch"
+    },
+    {
+      "at": "2026-09-19T13:24:01.856Z",
+      "event": "task-done",
+      "detail": "T5: Lease primitive in src/lib/fs.ts: acquireLeaseSync, reclaimStaleLeaseSync, D-09 liveness, exported processIsAlive, unit tests"
+    },
+    {
+      "at": "2026-09-19T13:24:01.930Z",
+      "event": "task-done",
+      "detail": "T6: Session lease module src/session/lease.ts: instance id, lease state, latestUnleasedSession, SessionLeasedError, openLeasedSession, switchLeasedSession, release, heartbeat, unit tests"
+    },
+    {
+      "at": "2026-09-19T13:24:14.417Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 271-T7 dispatch"
+    },
+    {
+      "at": "2026-09-19T13:40:19.636Z",
+      "event": "task-attempt",
+      "detail": "T7: failed (attempt 2) — dispatch 271-T7 interrupted by operator mid-run; partial edits in shell.ts/shell-types.ts kept"
+    },
+    {
+      "at": "2026-09-19T13:40:19.734Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 3) — 271-T7b resume over partial edits"
+    },
+    {
+      "at": "2026-09-19T13:40:55.606Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 271-T9 dispatch (parallel with T7b, disjoint files)"
+    },
+    {
+      "at": "2026-09-19T13:43:10.670Z",
+      "event": "task-done",
+      "detail": "T9: keryx sessions list LIVE column and --json live field; cli-reference for shell flags and sessions list"
+    },
+    {
+      "at": "2026-09-19T13:50:57.655Z",
+      "event": "task-done",
+      "detail": "T7: Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help"
     }
   ]
 }

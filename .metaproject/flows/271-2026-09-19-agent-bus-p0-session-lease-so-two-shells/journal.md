@@ -31,3 +31,25 @@
     9. `lease.test.ts` has a minimal schema checker (the repo has no JSON Schema validator), plus a negative test.
   - Env: the worktree had no node_modules. The orchestrator ran `bun install --frozen-lockfile`.
   - `security-pre-push.test.ts` and `git-hooks.test.ts` fail locally because a repo hook refuses a test's author email. The failure comes from the environment and is unrelated to this change; CI decides (AC11).
+- 2026-09-19T13:24:01.856Z - task-done: T5: Lease primitive in src/lib/fs.ts: acquireLeaseSync, reclaimStaleLeaseSync, D-09 liveness, exported processIsAlive, unit tests
+- 2026-09-19T13:24:01.930Z - task-done: T6: Session lease module src/session/lease.ts: instance id, lease state, latestUnleasedSession, SessionLeasedError, openLeasedSession, switchLeasedSession, release, heartbeat, unit tests
+- 2026-09-19T13:24:14.417Z - task-attempt: T7: started (attempt 1) — 271-T7 dispatch
+- 2026-09-19T13:40:19.636Z - task-attempt: T7: failed (attempt 2) — dispatch 271-T7 interrupted by operator mid-run; partial edits in shell.ts/shell-types.ts kept
+- 2026-09-19T13:40:19.734Z - task-attempt: T7: started (attempt 3) — 271-T7b resume over partial edits
+- 2026-09-19T13:40:55.606Z - task-attempt: T9: started (attempt 1) — 271-T9 dispatch (parallel with T7b, disjoint files)
+- 2026-09-19T13:41Z - orchestrator: T7 `attempts.count` reads 3, but only one real try has been made so far. The count records three events:
+  1. the first dispatch started;
+  2. the operator interrupted it (recorded as failed);
+  3. dispatch 271-T7b resumed over the partial edits.
+
+  The operator chose "resume over partial edits" rather than a restart. If T7b fails, re-plan instead of re-dispatching the same approach.
+- 2026-09-19T13:43:10.670Z - task-done: T9: keryx sessions list LIVE column and --json live field; cli-reference for shell flags and sessions list
+- 2026-09-19T13:43Z - orchestrator: 271-T9 returned DONE and was committed as de242b89. Orchestrator re-ran `bun test src/commands/sessions`: 11 pass. `sessions.ts` imports `sessionLeaseState` from `../session/lease` directly, because it is not re-exported from the barrel. Accepted.
+- 2026-09-19T13:50Z - orchestrator: 271-T7b returned DONE_WITH_CONCERNS. It kept the interrupted run's work and completed the flags, the top-level choice, bare `-r`, the signal release and the help text. Orchestrator re-ran `bun test src/commands/shell src/session src/lib/fs src/cli.test.ts`: 354 pass, 2 skip, 0 fail. tsc is clean. No existing test was edited. Concerns:
+  1. The chat TUI calls `runShell`, which now throws `SessionLeasedError`. The TUI must catch it. This goes to T8.
+  2. The chat-TUI bare `-r` pre-resolve is still unchanged. This goes to T8.
+  3. `cli.ts` now honours a positive integer `exitCode` on any thrown error (`ShellFlagError` uses 2). Reviewed: no existing thrown error class sets `exitCode`, and the other hits are all `process.exitCode` assignments. Any failure still exits non-zero. Accepted.
+  4. The refused-`/new` test covers only the chat loop, because `runAgentRepl` is not exported. The agent loop shares the switch code. Accepted. T10's subprocess tests exercise the agent path.
+  5. A REPL that throws mid-loop releases its lease only through `process.on("exit")`. Accepted: that hook is synchronous and idempotent.
+  - T8 must add `fork?`/`takeOver?` to the TUI session opts type (around tui-shell.ts:2841). It compiles today only through a spread.
+- 2026-09-19T13:50:57.655Z - task-done: T7: Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help
