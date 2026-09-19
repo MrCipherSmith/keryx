@@ -1,5 +1,5 @@
 # Requirements Roadmap
-Version: 0.29.11
+Version: 0.29.12
 
 ## Status
 
@@ -18,6 +18,7 @@ carrying the measurement that found it and the reason it was not done then.
 > push and nothing else, and 0.2.89–0.2.93 were never tagged. The
 > whole `keryx-mcp-servers` programme reached npm in 0.2.94._
 >
+> - **0.29.12**: `keryx-agent-bus` **P0–P3 implemented** (flows 271–274, PRs #607, #611, #615, #620): session lease, bus store + CLI, shells join the bus, delivery to the agent; P4–P5 specification ready, not implemented. Peer messages reach the agent as tool-provenance context. Idle agents wake on questions, replies, handoffs or name-addressed notices, with the agent tools `bus_list` and `bus_send` enforcing rate limits and conduct rules.
 > - **0.29.11**: `keryx-agent-bus` **P2 shell integration implemented** (flow 273, PR #615). Interactive shells now join the agent bus at startup with presence records and heartbeats. The `/bus` slash command lists peers, sends messages, replies, and asks questions. A poller detects new peers and events in real time, and events are rendered to the operator.
 > - **0.29.10**: `keryx-agent-bus` **P1 bus store and `keryx bus` CLI
 >   implemented** (flow 272, PR #611). The bus lives under the git common

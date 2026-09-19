@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.5.0
+Version: 0.6.0
 
 ## Purpose
 
@@ -13,7 +13,7 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**P0–P2 implemented. P3–P5 specification ready, not implemented.**
+**P0–P3 implemented. P4–P5 specification ready, not implemented.**
 
 - **P0 session lease: implemented** in flow 271, PR
   [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
@@ -32,8 +32,14 @@ the same session and silently overwrite each other's turns.
   and events. Event lines print to the operator. The `/bus` slash command lists
   peers, sends messages, replies to and asks questions. A Peers sidebar shows
   live shells.
-- **P3–P5: not implemented.** Agent delivery and tools, pause leases, and
-  remaining integrations do not exist yet.
+- **P3 agent delivery and tools: implemented** in flow 274, PR
+  [#620](https://github.com/MrCipherSmith/keryx/pull/620). Peer messages reach
+  the agent as tool-provenance context. An idle agent is woken by a question,
+  reply, handoff or name-addressed notice, capped by the auto-wake limit. The
+  agent has `bus_list` and `bus_send` tools, with rate limits and a conduct
+  block. Ack writes record delivery.
+- **P4–P5: not implemented.** Pause leases and wiki/scenario documentation do
+  not exist yet.
 
 ## Document index
 
