@@ -1,0 +1,234 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "274",
+  "slug": "agent-bus-p3-deliver-bus-messages-to-the",
+  "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T19:12:15.198Z",
+  "updatedAt": "2026-09-19T19:16:56.483Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:970ba824480bfea771f5e690ecfbf7b4faf8813471635096430e0e6a80d5a327",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by per-area implement tasks T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each task; integration proofs are T8; full suite is T10 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Docs: P3 status and bus tools mention (haiku)",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T19:12:15.198Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T19:16:55.631Z",
+      "event": "task-added",
+      "detail": "T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.716Z",
+      "event": "task-added",
+      "detail": "T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.812Z",
+      "event": "task-added",
+      "detail": "T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.896Z",
+      "event": "task-added",
+      "detail": "T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:16:55.978Z",
+      "event": "task-added",
+      "detail": "T9: Docs: P3 status and bus tools mention (haiku)"
+    },
+    {
+      "at": "2026-09-19T19:16:56.061Z",
+      "event": "task-added",
+      "detail": "T10: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T19:16:56.140Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T19:16:56.228Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T19:16:56.312Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T19:16:56.399Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T19:16:56.483Z",
+      "event": "started"
+    }
+  ]
+}
