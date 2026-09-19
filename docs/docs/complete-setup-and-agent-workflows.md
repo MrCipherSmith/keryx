@@ -15,7 +15,7 @@ root unless a section says otherwise.
 Required:
 
 - Git.
-- Bun 1.1.0 or newer.
+- Bun 1.3.14 or newer (see [Bun version](onboarding.md#bun-version)).
 - A project directory, preferably a Git repository.
 
 Optional:

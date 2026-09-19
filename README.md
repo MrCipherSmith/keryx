@@ -386,7 +386,7 @@ enabled. Nine modules are on after `init`; `mcp` is opt-in.
 
 ## Quick start
 
-**Requirements:** `git` and `bun` (>= 1.1.0).
+**Requirements:** `git` and `bun` (>= 1.3.14 — older Bun can close the terminal input of `keryx shell`; see [onboarding](docs/docs/onboarding.md#bun-version)).
 
 ```bash
 npm install -g @mrciphersmith/keryx
@@ -484,7 +484,7 @@ next.
 
 | Requirement | Status |
 |-------------|--------|
-| Bun | >= 1.1.0 |
+| Bun | >= 1.3.14 |
 | Git | Required for hooks, `--changed` scopes and the managed installer; the core runs without it |
 | ripgrep | Required only for `keryx ctx rg` and the agent's `search_code` tool |
 | Model provider credential | Required only for the optional AI commands below |

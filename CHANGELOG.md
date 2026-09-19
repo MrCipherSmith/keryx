@@ -3,6 +3,18 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.125] — 2026-09-19
+
+### Changed
+
+- **Minimum Bun is now 1.3.14** (`engines.bun`, README, onboarding,
+  CONTRIBUTING). Bun 1.2.22 through 1.3.13 can close a terminal's
+  `process.stdin` while another native stream is read in the same process
+  (oven-sh/bun#29787, #30565), which froze `keryx shell` when subagents started.
+  keryx 0.2.123+ recovers from it; `bun upgrade` removes it. The new "Bun
+  version" section in onboarding explains the symptom and how `--debug` records
+  it.
+
 ## [0.2.124] — 2026-09-19
 
 ### Fixed

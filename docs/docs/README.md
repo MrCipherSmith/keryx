@@ -4,7 +4,7 @@
 
 ## Quick start
 
-Requirements: `git` and `bun` (>= 1.1.0).
+Requirements: `git` and `bun` (>= 1.3.14).
 
 ```bash
 # Global install. The scope matters: the unscoped `keryx` on npm is an
