@@ -167,7 +167,7 @@ never writes flow state.
 ```
 keryx bus list [--json]
 keryx bus log [--since <seq>] [--limit N] [--json]
-keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] <text…>
+keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] [--json] <text…>
 keryx bus prune [--json]
 ```
 
@@ -175,8 +175,8 @@ keryx bus prune [--json]
 |---|---|
 | `list` | Live and stale peers — name, state, status, heartbeat age, branch, checkout and activity — and the active pause leases. Gone peers are hidden. `--json` prints both as JSON. |
 | `log` | The retained events, oldest first. `--since <seq>` shows only events after that sequence number, `--limit N` only the last `N`, `--json` prints them as JSON. |
-| `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind reply` needs `--reply-to <id>` (`reply-without-replyTo`). The body is redacted before it is written and refused with `body-too-large` above 2048 bytes. |
-| `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the bound (two kept, none older than 7 days). Live and stale peers are never touched. |
+| `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind reply` needs `--reply-to <id>` (`reply-without-replyTo`). The body is redacted before it is written and refused with `body-too-large` above 2048 bytes. `--json` prints `{ seq, id, resolvedTo }`. |
+| `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the bound (two kept, none older than 7 days). Live and stale peers are never touched. `--json` prints what was removed. |
 
 Refusals print their code and exit non-zero:
 

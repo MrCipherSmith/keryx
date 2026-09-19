@@ -76,7 +76,19 @@ export const DEFAULT_LOCK_STALE_MS = 30000;
 export async function withFileLock<T>(
   lockPath: string,
   fn: () => Promise<T>,
-  options: { timeoutMs?: number; retryMs?: number; staleMs?: number; heartbeatMs?: number } = {},
+  options: {
+    timeoutMs?: number;
+    retryMs?: number;
+    staleMs?: number;
+    heartbeatMs?: number;
+    /**
+     * TEST SEAM, never set in production: called after a waiter has judged the
+     * existing lock stale and before it moves it aside — the window in which a
+     * rival reclaimer can take the lock. Tests use it to interleave two
+     * reclaimers deterministically.
+     */
+    raceHook?: (point: "stale-judged") => Promise<void> | void;
+  } = {},
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? 5000;
   const retryMs = options.retryMs ?? 25;
@@ -101,7 +113,7 @@ export async function withFileLock<T>(
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
-      await removeStaleLock(lockPath, staleMs);
+      await removeStaleLock(lockPath, staleMs, options.raceHook);
       if (Date.now() - startedAt >= timeoutMs) {
         // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
         throw new Error(`Timed out waiting for lock: ${lockPath}`);
@@ -153,14 +165,42 @@ function isAlreadyExistsError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
 }
 
-async function removeStaleLock(lockPath: string, staleMs: number): Promise<void> {
+/**
+ * Move a stale lock aside and remove it — but only the lock that was judged.
+ *
+ * Between the judgement (old mtime, dead owner) and the rename, a rival waiter
+ * can reclaim the same stale lock and create a fresh one on the same path. A
+ * blind rename would then move THAT live lock away and let two holders run at
+ * once (review r1 F3). So the moved directory is checked after the rename —
+ * same inode and same owner token as the one judged — and anything else is
+ * renamed back untouched. The rename is atomic, so what is checked is exactly
+ * what is removed.
+ *
+ * Remaining window, stated rather than hidden: if a third waiter creates the
+ * path between our rename and the rename-back, the rename-back fails and the
+ * moved lock is left where it is (never deleted); its holder finds at release
+ * that `lockPath` is not its own and leaves it alone.
+ */
+async function removeStaleLock(
+  lockPath: string,
+  staleMs: number,
+  raceHook?: (point: "stale-judged") => Promise<void> | void,
+): Promise<void> {
   try {
     const stats = await stat(lockPath);
     if (Date.now() - stats.mtimeMs <= staleMs) return;
     const owner = await readLockOwner(path.join(lockPath, "owner.json"));
     if (owner && processIsAlive(owner.pid)) return;
+    await raceHook?.("stale-judged");
     const stalePath = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
     await rename(lockPath, stalePath);
+    const movedIno = (await stat(stalePath)).ino;
+    const moved = await readLockOwner(path.join(stalePath, "owner.json"));
+    if (movedIno !== stats.ino || moved?.token !== owner?.token) {
+      // Not the lock we judged: a rival's fresh lock. Put it back.
+      await rename(stalePath, lockPath).catch(() => {});
+      return;
+    }
     await rm(stalePath, { recursive: true, force: true });
   } catch {
     // Another process may have released the lock between mkdir attempts.

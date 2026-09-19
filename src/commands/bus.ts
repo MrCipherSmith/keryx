@@ -140,7 +140,7 @@ async function send(
   if (toLabel === undefined || body.length === 0 || kind === "" || replyTo === "") {
     throw new BusRefusal(
       "invalid-event",
-      `usage: keryx bus send <@name|@all> [--kind ${SENDABLE_KINDS.join("|")}] [--reply-to <id>] <text…>`,
+      `usage: keryx bus send <@name|@all> [--kind ${SENDABLE_KINDS.join("|")}] [--reply-to <id>] [--json] <text…>`,
     );
   }
   const result = await sendMessage(busRoot, {
@@ -211,13 +211,13 @@ async function list(
     ctx.out(pad("NAME", 18) + pad("STATE", 7) + pad("STATUS", 9) + pad("AGE", 7) + pad("BRANCH", 20) + pad("CHECKOUT", 36) + "ACTIVITY");
     for (const { record, state, ageMs } of peers) {
       ctx.out(
-        pad(`@${record.name}`, 18) +
+        pad(`@${displaySafe(record.name)}`, 18) +
           pad(state, 7) +
           pad(record.status, 9) +
           pad(formatAge(ageMs), 7) +
-          pad(record.branch ?? "-", 20) +
-          pad(record.checkout, 36) +
-          record.activity,
+          pad(displaySafe(record.branch ?? "-"), 20) +
+          pad(displaySafe(record.checkout), 36) +
+          displaySafe(record.activity),
       );
     }
   }
@@ -229,10 +229,10 @@ async function list(
     for (const lease of leases) {
       ctx.out(
         pad(lease.leaseId.slice(0, 8), 10) +
-          pad(`@${lease.holder.name}`, 18) +
+          pad(`@${displaySafe(lease.holder.name)}`, 18) +
           pad(lease.scope, 13) +
           pad(lease.expiresAt.slice(0, 19).replace("T", " "), 22) +
-          lease.reason,
+          displaySafe(lease.reason),
       );
     }
   }
@@ -266,12 +266,35 @@ async function log(
   }
   for (const event of events) {
     const reply = event.refs?.replyTo !== undefined ? ` (re ${event.refs.replyTo.slice(0, 8)})` : "";
-    const body = event.body === undefined ? "" : `: ${event.body.replace(/\s+/g, " ")}`;
+    const body = event.body === undefined ? "" : `: ${displaySafe(event.body)}`;
     ctx.out(
-      `#${event.seq} ${event.ts.slice(0, 19).replace("T", " ")} @${event.from.name} → ${event.toLabel} ${event.kind}${reply}${body}`,
+      `#${event.seq} ${event.ts.slice(0, 19).replace("T", " ")} @${displaySafe(event.from.name)} → ${displaySafe(event.toLabel)} ${event.kind}${reply}${body}`,
     );
   }
   return 0;
+}
+
+/**
+ * Text written by peers, made safe for a terminal (review r1 F5): ANSI/VT
+ * escape sequences (CSI, OSC, and any other ESC-introduced sequence) are
+ * removed, every remaining C0/C1 control character and DEL becomes a space,
+ * and runs of whitespace collapse to one. `--json` output is never passed
+ * through this: it is data, and JSON escapes control characters itself.
+ */
+export function displaySafe(text: string): string {
+  return (
+    text
+      // eslint-disable-next-line no-control-regex -- matching control characters is the point
+      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
+      // eslint-disable-next-line no-control-regex -- OSC ... BEL or ST
+      .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, "")
+      // eslint-disable-next-line no-control-regex -- any other ESC sequence (ESC + one char)
+      .replace(/\u001b[\s\S]?/g, "")
+      // eslint-disable-next-line no-control-regex -- C1 CSI/OSC introducers and the rest of C0/C1, DEL
+      .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
 }
 
 function formatAge(ms: number): string {
@@ -294,7 +317,7 @@ Usage:
   keryx bus list [--json]                          Live and stale peers, and active pause leases
   keryx bus log [--since <seq>] [--limit N] [--json]
                                                    Events, oldest first (--since: after that seq; --limit: last N)
-  keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] <text…>
+  keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] [--json] <text…>
                                                    Send a message as "cli" (a reply needs --reply-to)
   keryx bus prune [--json]                         Remove gone presence (>24 h), inactive leases, old log segments
 

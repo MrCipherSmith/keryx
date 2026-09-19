@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { cursorAtStart, readEvents } from "./log";
+import { appendEvent, cursorAtStart, readEvents } from "./log";
 import { leasePath, leasesDir, rotatedSegmentPath } from "./paths";
 import { listPresence, writePresence } from "./presence";
 import { pruneBus } from "./prune";
@@ -124,5 +124,55 @@ describe("pruneBus", () => {
     const root = await busRoot();
     expect(await pruneBus(root, options)).toEqual({ presence: [], leases: [], segments: [] });
     expect(await readdir(path.dirname(root))).toEqual([]);
+  });
+});
+
+// Review r1 F4: lease-expired is written at most once, even across a failed
+// delete or a crash after the append.
+describe("lease-expired exactly once (r1 F4)", () => {
+  const expiredEvents = async (root: string): Promise<number> =>
+    (await readEvents(root, await cursorAtStart(root))).events.filter(
+      (e) => e.kind === "lease-expired" && e.refs?.leaseId === LEASE.expired,
+    ).length;
+
+  async function withExpiredLease(): Promise<string> {
+    const root = await busRoot();
+    await mkdir(leasesDir(root), { recursive: true });
+    await writeFile(leasePath(root, LEASE.expired), JSON.stringify(lease(LEASE.expired, ID.live, NOW - 1)), "utf8");
+    return root;
+  }
+
+  test("a failed delete appends nothing; the next prune writes exactly one event", async () => {
+    const root = await withExpiredLease();
+    const failing = async (): Promise<void> => {
+      throw new Error("EACCES: injected");
+    };
+
+    await expect(pruneBus(root, { ...options, removeLeaseFile: failing })).rejects.toThrow(/injected/);
+    expect(await expiredEvents(root)).toBe(0);
+    expect(await readdir(leasesDir(root))).toEqual([`${LEASE.expired}.json`]);
+
+    const second = await pruneBus(root, options);
+    expect(second.leases).toEqual([LEASE.expired]);
+    expect(await expiredEvents(root)).toBe(1);
+    expect(await readdir(leasesDir(root))).toEqual([]);
+  });
+
+  test("after a crash between the append and the delete, the next prune removes the file and writes no second event", async () => {
+    const root = await withExpiredLease();
+    // What a pruner that died right after its append leaves behind.
+    await appendEvent(root, {
+      from: { instanceId: ID.session, name: "system", origin: "system" },
+      to: ["*"],
+      toLabel: "@all",
+      kind: "lease-expired",
+      refs: { leaseId: LEASE.expired },
+    });
+
+    const result = await pruneBus(root, options);
+
+    expect(result.leases).toEqual([LEASE.expired]);
+    expect(await expiredEvents(root)).toBe(1);
+    expect(await readdir(leasesDir(root))).toEqual([]);
   });
 });

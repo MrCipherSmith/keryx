@@ -5,8 +5,8 @@
 //      segment) + 1 — so a writer that died between its line and its head
 //      update cannot cause a duplicate;
 //   2. rotate first when this line would take the segment past the bound;
-//   3. write one line (terminating a torn fragment a crashed writer left, so
-//      the fragment becomes one skipped line instead of corrupting ours);
+//   3. cut off an unterminated fragment a crashed writer left (it was never
+//      readable and its seq never counted), then write one line;
 //   4. rewrite head.json { seq, segment, segmentInode } atomically.
 //
 // Segments are numbered from 1. The current one is `events.jsonl`; rotation
@@ -15,15 +15,16 @@
 // max(head.segment, newest rotated + 1), so a crash between the rename and the
 // head update is recovered from the directory itself.
 //
-// Readers hold a cursor { segment, inode, offset, seq }. They compare head and
-// the current file's inode with the cursor BEFORE comparing sizes (a freshly
-// rotated segment can be smaller than the old offset), finish the old segment
-// first, read complete lines only, and skip torn, invalid or unknown-version
+// Readers hold a cursor { segment, inode, offset, seq }. They open the current
+// segment FIRST and judge by that descriptor's inode, never by size (a freshly
+// rotated segment can be smaller than the old offset) and never by a path read
+// after listing (a rotation in between would skip a segment); they finish the
+// old segment first, read complete lines only, and skip torn, invalid or unknown-version
 // lines. `seq` is the last one delivered: an event at or below it is never
 // returned twice, whatever path the reader took to reach it.
 
 import { randomUUID } from "node:crypto";
-import { appendFile, chmod, open, rename, stat } from "node:fs/promises";
+import { appendFile, chmod, open, rename, stat, truncate } from "node:fs/promises";
 import { isNotFound, withFileLock } from "../lib/fs";
 import { redactSensitiveText } from "../security/service";
 import { BusRefusal } from "./errors";
@@ -154,32 +155,54 @@ interface SegmentTail {
   completeEnd: number;
 }
 
-async function inspectSegment(file: string): Promise<SegmentTail | undefined> {
-  let handle;
+type Handle = Awaited<ReturnType<typeof open>>;
+
+/** `file` opened read-only, or undefined when it does not exist. */
+async function openIfExists(file: string, flags = "r"): Promise<Handle | undefined> {
   try {
-    handle = await open(file, "r");
+    return await open(file, flags);
   } catch (error) {
     if (isNotFound(error)) return undefined;
     throw error;
   }
-  try {
-    const { size, ino } = await handle.stat();
-    if (size === 0) return { size, ino, lastSeq: 0, endsWithNewline: true, completeEnd: 0 };
-    const length = Math.min(size, TAIL_BYTES);
-    const start = size - length;
-    const buffer = Buffer.alloc(length);
-    const { bytesRead } = await handle.read(buffer, 0, length, start);
-    const text = buffer.subarray(0, bytesRead).toString("utf8");
-    const lastNewline = buffer.subarray(0, bytesRead).lastIndexOf(0x0a);
-    const completeEnd = lastNewline === -1 ? (start === 0 ? 0 : start) : start + lastNewline + 1;
-    let lastSeq = 0;
-    if (lastNewline !== -1) {
-      const lines = text.slice(0, text.lastIndexOf("\n")).split("\n");
-      for (let i = lines.length - 1; i >= 0 && lastSeq === 0; i -= 1) {
-        lastSeq = seqOfLine(lines[i] as string);
-      }
+}
+
+/** The tail of an open segment: its size, inode, last complete line and seq. */
+async function inspectHandle(handle: Handle): Promise<SegmentTail> {
+  const { size, ino } = await handle.stat();
+  if (size === 0) return { size, ino, lastSeq: 0, endsWithNewline: true, completeEnd: 0 };
+  let start = size - Math.min(size, TAIL_BYTES);
+  let bytes = await readRange(handle, start, size);
+  let lastNewline = bytes.lastIndexOf(0x0a);
+  if (lastNewline === -1 && start > 0) {
+    // A fragment longer than the tail window: look at the whole segment rather
+    // than guess where the last complete line ends.
+    start = 0;
+    bytes = await readRange(handle, 0, size);
+    lastNewline = bytes.lastIndexOf(0x0a);
+  }
+  const completeEnd = lastNewline === -1 ? 0 : start + lastNewline + 1;
+  let lastSeq = 0;
+  if (lastNewline !== -1) {
+    const lines = bytes.subarray(0, lastNewline).toString("utf8").split("\n");
+    for (let i = lines.length - 1; i >= 0 && lastSeq === 0; i -= 1) {
+      lastSeq = seqOfLine(lines[i] as string);
     }
-    return { size, ino, lastSeq, endsWithNewline: buffer[bytesRead - 1] === 0x0a, completeEnd };
+  }
+  return { size, ino, lastSeq, endsWithNewline: bytes[bytes.length - 1] === 0x0a, completeEnd };
+}
+
+async function readRange(handle: Handle, start: number, end: number): Promise<Buffer> {
+  const buffer = Buffer.alloc(Math.max(0, end - start));
+  const { bytesRead } = await handle.read(buffer, 0, buffer.length, start);
+  return buffer.subarray(0, bytesRead);
+}
+
+async function inspectSegment(file: string): Promise<SegmentTail | undefined> {
+  const handle = await openIfExists(file);
+  if (handle === undefined) return undefined;
+  try {
+    return await inspectHandle(handle);
   } finally {
     await handle.close().catch(() => {});
   }
@@ -256,17 +279,23 @@ export async function appendEvent(root: string, draft: EventDraft, options: Appe
       if (problems.length > 0) throw new BusRefusal("invalid-event", problems.join("; "));
 
       const line = `${JSON.stringify(event)}\n`;
-      let prefix = current !== undefined && !current.endsWithNewline ? "\n" : "";
-      const size = current?.size ?? 0;
-      if (size > 0 && size + Buffer.byteLength(prefix + line, "utf8") > maxSegmentBytes) {
+      let size = current?.size ?? 0;
+      if (current !== undefined && !current.endsWithNewline) {
+        // A crashed writer's unterminated fragment. It was never readable (no
+        // newline) and its seq was never counted, so it is cut off rather than
+        // terminated: terminating it would publish a line that may carry the
+        // very seq this append is about to take.
+        await truncate(eventsPath(root), current.completeEnd);
+        size = current.completeEnd;
+      }
+      if (size > 0 && size + Buffer.byteLength(line, "utf8") > maxSegmentBytes) {
         await rename(eventsPath(root), rotatedSegmentPath(root, segment));
         segment += 1;
-        prefix = "";
         await pruneRotatedSegments(root, { now });
       }
 
       const file = eventsPath(root);
-      await appendFile(file, prefix + line, { encoding: "utf8", mode: BUS_FILE_MODE });
+      await appendFile(file, line, { encoding: "utf8", mode: BUS_FILE_MODE });
       if (process.platform !== "win32") await chmod(file, BUS_FILE_MODE);
       await options.afterLineWritten?.(event);
       const { ino } = await stat(file);
@@ -358,23 +387,68 @@ function parseLines(text: string): BusEvent[] {
   return events;
 }
 
-async function statIno(file: string): Promise<number | undefined> {
-  try {
-    return (await stat(file)).ino;
-  } catch (error) {
-    if (isNotFound(error)) return undefined;
-    throw error;
+/**
+ * TEST SEAM, never set in production: called once the current segment is open
+ * (`opened`) and once the rotated segments are listed (`listed`) — the two
+ * points where a concurrent rotation can interleave with a reader. Tests inject
+ * a rotation there deterministically.
+ */
+export type ReaderRaceHook = (point: "opened" | "listed") => Promise<void> | void;
+
+/** Rotated segments with their inodes, ascending by number. Missing files are dropped. */
+async function rotatedWithInodes(root: string): Promise<{ segment: number; ino: number }[]> {
+  const result: { segment: number; ino: number }[] = [];
+  for (const segment of await listRotatedSegments(root)) {
+    try {
+      result.push({ segment, ino: (await stat(rotatedSegmentPath(root, segment))).ino });
+    } catch (error) {
+      if (!isNotFound(error)) throw error; // pruned between the listing and the stat
+    }
   }
+  return result;
+}
+
+/** Complete lines of an open segment from `offset`. */
+async function readHandle(handle: Handle, offset: number): Promise<SegmentRead> {
+  const { size, ino } = await handle.stat();
+  if (size <= offset) return { events: [], ino, end: offset };
+  const bytes = await readRange(handle, offset, size);
+  const lastNewline = bytes.lastIndexOf(0x0a);
+  if (lastNewline === -1) return { events: [], ino, end: offset };
+  return { events: parseLines(bytes.subarray(0, lastNewline).toString("utf8")), ino, end: offset + lastNewline + 1 };
+}
+
+/**
+ * Where the segment with inode `ino` lives: its rotated number when it has
+ * been rotated, otherwise it is the current segment and its number follows the
+ * newest rotated one (or head.json, whichever is higher).
+ */
+function segmentNumberOf(
+  ino: number,
+  rotated: readonly { segment: number; ino: number }[],
+  head: BusHead | undefined,
+): number {
+  const found = rotated.find((entry) => entry.ino === ino);
+  return found !== undefined ? found.segment : currentSegmentNumber(head, rotated.map((entry) => entry.segment));
 }
 
 /**
  * Events after `cursor`, and the cursor to use next time. Never throws on
- * content: bad lines are skipped. The rotation check (head and the current
- * file's inode against the cursor) comes before any size comparison.
+ * content: bad lines are skipped.
+ *
+ * Order matters, and it is the reason for the descriptor: `events.jsonl` is
+ * opened FIRST and read through that descriptor (inode X), and only then are
+ * the rotated segments listed. Whatever rotations happen meanwhile, X is one
+ * fixed segment: rotated segments older than X are read in full, X is read
+ * through the descriptor, and anything newer than X is left for the next call
+ * (its cursor names X, wherever X now lives). Reading `events.jsonl` by path
+ * after the listing instead would skip a segment rotated in between.
  */
-export async function readEvents(root: string, cursor: BusCursor): Promise<{ events: BusEvent[]; cursor: BusCursor }> {
-  const head = await readHead(root);
-  const currentIno = await statIno(eventsPath(root));
+export async function readEvents(
+  root: string,
+  cursor: BusCursor,
+  raceHook?: ReaderRaceHook,
+): Promise<{ events: BusEvent[]; cursor: BusCursor }> {
   const events: BusEvent[] = [];
   let seq = cursor.seq;
   const take = (batch: readonly BusEvent[]): void => {
@@ -386,49 +460,74 @@ export async function readEvents(root: string, cursor: BusCursor): Promise<{ eve
     }
   };
 
-  const moved =
-    cursor.inode === 0 ||
-    (head !== undefined && (head.segment !== cursor.segment || head.segmentInode !== cursor.inode)) ||
-    (currentIno !== undefined && currentIno !== cursor.inode);
+  const current = await openIfExists(eventsPath(root));
+  try {
+    const currentIno = current === undefined ? undefined : (await current.stat()).ino;
+    await raceHook?.("opened");
+    const head = await readHead(root);
+    const rotated = await rotatedWithInodes(root);
+    await raceHook?.("listed");
 
-  if (!moved) {
-    const read = currentIno === undefined ? undefined : await readSegment(eventsPath(root), cursor.offset, cursor.inode);
-    if (read === undefined) return { events, cursor };
+    // The cursor's own segment is still the one we hold open: read on from its
+    // offset (the rotation check is by inode, never by size).
+    if (current !== undefined && currentIno === cursor.inode && cursor.inode !== 0) {
+      const read = await readHandle(current, cursor.offset);
+      take(read.events);
+      return { events, cursor: { segment: segmentNumberOf(read.ino, rotated, head), inode: read.ino, offset: read.end, seq } };
+    }
+
+    // 1. Finish the cursor's own segment, found by inode among the rotated ones.
+    const own = cursor.inode === 0 ? undefined : rotated.find((entry) => entry.ino === cursor.inode);
+    if (own !== undefined) {
+      const read = await readSegment(rotatedSegmentPath(root, own.segment), cursor.offset, own.ino);
+      if (read !== undefined) take(read.events);
+    }
+    // 2. Every segment rotated after it and before the one we hold, in full.
+    const from = own?.segment ?? cursor.segment;
+    const held = currentIno === undefined ? undefined : rotated.find((entry) => entry.ino === currentIno);
+    for (const entry of rotated) {
+      const after = own !== undefined ? entry.segment > from : entry.segment >= from;
+      if (!after || entry.ino === cursor.inode || entry.ino === currentIno) continue;
+      if (held !== undefined && entry.segment > held.segment) break; // newer than X: next call
+      const read = await readSegment(rotatedSegmentPath(root, entry.segment), 0, entry.ino);
+      if (read !== undefined) take(read.events);
+    }
+    // 3. The segment we hold open, from its start.
+    if (current === undefined || currentIno === undefined) {
+      return { events, cursor: { segment: currentSegmentNumber(head, rotated.map((e) => e.segment)), inode: 0, offset: 0, seq } };
+    }
+    const read = await readHandle(current, 0);
     take(read.events);
-    return { events, cursor: { segment: cursor.segment, inode: read.ino, offset: read.end, seq } };
+    return { events, cursor: { segment: segmentNumberOf(read.ino, rotated, head), inode: read.ino, offset: read.end, seq } };
+  } finally {
+    await current?.close().catch(() => {});
   }
-
-  // 1. Finish the cursor's own segment, now renamed to events.<segment>.jsonl
-  //    (same inode). If it is gone or is not that file, nothing more of it can
-  //    be read.
-  if (cursor.inode !== 0 && cursor.segment >= 1) {
-    const old = await readSegment(rotatedSegmentPath(root, cursor.segment), cursor.offset, cursor.inode);
-    if (old !== undefined) take(old.events);
-  }
-  // 2. Every segment rotated since, in order, in full.
-  const rotated = await listRotatedSegments(root);
-  for (const segment of rotated) {
-    const after = cursor.inode === 0 ? segment >= cursor.segment : segment > cursor.segment;
-    if (!after) continue;
-    const read = await readSegment(rotatedSegmentPath(root, segment), 0);
-    if (read !== undefined) take(read.events);
-  }
-  // 3. The current segment from its start.
-  const segment = currentSegmentNumber(head, rotated);
-  const current = await readSegment(eventsPath(root), 0);
-  if (current === undefined) return { events, cursor: { segment, inode: 0, offset: 0, seq } };
-  take(current.events);
-  return { events, cursor: { segment, inode: current.ino, offset: current.end, seq } };
 }
 
-/** A cursor at the current end of the log, so history is not replayed (§5.1). */
-export async function cursorAtEnd(root: string): Promise<BusCursor> {
-  const head = await readHead(root);
-  const rotated = await listRotatedSegments(root);
-  const segment = currentSegmentNumber(head, rotated);
-  const current = await inspectSegment(eventsPath(root));
-  if (current === undefined) return { segment, inode: 0, offset: 0, seq: head?.seq ?? 0 };
-  return { segment, inode: current.ino, offset: current.completeEnd, seq: Math.max(head?.seq ?? 0, current.lastSeq) };
+/**
+ * A cursor at the current end of the log, so history is not replayed (§5.1).
+ * Same order as `readEvents`: open the current segment first, then locate it.
+ */
+export async function cursorAtEnd(root: string, raceHook?: ReaderRaceHook): Promise<BusCursor> {
+  const current = await openIfExists(eventsPath(root));
+  try {
+    await raceHook?.("opened");
+    const head = await readHead(root);
+    const rotated = await rotatedWithInodes(root);
+    await raceHook?.("listed");
+    if (current === undefined) {
+      return { segment: currentSegmentNumber(head, rotated.map((e) => e.segment)), inode: 0, offset: 0, seq: head?.seq ?? 0 };
+    }
+    const tail = await inspectHandle(current);
+    return {
+      segment: segmentNumberOf(tail.ino, rotated, head),
+      inode: tail.ino,
+      offset: tail.completeEnd,
+      seq: Math.max(head?.seq ?? 0, tail.lastSeq),
+    };
+  } finally {
+    await current?.close().catch(() => {});
+  }
 }
 
 /** A cursor before the oldest retained event: reading from it returns the whole retained log. */

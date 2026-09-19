@@ -272,3 +272,32 @@ test("unknown subcommands are refused with the help text", async () => {
   expect(result.code).toBe(1);
   expect(result.err[0]).toBe("Unknown bus subcommand: frobnicate");
 });
+
+// Review r1 F5: text written by peers never reaches the terminal with control
+// characters or escape sequences in it; --json is left as data.
+describe("control characters on display (r1 F5)", () => {
+  const ESC = "\u001b";
+  // eslint-disable-next-line no-control-regex -- the assertion is about control characters
+  const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
+  const hostile = `${ESC}[2J${ESC}]0;pwned\u0007clear${ESC}[31m red\u009b1m\u0000 end`;
+
+  test("an ESC sequence in a body does not reach stdout in `log`; --json keeps the data", async () => {
+    const root = await seededRoot();
+    await appendEvent(root, { from: { instanceId: ID.release, name: "release", origin: "agent" }, to: ["*"], toLabel: "@all", kind: "notice", body: hostile }, { now: () => NOW });
+
+    const text = (await run(["log"], { root })).out.join("\n");
+    expect(text).not.toMatch(CONTROL);
+    expect(text).toContain("notice: clear red 1m end");
+
+    const json = JSON.parse((await run(["log", "--json"], { root })).out.join("\n")) as { events: { body: string }[] };
+    expect(json.events[0]?.body).toBe(hostile);
+  });
+
+  test("activity, branch and checkout are stripped in `list`", async () => {
+    const root = await seededRoot();
+    await writePresence(root, { ...presence(ID.release, "release", NOW - 1_000), activity: `busy ${ESC}[5mblink`, branch: `feat${ESC}[0m`, checkout: `/repo${ESC}]8;;x\u0007` });
+    const text = (await run(["list"], { root })).out.join("\n");
+    expect(text).not.toMatch(CONTROL);
+    expect(text).toContain("busy blink");
+  });
+});

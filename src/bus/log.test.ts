@@ -330,3 +330,81 @@ describe("countRecent", () => {
     expect(await countRecent(root, { origin: "cli", sinceMs: 120_000, now: () => now })).toBe(3);
   });
 });
+
+// Review r1 F1: a rotation between the reader's listing and its read of the
+// current segment must not skip a segment. Injected deterministically through
+// the reader's race hook, at both points where a writer can interleave.
+describe("rotation racing a reader (r1 F1)", () => {
+  // Each line is ~300 bytes: every append after the first rotates.
+  const tiny = { maxSegmentBytes: 400 };
+  const body = (label: string): string => `${label} ${"p".repeat(120)}`;
+
+  for (const point of ["opened", "listed"] as const) {
+    test(`a rotation at "${point}" delivers every event exactly once and skips no segment`, async () => {
+      const root = await busRoot();
+      await appendEvent(root, draft(body("e1")), tiny);
+      const start = await cursorAtEnd(root);
+      await appendEvent(root, draft(body("e2")), tiny); // rotates segment 1
+      let injected = false;
+      const hook = async (at: "opened" | "listed"): Promise<void> => {
+        if (at !== point || injected) return;
+        injected = true;
+        await appendEvent(root, draft(body("e3")), tiny); // rotates segment 2 under the reader
+      };
+
+      const first = await readEvents(root, start, hook);
+      const second = await readEvents(root, first.cursor);
+      await appendEvent(root, draft(body("e4")), tiny);
+      const third = await readEvents(root, second.cursor);
+
+      expect(injected).toBe(true);
+      expect([...first.events, ...second.events, ...third.events].map((e) => e.seq)).toEqual([2, 3, 4]);
+    });
+
+    test(`cursorAtEnd with a rotation at "${point}" names the segment its inode really is`, async () => {
+      const root = await busRoot();
+      await appendEvent(root, draft(body("e1")), tiny);
+      await appendEvent(root, draft(body("e2")), tiny);
+      const cursor = await cursorAtEnd(root, async (at) => {
+        if (at === point) await appendEvent(root, draft(body("e3")), tiny);
+      });
+      const inodeAt = async (file: string): Promise<number | undefined> => (await stat(file).catch(() => undefined))?.ino;
+      // The segment number is where that inode actually lives: the current
+      // segment's number (head.segment) or the rotated file of that number.
+      if ((await inodeAt(eventsPath(root))) === cursor.inode) {
+        expect(cursor.segment).toBe((await readHead(root))?.segment as number);
+      } else {
+        expect(await inodeAt(rotatedSegmentPath(root, cursor.segment))).toBe(cursor.inode);
+      }
+      // Nothing after the cursor is lost or repeated.
+      await appendEvent(root, draft(body("e4")), tiny);
+      const after = (await readEvents(root, cursor)).events.map((e) => e.seq);
+      expect(after).toEqual(range(cursor.seq + 1, 4));
+    });
+  }
+});
+
+// Review r1 F2: a complete-looking fragment without its newline is cut off,
+// never revived as a line carrying a seq the next writer also takes.
+describe("unterminated fragment (r1 F2)", () => {
+  test("a valid-JSON fragment with no newline is truncated: fresh seq, never read, no duplicate", async () => {
+    const root = await busRoot();
+    await appendEvent(root, draft("first"));
+    // A writer died after writing every byte of seq 2 except the newline.
+    await appendFile(eventsPath(root), validLine(2).trimEnd(), "utf8");
+    expect((await readEvents(root, await cursorAtStart(root))).events.map((e) => e.seq)).toEqual([1]);
+
+    const next = await appendEvent(root, draft("second"));
+
+    const events = (await readEvents(root, await cursorAtStart(root))).events;
+    expect(next.seq).toBe(2);
+    expect(events.map((e) => [e.seq, e.body])).toEqual([
+      [1, "first"],
+      [2, "second"],
+    ]);
+    const raw = (await readFile(eventsPath(root), "utf8")).trimEnd().split("\n");
+    const onDisk = raw.map((line) => (JSON.parse(line) as BusEvent).seq);
+    expect(new Set(onDisk).size).toBe(onDisk.length);
+    expect(raw.join("\n")).not.toContain("manual 2");
+  });
+});

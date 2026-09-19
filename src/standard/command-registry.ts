@@ -935,7 +935,7 @@ export const COMMAND_DESCRIPTORS: CommandDescriptor[] = [
     read: false,
     sideEffects: [
       "appends one redacted event to the clone's bus log under <git-common-dir>/keryx/bus/",
-      "the message reaches the addressed agents' next turn (and may wake an idle one)",
+      "the addressed shells see the message when they read the bus log",
     ],
   },
   {
