@@ -104,3 +104,25 @@
   - Concern 1: `runAgentTurn`'s own slate handling and `closeSlateSession` on `/exit` and `/new` still read the local `slateSession`. That variable is cleared when the loss is noticed, so the exposure is at most one heartbeat. This is passed to review round r3 to confirm or flag.
   - Concern 2: a lease directory whose owner.json stays unreadable is never reported lost. This trade-off is intentional: `unknown` must not be treated as `lost`.
 - 2026-09-19T14:45Z - operator: completion outcome chosen: A, create a PR, review it, merge into `main`, and complete the flow.
+- 2026-09-19T14:51:45.240Z - task-attempt: T11: started (attempt 1) — 271-T11 docs status, PR #607
+- 2026-09-19T14:53:06.046Z - task-done: T11: Mark P0 implemented in the agent-bus package README, implementation-plan and roadmap row
+- 2026-09-19T15:00Z - orchestrator: review round r3 (271-review-r3) at PR head d3a8e839.
+  - All 11 earlier findings are refuted at this head. Each verdict names its fix commit (dbc45cd3 or 612eb1eb) and a proving test. The verifications block has been saved for ingest.
+  - One new minor finding, R3-1: a turn or a `/goal --auto` loop that is already running holds its own captured SlateSessionRef. After a take-over, clearing the local variable does not reach that ref, so `recordSlateTouch`, flow-done archiving and goal-loop `writeSlate` keep writing the taken-over session's slate until the turn or loop ends.
+  - The journal's T14 concern about `/exit` and `/new` is judged bounded (at most one heartbeat) and accepted.
+- 2026-09-19T15:00Z - orchestrator: re-plan. Round 3 of 3 is not clean, so the approach changes instead of the same one being repeated.
+  - R3-1 is the same class as N1: slate writes after the lease is lost. Two rounds have now closed this by gating the *callers* (getters and boxes), and each round left another caller holding a captured ref.
+  - New strategy: enforce at the slate object itself. The lease-loss listener marks the SlateSessionRef it owns as `detached`, and every slate write/open/close/archive path refuses when that flag is set. A new caller can no longer bypass the check, because the check lives in the thing it writes through. This is fix task T15, and it must include a test where the lease is lost between two tool calls of one turn, plus one for the goal loop.
+  - Scope is unchanged. It remains one flow, because the fix is local to the slate write layer. If this approach also fails review, stop and escalate to the operator; do not open a fourth round.
+- 2026-09-19T14:55:10.213Z - task-added: T15: Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)
+- 2026-09-19T14:55:10.305Z - task-attempt: T15: started (attempt 1) — 271-T15 re-planned approach after round 3
+- 2026-09-19T15:05:17.437Z - task-done: T15: Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)
+- 2026-09-19T15:05Z - orchestrator: 271-T15 returned DONE_WITH_CONCERNS and was committed as ed63f567.
+  - **Where the check lives.** The `detached` flag is enforced in `src/session/slate-lifecycle.ts`: `ensureSlateOpened` (checked twice, once around the git anchor lookup), `closeSlateSession`, and the new `writeSlateSession`, `recordSlateSessionTouch`, `readSlateSession` and `slateSessionDir`. These cover every writer in agent.ts (including the terminal-state write the brief missed), goal-command.ts (open, both binds, the verifier) and tui-shell.ts. The listeners detach the same object that the turn and goal loop captured.
+  - **Tests.** 6 new tests, each failing without the fix.
+  - **Test runs.** Targeted only, per the operator instruction below.
+  - **Accepted limitations:**
+    1. Loss is noticed only at a heartbeat or at `canPersist()`: at most one heartbeat of exposure. This is the same window already accepted.
+    2. Three tools write by raw dir: slate-tool `appendSeed`, the `workspace_create` bind, and the subagent parent fold. They resolve the dir through lease-gated getters (N1) on every call.
+    3. A machine wrap-up already running when the lease is lost is not interrupted. It no longer starts on a detached ref.
+- 2026-09-19T15:00Z - operator instruction: when PR CI runs the suites, do not duplicate them locally. `.github/workflows/ci.yml` runs on every pull_request: `check:core` (lint, typecheck, test:core), doc-links, and the client matrix (terminal, streaming, cancel-resume, runtime). From now on local runs are limited to targeted and new tests. T12 and AC11 evidence come from CI on the PR head.

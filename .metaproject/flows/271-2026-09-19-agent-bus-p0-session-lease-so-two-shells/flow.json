@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T14:50:20.253Z",
+  "updatedAt": "2026-09-19T15:05:17.437Z",
   "source": {
     "type": "description",
     "ref": null
@@ -226,15 +226,22 @@
       "id": "T11",
       "title": "Mark P0 implemented in the agent-bus package README, implementation-plan and roadmap row",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T14:51:45.239Z",
+            "outcome": "started",
+            "detail": "271-T11 docs status, PR #607"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -295,6 +302,27 @@
             "at": "2026-09-19T14:41:23.740Z",
             "outcome": "started",
             "detail": "271-T14 review r2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T15",
+      "title": "Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T14:55:10.304Z",
+            "outcome": "started",
+            "detail": "271-T15 re-planned approach after round 3"
           }
         ]
       },
@@ -482,6 +510,31 @@
       "at": "2026-09-19T14:50:20.253Z",
       "event": "task-done",
       "detail": "T14: Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost"
+    },
+    {
+      "at": "2026-09-19T14:51:45.240Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 271-T11 docs status, PR #607"
+    },
+    {
+      "at": "2026-09-19T14:53:06.046Z",
+      "event": "task-done",
+      "detail": "T11: Mark P0 implemented in the agent-bus package README, implementation-plan and roadmap row"
+    },
+    {
+      "at": "2026-09-19T14:55:10.213Z",
+      "event": "task-added",
+      "detail": "T15: Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)"
+    },
+    {
+      "at": "2026-09-19T14:55:10.305Z",
+      "event": "task-attempt",
+      "detail": "T15: started (attempt 1) — 271-T15 re-planned approach after round 3"
+    },
+    {
+      "at": "2026-09-19T15:05:17.437Z",
+      "event": "task-done",
+      "detail": "T15: Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)"
     }
   ]
 }
