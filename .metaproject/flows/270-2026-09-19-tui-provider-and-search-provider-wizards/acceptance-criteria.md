@@ -10,7 +10,7 @@ Rules:
 
 ## Criteria
 
-- AC1: Inside the running agent shell, every step of the `/provider` and `/connect` wizard (provider list, auth method, base URL, API key, device login, custom provider fields, model) renders in ModalHost: the shell header and sidebar stay visible, and no step mounts a full-screen `overlayBox` on the renderer root. A headless test drives the wizard through at least provider → key → model and asserts this at each step.
+- AC1: Inside the running agent shell, every step of the `/provider` and `/connect` wizard (provider list, auth method, base URL, API key, device login, custom provider fields, model) renders in ModalHost, bounded by the main column exactly as `/model` has been since flow 269: the sidebar stays visible (the dialog's opaque backdrop covers the main column, header included), and no step mounts a full-screen `overlayBox` on the renderer root. A headless test drives the wizard through at least provider → key → model and asserts this at each step.
 - AC2: Inside the running agent shell, every step of the `/search-provider` wizard (provider, field, credential, active provider, connection test) renders in ModalHost under the same rule as AC1, verified by a headless test.
 - AC3: The startup picker (before the chrome exists) and the chat shell keep working through the full-screen overlay; the existing wizard tests that drive them with a bare renderer pass unchanged.
 - AC4: In a wizard step rendered in ModalHost, Esc goes back one step (or cancels on the first step) exactly as the overlay version does, Enter confirms, and ←/→ move the cursor inside a text field instead of being swallowed by a tab switch; a single-tab modal never consumes ←/→.
