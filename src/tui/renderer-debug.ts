@@ -17,6 +17,42 @@ import {
   type StdinLike,
 } from "./stdin-guard";
 
+/**
+ * Keep `process.emitWarning` output off the full-screen UI while it is up.
+ *
+ * The runtime prints warnings straight to stderr, which under the alternate
+ * screen lands on top of the rendered frame: a MaxListenersExceededWarning once
+ * garbled the sidebar and footer of a live session. While the renderer owns the
+ * terminal, warnings go to the `--debug` log instead; on teardown (terminal
+ * restored) a one-line summary of each is printed so none is lost, and the
+ * runtime's own listeners are put back.
+ */
+export function routeProcessWarnings(
+  write: (text: string) => void = (text) => {
+    process.stderr.write(text);
+  },
+): () => void {
+  const previous = process.listeners("warning");
+  const seen: string[] = [];
+  const onWarning = (warning: Error): void => {
+    debugEvent("process.warning", { name: warning.name, message: warning.message, stack: warning.stack });
+    if (seen.length < 20) {
+      seen.push(`${warning.name}: ${warning.message}`);
+    }
+  };
+  process.removeAllListeners("warning");
+  process.on("warning", onWarning);
+  return () => {
+    process.off("warning", onWarning);
+    for (const listener of previous) {
+      process.on("warning", listener as (warning: Error) => void);
+    }
+    for (const line of seen) {
+      write(`keryx: runtime warning during the session — ${line}\n`);
+    }
+  };
+}
+
 /** At most this many reopens per minute — a tty that EOFs on every open is not recoverable. */
 const MAX_REOPENS_PER_MINUTE = 5;
 
@@ -178,6 +214,7 @@ export function attachRendererGuards(
       (current as { destroy?: () => void }).destroy?.();
     }
   });
+  teardown.push(routeProcessWarnings());
 
   if (!isDebugEnabled()) {
     return () => {

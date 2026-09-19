@@ -3,6 +3,23 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.126] — 2026-09-19
+
+### Fixed
+
+- **Approval dialogs no longer leak, and a runtime warning can no longer garble
+  the screen.** Every choice dialog removed its scroll boxes and rows from the
+  dock without destroying them. An OpenTUI ScrollBox keeps a `selection`
+  listener on the renderer until it is destroyed, and every renderable stays in
+  OpenTUI's global registry until then, so each approval leaked one or two
+  scroll boxes with their rows. After a few approvals the runtime printed
+  `MaxListenersExceededWarning: 11 selection listeners added to [CliRenderer]`
+  straight onto the full-screen UI, which corrupted the sidebar and footer of a
+  live session. Closed dialogs now destroy what they mounted (a regression test
+  opens fifteen dialogs and checks the listener count stays flat). While the TUI
+  owns the terminal, `process.emitWarning` output goes to the `--debug` log
+  instead of the screen, and is summarised on stderr after exit.
+
 ## [0.2.125] — 2026-09-19
 
 ### Changed
