@@ -128,13 +128,23 @@ import type { ShellDeps, ShellIO, ShellModelParams, ShellSessionOpts } from "./s
 import {
   compactSession,
   createSession,
+  exportSessionMarkdown,
   latestSession,
-  openSession,
   persistCompacted,
   persistHistory,
   shortSessionId,
   type SessionHandle,
 } from "../session";
+import {
+  describeLeaseHolder,
+  latestUnleasedSession,
+  openLeasedSession,
+  releaseSessionLease,
+  SessionLeasedError,
+  type SessionLeaseHandle,
+  type SkippedSession,
+  switchLeasedSession,
+} from "../session/lease";
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
@@ -206,6 +216,187 @@ export function readlineAgentHelpText(): string {
 }
 
 /**
+ * The one line `-c` prints when it passed over a session another shell holds
+ * (specification §6.1, AC1): the session, and its holder with the pid.
+ */
+export function describeSkippedSession(skipped: SkippedSession): string {
+  const stale = skipped.state === "stale" ? " (stale)" : "";
+  return `Skipped session ${shortSessionId(skipped.summary.id)} · ${skipped.summary.title}: open in ${describeLeaseHolder(skipped.holder)}${stale}\n`;
+}
+
+/**
+ * Bare `-r` without the TUI picker (readline, no TTY): the latest session no
+ * other shell has open (specification §6.1, AC4), announcing through `emit`
+ * the held session it passed over, as `-c` does. `undefined` when there is no
+ * such session; the caller then starts a new one.
+ */
+export function bareResumeTarget(cwd: string, emit: (text: string) => void): string | undefined {
+  const pick = latestUnleasedSession(cwd);
+  if (pick.skipped !== undefined) {
+    emit(describeSkippedSession(pick.skipped));
+  }
+  return pick.summary?.id;
+}
+
+/** Open options for a leased REPL session, from the caller's session opts. */
+function leasedOpenOptions(
+  session: ShellSessionOpts | undefined,
+  cwd: string,
+  provider: string,
+  model: string,
+): Parameters<typeof openLeasedSession>[0] {
+  return {
+    cwd,
+    ...(session?.continueLast === true ? { continueLast: true } : {}),
+    ...(session?.resumeId !== undefined ? { resumeId: session.resumeId } : {}),
+    ...(session?.fork === true ? { fork: true } : {}),
+    ...(session?.takeOver === true ? { takeOver: true } : {}),
+    provider,
+    model,
+  };
+}
+
+/**
+ * A brand-new leased session: the fallback after an open that failed for any
+ * reason other than a lease. `undefined` when even that fails; the caller then
+ * starts an unleased session rather than no session at all.
+ */
+function openFreshLeasedSession(
+  open: typeof openLeasedSession,
+  cwd: string,
+  provider: string,
+  model: string,
+): { handle: SessionHandle; lease: SessionLeaseHandle } | undefined {
+  try {
+    const opened = open({ cwd, provider, model });
+    return { handle: opened.handle, lease: opened.lease };
+  } catch {
+    return undefined;
+  }
+}
+
+/** What the operator chose for a session another shell holds (§6.1). */
+export type LeasedChoice = "fork" | "view" | "cancel" | "take-over";
+
+/** The line source and sink `resolveLeasedChoice` prompts through. */
+export interface LeasedChoiceIO {
+  write: (text: string) => void;
+  /** The next line typed, or `undefined` at end of input. */
+  readLine: () => Promise<string | undefined>;
+}
+
+/**
+ * Ask what to do about a `-r <id>` whose session another shell holds: fork
+ * (the default), view read-only, cancel, and take over only when the holder is
+ * stale (specification §6.1, AC3). End of input cancels. An answer that is not
+ * one of the offered rows asks again.
+ */
+export async function resolveLeasedChoice(io: LeasedChoiceIO, error: SessionLeasedError): Promise<LeasedChoice> {
+  const rows: Array<{ choice: LeasedChoice; label: string }> = [
+    { choice: "fork", label: "fork (default): continue in a copy of the session" },
+    { choice: "view", label: "view (read-only), then start a new session" },
+    { choice: "cancel", label: "cancel" },
+    ...(error.state === "stale" ? [{ choice: "take-over" as const, label: "take over (the holder is stale)" }] : []),
+  ];
+  const stale = error.state === "stale" ? " (stale)" : "";
+  io.write(
+    `Session ${shortSessionId(error.summary.id)} · ${error.summary.title} is open in ${describeLeaseHolder(error.holder)}${stale}.\n` +
+      rows.map((row, index) => `  ${index + 1}) ${row.label}\n`).join(""),
+  );
+  for (;;) {
+    io.write(`Choose [1-${rows.length}, default 1]: `);
+    const line = await io.readLine();
+    if (line === undefined) {
+      io.write("\n");
+      return "cancel";
+    }
+    const answer = line.trim().toLowerCase();
+    if (answer.length === 0) {
+      return "fork";
+    }
+    const byNumber = /^\d+$/.test(answer) ? rows[Number(answer) - 1] : undefined;
+    const byName = rows.find(
+      (row) => row.choice === answer || row.choice.replace("-", " ") === answer || row.choice.replace("-", "") === answer,
+    );
+    const picked = byNumber ?? byName;
+    if (picked !== undefined) {
+      return picked.choice;
+    }
+    io.write(`Not one of the choices: ${line.trim()}\n`);
+  }
+}
+
+/** Runtime seams for `runWithLeaseChoice`; production passes real stdio. */
+export interface LeaseChoiceRuntime {
+  /** `process.stdin.isTTY`: whether a person can answer the choice. */
+  isTty: boolean;
+  io: LeasedChoiceIO;
+  /** stderr: where the non-interactive refusal goes. */
+  writeError: (text: string) => void;
+  /** Renders the session for `view` (printed through `io.write`). Default `exportSessionMarkdown`. */
+  exportSession?: (cwd: string, sessionId: string) => string;
+}
+
+/**
+ * Run a readline REPL (`run`) and handle a `SessionLeasedError` from its open
+ * (specification §6.1, AC2/AC3):
+ *
+ * - without a TTY, the error message (it names `--fork`, plus `or --take-over`
+ *   when stale) goes to stderr and the result is exit code 1; nothing is
+ *   opened, so nothing is written to the held session;
+ * - with a TTY, `resolveLeasedChoice` decides: fork or take over re-open the
+ *   same id with that flag, view prints the session and then starts a NEW
+ *   session, cancel returns exit code 0 having opened nothing.
+ *
+ * Returns the exit code to set, or `undefined` when the REPL ran.
+ */
+export async function runWithLeaseChoice(
+  session: ShellSessionOpts,
+  run: (session: ShellSessionOpts) => Promise<void>,
+  runtime: LeaseChoiceRuntime,
+): Promise<number | undefined> {
+  let current = session;
+  for (;;) {
+    try {
+      await run(current);
+      return undefined;
+    } catch (error) {
+      if (!(error instanceof SessionLeasedError)) {
+        throw error;
+      }
+      if (!runtime.isTty) {
+        runtime.writeError(`${error.message}\n`);
+        return 1;
+      }
+      const choice = await resolveLeasedChoice(runtime.io, error);
+      const base: ShellSessionOpts = {
+        cwd: current.cwd,
+        ...(current.enabled !== undefined ? { enabled: current.enabled } : {}),
+        ...(current.leaseBox !== undefined ? { leaseBox: current.leaseBox } : {}),
+        ...(current.openLeased !== undefined ? { openLeased: current.openLeased } : {}),
+      };
+      if (choice === "cancel") {
+        return 0;
+      }
+      if (choice === "view") {
+        // Read-only: the export only reads the held session's files.
+        try {
+          const render = runtime.exportSession ?? ((cwd: string, id: string) => exportSessionMarkdown(cwd, id));
+          runtime.io.write(`${render(current.cwd, error.summary.id)}\n`);
+        } catch (cause) {
+          runtime.io.write(`Could not render the session: ${cause instanceof Error ? cause.message : String(cause)}\n`);
+        }
+        current = base;
+      } else if (choice === "fork") {
+        current = { ...base, resumeId: error.summary.id, fork: true };
+      } else {
+        current = { ...base, resumeId: error.summary.id, takeOver: true };
+      }
+    }
+  }
+}
+
+/**
  * The injectable REPL core. Iterates `io.lines`; slash commands are handled
  * inline (never call `provider.stream`), every other non-blank line is one
  * streaming turn whose request carries the FULL accumulated history.
@@ -235,19 +426,21 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
   let live: SessionHandle | undefined;
   let history: NormalizedMessage[] = [];
   let archive: NormalizedMessage[] = [];
+  // The session lease this loop holds (specification §6). Mirrored into the
+  // caller's `leaseBox` so a signal handler outside the loop can release it.
+  let lease: SessionLeaseHandle | undefined;
+  const holdLease = (next: SessionLeaseHandle | undefined): void => {
+    lease = next;
+    if (deps.session?.leaseBox !== undefined) deps.session.leaseBox.current = next;
+  };
+  const openLeased = deps.session?.openLeased ?? openLeasedSession;
   if (sessionsOn) {
     try {
-      const resumeId = deps.session?.resumeId;
-      if (resumeId === undefined && deps.session?.continueLast !== true) {
-        // plain new session
+      const opened = openLeased(leasedOpenOptions(deps.session, sessionCwd, providerName, modelName));
+      holdLease(opened.lease);
+      if (opened.skipped !== undefined) {
+        system(describeSkippedSession(opened.skipped));
       }
-      const opened = openSession({
-        cwd: sessionCwd,
-        ...(deps.session?.continueLast === true ? { continueLast: true } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-        provider: providerName,
-        model: modelName,
-      });
       live = opened.handle;
       history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -263,12 +456,23 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
         );
       }
     } catch (cause) {
-      live = createSession({ cwd: sessionCwd, provider: providerName, model: modelName });
+      // Another shell holds the session: the top level decides (fork, view,
+      // cancel, take over, or exit 1 without a TTY). Never a silent new session.
+      if (cause instanceof SessionLeasedError) {
+        throw cause;
+      }
+      const fresh = openFreshLeasedSession(openLeased, sessionCwd, providerName, modelName);
+      holdLease(fresh?.lease);
+      live = fresh?.handle ?? createSession({ cwd: sessionCwd, provider: providerName, model: modelName });
       history = [];
       archive = [];
       system(`${cause instanceof Error ? cause.message : String(cause)}\nStarting a new session.\n`);
     }
   }
+  const releaseLease = (): void => {
+    releaseSessionLease(lease);
+    holdLease(undefined);
+  };
 
   const save = (): void => {
     if (live === undefined) {
@@ -321,6 +525,7 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       const argument = parts.slice(1).join(" ");
 
       if (command === "/exit" || command === "/quit") {
+        releaseLease();
         return;
       }
       if (command === "/help") {
@@ -383,7 +588,18 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       }
       if (command === "/clear" || command === "/new") {
         if (sessionsOn) {
-          live = createSession({ cwd: sessionCwd, provider: providerName, model: modelName });
+          // §6.2: lease the new session first, release the current one after.
+          // A refusal keeps the current session and its lease.
+          try {
+            const next = switchLeasedSession(lease, () =>
+              openLeased({ cwd: sessionCwd, provider: providerName, model: modelName }),
+            );
+            holdLease(next.lease);
+            live = next.handle;
+          } catch (cause) {
+            system(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
+            continue;
+          }
           history = [];
           archive = [];
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
@@ -551,6 +767,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     io.onSafeBoundary?.();
     io.write("\n\n");
   }
+  // End of input: the normal return releases the lease (AC7).
+  releaseLease();
 }
 
 /**
@@ -1437,19 +1655,42 @@ async function runAgentRepl(
       agentIo.onSystem?.(`context 85% of window — compacted ${r.removed} messages\n`);
     },
   };
+  // The session lease this REPL holds (specification §6), mirrored into the
+  // caller's `leaseBox` for the SIGINT/SIGTERM handler.
+  let lease: SessionLeaseHandle | undefined;
+  const holdLease = (next: SessionLeaseHandle | undefined): void => {
+    lease = next;
+    if (sessionOpts?.leaseBox !== undefined) sessionOpts.leaseBox.current = next;
+  };
+  const openLeased = sessionOpts?.openLeased ?? openLeasedSession;
+  /**
+   * `/new` (specification §6.2): lease a new session BEFORE anything of the
+   * current one is touched, and release the current lease only after. On a
+   * refusal, say so and return false: the current session and lease stay.
+   */
+  const switchNewSession = (): SessionHandle | false => {
+    try {
+      const next = switchLeasedSession(lease, () =>
+        openLeased({ cwd: sessionCwd, provider: deps.providerId, model: deps.modelId }),
+      );
+      holdLease(next.lease);
+      return next.handle;
+    } catch (cause) {
+      agentIo.onSystem?.(`${cause instanceof Error ? cause.message : String(cause)}\nKept the current session.\n`);
+      return false;
+    }
+  };
+  const releaseLease = (): void => {
+    releaseSessionLease(lease);
+    holdLease(undefined);
+  };
   if (sessionsOn) {
     try {
-      const resumeId = sessionOpts?.resumeId;
-      if (resumeId === undefined && sessionOpts?.continueLast !== true && sessionOpts !== undefined) {
-        // if pick flag was mapped to continue by caller, resumeId may be set to latest
+      const opened = openLeased(leasedOpenOptions(sessionOpts, sessionCwd, deps.providerId, deps.modelId));
+      holdLease(opened.lease);
+      if (opened.skipped !== undefined) {
+        agentIo.onSystem?.(describeSkippedSession(opened.skipped));
       }
-      const opened = openSession({
-        cwd: sessionCwd,
-        ...(sessionOpts?.continueLast === true ? { continueLast: true } : {}),
-        ...(resumeId !== undefined ? { resumeId } : {}),
-        provider: deps.providerId,
-        model: deps.modelId,
-      });
       live = opened.handle;
       history = opened.history;
       archive = opened.archive.length > 0 ? [...opened.archive] : [...opened.history];
@@ -1464,11 +1705,20 @@ async function runAgentRepl(
         );
       }
     } catch (cause) {
-      live = createSession({
-        cwd: sessionCwd,
-        provider: deps.providerId,
-        model: deps.modelId,
-      });
+      // Another shell holds the session: the top level decides. Never a
+      // silent new session (AC2).
+      if (cause instanceof SessionLeasedError) {
+        throw cause;
+      }
+      const fresh = openFreshLeasedSession(openLeased, sessionCwd, deps.providerId, deps.modelId);
+      holdLease(fresh?.lease);
+      live =
+        fresh?.handle ??
+        createSession({
+          cwd: sessionCwd,
+          provider: deps.providerId,
+          model: deps.modelId,
+        });
       history = [];
       archive = [];
       nextArchiveIndex = 0;
@@ -1565,6 +1815,7 @@ async function runAgentRepl(
       // Flow 173 (AC7): sweep every tracked background job (process-group
       // SIGTERM→SIGKILL) on real session exit.
       await deps.sweepBackgroundJobs?.();
+      releaseLease(); // AC7: the normal return releases the session lease
       return; // end of input
     }
     rich.safeBoundary?.();
@@ -1576,6 +1827,7 @@ async function runAgentRepl(
         // SLATE-5 close trigger: shell exit (explicit command).
         await closeSlateSession(slateSession, mintTimestampAttemptId);
         await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
+        releaseLease(); // flow 271 AC7: `/exit` releases the session lease
         return;
       }
       if (command === "/help") {
@@ -1626,14 +1878,16 @@ async function runAgentRepl(
         // SLATE-5 close trigger: `/new` (and `/clear`, which is the same
         // command under sessions-off — no session dir there, so nothing to
         // close). Archive whatever slate the ABOUT-TO-BE-ABANDONED session
-        // was building before switching away from it.
+        // was building before switching away from it. Flow 271 (§6.2): lease
+        // the new session first; a refusal keeps session, slate and lease.
+        const nextLive = sessionsOn ? switchNewSession() : undefined;
+        if (nextLive === false) {
+          rich.printPrompt();
+          continue;
+        }
         await closeSlateSession(slateSession, mintTimestampAttemptId);
-        if (sessionsOn) {
-          live = createSession({
-            cwd: sessionCwd,
-            provider: deps.providerId,
-            model: deps.modelId,
-          });
+        if (nextLive !== undefined) {
+          live = nextLive;
           history = [];
           archive = [];
           nextArchiveIndex = 0;
@@ -2039,8 +2293,12 @@ export interface ShellCliFlags {
   continueLast?: boolean;
   /** Resume a session id / short id / title in this project. */
   resumeId?: string;
-  /** `-r` without id → open resume picker (TUI) or latest (non-TUI). */
+  /** `-r` without id → open resume picker (TUI) or latest unleased (non-TUI). */
   resumePick?: boolean;
+  /** `--fork` (only with `-r <id>`): fork the session and lease the fork. */
+  fork?: boolean;
+  /** `--take-over` (only with `-r <id>`): reclaim a STALE holder's lease. */
+  takeOver?: boolean;
   /**
    * `--permission-mode <ask|trust|auto>` or the `--ask`/`--trust`/`--auto`
    * shorthands. `undefined` means no flag was passed — `runAgentRepl` then
@@ -2094,6 +2352,19 @@ export interface ShellCliFlags {
 }
 
 /**
+ * A refused combination of the session-lease flags (`--fork`, `--take-over`).
+ * Carries exit code 2, the usage-error code, which `cli.ts` honours.
+ */
+export class ShellFlagError extends Error {
+  readonly exitCode = 2;
+
+  constructor(message: string) {
+    super(`${message}. See keryx shell --help.`);
+    this.name = "ShellFlagError";
+  }
+}
+
+/**
  * Parse shell CLI flags. Defaults: TUI on, agent mode implied (modeFlag
  * undefined). `--no-tui` opts out of TUI; `--chat` selects chat mode.
  * Session flags (`-c`/`-r`) are per-project only.
@@ -2120,6 +2391,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let continueLast: boolean | undefined;
   let resumeId: string | undefined;
   let resumePick: boolean | undefined;
+  let fork: boolean | undefined;
+  let takeOver: boolean | undefined;
   let permissionModeFlag: PermissionMode | undefined;
   let denyTools: string[] | undefined;
   let printPromptArg: string | undefined;
@@ -2153,6 +2426,10 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       } else {
         resumePick = true;
       }
+    } else if (arg === "--fork") {
+      fork = true;
+    } else if (arg === "--take-over") {
+      takeOver = true;
     } else if (arg === "--permission-mode") {
       const next = valueAfter(i++);
       if (!isPermissionMode(next)) invalid("--permission-mode must be ask, trust or auto");
@@ -2191,6 +2468,21 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   if (continueLast && (resumeId !== undefined || resumePick)) {
     invalid("--continue and --resume cannot be combined");
   }
+  // `--fork` / `--take-over` act on ONE named session (specification §6.1).
+  // `-r --take-over` is a bare `-r` (the peek stops at a flag) plus the flag,
+  // so it lands in the "needs an id" refusal too. Exit code 2: usage error.
+  const leaseFlag = fork === true ? "--fork" : takeOver === true ? "--take-over" : undefined;
+  if (leaseFlag !== undefined) {
+    if (continueLast === true) {
+      throw new ShellFlagError(`${leaseFlag} cannot be combined with --continue; use -r <id> ${leaseFlag}`);
+    }
+    if (fork === true && takeOver === true) {
+      throw new ShellFlagError("--fork and --take-over cannot be combined; choose one");
+    }
+    if (resumeId === undefined) {
+      throw new ShellFlagError(`${leaseFlag} needs an explicit session id; use -r <id> ${leaseFlag}`);
+    }
+  }
   if (printPromptArg !== undefined && modeFlag === false) {
     // Chat mode has no tools and no turn loop worth driving headlessly. Saying
     // so beats running something that looks like the agent and is not.
@@ -2205,6 +2497,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(continueLast === true ? { continueLast: true } : {}),
     ...(resumeId !== undefined ? { resumeId } : {}),
     ...(resumePick === true ? { resumePick: true } : {}),
+    ...(fork === true ? { fork: true } : {}),
+    ...(takeOver === true ? { takeOver: true } : {}),
     ...(permissionModeFlag !== undefined ? { permissionModeFlag } : {}),
     ...(denyTools !== undefined ? { denyTools } : {}),
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
@@ -2281,8 +2575,10 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --base-url <url>              Override the provider endpoint
   --agent | --chat              Choose agent (default) or chat mode
   --tui | --no-tui              Prefer TUI (default) or readline; last flag wins
-  --continue, -c                Continue the latest project session
+  --continue, -c                Continue the most recent session no other shell has open
   --resume, -r [id-or-title]     Resume a session, or open the session picker
+  --fork                        With -r <id>: continue in a fork of that session
+  --take-over                   With -r <id>: take the session from a stale holder
   --permission-mode <mode>      Agent permissions: ask, trust or auto
   --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
@@ -2291,7 +2587,10 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)
 
 Session continuation and resume are mutually exclusive. Permission flags
-are ignored in chat mode. Without a TTY, resume without an ID uses the latest session.
+are ignored in chat mode. Without a TTY, resume without an ID uses the latest
+session no other shell has open. A session open in another shell is refused;
+--fork and --take-over (stale holders only) need an explicit -r <id> and
+cannot be combined with each other or with --continue.
 
 Example: keryx shell --provider ollama --model llama3.1:latest`);
     return;
@@ -2309,6 +2608,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // interactive picker asks (agent-default), and the non-interactive path
   // defaults to agent. `undefined` = "no explicit flag given".
   let modeFlag = flags.modeFlag;
+  // `--fork` / `--take-over` (flow 271): passed to every surface's session opts.
+  const leaseFlagOpts: { fork?: boolean; takeOver?: boolean } = {
+    ...(flags.fork === true ? { fork: true } : {}),
+    ...(flags.takeOver === true ? { takeOver: true } : {}),
+  };
 
   // OpenTUI path (default when TTY): OpenTUI owns the terminal from the START —
   // NO readline is created here, so it cannot consume the terminal's responses
@@ -2627,6 +2931,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 cwd,
                 ...(flags.continueLast === true ? { continueLast: true } : {}),
                 ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
+                ...leaseFlagOpts,
               },
             };
           },
@@ -2654,6 +2959,8 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
           ...(flags.continueLast === true ? { continueLast: true } : {}),
           ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
           ...(flags.resumePick === true ? { pickOnStart: true } : {}),
+          // Flow 271: `--fork` / `--take-over` for the TUI's leased open (T8).
+          ...leaseFlagOpts,
         },
         ...(flags.permissionModeFlag !== undefined ? { initialPermissionMode: flags.permissionModeFlag } : {}),
         versionCheck,
@@ -2685,6 +2992,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // The readline agent session's MCP runtime, reachable from the signal
   // handler below. Assigned when the agent branch builds one.
   let readlineMcp: McpRuntime | undefined;
+  // The session lease the readline REPL holds (flow 271), written by the REPL
+  // and released by the signal handler below before `process.exit` (AC7).
+  const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
 
   // SIGINT: exit, but CLOSE FIRST.
   //
@@ -2700,6 +3010,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
   const closeAndExit = (code: number) => (): void => {
+    // Synchronously, first: the lease must be gone even if the close below hangs
+    // until the grace timeout (specification §6, AC7).
+    releaseSessionLease(leaseBox.current);
+    leaseBox.current = undefined;
     void (async (): Promise<void> => {
       try {
         await readlineMcp?.close();
@@ -2733,6 +3047,31 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         };
 
   const { io, emitSystem, printHeader, printPrompt, destroy } = createRichIo(sharedLines, versionCheck);
+
+  // Flow 271 (§6.1): what to do when the session to open is held by another
+  // shell. The choice reads from the same shared line iterator as the REPL;
+  // `--print` has no one to answer, so it takes the non-interactive refusal.
+  const leaseChoiceRuntime: LeaseChoiceRuntime = {
+    isTty: process.stdin.isTTY === true && oneShotPrompt === undefined,
+    io: {
+      write: (text) => {
+        io.write(text);
+      },
+      readLine: async () => {
+        const next = await lineIterator.next();
+        return next.done === true ? undefined : next.value;
+      },
+    },
+    writeError: (text) => {
+      process.stderr.write(text);
+    },
+  };
+  const bareResumeId = (): string | undefined => bareResumeTarget(process.cwd(), emitSystem);
+  const finishLeased = (code: number | undefined): void => {
+    if (code !== undefined) {
+      process.exitCode = code;
+    }
+  };
 
   let provider: string;
   let model: string;
@@ -2923,7 +3262,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // Resume pick without TUI → latest session in this project.
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {
-        resumeId = latestSession(process.cwd())?.id;
+        resumeId = bareResumeId();
       }
       const events =
         flags.eventsFile === undefined
@@ -2935,12 +3274,25 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               },
               flags.eventsMaxField,
             );
+      // One REPL run per session opts: `runWithLeaseChoice` re-runs it with
+      // `fork`/`takeOver`, or as a new session, after a leased refusal.
+      const runRepl = async (session: ShellSessionOpts): Promise<void> => {
+        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, session, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir);
+      };
       try {
-        await runAgentRepl(sharedLines, { printPrompt, safeBoundary: io.onSafeBoundary }, agentDeps, metaprojectPort, {
-          cwd: process.cwd(),
-          ...(flags.continueLast === true ? { continueLast: true } : {}),
-          ...(resumeId !== undefined ? { resumeId } : {}),
-        }, flags.permissionModeFlag, slateSessionBox, events, runtime.cacheDir);
+        finishLeased(
+          await runWithLeaseChoice(
+            {
+              cwd: process.cwd(),
+              ...(flags.continueLast === true ? { continueLast: true } : {}),
+              ...(resumeId !== undefined ? { resumeId } : {}),
+              ...leaseFlagOpts,
+              leaseBox,
+            },
+            runRepl,
+            leaseChoiceRuntime,
+          ),
+        );
       } finally {
         // Each connected server is a child process holding a pipe. Exiting
         // without closing them leaks one per session — and `closeServers`
@@ -2951,16 +3303,21 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     } else {
       let resumeId = flags.resumeId;
       if (flags.resumePick === true && resumeId === undefined) {
-        resumeId = latestSession(process.cwd())?.id;
+        resumeId = bareResumeId();
       }
-      await runShell(io, {
-        ...deps,
-        session: {
-          cwd: process.cwd(),
-          ...(flags.continueLast === true ? { continueLast: true } : {}),
-          ...(resumeId !== undefined ? { resumeId } : {}),
-        },
-      });
+      finishLeased(
+        await runWithLeaseChoice(
+          {
+            cwd: process.cwd(),
+            ...(flags.continueLast === true ? { continueLast: true } : {}),
+            ...(resumeId !== undefined ? { resumeId } : {}),
+            ...leaseFlagOpts,
+            leaseBox,
+          },
+          (session) => runShell(io, { ...deps, session }),
+          leaseChoiceRuntime,
+        ),
+      );
     }
   } finally {
     // Every exit closes the readline session's MCP runtime (K-012). The agent

@@ -319,6 +319,8 @@ Commands:
 if (import.meta.main) {
   main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : String(error));
-    process.exitCode = 1;
+    // A usage error (e.g. `keryx shell --fork` without `-r <id>`) carries its own code.
+    const code = (error as { exitCode?: unknown } | null)?.exitCode;
+    process.exitCode = typeof code === "number" && Number.isInteger(code) && code > 0 ? code : 1;
   });
 }

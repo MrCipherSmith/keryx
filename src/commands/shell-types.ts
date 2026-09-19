@@ -1,4 +1,5 @@
 import type { ProviderPort } from "../harness/provider/types";
+import type { OpenLeasedSessionOptions, OpenLeasedSessionResult, SessionLeaseHandle } from "../session/lease";
 
 /** Async line source + write sink; no real stdio is reached by `runShell`. */
 export interface ShellIO {
@@ -23,6 +24,20 @@ export interface ShellSessionOpts {
   resumeId?: string;
   /** When false, skip persistence (tests default). Default true when object set. */
   enabled?: boolean;
+  /** With `resumeId`: fork the session and lease the fork (`--fork`). */
+  fork?: boolean;
+  /** With `resumeId`: reclaim a STALE holder's lease (`--take-over`). */
+  takeOver?: boolean;
+  /**
+   * Written by the REPL with the session lease it currently holds, so a caller
+   * outside the loop (the readline SIGINT/SIGTERM handler) can release it.
+   */
+  leaseBox?: { current: SessionLeaseHandle | undefined };
+  /**
+   * Test seam: the leased open used for the start-up open and for `/new`.
+   * Production leaves it unset and gets `openLeasedSession`.
+   */
+  openLeased?: (opts: OpenLeasedSessionOptions) => OpenLeasedSessionResult;
 }
 
 /** Resolved per-provider sampling/budget/timeout overrides (flow 268). */
