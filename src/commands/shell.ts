@@ -129,22 +129,25 @@ import {
   compactSession,
   createSession,
   exportSessionMarkdown,
-  latestSession,
   persistCompacted,
   persistHistory,
   shortSessionId,
   type SessionHandle,
 } from "../session";
 import {
-  describeLeaseHolder,
   latestUnleasedSession,
   openLeasedSession,
   releaseSessionLease,
   SessionLeasedError,
   type SessionLeaseHandle,
-  type SkippedSession,
   switchLeasedSession,
 } from "../session/lease";
+import {
+  describeLeasedSession,
+  describeSkippedSession,
+  type LeasedChoice,
+  leasedChoiceRows,
+} from "../session/lease-choice";
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
@@ -215,14 +218,9 @@ export function readlineAgentHelpText(): string {
   );
 }
 
-/**
- * The one line `-c` prints when it passed over a session another shell holds
- * (specification §6.1, AC1): the session, and its holder with the pid.
- */
-export function describeSkippedSession(skipped: SkippedSession): string {
-  const stale = skipped.state === "stale" ? " (stale)" : "";
-  return `Skipped session ${shortSessionId(skipped.summary.id)} · ${skipped.summary.title}: open in ${describeLeaseHolder(skipped.holder)}${stale}\n`;
-}
+// The skipped-session line and the choice list live in `session/lease-choice.ts`
+// so the TUI shares them; re-exported here for the existing importers.
+export { describeSkippedSession, type LeasedChoice };
 
 /**
  * Bare `-r` without the TUI picker (readline, no TTY): the latest session no
@@ -275,9 +273,6 @@ function openFreshLeasedSession(
   }
 }
 
-/** What the operator chose for a session another shell holds (§6.1). */
-export type LeasedChoice = "fork" | "view" | "cancel" | "take-over";
-
 /** The line source and sink `resolveLeasedChoice` prompts through. */
 export interface LeasedChoiceIO {
   write: (text: string) => void;
@@ -292,17 +287,8 @@ export interface LeasedChoiceIO {
  * one of the offered rows asks again.
  */
 export async function resolveLeasedChoice(io: LeasedChoiceIO, error: SessionLeasedError): Promise<LeasedChoice> {
-  const rows: Array<{ choice: LeasedChoice; label: string }> = [
-    { choice: "fork", label: "fork (default): continue in a copy of the session" },
-    { choice: "view", label: "view (read-only), then start a new session" },
-    { choice: "cancel", label: "cancel" },
-    ...(error.state === "stale" ? [{ choice: "take-over" as const, label: "take over (the holder is stale)" }] : []),
-  ];
-  const stale = error.state === "stale" ? " (stale)" : "";
-  io.write(
-    `Session ${shortSessionId(error.summary.id)} · ${error.summary.title} is open in ${describeLeaseHolder(error.holder)}${stale}.\n` +
-      rows.map((row, index) => `  ${index + 1}) ${row.label}\n`).join(""),
-  );
+  const rows = leasedChoiceRows(error);
+  io.write(`${describeLeasedSession(error)}\n` + rows.map((row, index) => `  ${index + 1}) ${row.label}\n`).join(""));
   for (;;) {
     io.write(`Choose [1-${rows.length}, default 1]: `);
     const line = await io.readLine();
@@ -394,6 +380,53 @@ export async function runWithLeaseChoice(
       }
     }
   }
+}
+
+/**
+ * The chat TUI's driver (flow 271, AC3): `run` (normally `runShell`) behind
+ * `runWithLeaseChoice`, so a held `-r <id>` offers fork / view / cancel (/ take
+ * over when stale) in the chat transcript instead of ending the shell with an
+ * error. The prompt goes out through `onSystem`, and the answer is the next
+ * composer line, read from the same `io.lines` the driver reads afterwards.
+ * `notes` (the bare `-r` skipped-session line) are shown first.
+ *
+ * Returns the exit code to set (`0` after cancel), or `undefined` when the
+ * driver ran.
+ */
+export async function runLeasedChatShell(
+  io: ShellIO,
+  deps: ShellDeps,
+  run: (io: ShellIO, deps: ShellDeps) => Promise<void> = runShell,
+  notes: readonly string[] = [],
+): Promise<number | undefined> {
+  const system = (text: string): void => {
+    if (io.onSystem !== undefined) {
+      io.onSystem(text);
+    } else {
+      io.write(text);
+    }
+  };
+  for (const note of notes) {
+    system(note);
+  }
+  if (deps.session === undefined) {
+    await run(io, deps);
+    return undefined;
+  }
+  let iterator: AsyncIterator<string> | undefined;
+  const runtime: LeaseChoiceRuntime = {
+    isTty: true,
+    io: {
+      write: system,
+      readLine: async () => {
+        iterator ??= io.lines[Symbol.asyncIterator]();
+        const next = await iterator.next();
+        return next.done === true ? undefined : next.value;
+      },
+    },
+    writeError: system,
+  };
+  return runWithLeaseChoice(deps.session, (session) => run(io, { ...deps, session }), runtime);
 }
 
 /**
@@ -2897,6 +2930,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     });
     const tuiInitial = startup.initial;
     const tuiDetected = startup.detected;
+    // The chat TUI's session lease (flow 271), written by `runShell` and
+    // released in the `finally` below on every exit from the TUI branch.
+    const chatLeaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
 
     try {
     if (surface === "tui-chat") {
@@ -2904,15 +2940,28 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
       // through the shared chrome.
       const chatFactory = realMakeProvider(() => {});
       let chatResumeId = flags.resumeId;
+      // Bare `-r` never picks a session another shell holds (§6.1, AC4). The
+      // renderer is not up yet, so the skipped-session line is held and shown
+      // in the transcript once the chat driver starts.
+      const chatNotes: string[] = [];
       if (flags.resumePick === true && chatResumeId === undefined) {
-        chatResumeId = latestSession(cwd)?.id;
+        chatResumeId = bareResumeTarget(cwd, (text) => {
+          chatNotes.push(text);
+        });
       }
       if (
         await (runtime.launchChat ?? launchTuiChatShell)({
           detected: tuiDetected,
           redetect,
           ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
-          runShell,
+          // A held `-r <id>` makes `runShell` throw `SessionLeasedError`; the
+          // chat surface offers fork / view / cancel (/ take over) instead.
+          runShell: async (chatIo, chatDeps) => {
+            const code = await runLeasedChatShell(chatIo, chatDeps, runShell, chatNotes.splice(0));
+            if (code !== undefined) {
+              process.exitCode = code;
+            }
+          },
           makeShellDeps: (sel) => {
             // flow 268: resolved fresh on every chat `/model`/`/connect`
             // rebuild, same as the agent-mode `makeAgentDeps` above.
@@ -2932,6 +2981,7 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 ...(flags.continueLast === true ? { continueLast: true } : {}),
                 ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
                 ...leaseFlagOpts,
+                leaseBox: chatLeaseBox,
               },
             };
           },
@@ -2970,6 +3020,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     }
     // else: optional dep absent / init failed → fall through to the readline shell.
     } finally {
+      // The chat TUI's lease (flow 271, AC7). Idempotent: `runShell` usually
+      // released it already on its own return.
+      releaseSessionLease(chatLeaseBox.current);
+      chatLeaseBox.current = undefined;
       // Runs on every exit from the TUI branch — the two `return`s above and
       // the fall-through to readline alike. Each connected server is a child
       // process holding a pipe; on fall-through the readline path builds its
