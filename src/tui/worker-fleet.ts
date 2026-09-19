@@ -4,6 +4,8 @@
 // `keryx agents monitor`: ◐ running · ● done · ✗ failed · ○ ready · ◼ blocked.
 // Formatting prioritizes human-readable "what is happening / what do I do?"
 
+import { displaySafe } from "../bus/display";
+
 export type FleetWorkerStatus = "queued" | "running" | "done" | "failed" | "blocked";
 
 export interface FleetWorker {
@@ -207,20 +209,44 @@ export function formatFleetSidebar(workers: readonly FleetWorker[], maxLines = 1
 // bus, not a job this shell tracks — so it gets its OWN group below the local
 // fleet rather than being merged into it. Decoupled from `../bus/client`'s
 // `BusPeer`/`PresenceRecord` on purpose: this module stays free of the bus
-// module dependency, and the caller maps the one field it actually renders.
+// module dependency (`displaySafe` aside), and the caller maps the few
+// fields it actually renders.
 
 export interface FleetPeer {
   name: string;
   state: "live" | "stale";
+  /**
+   * The peer's own presence status (`PresenceRecord.status`: idle/working/
+   * blocked/held), passed through as a plain string rather than importing the
+   * bus schema's enum type — this module stays free of the bus module
+   * dependency beyond `displaySafe` (review r1 F11: the sidebar line must
+   * show BOTH live/stale and working/idle, not live/stale alone).
+   */
+  status: string;
   activity: string;
 }
 
-/** Truncate for the sidebar's ~28-char width, same budget `clip` uses above. */
+/** `FleetPeer.status` → a compact glyph; an unrecognized value falls back to `?` rather than throwing. */
+const PEER_STATUS_GLYPH: Record<string, string> = {
+  idle: "○",
+  working: "◐",
+  blocked: "◼",
+  held: "◆",
+};
+
+/**
+ * Truncate for the sidebar's ~28-char width, same budget `clip` uses above.
+ * `name` and `activity` are peer-supplied free text (specification §4.1) —
+ * `displaySafe` strips any escape sequence before it reaches the operator's
+ * terminal (review r1 F3).
+ */
 function formatPeerLine(peer: FleetPeer): string {
   const marker = peer.state === "live" ? "●" : "◌";
-  const activity = peer.activity.trim();
+  const statusGlyph = PEER_STATUS_GLYPH[peer.status] ?? "?";
+  const name = displaySafe(peer.name);
+  const activity = displaySafe(peer.activity).trim();
   const detail = activity.length > 0 ? ` ${clip(activity, 14)}` : "";
-  return `${marker} @${clip(peer.name, 10)}${detail}`;
+  return `${marker}${statusGlyph} @${clip(name, 10)}${detail}`;
 }
 
 /**

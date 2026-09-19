@@ -240,11 +240,12 @@ import type { VersionCheckResult } from "../lib/version-check";
 // surface-independent client; this file only wires status/activity in and
 // renders what it hands back (specification §5.1, §5.2, §7.2).
 import { joinBus, type BusClient, type BusPeer } from "../bus/client";
+import { formatBusEventLine, makeBusErrorReporter } from "../bus/display";
 import { listPresence } from "../bus/presence";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
-import { formatBusEventLine, openBus } from "./bus-panel";
+import { openBus } from "./bus-panel";
 import {
   appendUserEcho,
   clearTranscriptChildren,
@@ -3002,8 +3003,12 @@ export async function launchTuiAgentShell(opts: {
   // so the bus join, which needs the session id) exists, and every exit path
   // must call `leave()` even when Ctrl+C lands before the join ever ran.
   let liveBus: BusClient | undefined;
-  /** `event.id → fromName`, so `/bus reply <id>` can resolve `@name` without asking the operator to retype it. */
-  const recentBusSenders = new Map<string, string>();
+  // review r1 F6: set ONLY in `onDestroy` (Ctrl+C). `joinBus` is awaited
+  // inside a fire-and-forget IIFE, so Ctrl+C can land while it is still in
+  // flight; once it resolves after that, the resolved client must be left
+  // immediately — never assigned to `liveBus`, never painted into — rather
+  // than racing the already-destroyed renderer.
+  let destroyed = false;
   const foregroundOperation = createForegroundOperationOwner();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -3014,11 +3019,14 @@ export async function launchTuiAgentShell(opts: {
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
       onDestroy: () => {
+        destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
-        // Flow 271 (AC7): synchronously, before anything that may block.
+        // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
+        // session lease — specification §5.4's order — synchronously, before
+        // anything that may block.
+        liveBus?.leave(); // idempotent, synchronous-safe
         sessionLease.release();
-        liveBus?.leave(); // flow 273 (specification §5.4): idempotent, synchronous-safe
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -4266,7 +4274,7 @@ export async function launchTuiAgentShell(opts: {
       // startup picker (fork/view/cancel included) and `/resume` — is a live
       // session switch. Undefined before the bus has joined (every startup
       // call), so this is a safe no-op until then.
-      void liveBus?.setSession(opened.handle.summary.id);
+      void liveBus?.setSession(opened.handle.summary.id).catch(() => {}); // review r1 F10: setSession never throws, but never trust that from the call site either
     };
 
     const pickRecentSession = async (): Promise<SessionSummary | undefined> => {
@@ -4478,21 +4486,29 @@ export async function launchTuiAgentShell(opts: {
           ...(opts.session?.busName !== undefined ? { requestedName: opts.session.busName } : {}),
           shellConfig: loadShellConfig(),
           env: process.env,
-          sessionLease: sessionLease.current,
+          // review r1 F2: a getter, read at every use (join, each heartbeat,
+          // `rename`, `setSession`) — never a value captured once. `/new`
+          // swaps `sessionLease.current` to a fresh lease handle; a captured
+          // value would keep refreshing the OLD, already-released one and
+          // leave the new lease's name null forever.
+          sessionLease: () => sessionLease.current,
           status: () => ({
             status: herdrStateFor(lastMainAgentStatus),
             activity: lastMainAgentDetail ?? liveSession.summary.title,
           }),
+          onError: makeBusErrorReporter((line) => io.onSystem?.(`${line}\n`)),
           onEvent: (event) => {
-            recentBusSenders.set(event.id, event.fromName);
-            if (recentBusSenders.size > 200) {
-              const oldest = recentBusSenders.keys().next().value;
-              if (oldest !== undefined) recentBusSenders.delete(oldest);
-            }
-            io.onSystem?.(`${formatBusEventLine(event.fromName, event.kind, event.preview)}\n`);
+            if (destroyed) return; // review r1 F6: never paint after Ctrl+C
+            io.onSystem?.(`${formatBusEventLine(event)}\n`);
           },
           onPeers: (peers: BusPeer[]) => {
-            busFleetPeers = peers.map((peer) => ({ name: peer.record.name, state: peer.state, activity: peer.record.activity }));
+            if (destroyed) return; // review r1 F6: never paint after Ctrl+C
+            busFleetPeers = peers.map((peer) => ({
+              name: peer.record.name,
+              state: peer.state,
+              status: peer.record.status,
+              activity: peer.record.activity,
+            }));
             paintFleet();
           },
         });
@@ -4500,7 +4516,21 @@ export async function launchTuiAgentShell(opts: {
           io.onSystem?.(`bus: off (${joined.disabled})\n`);
           return;
         }
+        if (destroyed) {
+          // review r1 F6: Ctrl+C landed while this join was still in flight —
+          // leave immediately rather than adopting a client for a renderer
+          // that is already gone.
+          joined.leave();
+          return;
+        }
         liveBus = joined;
+        // review r1 F6/F10: a session switch (`/new`, `/resume`, the startup
+        // picker) that lands DURING this await calls `liveBus?.setSession`
+        // while `liveBus` is still undefined — a safe no-op at the time, but
+        // one that leaves the freshly-joined client on its ORIGINAL
+        // `sessionId` forever unless it is resynced here, right after
+        // `liveBus` is finally assigned, so the switch history lands.
+        void joined.setSession(liveSession.summary.id).catch(() => {});
         const renamedNote = joined.nameWasTaken ? " (requested name was taken; renamed)" : "";
         io.onSystem?.(`bus: joined as @${joined.name} · ${joined.peers().length} peers${renamedNote}\n`);
       } catch (error) {
@@ -4616,7 +4646,7 @@ export async function launchTuiAgentShell(opts: {
       // Flow 273 (specification §6.2, AC8): `/new` and `/clear` switch the
       // live session outside `applyOpened` (they reset the whole transcript
       // surface instead), so this is its own hook.
-      void liveBus?.setSession(liveSession.summary.id);
+      void liveBus?.setSession(liveSession.summary.id).catch(() => {}); // review r1 F10
       paintSessionHeader();
       if (note !== undefined && note.length > 0) {
         io.onSystem?.(`${note}\n`);
@@ -4770,17 +4800,23 @@ export async function launchTuiAgentShell(opts: {
       }
       const client = liveBus;
       void (async () => {
-        const now = Date.now();
-        const presence = await listPresence(client.root);
-        const leases = await listActiveLeases(client.root, { now, holderLiveness: holderLivenessFrom(presence, { now }) });
-        const { events } = await readEvents(client.root, await cursorAtStart(client.root));
-        openBus(otui, chrome, {
-          peers: client.peers(),
-          leases,
-          events,
-          renderer: r,
-          ...inspectorKeys,
-        });
+        try {
+          const now = Date.now();
+          const presence = await listPresence(client.root);
+          const leases = await listActiveLeases(client.root, { now, holderLiveness: holderLivenessFrom(presence, { now }) });
+          const { events } = await readEvents(client.root, await cursorAtStart(client.root));
+          openBus(otui, chrome, {
+            peers: client.peers(),
+            leases,
+            events,
+            renderer: r,
+            ...inspectorKeys,
+          });
+        } catch (error) {
+          // review r1 F10: reading presence/leases/log for the modal must not
+          // throw into the shell — report and leave the modal unopened.
+          io.onSystem?.(`bus: ${error instanceof Error ? error.message : String(error)}\n`);
+        }
       })();
     };
     /**
@@ -4814,14 +4850,14 @@ export async function launchTuiAgentShell(opts: {
         return;
       }
       if (parsed.kind === "reply") {
-        const toName = recentBusSenders.get(parsed.id);
-        if (toName === undefined) {
-          io.onSystem?.(`bus: reply: unknown message id ${parsed.id} (only recently received messages can be replied to)\n`);
-          return;
-        }
+        // review r1 F4: `resolveRef`/`reply` (in `../bus/client`) resolve
+        // `parsed.id` — a `#seq`, bare seq, or an id/short-id prefix — against
+        // the client's own bounded store of rendered events, and address the
+        // ORIGINAL sender's instance id even if they renamed since. No local
+        // id→name map to keep in sync here any more.
         void client
-          .send(`@${toName}`, "reply", parsed.text, parsed.id)
-          .then((result) => io.onSystem?.(`bus: sent (#${result.seq}) to @${toName}\n`))
+          .reply(parsed.id, parsed.text)
+          .then((result) => io.onSystem?.(`bus: sent (#${result.seq}) to ${result.event.toLabel}\n`))
           .catch(reportRefusal);
         return;
       }
@@ -5601,8 +5637,8 @@ export async function launchTuiAgentShell(opts: {
               await closeSlateSession(slateSession, mintTimestampAttemptId);
               await deps.sweepBackgroundJobs?.();
               jobs.removeAll();
+              liveBus?.leave(); // flow 273/271 (review r1 F9): leave the bus before releasing the lease
               sessionLease.release(); // flow 271 (AC7): after the slate close wrote its last file
-              liveBus?.leave(); // flow 273
               r.off("theme_mode", onThemeMode);
               r.destroy();
             })();
@@ -5815,7 +5851,7 @@ export async function launchTuiAgentShell(opts: {
             await closeSlateSession(slateSession, mintTimestampAttemptId);
             await deps.sweepBackgroundJobs?.();
             jobs.removeAll(); // F-002: purge the sidebar/store list too, not just the OS-level registry
-            sessionLease.release(); liveBus?.leave(); // flow 271/273
+            liveBus?.leave(); sessionLease.release(); // flow 271/273
             r.off("theme_mode", onThemeMode);
             r.destroy();
           })();
@@ -6595,8 +6631,11 @@ export async function launchTuiAgentShell(opts: {
   } catch {
     return false;
   } finally {
-    sessionLease.release(); // flow 271: idempotent; the exit paths above usually released it already
-    liveBus?.leave(); // flow 273 (specification §5.4): idempotent, same reasoning
+    // review r1 F9: leave the bus before releasing the lease (specification
+    // §5.4's order) — idempotent either way, the exit paths above usually
+    // did both already.
+    liveBus?.leave();
+    sessionLease.release();
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
     try {
       renderer?.destroy();

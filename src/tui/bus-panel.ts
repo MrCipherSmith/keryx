@@ -5,20 +5,15 @@
 // `openModal` host wiring. No selection/keypress handling — all three tabs are
 // a static snapshot taken when the modal opens, same as `/status`'s tabs.
 
-import type { BusPeer, RenderableBusEventKind } from "../bus/client";
+import type { BusPeer } from "../bus/client";
 import { displaySafe } from "../bus/display";
 import type { BusEvent, PauseLease } from "../bus/schema";
 import { openModal } from "./modal-host";
 
-/**
- * One transcript line for an addressed event (specification §5.2, T7
- * dispatch): `⇄ @from kind: preview`. Rendered through the shell's normal
- * `io.onSystem` (dim, unless it matches the `[error]` pattern that path
- * already special-cases — never that here), so it must work while busy.
- */
-export function formatBusEventLine(fromName: string, kind: RenderableBusEventKind, preview: string): string {
-  return `⇄ @${fromName} ${kind}: ${preview}`;
-}
+// review r1 F4: transcript event lines are `../bus/display`'s
+// `formatBusEventLine(RenderedBusEvent)` now — the ONE place both the
+// readline shell and the TUI format an event line — so this module no longer
+// keeps its own copy. `tui-shell.ts` imports that function directly.
 
 export type ModalTab = { id: string; label: string };
 
@@ -42,38 +37,62 @@ export const BUS_MODAL_FOOTER = [
   { key: "esc", label: "close" },
 ] as const;
 
-/** Peers tab: live/stale, name, status, activity, checkout, branch (T7 dispatch). */
+/**
+ * Peers tab: live/stale, name, status, activity, checkout, branch (T7
+ * dispatch). `name`, `checkout`, `branch` and `activity` are peer-supplied
+ * free text (specification §4.1) — `displaySafe`d before they reach the
+ * operator's terminal (review r1 F3); `status` is one of the closed
+ * `PresenceStatus` enum values and needs no sanitizing.
+ */
 export function formatBusPeersLines(peers: readonly BusPeer[]): string[] {
   if (peers.length === 0) {
     return ["No other instances on this bus."];
   }
   return peers.map((peer) => {
     const marker = peer.state === "live" ? "● live " : "◌ stale";
-    const branch = peer.record.branch ?? "—";
-    const activity = peer.record.activity.length > 0 ? peer.record.activity : "—";
-    return `${marker}  @${peer.record.name}  ${peer.record.status}  ${peer.record.checkout} (${branch})  ${activity}`;
+    const name = displaySafe(peer.record.name);
+    const branch = peer.record.branch === null ? "—" : displaySafe(peer.record.branch);
+    const checkout = displaySafe(peer.record.checkout);
+    const activity = peer.record.activity.length > 0 ? displaySafe(peer.record.activity) : "—";
+    return `${marker}  @${name}  ${peer.record.status}  ${checkout} (${branch})  ${activity}`;
   });
 }
 
-/** Leases tab: active pause leases only (`listActiveLeases`), read-only. */
+/**
+ * Leases tab: active pause leases only (`listActiveLeases`), read-only.
+ * `reason` and the holder's `name` are peer-supplied free text — `displaySafe`d
+ * before they reach the operator's terminal (review r1 F3).
+ */
 export function formatBusLeasesLines(leases: readonly PauseLease[]): string[] {
   if (leases.length === 0) {
     return ["No active leases."];
   }
   return leases.map((lease) => {
     const targets = lease.targets.length === 1 && lease.targets[0] === "*" ? "@all" : lease.targets.join(",");
-    return `${lease.scope}  @${lease.holder.name} → ${targets}  "${lease.reason}"  until ${lease.expiresAt}`;
+    const holderName = displaySafe(lease.holder.name);
+    const reason = displaySafe(lease.reason);
+    return `${lease.scope}  @${holderName} → ${targets}  "${reason}"  until ${lease.expiresAt}`;
   });
 }
 
-/** Log tab: the last 50 events, `displaySafe`d (T7 dispatch: "via readEvents from start"). */
+/**
+ * Log tab: the last 50 events, `displaySafe`d (T7 dispatch: "via readEvents
+ * from start"). Shows both `#seq` and the event's short id (review r1 F4) —
+ * the same 8-character prefix `../bus/client`'s `resolveRef`/`/bus reply`
+ * accept — so an operator can copy either into `/bus reply <ref>`.
+ * `fromName`, `toLabel` and the body preview are all peer-supplied free text,
+ * `displaySafe`d before they reach the operator's terminal (review r1 F3).
+ */
 export function formatBusLogLines(events: readonly BusEvent[]): string[] {
   if (events.length === 0) {
     return ["No events yet."];
   }
   return events.slice(-50).map((event) => {
+    const shortId = event.id.slice(0, 8);
+    const fromName = displaySafe(event.from.name);
+    const toLabel = displaySafe(event.toLabel);
     const preview = displaySafe(event.body ?? "").slice(0, 160);
-    return `#${event.seq}  @${event.from.name} → ${event.toLabel}  ${event.kind}${preview.length > 0 ? `: ${preview}` : ""}`;
+    return `#${event.seq} [${shortId}]  @${fromName} → ${toLabel}  ${event.kind}${preview.length > 0 ? `: ${preview}` : ""}`;
   });
 }
 
