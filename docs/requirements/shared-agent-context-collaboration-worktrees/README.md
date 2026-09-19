@@ -1,5 +1,5 @@
 # Shared Agent Context — Causal Collaboration and Worktree Overlays
-Version: 0.1.0
+Version: 0.1.1
 
 ## Status
 
@@ -31,7 +31,7 @@ Provide safe agent handoff and parallel-work context without a shared raw-transc
 
 ## Non-goals
 
-- A shared raw transcript, prompt, hidden-reasoning, or chat bus.
+- A shared raw transcript, prompt, hidden-reasoning, or chat bus. Bounded, typed coordination messages between live shells are specified separately in [Keryx Agent Bus](../keryx-agent-bus/README.md) (D-01). They do not flow through this package's ledgers, and this package's metadata-only rule is unchanged.
 - Another source of Flow task state, completion, or acceptance criteria.
 - Access inferred from checkout location, sibling worktree proximity, or common filesystem ownership.
 - Automatic overlay publish/merge or mutation of another agent's checkout.
@@ -41,6 +41,7 @@ Provide safe agent handoff and parallel-work context without a shared raw-transc
 - [Shared Agent Context specification](../shared-agent-context/specification.md)
 - [Shared Agent Context agent protocol](../shared-agent-context/agent-protocol.md)
 - [Keryx Multi-Agent Engine](../keryx-multi-agent-engine/README.md)
+- [Keryx Agent Bus](../keryx-agent-bus/README.md): a separate live coordination channel, not a collaboration ledger
 
 ## Completion condition
 

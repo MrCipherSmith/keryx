@@ -1,5 +1,5 @@
 # Shared Agent Context — Collaboration and Worktree Agent Protocol
-Version: 0.1.0
+Version: 0.1.1
 
 ## Status
 
@@ -8,7 +8,7 @@ Version: 0.1.0
 ## Collaboration behavior
 
 1. Publish only a server-validated handoff with typed artifact references, bounded purpose, causal parent, and permitted audience.
-2. Do not send raw transcript, prompt, hidden reasoning, credentials, copied source content, or a free-form chat message through collaboration.
+2. Do not send raw transcript, prompt, hidden reasoning, credentials, copied source content, or a free-form chat message through collaboration. Short coordination messages between live shells use the separate [Keryx Agent Bus](../keryx-agent-bus/README.md) (its D-01), and neither channel may carry or reference the other's payloads.
 3. Treat a handoff as an informational reference, not a permission grant or a Flow assignment.
 4. Follow owner references and current authorization checks before relying on a handoff result.
 5. Present a current RP-06 short-lived delegated capability for every public mutation. Handoff recording binds action, Project/workspace/Checkout, recipient audience, and workflow; revoked, expired, or mismatched bindings are denied at use.

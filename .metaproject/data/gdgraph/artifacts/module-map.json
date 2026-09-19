@@ -1497,6 +1497,7 @@
     "src/tui/transcript-blocks.ts",
     "src/tui/tui-shell.test.ts",
     "src/tui/tui-shell.ts",
+    "src/tui/wizard-modal.test.ts",
     "src/tui/worker-fleet.test.ts",
     "src/tui/worker-fleet.ts",
     "src/tui/workspace-inspector.test.ts",

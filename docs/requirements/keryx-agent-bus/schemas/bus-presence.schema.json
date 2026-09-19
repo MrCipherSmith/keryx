@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/bus-presence.schema.json",
+  "title": "Keryx agent bus presence record",
+  "description": "presence/<instanceId>.json. See specification.md section 4.1 and decisions.md D-09.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "instanceId", "name", "pid", "host", "sessionId", "checkout", "branch",
+    "surface", "status", "activity", "startedAt", "heartbeatAt", "keryxVersion"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "instanceId": { "type": "string", "format": "uuid" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "not": { "enum": ["all", "cli", "system"] } },
+    "pid": { "type": "integer", "minimum": 1 },
+    "host": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "checkout": { "type": "string", "minLength": 1 },
+    "branch": { "type": ["string", "null"], "maxLength": 255 },
+    "surface": { "enum": ["tui", "readline"] },
+    "status": { "enum": ["idle", "working", "blocked", "held"] },
+    "activity": { "type": "string", "maxLength": 120 },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "heartbeatAt": { "type": "string", "format": "date-time" },
+    "keryxVersion": { "type": "string", "minLength": 1 }
+  }
+}

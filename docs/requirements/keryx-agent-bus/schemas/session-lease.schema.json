@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/session-lease.schema.json",
+  "title": "Keryx session lease owner",
+  "description": "<sessionDir>/active.lease/owner.json. See specification.md sections 3.1 and 6, decisions.md D-07 and D-09.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "token", "pid", "host", "instanceId", "name", "acquiredAt", "heartbeatAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "token": { "type": "string", "format": "uuid" },
+    "pid": { "type": "integer", "minimum": 1 },
+    "host": { "type": "string", "minLength": 1, "maxLength": 255 },
+    "instanceId": { "type": "string", "format": "uuid" },
+    "name": {
+      "type": ["string", "null"],
+      "pattern": "^[a-z0-9][a-z0-9-]{0,31}$",
+      "not": { "enum": ["all", "cli", "system"] },
+      "description": "null when the lease is first acquired in openSession; rewritten with the bus name after joinBus (specification.md 5.1); stays null when the bus is disabled."
+    },
+    "acquiredAt": { "type": "string", "format": "date-time" },
+    "heartbeatAt": { "type": "string", "format": "date-time" }
+  }
+}
