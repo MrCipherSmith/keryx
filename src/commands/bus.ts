@@ -231,7 +231,7 @@ async function list(
         pad(lease.leaseId.slice(0, 8), 10) +
           pad(`@${displaySafe(lease.holder.name)}`, 18) +
           pad(lease.scope, 13) +
-          pad(lease.expiresAt.slice(0, 19).replace("T", " "), 22) +
+          pad(displaySafe(lease.expiresAt.slice(0, 19).replace("T", " ")), 22) +
           displaySafe(lease.reason),
       );
     }
@@ -268,7 +268,7 @@ async function log(
     const reply = event.refs?.replyTo !== undefined ? ` (re ${event.refs.replyTo.slice(0, 8)})` : "";
     const body = event.body === undefined ? "" : `: ${displaySafe(event.body)}`;
     ctx.out(
-      `#${event.seq} ${event.ts.slice(0, 19).replace("T", " ")} @${displaySafe(event.from.name)} → ${displaySafe(event.toLabel)} ${event.kind}${reply}${body}`,
+      `#${event.seq} ${displaySafe(event.ts.slice(0, 19).replace("T", " "))} @${displaySafe(event.from.name)} → ${displaySafe(event.toLabel)} ${event.kind}${reply}${body}`,
     );
   }
   return 0;

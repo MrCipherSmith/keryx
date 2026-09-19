@@ -257,8 +257,20 @@ function schemaProblems(schema: Record<string, unknown>, value: unknown): string
   return validateAgainstSchemaObject(schema, value).errors.map((error) => `${error.path}: ${error.message}`);
 }
 
+/** Strict ISO-8601 UTC, the only form the bus writes (`Date#toISOString`). */
+export const BUS_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$/;
+
+/**
+ * A bus timestamp: strict ISO-8601 UTC that also parses. `Date.parse` alone is
+ * not enough (review r2 N1): Bun's parser ignores parenthesised text, so
+ * `"(<ESC>[2J) Jan 1 2026"` parsed, passed, and reached the terminal raw.
+ */
+export function isBusTimestamp(value: unknown): value is string {
+  return typeof value === "string" && BUS_TIMESTAMP_PATTERN.test(value) && !Number.isNaN(Date.parse(value));
+}
+
 function isTimestamp(value: string): boolean {
-  return !Number.isNaN(Date.parse(value));
+  return isBusTimestamp(value);
 }
 
 export function busEventProblems(value: unknown): string[] {
@@ -293,7 +305,7 @@ export function pauseLeaseProblems(value: unknown): string[] {
   }
   const created = Date.parse(lease.createdAt);
   const expires = Date.parse(lease.expiresAt);
-  if (Number.isNaN(created) || Number.isNaN(expires)) {
+  if (!isTimestamp(lease.createdAt) || !isTimestamp(lease.expiresAt)) {
     problems.push("$.createdAt/$.expiresAt: not a timestamp");
   } else if (expires <= created || expires - created > MAX_LEASE_TTL_MS) {
     problems.push("$.expiresAt: must be after createdAt and at most 4 h later");

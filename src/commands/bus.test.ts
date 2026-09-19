@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { appendEvent } from "../bus/log";
-import { leasePath, leasesDir, resolveBusRoot } from "../bus/paths";
+import { eventsPath, leasePath, leasesDir, resolveBusRoot } from "../bus/paths";
 import { writePresence } from "../bus/presence";
 import type { PauseLease, PresenceRecord } from "../bus/schema";
 import { type BusCommandDeps, runBusCommand, USE_AGENT_TOOL_EXIT } from "./bus";
@@ -300,4 +300,25 @@ describe("control characters on display (r1 F5)", () => {
     expect(text).not.toMatch(CONTROL);
     expect(text).toContain("busy blink");
   });
+});
+
+test("r2 N1: a record whose ts smuggles an escape sequence is skipped, and `log` never prints ESC", async () => {
+  const root = await seededRoot();
+  await appendEvent(root, { from: { instanceId: ID.release, name: "release", origin: "agent" }, to: ["*"], toLabel: "@all", kind: "notice", body: "ok" }, { now: () => NOW });
+  const hostile = {
+    schemaVersion: 1,
+    seq: 2,
+    id: ID.lease,
+    ts: "(\u001b[2J) Jan 1 2026",
+    from: { instanceId: ID.release, name: "release", origin: "agent" },
+    to: ["*"],
+    toLabel: "@all",
+    kind: "notice",
+    body: "smuggled",
+  };
+  await writeFile(eventsPath(root), `${JSON.stringify(hostile)}\n`, { flag: "a" });
+
+  const { out } = await run(["log"], { root });
+  expect(out.join("\n")).not.toContain("\u001b");
+  expect(out).toEqual(["#1 2026-09-19 12:00:00 @release → @all notice: ok"]);
 });

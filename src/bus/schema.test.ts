@@ -182,3 +182,28 @@ describe("pause leases", () => {
     expect(parsePauseLease(lease({ leaseId: "../x" }))).toBeUndefined();
   });
 });
+
+// Review r2 N1: timestamps are strict ISO-8601 UTC. Bun's Date.parse ignores
+// parenthesised text, so a lenient check let an escape sequence through.
+describe("strict timestamps (r2 N1)", () => {
+  const hostile = "(\u001b[2J) Jan 1 2026";
+
+  test("the hostile value really does parse, so Date.parse alone is not a check", () => {
+    expect(Number.isNaN(Date.parse(hostile))).toBe(false);
+  });
+
+  test("events, presence and leases carrying it are rejected", () => {
+    expect(parseBusEvent(event({ ts: hostile }))).toBeUndefined();
+    expect(parsePresence(presence({ heartbeatAt: hostile }))).toBeUndefined();
+    expect(parsePresence(presence({ startedAt: hostile }))).toBeUndefined();
+    expect(parsePauseLease(lease({ expiresAt: hostile }))).toBeUndefined();
+    expect(parsePauseLease(lease({ createdAt: hostile }))).toBeUndefined();
+  });
+
+  test("the form the bus writes is accepted, with or without fractions; offsets and dates alone are not", () => {
+    expect(parseBusEvent(event({ ts: "2026-09-19T10:00:00Z" }))).toBeDefined();
+    expect(parseBusEvent(event({ ts: "2026-09-19T10:00:00.123456789Z" }))).toBeDefined();
+    expect(parseBusEvent(event({ ts: "2026-09-19T10:00:00+02:00" }))).toBeUndefined();
+    expect(parseBusEvent(event({ ts: "2026-09-19" }))).toBeUndefined();
+  });
+});

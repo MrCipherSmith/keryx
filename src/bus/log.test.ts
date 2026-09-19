@@ -103,7 +103,7 @@ describe("appendEvent", () => {
     expect((await appendEvent(root, draft())).seq).toBe(11);
   });
 
-  test("a torn tail left by a crashed writer is terminated, skipped by readers, and never glued to the next line", async () => {
+  test("a torn tail left by a crashed writer is cut off, never read, and never glued to the next line", async () => {
     const root = await busRoot();
     await appendEvent(root, draft("first"));
     await appendFile(eventsPath(root), '{"schemaVersion":1,"seq":2,"id":"', "utf8");
