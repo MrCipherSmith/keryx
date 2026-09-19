@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T15:09:03.043Z",
+  "updatedAt": "2026-09-19T15:15:37.302Z",
   "source": {
     "type": "description",
     "ref": null
@@ -351,6 +351,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T17",
+      "title": "R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T15:13:58.897Z",
+            "outcome": "started",
+            "detail": "271-T17 operator approved narrow 4th fix round"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -571,6 +592,21 @@
       "at": "2026-09-19T15:09:03.043Z",
       "event": "task-done",
       "detail": "T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach"
+    },
+    {
+      "at": "2026-09-19T15:13:58.803Z",
+      "event": "task-added",
+      "detail": "T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)"
+    },
+    {
+      "at": "2026-09-19T15:13:58.897Z",
+      "event": "task-attempt",
+      "detail": "T17: started (attempt 1) — 271-T17 operator approved narrow 4th fix round"
+    },
+    {
+      "at": "2026-09-19T15:15:37.302Z",
+      "event": "task-done",
+      "detail": "T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)"
     }
   ]
 }

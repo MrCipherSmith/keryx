@@ -135,3 +135,12 @@
   - The onLost listener reads the live `slateSession`, so it always detaches the currently bound ref.
   - Two composition tests added. Targeted runs: 237 pass. tsc and eslint clean.
   - Worker concern: #606 leaves the old slate ref undetached after a successful `/resume`, so a running turn could write to it. Not reachable: `/resume` is not in the busy allowlist (`classifyBusyDispatch` has no match, so it is deferred), so it only runs when no turn or `/goal` loop is running. Accepted.
+- 2026-09-19T15:13:58.803Z - task-added: T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)
+- 2026-09-19T15:13:58.897Z - task-attempt: T17: started (attempt 1) — 271-T17 operator approved narrow 4th fix round
+- 2026-09-19T15:12Z - orchestrator: verification round r4 (271-review-r4-verify) at head 1096d945.
+  - R3-1 is refuted: fix ed63f567 is proven by tests in slate-lifecycle, agent, goal-command and shell-lease.
+  - The merge 611bb16a with #606 is correct: `/resume` switches first, then rebinds, then refreshes. `/clear` and `/new` keep the lease guard, and the rebind writes nothing.
+  - Targeted tests: 392 pass.
+  - One new finding, R4-1. The reviewer rated it "low"; it is recorded here as minor because the gate scale has no "low". After `runGoalVerifier` returns, `/goal --auto` does not re-check detach, so a lease lost during the verifier lets one more full turn run in a session that was taken over. Slate writes in that turn are already refused.
+- 2026-09-19T15:13Z - operator decision: fix R4-1, then merge. This approves one narrow fix round beyond the three-round bound, recorded here as an explicit exception. The fix is T17: a single post-verifier detach check plus a test. Only R4-1 is verified afterwards.
+- 2026-09-19T15:15:37.302Z - task-done: T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)
