@@ -1,0 +1,65 @@
+# Flow Journal
+
+- 2026-09-19T15:34:50.736Z - flow created
+- 2026-09-19T15:41:18.405Z - task-added: T5: Clone scope extraction (src/lib/clone-scope.ts) and KERYX_TOOL_CALL=1 marker in resolveShellEnv
+- 2026-09-19T15:41:18.500Z - task-added: T6: Bus core: pure paths/ids, inline schemas + validators, presence with D-09 liveness and D-06 names, enablement resolver
+- 2026-09-19T15:41:18.585Z - task-added: T7: Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune
+- 2026-09-19T15:41:18.672Z - task-added: T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference
+- 2026-09-19T15:41:18.767Z - task-added: T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other
+- 2026-09-19T15:41:18.856Z - task-added: T10: Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap
+- 2026-09-19T15:41:18.940Z - task-added: T11: Verification: CI on the PR head green (typecheck, lint, full suite)
+- 2026-09-19T15:41:19.026Z - task-done: T1: Collect remaining context
+- 2026-09-19T15:41:19.112Z - task-done: T2: Implement per plan
+- 2026-09-19T15:41:19.195Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-19T15:41:19.287Z - frozen: 15 criteria; checksum recorded
+- 2026-09-19T15:41:19.369Z - started
+- 2026-09-19T15:41:32.254Z - task-attempt: T5: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:41:32.342Z - task-attempt: T6: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:41:32.431Z - task-attempt: T7: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:59:05.242Z - task-done: T5: Clone scope extraction (src/lib/clone-scope.ts) and KERYX_TOOL_CALL=1 marker in resolveShellEnv
+- 2026-09-19T15:59:09.666Z - task-done: T6: Bus core: pure paths/ids, inline schemas + validators, presence with D-09 liveness and D-06 names, enablement resolver
+- 2026-09-19T15:59:13.969Z - task-done: T7: Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune
+- 2026-09-19T15:59Z - orchestrator: `272-lib` (T5–T7) returned DONE_WITH_CONCERNS. The worker reports targeted tests at 265 pass, 0 fail, and tsc and eslint clean. Operator rule: no broad local suites.
+  - Accepted:
+    - `bus` is registered as a client zone in import-zones and added to BYPASSING_ZONES, because it calls `detectCi`. `capability` has no facade.
+    - `resolveBusRoot` canonicalises paths with realpath. On macOS `/var` and `/private/var` otherwise produce two different roots.
+    - Schema uuid fields also carry an explicit `pattern`, because the validator ignores `format` and `["*"]` would match both branches of the `oneOf`.
+    - The cursor carries `seq`.
+    - `appendEvent` terminates a torn tail before appending.
+    - `pruneBus` writes a single `lease-expired` event under the lock, as in the lifecycle spec.
+  - Moved to T8:
+    - the AC12 no-flow-writes test;
+    - a typed `bus` field on `ShellConfig`.
+  - Environment: `allocation.test.ts` fails locally only because of the global git hook on the fixture author, and passes with `GIT_CONFIG_GLOBAL=/dev/null`. CI decides.
+- 2026-09-19T15:59:37.859Z - task-attempt: T8: started (attempt 1) — 272-T8 CLI
+- 2026-09-19T16:05:58.592Z - task-done: T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference
+- 2026-09-19T16:05:58.678Z - task-attempt: T9: started (attempt 1) — 272-T9 multi-process verification
+- 2026-09-19T16:09:14.884Z - task-done: T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other
+- 2026-09-19T16:10:03.575Z - task-attempt: T10: started (attempt 1) — 272-T10 docs status, PR #611
+- 2026-09-19T16:11:38.316Z - task-done: T10: Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap
+- 2026-09-19T16:14:56.200Z - task-added: T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json
+- 2026-09-19T16:14:56.288Z - task-attempt: T12: started (attempt 1) — 272-T12 review r1 fixes
+- 2026-09-19T16:23:38.701Z - task-done: T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json
+- 2026-09-19T16:24Z - orchestrator summary: T8, T9, T10, review r1 and T12.
+  - **T8** was accepted.
+    - The rate-limit bypass requires two variables: a test context plus `KERYX_TEST_BUS_RATE=off`.
+    - A bad kind or bad usage is refused as `invalid-event`.
+  - **T9** found and fixed a real bug.
+    - A writer killed while holding `append.lock` stalled the next writer for 30 s. The cause was that `withFileLock`'s default stale time equals its timeout.
+    - The bus locks now use a 5 s stale time, so a live holder keeps the lock through its heartbeat and its pid check.
+  - **Review r1** (272-review-r1, head 3cf09b6d) found:
+    - F1 (major): a rotation during a read loses a segment.
+    - F2–F5 (minor): a torn fragment is revived as a duplicate `seq`; a check-then-rename race in `removeStaleLock`; a duplicate `lease-expired`; terminal escape injection.
+    - F6 (info): project-key slug collision (accepted) and missing `--json` docs (fixed).
+  - **T12** fixed F1–F5 and the docs part of F6 in c74f5a39.
+    - Each fix has a test that fails without it.
+    - Targeted tests: 164 pass. Process test: 4 pass. tsc and eslint clean.
+    - Accepted residuals:
+      - A third waiter arriving during the F3 rename-back window keeps the moved lock rather than deleting it. This is documented in the code.
+      - A failed lease delete makes `prune` exit with an error instead of a named refusal.
+- 2026-09-19T16:27:04.431Z - task-added: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path
+- 2026-09-19T16:27:04.508Z - task-attempt: T13: started (attempt 1) — 272-T13 review r2 fixes
+- 2026-09-19T16:30:51.308Z - task-done: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path
+- 2026-09-19T16:35:27.761Z - task-added: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes
+- 2026-09-19T16:35:27.837Z - task-attempt: T14: started (attempt 1) — 272-T14 CI coverage fix
+- 2026-09-19T16:36:21.606Z - task-done: T14: CI fix: add src/bus/ to test:core so the core-gate coverage test (src/core-package.test.ts:591) passes

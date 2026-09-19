@@ -29,6 +29,7 @@ import { statusCommand } from "./commands/status";
 import { harnessCommand } from "./commands/harness";
 import { ShellFlagError, shellCommand } from "./commands/shell";
 import { sessionsCommand } from "./commands/sessions";
+import { busCommand } from "./commands/bus";
 import { modulesCommand } from "./commands/modules";
 import { projectsCommand } from "./commands/projects";
 import { serveCommand } from "./commands/serve";
@@ -101,6 +102,7 @@ export const CLI_ROUTES: Record<string, (rest: string[]) => Promise<void> | void
   shell: shellCommand,
   sessions: sessionsCommand,
   session: sessionsCommand,
+  bus: busCommand,
   version: versionCommand,
   workspace: workspaceCommand,
   retention: retentionCommand,
@@ -158,6 +160,8 @@ Usage:
                                                Start TUI agent shell (sessions are per-project)
   keryx sessions list|fork <id>|export <id>|path
                                                List / branch / export sessions for the current project
+  keryx bus list [--json] | log [--since <seq>] [--limit N] [--json] | send <@name|@all> [--kind <k>] [--reply-to <id>] <text> | prune
+                                               Agent bus: peers, events and messages shared across this clone's worktrees
   keryx version check [--json]                 Check npm latest (advisory; never installs)
   keryx harness run --provider <fake|anthropic|ollama> --model <m> [--base-url <url>] [--record <path>] "<prompt>"
   keryx harness exec [--allow-env KEY]... [--max-runtime-ms N] [--allow-real-subprocess]
@@ -276,6 +280,7 @@ Commands:
   shell     Start the interactive TUI agent harness. Use --no-tui or --chat to opt out.
             Sessions: -c continue last in this project, -r [id] resume (per-project).
   sessions  List or export per-project shell sessions
+  bus       Agent bus: list peers and leases, read the log, send a message, prune
   version   Check whether a newer npm release is available
   harness   Run a single provider turn (harness run) and print structured events
   init      Initialize .metaproject in the current project

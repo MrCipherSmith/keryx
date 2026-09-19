@@ -55,6 +55,7 @@ rules sync regenerates it. That index text is prompt guidance, not enforcement.
 | `shell` | Start the interactive TUI agent shell (sessions are per-project). |
 | `version` | Check whether the installed Keryx version has a newer npm release. |
 | `sessions` | List, fork, export, or locate agent sessions for the current project. |
+| `bus` | Agent bus across this clone's worktrees: list peers and leases, read the log, send a message, prune. |
 | `harness` | Drive the agent execution loop non-interactively (`run`, `exec`, `extension`, `wave`, `replay`). |
 | `init` | Initialize `.metaproject/` in the current project. |
 | `status` | Show local Metaproject status. |
@@ -155,6 +156,39 @@ keryx sessions list | fork <id> | export <id> | path
 git root, or by absolute cwd outside a repository — so `list` never shows another
 project's work. The [harness page](./harness.md#sessions) covers what a session
 holds and what forking copies.
+
+## bus
+
+The agent bus: keryx shells in every worktree of one clone see each other and
+exchange short messages. The bus lives in the git common directory
+(`<git-common-dir>/keryx/bus/<project-key>/`), outside `.metaproject/`, and
+never writes flow state.
+
+```
+keryx bus list [--json]
+keryx bus log [--since <seq>] [--limit N] [--json]
+keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] [--json] <text…>
+keryx bus prune [--json]
+```
+
+| Subcommand | Description |
+|---|---|
+| `list` | Live and stale peers — name, state, status, heartbeat age, branch, checkout and activity — and the active pause leases. Gone peers are hidden. `--json` prints both as JSON. |
+| `log` | The retained events, oldest first. `--since <seq>` shows only events after that sequence number, `--limit N` only the last `N`, `--json` prints them as JSON. |
+| `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind reply` needs `--reply-to <id>` (`reply-without-replyTo`). The body is redacted before it is written and refused with `body-too-large` above 2048 bytes. `--json` prints `{ seq, id, resolvedTo }`. |
+| `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the bound (two kept, none older than 7 days). Live and stale peers are never touched. `--json` prints what was removed. |
+
+Refusals print their code and exit non-zero:
+
+- **`use-agent-tool`** (exit `2`): `send` run inside a keryx tool call, where
+  `KERYX_TOOL_CALL=1` is set on every `shell_exec` child. An agent uses its bus
+  tools instead. `list`, `log` and `prune` still work there. `KERYX_SESSION_*`
+  variables alone do not trigger this.
+- **`bus-disabled`**: `send` and `prune` when the bus is off — `KERYX_BUS=off`,
+  shell config `bus.enabled: false`, or a CI environment. The reason is named.
+  `list` and `log` still read.
+- **`rate-limited`**: more than 30 CLI messages in one minute across the whole
+  clone.
 
 ## shell behavior
 

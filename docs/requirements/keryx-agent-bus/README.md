@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.3.0
+Version: 0.4.0
 
 ## Purpose
 
@@ -13,24 +13,32 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**P0 implemented. P1–P5 specification ready, not implemented.**
+**P0 and P1 implemented. P2–P5 specification ready, not implemented.**
 
 - **P0 session lease: implemented** in flow 271, PR
   [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
   takes an exclusive lease: `-c` skips live sessions, `-r` on a live session
   offers fork, view or cancel, and `keryx sessions list` marks live and stale
   sessions. Two `-c` shells no longer share one session.
-- **P1–P5: not implemented.** The bus store and CLI, shell integration, agent
-  delivery and tools, pause leases, and the docs phase do not exist yet.
+- **P1 bus store and CLI: implemented** in flow 272, PR
+  [#611](https://github.com/MrCipherSmith/keryx/pull/611). The bus store lives
+  under the git common directory: presence records, the append-only event log,
+  a read-only session-lease reader, and prune. `keryx bus list|log|send|prune`
+  refuses mutating commands inside a tool call (D-13), applies the clone-wide
+  CLI rate limit, and reports `bus-disabled` when the bus is off.
+- **P2–P5: not implemented.** Shell integration, agent delivery and tools,
+  pause leases, and the docs phase do not exist yet.
 
-So, apart from the session lease:
+So, apart from the session lease and the `keryx bus` CLI:
 
-- shells are unaware of each other;
-- a running agent accepts no external input.
+- no shell joins the bus yet, so shells are unaware of each other;
+- there is no heartbeat and no poller;
+- nothing delivers bus messages to an agent, so a running agent accepts no
+  external input;
+- pause leases cannot be written.
 
-The bus code, and the P1+ integration hooks named in the specification (bus
-join and poller, inbox drains, bus tools, the publish-lease gate floor), do not
-exist yet.
+The P2+ integration hooks named in the specification (bus join and poller,
+inbox drains, bus tools, the publish-lease gate floor) do not exist yet.
 
 ## Document index
 

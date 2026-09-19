@@ -10,7 +10,7 @@ import {
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { access, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, readFile, rename, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { hostname } from "node:os";
 import path from "node:path";
 
@@ -37,12 +37,27 @@ export function isPathInside(root: string, candidate: string): boolean {
   return relative === "" || (relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
-export async function writeFileAtomic(filePath: string, content: string): Promise<void> {
+/**
+ * Write `content` to a temp file beside `filePath`, then rename it over. With
+ * `options.mode` the temp file is created with that mode and chmodded to it
+ * (creation modes are filtered by the umask), and the rename carries the mode
+ * over, so the file never exists at `filePath` with a wider one.
+ */
+export async function writeFileAtomic(
+  filePath: string,
+  content: string,
+  options: { mode?: number } = {},
+): Promise<void> {
   const dir = path.dirname(filePath);
   await mkdir(dir, { recursive: true });
   const tmp = path.join(dir, `.${path.basename(filePath)}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`);
   try {
-    await writeFile(tmp, content, "utf8");
+    if (options.mode === undefined) {
+      await writeFile(tmp, content, "utf8");
+    } else {
+      await writeFile(tmp, content, { encoding: "utf8", mode: options.mode });
+      if (process.platform !== "win32") await chmod(tmp, options.mode);
+    }
     await rename(tmp, filePath);
   } catch (error) {
     await rm(tmp, { force: true }).catch(() => {});
@@ -61,7 +76,21 @@ export const DEFAULT_LOCK_STALE_MS = 30000;
 export async function withFileLock<T>(
   lockPath: string,
   fn: () => Promise<T>,
-  options: { timeoutMs?: number; retryMs?: number; staleMs?: number; heartbeatMs?: number } = {},
+  options: {
+    timeoutMs?: number;
+    retryMs?: number;
+    staleMs?: number;
+    heartbeatMs?: number;
+    /**
+     * TEST SEAM, never set in production. Called where another process can
+     * interleave: `stale-judged` after a waiter judged the lock stale and
+     * before it moves it aside; `moved-aside` right after that move;
+     * `restored` after a lock found not to be the judged one was put back;
+     * `created` between this acquirer's `mkdir` and its `owner.json` write.
+     * Tests use it to interleave reclaimers and acquirers deterministically.
+     */
+    raceHook?: (point: FileLockRacePoint) => Promise<void> | void;
+  } = {},
 ): Promise<T> {
   const timeoutMs = options.timeoutMs ?? 5000;
   const retryMs = options.retryMs ?? 25;
@@ -75,10 +104,18 @@ export async function withFileLock<T>(
   while (true) {
     try {
       await mkdir(lockPath);
+      const createdIno = (await stat(lockPath)).ino;
+      await options.raceHook?.("created");
       try {
         await writeFile(ownerPath, JSON.stringify(owner), { encoding: "utf8", flag: "wx", mode: 0o600 });
       } catch (error) {
-        await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+        // Remove only the directory this call created (review r2 N2). A
+        // reclaimer's rename-back can replace our still-empty directory with a
+        // live holder's lock; the failed `wx` write then means "someone else's
+        // lock is here", and removing `lockPath` would delete THEIR lock.
+        if (await isSameEmptyOrOwnerlessDir(lockPath, createdIno)) {
+          await rm(lockPath, { recursive: true, force: true }).catch(() => {});
+        }
         throw error;
       }
       break;
@@ -86,7 +123,7 @@ export async function withFileLock<T>(
       if (!isAlreadyExistsError(error)) {
         throw error;
       }
-      await removeStaleLock(lockPath, staleMs);
+      await removeStaleLock(lockPath, staleMs, options.raceHook);
       if (Date.now() - startedAt >= timeoutMs) {
         // eslint-disable-next-line preserve-caught-error -- Preserve the sanitized public diagnostic without exposing the raw caught value or stack.
         throw new Error(`Timed out waiting for lock: ${lockPath}`);
@@ -138,14 +175,67 @@ function isAlreadyExistsError(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "EEXIST";
 }
 
-async function removeStaleLock(lockPath: string, staleMs: number): Promise<void> {
+export type FileLockRacePoint = "stale-judged" | "moved-aside" | "restored" | "created";
+
+/** True when `dir` is still the directory with inode `ino` and holds no owner record. */
+async function isSameEmptyOrOwnerlessDir(dir: string, ino: number): Promise<boolean> {
+  try {
+    if ((await stat(dir)).ino !== ino) return false;
+    return (await readLockOwner(path.join(dir, "owner.json"))) === undefined;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Move a stale lock aside and remove it — but only the lock that was judged.
+ *
+ * Between the judgement (old mtime, dead owner) and the rename, a rival waiter
+ * can reclaim the same stale lock and create a fresh one on the same path. A
+ * blind rename would then move THAT live lock away and let two holders run at
+ * once (review r1 F3). So the moved directory is checked after the rename —
+ * same inode and same owner token as the one judged — and anything else is
+ * renamed back untouched. The rename is atomic, so what is checked is exactly
+ * what is removed.
+ *
+ * The rename-back never replaces a held lock. POSIX `rename` can replace only
+ * an EMPTY directory: a third acquirer's directory caught between its `mkdir`
+ * and its `owner.json` write. That acquirer then fails its `wx` write, sees
+ * the inode is no longer the one it created, and leaves the restored lock
+ * alone (review r2 N2) — so the lock we moved is back and still exclusive.
+ *
+ * Remaining window, stated rather than hidden: if the third acquirer has
+ * already written its `owner.json` before the rename-back, the rename-back
+ * fails (ENOTEMPTY/EEXIST) and the moved lock is left at its `.stale.` path —
+ * not deleted, but no longer at `lockPath`, so its holder and the third
+ * acquirer can both be inside at once. The moved holder's release then finds
+ * `lockPath` carrying another token and is a no-op; the `.stale.` directory is
+ * left behind. Closing this would need a kernel lock, which this primitive
+ * deliberately does not use.
+ */
+async function removeStaleLock(
+  lockPath: string,
+  staleMs: number,
+  raceHook?: (point: FileLockRacePoint) => Promise<void> | void,
+): Promise<void> {
   try {
     const stats = await stat(lockPath);
     if (Date.now() - stats.mtimeMs <= staleMs) return;
     const owner = await readLockOwner(path.join(lockPath, "owner.json"));
     if (owner && processIsAlive(owner.pid)) return;
+    await raceHook?.("stale-judged");
     const stalePath = `${lockPath}.stale.${process.pid}.${randomUUID()}`;
     await rename(lockPath, stalePath);
+    await raceHook?.("moved-aside");
+    const movedIno = (await stat(stalePath)).ino;
+    const moved = await readLockOwner(path.join(stalePath, "owner.json"));
+    if (movedIno !== stats.ino || moved?.token !== owner?.token) {
+      // Not the lock we judged: a rival's fresh lock. Put it back; this can
+      // only replace an empty directory, never a held lock (see above).
+      await rename(stalePath, lockPath).catch(() => {});
+      await raceHook?.("restored");
+      return;
+    }
     await rm(stalePath, { recursive: true, force: true });
   } catch {
     // Another process may have released the lock between mkdir attempts.
