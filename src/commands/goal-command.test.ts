@@ -1888,3 +1888,69 @@ test("flow 271 R3-1: once the lease is lost after round 1, a running /goal --aut
   expect(turn).toBe(2);
   expect(system.join("")).toContain("another shell took this session over");
 });
+
+test("flow 271 R4-1: a lease lost while the verifier runs stops the loop — no extra round on a not-achieved verdict, no slate change", async () => {
+  const cwd = await tempCwd();
+  const dir = await tempSessionDir();
+  const slateSession: SlateSessionRef = { dir, cwd, opened: false };
+  let calls = 0;
+  const description: ProviderDescription = {
+    capabilities: {
+      streaming: true,
+      toolCalls: true,
+      parallelToolCalls: false,
+      structuredOutput: false,
+      reasoningMetadata: false,
+      promptCaching: false,
+      vision: false,
+      tokenCounting: false,
+      modelListing: false,
+    },
+    descriptor: { providerId: "scripted" },
+  };
+  // Round 2 claims done early, so the verifier runs with round budget left.
+  const provider: AgentDeps["provider"] = {
+    describe: () => description,
+    stream: (_request, opts) => {
+      calls += 1;
+      const text = calls === 2 ? `All done here. ${ROUND_DONE_MARKER}` : "still working";
+      return (async function* (): AsyncGenerator<NormalizedEvent> {
+        yield { sequence: 0, attemptId: opts.attemptId, kind: "text_delta", text } as NormalizedEvent;
+        yield { sequence: 1, attemptId: opts.attemptId, kind: "model_end" } as NormalizedEvent;
+      })();
+    },
+  };
+  let slateAtLoss: string | undefined;
+  const spawnSubagent = fakeSpawnSubagentTool(async () => {
+    // Another shell takes the session over while the verifier runs.
+    slateAtLoss = await readFile(path.join(dir, "slate.json"), "utf8");
+    detachSlateSession(slateSession);
+    return { output: '{"achieved": false, "gaps": ["tests missing"]}', isError: false };
+  });
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [spawnSubagent],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+  };
+  const { io, system } = collectingIo();
+
+  await runGoalCommand({
+    raw: "implement the login flow --auto 3",
+    cwd,
+    io,
+    deps,
+    history: [],
+    slateSession,
+    mintAttemptId: () => "attempt-0",
+  });
+
+  expect(slateAtLoss).toBeDefined();
+  // First turn + round 2 only: no verifier-triggered extra round.
+  expect(calls).toBe(2);
+  expect(system.join("")).toContain("another shell took this session over");
+  expect(await readFile(path.join(dir, "slate.json"), "utf8")).toBe(slateAtLoss as string);
+  expect(await readdir(path.join(dir, "slate-archive")).catch(() => [])).toEqual([]);
+});

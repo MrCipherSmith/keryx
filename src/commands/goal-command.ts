@@ -879,6 +879,13 @@ export async function runGoalCommand(params: RunGoalCommandParams): Promise<void
     }
     const wasOpenBeforeVerifier = slateSession.opened;
     const verdict = await runGoalVerifier(deps, parsed.text, cwd, slateSession, history, io, mintAttemptId);
+    // Flow 271 R4-1: the lease can be lost while the verifier runs. Check
+    // again, or a not-achieved verdict runs one more full turn in a session
+    // another shell now owns.
+    if (isSlateSessionDetached(slateSession)) {
+      systemLine(io, "/goal --auto: stopped — another shell took this session over.\n");
+      return;
+    }
     // #389: every outcome — achieved, not achieved, unavailable — is now
     // observable, not only the "not achieved" branch. "Unavailable" covers
     // every reason `runGoalVerifier` returns `undefined` (no `spawn_subagent`
