@@ -4,6 +4,8 @@
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { buildBusTools } from "../bus/agent-tools";
+import type { BusClient } from "../bus/client";
 import { applyPatchTool } from "../harness/tool/builtin/apply-patch-tool";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
 import {
@@ -102,6 +104,23 @@ export type InteractiveAgentToolsInput = {
    * roster to be the same as another tool's.
    */
   denyTools?: readonly string[];
+  /**
+   * Flow 274 T6 (specification §7.1): when supplied, `bus_list` and `bus_send`
+   * are added to the roster. `client` is read at every call (build time AND
+   * tool-invocation time, never captured once) — a session that has not
+   * joined the bus yet, has left it, or joined disabled, reports `undefined`,
+   * and both tools then refuse with `bus-disabled` rather than being absent.
+   * This keeps the tool roster's SHAPE stable across a session even as the
+   * bus connects or drops, which matters because `AgentInstructionContext`
+   * (`../commands/agent.ts`) names tools from a roster snapshot — a roster
+   * that changed shape mid-session would leave that snapshot stale.
+   *
+   * Omitted entirely (every subagent/child tool-build path, and any surface
+   * that never joins the bus) → no `bus_*` tool is offered at all, matching
+   * specification §7.1: "None of these tools is offered to subagents or
+   * external children in v1."
+   */
+  bus?: { client: () => BusClient | undefined };
 };
 
 /**
@@ -209,6 +228,11 @@ export function buildInteractiveAgentTools(input: InteractiveAgentToolsInput): I
     createAskUserTool(invokeAskUserHost),
     slateReadTool(input.cwd, getSessionDir),
     slateWriteSeedTool(getSessionDir, idSeq, clock),
+    // Flow 274 T6: main-agent-only bus tools (specification §7.1). Never
+    // reached by a subagent or external child — neither tool-build path calls
+    // this factory (see `spawn-subagent-tool.ts`, which builds its own child
+    // roster from `builtinReadOnlyTools`/`builtinMetaprojectTools` only).
+    ...(input.bus === undefined ? [] : buildBusTools(input.bus.client)),
     // Two tools of fixed cost, whatever the operator has connected — never
     // one registered tool per MCP tool. That refusal is the package's whole
     // shape, and `mcp-tool-surface.test.ts` is what keeps it true from here.

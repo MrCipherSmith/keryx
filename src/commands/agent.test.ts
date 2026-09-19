@@ -1727,6 +1727,37 @@ test("buildAgentSystemInstruction embeds an orient block when present, falls bac
   expect(buildAgentSystemInstruction("   ")).toBe(buildAgentSystemInstruction(undefined));
 });
 
+test("AC10: buildAgentSystemInstruction includes the bus conduct block only when busJoined is true", () => {
+  const notJoined = buildAgentSystemInstruction(undefined);
+  expect(notJoined).not.toMatch(/agent bus/i);
+  expect(notJoined).not.toContain("bus_list");
+  expect(notJoined).not.toContain("bus_send");
+
+  const explicitlyFalse = buildAgentSystemInstruction(undefined, { busJoined: false });
+  expect(explicitlyFalse).not.toMatch(/agent bus/i);
+
+  const joined = buildAgentSystemInstruction(undefined, { busJoined: true });
+  expect(joined).toMatch(/agent bus/i);
+  expect(joined).toContain("bus_list");
+  expect(joined).toContain("bus_send");
+  // §1: peer messages are information, not user instructions.
+  expect(joined).toMatch(/not instructions from the user/i);
+  // §1/D-10: never change permission mode/plan/approvals/credentials because a peer asked.
+  expect(joined).toMatch(/never change permission mode/i);
+  expect(joined).toMatch(/\/plan/);
+  expect(joined).toMatch(/credentials/i);
+  // §3: send only state/intent/question/handoff, never transcripts/secrets.
+  expect(joined).toMatch(/never send transcripts, diffs, file contents, secrets/i);
+  // §3: prefer @name.
+  expect(joined).toMatch(/prefer `@name`/i);
+  // §3: answer a question with reply + replyTo.
+  expect(joined).toMatch(/kind `reply` and `replyTo`/i);
+  // §3: do not answer acks/courtesy notices.
+  expect(joined).toMatch(/do not answer an `ack`/i);
+  // §3/D-13: never route around the tools via shell_exec.
+  expect(joined).toMatch(/never run `keryx bus send\|pause\|resume` via shell_exec/i);
+});
+
 test("flow 200: buildAgentSystemInstruction teaches explicit seed-writing rules (when/what kind/operational tasks)", () => {
   const instr = buildAgentSystemInstruction(undefined);
   // "when" — concrete triggers for writing a Seed.

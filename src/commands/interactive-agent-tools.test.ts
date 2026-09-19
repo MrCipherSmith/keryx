@@ -378,6 +378,58 @@ describe("--deny-tools withholds a capability rather than gating it", () => {
   });
 });
 
+// --- flow 274 T6: bus_list/bus_send are offered only with the `bus` option ---
+//
+// AC9: bus_* tools reach the main interactive agent only when the bus is
+// joined, never a subagent or external child. Neither of THOSE build paths
+// calls `buildInteractiveAgentTools` at all (see
+// `spawn-subagent-isolation.test.ts`), so the property this suite pins is
+// narrower and complementary: the factory itself must not hand out `bus_*`
+// unless a caller explicitly opts in with `bus`.
+
+describe("K-flow-274: the bus option", () => {
+  test("without `bus`, no bus_* tool is offered", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-no-bus-"));
+    const tools = buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+    });
+    const names = interactiveAgentToolNames(tools);
+    expect(names.some((name) => name.startsWith("bus_"))).toBe(false);
+  });
+
+  test("with `bus`, bus_list and bus_send are offered", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-with-bus-"));
+    const tools = buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+      bus: { client: () => undefined },
+    });
+    const names = interactiveAgentToolNames(tools);
+    expect(names).toContain("bus_list");
+    expect(names).toContain("bus_send");
+  });
+
+  test("with `bus` but no live client (not yet joined / left), the tools refuse with bus-disabled rather than being absent", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "keryx-tools-bus-no-client-"));
+    const tools = buildInteractiveAgentTools({
+      cwd,
+      metaprojectPort: createMetaprojectAdapter(cwd),
+      searchController: createDefaultSearchProviderController(),
+      spawnTool: stubSpawn,
+      bus: { client: () => undefined },
+    });
+    const busList = tools.find((tool) => tool.definition.name === "bus_list");
+    const result = await busList?.invoke({});
+    expect(result?.isError).toBe(true);
+    expect(result?.output).toContain("bus-disabled");
+  });
+});
+
 describe("denyInteractiveTools", () => {
   const tool = (name: string) => ({
     definition: { name, description: "", inputSchema: { type: "object" as const, properties: {} }, risk: "read" as const },
