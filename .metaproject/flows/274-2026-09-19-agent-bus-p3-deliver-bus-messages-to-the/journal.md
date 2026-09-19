@@ -20,3 +20,8 @@
 - 2026-09-19T20:17:42.061Z - task-done: T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)
 - 2026-09-19T20:17:42.481Z - task-attempt: T8: started (attempt 1) — 274-T8 integration tests (sonnet)
 - 2026-09-19T20:32:32.342Z - task-done: T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)
+- 2026-09-19T20:33:04.591Z - task-attempt: T9: started (attempt 1) — 274-T9 docs (haiku)
+- 2026-09-19T20:36:00.050Z - task-done: T9: Docs: P3 status and bus tools mention (haiku)
+- 2026-09-19T20:40:12.800Z - task-added: T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)
+- 2026-09-19T20:40:12.877Z - task-attempt: T11: started (attempt 1) — 274-T11 lanes A+B in parallel (sonnet)
+- 2026-09-19T21:13:07.871Z - task-done: T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)

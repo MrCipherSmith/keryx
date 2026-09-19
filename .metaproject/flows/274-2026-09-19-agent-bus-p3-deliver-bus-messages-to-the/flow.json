@@ -9,7 +9,7 @@
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
   "status": "in-progress",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T20:32:32.342Z",
+  "updatedAt": "2026-09-19T21:13:07.871Z",
   "source": {
     "type": "description",
     "ref": null
@@ -174,15 +174,22 @@
       "id": "T9",
       "title": "Docs: P3 status and bus tools mention (haiku)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:33:04.591Z",
+            "outcome": "started",
+            "detail": "274-T9 docs (haiku)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -197,6 +204,27 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T20:40:12.877Z",
+            "outcome": "started",
+            "detail": "274-T11 lanes A+B in parallel (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -297,6 +325,31 @@
       "at": "2026-09-19T20:32:32.342Z",
       "event": "task-done",
       "detail": "T8: Integration tests: three drain sites, empty bus-message turn, reply loop stops at cap, ack only after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:33:04.591Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 274-T9 docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T20:36:00.050Z",
+      "event": "task-done",
+      "detail": "T9: Docs: P3 status and bus tools mention (haiku)"
+    },
+    {
+      "at": "2026-09-19T20:40:12.800Z",
+      "event": "task-added",
+      "detail": "T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:40:12.877Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 274-T11 lanes A+B in parallel (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:13:07.871Z",
+      "event": "task-done",
+      "detail": "T11: Review r1 fixes: lane A (bus lib: agent origin + log-counted limit, self-send refusal, quarantine tags, inbox onDrop, bus_list quarantine) and lane B (surfaces: capped notice once, tools only when joined, pre-await inbox, currentSel re-read, side workers no bus, drop notice, wake-controller factory) (sonnet)"
     }
   ]
 }
