@@ -51,8 +51,9 @@ import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
+  detachSlateSession,
   mintTimestampAttemptId,
-  recordSlateTouch,
+  recordSlateSessionTouch,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
 import { renderAnchorsBlock } from "../session/slate";
@@ -1274,8 +1275,8 @@ export async function applyRuntimeSwitchToSlate(params: {
   if (params.slateSession === undefined || !params.slateSession.opened) {
     return false;
   }
-  const result = await recordSlateTouch(params.slateSession.dir, [], { runtime: params.runtime });
-  if (!result.changed) {
+  const result = await recordSlateSessionTouch(params.slateSession, [], { runtime: params.runtime });
+  if (result === undefined || !result.changed) {
     return false;
   }
   params.history.push({
@@ -4412,6 +4413,10 @@ export async function launchTuiAgentShell(opts: {
     // nothing more is written here, the slate ref is dropped (so tools record
     // no slate touches into the session), and the operator is told once.
     sessionLease.onLost((message) => {
+      // Flow 271 R3-1: detach the ref itself, not only this variable. A turn or
+      // a `/goal --auto` loop that is already running holds the same object,
+      // and every slate write through a detached ref refuses.
+      detachSlateSession(slateSession);
       slateSession = undefined;
       if (sessionPersistTimer !== undefined) {
         clearTimeout(sessionPersistTimer);

@@ -6,12 +6,17 @@ import {
   closeSlate,
   closeSlateSession,
   computeAnchors,
+  detachSlateSession,
   ensureSlateOpened,
   isClosePhrase,
   isCourseDone,
   mintTimestampAttemptId,
   openSlate,
+  readSlateSession,
+  recordSlateSessionTouch,
   recordSlateTouch,
+  slateSessionDir,
+  writeSlateSession,
   type SlateSessionRef,
 } from "./slate-lifecycle";
 import { readSlate, writeSlate, type Slate } from "./slate";
@@ -380,4 +385,60 @@ test("mintTimestampAttemptId produces archiveSlate-safe tokens that never collid
   expect(a).not.toBe(b);
   expect(/^[A-Za-z0-9._-]+$/.test(a)).toBe(true);
   expect(/^[A-Za-z0-9._-]+$/.test(b)).toBe(true);
+});
+
+// --- flow 271 R3-1: a detached SlateSessionRef refuses every write ---------
+
+async function snapshotSessionDir(dir: string): Promise<Record<string, string>> {
+  const files: Record<string, string> = {};
+  const walk = async (rel: string): Promise<void> => {
+    for (const entry of await readdir(path.join(dir, rel), { withFileTypes: true })) {
+      const child = path.join(rel, entry.name);
+      if (entry.isDirectory()) await walk(child);
+      else files[child] = await readFile(path.join(dir, child), "utf8");
+    }
+  };
+  await walk("");
+  return files;
+}
+
+test("flow 271 R3-1: a detached ref makes open, reopen, write, touch, close and archive refuse, and leaves the slate files unchanged", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  const mint = fixedMinter();
+  const ref: SlateSessionRef = { dir, cwd, opened: false };
+  await ensureSlateOpened(ref, mint);
+  await recordSlateSessionTouch(ref, ["src/a.ts"]);
+  const before = await snapshotSessionDir(dir);
+  expect(before["slate.json"]).toContain("src/a.ts");
+
+  detachSlateSession(ref);
+
+  expect(await recordSlateSessionTouch(ref, ["src/b.ts"])).toBeUndefined();
+  expect(await writeSlateSession(ref, (prev) => ({ ...(prev as Slate), workspaceId: "stolen" }))).toBeUndefined();
+  expect(await readSlateSession(ref)).toBeUndefined();
+  expect(slateSessionDir(ref)).toBeUndefined();
+  // Close would archive the new holder's live slate.
+  await closeSlateSession(ref, mint);
+  // Reopen with a stale `opened` flag, and a fresh open, would both archive it.
+  await ensureSlateOpened(ref, mint);
+  ref.opened = false;
+  await ensureSlateOpened(ref, mint);
+
+  expect(await snapshotSessionDir(dir)).toEqual(before);
+});
+
+test("flow 271 R3-1: a ref detached while the open resolves its anchors does not open", async () => {
+  const dir = await tempSessionDir();
+  const cwd = await tempCwd();
+  await writeSlate(dir, () => ({ anchors: { root: "/new-holder", touched: [] }, course: {}, seeds: [] }));
+  const before = await snapshotSessionDir(dir);
+  const ref: SlateSessionRef = { dir, cwd, opened: false };
+
+  const opening = ensureSlateOpened(ref, fixedMinter());
+  detachSlateSession(ref);
+  await opening;
+
+  expect(ref.opened).toBe(false);
+  expect(await snapshotSessionDir(dir)).toEqual(before);
 });

@@ -37,7 +37,7 @@ import type {
 import { estimateRequestTokens, needsCompaction } from "../harness/provider/context-guard";
 import { compactMessages } from "../session/compact";
 import { executeWaves, planWaves, WaveExecutionError, type ChildTask } from "../harness/parallel/scheduler";
-import { readSlate, renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
+import { renderAnchorsBlock, type Slate, type SlateAnchors, type SlateCourse } from "../session/slate";
 import { courseFromSlate } from "../session/slate-course";
 import { runWrapUp, type RunWrapUpInput, type WrapUpOutcome } from "../sac/machine-wrap-up";
 import {
@@ -45,7 +45,9 @@ import {
   ensureSlateOpened,
   isClosePhrase,
   isCourseDone,
-  recordSlateTouch,
+  readSlateSession,
+  recordSlateSessionTouch,
+  slateSessionDir,
   type SlateSessionRef,
 } from "../session/slate-lifecycle";
 import { renderTerminalStateBlock, writeTerminalState, type TerminalState, type TerminalStateReason } from "../session/slate-terminal-state";
@@ -1471,7 +1473,7 @@ async function resolveTerminalStateSnapshots(
   const ref = options.slateSession;
   if (ref !== undefined && ref.opened) {
     try {
-      const slate = await readSlate(ref.dir);
+      const slate = await readSlateSession(ref);
       if (slate !== undefined) {
         return { courseSnapshot: slate.course, anchorsSnapshot: slate.anchors };
       }
@@ -1513,9 +1515,12 @@ async function emitTerminalState(
   // write — swallow-and-degrade, matching this file's existing convention at
   // `resolveTerminalStateSnapshots`.
   const ref = options.slateSession;
-  if (ref !== undefined && ref.opened) {
+  // `slateSessionDir` is undefined for a detached ref (flow 271 R3-1): a
+  // displaced shell writes no terminal state into the session it lost.
+  const terminalDir = ref !== undefined && ref.opened ? slateSessionDir(ref) : undefined;
+  if (terminalDir !== undefined) {
     try {
-      await writeTerminalState(ref.dir, state);
+      await writeTerminalState(terminalDir, state);
     } catch {
       // Degrade silently; io.onTerminalState/the rendered block above already
       // delivered this TerminalState to the caller.
@@ -1609,7 +1614,9 @@ async function closeSlateOnFlowDone(io: AgentIO, deps: AgentDeps, options: RunAg
     return;
   }
   try {
-    const slate = await readSlate(ref.dir);
+    // Through the ref (flow 271 R3-1): a detached ref reads no slate, so a
+    // displaced shell neither dispatches wrap-up nor archives the new holder's.
+    const slate = await readSlateSession(ref);
     const course = await courseFromSlate(ref.cwd, slate);
     if (isCourseDone(course)) {
       if (slate !== undefined) {
@@ -1746,7 +1753,7 @@ async function runAgentTurnCore(
         // plain language ("wrap up", "task complete", …) — dispatch BEFORE
         // the close archives the slate, so there is still a live Slate to
         // read Seeds/workspaceId from.
-        const liveSlate = await readSlate(options.slateSession.dir);
+        const liveSlate = await readSlateSession(options.slateSession);
         if (liveSlate !== undefined) {
           await dispatchWrapUpBestEffort(io, options, "explicit", options.slateSession.cwd, options.slateSession.dir, liveSlate);
         }
@@ -1774,7 +1781,7 @@ async function runAgentTurnCore(
           model: deps.modelId,
         });
         if (!wasOpened && options.slateSession.opened) {
-          const freshSlate = await readSlate(options.slateSession.dir);
+          const freshSlate = await readSlateSession(options.slateSession);
           if (freshSlate !== undefined) {
             history.push({ role: "user", content: renderAnchorsBlock(freshSlate.anchors), provenance: "project", ts: now() });
             io.onHistoryChange?.("tool");
@@ -2484,10 +2491,12 @@ async function runAgentTurnCore(
         // see `anchorsToAnnounce` above the loop — only recorded on disk.
         try {
           const touchedPaths = extractTouchedFromToolInput(call.name, parseToolInput(call.input));
-          const touch = await recordSlateTouch(options.slateSession.dir, touchedPaths, {
+          // Through the ref (flow 271 R3-1): once the lease is lost the ref is
+          // detached and this writes nothing, even mid-turn.
+          const touch = await recordSlateSessionTouch(options.slateSession, touchedPaths, {
             runtime: { provider: deps.providerId, model: deps.modelId },
           });
-          if (touch.changed) {
+          if (touch?.changed === true) {
             anchorsToAnnounce = touch.slate.anchors;
           }
         } catch (err) {

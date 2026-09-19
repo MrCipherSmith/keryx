@@ -152,6 +152,7 @@ import {
   leasedChoiceRows,
 } from "../session/lease-choice";
 import { closeSlateSession, mintTimestampAttemptId, type SlateSessionRef } from "../session/slate-lifecycle";
+import { detachSlateSession } from "../session/slate-lifecycle";
 import { runGoalCommand } from "./goal-command";
 import { invokeAskUserHost } from "../tui/ask-user-bridge";
 
@@ -1707,6 +1708,10 @@ async function runAgentRepl(
   // written to it: `save`, both compaction paths check `leaseWatch.canPersist()`,
   // and the slate ref is dropped so no tool or turn records into it.
   const leaseWatch = watchLeaseLoss((message) => {
+    // Flow 271 R3-1: detach the ref itself, not only these variables. A turn or
+    // a `/goal --auto` loop that is already running holds the same object, and
+    // every slate write through a detached ref refuses.
+    detachSlateSession(slateSession);
     slateSession = undefined;
     slateSessionBox.current = undefined;
     agentIo.onSystem?.(message);

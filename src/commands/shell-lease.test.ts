@@ -542,3 +542,31 @@ describe("readline agent slate getters are gated by the lease (review r2 N1, sou
     expect(gate).toBeLessThan(body.indexOf("openLeased(leasedOpenOptions(sessionOpts"));
   });
 });
+
+describe("lease-loss listeners detach the slate ref itself (flow 271 R3-1, source-text audit)", () => {
+  // A running turn or `/goal --auto` loop holds the ref object, not the shell's
+  // variable, so the listener must detach that object before dropping it.
+  const listenerDetachesFirst = (source: string, listener: string): void => {
+    const start = source.indexOf(listener);
+    expect(start).toBeGreaterThanOrEqual(0);
+    const body = source.slice(start);
+    const detach = body.indexOf("detachSlateSession(slateSession);");
+    expect(detach).toBeGreaterThanOrEqual(0);
+    expect(detach).toBeLessThan(body.indexOf("slateSession = undefined;"));
+    expect(detach).toBeLessThan(body.indexOf("});"));
+  };
+
+  test("readline agent: watchLeaseLoss detaches before clearing", () => {
+    listenerDetachesFirst(
+      readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8"),
+      "const leaseWatch = watchLeaseLoss((message) => {\n    // Flow 271",
+    );
+  });
+
+  test("tui: sessionLease.onLost detaches before clearing", () => {
+    listenerDetachesFirst(
+      readFileSync(path.join(import.meta.dir, "..", "tui", "tui-shell.ts"), "utf8"),
+      "sessionLease.onLost((message) => {",
+    );
+  });
+});
