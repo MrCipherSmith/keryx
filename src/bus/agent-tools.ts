@@ -10,29 +10,34 @@
 // external child (§7.1: "None of these tools is offered to subagents or
 // external children in v1."). Neither tool set is built from this factory.
 //
-// `bus_send`'s own rate limit (D-12: 10 agent-origin messages per minute per
-// instance) is enforced HERE, not inside `BusClient`: the client's `send`/
-// `reply` always write with `from.origin: "operator"` (`./client.ts`), which
-// carries send.ts's own 30/minute operator-origin limit — that limit is a
-// property of the STORAGE layer and is unrelated to this tool's D-12 budget.
-// So this module keeps its own sliding window, with an injectable clock for
-// deterministic tests, and refuses locally (`rate-limited`) before ever
-// calling `client.send`/`client.reply`.
+// `bus_send` writes through `client.sendAsAgent`/`client.replyAsAgent`
+// (`./client.ts`), which mint `from.origin: "agent"` and are counted against
+// `send.ts`'s own `AGENT_RATE_LIMIT_PER_MINUTE` (10/minute per instance,
+// D-12) from the log itself, under `append.lock` — exactly like the CLI and
+// operator budgets. This module used to keep its own in-memory sliding
+// window and refuse locally before ever calling the client; that window
+// reset on every `buildBusTools` rebuild (a join, `/model`, `/connect`: review
+// r1 F5) and wrote agent-origin sends with `from.origin: "operator"`,
+// misattributing them and spending the OPERATOR budget instead of its own
+// (review r1 F3). Counting from the log instead means the budget is a
+// property of this instance's send history, not of any one closure's
+// lifetime, and every refusal (including `rate-limited`) now comes back from
+// `client.sendAsAgent`/`replyAsAgent` through the generic `BusRefusal`
+// mapping below rather than from a check local to this file.
 
 import type { InteractiveTool, InteractiveToolResult } from "../harness/tool/builtin/interactive-tools";
+import { quarantinePeerMessage } from "../harness/child/quarantine";
 import type { BusClient } from "./client";
 import { displaySafe } from "./display";
 import { isBusRefusal, type BusRefusalCode } from "./errors";
 import { listActiveLeases } from "./leases";
 import type { PresenceLiveness } from "./presence";
-import { SENDABLE_KINDS, type SendableKind } from "./send";
+import { AGENT_RATE_LIMIT_PER_MINUTE, SENDABLE_KINDS, type SendableKind } from "./send";
 
-/** D-12: agent-origin messages per minute, per instance. */
-export const AGENT_RATE_LIMIT_PER_MINUTE = 10;
-const AGENT_RATE_WINDOW_MS = 60_000;
+export { AGENT_RATE_LIMIT_PER_MINUTE };
 
 export interface BuildBusToolsOptions {
-  /** Injectable clock for the agent-origin rate limiter; defaults to `Date.now`. */
+  /** Injectable clock; kept for callers that pass one, though `bus_send`'s own rate limiting now lives in `./send.ts`, counted from the log. */
   now?: () => number;
 }
 
@@ -41,9 +46,10 @@ function refusal(toolName: string, code: BusRefusalCode, message: string): Inter
 }
 
 /**
- * A `BusRefusal` thrown by `client.send`/`client.reply`, reported the same
- * way a locally-built {@link refusal} is. `BusRefusal`'s own `message` is
- * already `"<code>: <detail>"` (see `./errors.ts`'s constructor) — passing it
+ * A `BusRefusal` thrown by `client.sendAsAgent`/`client.replyAsAgent`,
+ * reported the same way a locally-built {@link refusal} is. `BusRefusal`'s
+ * own `message` is already `"<code>: <detail>"` (see `./errors.ts`'s
+ * constructor) — passing it
  * through `refusal()` a second time would duplicate the code, so this reads
  * the code once and formats it exactly like every other refusal here.
  */
@@ -85,8 +91,8 @@ const BUS_SEND_DESCRIPTION =
   "kind 'reply' and replyTo, never a new thread. Do not answer an ack or a courtesy notice. " +
   "Send only state, intent, a question or a handoff — never transcripts, diffs, file contents, " +
   "secrets or reasoning. Refusals: bus-disabled, unknown-recipient, recipient-not-live, " +
-  "rate-limited, body-too-large, reply-without-replyTo, unknown-message. On success returns " +
-  "{ seq, id, resolvedTo }.";
+  "recipient-is-self, rate-limited, body-too-large, reply-without-replyTo, unknown-message. " +
+  "On success returns { seq, id, resolvedTo }.";
 
 /**
  * Build `bus_list` and `bus_send`. `getClient` is read at every call (build
@@ -98,19 +104,6 @@ const BUS_SEND_DESCRIPTION =
  */
 export function buildBusTools(getClient: () => BusClient | undefined, options: BuildBusToolsOptions = {}): InteractiveTool[] {
   const now = options.now ?? Date.now;
-
-  // The agent-origin sliding window (D-12). One window per built tool set,
-  // which is exactly one per joined session — `buildInteractiveAgentTools` is
-  // called once per session (rebuilds reuse the same `bus` option), so this
-  // closure's lifetime matches the instance's.
-  let sendTimestamps: number[] = [];
-  function withinAgentRateLimit(): boolean {
-    const at = now();
-    sendTimestamps = sendTimestamps.filter((sentAt) => at - sentAt < AGENT_RATE_WINDOW_MS);
-    if (sendTimestamps.length >= AGENT_RATE_LIMIT_PER_MINUTE) return false;
-    sendTimestamps.push(at);
-    return true;
-  }
 
   const busList: InteractiveTool = {
     definition: {
@@ -132,11 +125,17 @@ export function buildBusTools(getClient: () => BusClient | undefined, options: B
       const leases = activeLeases.filter((lease) => appliesToInstance(lease, client.instanceId));
       const payload = {
         self: { name: displaySafe(client.name), instanceId: client.instanceId },
+        // review r1 F12: `status`/`activity` are free text another instance
+        // wrote (`writeCurrentPresence`'s `opts.status()`, `./client.ts`) and
+        // reach the model here — `displaySafe` alone strips control
+        // characters but does not flag instruction-shaped text the way a bus
+        // message body already is (`quarantinePeerMessage`, shared with
+        // `../harness/child/quarantine.ts`'s child-summary quarantine).
         peers: peers.map((peer) => ({
           name: displaySafe(peer.record.name),
           state: peer.state,
-          status: displaySafe(peer.record.status),
-          activity: displaySafe(peer.record.activity),
+          status: quarantinePeerMessage(displaySafe(peer.record.status)).text,
+          activity: quarantinePeerMessage(displaySafe(peer.record.activity)).text,
           checkout: displaySafe(peer.record.checkout),
           branch: peer.record.branch === null ? null : displaySafe(peer.record.branch),
         })),
@@ -186,15 +185,12 @@ export function buildBusTools(getClient: () => BusClient | undefined, options: B
       if (kind === "reply" && replyTo === undefined) {
         return refusal("bus_send", "reply-without-replyTo", "a reply needs replyTo (the id/#seq/prefix of the message being answered)");
       }
-      if (!withinAgentRateLimit()) {
-        return refusal(
-          "bus_send",
-          "rate-limited",
-          `this instance already sent ${AGENT_RATE_LIMIT_PER_MINUTE} agent-origin messages in the last minute`,
-        );
-      }
       try {
-        const result = kind === "reply" ? await client.reply(replyTo as string, body) : await client.send(to, kind, body);
+        // review r1 F3: written with `from.origin: "agent"` and counted
+        // against `./send.ts`'s own AGENT_RATE_LIMIT_PER_MINUTE budget, never
+        // the operator's `send`/`reply` (D-12).
+        const result =
+          kind === "reply" ? await client.replyAsAgent(replyTo as string, body) : await client.sendAsAgent(to, kind, body);
         return { output: JSON.stringify({ seq: result.seq, id: result.id, resolvedTo: result.resolvedTo }), isError: false };
       } catch (error) {
         if (isBusRefusal(error)) {

@@ -185,6 +185,21 @@ export interface BusClient {
    * `BusRefusal("unknown-message")` when `ref` does not resolve.
    */
   reply(ref: string, body: string): Promise<SendResult>;
+  /**
+   * Like {@link send}, but writes `from.origin: "agent"` (specification §4.2,
+   * D-12): the model's own `bus_send` tool call (`./agent-tools.ts`), never
+   * the operator's own typed input. Shares every other refusal `send` has
+   * (`unknown-recipient`, `recipient-not-live`, `recipient-is-self`,
+   * `body-too-large`, …) plus its own, separately-counted 10/minute budget
+   * (review r1 F3, F5).
+   */
+  sendAsAgent(toLabel: string, kind: SendableKind, body: string): Promise<SendResult>;
+  /**
+   * Like {@link reply} — same `resolveRef` lookup, same ORIGINAL-sender
+   * addressing (review r1 F4) — but writes `from.origin: "agent"` (review r1
+   * F3) and is counted against the agent budget, not the operator's.
+   */
+  replyAsAgent(ref: string, body: string): Promise<SendResult>;
   /** One poll cycle now, awaited; for tests. Returns every event addressed to this instance. */
   pollNow(): Promise<BusEvent[]>;
   /**
@@ -563,6 +578,38 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
         replyTo: resolved.id,
         toInstanceId: resolved.fromInstanceId,
         origin: "operator",
+        from,
+        now,
+        liveness: { isAlive, host },
+        env: opts.env,
+      });
+    },
+    async sendAsAgent(toLabel, kind, body) {
+      const from: BusSender = { instanceId, name: state.name, origin: "agent" };
+      return sendMessage(root, {
+        toLabel,
+        kind,
+        body,
+        origin: "agent",
+        from,
+        now,
+        liveness: { isAlive, host },
+        env: opts.env,
+      });
+    },
+    async replyAsAgent(ref, body) {
+      const resolved = resolveRefImpl(ref);
+      if (resolved === undefined) {
+        throw new BusRefusal("unknown-message", `no rendered message matches ${JSON.stringify(ref)}`);
+      }
+      const from: BusSender = { instanceId, name: state.name, origin: "agent" };
+      return sendMessage(root, {
+        toLabel: `@${resolved.fromName}`,
+        kind: "reply",
+        body,
+        replyTo: resolved.id,
+        toInstanceId: resolved.fromInstanceId,
+        origin: "agent",
         from,
         now,
         liveness: { isAlive, host },

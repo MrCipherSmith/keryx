@@ -12,7 +12,11 @@
 // Pure in-memory queue: no clock, no I/O, no network. Bounded so a burst of
 // peer traffic while the agent is busy elsewhere cannot grow this without
 // limit; the oldest pending events are dropped first, and the drop count is
-// exposed so a caller/test can tell it happened.
+// exposed (`droppedCount`) so a caller/test can tell it happened. Review r1
+// F10: a drop was otherwise silent to the operator — `createBusInbox`'s
+// optional `onDrop` callback fires on every drop (never batched) so a shell
+// surface can show a notice instead of the count only being visible to a
+// caller that happens to poll `droppedCount` itself.
 
 import type { RenderedBusEvent } from "./client";
 
@@ -56,8 +60,19 @@ export interface BusInbox {
   readonly droppedCount: number;
 }
 
+export interface CreateBusInboxOptions {
+  /**
+   * review r1 F10: called once for EVERY event dropped by the 200-pending
+   * bound (never batched), with the cumulative {@link BusInbox.droppedCount}
+   * AFTER that drop, so a caller (a shell surface) can surface a notice to
+   * the operator instead of the drop staying silent. Never called for a
+   * normal push that stays within the bound.
+   */
+  onDrop?: (droppedTotal: number) => void;
+}
+
 /** A fresh, empty bus inbox. One per joined session. */
-export function createBusInbox(): BusInbox {
+export function createBusInbox(options: CreateBusInboxOptions = {}): BusInbox {
   let pending: BusInboxEvent[] = [];
   let droppedCount = 0;
 
@@ -67,6 +82,7 @@ export function createBusInbox(): BusInbox {
       if (pending.length > MAX_PENDING_BUS_EVENTS) {
         pending.shift();
         droppedCount += 1;
+        options.onDrop?.(droppedCount);
       }
     },
     drainUndelivered() {

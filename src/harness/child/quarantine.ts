@@ -25,9 +25,16 @@ interface QuarantinePattern {
 
 const PATTERNS: readonly QuarantinePattern[] = [
   {
-    // Imitations of harness control tags (e.g. <system-reminder>, </system>).
+    // Imitations of harness control tags (e.g. <system-reminder>, </system>),
+    // including the agent-bus/child-notification wrappers a forged summary or
+    // peer message could imitate to look like a real delivery (review r1 F8):
+    // <peer-message> (agent.ts's bus-delivery wrapper) and
+    // <task-notification> (its task-completion-inbox counterpart).
     name: "control-tag",
-    test: (t) => /<\/?\s*(system-reminder|system|important|assistant|human|tool_result|function_calls)\b[^>]*>/i.test(t),
+    test: (t) =>
+      /<\/?\s*(system-reminder|system|important|assistant|human|tool_result|function_calls|peer-message|task-notification)\b[^>]*>/i.test(
+        t,
+      ),
   },
   {
     // Conversation turn markers that try to inject a new role turn.

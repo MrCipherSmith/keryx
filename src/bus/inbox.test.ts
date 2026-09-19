@@ -121,4 +121,30 @@ describe("AC1: the 200-pending bound", () => {
     expect(inbox.size).toBe(MAX_PENDING_BUS_EVENTS);
     expect(inbox.droppedCount).toBe(0);
   });
+
+  // review r1 F10: a drop used to be silent — droppedCount changed, but
+  // nothing told a caller (a shell surface) it happened unless it happened to
+  // poll the counter itself.
+  test("onDrop fires once per dropped event, with the cumulative droppedCount, and never for a push within the bound", () => {
+    const drops: number[] = [];
+    const inbox = createBusInbox({ onDrop: (total) => drops.push(total) });
+    for (let i = 0; i < MAX_PENDING_BUS_EVENTS; i++) {
+      inbox.push(event({ id: `id-${i}`, seq: i }));
+    }
+    expect(drops).toEqual([]); // nothing dropped yet: no calls at all
+
+    for (let i = 0; i < 3; i++) {
+      inbox.push(event({ id: `overflow-${i}`, seq: MAX_PENDING_BUS_EVENTS + i }));
+    }
+    expect(drops).toEqual([1, 2, 3]); // one call per drop, running total
+    expect(inbox.droppedCount).toBe(3);
+  });
+
+  test("omitting onDrop is safe: drops still happen without a callback", () => {
+    const inbox = createBusInbox();
+    for (let i = 0; i < MAX_PENDING_BUS_EVENTS + 2; i++) {
+      inbox.push(event({ id: `id-${i}`, seq: i }));
+    }
+    expect(inbox.droppedCount).toBe(2);
+  });
 });
