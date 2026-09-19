@@ -1149,6 +1149,7 @@ export async function pickShellApproval(
   loadContext: ApprovalContextLoader,
   destructive = false,
   credentials = false,
+  ui: { onOpen?: () => void; signal?: AbortSignal } = {},
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1203,6 +1204,8 @@ export async function pickShellApproval(
     ...(context !== undefined ? { context } : {}),
     cancelId: "deny",
     options,
+    ...(ui.onOpen !== undefined ? { onOpen: ui.onOpen } : {}),
+    ...(ui.signal !== undefined ? { signal: ui.signal } : {}),
   });
   if (id === "once" || id === "always-exact" || id === "always-prefix" || id === "deny") {
     return id;
@@ -3320,19 +3323,23 @@ export async function launchTuiAgentShell(opts: {
           chrome.hideMenu(); // release menuNav before the dock takes over
           setMainAgent("blocked", "approval");
           const preview = request.task.length > 80 ? `${request.task.slice(0, 77)}…` : request.task;
-          const id = await showComposerChoice(otui, r, chrome.dock, {
-            title: `Run the external agent ${request.agentId}?`,
-            subtitle: preview,
-            cancelId: "deny",
-            options: [
-              {
-                id: "allow",
-                label: `Allow ${request.agentId}`,
-                description: `Spends your ${request.agentId} subscription · sandbox ${request.sandbox ?? "read-only"}`,
-              },
-              { id: "deny", label: "Deny", description: "Do not start the external agent" },
-            ],
-          });
+          const id = await chrome.withOverlay(() =>
+            showComposerChoice(otui, r, chrome.dock, {
+              title: `Run the external agent ${request.agentId}?`,
+              subtitle: preview,
+              cancelId: "deny",
+              onOpen: () => chrome.blurComposer(),
+              signal: foregroundOperation.signal,
+              options: [
+                {
+                  id: "allow",
+                  label: `Allow ${request.agentId}`,
+                  description: `Spends your ${request.agentId} subscription · sandbox ${request.sandbox ?? "read-only"}`,
+                },
+                { id: "deny", label: "Deny", description: "Do not start the external agent" },
+              ],
+            }),
+          );
           input.focus();
           setMainAgent("running", id === "allow" ? "external" : "denied");
           return id === "allow"
@@ -3595,20 +3602,24 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
-        const id = await showComposerChoice(otui, r, chrome.dock, {
-          title: "Spawn general subagent?",
-          subtitle: taskPreview,
-          cancelId: "deny",
-          options: [
-            {
-              id: "allow",
-              label: "Allow subagent",
-              description: "Run bounded child (still no shell in v1)",
-              recommended: true,
-            },
-            { id: "deny", label: "Deny", description: "Do not spawn" },
-          ],
-        });
+        const id = await chrome.withOverlay(() =>
+          showComposerChoice(otui, r, chrome.dock, {
+            title: "Spawn general subagent?",
+            subtitle: taskPreview,
+            cancelId: "deny",
+            onOpen: () => chrome.blurComposer(),
+            signal: foregroundOperation.signal,
+            options: [
+              {
+                id: "allow",
+                label: "Allow subagent",
+                description: "Run bounded child (still no shell in v1)",
+                recommended: true,
+              },
+              { id: "deny", label: "Deny", description: "Do not spawn" },
+            ],
+          }),
+        );
         input.focus();
         setMainAgent("running", id === "allow" ? "subagent" : "denied");
         transcript.add(
@@ -3656,15 +3667,19 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
         setMainAgent("blocked", "approval");
-        const id = await showComposerChoice(otui, r, chrome.dock, {
-          title: "Approve apply_patch?",
-          subtitle: "Diff shown above · Esc denies",
-          cancelId: "deny",
-          options: [
-            { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
-            { id: "deny", label: "Deny", description: "Do not write anything" },
-          ],
-        });
+        const id = await chrome.withOverlay(() =>
+          showComposerChoice(otui, r, chrome.dock, {
+            title: "Approve apply_patch?",
+            subtitle: "Diff shown above · Esc denies",
+            cancelId: "deny",
+            onOpen: () => chrome.blurComposer(),
+            signal: foregroundOperation.signal,
+            options: [
+              { id: "allow", label: "Approve", description: "Write the patch to disk", recommended: true },
+              { id: "deny", label: "Deny", description: "Do not write anything" },
+            ],
+          }),
+        );
         input.focus();
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
@@ -3717,19 +3732,23 @@ export async function launchTuiAgentShell(opts: {
         }
         chrome.hideMenu();
         setMainAgent("blocked", "approval");
-        const id = await showComposerChoice(otui, r, chrome.dock, {
-          title: described.title,
-          // Names the tool and the server and NOTHING the model supplied,
-          // so no payload prefix can occupy the line read first.
-          subtitle: summariseUseToolApproval(described),
-          cancelId: "deny",
-          options: [
-            // No "always" option. `described.rememberable` is typed
-            // `false` so this cannot be added back by forgetting to check.
-            { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
-            { id: "deny", label: "Deny", description: "the tool call is refused", recommended: true },
-          ],
-        });
+        const id = await chrome.withOverlay(() =>
+          showComposerChoice(otui, r, chrome.dock, {
+            title: described.title,
+            // Names the tool and the server and NOTHING the model supplied,
+            // so no payload prefix can occupy the line read first.
+            subtitle: summariseUseToolApproval(described),
+            cancelId: "deny",
+            onOpen: () => chrome.blurComposer(),
+            signal: foregroundOperation.signal,
+            options: [
+              // No "always" option. `described.rememberable` is typed
+              // `false` so this cannot be added back by forgetting to check.
+              { id: APPROVAL_ALLOW_ID, label: "Approve", description: `run ${described.tool} on ${described.server}` },
+              { id: "deny", label: "Deny", description: "the tool call is refused", recommended: true },
+            ],
+          }),
+        );
         input.focus();
         // `isDockApproval`, not an inline `id === "allow"`, and not three
         // copies of it. A reviewer inverted this comparison — so "Deny"
@@ -3791,15 +3810,19 @@ export async function launchTuiAgentShell(opts: {
         setMainAgent("blocked", "approval");
         const elicitationSubtitle =
           described.message.length > 80 ? `${described.message.slice(0, 77)}…` : described.message;
-        const id = await showComposerChoice(otui, r, chrome.dock, {
-          title: "Approve codex elicitation?",
-          subtitle: elicitationSubtitle,
-          cancelId: "deny",
-          options: [
-            { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
-            { id: "deny", label: "Deny", description: "codex's action is refused" },
-          ],
-        });
+        const id = await chrome.withOverlay(() =>
+          showComposerChoice(otui, r, chrome.dock, {
+            title: "Approve codex elicitation?",
+            subtitle: elicitationSubtitle,
+            cancelId: "deny",
+            onOpen: () => chrome.blurComposer(),
+            signal: foregroundOperation.signal,
+            options: [
+              { id: "allow", label: "Approve", description: "codex proceeds with this action", recommended: true },
+              { id: "deny", label: "Deny", description: "codex's action is refused" },
+            ],
+          }),
+        );
         input.focus();
         setMainAgent("running", id === "allow" ? "write" : "denied");
         transcript.add(
@@ -3879,14 +3902,11 @@ export async function launchTuiAgentShell(opts: {
       setMainAgent("blocked", "approval");
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
-      const choice = await pickShellApproval(
-        otui,
-        r,
-        chrome.dock,
-        cmd,
-        approvalContext,
-        destructive,
-        meta?.credentials === true,
+      const choice = await chrome.withOverlay(() =>
+        pickShellApproval(otui, r, chrome.dock, cmd, approvalContext, destructive, meta?.credentials === true, {
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+        }),
       );
       input.focus();
 
@@ -3954,19 +3974,23 @@ export async function launchTuiAgentShell(opts: {
           content: otui.t`${otui.yellow("? ")} ${otui.dim(qShort)}`,
         }),
       );
-      const chosen = await showComposerChoice(otui, r, chrome.dock, {
-        title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
-        subtitle: "Pick an option · Esc cancels",
-        cancelId: "__cancel__",
-        options: req.options.map(
-          (o): ChoiceOption => ({
-            id: o.id,
-            label: o.label,
-            description: o.description.length > 0 ? o.description : " ",
-            ...(o.recommended === true ? { recommended: true } : {}),
-          }),
-        ),
-      });
+      const chosen = await chrome.withOverlay(() =>
+        showComposerChoice(otui, r, chrome.dock, {
+          title: req.question.length > 72 ? `${req.question.slice(0, 69)}…` : req.question,
+          subtitle: "Pick an option · Esc cancels",
+          cancelId: "__cancel__",
+          onOpen: () => chrome.blurComposer(),
+          signal: foregroundOperation.signal,
+          options: req.options.map(
+            (o): ChoiceOption => ({
+              id: o.id,
+              label: o.label,
+              description: o.description.length > 0 ? o.description : " ",
+              ...(o.recommended === true ? { recommended: true } : {}),
+            }),
+          ),
+        }),
+      );
       input.focus();
       if (chosen !== "__cancel__") {
         const picked = req.options.find((o) => o.id === chosen);
@@ -4543,14 +4567,15 @@ export async function launchTuiAgentShell(opts: {
                 "Skips confirmation for EVERY action, including destructive commands. " +
                 "Only credential-touching commands still ask.",
               cancelId: "cancel",
-              options: [
-                { id: "confirm", label: "Confirm", description: "I understand the risk" },
-                { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
-              ],
+              enqueue: false,
               onBusy: () => {
                 blockedByOpenDialog = true;
                 chrome.showToast("Answer the open approval first, then retry /mode.");
               },
+              options: [
+                { id: "confirm", label: "Confirm", description: "I understand the risk" },
+                { id: "cancel", label: "Cancel", description: "Keep the current mode", recommended: true },
+              ],
             }),
           );
           input.focus();
@@ -4594,16 +4619,17 @@ export async function launchTuiAgentShell(opts: {
             title: `Permission mode (current: ${permissionMode})`,
             subtitle: stored !== undefined ? `Project default: ${stored}` : "No project default set.",
             cancelId: permissionMode,
+            enqueue: false,
+            onBusy: () => {
+              blockedByOpenDialog = true;
+              chrome.showToast("Answer the open approval first, then retry /mode.");
+            },
             options: PERMISSION_MODES.map((m) => ({
               id: m,
               label: m,
               description: MODE_PICKER_DESCRIPTIONS[m],
               recommended: m === permissionMode,
             })),
-            onBusy: () => {
-              blockedByOpenDialog = true;
-              chrome.showToast("Answer the open approval first, then retry /mode.");
-            },
           }),
         );
         input.focus();
@@ -5378,6 +5404,7 @@ export async function launchTuiAgentShell(opts: {
               { id: "side", label: "Side-1", description: "read-only answer, outside main history (as before)" },
             ],
             cancelId: "side",
+            enqueue: false,
             onBusy: () => {
               blockedByOpenDialog = true;
               chrome.showToast("Answer the open approval first, then resend.");

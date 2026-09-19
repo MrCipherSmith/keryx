@@ -1057,6 +1057,12 @@ export async function createShellChrome(
     }
   });
   textarea.onSubmit = () => {
+    // Dock/overlay owns Enter while a choice is up. Submitting here would
+    // clear the composer and race a second `showComposerChoice` against the
+    // still-open picker (the turn then waits forever with a dead selector).
+    if (overlayActive()) {
+      return;
+    }
     const line = input.value.trim();
     input.value = "";
     hideMenu();

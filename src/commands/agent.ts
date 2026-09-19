@@ -2310,6 +2310,7 @@ async function runAgentTurnCore(
           )
         : undefined;
 
+    const answeredToolIds = new Set<string>();
     // SLATE-2a per-tool-call Anchors auto-inject: deferred until AFTER this
     // whole `calls` batch is fully processed (see the push below, past the
     // loop). A parallel assistant turn can carry several `tool_calls`; every
@@ -2335,6 +2336,29 @@ async function runAgentTurnCore(
     for (const call of calls) {
       if (isAborted()) {
         system("\n[stopped] Model turn interrupted by user.\n");
+        // Parallel spawn results already settled must still answer their
+        // `tool_calls` — dropping them leaves an orphaned assistant batch and
+        // the next provider round never starts.
+        if (concurrentSpawnResults !== undefined) {
+          for (const spawnCall of spawnConcurrencyCandidates) {
+            if (answeredToolIds.has(spawnCall.id)) {
+              continue;
+            }
+            const settled = concurrentSpawnResults.get(spawnCall.id);
+            if (settled === undefined) {
+              continue;
+            }
+            io.onToolResult?.(spawnCall.name, settled);
+            history.push({
+              role: "tool",
+              content: redactSensitiveText(settled.output),
+              provenance: "tool",
+              toolCallId: spawnCall.id,
+              ts: now(),
+            });
+            io.onHistoryChange?.("tool");
+          }
+        }
         return {};
       }
       if (deps.unattended === true && call.name === "ask_user") {
@@ -2441,6 +2465,7 @@ async function runAgentTurnCore(
         ts: now(),
       });
       io.onHistoryChange?.("tool");
+      answeredToolIds.add(call.id);
       if (untrusted) {
         untrustedContentSeen = true;
       }

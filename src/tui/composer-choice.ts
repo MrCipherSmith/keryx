@@ -30,13 +30,22 @@ export interface ComposerChoiceRequest {
   /** Returned when the user presses Esc. */
   cancelId: string;
   /**
-   * Called synchronously — instead of ever mounting — when `dock` already
-   * has a choice open. The promise still resolves to `cancelId`, so every
-   * existing caller's cancel path (already a safe no-op or an Esc-equivalent
-   * default) runs unchanged; this hook exists only so the caller can explain
-   * to the user why nothing happened instead of leaving them to wonder.
+   * Called synchronously — instead of waiting or mounting — when another choice
+   * already holds this dock and `enqueue` is false. The promise still resolves
+   * to `cancelId`, so every existing caller's cancel path runs unchanged.
    */
   onBusy?: () => void;
+  /**
+   * Default true: wait for the previous choice on this dock to finish, then
+   * show this one (so two parallel `spawn_subagent` approvals cannot stack
+   * two key listeners in one dock). False: if the dock is already claimed,
+   * resolve `cancelId` immediately after `onBusy`.
+   */
+  enqueue?: boolean;
+  /** When aborted, cleanup and resolve `cancelId` (Esc-equivalent). */
+  signal?: AbortSignal;
+  /** Called once the menu is mounted, before it takes keyboard focus. */
+  onOpen?: () => void;
 }
 
 import { getTheme } from "./theme";
@@ -96,14 +105,72 @@ function onKeypress(r: Renderer, handler: (key: KeypressEvent) => void): () => v
     );
 }
 
+/** Per-dock waiter chain so concurrent callers cannot both pass `visible===false`. */
+const dockChain = new WeakMap<object, Promise<void>>();
+/** How many callers currently hold or wait for this dock (sync, for `enqueue:false`). */
+const dockDepth = new WeakMap<object, number>();
+
+function dockBusy(dock: object): boolean {
+  return (dockDepth.get(dock) ?? 0) > 0;
+}
+
+function lockDock(dock: object): Promise<() => void> {
+  dockDepth.set(dock, (dockDepth.get(dock) ?? 0) + 1);
+  const prev = dockChain.get(dock) ?? Promise.resolve();
+  let release!: () => void;
+  const mine = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  dockChain.set(
+    dock,
+    prev.then(() => mine),
+  );
+  return prev.then(() => {
+    return (): void => {
+      const n = (dockDepth.get(dock) ?? 1) - 1;
+      if (n <= 0) {
+        dockDepth.delete(dock);
+      } else {
+        dockDepth.set(dock, n);
+      }
+      release();
+    };
+  });
+}
+
 /**
  * Show an interactive choice menu inside `dock` (placed above the composer in
  * the main column, same band as the `/` command dropdown). Resolves the chosen
  * option id, or `cancelId` on Esc. Options are a manually painted list (not
  * OpenTUI's `SelectRenderable`) so each row can be clicked directly — the
  * native `SelectRenderable` has no per-item mouse routing, only keyboard.
+ *
+ * Concurrent calls on the same dock are serialized (queued) unless
+ * `enqueue: false`, which cancels immediately while another choice is live.
  */
-export function showComposerChoice(
+export async function showComposerChoice(
+  otui: OpenTui,
+  r: Renderer,
+  dock: Box,
+  request: ComposerChoiceRequest,
+): Promise<string> {
+  const enqueue = request.enqueue !== false;
+  if (!enqueue && dockBusy(dock)) {
+    request.onBusy?.();
+    return request.cancelId;
+  }
+  const unlock = await lockDock(dock);
+  try {
+    if (request.signal?.aborted === true) {
+      return request.cancelId;
+    }
+    return await presentComposerChoice(otui, r, dock, request);
+  } finally {
+    unlock();
+  }
+}
+
+function presentComposerChoice(
   otui: OpenTui,
   r: Renderer,
   dock: Box,
@@ -132,6 +199,7 @@ export function showComposerChoice(
     let selected = recommendedIdx >= 0 ? recommendedIdx : 0;
 
     dock.visible = true;
+    request.onOpen?.();
     const theme = getTheme();
 
     const rawSubtitle = request.subtitle !== undefined && request.subtitle.length > 0 ? request.subtitle : undefined;
@@ -211,7 +279,15 @@ export function showComposerChoice(
       }
     };
 
+    let settled = false;
+    const onAbort = (): void => {
+      finish(request.cancelId);
+    };
     const finish = (id: string): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       cleanup();
       resolve(id);
     };
@@ -269,6 +345,7 @@ export function showComposerChoice(
     function cleanup(): void {
       closed = true;
       unsub();
+      request.signal?.removeEventListener("abort", onAbort);
       try {
         dock.remove(title);
         if (subtitleScroll !== undefined) {
@@ -308,9 +385,11 @@ export function showComposerChoice(
       }
       const focused = r.currentFocusedRenderable;
       const inScroll = subtitleScroll !== undefined && focused !== null && containsNode(subtitleScroll, focused);
-      if (inScroll) {
+      if (inScroll && key.name !== "return" && key.name !== "linefeed" && key.name !== "kpenter") {
         // Arrow keys / PageUp / PageDown fall through to the scroll box's own
-        // native `handleKeyPress` — nothing to do here.
+        // native `handleKeyPress`. Enter still confirms the highlighted option
+        // — otherwise a focused command preview swallows the only accept key
+        // and the turn waits forever with the selector still on screen.
         return;
       }
       if (key.name === "up") {
@@ -337,6 +416,9 @@ export function showComposerChoice(
       }
     };
     const unsub = onKeypress(r, onKey);
+    if (request.signal !== undefined) {
+      request.signal.addEventListener("abort", onAbort, { once: true });
+    }
     optionsScroll.focus();
   });
 }
