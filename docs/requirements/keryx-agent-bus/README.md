@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.4.0
+Version: 0.5.0
 
 ## Purpose
 
@@ -13,7 +13,7 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**P0 and P1 implemented. P2–P5 specification ready, not implemented.**
+**P0–P2 implemented. P3–P5 specification ready, not implemented.**
 
 - **P0 session lease: implemented** in flow 271, PR
   [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
@@ -26,19 +26,14 @@ the same session and silently overwrite each other's turns.
   a read-only session-lease reader, and prune. `keryx bus list|log|send|prune`
   refuses mutating commands inside a tool call (D-13), applies the clone-wide
   CLI rate limit, and reports `bus-disabled` when the bus is off.
-- **P2–P5: not implemented.** Shell integration, agent delivery and tools,
-  pause leases, and the docs phase do not exist yet.
-
-So, apart from the session lease and the `keryx bus` CLI:
-
-- no shell joins the bus yet, so shells are unaware of each other;
-- there is no heartbeat and no poller;
-- nothing delivers bus messages to an agent, so a running agent accepts no
-  external input;
-- pause leases cannot be written.
-
-The P2+ integration hooks named in the specification (bus join and poller,
-inbox drains, bus tools, the publish-lease gate floor) do not exist yet.
+- **P2 shell integration: implemented** in flow 273, PR
+  [#615](https://github.com/MrCipherSmith/keryx/pull/615). Shells join the bus
+  at startup with presence and heartbeat records. A poller detects new peers
+  and events. Event lines print to the operator. The `/bus` slash command lists
+  peers, sends messages, replies to and asks questions. A Peers sidebar shows
+  live shells.
+- **P3–P5: not implemented.** Agent delivery and tools, pause leases, and
+  remaining integrations do not exist yet.
 
 ## Document index
 
