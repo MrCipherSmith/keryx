@@ -9,7 +9,7 @@
   "title": "Agent bus P1: clone-wide bus store and keryx bus CLI",
   "status": "in-progress",
   "createdAt": "2026-09-19T15:34:50.736Z",
-  "updatedAt": "2026-09-19T15:59:13.969Z",
+  "updatedAt": "2026-09-19T16:09:14.884Z",
   "source": {
     "type": "description",
     "ref": null
@@ -153,29 +153,43 @@
       "id": "T8",
       "title": "Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T15:59:37.859Z",
+            "outcome": "started",
+            "detail": "272-T8 CLI"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
       "title": "Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:05:58.678Z",
+            "outcome": "started",
+            "detail": "272-T9 multi-process verification"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T10",
@@ -299,6 +313,26 @@
       "at": "2026-09-19T15:59:13.969Z",
       "event": "task-done",
       "detail": "T7: Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune"
+    },
+    {
+      "at": "2026-09-19T15:59:37.859Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 272-T8 CLI"
+    },
+    {
+      "at": "2026-09-19T16:05:58.592Z",
+      "event": "task-done",
+      "detail": "T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference"
+    },
+    {
+      "at": "2026-09-19T16:05:58.678Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 272-T9 multi-process verification"
+    },
+    {
+      "at": "2026-09-19T16:09:14.884Z",
+      "event": "task-done",
+      "detail": "T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other"
     }
   ]
 }

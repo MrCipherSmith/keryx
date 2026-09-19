@@ -31,3 +31,7 @@
     - the AC12 no-flow-writes test;
     - a typed `bus` field on `ShellConfig`.
   - Environment: `allocation.test.ts` fails locally only because of the global git hook on the fixture author, and passes with `GIT_CONFIG_GLOBAL=/dev/null`. CI decides.
+- 2026-09-19T15:59:37.859Z - task-attempt: T8: started (attempt 1) — 272-T8 CLI
+- 2026-09-19T16:05:58.592Z - task-done: T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference
+- 2026-09-19T16:05:58.678Z - task-attempt: T9: started (attempt 1) — 272-T9 multi-process verification
+- 2026-09-19T16:09:14.884Z - task-done: T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other
