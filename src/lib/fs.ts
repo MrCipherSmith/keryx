@@ -251,12 +251,26 @@ export interface LeaseHandle<T extends LeaseOwnerBase = LeaseOwnerBase> {
   refresh(patch?: Partial<T>): boolean;
   /**
    * True while the lease directory on disk is the one this handle created
-   * (same inode) and still carries this handle's token. Read-only.
+   * (same inode) and still carries this handle's token. Read-only. False also
+   * when that cannot be told right now (see `ownership`), so a write that
+   * needs certainty is skipped.
    */
   holds(): boolean;
+  /**
+   * Whose lease this is, as far as the disk can tell right now (read-only):
+   *
+   * - `held`: our directory (same inode) with our token in a readable record;
+   * - `lost`: the directory is gone, its inode differs, or a well-formed
+   *   record carries another token — someone else has the lease;
+   * - `unknown`: the record cannot be read or is malformed (EMFILE, EIO, a
+   *   torn read, ...). Not a loss: ask again at the next check.
+   */
+  ownership(): LeaseOwnership;
   /** Remove the lease directory iff the token on disk is ours. Idempotent. */
   release(): void;
 }
+
+export type LeaseOwnership = "held" | "lost" | "unknown";
 
 export type AcquireLeaseResult<T extends LeaseOwnerBase = LeaseOwnerBase> =
   | { ok: true; handle: LeaseHandle<T> }
@@ -504,8 +518,24 @@ function createLeaseHandle<T extends LeaseOwnerBase>(
   let released = false;
   const ownerPath = path.join(lockPath, LEASE_OWNER_FILE);
   // Ours means: the directory this handle created (inode) with our token in it.
-  const holds = (): boolean =>
-    inodeOf(lockPath) === createdIno && readLeaseOwnerSync(lockPath)?.token === initial.token;
+  // Only positive evidence of another owner is a loss; a record that cannot be
+  // read or parsed right now is `unknown`, never `lost` (review r2 N2).
+  const ownership = (): LeaseOwnership => {
+    let ino: number;
+    try {
+      ino = statSync(lockPath).ino;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException | null)?.code;
+      return code === "ENOENT" || code === "ENOTDIR" ? "lost" : "unknown";
+    }
+    if (ino !== createdIno) return "lost";
+    const record = readLeaseOwnerSync(lockPath);
+    if (record === undefined) return "unknown";
+    return record.token === initial.token ? "held" : "lost";
+  };
+  // `refresh` and `release` act only on `held`: on `unknown` they skip the
+  // write, so an unreadable or foreign record is never renamed over or removed.
+  const holds = (): boolean => ownership() === "held";
 
   return {
     get owner(): T {
@@ -541,6 +571,7 @@ function createLeaseHandle<T extends LeaseOwnerBase>(
       return true;
     },
     holds,
+    ownership,
     release(): void {
       if (released) return;
       released = true;

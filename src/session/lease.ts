@@ -322,13 +322,14 @@ function wrapHandle(
     refresh(patch) {
       if (released || lost) return false;
       if (inner.refresh(patch)) return true;
-      // A failed refresh is a loss only when the lease on disk is not ours any
-      // more; a transient write error (a full disk, say) is not.
-      if (!inner.holds()) markLost();
+      // A failed refresh is a loss only on positive evidence that the lease on
+      // disk is someone else's; a transient write or read error (a full disk,
+      // EMFILE, a torn read) is not, and the next heartbeat tries again.
+      if (inner.ownership() === "lost") markLost();
       return false;
     },
     checkLost() {
-      if (!lost && !released && !inner.holds()) markLost();
+      if (!lost && !released && inner.ownership() === "lost") markLost();
       return lost;
     },
     onLost(cb) {
@@ -463,6 +464,34 @@ export function watchLeaseLoss(notify: (message: string, lost: SessionLeaseHandl
       return current === undefined || !current.checkLost();
     },
   };
+}
+
+/**
+ * `value`, or undefined once the lease guarding it is lost (review r2 N1).
+ * `canPersist` checks the disk, so a take-over is caught at the read that
+ * precedes a write, not only at the next heartbeat or save.
+ */
+export function whilePersisting<T>(value: T | undefined, canPersist: () => boolean): T | undefined {
+  return value !== undefined && !canPersist() ? undefined : value;
+}
+
+/**
+ * Gate every READ of `box.current` by `canPersist` (review r2 N1): once the
+ * lease is lost, readers of the box (the readline agent's slate getters,
+ * `getSessionDir` / `getSlateSession`, built before any session is open) see
+ * undefined, so no slate tool writes into a session this shell no longer
+ * holds. Writes to `box.current` are unchanged.
+ */
+export function gateBoxByLease<T>(box: { current: T | undefined }, canPersist: () => boolean): void {
+  let value = box.current;
+  Object.defineProperty(box, "current", {
+    configurable: true,
+    enumerable: true,
+    get: () => whilePersisting(value, canPersist),
+    set: (next: T | undefined) => {
+      value = next;
+    },
+  });
 }
 
 /** Idempotent: stops the heartbeat, removes the exit hook, removes the lease if ours. */

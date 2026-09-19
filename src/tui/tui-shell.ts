@@ -188,7 +188,7 @@ import {
   shortSessionId,
   type SessionHandle,
 } from "../session";
-import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError } from "../session/lease";
+import { LOST_LEASE_COMPACT_REFUSAL, openLeasedSession, SessionLeasedError, whilePersisting } from "../session/lease";
 import { describeSkippedSession } from "../session/lease-choice";
 import {
   createTuiLeaseHolder,
@@ -3050,7 +3050,12 @@ export async function launchTuiAgentShell(opts: {
     // doc comment above) needs it to wire `createSpawnSubagentTool`'s new
     // `getSlateSession` getter so a dispatched subagent's Seeds actually
     // fold into this session's slate once it opens.
-    let deps = await opts.makeAgentDeps(sel, () => slateSession);
+    // Review r2 N1: every slate read goes through this, so once another shell
+    // took the session over, slate tools see no session (the check is on disk,
+    // at the write) rather than writing into it until the next heartbeat.
+    const liveSlateSession = (): SlateSessionRef | undefined =>
+      whilePersisting(slateSession, () => sessionLease.canPersist());
+    let deps = await opts.makeAgentDeps(sel, liveSlateSession);
     liveDeps = deps; // F-002: onDestroy reads this ref (TDZ-safe, see above)
     // Flow 268 T16 (AC11): local mirror of `opts.setReasoningOverride`'s
     // target, so the `/reasoning` no-arg status line can name the source
@@ -3193,7 +3198,7 @@ export async function launchTuiAgentShell(opts: {
       );
     };
     const refreshWorkspaceSidebar = async (): Promise<void> => {
-      const dir = slateSession?.dir;
+      const dir = liveSlateSession()?.dir;
       const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
       if (workspaceId === undefined) {
         currentSlates = [];
@@ -4592,7 +4597,7 @@ export async function launchTuiAgentShell(opts: {
     };
     const showWorkspace = (): void => {
       void (async () => {
-        const dir = slateSession?.dir;
+        const dir = liveSlateSession()?.dir;
         const workspaceId = dir !== undefined ? (await readSlate(dir).catch(() => undefined))?.workspaceId : undefined;
         if (workspaceId === undefined) {
           io.onSystem?.("No workspace bound to this session yet — the agent binds one automatically on its first real task.\n");
@@ -4833,7 +4838,7 @@ export async function launchTuiAgentShell(opts: {
       currentSel = ns;
       // Finding 1 fix: same widened contract as the initial `makeAgentDeps`
       // call above — pass the live `slateSession` ref, not just `.dir`.
-      deps = { ...(await opts.makeAgentDeps(ns, () => slateSession)), onContextCompaction };
+      deps = { ...(await opts.makeAgentDeps(ns, liveSlateSession)), onContextCompaction };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
         ns.baseUrl === undefined ? { provider: ns.provider, model: ns.model } : { provider: ns.provider, model: ns.model, baseUrl: ns.baseUrl },
@@ -5251,7 +5256,7 @@ export async function launchTuiAgentShell(opts: {
             // Finding 1 fix: same widened contract as the other two
             // `opts.makeAgentDeps` call sites in this file — pass the live
             // `slateSession` ref, not just `.dir`.
-            const base = await opts.makeAgentDeps(currentSel, () => slateSession);
+            const base = await opts.makeAgentDeps(currentSel, liveSlateSession);
             // Read-only: never allow shell/mutations from a side worker.
             // F-003: `risk === "read"` alone is not enough — see
             // `SIDE_WORKER_DENIED_TOOL_NAMES`'s doc comment above.

@@ -140,6 +140,7 @@ import {
   releaseSessionLease,
   SessionLeasedError,
   type SessionLeaseHandle,
+  gateBoxByLease,
   LOST_LEASE_COMPACT_REFUSAL,
   switchLeasedSession,
   watchLeaseLoss,
@@ -1710,6 +1711,10 @@ async function runAgentRepl(
     slateSessionBox.current = undefined;
     agentIo.onSystem?.(message);
   });
+  // Review r2 N1: the slate getters built in `shellCommand` read this box, so
+  // gating its reads makes the slate tools themselves check the lease (on disk)
+  // before every write, instead of waiting for the next heartbeat or save.
+  gateBoxByLease(slateSessionBox, () => leaseWatch.canPersist());
   const holdLease = (next: SessionLeaseHandle | undefined): void => {
     lease = next;
     leaseWatch.track(next);

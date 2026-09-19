@@ -497,3 +497,14 @@ describe("the TUI lease holder after a take-over (review F1)", () => {
     expect(notes).toHaveLength(1);
   });
 });
+
+describe("TUI slate getters go through the lease gate (review r2 N1, source-text audit)", () => {
+  const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+  test("no slate getter or slate dir read bypasses liveSlateSession", () => {
+    expect(source).toContain("whilePersisting(slateSession, () => sessionLease.canPersist())");
+    expect(source).not.toContain("() => slateSession)");
+    expect(source).not.toContain("slateSession?.dir");
+    expect(source.match(/makeAgentDeps\([^)]*, liveSlateSession\)/g)?.length).toBe(3);
+  });
+});

@@ -2239,7 +2239,10 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     const declIndex = fnBody.indexOf("let slateSession: SlateSessionRef | undefined;");
     expect(declIndex).toBeGreaterThan(callIndex); // confirms the TDZ-shaped ordering this audit is about
     const call = fnBody.slice(callIndex, callIndex + 200);
-    expect(call).toContain("opts.makeAgentDeps(sel, () => slateSession)");
+    // Flow 271 review r2 N1: the live getter is `liveSlateSession`, which reads
+    // `slateSession` at call time through the lease gate.
+    expect(call).toContain("opts.makeAgentDeps(sel, liveSlateSession)");
+    expect(fnBody).toContain("whilePersisting(slateSession, () => sessionLease.canPersist())");
   });
 
   test("the /model|/connect switchTo(...) rebuild passes the same live getter", () => {
@@ -2249,7 +2252,7 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     // `onContextCompaction` (`deps = { ...(await opts.makeAgentDeps(...)),
     // onContextCompaction }`), pushing the closing `)` a bit further out.
     const switchToBlock = fnBody.slice(switchToIndex, switchToIndex + 340);
-    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, () => slateSession)");
+    expect(switchToBlock).toContain("opts.makeAgentDeps(ns, liveSlateSession)");
   });
 
   test("switchTo refreshes the live balance panel for the NEW provider", () => {
@@ -2264,12 +2267,13 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     const baseIndex = fnBody.indexOf("const base = await opts.makeAgentDeps(");
     expect(baseIndex).toBeGreaterThanOrEqual(0);
     const baseBlock = fnBody.slice(baseIndex, baseIndex + 200);
-    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, () => slateSession)");
+    expect(baseBlock).toContain("opts.makeAgentDeps(currentSel, liveSlateSession)");
   });
 
   test("all three real call sites are updated — not fewer, not more", () => {
-    const occurrences = fnBody.split("() => slateSession)").length - 1;
+    const occurrences = fnBody.split(", liveSlateSession)").length - 1;
     expect(occurrences).toBe(3);
+    expect(fnBody).not.toContain("() => slateSession)");
   });
 });
 

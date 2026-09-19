@@ -531,3 +531,14 @@ describe("a shell that lost its lease stops saving (review F1)", () => {
     );
   });
 });
+
+describe("readline agent slate getters are gated by the lease (review r2 N1, source-text audit)", () => {
+  const source = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+
+  test("runAgentRepl gates the slate box before any session is leased", () => {
+    const body = source.slice(source.indexOf("async function runAgentRepl("));
+    const gate = body.indexOf("gateBoxByLease(slateSessionBox, () => leaseWatch.canPersist());");
+    expect(gate).toBeGreaterThanOrEqual(0);
+    expect(gate).toBeLessThan(body.indexOf("openLeased(leasedOpenOptions(sessionOpts"));
+  });
+});

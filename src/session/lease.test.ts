@@ -1,12 +1,13 @@
 // Session lease (agent bus P0, spec §6, AC8/AC9 groundwork for AC1/AC2/AC5).
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import { readLeaseOwnerSync } from "../lib/fs";
 import {
   describeLeaseLoss,
+  gateBoxByLease,
   latestUnleasedSession,
   openLeasedSession,
   processInstanceId,
@@ -20,6 +21,7 @@ import {
   sessionLeaseState,
   switchLeasedSession,
   watchLeaseLoss,
+  whilePersisting,
 } from "./lease";
 import { createSession, type SessionHandle, shortSessionId } from "./store";
 
@@ -515,5 +517,76 @@ describe("test-only timing knobs (review F5)", () => {
   test("explicit options still win", () => {
     setEnv({ NODE_ENV: "test", KERYX_SESSION_LEASE_STALE_MS: "600", KERYX_SESSION_LEASE_HEARTBEAT_MS: "150" });
     expect(resolveSessionLeaseTiming({ staleMs: 30, heartbeatMs: 7 })).toMatchObject({ staleMs: 30, heartbeatMs: 7 });
+  });
+});
+
+describe("slate reads are gated by the lease (review r2 N1)", () => {
+  test("gateBoxByLease: after a take-over the box reads undefined, detected at the read itself", () => {
+    const opened = track(openLeasedSession({ cwd, dataDir }));
+    const notes: string[] = [];
+    const watch = watchLeaseLoss((message) => notes.push(message));
+    watch.track(opened.lease);
+    const ref = { dir: opened.handle.dir, cwd, opened: false };
+    const box: { current: typeof ref | undefined } = { current: ref };
+    gateBoxByLease(box, () => watch.canPersist());
+    expect(box.current).toBe(ref);
+
+    // No heartbeat and no save in between: the slate read is the first check.
+    takeOverOnDisk(opened.handle.summary.id);
+    expect(box.current).toBeUndefined();
+    expect(notes).toHaveLength(1);
+    expect(opened.lease.lost).toBe(true);
+  });
+
+  test("gateBoxByLease keeps writes: a new session's ref is readable while its lease is held", () => {
+    let held = true;
+    const box: { current: string | undefined } = { current: undefined };
+    gateBoxByLease(box, () => held);
+    box.current = "next-session-dir";
+    expect(box.current).toBe("next-session-dir");
+    held = false;
+    expect(box.current).toBeUndefined();
+    expect(whilePersisting(undefined, () => false)).toBeUndefined();
+  });
+});
+
+describe("an unreadable owner record is not a loss (review r2 N2)", () => {
+  test("a malformed owner.json in our own directory: not lost, not overwritten, recovers", () => {
+    const opened = track(openLeasedSession({ cwd, dataDir }));
+    const ownerPath = path.join(opened.lease.lockPath, "owner.json");
+    const good = readFileSync(ownerPath, "utf8");
+    writeFileSync(ownerPath, "{torn");
+
+    expect(opened.lease.checkLost()).toBe(false);
+    // What the heartbeat runs: it skips the write rather than rename over it.
+    expect(opened.lease.refresh()).toBe(false);
+    expect(opened.lease.lost).toBe(false);
+    expect(readFileSync(ownerPath, "utf8")).toBe("{torn");
+
+    writeFileSync(ownerPath, good);
+    expect(opened.lease.refresh()).toBe(true);
+    expect(opened.lease.checkLost()).toBe(false);
+  });
+
+  test.skipIf(process.getuid?.() === 0)("an owner.json that cannot be read (EACCES) is not a loss", () => {
+    const opened = track(openLeasedSession({ cwd, dataDir }));
+    const ownerPath = path.join(opened.lease.lockPath, "owner.json");
+    chmodSync(ownerPath, 0o000);
+    try {
+      expect(opened.lease.checkLost()).toBe(false);
+      expect(opened.lease.refresh()).toBe(false);
+      expect(opened.lease.lost).toBe(false);
+    } finally {
+      chmodSync(ownerPath, 0o600);
+    }
+    expect(opened.lease.refresh()).toBe(true);
+  });
+
+  test("positive evidence is still a loss: another token, or a replaced directory", () => {
+    const opened = track(openLeasedSession({ cwd, dataDir }));
+    const ownerPath = path.join(opened.lease.lockPath, "owner.json");
+    const record = JSON.parse(readFileSync(ownerPath, "utf8")) as SessionLeaseOwner;
+    writeFileSync(ownerPath, JSON.stringify({ ...record, token: randomUUID() }));
+    expect(opened.lease.checkLost()).toBe(true);
   });
 });
