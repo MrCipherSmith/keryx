@@ -7,17 +7,66 @@
   "id": "271",
   "slug": "agent-bus-p0-session-lease-so-two-shells",
   "title": "Agent bus P0: session lease so two shells never share one session",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T15:19:25.404Z",
+  "updatedAt": "2026-09-19T15:27:31.981Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:872ae8a8bd5922fecb9c9408626364e04a17bcbbee987c9d8a66e84057148e80",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-19T15:26:02.147Z",
+      "note": "shell-lease.process.test.ts AC1: two -c shells get different session ids, and B prints 'Skipped session <X> (pid <A>)'; green in CI on PR #607 head 86768cd5"
+    },
+    "AC2": {
+      "at": "2026-09-19T15:26:02.230Z",
+      "note": "shell-lease.process.test.ts AC2: non-TTY -r X exits non-zero with --fork in stderr, and context/archive/summary are byte- and mtime-identical; -r X --fork opens and leases a new fork; shell-lease.test.ts; CI green at 86768cd5"
+    },
+    "AC3": {
+      "at": "2026-09-19T15:26:02.314Z",
+      "note": "resolveLeasedChoice tests (shell-lease.test.ts) and resolveLeasedStartup tests (tui-session-lease.test.ts): fork/view/cancel on both surfaces, take-over offered only when the holder is stale, view renders read-only and then opens a new session, cancel opens nothing; CI green at 86768cd5"
+    },
+    "AC4": {
+      "at": "2026-09-19T15:26:02.400Z",
+      "note": "bareResumeTarget/latestUnleasedSession on the readline and chat-TUI bare -r paths (shell-lease.test.ts); startupSessionChoices/sessionPickerOptions label rows live/stale (tui-session-lease.test.ts); CI green at 86768cd5"
+    },
+    "AC5": {
+      "at": "2026-09-19T15:26:02.483Z",
+      "note": "shell-lease.process.test.ts AC5: after SIGSTOP the session reads stale in sessions list --json, -c skips it and --take-over succeeds; --take-over against a live holder is refused (default timing); after SIGKILL a plain -r reclaims silently; short staleMs set via KERYX_TEST_LEASE_TIMING; CI green at 86768cd5"
+    },
+    "AC6": {
+      "at": "2026-09-19T15:26:02.568Z",
+      "note": "switchLeasedSession acquires before it releases (lease.test.ts); readline /new refusal keeps the current lease (shell-lease.test.ts); TUI /resume and /new go through sessionLease.switchTo, refused /resume keeps the lease, successful switch releases the old one (tui-session-lease.test.ts, including the #606 composition test); CI green at 86768cd5"
+    },
+    "AC7": {
+      "at": "2026-09-19T15:26:02.654Z",
+      "note": "shell-lease.process.test.ts AC7: SIGTERM exit 143, SIGINT exit 130 and /exit over stdin each remove active.lease; TUI onDestroy, /exit, menu exit and finally release (tui-session-lease.test.ts plus source audits); CI green at 86768cd5"
+    },
+    "AC8": {
+      "at": "2026-09-19T15:26:02.740Z",
+      "note": "lease.test.ts schema check of owner.json against session-lease.schema.json (name null), modes 0600/0700, unref'd 5s heartbeat refresh, release is a no-op on token mismatch (fs.lease.test.ts); CI green at 86768cd5"
+    },
+    "AC9": {
+      "at": "2026-09-19T15:26:02.825Z",
+      "note": "src/session/store.test.ts and store.callers.test.ts not modified in PR #607 (diff touches neither); withFileLock/isLockHeld unchanged, only new lease functions added to fs.ts; both suites green in CI at 86768cd5"
+    },
+    "AC10": {
+      "at": "2026-09-19T15:26:02.910Z",
+      "note": "sessions.list.test.ts: LIVE column live/stale/blank/? and JSON live field; shell --help and docs/docs/cli-reference.md document --fork/--take-over and the new -c and bare -r meaning; flag refusals covered in shell-lease.test.ts and shell-cli-validation.test.ts (exit 2, ShellFlagError); CI green at 86768cd5"
+    },
+    "AC11": {
+      "at": "2026-09-19T15:26:02.998Z",
+      "note": "CI on PR #607 head 86768cd5: 18/18 checks green (typecheck-and-tests incl. lint, typecheck and test:core; client matrix terminal/streaming/cancel-resume/runtime; standard-pr; metrics-contract), mergeStateStatus CLEAN; merged as d29ac616"
+    },
+    "AC12": {
+      "at": "2026-09-19T15:26:03.090Z",
+      "note": "docs/requirements/keryx-agent-bus README 0.3.0 and implementation-plan 0.3.0 mark P0 implemented (flow 271, PR #607) and P1-P5 not implemented; roadmap 0.29.9 row and changelog updated; merged in d29ac616"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/607"
   },
   "baseBranch": "main",
   "tasks": [
@@ -76,7 +125,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +133,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -247,7 +297,7 @@
       "id": "T12",
       "title": "Verification: typecheck, lint and full test suite green; record results",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 2,
@@ -266,7 +316,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T13",
@@ -643,6 +694,104 @@
       "at": "2026-09-19T15:19:25.404Z",
       "event": "task-done",
       "detail": "T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent"
+    },
+    {
+      "at": "2026-09-19T15:23:57.753Z",
+      "event": "task-done",
+      "detail": "T12: Verification: typecheck, lint and full test suite green; record results"
+    },
+    {
+      "at": "2026-09-19T15:24:00.520Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/607 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-19T15:26:02.054Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-19T15:26:02.147Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: shell-lease.process.test.ts AC1: two -c shells get different session ids, and B prints 'Skipped session <X> (pid <A>)'; green in CI on PR #607 head 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.230Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: shell-lease.process.test.ts AC2: non-TTY -r X exits non-zero with --fork in stderr, and context/archive/summary are byte- and mtime-identical; -r X --fork opens and leases a new fork; shell-lease.test.ts; CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.314Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: resolveLeasedChoice tests (shell-lease.test.ts) and resolveLeasedStartup tests (tui-session-lease.test.ts): fork/view/cancel on both surfaces, take-over offered only when the holder is stale, view renders read-only and then opens a new session, cancel opens nothing; CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.400Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: bareResumeTarget/latestUnleasedSession on the readline and chat-TUI bare -r paths (shell-lease.test.ts); startupSessionChoices/sessionPickerOptions label rows live/stale (tui-session-lease.test.ts); CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.483Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: shell-lease.process.test.ts AC5: after SIGSTOP the session reads stale in sessions list --json, -c skips it and --take-over succeeds; --take-over against a live holder is refused (default timing); after SIGKILL a plain -r reclaims silently; short staleMs set via KERYX_TEST_LEASE_TIMING; CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.568Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: switchLeasedSession acquires before it releases (lease.test.ts); readline /new refusal keeps the current lease (shell-lease.test.ts); TUI /resume and /new go through sessionLease.switchTo, refused /resume keeps the lease, successful switch releases the old one (tui-session-lease.test.ts, including the #606 composition test); CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.654Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: shell-lease.process.test.ts AC7: SIGTERM exit 143, SIGINT exit 130 and /exit over stdin each remove active.lease; TUI onDestroy, /exit, menu exit and finally release (tui-session-lease.test.ts plus source audits); CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.740Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: lease.test.ts schema check of owner.json against session-lease.schema.json (name null), modes 0600/0700, unref'd 5s heartbeat refresh, release is a no-op on token mismatch (fs.lease.test.ts); CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.825Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: src/session/store.test.ts and store.callers.test.ts not modified in PR #607 (diff touches neither); withFileLock/isLockHeld unchanged, only new lease functions added to fs.ts; both suites green in CI at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.910Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: sessions.list.test.ts: LIVE column live/stale/blank/? and JSON live field; shell --help and docs/docs/cli-reference.md document --fork/--take-over and the new -c and bare -r meaning; flag refusals covered in shell-lease.test.ts and shell-cli-validation.test.ts (exit 2, ShellFlagError); CI green at 86768cd5"
+    },
+    {
+      "at": "2026-09-19T15:26:02.998Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: CI on PR #607 head 86768cd5: 18/18 checks green (typecheck-and-tests incl. lint, typecheck and test:core; client matrix terminal/streaming/cancel-resume/runtime; standard-pr; metrics-contract), mergeStateStatus CLEAN; merged as d29ac616"
+    },
+    {
+      "at": "2026-09-19T15:26:03.090Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: docs/requirements/keryx-agent-bus README 0.3.0 and implementation-plan 0.3.0 mark P0 implemented (flow 271, PR #607) and P1-P5 not implemented; roadmap 0.29.9 row and changelog updated; merged in d29ac616"
+    },
+    {
+      "at": "2026-09-19T15:26:21.111Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-19T15:26:30.312Z",
+      "event": "completion-failed",
+      "detail": "health: no report; run `keryx health run` first"
+    },
+    {
+      "at": "2026-09-19T15:27:22.462Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/607 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-19T15:27:22.620Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-19T15:27:31.981Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
