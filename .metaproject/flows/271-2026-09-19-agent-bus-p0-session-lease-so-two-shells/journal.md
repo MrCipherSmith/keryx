@@ -90,3 +90,17 @@
     - F8 is documented only.
   - The report with its `keryx:findings` block is kept for `keryx review ingest`.
 - 2026-09-19T14:38:26.687Z - task-done: T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError
+- 2026-09-19T14:41:23.645Z - task-added: T14: Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost
+- 2026-09-19T14:41:23.740Z - task-attempt: T14: started (attempt 1) — 271-T14 review r2 fixes
+- 2026-09-19T14:50:20.253Z - task-done: T14: Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost
+- 2026-09-19T14:40Z - orchestrator: review round r2 re-ran against dbc45cd3.
+  - All r1 findings are fixed, each with a proving test; F8 is documented.
+  - New findings: N1 (minor), slate tool writes not gated until the loss is noticed; N2 (minor), a transient owner.json read failure marks the lease lost permanently.
+  - Both went to T14.
+  - The review/fix loop is at round 2 of 3.
+- 2026-09-19T14:50Z - orchestrator: 271-T14 returned DONE_WITH_CONCERNS and was committed as 612eb1eb.
+  - Orchestrator re-ran the scoped suite: 1303 pass, 2 skip, 0 fail. tsc and lint are clean. Process test run 3 times by the worker, green each time.
+  - Four source-text assertions in tui-shell.test.ts were updated from `() => slateSession` to `liveSlateSession`, because the text they pin changed.
+  - Concern 1: `runAgentTurn`'s own slate handling and `closeSlateSession` on `/exit` and `/new` still read the local `slateSession`. That variable is cleared when the loss is noticed, so the exposure is at most one heartbeat. This is passed to review round r3 to confirm or flag.
+  - Concern 2: a lease directory whose owner.json stays unreadable is never reported lost. This trade-off is intentional: `unknown` must not be treated as `lost`.
+- 2026-09-19T14:45Z - operator: completion outcome chosen: A, create a PR, review it, merge into `main`, and complete the flow.

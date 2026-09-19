@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T14:38:26.687Z",
+  "updatedAt": "2026-09-19T14:50:20.253Z",
   "source": {
     "type": "description",
     "ref": null
@@ -281,6 +281,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T14",
+      "title": "Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T14:41:23.740Z",
+            "outcome": "started",
+            "detail": "271-T14 review r2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -446,6 +467,21 @@
       "at": "2026-09-19T14:38:26.687Z",
       "event": "task-done",
       "detail": "T13: Review r1 fixes: F1 lost-lease surfaced and persistence stopped; F2/F3 no clobber in refresh/release/create cleanup; F4 openWith keeps existing handle; F5 clamp timing env; F6 sessions list tolerant; F7 AC5 test timing; F9 exitCode only for ShellFlagError"
+    },
+    {
+      "at": "2026-09-19T14:41:23.645Z",
+      "event": "task-added",
+      "detail": "T14: Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost"
+    },
+    {
+      "at": "2026-09-19T14:41:23.740Z",
+      "event": "task-attempt",
+      "detail": "T14: started (attempt 1) — 271-T14 review r2 fixes"
+    },
+    {
+      "at": "2026-09-19T14:50:20.253Z",
+      "event": "task-done",
+      "detail": "T14: Review r2 fixes: N1 slate getters gated by canPersist; N2 unreadable owner.json is 'unknown', not lost"
     }
   ]
 }
