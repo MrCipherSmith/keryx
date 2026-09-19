@@ -1,0 +1,250 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "270",
+  "slug": "tui-provider-and-search-provider-wizards",
+  "title": "TUI: provider and search-provider wizards in ModalHost, /tools and /mcp layout, mode row in sidebar, persistent splash until first message",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T06:56:32.865Z",
+  "updatedAt": "2026-09-19T06:58:57.497Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1a4a650af4d54cb86ccd70934eb9c0de4b459ec96ad8d19e15f6de56416ea33e",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by lane tasks T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests are part of each lane task T5-T9 and the T10 verification"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lane A: /tools and /mcp row layout, per-tab footer, risk label, ~ paths, Grok [[x]] TOML (AC5-AC8)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "ModalHost single-tab arrows + StepSurface + /provider and /connect wizard steps in ModalHost (AC1, AC3, AC4)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "/search-provider wizard steps in ModalHost (AC2)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Sidebar Mode row: permission mode + read-only (AC9)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Wordmark in empty transcript until first message; boot drops fake steps (AC10)",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Verification: typecheck, lint, tui/mcp-servers tests, live pty walk of both wizards, /tools, /mcp, /plan, splash (AC11)",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T5",
+        "T6",
+        "T7",
+        "T8",
+        "T9"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T06:56:32.865Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T06:58:56.608Z",
+      "event": "task-added",
+      "detail": "T5: Lane A: /tools and /mcp row layout, per-tab footer, risk label, ~ paths, Grok [[x]] TOML (AC5-AC8)"
+    },
+    {
+      "at": "2026-09-19T06:58:56.693Z",
+      "event": "task-added",
+      "detail": "T6: ModalHost single-tab arrows + StepSurface + /provider and /connect wizard steps in ModalHost (AC1, AC3, AC4)"
+    },
+    {
+      "at": "2026-09-19T06:58:56.778Z",
+      "event": "task-added",
+      "detail": "T7: /search-provider wizard steps in ModalHost (AC2)"
+    },
+    {
+      "at": "2026-09-19T06:58:56.862Z",
+      "event": "task-added",
+      "detail": "T8: Sidebar Mode row: permission mode + read-only (AC9)"
+    },
+    {
+      "at": "2026-09-19T06:58:56.947Z",
+      "event": "task-added",
+      "detail": "T9: Wordmark in empty transcript until first message; boot drops fake steps (AC10)"
+    },
+    {
+      "at": "2026-09-19T06:58:57.029Z",
+      "event": "task-added",
+      "detail": "T10: Verification: typecheck, lint, tui/mcp-servers tests, live pty walk of both wizards, /tools, /mcp, /plan, splash (AC11)"
+    },
+    {
+      "at": "2026-09-19T06:58:57.118Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T06:58:57.221Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T06:58:57.316Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T06:58:57.413Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T06:58:57.497Z",
+      "event": "started"
+    }
+  ]
+}
