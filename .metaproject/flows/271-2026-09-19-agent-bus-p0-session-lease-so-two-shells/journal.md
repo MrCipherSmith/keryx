@@ -53,3 +53,14 @@
   5. A REPL that throws mid-loop releases its lease only through `process.on("exit")`. Accepted: that hook is synchronous and idempotent.
   - T8 must add `fork?`/`takeOver?` to the TUI session opts type (around tui-shell.ts:2841). It compiles today only through a spread.
 - 2026-09-19T13:50:57.655Z - task-done: T7: Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help
+- 2026-09-19T13:51:04.466Z - task-attempt: T8: started (attempt 1) — 271-T8 dispatch
+- 2026-09-19T14:04Z - orchestrator: 271-T8 returned DONE_WITH_CONCERNS.
+  - Orchestrator re-ran the tests: `bun test src/tui src/commands/shell src/commands/sessions src/session src/lib/fs src/lib/config-dir src/cli.test.ts`, 1265 pass, 2 skip, 0 fail. tsc is clean. No existing test was edited.
+  - The shared choice list now lives in `src/session/lease-choice.ts`, so the TUI does not import `commands/shell`.
+  - A held `/resume` target is refused with a `--fork` hint, and the current session and lease are kept. Accepted: spec §6.2 only requires the refusal and keeping the lease.
+  - Concerns:
+    1. `/new` closes the slate before the new open. If that open fails for a reason other than a lease, the session stays but its slate is closed. A new session is always lease-free. Accepted; follow-up candidate.
+    2. The chat-TUI prompt needs an explicit `1`, because the composer ignores empty lines. Accepted.
+    3. The TUI half of AC7 is covered by source-text audits plus real-lease tests of `createTuiLeaseHolder`. The subprocess proof is T10.
+    4. `openLeasedSession(` is not in the store.callers guard list. The one call sits inside `try`, and review checks it.
+- 2026-09-19T14:04:42.236Z - task-done: T8: TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r

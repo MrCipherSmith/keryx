@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T13:50:57.655Z",
+  "updatedAt": "2026-09-19T14:04:42.236Z",
   "source": {
     "type": "description",
     "ref": null
@@ -163,15 +163,22 @@
       "id": "T8",
       "title": "TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T13:51:04.466Z",
+            "outcome": "started",
+            "detail": "271-T8 dispatch"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -355,6 +362,16 @@
       "at": "2026-09-19T13:50:57.655Z",
       "event": "task-done",
       "detail": "T7: Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help"
+    },
+    {
+      "at": "2026-09-19T13:51:04.466Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 271-T8 dispatch"
+    },
+    {
+      "at": "2026-09-19T14:04:42.236Z",
+      "event": "task-done",
+      "detail": "T8: TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r"
     }
   ]
 }
