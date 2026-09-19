@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/pause-lease.schema.json",
+  "title": "Keryx agent bus pause lease",
+  "description": "leases/<leaseId>.json. See specification.md section 4.3 and decisions.md D-03. Active = file exists AND now < expiresAt AND (holder is not gone per D-09 OR holder.origin is cli). A stale holder keeps its lease. targets [\"*\"] means every instance except the holder.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "leaseId", "holder", "targets", "scope", "reason", "createdAt", "expiresAt", "requestEventSeq"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "leaseId": { "type": "string", "format": "uuid" },
+    "holder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instanceId", "name", "origin"],
+      "properties": {
+        "instanceId": { "type": "string", "format": "uuid" },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$", "description": "\"cli\" only when origin is cli; otherwise a non-reserved instance name." },
+        "origin": { "enum": ["agent", "operator", "cli"] }
+      }
+    },
+    "targets": {
+      "oneOf": [
+        { "type": "array", "items": { "const": "*" }, "minItems": 1, "maxItems": 1 },
+        { "type": "array", "items": { "type": "string", "format": "uuid" }, "minItems": 1, "maxItems": 32, "uniqueItems": true }
+      ]
+    },
+    "scope": { "enum": ["turns", "git-publish", "advisory"] },
+    "reason": { "type": "string", "minLength": 1, "maxLength": 2048 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "expiresAt": {
+      "type": "string",
+      "format": "date-time",
+      "description": "At most 4 h after createdAt; enforced by the writer (decisions.md D-12)."
+    },
+    "requestEventSeq": { "type": "integer", "minimum": 1 }
+  }
+}

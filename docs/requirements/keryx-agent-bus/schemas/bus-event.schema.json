@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://keryx.dev/schemas/bus-event.schema.json",
+  "title": "Keryx agent bus event",
+  "description": "One line of events.jsonl. See specification.md section 4.2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "seq", "id", "ts", "from", "to", "toLabel", "kind"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "format": "uuid" },
+    "ts": { "type": "string", "format": "date-time" },
+    "from": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["instanceId", "name", "origin"],
+      "properties": {
+        "instanceId": { "type": "string", "format": "uuid" },
+        "name": { "$ref": "#/$defs/name", "description": "Instance name; the reserved names cli and system appear only with origin cli and system respectively." },
+        "origin": { "enum": ["agent", "operator", "cli", "system"] }
+      }
+    },
+    "to": {
+      "oneOf": [
+        { "type": "array", "items": { "const": "*" }, "minItems": 1, "maxItems": 1 },
+        { "type": "array", "items": { "type": "string", "format": "uuid" }, "minItems": 1, "maxItems": 32, "uniqueItems": true }
+      ]
+    },
+    "toLabel": { "type": "string", "pattern": "^@([a-z0-9][a-z0-9-]{0,31}|all)$" },
+    "kind": {
+      "enum": ["notice", "question", "reply", "handoff", "pause-request", "resume", "override", "ack", "lease-expired"]
+    },
+    "body": {
+      "type": "string",
+      "maxLength": 2048,
+      "description": "Redacted before write. The 2048-byte UTF-8 bound is enforced by the writer; maxLength is only a character upper bound."
+    },
+    "refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "replyTo": { "type": "string", "format": "uuid" },
+        "leaseId": { "type": "string", "format": "uuid" },
+        "flowId": { "type": "string", "pattern": "^[0-9]{3,}$" },
+        "taskId": { "type": "string", "maxLength": 64 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "kind": { "enum": ["notice", "question", "reply", "handoff", "pause-request"] } } },
+      "then": { "required": ["body"] }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "reply" } } },
+      "then": { "required": ["refs"], "properties": { "refs": { "required": ["replyTo"] } } }
+    },
+    {
+      "if": { "properties": { "kind": { "enum": ["pause-request", "resume", "override", "lease-expired"] } } },
+      "then": { "required": ["refs"], "properties": { "refs": { "required": ["leaseId"] } } }
+    },
+    {
+      "if": { "properties": { "kind": { "const": "ack" } } },
+      "then": {
+        "required": ["refs"],
+        "properties": { "refs": { "required": ["replyTo"] } },
+        "not": { "required": ["body"] }
+      }
+    },
+    {
+      "if": { "properties": { "kind": { "enum": ["override", "ack", "lease-expired"] } } },
+      "then": { "properties": { "from": { "properties": { "origin": { "const": "system" } } } } }
+    }
+  ],
+  "$defs": {
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,31}$" }
+  }
+}
