@@ -9,7 +9,7 @@
   "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
   "status": "in-progress",
   "createdAt": "2026-09-19T21:39:31.218Z",
-  "updatedAt": "2026-09-19T23:06:49.104Z",
+  "updatedAt": "2026-09-19T23:13:32.529Z",
   "source": {
     "type": "description",
     "ref": null
@@ -211,6 +211,27 @@
       "acRefs": [],
       "evidenceRefs": [],
       "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:08:08.292Z",
+            "outcome": "started",
+            "detail": "275-T12 merge main #618 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -316,6 +337,21 @@
       "at": "2026-09-19T23:06:49.104Z",
       "event": "task-done",
       "detail": "T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:08:08.206Z",
+      "event": "task-added",
+      "detail": "T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes"
+    },
+    {
+      "at": "2026-09-19T23:08:08.292Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 275-T12 merge main #618 (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:13:32.529Z",
+      "event": "task-done",
+      "detail": "T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes"
     }
   ]
 }

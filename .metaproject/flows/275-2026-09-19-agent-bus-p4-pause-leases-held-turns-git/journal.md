@@ -21,3 +21,6 @@
 - 2026-09-19T22:53:10.022Z - task-done: T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)
 - 2026-09-19T23:06:20.758Z - task-done: T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)
 - 2026-09-19T23:06:49.104Z - task-done: T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)
+- 2026-09-19T23:08:08.206Z - task-added: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
+- 2026-09-19T23:08:08.292Z - task-attempt: T12: started (attempt 1) — 275-T12 merge main #618 (sonnet)
+- 2026-09-19T23:13:32.529Z - task-done: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
