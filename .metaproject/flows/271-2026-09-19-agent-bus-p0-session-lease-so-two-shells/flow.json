@@ -1,0 +1,272 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "271",
+  "slug": "agent-bus-p0-session-lease-so-two-shells",
+  "title": "Agent bus P0: session lease so two shells never share one session",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T13:06:03.981Z",
+  "updatedAt": "2026-09-19T13:12:27.745Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:872ae8a8bd5922fecb9c9408626364e04a17bcbbee987c9d8a66e84057148e80",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by the per-area implement tasks T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each implement task (T5-T9); cross-process verification is T10 and the full suite is T12"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lease primitive in src/lib/fs.ts: acquireLeaseSync, reclaimStaleLeaseSync, D-09 liveness, exported processIsAlive, unit tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Session lease module src/session/lease.ts: instance id, lease state, latestUnleasedSession, SessionLeasedError, openLeasedSession, switchLeasedSession, release, heartbeat, unit tests",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "keryx sessions list LIVE column and --json live field; cli-reference for shell flags and sessions list",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Subprocess verification: two -c shells (AC1), SIGKILL and SIGSTOP holders with short staleMs (AC5), SIGTERM release (AC7)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Mark P0 implemented in the agent-bus package README, implementation-plan and roadmap row",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T12",
+      "title": "Verification: typecheck, lint and full test suite green; record results",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T13:06:03.981Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T13:12:20.601Z",
+      "event": "task-added",
+      "detail": "T5: Lease primitive in src/lib/fs.ts: acquireLeaseSync, reclaimStaleLeaseSync, D-09 liveness, exported processIsAlive, unit tests"
+    },
+    {
+      "at": "2026-09-19T13:12:20.692Z",
+      "event": "task-added",
+      "detail": "T6: Session lease module src/session/lease.ts: instance id, lease state, latestUnleasedSession, SessionLeasedError, openLeasedSession, switchLeasedSession, release, heartbeat, unit tests"
+    },
+    {
+      "at": "2026-09-19T13:12:20.775Z",
+      "event": "task-added",
+      "detail": "T7: Readline wiring in shell.ts: --fork/--take-over flags and validation, leased open, TTY choice and non-TTY exit, /new switch, bare -r, release on exit, help"
+    },
+    {
+      "at": "2026-09-19T13:12:20.859Z",
+      "event": "task-added",
+      "detail": "T8: TUI wiring: leased startup opens, fork/view/cancel/take-over choice, applyOpened//resume//new switch, live/stale picker labels, release in onDestroy and finally, chat-TUI bare -r"
+    },
+    {
+      "at": "2026-09-19T13:12:20.948Z",
+      "event": "task-added",
+      "detail": "T9: keryx sessions list LIVE column and --json live field; cli-reference for shell flags and sessions list"
+    },
+    {
+      "at": "2026-09-19T13:12:21.032Z",
+      "event": "task-added",
+      "detail": "T10: Subprocess verification: two -c shells (AC1), SIGKILL and SIGSTOP holders with short staleMs (AC5), SIGTERM release (AC7)"
+    },
+    {
+      "at": "2026-09-19T13:12:21.121Z",
+      "event": "task-added",
+      "detail": "T11: Mark P0 implemented in the agent-bus package README, implementation-plan and roadmap row"
+    },
+    {
+      "at": "2026-09-19T13:12:21.201Z",
+      "event": "task-added",
+      "detail": "T12: Verification: typecheck, lint and full test suite green; record results"
+    },
+    {
+      "at": "2026-09-19T13:12:27.292Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T13:12:27.371Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T13:12:27.443Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T13:12:27.590Z",
+      "event": "frozen",
+      "detail": "12 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T13:12:27.745Z",
+      "event": "started"
+    }
+  ]
+}
