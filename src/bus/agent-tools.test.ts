@@ -79,6 +79,18 @@ function fakeClient(overrides: Partial<BusClient> = {}): BusClient {
     replyAsAgent: async () => SEND_RESULT,
     pollNow: async () => [],
     ack: () => {},
+    pause: async () => pauseLease(),
+    resume: async () => {},
+    override: async () => {},
+    leaseView: () => ({
+      refresh: async () => {},
+      appliesToMe: () => false,
+      held: () => false,
+      heldBy: () => undefined,
+      banner: () => undefined,
+      override: async () => {},
+      myLeases: () => [],
+    }),
     leave: () => {},
     ...overrides,
   };

@@ -81,6 +81,16 @@ export interface ApprovalMeta {
    * and never remembered, whatever the user picks.
    */
   credentials?: boolean;
+  /**
+   * A `git-publish` pause lease (agent bus, specification §4.3, §4.4) applies to
+   * this shell command: `isPublishCommand(command) &&
+   * busLeases.appliesToMe("git-publish")`, computed in the shell branch of
+   * `executeCall` alongside {@link ApprovalGateInput.publishLease}. Like
+   * `credentials`, it is never auto-approved from a saved allowlist and never
+   * offered "always allow" — a previously saved `git push` pattern must not
+   * pass silently while a peer's publish lease applies.
+   */
+  publishLease?: boolean;
 }
 
 /**

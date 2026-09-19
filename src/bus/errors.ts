@@ -18,7 +18,10 @@ export type BusRefusalCode =
   | "rate-limited"
   | "reply-without-replyTo"
   | "unknown-message"
-  | "use-agent-tool";
+  | "use-agent-tool"
+  | "lease-already-held"
+  | "ttl-out-of-range"
+  | "not-lease-holder";
 
 export class BusRefusal extends Error {
   readonly code: BusRefusalCode;

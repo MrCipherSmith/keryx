@@ -12,7 +12,8 @@
 // `leave()` on their own shutdown paths.
 
 import { execFile } from "node:child_process";
-import { unlinkSync } from "node:fs";
+import { appendFileSync, readFileSync, unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { hostname } from "node:os";
 import { promisify } from "node:util";
 import { processIsAlive } from "../lib/fs";
@@ -22,8 +23,10 @@ import { resolveProjectRoot } from "../session/paths";
 import { displaySafe } from "./display";
 import { busEnabled, busPollMs, type BusEnabledInput } from "./enabled";
 import { BusRefusal } from "./errors";
+import { BUS_FILE_MODE } from "./files";
 import { appendEvent, cursorAtEnd, readEvents, type BusCursor } from "./log";
-import { presencePath, resolveBusRoot } from "./paths";
+import { createLeaseView, createPauseLease, resumePauseLease, type PauseLeaseView } from "./pause";
+import { eventsPath, leasePath, presencePath, resolveBusRoot } from "./paths";
 import {
   allocateName,
   classifyPresence,
@@ -33,11 +36,14 @@ import {
   type PresenceLiveness,
 } from "./presence";
 import {
+  BUS_SCHEMA_VERSION,
   isAssignableBusName,
   MAX_ACTIVITY_CHARS,
   type BusEvent,
   type BusEventKind,
   type BusSender,
+  type LeaseScope,
+  type PauseLease,
   type PresenceRecord,
   type PresenceStatus,
   type PresenceSurface,
@@ -212,7 +218,50 @@ export interface BusClient {
    * was seen."
    */
   ack(events: readonly RenderedBusEvent[]): void;
-  /** Idempotent and synchronous-safe: stops both timers and removes presence. */
+  /**
+   * Create a pause lease held by this instance (specification §4.3).
+   * `origin` distinguishes the operator's own `/bus pause` (`"operator"`)
+   * from the model's `bus_pause` tool call (`"agent"`); `keryx bus pause`
+   * (origin `"cli"`) has no client and calls `createPauseLease` directly.
+   * Shares `createPauseLease`'s refusals (`lease-already-held`,
+   * `ttl-out-of-range`, `unknown-recipient`, `recipient-not-live`,
+   * `recipient-is-self`). Refreshes {@link leaseView} before returning.
+   */
+  pause(toLabel: string, scope: LeaseScope, reason: string, ttlMs: number | undefined, origin: "operator" | "agent"): Promise<PauseLease>;
+  /**
+   * End a lease: allowed only when this instance is the lease's holder
+   * (`resumePauseLease`'s `not-lease-holder` otherwise). `origin` mirrors
+   * {@link pause}'s. Idempotent when the lease is already gone. Refreshes
+   * {@link leaseView} before returning.
+   */
+  resume(leaseId: string, origin: "operator" | "agent"): Promise<void>;
+  /** Release THIS instance from `leaseId` (`/bus override`); see {@link PauseLeaseView.override}. */
+  override(leaseId: string): Promise<void>;
+  /**
+   * This instance's lease view (`./pause.ts`'s `createLeaseView`), refreshed
+   * on every poll (and immediately after {@link pause}/{@link resume}/
+   * {@link override}) — always the SAME object, so a caller may hold onto it
+   * across polls rather than re-fetching.
+   */
+  leaseView(): PauseLeaseView;
+  /**
+   * Idempotent and synchronous-safe: stops both timers, removes presence, and
+   * resumes every pause lease this instance holds (specification §5.4).
+   *
+   * The resume is itself synchronous-safe, because `leave()` runs from Node's
+   * synchronous `"exit"` handler on an ordinary shutdown (SIGINT/SIGTERM
+   * through the existing shutdown path, or a plain process exit), where no
+   * async work scheduled here would ever complete: for each lease this
+   * instance holds (as of the last `leaseView()` refresh), the lease FILE is
+   * deleted synchronously first — that alone is enough for every peer, since
+   * §4.3's "active" rule is file-existence based — and a best-effort `resume`
+   * event is appended synchronously afterwards, bypassing the shared
+   * `append.lock` (a small, accepted risk of a rare seq collision under a
+   * concurrent writer, for an exit-time fallback that is otherwise silent).
+   * A true crash (SIGKILL, or any signal Node cannot catch) runs none of
+   * this; those leases are left for D-09's holder-gone liveness rule to
+   * expire within one liveness window, exactly as documented there.
+   */
   leave(): void;
 }
 
@@ -384,11 +433,16 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
 
   await writeCurrentPresence();
   let cursor: BusCursor;
+  // `./pause.ts`'s cached reader for this instance: refreshed on every poll
+  // (below) and right after pause/resume/override, so `leaseView()` always
+  // reflects the last-known state without a caller ever awaiting a refresh.
+  const leaseViewInstance = createLeaseView({ root, instanceId, now, liveness: { isAlive, host } });
   try {
     // specification §5.1: the session lease learns this instance's bus name
     // right at join, not only from the first heartbeat.
     opts.sessionLease?.()?.refresh({ name: state.name });
     cursor = await cursorAtEnd(root);
+    await leaseViewInstance.refresh();
   } catch (error) {
     // review r1 F7: anything after the presence write that throws (a lease
     // refresh, `cursorAtEnd`) orphans that presence record unless it is
@@ -480,6 +534,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     const presence = await listPresence(root);
     peers = toPeers(presence, instanceId, classify, now());
     opts.onPeers(peers);
+    await leaseViewInstance.refresh();
     return mine;
   };
 
@@ -496,6 +551,83 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
   const pollTimer = timers.setInterval(pollTick, pollMs);
   unref(pollTimer);
 
+  /**
+   * Best-effort seq for the synchronous resume append below: the highest
+   * `seq` claimed by any complete, parseable line currently in the CURRENT
+   * segment, plus one. Mirrors `./log.ts`'s own crash recovery (it tail-scans
+   * the segment rather than trusting `head.json` alone) rather than
+   * `head.json` directly, so this fallback agrees with what the next real
+   * `appendEvent` call would derive if `head.json` itself is stale. Never
+   * throws: an unreadable or absent segment is worth exactly the same as "no
+   * events yet" here — this whole path is a best-effort fallback, and the
+   * lease FILE deletion below is what actually makes the lease inactive for
+   * every peer.
+   */
+  const bestEffortSyncSeq = (): number => {
+    try {
+      const content = readFileSync(eventsPath(root), "utf8");
+      let last = 0;
+      for (const line of content.split("\n")) {
+        if (line.trim().length === 0) continue;
+        try {
+          const value = JSON.parse(line) as { seq?: unknown };
+          if (typeof value.seq === "number" && value.seq > last) last = value.seq;
+        } catch {
+          // torn or foreign line: ignore, exactly like `./log.ts`'s reader.
+        }
+      }
+      return last + 1;
+    } catch {
+      return 1;
+    }
+  };
+
+  /**
+   * Synchronous, best-effort resume of every lease this instance holds (see
+   * {@link BusClient.leave}'s doc comment for why this must be synchronous
+   * and why it bypasses `append.lock`). Never throws.
+   */
+  const syncResumeOwnLeases = (): void => {
+    let mine: readonly PauseLease[];
+    try {
+      mine = leaseViewInstance.myLeases();
+    } catch {
+      return;
+    }
+    for (const lease of mine) {
+      try {
+        unlinkSync(leasePath(root, lease.leaseId));
+      } catch {
+        // best effort: already gone, or this process cannot write here any more.
+      }
+      try {
+        // Addressed like the lease's own `targets` (§4.2's `resume` row:
+        // "wakes: yes" — whoever was held is exactly who should wake up now),
+        // mirroring the async `resumePauseLease`. `toLabel` is always "@all"
+        // here rather than resolving a concrete target's current name: doing
+        // that synchronously would mean a second sync directory read in an
+        // exit-time fallback that is already documented as best-effort, for
+        // a field `to` (not `toLabel`) is what actually routes the event.
+        const event = {
+          schemaVersion: BUS_SCHEMA_VERSION,
+          seq: bestEffortSyncSeq(),
+          id: randomUUID(),
+          ts: new Date(now()).toISOString(),
+          from: { instanceId: lease.holder.instanceId, name: lease.holder.name, origin: lease.holder.origin },
+          to: lease.targets,
+          toLabel: "@all",
+          kind: "resume" as const,
+          refs: { leaseId: lease.leaseId },
+        };
+        appendFileSync(eventsPath(root), `${JSON.stringify(event)}\n`, { encoding: "utf8", mode: BUS_FILE_MODE });
+      } catch {
+        // Best effort only: the lease FILE above is already gone, which is
+        // enough for every peer (§4.3's "active" rule is file-existence
+        // based) — this `resume` event is purely informational.
+      }
+    }
+  };
+
   // ---- leave: idempotent, synchronous-safe (specification §5.4). ----
   const leave = (): void => {
     if (left) return;
@@ -503,6 +635,7 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
     timers.clearInterval(heartbeatTimer);
     timers.clearInterval(pollTimer);
     process.off("exit", onExit);
+    syncResumeOwnLeases();
     removePresenceSync();
   };
   function onExit(): void {
@@ -641,6 +774,30 @@ export async function joinBus(opts: JoinBusOptions): Promise<BusClient | { disab
           }
         })();
       }
+    },
+    async pause(toLabel, scope, reason, ttlMs, origin) {
+      const holder = { instanceId, name: state.name, origin };
+      const lease = await createPauseLease(root, {
+        holder,
+        toLabel,
+        scope,
+        reason,
+        ...(ttlMs !== undefined ? { ttlMs } : {}),
+        now,
+        liveness: { isAlive, host },
+      });
+      await leaseViewInstance.refresh();
+      return lease;
+    },
+    async resume(leaseId, origin) {
+      await resumePauseLease(root, { leaseId, by: { instanceId, name: state.name, origin }, now });
+      await leaseViewInstance.refresh();
+    },
+    async override(leaseId) {
+      await leaseViewInstance.override(leaseId);
+    },
+    leaseView() {
+      return leaseViewInstance;
     },
     leave,
   };

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { classifyCommand, isDestructiveCommand } from "./command-risk";
+import { classifyCommand, isDestructiveCommand, isPublishCommand } from "./command-risk";
 
 // Table-driven: every row is (command, expected class). The classifier is pure
 // and deterministic, so the table IS the specification.
@@ -95,4 +95,42 @@ test("classifyCommand is pure: repeated calls agree", () => {
 test("isDestructiveCommand is the boolean projection of classifyCommand", () => {
   expect(isDestructiveCommand("rm -rf /")).toBe(true);
   expect(isDestructiveCommand("ls")).toBe(false);
+});
+
+// --- isPublishCommand (specification §4.3 git-publish scope, §4.4) ---------
+
+const PUBLISHES: [string, string][] = [
+  ["git push", "plain push"],
+  ["git push origin main", "push with remote and branch"],
+  ["git -C ./worktree push", "git -C <dir> push"],
+  ["git tag v1.2.3 && git push --tags", "tag then push chain"],
+  ["echo hi; git push", "push after an unrelated segment"],
+  ["gh release create v1.2.3", "gh release"],
+  ["gh pr merge 42", "gh pr merge"],
+  ["npm publish", "npm publish"],
+  ["npm publish --tag next", "npm publish with flags"],
+  ["bun publish", "bun publish"],
+];
+
+const NOT_PUBLISHES: [string, string][] = [
+  ["git pull", "pull is not push"],
+  ["git status", "read-only git"],
+  ['echo "git push"', "a quoted string mentioning git push is not a command"],
+  ["gh pr view 42", "gh pr view is not gh pr merge"],
+  ["gh issue list", "unrelated gh subcommand"],
+  ["npm install", "unrelated npm subcommand"],
+  ["bun install", "unrelated bun subcommand"],
+  ["", "empty"],
+];
+
+test("isPublishCommand: publishing commands", () => {
+  for (const [cmd, why] of PUBLISHES) {
+    expect(`${cmd} => ${isPublishCommand(cmd)} (${why})`).toBe(`${cmd} => true (${why})`);
+  }
+});
+
+test("isPublishCommand: non-publishing commands", () => {
+  for (const [cmd, why] of NOT_PUBLISHES) {
+    expect(`${cmd} => ${isPublishCommand(cmd)} (${why})`).toBe(`${cmd} => false (${why})`);
+  }
 });

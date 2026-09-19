@@ -14,7 +14,8 @@ import {
 } from "./client";
 import { displaySafe } from "./display";
 import { isBusRefusal } from "./errors";
-import { appendEvent } from "./log";
+import { readLease } from "./leases";
+import { appendEvent, cursorAtStart, readEvents } from "./log";
 import { eventsPath, presencePath, resolveBusRoot } from "./paths";
 import { readPresence, writePresence } from "./presence";
 import { processInstanceId } from "../session/lease";
@@ -871,5 +872,35 @@ describe("joinBus: leave (specification §5.4)", () => {
 
     client.leave(); // idempotent: removes nothing more
     expect(process.listenerCount("exit")).toBe(before);
+  });
+});
+
+describe("joinBus: leave resumes own leases (specification §5.4, AC9, flow 275 T5)", () => {
+  test("deletes the lease file synchronously and appends a best-effort resume event", async () => {
+    const cwd = await repo();
+    const client = asClient(await join(cwd));
+    const { root } = await resolveBusRoot(cwd);
+
+    const lease = await client.pause("@all", "turns", "cutting 0.2.130", undefined, "operator");
+    expect(await readLease(root, lease.leaseId)).toBeDefined();
+
+    client.leave();
+
+    expect(await readLease(root, lease.leaseId)).toBeUndefined();
+    const events = (await readEvents(root, await cursorAtStart(root))).events;
+    const resume = events.find((e) => e.kind === "resume" && e.refs?.leaseId === lease.leaseId);
+    expect(resume).toBeDefined();
+    expect(resume?.from.instanceId).toBe(client.instanceId);
+  });
+
+  test("a client holding no lease leaves exactly as before (no resume event)", async () => {
+    const cwd = await repo();
+    const client = asClient(await join(cwd));
+    const { root } = await resolveBusRoot(cwd);
+
+    client.leave();
+
+    const events = (await readEvents(root, await cursorAtStart(root))).events;
+    expect(events.filter((e) => e.kind === "resume")).toHaveLength(0);
   });
 });

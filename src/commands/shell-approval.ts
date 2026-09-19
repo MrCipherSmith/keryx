@@ -25,6 +25,14 @@ export type ShellApprovalEval = {
    * command-family-specific signal this is the only reader of).
    */
   sacReviewConfirmation: boolean;
+  /**
+   * A `git-publish` pause lease applies to this command (`ApprovalMeta.publishLease`,
+   * specification §4.4). Excluded from `autoApprove` exactly like `credentials`:
+   * a saved or session allowlist pattern must not answer the prompt while a
+   * peer's publish lease is in effect, and the caller must not offer "always
+   * allow" while this is set (see `formatShellApprovalHints`).
+   */
+  publishLease: boolean;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -52,6 +60,7 @@ export function evaluateShellApproval(input: {
   const destructive = input.meta?.destructive === true;
   const credentials = input.meta?.credentials === true;
   const sacReviewConfirmation = touchesSacConfirmReview(command);
+  const publishLease = input.meta?.publishLease === true;
   const audit = io.loadAudit();
   for (const pattern of audit.permissions.allow) {
     input.sessionAllow.add(pattern);
@@ -61,19 +70,35 @@ export function evaluateShellApproval(input: {
     !destructive &&
     !credentials &&
     !sacReviewConfirmation &&
+    !publishLease &&
     isShellCommandAllowed(command, [...input.sessionAllow]);
   return {
     command,
     destructive,
     credentials,
     sacReviewConfirmation,
+    publishLease,
     autoApprove,
     rejected: audit.rejected,
     tampered,
   };
 }
 
-export function rememberExactShellGrant(command: string, sessionAllow: Set<string>): string {
+/**
+ * `publishLease: true` refuses to remember anything, mirroring the destructive/
+ * credentials posture: while a peer's `git-publish` lease applies, "always
+ * allow" must not be offered (§4.4) and, defensively, must not persist even if
+ * a caller offered it anyway. Optional so the existing two-argument call sites
+ * (which predate the publish-lease floor) still compile unchanged.
+ */
+export function rememberExactShellGrant(
+  command: string,
+  sessionAllow: Set<string>,
+  options?: { publishLease?: boolean },
+): string {
+  if (options?.publishLease === true) {
+    return "";
+  }
   const { exact, offerExact } = suggestShellPatterns(command);
   if (!offerExact) {
     return "";
@@ -95,6 +120,9 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
   }
   if (evaled.sacReviewConfirmation) {
     lines.push("SAC proposal review/confirm-token — will not be remembered");
+  }
+  if (evaled.publishLease) {
+    lines.push("a peer's git-publish lease applies — will not be remembered");
   }
   return lines;
 }
