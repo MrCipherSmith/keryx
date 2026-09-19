@@ -46,10 +46,31 @@ export interface ComposerChoiceRequest {
   signal?: AbortSignal;
   /** Called once the menu is mounted, before it takes keyboard focus. */
   onOpen?: () => void;
+  /**
+   * Enter is ignored for this long after the menu mounts, and for this long
+   * after the last printable key reached the menu. A dialog that pops up while
+   * the user is typing a message must not be answered by the Enter that was
+   * meant to send that message — observed: a typed prompt's Enter approved a
+   * shell command the user never read. Default {@link DEFAULT_ACCEPT_DELAY_MS}
+   * (0 under `bun test`, where keys are driven synchronously). Esc and clicks
+   * are never delayed: refusing, or a deliberate click, is always safe.
+   */
+  acceptDelayMs?: number;
+}
+
+/** See {@link ComposerChoiceRequest.acceptDelayMs}. */
+export const DEFAULT_ACCEPT_DELAY_MS = 400;
+
+function resolveAcceptDelay(request: ComposerChoiceRequest): number {
+  if (request.acceptDelayMs !== undefined) {
+    return Math.max(0, request.acceptDelayMs);
+  }
+  return process.env.NODE_ENV === "test" ? 0 : DEFAULT_ACCEPT_DELAY_MS;
 }
 
 import { getTheme } from "./theme";
 import { containsNode } from "./modal-host";
+import { debugEvent } from "./debug-log";
 
 type OpenTui = typeof import("@opentui/core");
 type Renderer = Awaited<ReturnType<OpenTui["createCliRenderer"]>>;
@@ -156,12 +177,17 @@ export async function showComposerChoice(
 ): Promise<string> {
   const enqueue = request.enqueue !== false;
   if (!enqueue && dockBusy(dock)) {
+    debugEvent("choice.busy-cancel", { title: request.title });
     request.onBusy?.();
     return request.cancelId;
   }
+  const queuedAt = Date.now();
+  debugEvent("choice.request", { title: request.title, waitingBehind: dockDepth.get(dock) ?? 0 });
   const unlock = await lockDock(dock);
+  debugEvent("choice.lock-acquired", { title: request.title, waitedMs: Date.now() - queuedAt });
   try {
     if (request.signal?.aborted === true) {
+      debugEvent("choice.aborted-before-open", { title: request.title });
       return request.cancelId;
     }
     return await presentComposerChoice(otui, r, dock, request);
@@ -186,6 +212,7 @@ function presentComposerChoice(
   // approval the user never actually looked at. One choice open at a time,
   // full stop.
   if (dock.visible === true) {
+    debugEvent("choice.dock-already-visible", { title: request.title });
     request.onBusy?.();
     return Promise.resolve(request.cancelId);
   }
@@ -199,6 +226,9 @@ function presentComposerChoice(
     let selected = recommendedIdx >= 0 ? recommendedIdx : 0;
 
     dock.visible = true;
+    const openedAt = Date.now();
+    const acceptDelayMs = resolveAcceptDelay(request);
+    let lastTypedAt = 0;
     request.onOpen?.();
     const theme = getTheme();
 
@@ -281,13 +311,14 @@ function presentComposerChoice(
 
     let settled = false;
     const onAbort = (): void => {
-      finish(request.cancelId);
+      finish(request.cancelId, "abort");
     };
-    const finish = (id: string): void => {
+    const finish = (id: string, via = "key"): void => {
       if (settled) {
         return;
       }
       settled = true;
+      debugEvent("choice.finish", { title: request.title, id, via, openMs: Date.now() - openedAt });
       cleanup();
       resolve(id);
     };
@@ -299,7 +330,7 @@ function presentComposerChoice(
         width: "100%",
         flexDirection: "column",
         onMouseDown: () => {
-          finish(o.id);
+          finish(o.id, "click");
         },
       });
       const label = new otui.TextRenderable(r, { id: `ch-opt-l-${i}-${Date.now()}`, content: o.displayLabel });
@@ -365,8 +396,11 @@ function presentComposerChoice(
     }
 
     const onKey = (key: KeypressEvent): void => {
+      if (!key.ctrl && typeof key.sequence === "string" && key.sequence.length === 1 && key.sequence >= " ") {
+        lastTypedAt = Date.now();
+      }
       if (key.name === "escape") {
-        finish(request.cancelId);
+        finish(request.cancelId, "escape");
         key.preventDefault();
         key.stopPropagation();
         return;
@@ -407,6 +441,18 @@ function presentComposerChoice(
         return;
       }
       if (key.name === "return" || key.name === "linefeed" || key.name === "kpenter") {
+        const now = Date.now();
+        if (now - openedAt < acceptDelayMs || now - lastTypedAt < acceptDelayMs) {
+          // Swallowed, not forwarded: it must not reach the composer either.
+          debugEvent("choice.enter-ignored", {
+            title: request.title,
+            sinceOpenMs: now - openedAt,
+            sinceTypingMs: lastTypedAt === 0 ? undefined : now - lastTypedAt,
+          });
+          key.preventDefault();
+          key.stopPropagation();
+          return;
+        }
         const chosen = options[selected];
         if (chosen !== undefined) {
           finish(chosen.id);
@@ -420,5 +466,12 @@ function presentComposerChoice(
       request.signal.addEventListener("abort", onAbort, { once: true });
     }
     optionsScroll.focus();
+    debugEvent("choice.open", {
+      title: request.title,
+      options: options.map((o) => o.id),
+      selected: options[selected]?.id,
+      scrollableSubtitle: hasScrollableSubtitle,
+      acceptDelayMs,
+    });
   });
 }

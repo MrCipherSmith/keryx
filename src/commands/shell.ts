@@ -2091,6 +2091,14 @@ export interface ShellCliFlags {
    * never contained it. Redaction still runs first at any limit.
    */
   eventsMaxField?: number;
+  /**
+   * `--debug`: record the session to `<keryx config dir>/debug/<run>/` —
+   * terminal-input state and every call that can stop it (with stacks), keys
+   * (names only, never typed text), dialogs, overlays, tool calls, agent state
+   * — and start a detached watcher process that checks from outside whether the
+   * shell is still reading its terminal, and re-arms input if it is not.
+   */
+  debug?: boolean;
 }
 
 /**
@@ -2125,6 +2133,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let printPromptArg: string | undefined;
   let eventsFile: string | undefined;
   let eventsMaxField: number | undefined;
+  let debug: boolean | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -2179,6 +2188,8 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       i += 1;
     } else if (arg === "--events-file") {
       eventsFile = valueAfter(i++);
+    } else if (arg === "--debug") {
+      debug = true;
     } else if (arg === "--events-max-field") {
       const raw = valueAfter(i++);
       const parsed = Number(raw);
@@ -2210,6 +2221,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(printPromptArg !== undefined ? { printPrompt: printPromptArg } : {}),
     ...(eventsFile !== undefined ? { eventsFile } : {}),
     ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
+    ...(debug === true ? { debug: true } : {}),
   };
 }
 
@@ -2271,6 +2283,12 @@ export interface ShellCommandRuntime {
 }
 
 export async function shellCommand(args: string[], runtime: ShellCommandRuntime = {}): Promise<void> {
+  // Internal: the detached watcher `--debug` starts. Not a user-facing flag.
+  if (args[0] === "--debug-watcher") {
+    const { runDebugWatcher } = await import("../tui/debug-watcher");
+    await runDebugWatcher(args.slice(1));
+    return;
+  }
   const flags = parseShellCliFlags(args);
   if (flags.help) {
     console.log(`Usage: keryx shell [options]
@@ -2289,12 +2307,42 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --print, -p <prompt>          Run one agent turn on this prompt and exit
   --events-file <path>          Append an NDJSON transcript (turns, tools, usage)
   --events-max-field <n>        Per-field character cap in that transcript (default 4000)
+  --debug                       Log the session (input, keys, dialogs, tools) and start a watcher
+                                that re-arms terminal input if it stops; see debug/latest.txt
 
 Session continuation and resume are mutually exclusive. Permission flags
 are ignored in chat mode. Without a TTY, resume without an ID uses the latest session.
 
+A shell that stops reacting to keys can be recovered from another terminal
+with: kill -USR2 <keryx pid>
+
 Example: keryx shell --provider ollama --model llama3.1:latest`);
     return;
+  }
+  if (flags.debug === true) {
+    const { startDebugRun, debugEvent } = await import("../tui/debug-log");
+    const { spawnDebugWatcher } = await import("../tui/debug-watcher");
+    const run = startDebugRun(runtime.cacheDir !== undefined ? { configDir: runtime.cacheDir } : {});
+    const watcherPid = spawnDebugWatcher(run);
+    debugEvent("session.start", {
+      version: packageJson.version,
+      argv: args,
+      bun: typeof Bun !== "undefined" ? Bun.version : undefined,
+      platform: process.platform,
+      execPath: process.execPath,
+      cwd: process.cwd(),
+      stdinTTY: process.stdin.isTTY === true,
+      stdoutTTY: process.stdout.isTTY === true,
+      env: Object.fromEntries(
+        ["TERM", "TERM_PROGRAM", "COLORTERM", "TMUX", "HERDR_ENV", "HERDR_PANE_ID", "SSH_TTY", "LANG"].map((k) => [k, process.env[k]]),
+      ),
+      watcherPid,
+      dir: run.dir,
+    });
+    process.on("exit", (code) => {
+      debugEvent("session.exit", { code });
+      process.stderr.write(`keryx debug log: ${run.dir}\n`);
+    });
   }
   // Start exactly once, before provider detection, renderer creation, or
   // readline. Nothing below awaits this promise during startup.

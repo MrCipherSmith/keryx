@@ -104,7 +104,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
-            [--base-url <url>] [--agent|--chat] [--tui|--no-tui]
+            [--base-url <url>] [--agent|--chat] [--tui|--no-tui] [--debug]
 ```
 
 | Flag | Description |
@@ -116,9 +116,14 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--provider <p>] [--model <m>]
 | `--base-url <url>` | Point the provider at a custom endpoint. |
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
+| `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
+
+If a TUI session stops reacting to the keyboard and mouse while it still draws
+(spinner and timer running), run `kill -USR2 <keryx pid>` from another
+terminal: every session re-arms its terminal input on `SIGUSR2`.
 
 ---
 
