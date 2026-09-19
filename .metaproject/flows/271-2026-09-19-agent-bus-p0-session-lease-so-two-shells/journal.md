@@ -126,3 +126,5 @@
     2. Three tools write by raw dir: slate-tool `appendSeed`, the `workspace_create` bind, and the subagent parent fold. They resolve the dir through lease-gated getters (N1) on every call.
     3. A machine wrap-up already running when the lease is lost is not interrupted. It no longer starts on a detached ref.
 - 2026-09-19T15:00Z - operator instruction: when PR CI runs the suites, do not duplicate them locally. `.github/workflows/ci.yml` runs on every pull_request: `check:core` (lint, typecheck, test:core), doc-links, and the client matrix (terminal, streaming, cancel-resume, runtime). From now on local runs are limited to targeted and new tests. T12 and AC11 evidence come from CI on the PR head.
+- 2026-09-19T15:06:05.914Z - task-added: T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach
+- 2026-09-19T15:06:05.995Z - task-attempt: T16: started (attempt 1) — 271-T16 merge main #606

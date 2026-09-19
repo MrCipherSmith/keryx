@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T15:05:17.437Z",
+  "updatedAt": "2026-09-19T15:06:05.995Z",
   "source": {
     "type": "description",
     "ref": null
@@ -330,6 +330,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T16",
+      "title": "Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T15:06:05.995Z",
+            "outcome": "started",
+            "detail": "271-T16 merge main #606"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -535,6 +555,16 @@
       "at": "2026-09-19T15:05:17.437Z",
       "event": "task-done",
       "detail": "T15: Re-planned R3-1 fix: detach the SlateSessionRef on lease loss and refuse slate writes/open/close/archive on a detached ref (turn and /goal loop)"
+    },
+    {
+      "at": "2026-09-19T15:06:05.914Z",
+      "event": "task-added",
+      "detail": "T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach"
+    },
+    {
+      "at": "2026-09-19T15:06:05.995Z",
+      "event": "task-attempt",
+      "detail": "T16: started (attempt 1) — 271-T16 merge main #606"
     }
   ]
 }
