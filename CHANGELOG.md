@@ -3,6 +3,18 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.120] — 2026-09-19
+Two fixes found while checking 0.2.119 in a terminal (PR #601).
+
+### Fixed
+
+- **The Tools tab keeps its tool list after you visit MCP Clients.** In
+  `/integrations`, going to MCP Clients and back to Tools, then pressing ↓,
+  used to replace the tool list with the MCP client rows, while the tab strip
+  still read Tools. This had been the case since before 0.2.118.
+- **The Brave search-provider key prompt says "API" once.** It read "Paste
+  your Brave Search API API key".
+
 ## [0.2.119] — 2026-09-19
 The Tools tab of `/integrations` no longer leaves blank rows under its list
 (PR #599).
