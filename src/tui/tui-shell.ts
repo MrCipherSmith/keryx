@@ -252,13 +252,23 @@ import {
   busInboxFullNotice,
   createBusDropNotifier,
   createBusWakeController,
+  // Flow 275 (agent bus P4, T7; specification §4.3, §5.2): the held→released
+  // edge detector that drains the queue built up while a `turns` lease held
+  // this instance — same shape `createBusWakeController` already uses.
+  createLeaseHoldController,
   type BusDropNotifier,
   type BusWakeController,
+  type LeaseHoldController,
 } from "./bus-wake";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
 import { openBus } from "./bus-panel";
+// Flow 275 (agent bus P4, T7; specification §4.3, §7.2): pause leases — held
+// turns, the status-bar banner, and `/bus pause|resume|override`.
+// `PauseLeaseView` is T5's cached reader (`../bus/pause.ts`); this file only
+// polls it (via `BusClient.leaseView()`) and reacts.
+import type { PauseLeaseView } from "../bus/pause";
 import {
   appendUserEcho,
   clearTranscriptChildren,
@@ -1202,6 +1212,12 @@ export async function pickShellApproval(
   destructive = false,
   credentials = false,
   ui: { onOpen?: () => void; signal?: AbortSignal } = {},
+  // Flow 275 T7 (specification §4.4): a peer's `git-publish` pause lease
+  // applies to this command (`ShellApprovalEval.publishLease`,
+  // `../commands/shell-approval.ts`). Positional and defaulted like
+  // `destructive`/`credentials` above it, so every existing call site (this
+  // file's own headless tests included) keeps compiling unchanged.
+  publishLease = false,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1212,7 +1228,16 @@ export async function pickShellApproval(
   const { exact, prefix, offerExact, offerPrefix } = suggestShellPatterns(command);
   // A grant that cannot be given safely is not shown at all: an "always" option
   // the user picks and that is then silently refused would be worse than absent.
-  // Destructive commands offer neither (ADR-0009).
+  // Destructive commands offer neither (ADR-0009) — `suggestShellPatterns`
+  // itself accounts for that from the command text alone. `publishLease` is
+  // NOT a property of the command text (a `git push` is ordinary otherwise)
+  // — it is ambient bus state read at the call site — so it is excluded here
+  // instead, mirroring readline's `rememberExactShellGrant`/
+  // `formatShellApprovalHints` (`../commands/shell-approval.ts`): while the
+  // lease applies, neither grant is offered, whatever `suggestShellPatterns`
+  // says.
+  const canOfferExact = offerExact && !publishLease;
+  const canOfferPrefix = offerPrefix && !publishLease;
   const options = [
     {
       id: "once",
@@ -1220,7 +1245,7 @@ export async function pickShellApproval(
       description: "Run only this time",
       recommended: true,
     },
-    ...(offerExact
+    ...(canOfferExact
       ? [
           {
             id: "always-exact",
@@ -1229,7 +1254,7 @@ export async function pickShellApproval(
           },
         ]
       : []),
-    ...(offerPrefix
+    ...(canOfferPrefix
       ? [
           {
             id: "always-prefix",
@@ -1247,9 +1272,11 @@ export async function pickShellApproval(
   const id = await showComposerChoice(otui, r, dock, {
     title: credentials
       ? "⚠ touches keryx's OWN permissions/credentials — allow?"
-      : destructive
-        ? "⚠ DESTRUCTIVE command — allow?"
-        : "Allow shell command?",
+      : publishLease
+        ? "⚠ a peer's git-publish lease applies — allow?"
+        : destructive
+          ? "⚠ DESTRUCTIVE command — allow?"
+          : "Allow shell command?",
     // Untruncated: `showComposerChoice` renders this in a scrollable, ctrl+o-
     // focusable box (its own defensive char cap), not a single collapsed line.
     subtitle: command,
@@ -3077,6 +3104,11 @@ export async function launchTuiAgentShell(opts: {
   // poll cannot fire until long after this function's synchronous setup (and
   // so this assignment) has completed.
   let busWakeController: BusWakeController | undefined;
+  // Flow 275 (agent bus P4, T7; specification §4.3, §5.2): same nullable-ref/
+  // TDZ idiom as `busWakeController` right above — the real implementation is
+  // built once `mainQueue`/`runLine`/`forceHandoff` exist, further down; a
+  // poll landing before that is a safe no-op via optional chaining.
+  let leaseHoldController: LeaseHoldController | undefined;
   // review r1 F1: whether the poll CURRENTLY being processed delivered at
   // least one event to `busInbox` — set by `onEvent` (below, per event) and
   // read/reset by `onPeers` once per poll, right after every event of that
@@ -3087,6 +3119,27 @@ export async function launchTuiAgentShell(opts: {
   // `/model`/`/connect`/side-worker rebuild) — `commands/shell.ts`'s
   // `makeAgentDeps` reads `bus.client()` at call time, never a snapshot.
   const busClientRef = { client: (): BusClient | undefined => liveBus };
+  // Flow 275 (agent bus P4, T7; specification §4.3): this instance's cached
+  // lease reader, or `undefined` before the bus join settles / when the bus
+  // is disabled — `BusClient.leaseView()` always returns the SAME object
+  // (refreshed on every poll and right after pause/resume/override), so
+  // reading through this getter fresh at every call site is cheap and never
+  // stale by more than one poll interval.
+  const leaseView = (): PauseLeaseView | undefined => liveBus?.leaseView();
+  /**
+   * Adapts a `BusClient` to `AgentDeps.busLeases` (flow 275 T6/T8 contract,
+   * specification §4.4) — same shape as `commands/shell.ts`'s own
+   * `busLeasesFromClient` (T8's readline surface): `heldBy` there returns
+   * just `{name, reason}`, not the full `PauseLease`, so `executeCall`'s
+   * publish-lease floor never needs to import the lease schema itself.
+   */
+  const busLeasesFromClient = (bus: BusClient): NonNullable<AgentDeps["busLeases"]> => ({
+    appliesToMe: (scope) => bus.leaseView().appliesToMe(scope),
+    heldBy: () => {
+      const lease = bus.leaseView().heldBy();
+      return lease === undefined ? undefined : { name: lease.holder.name, reason: lease.reason };
+    },
+  });
   const foregroundOperation = createForegroundOperationOwner();
   // Flow 271: the session lease this shell holds. Declared before the renderer
   // so `onDestroy` (Ctrl+C) can release it; empty until a session is open, and
@@ -3278,6 +3331,17 @@ export async function launchTuiAgentShell(opts: {
     // (the macOS pty smoke leg). Painted by `paintModeRow` once both are known.
     const sbModeV = new otui.TextRenderable(r, { id: "sb-mode-v", content: "" });
     sidebar.add(sbModeV);
+    // Flow 275 (agent bus P4, T7; specification §4.3): a persistent banner
+    // while a `turns` pause lease holds this instance — holder, reason,
+    // remaining TTL, right below the mode line (same "one more row" budget
+    // concern the comment above documents). Empty (nothing painted) whenever
+    // no lease holds this instance; `paintHoldBanner` is the only writer.
+    const sbHoldV = new otui.TextRenderable(r, { id: "sb-hold-v", content: "" });
+    sidebar.add(sbHoldV);
+    const paintHoldBanner = (): void => {
+      const banner = leaseView()?.banner();
+      sbHoldV.content = banner === undefined ? "" : otui.t`${otui.yellow(banner)}`;
+    };
     // Usage row under Model: cumulative in/out tokens this session, fed by
     // `attachUsageIo`'s setUsage chrome. Starts "↑0 ↓0"; real numbers replace
     // it the first time the provider reports usage.
@@ -4112,10 +4176,22 @@ export async function launchTuiAgentShell(opts: {
       setBusyPhase("waiting for your approval (menu above input)");
       chrome.hideMenu(); // hide the dropdown AND release menuNav before the dock takes over
       const choice = await chrome.withOverlay(() =>
-        pickShellApproval(otui, r, chrome.dock, cmd, approvalContext, destructive, meta?.credentials === true, {
-          onOpen: () => chrome.blurComposer(),
-          signal: foregroundOperation.signal,
-        }),
+        pickShellApproval(
+          otui,
+          r,
+          chrome.dock,
+          cmd,
+          approvalContext,
+          destructive,
+          meta?.credentials === true,
+          {
+            onOpen: () => chrome.blurComposer(),
+            signal: foregroundOperation.signal,
+          },
+          // Flow 275 T7 (specification §4.4): never offer to remember while a
+          // peer's `git-publish` lease applies to this command.
+          ev.publishLease,
+        ),
       );
       input.focus();
 
@@ -4602,6 +4678,14 @@ export async function launchTuiAgentShell(opts: {
             // last overflow notice — let the NEXT overflow episode print its
             // own notice.
             busDropNotifier.onInboxSizeObserved(busInbox.size);
+            // Flow 275 (agent bus P4, T7; specification §5.2 step 5): leases
+            // are re-listed as part of THIS SAME poll (`BusClient.doPoll`
+            // refreshes `leaseView()` before calling `onPeers` — see
+            // `../bus/client.ts`), so repainting the banner and checking for
+            // a hold release here, right alongside the other once-per-poll
+            // bookkeeping, is always looking at this poll's fresh state.
+            paintHoldBanner();
+            leaseHoldController?.onPoll();
             // Flow 274 T7 (specification §5.3): "on the poll, when busInbox
             // receives a wake-eligible kind" — `onPeers` fires exactly once
             // per poll, AFTER every event of that poll was already routed to
@@ -4663,6 +4747,11 @@ export async function launchTuiAgentShell(opts: {
                 onContextCompaction,
                 busInbox,
                 busAck: (events) => joined.ack(events),
+                // Flow 275 T7 (specification §4.4, agent-protocol.md §2): the
+                // SAME live lease view the hold/banner logic reads, so the
+                // agent's own `publishLease` gate (T6, `commands/agent.ts`)
+                // sees the identical state as the operator surface.
+                busLeases: busLeasesFromClient(joined),
               }
             : {
                 // A concurrent `/model`/`/connect` already replaced `deps` —
@@ -4670,6 +4759,7 @@ export async function launchTuiAgentShell(opts: {
                 ...deps,
                 busInbox,
                 busAck: (events) => joined.ack(events),
+                busLeases: busLeasesFromClient(joined),
               };
         liveDeps = deps;
       } catch (error) {
@@ -4949,6 +5039,9 @@ export async function launchTuiAgentShell(opts: {
             leases,
             events,
             renderer: r,
+            // Flow 275 T7 (specification §7.2): marks which leases apply to
+            // THIS instance in the Leases tab (`formatBusLeasesLines`).
+            selfInstanceId: client.instanceId,
             ...inspectorKeys,
           });
         } catch (error) {
@@ -4960,8 +5053,13 @@ export async function launchTuiAgentShell(opts: {
     };
     /**
      * `/bus` subcommands (specification §7.2): `send`/the `@name` shorthand,
-     * `ask`, `reply <id>` and `name <new>`. `pause`/`resume`/`override` are
-     * P4 (writing leases — see `src/bus/leases.ts`) and are not wired here.
+     * `ask`, `reply <id>` and `name <new>`, plus flow 275's
+     * `pause`/`resume`/`override` (specification §4.3): creating, ending, or
+     * releasing THIS instance from a pause lease, through
+     * `BusClient.pause`/`resume`/`override` with origin `"operator"`. The
+     * banner and the held/queued state repaint immediately after any of the
+     * three succeed, rather than waiting up to one poll interval — an
+     * operator who just typed `/bus resume` expects the queue to move NOW.
      */
     const runBusCommand = (line: string): void => {
       const parsed = parseBusCommand(line);
@@ -4997,6 +5095,55 @@ export async function launchTuiAgentShell(opts: {
         void client
           .reply(parsed.id, parsed.text)
           .then((result) => io.onSystem?.(`bus: sent (#${result.seq}) to ${result.event.toLabel}\n`))
+          .catch(reportRefusal);
+        return;
+      }
+      if (parsed.kind === "pause") {
+        void client
+          .pause(parsed.toLabel, parsed.scope, parsed.reason, parsed.ttlMs, "operator")
+          .then((lease) => {
+            io.onSystem?.(
+              `bus: pause lease ${lease.leaseId.slice(0, 8)} created — ${lease.scope} → ${parsed.toLabel}\n`,
+            );
+            paintHoldBanner();
+            leaseHoldController?.onPoll();
+          })
+          .catch(reportRefusal);
+        return;
+      }
+      if (parsed.kind === "resume") {
+        // Default (specification §7.2): this instance's OWN lease — at most
+        // one can be active per holder (D-12/AC1), so the first is the only one.
+        const leaseId = parsed.leaseId ?? client.leaseView().myLeases()[0]?.leaseId;
+        if (leaseId === undefined) {
+          io.onSystem?.("bus: no active lease held by this instance to resume\n");
+          return;
+        }
+        void client
+          .resume(leaseId, "operator")
+          .then(() => {
+            io.onSystem?.(`bus: lease ${leaseId.slice(0, 8)} resumed\n`);
+            paintHoldBanner();
+            leaseHoldController?.onPoll();
+          })
+          .catch(reportRefusal);
+        return;
+      }
+      if (parsed.kind === "override") {
+        // Default (specification §7.2): the `turns` lease currently holding
+        // this instance — `heldBy()` is exactly that lease, or undefined.
+        const leaseId = parsed.leaseId ?? client.leaseView().heldBy()?.leaseId;
+        if (leaseId === undefined) {
+          io.onSystem?.("bus: no lease is currently held against this instance\n");
+          return;
+        }
+        void client
+          .override(leaseId)
+          .then(() => {
+            io.onSystem?.(`bus: overrode lease ${leaseId.slice(0, 8)} — turns released for this instance\n`);
+            paintHoldBanner();
+            leaseHoldController?.onPoll();
+          })
           .catch(reportRefusal);
         return;
       }
@@ -5216,6 +5363,9 @@ export async function launchTuiAgentShell(opts: {
         // once the join settles, see the `joinBus` callback below).
         ...(deps.busInbox !== undefined ? { busInbox: deps.busInbox } : {}),
         ...(deps.busAck !== undefined ? { busAck: deps.busAck } : {}),
+        // Flow 275 T7: same reasoning — `opts.makeAgentDeps` knows nothing
+        // about the lease view either.
+        ...(deps.busLeases !== undefined ? { busLeases: deps.busLeases } : {}),
       };
       liveDeps = deps; // F-002: keep onDestroy's ref pointed at the current deps
       saveShellConfig(
@@ -5463,6 +5613,15 @@ export async function launchTuiAgentShell(opts: {
     const forceMainQueue = (index: number): void => {
       const item = mainQueue[index];
       if (item === undefined) return;
+      // Flow 275 T7 (specification §4.3, AC4): "/queue force" — and the
+      // Ctrl+Q queue-nav force action and the queue-dock force button, which
+      // both call this SAME function — must not be the back door around a
+      // `turns` hold. The item stays exactly where it is; only `/bus`
+      // (`override`, or the holder's own `resume`) actually lifts a hold.
+      if (leaseView()?.held() === true) {
+        io.onSystem?.(`◇ held — q${index + 1} stays queued until the lease is released (see /bus).\n`);
+        return;
+      }
       mainQueue = removeMainQueueItem(mainQueue, index);
       paintMainQueue();
       // Cancellation is cooperative, and only the press that owns the handoff
@@ -5958,6 +6117,19 @@ export async function launchTuiAgentShell(opts: {
           paintMainQueue();
           return;
         }
+        // Flow 275 T7 (specification §4.3, AC4): "dispatches no side worker
+        // for busy lines" while a `turns` lease holds this instance — a side
+        // worker is a way around the hold (it starts its own agent turn,
+        // just not the MAIN one), so it is never even offered here. The line
+        // goes straight to the main queue, same as the idle-path hold below,
+        // skipping the Main-queue/Side-1 choice entirely.
+        if (leaseView()?.held() === true) {
+          const id = `mq${mainQueueSeq++}`;
+          mainQueue.push({ id, question: line, displayQuestion: displayLine });
+          paintMainQueue();
+          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length} (no side worker while held).\n`);
+          return;
+        }
         void (async () => {
           let blockedByOpenDialog = false;
           const chosen = await showComposerChoice(otui, r, chrome.dock, {
@@ -6428,6 +6600,22 @@ export async function launchTuiAgentShell(opts: {
         io.onSystem?.(helpText());
         return;
       }
+      // Flow 275 T7 (specification §4.3, AC4): a `turns` lease holding this
+      // instance starts no new main-agent turn from an operator line — it
+      // goes to the main queue instead, same as the busy-branch hold above,
+      // and runs once the lease is released (`leaseHoldController`).
+      // `task-notification`/`bus-message` origins are already kept out of
+      // this point by their own wake sites' `isIdle` ("not held"); this is a
+      // defensive no-op for either, never an empty-line turn or a queue push.
+      if (leaseView()?.held() === true) {
+        if (origin === "operator") {
+          const id = `mq${mainQueueSeq++}`;
+          mainQueue.push({ id, question: line, displayQuestion: displayLine });
+          paintMainQueue();
+          io.onSystem?.(`◇ ${leaseView()?.banner() ?? "held"} — queued as q${mainQueue.length}.\n`);
+        }
+        return;
+      }
       appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });
       transcript.add(
         new otui.TextRenderable(r, {
@@ -6760,10 +6948,13 @@ export async function launchTuiAgentShell(opts: {
     // Idle means both halves — nothing running in the foreground AND nothing
     // the operator queued. A queued message is the real next step and the
     // settle handlers keep draining it first; a notification that jumped that
-    // queue would answer a question nobody asked yet.
+    // queue would answer a question nobody asked yet. Flow 275 T7
+    // (specification §4.3, AC4): a `turns` lease holding this instance is a
+    // third reason to stay "not idle" — same rule the bus-wake controller's
+    // own `isIdle` enforces right below.
     deps.jobRegistry?.onCompletion(() => {
       const busy = chrome.isBusy() || foregroundOperation.isActive;
-      const idle = !busy && mainQueue.length === 0;
+      const idle = !busy && mainQueue.length === 0 && leaseView()?.held() !== true;
       if (!idle) {
         return;
       }
@@ -6794,7 +6985,16 @@ export async function launchTuiAgentShell(opts: {
     // start a turn with nothing to drain, burning the auto-wake budget on an
     // empty round.
     busWakeController = createBusWakeController({
-      isIdle: () => !destroyed && !chrome.isBusy() && !foregroundOperation.isActive && mainQueue.length === 0,
+      // Flow 275 T7 (specification §4.3, AC4): "not held" joins the SAME
+      // idle test the task-notification wake uses right below — a `turns`
+      // lease holding this instance must block a bus wake exactly like it
+      // blocks every other route into a new main-agent turn.
+      isIdle: () =>
+        !destroyed &&
+        !chrome.isBusy() &&
+        !foregroundOperation.isActive &&
+        mainQueue.length === 0 &&
+        leaseView()?.held() !== true,
       inbox: busInbox,
       getWakes: () => consecutiveAutoWakes,
       incWakes: () => {
@@ -6808,6 +7008,22 @@ export async function launchTuiAgentShell(opts: {
         );
       },
       hasBusDeps: () => deps.busInbox !== undefined,
+    });
+
+    // Flow 275 (agent bus P4, T7; specification §5.2 step 5, AC4): drains the
+    // queue the moment a `turns` lease releases this instance — the SAME
+    // "forced item first, else FIFO head" rule the turn-settle handler above
+    // uses (`forceHandoff.takeNext() ?? mainQueue.shift()`), and skipped
+    // outright while a turn is still busy (that turn's own settle drains the
+    // queue once it finishes; draining here too would double-dispatch).
+    leaseHoldController = createLeaseHoldController({
+      isHeld: () => leaseView()?.held() === true,
+      onRelease: () => {
+        if (chrome.isBusy() || foregroundOperation.isActive || forceHandoff.isAwaitingSettlement) return;
+        const drained = forceHandoff.takeNext() ?? mainQueue.shift();
+        paintMainQueue();
+        if (drained !== undefined) runLine(drained.question);
+      },
     });
 
     // --- block navigation mode (Ctrl+O … Esc) — flow 109 D-3 ----------------

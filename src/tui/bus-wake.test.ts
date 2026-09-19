@@ -9,7 +9,13 @@
 // actually testable, per review r1.
 import { describe, expect, test } from "bun:test";
 import { createBusInbox, type BusInboxEvent } from "../bus/inbox";
-import { busInboxFullNotice, createBusDropNotifier, createBusWakeController, decideBusWake } from "./bus-wake";
+import {
+  busInboxFullNotice,
+  createBusDropNotifier,
+  createBusWakeController,
+  createLeaseHoldController,
+  decideBusWake,
+} from "./bus-wake";
 
 /** A minimal `BusInboxEvent`, overridable per test (mirrors `tui-bus.test.ts`'s `renderedEvent`). */
 function inboxEvent(overrides: Partial<BusInboxEvent> = {}): BusInboxEvent {
@@ -229,5 +235,66 @@ describe("createBusDropNotifier (review r1 F10)", () => {
 
   test("busInboxFullNotice formats the exact operator line review r1 F10 asks for", () => {
     expect(busInboxFullNotice(7)).toBe("bus: inbox full — 7 older message(s) dropped\n");
+  });
+});
+
+// Flow 275 (agent bus P4, T7; specification §4.3, §5.2, AC4): the held→
+// released edge detector that drains the TUI's held queue.
+describe("createLeaseHoldController (specification §5.2 step 5, AC4)", () => {
+  function harness(initialHeld: boolean) {
+    let held = initialHeld;
+    const releases: number[] = [];
+    const controller = createLeaseHoldController({
+      isHeld: () => held,
+      onRelease: () => releases.push(releases.length + 1),
+    });
+    return { controller, releases, setHeld: (v: boolean) => { held = v; } };
+  }
+
+  test("never held: onPoll never releases", () => {
+    const { controller, releases } = harness(false);
+    controller.onPoll();
+    controller.onPoll();
+    expect(releases).toEqual([]);
+  });
+
+  test("still held: onPoll never releases", () => {
+    const { controller, releases } = harness(true);
+    controller.onPoll();
+    controller.onPoll();
+    expect(releases).toEqual([]);
+  });
+
+  test("held then released: fires onRelease exactly once, on the poll it actually flips", () => {
+    const { controller, releases, setHeld } = harness(true);
+    controller.onPoll(); // still held
+    expect(releases).toEqual([]);
+    setHeld(false);
+    controller.onPoll(); // flips here
+    expect(releases).toEqual([1]);
+    controller.onPoll(); // stays released — no second fire
+    expect(releases).toEqual([1]);
+  });
+
+  test("a later held episode fires its own release again", () => {
+    const { controller, releases, setHeld } = harness(true);
+    controller.onPoll(); // observe held=true first, so the next flip is a real transition
+    setHeld(false);
+    controller.onPoll();
+    expect(releases).toEqual([1]);
+    setHeld(true);
+    controller.onPoll(); // held again — no release
+    expect(releases).toEqual([1]);
+    setHeld(false);
+    controller.onPoll(); // released again — fires
+    expect(releases).toEqual([1, 2]);
+  });
+
+  test("starting unheld, never released, even if isHeld briefly reports false the first call", () => {
+    // wasHeld starts false — a false->false transition on the very first
+    // poll must never be mistaken for a release.
+    const { controller, releases } = harness(false);
+    controller.onPoll();
+    expect(releases).toEqual([]);
   });
 });
