@@ -1,0 +1,201 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "A rotation between listing the rotated segments and reading events.jsonl loses a segment",
+    "impact": "The cursor is on segment S. The reader lists the segments up to S. A writer then rotates S+1 and appends the first line of S+2. Step 3 reads S+2, seq jumps past S+1, and S+1 is never delivered.",
+    "suggested_fix": "Open events.jsonl and keep the fd (inode X) before listing the rotated segments. Skip the rotated segment whose inode is X. Take the cursor's segment from where X actually is.",
+    "evidence": "src/bus/log.ts:408 at the round's head; The cursor is on segment S. The reader lists the segments up to S. A writer then rotates S+1 and appends the first line of S+2. Step 3 reads S+2, seq jumps past S+1, and S+1 is never delivered.",
+    "confidence": "high",
+    "file": "src/bus/log.ts",
+    "line": 408,
+    "class_scope": {
+      "sites": [
+        "src/bus/log.ts:readEvents moved branch (401-421)",
+        "src/bus/log.ts:cursorAtEnd (425-432) same path-then-list order"
+      ],
+      "enumeration_method": "Read every function in log.ts that combines listRotatedSegments with a path-based read of eventsPath."
+    },
+    "global_id": "2026-09-19-ingest-main#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix c74f5a39, no longer reproduces at head e9aec174: src/bus/log.ts:463-501 opens events.jsonl first and locates it by inode; test src/bus/log.test.ts:342 injects a rotation at 'opened' and at 'listed', and passes. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "A complete but unterminated fragment is revived as a duplicate seq",
+    "impact": "A short write ends just before the newline. The next writer's newline prefix turns the fragment into a valid seq-N line, then that writer appends its own seq N.",
+    "suggested_fix": "Under the lock, truncate the segment to completeEnd, or count the fragment's seq in lastSeq.",
+    "evidence": "src/bus/log.ts:259 at the round's head; A short write ends just before the newline. The next writer's newline prefix turns the fragment into a valid seq-N line, then that writer appends its own seq N.",
+    "confidence": "high",
+    "file": "src/bus/log.ts",
+    "line": 259,
+    "global_id": "2026-09-19-ingest-main#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix c74f5a39, no longer reproduces at head e9aec174: src/bus/log.ts:283-290 truncates to completeEnd under append.lock; test src/bus/log.test.ts:390 passes. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The removeStaleLock check-then-rename race can remove a fresh live lock",
+    "impact": "Two waiters both try to reclaim a dead holder's lock. The second renames away the first's new lock, and both write.",
+    "suggested_fix": "After the rename, confirm the moved owner token is the one that was judged stale.",
+    "evidence": "src/lib/fs.ts:156 at the round's head; Two waiters both try to reclaim a dead holder's lock. The second renames away the first's new lock, and both write.",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 156,
+    "global_id": "2026-09-19-ingest-main#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix c74f5a39, no longer reproduces at head e9aec174: src/lib/fs.ts:184-205 checks the moved directory's inode and token and renames it back when they differ; test src/lib/fs.lock-reclaim.test.ts:24 passes and fs.test.ts shows no regression. The narrower residual was filed as N2. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "lease-expired is duplicated when the lease file removal fails or the process crashes",
+    "impact": "The process crashes between the append and afterAppend, and the next prune writes a second lease-expired.",
+    "suggested_fix": "Delete the lease first, or check the log for an existing lease-expired with that leaseId, all under the lock.",
+    "evidence": "src/bus/prune.ts:64 at the round's head; The process crashes between the append and afterAppend, and the next prune writes a second lease-expired.",
+    "confidence": "high",
+    "file": "src/bus/prune.ts",
+    "line": 64,
+    "global_id": "2026-09-19-ingest-main#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix c74f5a39, no longer reproduces at head e9aec174: src/bus/prune.ts:89-101 re-checks, looks the lease up in the log, deletes, then appends; tests src/bus/prune.test.ts:110, :145 and :161 pass. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Control characters in body, activity, branch and checkout reach the terminal",
+    "impact": "A peer sends ESC sequences, and bus log and bus list print them raw.",
+    "suggested_fix": "Strip C0/C1 control characters before display.",
+    "evidence": "src/commands/bus.ts:268 at the round's head; A peer sends ESC sequences, and bus log and bus list print them raw.",
+    "confidence": "high",
+    "file": "src/commands/bus.ts",
+    "line": 268,
+    "global_id": "2026-09-19-ingest-main#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix c74f5a39, no longer reproduces at head e9aec174: src/commands/bus.ts:284-298 applies displaySafe to the body, names, toLabel, branch, checkout, activity and reason; test src/commands/bus.test.ts:284 passes. The ts/expiresAt gap was filed as N1. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "Project-key slug collisions; send --json is missing from help and cli-reference",
+    "impact": "The paths a/b and a-b share a bus.",
+    "suggested_fix": "Document --json. The slug collision is accepted as a known limitation.",
+    "evidence": "src/bus/paths.ts:62 at the round's head; The paths a/b and a-b share a bus.",
+    "confidence": "high",
+    "file": "src/bus/paths.ts",
+    "line": 62,
+    "global_id": "2026-09-19-ingest-main#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "doc part only, fix c74f5a39, present at head e9aec174: docs/docs/cli-reference.md documents send --json, and src/standard/command-registry.ts:938 no longer says 'may wake'. The slug-collision part was accepted by the operator as info.",
+      "verifier": "272-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "c74f5a39"
+    }
+  },
+  {
+    "id": "N1",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "ts/expiresAt printed without displaySafe; lenient timestamp validation",
+    "impact": "A peer-written ts carrying ESC would reach the terminal if the parser accepted it",
+    "suggested_fix": "strict ISO-8601 UTC check plus displaySafe on timestamps",
+    "evidence": "src/commands/bus.ts:271 at the round's head; A peer-written ts carrying ESC would reach the terminal if the parser accepted it",
+    "confidence": "high",
+    "file": "src/commands/bus.ts",
+    "line": 271,
+    "global_id": "2026-09-19-ingest-main#N1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 0d27d6d3, head 9740c068: strict ISO-8601 UTC isBusTimestamp in src/bus/schema.ts:260-274 (also covers lease createdAt/expiresAt); displaySafe on ts and expiresAt at src/commands/bus.ts:234 and :271; tests src/bus/schema.test.ts:188 and src/commands/bus.test.ts:305 pass. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "0d27d6d3"
+    }
+  },
+  {
+    "id": "N2",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Rename-back onto a third waiter's empty lock dir let that waiter's cleanup rm a live lock",
+    "impact": "C has run mkdir but not written owner.json; B renames A's lock back; C's cleanup removes A's lock",
+    "suggested_fix": "acquirer cleanup removes only its own empty/ownerless directory",
+    "evidence": "src/lib/fs.ts:200 at the round's head; C has run mkdir but not written owner.json; B renames A's lock back; C's cleanup removes A's lock",
+    "confidence": "high",
+    "file": "src/lib/fs.ts",
+    "line": 200,
+    "global_id": "2026-09-19-ingest-main#N2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 0d27d6d3, head 9740c068: src/lib/fs.ts:107-118 records the created inode and removes lockPath only while it is that same empty or ownerless directory (isSameEmptyOrOwnerlessDir :181); tests src/lib/fs.lock-reclaim.test.ts:82 and :24 pass, and fs.test.ts shows no regression for other withFileLock callers. refuted = no longer reproduces after the fix.",
+      "verifier": "272-review-r3"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "0d27d6d3"
+    }
+  }
+]
