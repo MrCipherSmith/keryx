@@ -1,6 +1,6 @@
 {
   "name": "@mrciphersmith/keryx",
-  "version": "0.2.124",
+  "version": "0.2.125",
   "description": "Version-controlled project context for AI coding agents: code graph, architecture wiki, project memory, relevant tests, quality signals, and task flows.",
   "private": false,
   "publishConfig": {
@@ -95,7 +95,7 @@
     "typescript-eslint": "^8.69.0"
   },
   "engines": {
-    "bun": ">=1.1.0"
+    "bun": ">=1.3.14"
   },
   "trustedDependencies": [
     "protobufjs",

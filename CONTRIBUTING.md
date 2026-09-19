@@ -18,7 +18,7 @@ Please keep these two invariants in mind before proposing changes:
 
 ## Requirements
 
-- [Bun](https://bun.sh) `>= 1.1.0`
+- [Bun](https://bun.sh) `>= 1.3.14`
 - `git`
 
 ## Getting Started

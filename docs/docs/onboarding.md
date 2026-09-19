@@ -7,13 +7,31 @@ The public command is `keryx`. This guide gets you from zero to a running worksp
 ## Requirements
 
 Which of these you need depends on how you install — see the table below. In
-the common case (`npm install -g`) it is `bun >= 1.1.0`, plus `git` for hooks
+the common case (`npm install -g`) it is `bun >= 1.3.14`, plus `git` for hooks
 and `--changed` scopes.
 
 - `git` — required for git hooks, `--changed` scopes and the managed installer; the core runs without it
-- `bun` (>= 1.1.0) — required for every path except the standalone binary
+- `bun` (>= 1.3.14) — required for every path except the standalone binary; see [Bun version](#bun-version)
 
 External tools like `gh` (GitHub CLI), `eslint`, and `tsc` are used opportunistically by some modules but are never hard dependencies.
+
+## Bun version
+
+keryx needs **Bun 1.3.14 or newer**. Check it with `bun --version` and update
+with `bun upgrade`.
+
+The floor is not arbitrary. Bun 1.2.22 through 1.3.13 can close a terminal's
+`process.stdin` while another native stream is being read in the same process
+([oven-sh/bun#29787](https://github.com/oven-sh/bun/issues/29787),
+[#30565](https://github.com/oven-sh/bun/issues/30565)). In `keryx shell` this
+shows up as a frozen screen: the spinner and timer keep running, but no key,
+Esc or Ctrl+C gets through. It typically happens when subagents start. keryx
+0.2.123+ detects the closed input and reopens the terminal, but only a current
+Bun removes the cause. `keryx shell --debug` records the event as
+`stdin.dead.end` followed by `stdin.reopened`.
+
+The standalone binary bundles its own Bun and is not affected by the Bun
+installed on the machine.
 
 ## Install
 
