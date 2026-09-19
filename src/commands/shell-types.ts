@@ -1,3 +1,5 @@
+import type { BusClient } from "../bus/client";
+import type { PresenceSurface } from "../bus/schema";
 import type { ProviderPort } from "../harness/provider/types";
 import type { OpenLeasedSessionOptions, OpenLeasedSessionResult, SessionLeaseHandle } from "../session/lease";
 
@@ -38,6 +40,27 @@ export interface ShellSessionOpts {
    * Production leaves it unset and gets `openLeasedSession`.
    */
   openLeased?: (opts: OpenLeasedSessionOptions) => OpenLeasedSessionResult;
+  /**
+   * `--name` (flow 273 T6), or the shell config's `bus.name`: the requested
+   * bus instance name (decision D-06), threaded to `joinBus`'s
+   * `requestedName`. Also the field the TUI launch options carry the same
+   * value under (`session.busName` in `src/tui/tui-shell.ts`'s own opts), so
+   * `keryx shell --name` reaches that surface's `joinBus` call too even
+   * though that surface never reads THIS interface.
+   */
+  busName?: string;
+  /**
+   * Which bus `surface` this shell reports as (specification §4.1). The
+   * readline chat and agent REPLs default to `"readline"`; the chat TUI —
+   * driven through this same `runShell` — sets `"tui"`.
+   */
+  busSurface?: PresenceSurface;
+  /**
+   * Written by the REPL with the bus client it joined (mirrors `leaseBox`),
+   * so a caller outside the loop (the readline SIGINT/SIGTERM handler) can
+   * call `leave()` synchronously before `process.exit` (specification §5.4).
+   */
+  busBox?: { current: BusClient | undefined };
 }
 
 /** Resolved per-provider sampling/budget/timeout overrides (flow 268). */

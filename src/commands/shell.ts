@@ -20,6 +20,10 @@
 
 import { randomUUID } from "node:crypto";
 import * as readline from "node:readline";
+import { joinBus, type BusClient, type RenderedBusEvent, type BusPeer } from "../bus/client";
+import { displaySafe } from "../bus/display";
+import { isBusRefusal } from "../bus/errors";
+import { isAssignableBusName } from "../bus/schema";
 import { loadOAuthGrant } from "../lib/oauth/grants";
 import { providerByName, resolveProviderModelParamsByName } from "./providers";
 import { makeProvider } from "../harness/provider/make-provider";
@@ -222,6 +226,159 @@ export function readlineAgentHelpText(): string {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Bus wiring shared by the readline chat and agent REPLs (flow 273 T6,
+// specification §5.1, §5.2, §5.4, §7.2's non-pause subset). Both loops join
+// with `joinBus` (`../bus/client.ts`) after their session lease is settled,
+// render inbound events through their own system-output path, and dispatch
+// `/bus` through `runBusSlashCommand`. Neither loop reimplements the
+// join/heartbeat/poll sequence itself.
+// ---------------------------------------------------------------------------
+
+/** Age formatting for `/bus [list]`; mirrors `keryx bus list`'s own (`src/commands/bus.ts`). */
+function formatBusAge(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "-";
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  return `${Math.floor(seconds / 3600)}h`;
+}
+
+/** `bus: joined as @<name> · <n> peers` (specification §5.1), with the D-06 rename note when it applies. */
+function formatBusJoinLine(bus: BusClient): string {
+  const note = bus.nameWasTaken ? " (requested name was already taken)" : "";
+  return `bus: joined as @${displaySafe(bus.name)} · ${bus.peers().length} peers${note}\n`;
+}
+
+/** One rendered line per inbound event (specification §5.2): `⇄ @from kind: preview`. */
+function formatBusEventLine(event: RenderedBusEvent): string {
+  return `⇄ @${displaySafe(event.fromName)} ${event.kind}: ${event.preview}\n`;
+}
+
+/** The `/bus [list]` peers table, for a surface with no fleet sidebar. */
+function formatBusPeersTable(peers: readonly BusPeer[]): string {
+  if (peers.length === 0) return "bus: no live or stale peers.\n";
+  const rows = peers.map(
+    (peer) =>
+      `  @${displaySafe(peer.record.name)} · ${peer.state} · ${peer.record.status} · ${formatBusAge(peer.ageMs)} · ${displaySafe(peer.record.activity)}\n`,
+  );
+  return `bus: ${peers.length} peer(s)\n${rows.join("")}`;
+}
+
+/** A `BusRefusal` prints its own named code; anything else prints its message. Never thrown further (§5.2). */
+function busErrorLine(error: unknown): string {
+  if (isBusRefusal(error)) return `bus: ${error.message}\n`;
+  return `bus: ${error instanceof Error ? error.message : String(error)}\n`;
+}
+
+type BusSlashCommand =
+  | { kind: "list" }
+  | { kind: "send"; to: string; text: string }
+  | { kind: "ask"; to: string; text: string }
+  | { kind: "reply"; replyTo: string; text: string }
+  | { kind: "name"; name: string }
+  | { kind: "usage"; message: string };
+
+/** Pure parse of `/bus <argument>` (specification §7.2's non-pause subset). */
+function parseBusSlashCommand(argument: string): BusSlashCommand {
+  const trimmed = argument.trim();
+  if (trimmed.length === 0 || trimmed === "list") {
+    return { kind: "list" };
+  }
+  // `/bus @name text` shorthand for `/bus send @name text`.
+  if (trimmed.startsWith("@")) {
+    const spaceIndex = trimmed.indexOf(" ");
+    const text = spaceIndex < 0 ? "" : trimmed.slice(spaceIndex + 1).trim();
+    if (spaceIndex < 0 || text.length === 0) {
+      return { kind: "usage", message: "Usage: /bus @name <text>\n" };
+    }
+    return { kind: "send", to: trimmed.slice(0, spaceIndex), text };
+  }
+  const spaceIndex = trimmed.indexOf(" ");
+  const sub = spaceIndex < 0 ? trimmed : trimmed.slice(0, spaceIndex);
+  const rest = spaceIndex < 0 ? "" : trimmed.slice(spaceIndex + 1).trim();
+  if (sub === "send") {
+    const restSpace = rest.indexOf(" ");
+    const text = restSpace < 0 ? "" : rest.slice(restSpace + 1).trim();
+    if (!rest.startsWith("@") || restSpace < 0 || text.length === 0) {
+      return { kind: "usage", message: "Usage: /bus send @name <text>\n" };
+    }
+    return { kind: "send", to: rest.slice(0, restSpace), text };
+  }
+  if (sub === "ask") {
+    const restSpace = rest.indexOf(" ");
+    const text = restSpace < 0 ? "" : rest.slice(restSpace + 1).trim();
+    if (!rest.startsWith("@") || restSpace < 0 || text.length === 0) {
+      return { kind: "usage", message: "Usage: /bus ask @name <text>\n" };
+    }
+    return { kind: "ask", to: rest.slice(0, restSpace), text };
+  }
+  if (sub === "reply") {
+    const restSpace = rest.indexOf(" ");
+    const text = restSpace < 0 ? "" : rest.slice(restSpace + 1).trim();
+    if (restSpace < 0 || text.length === 0) {
+      return { kind: "usage", message: "Usage: /bus reply <id> <text>\n" };
+    }
+    return { kind: "reply", replyTo: rest.slice(0, restSpace), text };
+  }
+  if (sub === "name") {
+    if (rest.length === 0) {
+      return { kind: "usage", message: "Usage: /bus name <new-name>\n" };
+    }
+    return { kind: "name", name: rest };
+  }
+  return {
+    kind: "usage",
+    message: `Unknown /bus subcommand '${sub}'. Usage: /bus [list|send @name|ask @name|reply <id>|name] <text>\n`,
+  };
+}
+
+/**
+ * `/bus` dispatch shared by both readline REPLs. `recentSenders` maps a
+ * received event's id to its sender's name, so `/bus reply <id> text` can
+ * resolve a recipient without the operator retyping `@name` (the id is all
+ * `⇄ @from kind: preview` shows). A bus error is never thrown further — it
+ * prints one line and the loop continues (specification §5.2).
+ */
+async function runBusSlashCommand(
+  bus: BusClient | undefined,
+  argument: string,
+  recentSenders: ReadonlyMap<string, string>,
+  emit: (text: string) => void,
+): Promise<void> {
+  if (bus === undefined) {
+    emit("bus: not joined for this session.\n");
+    return;
+  }
+  const parsed = parseBusSlashCommand(argument);
+  try {
+    if (parsed.kind === "list") {
+      emit(formatBusPeersTable(bus.peers()));
+    } else if (parsed.kind === "send") {
+      await bus.send(parsed.to, "notice", parsed.text);
+      emit(`bus: sent to ${parsed.to}\n`);
+    } else if (parsed.kind === "ask") {
+      await bus.send(parsed.to, "question", parsed.text);
+      emit(`bus: asked ${parsed.to}\n`);
+    } else if (parsed.kind === "reply") {
+      const to = recentSenders.get(parsed.replyTo);
+      if (to === undefined) {
+        emit(`bus: no known message ${parsed.replyTo} to reply to\n`);
+        return;
+      }
+      await bus.send(`@${to}`, "reply", parsed.text, parsed.replyTo);
+      emit(`bus: replied to @${to}\n`);
+    } else if (parsed.kind === "name") {
+      await bus.rename(parsed.name);
+      emit(`bus: renamed to @${parsed.name}\n`);
+    } else {
+      emit(parsed.message);
+    }
+  } catch (cause) {
+    emit(busErrorLine(cause));
+  }
+}
+
 // The skipped-session line and the choice list live in `session/lease-choice.ts`
 // so the TUI shares them; re-exported here for the existing importers.
 export { describeSkippedSession, type LeasedChoice };
@@ -364,6 +521,13 @@ export async function runWithLeaseChoice(
         ...(current.enabled !== undefined ? { enabled: current.enabled } : {}),
         ...(current.leaseBox !== undefined ? { leaseBox: current.leaseBox } : {}),
         ...(current.openLeased !== undefined ? { openLeased: current.openLeased } : {}),
+        // Flow 273 T6: a lease-conflict retry (fork/view/take-over) re-opens
+        // under a NEW `ShellSessionOpts` — without carrying these forward the
+        // re-opened REPL would silently lose its requested bus name/surface
+        // and the caller's `busBox` handle for the SIGINT/SIGTERM leave().
+        ...(current.busName !== undefined ? { busName: current.busName } : {}),
+        ...(current.busSurface !== undefined ? { busSurface: current.busSurface } : {}),
+        ...(current.busBox !== undefined ? { busBox: current.busBox } : {}),
       };
       if (choice === "cancel") {
         return 0;
@@ -516,6 +680,49 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
     holdLease(undefined);
   };
 
+  // Flow 273 T6: join the bus once the session lease is settled (specification
+  // §5.1). A bus failure of any kind prints one line and never stops the shell
+  // (§5.2) — there is no persistent session to join a bus for otherwise.
+  let busWorking = false;
+  const busStatus = (): { status: "idle" | "working" | "blocked"; activity: string } => ({
+    status: busWorking ? "working" : "idle",
+    activity: live?.summary.title ?? "keryx chat",
+  });
+  const busRecentSenders = new Map<string, string>();
+  let bus: BusClient | undefined;
+  if (sessionsOn && live !== undefined) {
+    try {
+      const joined = await joinBus({
+        cwd: sessionCwd,
+        sessionId: live.summary.id,
+        surface: deps.session?.busSurface ?? "readline",
+        ...(deps.session?.busName !== undefined ? { requestedName: deps.session.busName } : {}),
+        shellConfig: loadShellConfig(),
+        env: process.env,
+        ...(lease !== undefined ? { sessionLease: lease } : {}),
+        status: busStatus,
+        onEvent: (event) => {
+          busRecentSenders.set(event.id, event.fromName);
+          system(formatBusEventLine(event));
+        },
+        onPeers: () => {},
+      });
+      if ("disabled" in joined) {
+        system(`bus: off (${joined.disabled})\n`);
+      } else {
+        bus = joined;
+        if (deps.session?.busBox !== undefined) deps.session.busBox.current = bus;
+        system(formatBusJoinLine(joined));
+      }
+    } catch (cause) {
+      system(busErrorLine(cause));
+    }
+  }
+  const leaveBus = (): void => {
+    bus?.leave();
+    if (deps.session?.busBox !== undefined) deps.session.busBox.current = undefined;
+  };
+
   const save = (): void => {
     if (live === undefined || !leaseWatch.canPersist()) {
       return;
@@ -567,8 +774,13 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       const argument = parts.slice(1).join(" ");
 
       if (command === "/exit" || command === "/quit") {
+        leaveBus();
         releaseLease();
         return;
+      }
+      if (command === "/bus") {
+        await runBusSlashCommand(bus, argument, busRecentSenders, system);
+        continue;
       }
       if (command === "/help") {
         system(HELP_TEXT);
@@ -644,6 +856,8 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
           }
           history = [];
           archive = [];
+          // AC8: presence.sessionId follows every in-process session switch.
+          await bus?.setSession(live.summary.id);
           system(`New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`);
         } else {
           history.length = 0;
@@ -754,6 +968,9 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
 
     let accumulated = "";
     let errored = false;
+    // A turn is now running: the bus heartbeat reports `working` until this
+    // one settles, cleared right before the loop's trailing blank line below.
+    busWorking = true;
     // Signal the start of a streamed reply so a rich wrapper can show a role
     // label + spinner; a no-op (no output) when no wrapper is attached.
     io.onTurnStart?.();
@@ -808,12 +1025,14 @@ export async function runShell(io: ShellIO, deps: ShellDeps): Promise<void> {
       history.pop();
     }
 
+    busWorking = false;
     // Terminate the streamed reply with a blank line so consecutive turns are
     // visually separated instead of running together on one line.
     io.onSafeBoundary?.();
     io.write("\n\n");
   }
-  // End of input: the normal return releases the lease (AC7).
+  // End of input: the normal return releases the bus and the lease (AC7).
+  leaveBus();
   releaseLease();
 }
 
@@ -1790,6 +2009,50 @@ async function runAgentRepl(
       );
     }
   }
+
+  // Flow 273 T6: join the bus once the session lease is settled (specification
+  // §5.1). A bus failure of any kind prints one line and never stops the REPL
+  // (§5.2) — there is no persistent session to join a bus for otherwise.
+  let busWorking = false;
+  const busStatus = (): { status: "idle" | "working" | "blocked"; activity: string } => ({
+    status: busWorking ? "working" : "idle",
+    activity: live?.summary.title ?? "keryx agent",
+  });
+  const busRecentSenders = new Map<string, string>();
+  let bus: BusClient | undefined;
+  if (sessionsOn && live !== undefined) {
+    try {
+      const joined = await joinBus({
+        cwd: sessionCwd,
+        sessionId: live.summary.id,
+        surface: "readline",
+        ...(sessionOpts?.busName !== undefined ? { requestedName: sessionOpts.busName } : {}),
+        shellConfig: loadShellConfig(configDir),
+        env: process.env,
+        ...(lease !== undefined ? { sessionLease: lease } : {}),
+        status: busStatus,
+        onEvent: (event) => {
+          busRecentSenders.set(event.id, event.fromName);
+          agentIo.onSystem?.(formatBusEventLine(event));
+        },
+        onPeers: () => {},
+      });
+      if ("disabled" in joined) {
+        agentIo.onSystem?.(`bus: off (${joined.disabled})\n`);
+      } else {
+        bus = joined;
+        if (sessionOpts?.busBox !== undefined) sessionOpts.busBox.current = bus;
+        agentIo.onSystem?.(formatBusJoinLine(joined));
+      }
+    } catch (cause) {
+      agentIo.onSystem?.(busErrorLine(cause));
+    }
+  }
+  const leaveBus = (): void => {
+    bus?.leave();
+    if (sessionOpts?.busBox !== undefined) sessionOpts.busBox.current = undefined;
+  };
+
   slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;
   slateSessionBox.current = slateSession;
 
@@ -1855,12 +2118,14 @@ async function runAgentRepl(
       consecutiveAutoWakes += 1;
       out(`\n${GUTTER}${style.cyan("●")} ${style.bold("keryx")}\n`);
       startSpinner();
+      busWorking = true;
       try {
         await runAgentTurn(agentIo, deps, history, "", {
           origin: "task-notification",
           ...(slateSession !== undefined ? { slateSession } : {}),
         });
       } finally {
+        busWorking = false;
         endBlock();
         stopSpinner();
       }
@@ -1878,6 +2143,7 @@ async function runAgentRepl(
       // Flow 173 (AC7): sweep every tracked background job (process-group
       // SIGTERM→SIGKILL) on real session exit.
       await deps.sweepBackgroundJobs?.();
+      leaveBus(); // flow 273 AC7-equivalent: the normal return leaves the bus too
       releaseLease(); // AC7: the normal return releases the session lease
       return; // end of input
     }
@@ -1890,10 +2156,13 @@ async function runAgentRepl(
         // SLATE-5 close trigger: shell exit (explicit command).
         await closeSlateSession(slateSession, mintTimestampAttemptId);
         await deps.sweepBackgroundJobs?.(); // flow 173 AC7: sweep on exit
+        leaveBus(); // flow 273 T6: /exit leaves the bus too
         releaseLease(); // flow 271 AC7: `/exit` releases the session lease
         return;
       }
-      if (command === "/help") {
+      if (command === "/bus") {
+        await runBusSlashCommand(bus, rest, busRecentSenders, (text) => agentIo.onSystem?.(text));
+      } else if (command === "/help") {
         agentIo.onSystem?.(readlineAgentHelpText());
       } else if (isSessionInfoCommand(command)) {
         const cwd = sessionCwd;
@@ -1956,6 +2225,8 @@ async function runAgentRepl(
           nextArchiveIndex = 0;
           slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };
           slateSessionBox.current = slateSession;
+          // AC8: presence.sessionId follows every in-process session switch.
+          await bus?.setSession(live.summary.id);
           agentIo.onSystem?.(
             `New session ${shortSessionId(live.summary.id)} (previous kept on disk)\n`,
           );
@@ -2239,6 +2510,7 @@ async function runAgentRepl(
     events?.emit({ type: "turn_start", prompt: line, provider: deps.providerId, model: deps.modelId });
     deps.resetSubagentBudget?.();
     startSpinner();
+    busWorking = true;
     try {
       await runAgentTurn(agentIo, deps, history, line, slateSession !== undefined ? { slateSession } : {});
     } catch (error) {
@@ -2248,6 +2520,7 @@ async function runAgentRepl(
       turnError = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
+      busWorking = false;
       endBlock(); // close any still-open live block (e.g. on a mid-turn throw)
       stopSpinner();
       const end: ShellEvent = {
@@ -2422,10 +2695,19 @@ export interface ShellCliFlags {
    * shell is still reading its terminal, and re-arms input if it is not.
    */
   debug?: boolean;
+  /**
+   * `--name <name>` (flow 273 T6, decision D-06): the requested bus instance
+   * name. Validated against `isAssignableBusName` at parse time — a reserved
+   * name (`all`, `cli`, `system`) or one outside `^[a-z0-9][a-z0-9-]{0,31}$`
+   * is refused here (`ShellFlagError`, exit 2) rather than reaching `joinBus`,
+   * which would otherwise silently fall back to `agent-<n>`.
+   */
+  name?: string;
 }
 
 /**
- * A refused combination of the session-lease flags (`--fork`, `--take-over`).
+ * A refused combination of the session-lease flags (`--fork`, `--take-over`),
+ * or of `--name` (flow 273 T6).
  * Carries exit code 2, the usage-error code, which `cli.ts` honours.
  */
 export class ShellFlagError extends Error {
@@ -2472,6 +2754,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
   let eventsFile: string | undefined;
   let eventsMaxField: number | undefined;
   let debug: boolean | undefined;
+  let name: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === "--provider") {
@@ -2504,6 +2787,18 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
       fork = true;
     } else if (arg === "--take-over") {
       takeOver = true;
+    } else if (arg === "--name") {
+      // D-06: a reserved or malformed name is refused HERE (exit 2) rather
+      // than reaching `joinBus`, which treats an unusable requested name as
+      // simply absent and falls back to `agent-<n>` — a silent fallback would
+      // be the wrong outcome for a flag the operator typed on purpose.
+      const next = valueAfter(i++);
+      if (!isAssignableBusName(next)) {
+        throw new ShellFlagError(
+          `--name "${next}" must match ^[a-z0-9][a-z0-9-]{0,31}$ and not be "all", "cli" or "system"`,
+        );
+      }
+      name = next;
     } else if (arg === "--permission-mode") {
       const next = valueAfter(i++);
       if (!isPermissionMode(next)) invalid("--permission-mode must be ask, trust or auto");
@@ -2581,6 +2876,7 @@ export function parseShellCliFlags(args: string[]): ShellCliFlags {
     ...(eventsFile !== undefined ? { eventsFile } : {}),
     ...(eventsMaxField !== undefined ? { eventsMaxField } : {}),
     ...(debug === true ? { debug: true } : {}),
+    ...(name !== undefined ? { name } : {}),
   };
 }
 
@@ -2662,6 +2958,7 @@ export async function shellCommand(args: string[], runtime: ShellCommandRuntime 
   --resume, -r [id-or-title]     Resume a session, or open the session picker
   --fork                        With -r <id>: continue in a fork of that session
   --take-over                   With -r <id>: take the session from a stale holder
+  --name <name>                 Join the agent bus under this name (lowercase, digits, -; not all/cli/system)
   --permission-mode <mode>      Agent permissions: ask, trust or auto
   --deny-tools <a,b>            Withhold these tools from the session entirely
   --ask | --trust | --auto       Permission shortcuts; last flag wins
@@ -3013,6 +3310,20 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     // The chat TUI's session lease (flow 271), written by `runShell` and
     // released in the `finally` below on every exit from the TUI branch.
     const chatLeaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+    // The chat TUI's bus client (flow 273 T6), left in that same `finally`.
+    const chatBusBox: { current: BusClient | undefined } = { current: undefined };
+    // The tui-agent surface's session opts (flow 273 T6: carries `busName`
+    // for T7's `joinBus` wiring — see the call site below for why this is a
+    // named variable rather than an inline literal).
+    const tuiAgentSessionOpts = {
+      cwd,
+      ...(flags.continueLast === true ? { continueLast: true } : {}),
+      ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
+      ...(flags.resumePick === true ? { pickOnStart: true } : {}),
+      // Flow 271: `--fork` / `--take-over` for the TUI's leased open (T8).
+      ...leaseFlagOpts,
+      ...(flags.name !== undefined ? { busName: flags.name } : {}),
+    };
 
     try {
     if (surface === "tui-chat") {
@@ -3061,7 +3372,10 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
                 ...(flags.continueLast === true ? { continueLast: true } : {}),
                 ...(chatResumeId !== undefined ? { resumeId: chatResumeId } : {}),
                 ...leaseFlagOpts,
+                ...(flags.name !== undefined ? { busName: flags.name } : {}),
+                busSurface: "tui",
                 leaseBox: chatLeaseBox,
+                busBox: chatBusBox,
               },
             };
           },
@@ -3084,14 +3398,15 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
         // `/connect` and `/model` re-probe providers fresh.
         redetect,
         ...(tuiInitial !== undefined ? { initial: tuiInitial } : {}),
-        session: {
-          cwd,
-          ...(flags.continueLast === true ? { continueLast: true } : {}),
-          ...(flags.resumeId !== undefined ? { resumeId: flags.resumeId } : {}),
-          ...(flags.resumePick === true ? { pickOnStart: true } : {}),
-          // Flow 271: `--fork` / `--take-over` for the TUI's leased open (T8).
-          ...leaseFlagOpts,
-        },
+        // `tuiAgentSessionOpts` (below), not an inline literal here: passed as
+        // a variable so TS checks it structurally instead of as a fresh
+        // object literal. `launchTuiAgentShell`'s own `session` option type
+        // (`src/tui/tui-shell.ts`, T7's file) does not (yet) declare
+        // `busName` — a fresh literal here would fail an excess-property
+        // check that a variable's assignability does not run, so this reaches
+        // T7's own `joinBus` wiring there without this file depending on, or
+        // needing to touch, that type's shape.
+        session: tuiAgentSessionOpts,
         ...(flags.permissionModeFlag !== undefined ? { initialPermissionMode: flags.permissionModeFlag } : {}),
         versionCheck,
       })
@@ -3100,8 +3415,11 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
     }
     // else: optional dep absent / init failed → fall through to the readline shell.
     } finally {
-      // The chat TUI's lease (flow 271, AC7). Idempotent: `runShell` usually
-      // released it already on its own return.
+      // The chat TUI's bus client and lease (flow 273 T6, flow 271, AC7).
+      // Idempotent: `runShell` usually released both already on its own
+      // return. Bus first, so a peer never sees presence outlive the lease.
+      chatBusBox.current?.leave();
+      chatBusBox.current = undefined;
       releaseSessionLease(chatLeaseBox.current);
       chatLeaseBox.current = undefined;
       // Runs on every exit from the TUI branch — the two `return`s above and
@@ -3129,6 +3447,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // The session lease the readline REPL holds (flow 271), written by the REPL
   // and released by the signal handler below before `process.exit` (AC7).
   const leaseBox: { current: SessionLeaseHandle | undefined } = { current: undefined };
+  // The bus client the readline REPL joined (flow 273 T6), released by the
+  // same signal handler before the lease (specification §5.4).
+  const busBox: { current: BusClient | undefined } = { current: undefined };
 
   // SIGINT: exit, but CLOSE FIRST.
   //
@@ -3144,8 +3465,12 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
   // `close()` is bounded (see `CLOSE_GRACE_MS`), so this cannot turn Ctrl-C
   // into a hang.
   const closeAndExit = (code: number) => (): void => {
-    // Synchronously, first: the lease must be gone even if the close below hangs
-    // until the grace timeout (specification §6, AC7).
+    // Synchronously, first: the bus presence and the lease must both be gone
+    // even if the close below hangs until the grace timeout (specification
+    // §5.4, §6, AC7). Bus first, so a peer never sees presence outlive the
+    // lease it names.
+    busBox.current?.leave();
+    busBox.current = undefined;
     releaseSessionLease(leaseBox.current);
     leaseBox.current = undefined;
     void (async (): Promise<void> => {
@@ -3421,7 +3746,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
               ...(flags.continueLast === true ? { continueLast: true } : {}),
               ...(resumeId !== undefined ? { resumeId } : {}),
               ...leaseFlagOpts,
+              ...(flags.name !== undefined ? { busName: flags.name } : {}),
               leaseBox,
+              busBox,
             },
             runRepl,
             leaseChoiceRuntime,
@@ -3446,7 +3773,9 @@ Example: keryx shell --provider ollama --model llama3.1:latest`);
             ...(flags.continueLast === true ? { continueLast: true } : {}),
             ...(resumeId !== undefined ? { resumeId } : {}),
             ...leaseFlagOpts,
+            ...(flags.name !== undefined ? { busName: flags.name } : {}),
             leaseBox,
+            busBox,
           },
           (session) => runShell(io, { ...deps, session }),
           leaseChoiceRuntime,
