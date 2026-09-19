@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.2.0
+Version: 0.3.0
 
 ## Purpose
 
@@ -13,16 +13,24 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**Specification ready (future). Nothing is implemented.**
+**P0 implemented. P1–P5 specification ready, not implemented.**
 
-Current state, verified against `main` at d6f864b3:
+- **P0 session lease: implemented** in flow 271, PR
+  [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
+  takes an exclusive lease: `-c` skips live sessions, `-r` on a live session
+  offers fork, view or cancel, and `keryx sessions list` marks live and stale
+  sessions. Two `-c` shells no longer share one session.
+- **P1–P5: not implemented.** The bus store and CLI, shell integration, agent
+  delivery and tools, pause leases, and the docs phase do not exist yet.
+
+So, apart from the session lease:
 
 - shells are unaware of each other;
-- a running agent accepts no external input;
-- two shells started with `-c` share one session, and the last writer wins.
+- a running agent accepts no external input.
 
-The integration points named in the specification exist today. The bus code
-itself does not.
+The bus code, and the P1+ integration hooks named in the specification (bus
+join and poller, inbox drains, bus tools, the publish-lease gate floor), do not
+exist yet.
 
 ## Document index
 

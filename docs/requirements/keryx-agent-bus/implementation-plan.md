@@ -1,9 +1,14 @@
 # Implementation Plan: Keryx Agent Bus
-Version: 0.2.1
+Version: 0.3.0
 
 ## Status
 
-Planned. Nothing is implemented. Delivery goes through one managed flow per
+P0 is implemented (flow 271, PR #607). P1–P5 are planned and not implemented.
+Known P0 limitations: a brand-new session is created a moment before it is
+leased; an unreadable owner record reads as unknown rather than lost; cross-host
+clock skew is documented only.
+
+Delivery goes through one managed flow per
 phase, driven by `flow-orchestrator`, each in its own worktree with a commit at
 every task boundary. Acceptance criteria refer to
 [specification.md](specification.md) §10.
@@ -12,7 +17,7 @@ every task boundary. Acceptance criteria refer to
 
 | Phase | Scope | ACs | Depends on |
 |---|---|---|---|
-| **P0 Session lease** | Scope:<br>• `acquireLeaseSync` in `src/lib/fs.ts`, with the D-09 liveness rule and file I/O shared with `withFileLock`<br>• the lease in `openSession`<br>• `latestUnleasedSession`<br>• live and stale markers in `listSessions` and `keryx sessions list`<br>• `--fork` / `--take-over` and the fork/view/cancel picker<br>• the §6.2 switch order for `/resume`, the startup picker and readline bare `-r` | AC1, AC2, AC3a, AC20, AC22 | none |
+| **P0 Session lease** (implemented: flow 271, PR #607) | Scope:<br>• `acquireLeaseSync` in `src/lib/fs.ts`, with the D-09 liveness rule and file I/O shared with `withFileLock`<br>• the lease in `openSession`<br>• `latestUnleasedSession`<br>• live and stale markers in `listSessions` and `keryx sessions list`<br>• `--fork` / `--take-over` and the fork/view/cancel picker<br>• the §6.2 switch order for `/resume`, the startup picker and readline bare `-r` | AC1, AC2, AC3a, AC20, AC22 | none |
 | **P1 Bus store and CLI** | Scope:<br>• extract `gitCommonDir`/`gitToplevel` into `src/lib/clone-scope.ts`; allocation behaviour unchanged<br>• `src/bus/`: root resolution from the project root, presence read/write, append under lock with crash-safe `seq`, a reader with an inode-aware cursor and rotation, prune, schema validators, id sanitising<br>• `KERYX_TOOL_CALL=1` set on `shell_exec` children in `resolveShellEnv` (`src/harness/process/shell-spawn.ts`)<br>• `keryx bus list\|log\|send\|prune` with the D-13 marker check and the clone-wide CLI rate limit, registered in the command registry and cli-reference | AC4 (CLI half), AC15, AC16, AC17 (CI and env), AC19, AC21 (send) | P0 (liveness helpers) |
 | **P2 Shell integration** | Scope:<br>• `joinBus` and leave in both shell surfaces<br>• the heartbeat, which also refreshes the session lease and its name<br>• the poller<br>• `--name` and `bus.name`<br>• operator rendering of inbound events<br>• the Peers group in the fleet sidebar<br>• the `/bus` modal and non-pause subcommands<br>• `bus` in `classifyBusyDispatch` | AC3b, AC4, AC17, AC18, AC20 | P1 |
 | **P3 Agent delivery and tools** | Scope:<br>• `busInbox` with `drainUndelivered`<br>• `buildPeerMessageNotification` and `quarantinePeerMessage`<br>• drains at all three sites in `runAgentTurn` (turn start for `bus-message`, round boundary, post-answer)<br>• the wake trigger on poll and on settle, sharing the auto-wake cap<br>• `ack` writes<br>• `bus_list` and `bus_send` with rate limits<br>• the protocol text from [agent-protocol.md](agent-protocol.md) in the system prompt and tool descriptions | AC5, AC6, AC7, AC8, AC13, AC14 (send refusals) | P2 |
