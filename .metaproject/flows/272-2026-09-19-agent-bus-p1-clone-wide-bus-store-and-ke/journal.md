@@ -13,3 +13,21 @@
 - 2026-09-19T15:41:19.195Z - task-done: T3: Add/adjust tests and make them pass
 - 2026-09-19T15:41:19.287Z - frozen: 15 criteria; checksum recorded
 - 2026-09-19T15:41:19.369Z - started
+- 2026-09-19T15:41:32.254Z - task-attempt: T5: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:41:32.342Z - task-attempt: T6: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:41:32.431Z - task-attempt: T7: started (attempt 1) — 272-lib dispatch (T5+T6+T7)
+- 2026-09-19T15:59:05.242Z - task-done: T5: Clone scope extraction (src/lib/clone-scope.ts) and KERYX_TOOL_CALL=1 marker in resolveShellEnv
+- 2026-09-19T15:59:09.666Z - task-done: T6: Bus core: pure paths/ids, inline schemas + validators, presence with D-09 liveness and D-06 names, enablement resolver
+- 2026-09-19T15:59:13.969Z - task-done: T7: Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune
+- 2026-09-19T15:59Z - orchestrator: `272-lib` (T5–T7) returned DONE_WITH_CONCERNS. The worker reports targeted tests at 265 pass, 0 fail, and tsc and eslint clean. Operator rule: no broad local suites.
+  - Accepted:
+    - `bus` is registered as a client zone in import-zones and added to BYPASSING_ZONES, because it calls `detectCi`. `capability` has no facade.
+    - `resolveBusRoot` canonicalises paths with realpath. On macOS `/var` and `/private/var` otherwise produce two different roots.
+    - Schema uuid fields also carry an explicit `pattern`, because the validator ignores `format` and `["*"]` would match both branches of the `oneOf`.
+    - The cursor carries `seq`.
+    - `appendEvent` terminates a torn tail before appending.
+    - `pruneBus` writes a single `lease-expired` event under the lock, as in the lifecycle spec.
+  - Moved to T8:
+    - the AC12 no-flow-writes test;
+    - a typed `bus` field on `ShellConfig`.
+  - Environment: `allocation.test.ts` fails locally only because of the global git hook on the fixture author, and passes with `GIT_CONFIG_GLOBAL=/dev/null`. CI decides.
