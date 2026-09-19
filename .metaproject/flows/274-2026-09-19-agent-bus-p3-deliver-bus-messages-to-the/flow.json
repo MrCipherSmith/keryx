@@ -7,17 +7,66 @@
   "id": "274",
   "slug": "agent-bus-p3-deliver-bus-messages-to-the",
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T21:33:34.816Z",
+  "updatedAt": "2026-09-19T21:38:39.658Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:970ba824480bfea771f5e690ecfbf7b4faf8813471635096430e0e6a80d5a327",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-19T21:38:11.875Z",
+      "note": "busInbox exactly-once drain, system kinds excluded, 200 bound with onDrop — inbox.test.ts, client.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC2": {
+      "at": "2026-09-19T21:38:11.960Z",
+      "note": "runAgentTurn drains at bus-message turn start (empty -> no model call), round boundary and post-answer; one user/tool message per drain; never inside a tool_calls batch — agent-bus-notification.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC3": {
+      "at": "2026-09-19T21:38:12.043Z",
+      "note": "buildPeerMessageNotification banner, <peer-message> blocks with id/seq/from/kind, quarantinePeerMessage sharing PATTERNS (now also flags forged peer-message/task-notification tags), escaped markup, empty -> '' — peer-notification.test.ts, quarantine.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC4": {
+      "at": "2026-09-19T21:38:12.126Z",
+      "note": "ack (origin system, to sender instance, refs.replyTo) written only after the history push; errors routed to onError — client-ack.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC5": {
+      "at": "2026-09-19T21:38:12.207Z",
+      "note": "createBusWakeController: idle + wake-eligible -> runLine('', 'bus-message') on poll with new events and on settle; broadcast notice never wakes; shared consecutiveAutoWakes and resolveMaxAutoWake with a once-per-batch capped notice — bus-wake.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC6": {
+      "at": "2026-09-19T21:38:12.290Z",
+      "note": "two agents that always reply stop waking at the cap, driven through the real createBusWakeController — delivery.integration.test.ts AC6. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC7": {
+      "at": "2026-09-19T21:38:12.369Z",
+      "note": "readline never wakes; 'bus: N message(s) pending' shown at the prompt; delivered within the next turn — shell-bus.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC8": {
+      "at": "2026-09-19T21:38:12.452Z",
+      "note": "bus_list (peers with quarantined status/activity, leases) and bus_send (notice/question/reply/handoff, origin agent, log-counted 10/min) with named refusals incl. recipient-is-self — agent-tools.test.ts, send.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC9": {
+      "at": "2026-09-19T21:38:12.532Z",
+      "note": "bus_* offered only when joined (bus.client() at build time); never to subagents/external children (spawn-subagent-isolation.test.ts) or side workers; absent when the bus is disabled — interactive-agent-tools.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC10": {
+      "at": "2026-09-19T21:38:12.615Z",
+      "note": "conduct block from agent-protocol in the system prompt only when busJoined; side workers get busJoined false — agent.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    "AC11": {
+      "at": "2026-09-19T21:38:12.693Z",
+      "note": "CI on PR #620 head 1756ce70: 18/18 green incl. typecheck-and-tests, the client matrix and opentui native; merged a84c561a"
+    },
+    "AC12": {
+      "at": "2026-09-19T21:38:12.774Z",
+      "note": "agent-bus README 0.6.0, implementation-plan 0.6.0 and roadmap 0.29.12 mark P0-P3 implemented (flows 271-274, PRs #607/#611/#615/#620) and P4-P5 not implemented; merged a84c561a"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/620"
   },
   "baseBranch": "main",
   "tasks": [
@@ -76,7 +125,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -84,7 +133,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -195,7 +245,7 @@
       "id": "T10",
       "title": "Verification: CI on the PR head green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -203,7 +253,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T11",
@@ -386,6 +437,90 @@
       "at": "2026-09-19T21:33:34.816Z",
       "event": "task-done",
       "detail": "T12: CI fixes: source-audit tests (boot-animation runLine signature, tui-session-lease makeAgentDeps count) and unhandled append.lock ENOENT after temp cleanup in delivery.integration (check ack rejection handling) (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:37:50.216Z",
+      "event": "task-done",
+      "detail": "T10: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T21:37:52.822Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/620 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-19T21:38:11.789Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-19T21:38:11.875Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: busInbox exactly-once drain, system kinds excluded, 200 bound with onDrop — inbox.test.ts, client.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:11.960Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: runAgentTurn drains at bus-message turn start (empty -> no model call), round boundary and post-answer; one user/tool message per drain; never inside a tool_calls batch — agent-bus-notification.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.043Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: buildPeerMessageNotification banner, <peer-message> blocks with id/seq/from/kind, quarantinePeerMessage sharing PATTERNS (now also flags forged peer-message/task-notification tags), escaped markup, empty -> '' — peer-notification.test.ts, quarantine.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.126Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: ack (origin system, to sender instance, refs.replyTo) written only after the history push; errors routed to onError — client-ack.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.207Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: createBusWakeController: idle + wake-eligible -> runLine('', 'bus-message') on poll with new events and on settle; broadcast notice never wakes; shared consecutiveAutoWakes and resolveMaxAutoWake with a once-per-batch capped notice — bus-wake.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.290Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: two agents that always reply stop waking at the cap, driven through the real createBusWakeController — delivery.integration.test.ts AC6. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.369Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: readline never wakes; 'bus: N message(s) pending' shown at the prompt; delivered within the next turn — shell-bus.test.ts, delivery.integration.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.452Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: bus_list (peers with quarantined status/activity, leases) and bus_send (notice/question/reply/handoff, origin agent, log-counted 10/min) with named refusals incl. recipient-is-self — agent-tools.test.ts, send.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.532Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: bus_* offered only when joined (bus.client() at build time); never to subagents/external children (spawn-subagent-isolation.test.ts) or side workers; absent when the bus is disabled — interactive-agent-tools.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.615Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: conduct block from agent-protocol in the system prompt only when busJoined; side workers get busJoined false — agent.test.ts, tui-shell.test.ts. CI green 18/18 on PR #620 head 1756ce70, merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.693Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: CI on PR #620 head 1756ce70: 18/18 green incl. typecheck-and-tests, the client matrix and opentui native; merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:12.774Z",
+      "event": "ac-confirmed",
+      "detail": "AC12: agent-bus README 0.6.0, implementation-plan 0.6.0 and roadmap 0.29.12 mark P0-P3 implemented (flows 271-274, PRs #607/#611/#615/#620) and P4-P5 not implemented; merged a84c561a"
+    },
+    {
+      "at": "2026-09-19T21:38:31.139Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-19T21:38:39.658Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
