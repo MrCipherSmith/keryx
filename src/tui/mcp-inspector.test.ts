@@ -626,3 +626,54 @@ test("the last of many wrapped tools is reachable with the down arrow", () => {
   // And the window holds no more lines than the body has rows.
   expect(shown.split("\n").length).toBeLessThanOrEqual(20);
 });
+
+// Seen on 0.2.119: ModalHost gives every tab ONE body container. After a
+// visit to MCP Clients, the first ↓ back on Tools repainted both tabs into
+// it and the MCP rows replaced the tool list under a strip reading [Tools].
+test("after visiting MCP Clients, ↓ on the Tools tab keeps showing tools", () => {
+  const body = fakeBody();
+  let active = "tools";
+  let press: ((key: { name: string; sequence: string }) => void) | undefined;
+  let host: { renderTab: (id: string, b: unknown, c?: { width: number }) => unknown } | undefined;
+  presentMcpTools(
+    (_otui, _chrome, input) => {
+      host = input;
+      input.renderTab("tools", body, { width: 100 });
+      return {
+        close: () => input.onClose?.(),
+        setTab: (id) => {
+          active = id;
+        },
+        activeTab: () => active,
+      };
+    },
+    fakeOtui(),
+    {},
+    {
+      tools: TOOLS,
+      runtimes: RUNTIMES,
+      visibleRows: 20,
+      connect: async () => ({ ok: true }),
+      disconnect: async () => ({ ok: true }),
+      onKeypress: (handler) => {
+        press = handler;
+        return () => {};
+      },
+    },
+  );
+  // Switch to MCP Clients and back, the way ModalHost re-mounts a tab: the
+  // same body, cleared and handed to renderTab again.
+  const remount = (id: string): void => {
+    for (const child of [...body.getChildren()]) body.remove(child);
+    active = id;
+    host?.renderTab(id, body, { width: 100 });
+  };
+  remount("mcp");
+  remount("tools");
+  press?.({ name: "down", sequence: "" });
+
+  const shown = body.rows().map((row) => row.content).join("\n");
+  expect(shown).toContain("gdgraph_affected");
+  expect(shown).not.toContain("keryx connected"); // every MCP client row says (not) connected
+  expect(shown).not.toContain("keryx not connected");
+});

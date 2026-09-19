@@ -140,13 +140,18 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
     },
   };
 
+  // "Brave Search API" already names the API: appending " API key" printed
+  // "Paste your Brave Search API API key" in the /search-provider wizard.
+  const apiKeyLabel = (displayName: string): string =>
+    /\bAPI$/.test(displayName) ? `${displayName} key` : `${displayName} API key`;
+
   const remote = (id: Exclude<SearchProviderId, "searxng">, displayName: string, endpoint: string, injection: CredentialInjection["injection"], name: string, mapping: { title: string; url: string; snippet: string; date?: string }): SearchProviderDescriptor => ({
     id,
     displayName,
     kind: "remote",
     fields: [],
     defaults: {},
-    credentialSchema: { required: true, label: `${displayName} API key`, secret: true },
+    credentialSchema: { required: true, label: apiKeyLabel(displayName), secret: true },
     documentationUrl: id === "brave" ? "https://api.search.brave.com/app/documentation" : id === "tavily" ? "https://docs.tavily.com/" : "https://docs.exa.ai/",
     capabilities: { localLoopback: false, supportsPublicationDate: Boolean(mapping.date) },
     async testConnection(_fields) {
