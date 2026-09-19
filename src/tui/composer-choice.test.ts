@@ -259,3 +259,28 @@ otuiTest("Enter while the user is still typing into the open menu is ignored; Es
   expect(await pending).toBe("deny");
   h.destroy();
 });
+
+otuiTest("closed dialogs release their scroll boxes (no renderer 'selection' listener leak)", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const count = (): number => (h.renderer as unknown as { listenerCount: (e: string) => number }).listenerCount("selection");
+  const baseline = count();
+  for (let i = 0; i < 15; i++) {
+    const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+      title: `Allow shell command #${i}?`,
+      // Multi-line so the scrollable subtitle (a second ScrollBox) is mounted too.
+      subtitle: "echo one\necho two\necho three",
+      cancelId: "deny",
+      options: [
+        { id: "once", label: "Allow once", description: "", recommended: true },
+        { id: "deny", label: "Deny", description: "" },
+      ],
+    });
+    await h.flush();
+    h.mockInput.pressEscape();
+    expect(await pending).toBe("deny");
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+  expect(count()).toBe(baseline);
+  h.destroy();
+});

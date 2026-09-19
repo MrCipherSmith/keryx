@@ -377,22 +377,38 @@ function presentComposerChoice(
       closed = true;
       unsub();
       request.signal?.removeEventListener("abort", onAbort);
+      const mounted = [
+        title,
+        ...(subtitleScroll !== undefined ? [subtitleScroll] : []),
+        ...(subtitleLine !== undefined ? [subtitleLine] : []),
+        ...contextLines,
+        optionsScroll,
+      ];
       try {
-        dock.remove(title);
-        if (subtitleScroll !== undefined) {
-          dock.remove(subtitleScroll);
+        for (const node of mounted) {
+          dock.remove(node);
         }
-        if (subtitleLine !== undefined) {
-          dock.remove(subtitleLine);
-        }
-        for (const line of contextLines) {
-          dock.remove(line);
-        }
-        dock.remove(optionsScroll);
       } catch {
         // best-effort
       }
       dock.visible = false;
+      // `remove` only detaches. A ScrollBox subscribes to the renderer's
+      // `selection` event and lets go of it only in `destroy()`, and every
+      // renderable stays in OpenTUI's global registry until destroyed — so each
+      // dialog used to leak its scroll boxes and rows. After a handful of
+      // approvals Node printed a MaxListenersExceededWarning straight onto the
+      // TUI ("11 selection listeners added to [CliRenderer]"), corrupting the
+      // screen. Destroyed on the next tick, because `finish` can run from a
+      // row's own mouse handler, which is still on the stack here.
+      setTimeout(() => {
+        for (const node of mounted) {
+          try {
+            node.destroyRecursively();
+          } catch {
+            // already gone
+          }
+        }
+      }, 0);
     }
 
     const onKey = (key: KeypressEvent): void => {

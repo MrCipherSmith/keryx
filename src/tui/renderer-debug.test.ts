@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
-import { attachRendererGuards } from "./renderer-debug";
+import { attachRendererGuards, routeProcessWarnings } from "./renderer-debug";
 import type { StdinLike } from "./stdin-guard";
 
 class FakeStream extends EventEmitter implements StdinLike {
@@ -132,4 +132,16 @@ test("SIGUSR2 on a dead stream reopens it", async () => {
   process.emit("SIGUSR2", "SIGUSR2");
   expect(state.stdin).toBe(reopened);
   detach();
+});
+
+test("runtime warnings are held off the terminal while the UI is up, then summarised", async () => {
+  const printed: string[] = [];
+  const before = process.listenerCount("warning");
+  const restore = routeProcessWarnings((text) => printed.push(text));
+  process.emitWarning("something leaked", "MaxListenersExceededWarning");
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  expect(printed).toEqual([]);
+  restore();
+  expect(printed.join("")).toContain("MaxListenersExceededWarning: something leaked");
+  expect(process.listenerCount("warning")).toBe(before);
 });
