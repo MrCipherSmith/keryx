@@ -1,0 +1,253 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "272",
+  "slug": "agent-bus-p1-clone-wide-bus-store-and-ke",
+  "title": "Agent bus P1: clone-wide bus store and keryx bus CLI",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T15:34:50.736Z",
+  "updatedAt": "2026-09-19T15:41:19.369Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:57e0b94f8806f8a5546c2867624c48d15d5f4c7b31ec1a705e5328298d5dad4f",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by the per-area implement tasks T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each implement task; cross-process proofs are T9; the full suite is T11 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Clone scope extraction (src/lib/clone-scope.ts) and KERYX_TOOL_CALL=1 marker in resolveShellEnv",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Bus core: pure paths/ids, inline schemas + validators, presence with D-09 liveness and D-06 names, enablement resolver",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T10",
+      "title": "Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap",
+      "kind": "docs",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI on the PR head green (typecheck, lint, full suite)",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T15:34:50.736Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T15:41:18.405Z",
+      "event": "task-added",
+      "detail": "T5: Clone scope extraction (src/lib/clone-scope.ts) and KERYX_TOOL_CALL=1 marker in resolveShellEnv"
+    },
+    {
+      "at": "2026-09-19T15:41:18.500Z",
+      "event": "task-added",
+      "detail": "T6: Bus core: pure paths/ids, inline schemas + validators, presence with D-09 liveness and D-06 names, enablement resolver"
+    },
+    {
+      "at": "2026-09-19T15:41:18.585Z",
+      "event": "task-added",
+      "detail": "T7: Event log: locked crash-safe append, redaction and body bound, rotation and retention, rotation-safe cursor reader; lease reader; prune"
+    },
+    {
+      "at": "2026-09-19T15:41:18.672Z",
+      "event": "task-added",
+      "detail": "T8: Send and CLI: keryx bus list|log|send|prune, recipient resolution, CLI rate limit, D-13 refusal, bus-disabled; registry, help, cli-reference"
+    },
+    {
+      "at": "2026-09-19T15:41:18.767Z",
+      "event": "task-added",
+      "detail": "T9: Multi-process and cross-worktree verification: 8x100 concurrent appends, killed-writer seq, rotation reader, two worktrees list each other"
+    },
+    {
+      "at": "2026-09-19T15:41:18.856Z",
+      "event": "task-added",
+      "detail": "T10: Mark P1 implemented in the agent-bus package README, implementation-plan and roadmap"
+    },
+    {
+      "at": "2026-09-19T15:41:18.940Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI on the PR head green (typecheck, lint, full suite)"
+    },
+    {
+      "at": "2026-09-19T15:41:19.026Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T15:41:19.112Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T15:41:19.195Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T15:41:19.287Z",
+      "event": "frozen",
+      "detail": "15 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T15:41:19.369Z",
+      "event": "started"
+    }
+  ]
+}
