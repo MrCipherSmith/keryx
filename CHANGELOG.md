@@ -3,6 +3,35 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.122] — 2026-09-19
+
+### Fixed
+
+- **A shell whose terminal input stopped can be brought back.** In session
+  603f3171 (0.2.121, under herdr) the shell kept drawing its spinner while no
+  key, Esc or Ctrl+C reached it: the terminal's input queue was full and the
+  tty reader was no longer polled. The approval picker on screen looked hung;
+  input as a whole had stopped. The 0.2.121 dock fix did not address this.
+  Every TUI session now re-arms terminal input on `SIGUSR2`, so
+  `kill -USR2 <keryx pid>` from another terminal recovers it without losing the
+  session.
+- **An approval that pops up while you type is no longer answered by your
+  Enter.** The picker ignores Enter for 400 ms after it opens and while
+  printable keys are still arriving; Esc and clicks are never delayed.
+
+### Added
+
+- **`keryx shell --debug`.** Records the session to
+  `~/.local/share/keryx/debug/<run>/shell.ndjson` (path also in
+  `debug/latest.txt` and shown on exit): terminal-input state every second,
+  every call that pauses, detaches or reconfigures stdin with the calling
+  stack, key names (never typed text), dialogs, overlays, tool calls, agent
+  state and herdr reports. It also starts a detached watcher
+  (`watcher.ndjson`) that checks from outside whether the shell is still
+  reading its terminal — epoll registration of the tty reader and unread bytes
+  in the tty queue (Linux) — and on a stall writes a full process snapshot and
+  sends `SIGUSR2` to recover.
+
 ## [0.2.121] — 2026-09-19
 
 ### Fixed

@@ -45,6 +45,8 @@ import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
 import { getTheme, onThemeChange, type Theme } from "./theme";
 import { destroyModalHost } from "./modal-host";
+import { currentDebugRun, debugEvent } from "./debug-log";
+import { attachRendererGuards } from "./renderer-debug";
 
 /** The `@opentui/core` module shape, referenced structurally (type-only). */
 type OpenTui = typeof import("@opentui/core");
@@ -455,14 +457,22 @@ export async function createShellRenderer(
   otui: OpenTui,
   opts: { onDestroy?: (() => void) | undefined } = {},
 ): Promise<Renderer> {
-  return await otui.createCliRenderer({
+  // Input recovery (SIGUSR2) in every session, plus the `--debug` log when on.
+  // Assigned after creation; `onDestroy` can only fire after that.
+  const guards: { detach?: () => void } = {};
+  const renderer = await otui.createCliRenderer({
     exitOnCtrlC: true,
     screenMode: "alternate-screen",
     clearOnShutdown: true,
     useMouse: true,
     backgroundColor: getTheme().bg,
-    ...(opts.onDestroy !== undefined ? { onDestroy: opts.onDestroy } : {}),
+    onDestroy: () => {
+      guards.detach?.();
+      opts.onDestroy?.();
+    },
   });
+  guards.detach = attachRendererGuards(renderer);
+  return renderer;
 }
 
 /**
@@ -705,10 +715,12 @@ export async function createShellChrome(
   };
   const withOverlay = async <T>(run: () => Promise<T>): Promise<T> => {
     overlayDepth += 1;
+    debugEvent("overlay.enter", { depth: overlayDepth, dockVisible: dock.visible });
     try {
       return await run();
     } finally {
       overlayDepth -= 1;
+      debugEvent("overlay.exit", { depth: overlayDepth, dockVisible: dock.visible });
     }
   };
   const addOverlaySource = (isActive: () => boolean): (() => void) => {
@@ -1061,9 +1073,11 @@ export async function createShellChrome(
     // clear the composer and race a second `showComposerChoice` against the
     // still-open picker (the turn then waits forever with a dead selector).
     if (overlayActive()) {
+      debugEvent("composer.submit-blocked", { reason: "overlay active", dockVisible: dock.visible, overlayDepth });
       return;
     }
     const line = input.value.trim();
+    debugEvent("composer.submit", { chars: line.length, slash: line.startsWith("/") });
     input.value = "";
     hideMenu();
     syncComposerHeight();
@@ -1232,6 +1246,16 @@ export async function createShellChrome(
     appliedTheme = theme;
   };
   const unsubTheme = onThemeChange((theme) => applyTheme(theme));
+
+  {
+    const run = currentDebugRun();
+    if (run !== undefined) {
+      // Toasts need the layout mounted; defer one tick past the return.
+      setTimeout(() => {
+        if (alive) showToast(`debug log: ${run.dir}`);
+      }, 0);
+    }
+  }
 
   return {
     renderer: r,
