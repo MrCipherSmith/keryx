@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T15:15:37.302Z",
+  "updatedAt": "2026-09-19T15:17:11.135Z",
   "source": {
     "type": "description",
     "ref": null
@@ -372,6 +372,26 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T18",
+      "title": "Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T15:17:11.135Z",
+            "outcome": "started",
+            "detail": "271-T18 merge main #608"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
     }
   ],
   "history": [
@@ -607,6 +627,16 @@
       "at": "2026-09-19T15:15:37.302Z",
       "event": "task-done",
       "detail": "T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)"
+    },
+    {
+      "at": "2026-09-19T15:17:11.039Z",
+      "event": "task-added",
+      "detail": "T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent"
+    },
+    {
+      "at": "2026-09-19T15:17:11.135Z",
+      "event": "task-attempt",
+      "detail": "T18: started (attempt 1) — 271-T18 merge main #608"
     }
   ]
 }

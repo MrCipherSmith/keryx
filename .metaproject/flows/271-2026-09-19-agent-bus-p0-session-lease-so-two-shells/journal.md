@@ -144,3 +144,5 @@
   - One new finding, R4-1. The reviewer rated it "low"; it is recorded here as minor because the gate scale has no "low". After `runGoalVerifier` returns, `/goal --auto` does not re-check detach, so a lease lost during the verifier lets one more full turn run in a session that was taken over. Slate writes in that turn are already refused.
 - 2026-09-19T15:13Z - operator decision: fix R4-1, then merge. This approves one narrow fix round beyond the three-round bound, recorded here as an explicit exception. The fix is T17: a single post-verifier detach check plus a test. Only R4-1 is verified afterwards.
 - 2026-09-19T15:15:37.302Z - task-done: T17: R4-1: /goal --auto re-checks slate detach after runGoalVerifier before the extra round (operator-approved 4th round)
+- 2026-09-19T15:17:11.039Z - task-added: T18: Merge origin/main (PR #608 shell --debug, stdin guard) and keep --fork/--take-over flag validation, help and cli-reference consistent
+- 2026-09-19T15:17:11.135Z - task-attempt: T18: started (attempt 1) — 271-T18 merge main #608
