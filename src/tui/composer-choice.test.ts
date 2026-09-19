@@ -3,7 +3,8 @@
 // picker while a tool-approval prompt was still pending), leaving two
 // independent keypress listeners racing the same Enter/Esc and silently
 // resolving the FIRST dialog with whatever it happened to have selected —
-// not what the user actually answered.
+// not what the user actually answered. Concurrent approval callers enqueue;
+// UI callers pass `enqueue: false` to cancel immediately.
 import { expect, test } from "bun:test";
 import { commandsForMode } from "../commands/agent-commands";
 import { showComposerChoice } from "./composer-choice";
@@ -81,6 +82,7 @@ otuiTest(
     const second = await showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
       title: "Permission mode (current: default)",
       cancelId: "default",
+      enqueue: false,
       options: [{ id: "auto", label: "auto", description: "" }],
       onBusy: () => {
         busyCalls += 1;
@@ -137,6 +139,70 @@ otuiTest("a second call is allowed once the first has resolved", async () => {
   await h.flush();
   expect(await second).toBe("ok2");
   expect(busyCalls).toBe(0);
+
+  h.destroy();
+});
+
+otuiTest("concurrent enqueue=true calls serialize instead of stacking both menus", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+
+  const first = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Spawn A?",
+    cancelId: "deny",
+    options: [
+      { id: "allow", label: "Allow", description: "", recommended: true },
+      { id: "deny", label: "Deny", description: "" },
+    ],
+  });
+  const second = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Spawn B?",
+    cancelId: "deny",
+    options: [
+      { id: "allow", label: "Allow", description: "", recommended: true },
+      { id: "deny", label: "Deny", description: "" },
+    ],
+  });
+  await h.flush();
+  const before = h.captureCharFrame();
+  expect(before).toContain("Spawn A?");
+  expect(before).not.toContain("Spawn B?");
+
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(await first).toBe("allow");
+  await h.flush();
+  const after = h.captureCharFrame();
+  expect(after).toContain("Spawn B?");
+  expect(after).not.toContain("Spawn A?");
+
+  h.mockInput.pressEnter();
+  await h.flush();
+  expect(await second).toBe("allow");
+  expect(h.chrome.dock.visible).toBe(false);
+
+  h.destroy();
+});
+
+otuiTest("abort signal resolves cancelId and hides the dock", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui);
+  const ac = new AbortController();
+
+  const pending = showComposerChoice(otui.core, h.renderer, h.chrome.dock, {
+    title: "Ask?",
+    cancelId: "__cancel__",
+    signal: ac.signal,
+    options: [
+      { id: "a", label: "A", description: "", recommended: true },
+      { id: "b", label: "B", description: "" },
+    ],
+  });
+  await h.flush();
+  expect(h.chrome.dock.visible).toBe(true);
+  ac.abort();
+  expect(await pending).toBe("__cancel__");
+  expect(h.chrome.dock.visible).toBe(false);
 
   h.destroy();
 });
