@@ -57,3 +57,6 @@
     - Accepted residuals:
       - A third waiter arriving during the F3 rename-back window keeps the moved lock rather than deleting it. This is documented in the code.
       - A failed lease delete makes `prune` exit with an error instead of a named refusal.
+- 2026-09-19T16:27:04.431Z - task-added: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path
+- 2026-09-19T16:27:04.508Z - task-attempt: T13: started (attempt 1) — 272-T13 review r2 fixes
+- 2026-09-19T16:30:51.308Z - task-done: T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path

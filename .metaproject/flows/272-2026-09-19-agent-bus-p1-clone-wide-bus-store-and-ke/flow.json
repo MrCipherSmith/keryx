@@ -9,7 +9,7 @@
   "title": "Agent bus P1: clone-wide bus store and keryx bus CLI",
   "status": "in-progress",
   "createdAt": "2026-09-19T15:34:50.736Z",
-  "updatedAt": "2026-09-19T16:23:38.701Z",
+  "updatedAt": "2026-09-19T16:30:51.308Z",
   "source": {
     "type": "description",
     "ref": null
@@ -246,6 +246,27 @@
       "evidenceRefs": [],
       "budget": {},
       "disposition": "completed"
+    },
+    {
+      "id": "T13",
+      "title": "Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:27:04.508Z",
+            "outcome": "started",
+            "detail": "272-T13 review r2 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -386,6 +407,21 @@
       "at": "2026-09-19T16:23:38.701Z",
       "event": "task-done",
       "detail": "T12: Review r1 fixes: F1 rotation-safe read order; F2 truncate unterminated fragment; F3 removeStaleLock token re-check; F4 lease-expired exactly once; F5 strip control chars on display; F6 document send --json"
+    },
+    {
+      "at": "2026-09-19T16:27:04.431Z",
+      "event": "task-added",
+      "detail": "T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path"
+    },
+    {
+      "at": "2026-09-19T16:27:04.508Z",
+      "event": "task-attempt",
+      "detail": "T13: started (attempt 1) — 272-T13 review r2 fixes"
+    },
+    {
+      "at": "2026-09-19T16:30:51.308Z",
+      "event": "task-done",
+      "detail": "T13: Review r2 fixes: N1 strict ISO timestamps and displaySafe on ts/expiresAt; N2 acquirer cleanup removes only its own lock dir, rename-back never lands on an existing path"
     }
   ]
 }
