@@ -31,6 +31,30 @@ export interface PresenceClassifyOptions {
   staleMs?: number | undefined;
 }
 
+/** Smallest staleMs the test knob may set. */
+const MIN_ENV_PRESENCE_STALE_MS = 100;
+
+/**
+ * TEST-ONLY: `KERYX_BUS_PRESENCE_STALE_MS` lets the subprocess tests shorten
+ * D-09's 15 s presence window so a stale/gone peer can be produced without a
+ * real wait. Gated exactly like `KERYX_SESSION_LEASE_STALE_MS`
+ * (`src/session/lease.ts`'s `leaseTimingEnvEnabled`): not documented for
+ * users, honoured only in a test context (`NODE_ENV === "test"`, set by `bun
+ * test`, or `KERYX_TEST_BUS_TIMING === "1"`, set by the subprocess tests), and
+ * only for a value >= 100 ms. An explicit `options.staleMs` always wins.
+ */
+function presenceTimingEnvEnabled(): boolean {
+  return process.env.NODE_ENV === "test" || process.env.KERYX_TEST_BUS_TIMING === "1";
+}
+
+function envPresenceStaleMs(): number | undefined {
+  if (!presenceTimingEnvEnabled()) return undefined;
+  const raw = process.env.KERYX_BUS_PRESENCE_STALE_MS;
+  if (raw === undefined || !/^\d+$/.test(raw)) return undefined;
+  const value = Number(raw);
+  return value >= MIN_ENV_PRESENCE_STALE_MS ? value : undefined;
+}
+
 /**
  * D-09: live when `heartbeatAt` is at most `staleMs` old; otherwise stale when
  * the record is from this host and its pid is alive; otherwise gone. The pid
@@ -38,7 +62,7 @@ export interface PresenceClassifyOptions {
  * live, because the heartbeat is judged first.
  */
 export function classifyPresence(record: PresenceRecord, options: PresenceClassifyOptions): PresenceLiveness {
-  const staleMs = options.staleMs ?? BUS_PRESENCE_STALE_MS;
+  const staleMs = options.staleMs ?? envPresenceStaleMs() ?? BUS_PRESENCE_STALE_MS;
   const heartbeat = Date.parse(record.heartbeatAt);
   if (!Number.isNaN(heartbeat) && options.now - heartbeat <= staleMs) return "live";
   const thisHost = options.host ?? hostname();

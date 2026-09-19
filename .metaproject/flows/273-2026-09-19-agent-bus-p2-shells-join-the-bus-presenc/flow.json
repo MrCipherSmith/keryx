@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "273",
+  "slug": "agent-bus-p2-shells-join-the-bus-presenc",
+  "title": "Agent bus P2: shells join the bus — presence, heartbeat, poller, /bus, peers",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T16:46:59.516Z",
+  "updatedAt": "2026-09-19T19:02:43.737Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:1e9d272bd12f66f6f25563e1bdda78246e59dad2e48353b59264b2ca3c785ec6",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by per-area implement tasks T5-T7"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each implement task; process proofs are T8; full suite is T10 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T16:51:00.367Z",
+            "outcome": "started",
+            "detail": "273-T5 bus client (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:10:32.189Z",
+            "outcome": "started",
+            "detail": "273-T6 readline (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:10:32.276Z",
+            "outcome": "started",
+            "detail": "273-T7 TUI (sonnet), parallel with T6"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:42:48.690Z",
+            "outcome": "started",
+            "detail": "273-T8 process tests (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T17:55:29.614Z",
+            "outcome": "started",
+            "detail": "273-T9 docs (haiku)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T11",
+      "title": "Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-19T18:00:16.781Z",
+            "outcome": "started",
+            "detail": "273-T11 review r1 fixes (sonnet)"
+          },
+          {
+            "at": "2026-09-19T18:10:18.226Z",
+            "outcome": "failed",
+            "detail": "273-T11 single worker made no edits; stopped by operator decision, re-dispatched as 3 lanes"
+          },
+          {
+            "at": "2026-09-19T18:10:26.847Z",
+            "outcome": "started",
+            "detail": "273-T11A client lane (sonnet); B readline and C TUI follow in parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T16:46:59.516Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T16:50:57.944Z",
+      "event": "task-added",
+      "detail": "T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)"
+    },
+    {
+      "at": "2026-09-19T16:50:58.033Z",
+      "event": "task-added",
+      "detail": "T6: Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)"
+    },
+    {
+      "at": "2026-09-19T16:50:58.183Z",
+      "event": "task-added",
+      "detail": "T7: TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)"
+    },
+    {
+      "at": "2026-09-19T16:50:58.267Z",
+      "event": "task-added",
+      "detail": "T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)"
+    },
+    {
+      "at": "2026-09-19T16:50:58.345Z",
+      "event": "task-added",
+      "detail": "T9: Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)"
+    },
+    {
+      "at": "2026-09-19T16:50:58.428Z",
+      "event": "task-added",
+      "detail": "T10: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T16:50:58.511Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T16:50:58.593Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T16:50:58.675Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T16:50:58.762Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T16:50:58.848Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-19T16:51:00.367Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 273-T5 bus client (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:31.839Z",
+      "event": "task-done",
+      "detail": "T5: Bus client src/bus/client.ts: joinBus/leave, heartbeat + lease name patch, poller with addressed-event filter, rename, operator send (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:32.189Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 273-T6 readline (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:10:32.276Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 273-T7 TUI (sonnet), parallel with T6"
+    },
+    {
+      "at": "2026-09-19T17:40:32.804Z",
+      "event": "task-done",
+      "detail": "T6: Readline wiring: --name flag, join in runShell/runAgentRepl, event lines, /bus text subcommands, leave on exit/signals, setSession on /new (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:42:48.510Z",
+      "event": "task-done",
+      "detail": "T7: TUI wiring: join, transcript event lines, fleet Peers group, /bus modal + subcommands, bus busy target, leave on exits, setSession on switches (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:42:48.690Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 273-T8 process tests (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:54:58.393Z",
+      "event": "task-done",
+      "detail": "T8: Process tests: two worktrees see each other and receive /bus send, SIGKILL gone, SIGSTOP stale, SIGTERM removes presence, disabled bus, no bus id in child env (sonnet)"
+    },
+    {
+      "at": "2026-09-19T17:55:29.614Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 273-T9 docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T17:58:30.329Z",
+      "event": "task-done",
+      "detail": "T9: Docs: P2 status in package README/plan/roadmap; --name in cli-reference (haiku)"
+    },
+    {
+      "at": "2026-09-19T18:00:16.697Z",
+      "event": "task-added",
+      "detail": "T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)"
+    },
+    {
+      "at": "2026-09-19T18:00:16.781Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 1) — 273-T11 review r1 fixes (sonnet)"
+    },
+    {
+      "at": "2026-09-19T18:10:18.227Z",
+      "event": "task-attempt",
+      "detail": "T11: failed (attempt 2) — 273-T11 single worker made no edits; stopped by operator decision, re-dispatched as 3 lanes"
+    },
+    {
+      "at": "2026-09-19T18:10:26.847Z",
+      "event": "task-attempt",
+      "detail": "T11: started (attempt 3) — 273-T11A client lane (sonnet); B readline and C TUI follow in parallel"
+    },
+    {
+      "at": "2026-09-19T19:02:43.737Z",
+      "event": "task-done",
+      "detail": "T11: Review r1 fixes F1-F11: presence resurrection guard, lease rebind on switch, displaySafe in TUI peers/panels, usable /bus reply by short id to instanceId, error containment, join race/orphan, SIGSTOP test, leave order, onError, gaps (sonnet)"
+    }
+  ]
+}

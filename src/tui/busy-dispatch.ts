@@ -41,6 +41,14 @@ export type BusyDispatchTarget =
    */
   | "demote"
   | "game"
+  /**
+   * `/bus` (flow 273, specification §7.2): messaging and viewing peers on the
+   * project agent bus is read-only from this instance's own point of view —
+   * the same reasoning as `/status`/`/flows` above — and an operator override
+   * of a `turns` lease has to reach the bus from a held instance, so it must
+   * never be deferred.
+   */
+  | "bus"
   | "deferred"
   | "not-a-command";
 
@@ -73,6 +81,7 @@ export function classifyBusyDispatch(params: {
   if (commandName === "/plan") return "plan";
   if (commandName === "/demote") return "demote";
   if (commandName === "/game") return "game";
+  if (commandName === "/bus") return "bus";
   const isBusyReadonlyCommand = isSessionInfo || isFlows || isWorkspace || isReview || isMcp || isMcpConsumer;
   if (isBusyReadonlyCommand && isSessionInfo) return "session-info";
   if (isBusyReadonlyCommand && isFlows) return "flows";

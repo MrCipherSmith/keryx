@@ -1,11 +1,13 @@
 import { expect, test } from "bun:test";
 import {
   formatFleetSidebar,
+  formatFleetSidebarWithPeers,
   humanFleetPhase,
   MAIN_AGENT_ID,
   mainHeadline,
   shortWorkerLabel,
   WorkerFleet,
+  type FleetPeer,
 } from "./worker-fleet";
 
 test("shortWorkerLabel strips path and .md", () => {
@@ -80,6 +82,22 @@ test("WorkerFleet upsert and subscribe", () => {
   fleet.clear();
   expect(fleet.list()).toHaveLength(0);
   unsub();
+});
+
+// review r1 F3/F11: `FleetPeer.name`/`activity` are bus-peer-supplied free
+// text (specification §4.1), and the line also carries the peer's own
+// live/stale AND working/idle status (F11) — see `tui-bus.test.ts` for the
+// fuller `formatFleetSidebarWithPeers` coverage (name/status/activity
+// composition, the unrecognized-status fallback). This is the escape-sequence
+// guard on its own, in the module that owns the sidebar's peer line.
+test("a peer's name and activity never paint an escape sequence into the sidebar", () => {
+  const ESC = "\x1b";
+  const peers: FleetPeer[] = [
+    { name: `evil${ESC}[31mname`, state: "live", status: "working", activity: `hi${ESC}]0;pwned${ESC}\\there` },
+  ];
+  const text = formatFleetSidebarWithPeers([], peers, 12);
+  expect(text).not.toContain(ESC);
+  expect(text).toContain("evilname");
 });
 
 test("WorkerFleet clearMatching keeps side workers", () => {

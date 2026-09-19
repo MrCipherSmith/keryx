@@ -7,6 +7,7 @@ export type BusRefusalCode =
   | "invalid-id"
   | "invalid-name"
   | "reserved-name"
+  | "name-taken"
   | "invalid-event"
   | "invalid-presence"
   | "body-too-large"
@@ -15,6 +16,7 @@ export type BusRefusalCode =
   | "recipient-not-live"
   | "rate-limited"
   | "reply-without-replyTo"
+  | "unknown-message"
   | "use-agent-tool";
 
 export class BusRefusal extends Error {

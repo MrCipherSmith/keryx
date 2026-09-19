@@ -106,7 +106,7 @@ prints CLI usage and does **not** start it. Sessions are per-project.
 ```
 keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
             [--provider <p>] [--model <m>] [--base-url <url>] [--agent|--chat]
-            [--tui|--no-tui] [--debug]
+            [--tui|--no-tui] [--debug] [--name <name>]
 ```
 
 | Flag | Description |
@@ -121,9 +121,12 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 | `--agent` / `--chat` | Agent mode with tools, or chat without them. |
 | `--tui` / `--no-tui` | Force the full-screen renderer, or fall back to the line-based readline shell. |
 | `--debug` | Record the session to `~/.local/share/keryx/debug/<run>/` (`shell.ndjson`: terminal-input state, stdin calls with stacks, key names but never typed text, dialogs, tools, agent state) and start a watcher process (`watcher.ndjson`) that re-arms terminal input if the shell stops reading it. The newest run is named in `debug/latest.txt`. |
+| `--name <name>` | Set this shell's bus name. Names follow D-06: lowercase letters, digits and `-`, up to 32 characters. `all`, `cli` and `system` are reserved. If a live shell already holds the name, the new shell gets `<name>-2`. |
 
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
+
+An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ [#<seq>] @from kind: preview` — the sequence number and the message's short id (its first 8 characters). The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <#seq|id-prefix> <text>`, and `name <new>` (rename this shell). `/bus reply` resolves its first argument against the last 200 rendered events — a bare or `#`-prefixed sequence number, or a unique prefix (at least 8 characters) of a message's id — and always replies to that sender's underlying instance, so it still reaches them even if they renamed since; an argument matching no rendered message is refused with one line. The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
 
 One shell holds a session at a time. `-r <id>` on a session a live shell holds
 offers fork, view or cancel in an interactive run, plus take over when the
