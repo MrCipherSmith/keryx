@@ -9,7 +9,7 @@
   "title": "Agent bus P3: deliver bus messages to the agent — drains, wake, bus_list and bus_send tools",
   "status": "in-progress",
   "createdAt": "2026-09-19T19:12:15.198Z",
-  "updatedAt": "2026-09-19T19:34:31.117Z",
+  "updatedAt": "2026-09-19T20:17:42.061Z",
   "source": {
     "type": "description",
     "ref": null
@@ -111,29 +111,43 @@
       "id": "T6",
       "title": "Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:34:31.448Z",
+            "outcome": "started",
+            "detail": "274-T6 tools+conduct (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T19:34:31.532Z",
+            "outcome": "started",
+            "detail": "274-T7 surface wiring (sonnet), parallel"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
@@ -246,6 +260,26 @@
       "at": "2026-09-19T19:34:31.117Z",
       "event": "task-done",
       "detail": "T5: Delivery core: busInbox, buildPeerMessageNotification + quarantinePeerMessage, three drains in runAgentTurn, bus-message origin, ack after delivery (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.448Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 274-T6 tools+conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T19:34:31.532Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 274-T7 surface wiring (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T19:52:05.382Z",
+      "event": "task-done",
+      "detail": "T6: Agent tools bus_list/bus_send, main-agent-only exposure, conduct text in system prompt when joined (sonnet)"
+    },
+    {
+      "at": "2026-09-19T20:17:42.061Z",
+      "event": "task-done",
+      "detail": "T7: Surface wiring: inbox + ack deps, TUI idle/settle wake sharing the auto-wake cap, readline prompt announce (sonnet)"
     }
   ]
 }
