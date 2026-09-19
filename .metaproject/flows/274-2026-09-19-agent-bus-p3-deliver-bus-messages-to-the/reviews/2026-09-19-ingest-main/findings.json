@@ -1,0 +1,315 @@
+[
+  {
+    "id": "F1",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Capped bus-wake notice reprints on every poll",
+    "impact": "onPeers runs on every 1.5s poll; with the agent idle, the cap reached and a question pending, the capped line prints every poll until the operator types",
+    "suggested_fix": "Print once per pending batch (flag cleared on drain or on an operator line), or only when the poll delivered new events",
+    "evidence": "src/tui/tui-shell.ts:6727 at head 6f01bdde; onPeers runs on every 1.5s poll; with the agent idle, the cap reached and a question pending, the capped line prints every poll until the operator types",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 6727,
+    "class_scope": {
+      "sites": [
+        "src/tui/tui-shell.ts:4575",
+        "src/tui/tui-shell.ts:6677",
+        "src/tui/tui-shell.ts:6727"
+      ],
+      "enumeration_method": "keryx ctx rg onBusPollSettled|onPeers in tui-shell.ts and client.ts doPoll"
+    },
+    "global_id": "2026-09-19-ingest-main#F1",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: bus-wake.ts:122-145 createBusWakeController prints the capped notice once per backlog; test 'F1: the capped notice prints once per pending batch' passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F2",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "bus_* tools are offered when the bus is disabled (AC9)",
+    "impact": "Both surfaces pass bus unconditionally; KERYX_BUS=off, sessions off, or a failed join still exposes bus_list/bus_send to the model",
+    "suggested_fix": "Add the bus option only when the join succeeds (rebuild the tools then)",
+    "evidence": "src/commands/interactive-agent-tools.ts:235 at head 6f01bdde; Both surfaces pass bus unconditionally; KERYX_BUS=off, sessions off, or a failed join still exposes bus_list/bus_send to the model",
+    "confidence": "high",
+    "file": "src/commands/interactive-agent-tools.ts",
+    "line": 235,
+    "class_scope": {
+      "sites": [
+        "src/commands/shell.ts:3309",
+        "src/commands/shell.ts:3760",
+        "src/tui/tui-shell.ts:3061",
+        "src/commands/interactive-agent-tools.test.ts:417"
+      ],
+      "enumeration_method": "diff review of every buildInteractiveAgentTools/makeAgentDeps call site"
+    },
+    "global_id": "2026-09-19-ingest-main#F2",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: interactive-agent-tools.ts:239-245 gates the bus tools on bus.client() at build time; the readline join rebuild at shell.ts:2097 sets tools and toolNames together; tests in interactive-agent-tools.test.ts and shell-bus.test.ts pass. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F3",
+    "reviewer": "review-orchestrator",
+    "severity": "major",
+    "problem": "Agent sends are written with origin operator",
+    "impact": "Model-authored bus_send events carry from.origin operator, contrary to spec 4.2 and D-12; their provenance is misattributed, the agent limit is not counted from the log, and they use up the operator budget",
+    "suggested_fix": "Add origin agent to sendMessage with a countRecent 10/min per-instance limit",
+    "evidence": "src/bus/agent-tools.ts:197 at head 6f01bdde; Model-authored bus_send events carry from.origin operator, contrary to spec 4.2 and D-12; their provenance is misattributed, the agent limit is not counted from the log, and they use up the operator budget",
+    "confidence": "high",
+    "file": "src/bus/agent-tools.ts",
+    "line": 197,
+    "class_scope": {
+      "sites": [
+        "src/bus/agent-tools.ts:197",
+        "src/bus/client.ts send/reply",
+        "src/bus/send.ts:36"
+      ],
+      "enumeration_method": "keryx ctx rg origin in src/bus/send.ts and client.ts"
+    },
+    "global_id": "2026-09-19-ingest-main#F3",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: send.ts:199-215 counts the agent-origin limit with countRecent under append.lock; sendAsAgent/replyAsAgent set origin agent; test 'the 11th agent message within a minute is rate-limited' passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  },
+  {
+    "id": "F4",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Wakes before the join rebuild hit deps without busInbox",
+    "impact": "A poll wake during await makeAgentDeps produces an empty turn that burns the cap",
+    "suggested_fix": "Attach busInbox/busAck before the await, or skip the wake while deps.busInbox is undefined",
+    "evidence": "src/tui/tui-shell.ts:4608 at head 6f01bdde; A poll wake during await makeAgentDeps produces an empty turn that burns the cap",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4608,
+    "global_id": "2026-09-19-ingest-main#F4",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: tui-shell.ts:6810 hasBusDeps gates onPoll and onSettle; test 'F4: hasBusDeps false suppresses onPoll' passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F5",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The agent rate window resets on every deps rebuild",
+    "impact": "join, /model and /connect each rebuild buildBusTools with a fresh window",
+    "suggested_fix": "Count the limit from the log",
+    "evidence": "src/bus/agent-tools.ts:106 at head 6f01bdde; join, /model and /connect each rebuild buildBusTools with a fresh window",
+    "confidence": "high",
+    "file": "src/bus/agent-tools.ts",
+    "line": 106,
+    "global_id": "2026-09-19-ingest-main#F5",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: the in-memory window is removed and the limit is log-counted in send.ts; test 'the 11th agent send ... even across two separately built tool sets' passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  },
+  {
+    "id": "F6",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "bus_send can target its own instance",
+    "impact": "A send to @self resolves to the agent's own id, so the agent wakes itself and acks its own message",
+    "suggested_fix": "Refuse sends whose only resolved recipient is self",
+    "evidence": "src/bus/agent-tools.ts:197 at head 6f01bdde; A send to @self resolves to the agent's own id, so the agent wakes itself and acks its own message",
+    "confidence": "high",
+    "file": "src/bus/agent-tools.ts",
+    "line": 197,
+    "global_id": "2026-09-19-ingest-main#F6",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: send.ts:155-161 refuses with recipient-is-self; the recipient-is-self describe block (5 tests) passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  },
+  {
+    "id": "F7",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "The join rebuild can revert a concurrent /model",
+    "impact": "currentSel is captured before the await; a join that finishes later overwrites the new model's deps",
+    "suggested_fix": "Re-read currentSel after the await, or serialise rebuilds",
+    "evidence": "src/tui/tui-shell.ts:4609 at head 6f01bdde; currentSel is captured before the await; a join that finishes later overwrites the new model's deps",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 4609,
+    "global_id": "2026-09-19-ingest-main#F7",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: tui-shell.ts:4657 captures selAtJoin before the await and compares currentSel after it; the tui-shell.test.ts selAtJoin audit passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F8",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Quarantine ignores peer-message/task-notification tags",
+    "impact": "Forged harness tags are escaped but not flagged",
+    "suggested_fix": "Add both tags to the control-tag pattern",
+    "evidence": "src/harness/child/quarantine.ts:30 at head 6f01bdde; Forged harness tags are escaped but not flagged",
+    "confidence": "high",
+    "file": "src/harness/child/quarantine.ts",
+    "line": 30,
+    "global_id": "2026-09-19-ingest-main#F8",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: the quarantine.ts control-tag pattern includes peer-message|task-notification; the forged-tag tests in quarantine.test.ts pass. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  },
+  {
+    "id": "F9",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Side workers get the conduct block without bus_send",
+    "impact": "busJoined is true for side-worker deps built with busClientRef",
+    "suggested_fix": "Do not pass bus for side workers",
+    "evidence": "src/tui/tui-shell.ts:5577 at head 6f01bdde; busJoined is true for side-worker deps built with busClientRef",
+    "confidence": "high",
+    "file": "src/tui/tui-shell.ts",
+    "line": 5577,
+    "global_id": "2026-09-19-ingest-main#F9",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: the side-worker makeAgentDeps call passes undefined, not busClientRef, and busJoined is false; the tui-shell.test.ts F9 test passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F10",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "Inbox overflow drops are silent",
+    "impact": "Beyond 200 pending messages, messages are dropped and droppedCount is never surfaced",
+    "suggested_fix": "Show the operator a notice when droppedCount grows",
+    "evidence": "src/bus/inbox.ts:67 at head 6f01bdde; Beyond 200 pending messages, messages are dropped and droppedCount is never surfaced",
+    "confidence": "high",
+    "file": "src/bus/inbox.ts",
+    "line": 67,
+    "global_id": "2026-09-19-ingest-main#F10",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: the inbox onDrop is throttled by createBusDropNotifier on both surfaces; the tests in inbox.test.ts and bus-wake.test.ts pass. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  },
+  {
+    "id": "F11",
+    "reviewer": "review-orchestrator",
+    "severity": "minor",
+    "problem": "AC5/AC6 wake is proven by a reimplemented loop and source audits",
+    "impact": "The real onBusPollSettled counter and reset are never exercised",
+    "suggested_fix": "Extract a wake-controller factory and test its behaviour",
+    "evidence": "src/bus/delivery.integration.test.ts:458 at head 6f01bdde; The real onBusPollSettled counter and reset are never exercised",
+    "confidence": "high",
+    "file": "src/bus/delivery.integration.test.ts",
+    "line": 458,
+    "global_id": "2026-09-19-ingest-main#F11",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 36866fd9, no longer reproduces at head 8b02cca0: createBusWakeController is extracted, and the AC6 integration test drives the real controller; delivery.integration.test.ts passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "36866fd9"
+    }
+  },
+  {
+    "id": "F12",
+    "reviewer": "review-orchestrator",
+    "severity": "info",
+    "problem": "bus_list peer strings are not quarantined",
+    "impact": "Peer status and activity reach the model with only displaySafe applied",
+    "suggested_fix": "Quarantine them or frame them as data",
+    "evidence": "src/bus/agent-tools.ts:138 at head 6f01bdde; Peer status and activity reach the model with only displaySafe applied",
+    "confidence": "high",
+    "file": "src/bus/agent-tools.ts",
+    "line": 138,
+    "global_id": "2026-09-19-ingest-main#F12",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "fix 66faa292, no longer reproduces at head 8b02cca0: agent-tools.ts:137-138 quarantines peer status/activity; the F12 test in agent-tools.test.ts passes. refuted = no longer reproduces after the fix.",
+      "verifier": "274-review-r2"
+    },
+    "source": "internal",
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "66faa292"
+    }
+  }
+]
