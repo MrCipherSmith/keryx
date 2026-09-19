@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.119] — 2026-09-19
+The Tools tab of `/integrations` no longer leaves blank rows under its list
+(PR #599).
+
+### Fixed
+
+- **The Tools tab fills the dialog.** A tool with a long description that did
+  not fit in the rows left under the list used to leave those rows empty,
+  sometimes eight or more. The start of that tool now fills them, and ↓ shows
+  it in full.
+
 ## [0.2.118] — 2026-09-19
 Every step of the provider and search-provider wizards now opens as a dialog
 inside the shell. `/integrations` and `/mcp` are readable at any width. The
