@@ -2962,14 +2962,14 @@ describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (sour
     expect(branchBlock).toContain("const selectable = searchProviderController.selectable();");
   });
 
-  test("AC1: 1+ connected providers opens the picker via chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))", () => {
-    expect(branchBlock).toContain("chrome.withOverlay(() => pickSearchProviderStep(otui, r, selectable))");
+  test("AC1: 1+ connected providers opens the picker via chrome.withOverlay(() => pickSearchProviderStep(otui, chrome, selectable))", () => {
+    expect(branchBlock).toContain("chrome.withOverlay(() => pickSearchProviderStep(otui, chrome, selectable))");
   });
 
   test("AC3: an empty selectable() list shows the existing 'no connected providers' message and returns before the picker call", () => {
     const emptyGuardIdx = branchBlock.indexOf("if (selectable.length === 0) {");
     expect(emptyGuardIdx).toBeGreaterThanOrEqual(0);
-    const pickerCallIdx = branchBlock.indexOf("pickSearchProviderStep(otui, r, selectable)");
+    const pickerCallIdx = branchBlock.indexOf("pickSearchProviderStep(otui, chrome, selectable)");
     expect(pickerCallIdx).toBeGreaterThan(emptyGuardIdx); // the picker call textually follows the empty-guard block
 
     const emptyGuardBlock = branchBlock.slice(emptyGuardIdx, pickerCallIdx);
@@ -2977,7 +2977,7 @@ describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (sour
     expect(emptyGuardBlock).toContain("return;");
     // Confirms the empty-guard's own body never reaches the picker call —
     // the only occurrence inside this slice would be a genuine wiring bug.
-    expect(emptyGuardBlock).not.toContain("pickSearchProviderStep(otui, r, selectable)");
+    expect(emptyGuardBlock).not.toContain("pickSearchProviderStep(otui, chrome, selectable)");
   });
 
   test("AC2: Esc (picked === undefined) returns before selectSearchProviderAndReport/select is ever called", () => {
@@ -3009,7 +3009,7 @@ describe("flow 180 — tui-shell.ts /search-connect bare-arg picker wiring (sour
     expect(searchProviderBranchIdx).toBeGreaterThanOrEqual(0);
     expect(searchProviderBranchIdx).toBeLessThan(branchIdx); // /search-provider's branch precedes /search-connect's, unmoved
     const searchProviderBlock = tuiSource.slice(searchProviderBranchIdx, branchIdx);
-    expect(searchProviderBlock).toContain("searchProviderWizardInTui(otui, r, searchProviderController)");
+    expect(searchProviderBlock).toContain("searchProviderWizardInTui(otui, chrome, searchProviderController)");
     // The wizard's own entry point is untouched by flow 180 — no picker/select wiring added here.
     expect(searchProviderBlock).not.toContain("selectSearchProviderAndReport");
   });

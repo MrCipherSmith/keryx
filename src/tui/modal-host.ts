@@ -509,6 +509,11 @@ function ensureHost(otui: OpenTui, chrome: ModalChrome): HostState {
     if (key.name === "right" && claimArrow("right")) {
       return;
     }
+    // A single tab has nowhere to switch to, so the arrows stay with the body:
+    // a text field in a wizard step needs them to move its cursor (flow 270).
+    if (state.tabs.length < 2 && (key.name === "left" || key.name === "right")) {
+      return;
+    }
     if (key.name === "left" || (onStrip && key.name === "tab" && key.shift === true)) {
       const prev = idx > 0 ? state.tabs[idx - 1] : undefined;
       if (prev !== undefined) {
