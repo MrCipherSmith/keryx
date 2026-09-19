@@ -128,3 +128,10 @@
 - 2026-09-19T15:00Z - operator instruction: when PR CI runs the suites, do not duplicate them locally. `.github/workflows/ci.yml` runs on every pull_request: `check:core` (lint, typecheck, test:core), doc-links, and the client matrix (terminal, streaming, cancel-resume, runtime). From now on local runs are limited to targeted and new tests. T12 and AC11 evidence come from CI on the PR head.
 - 2026-09-19T15:06:05.914Z - task-added: T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach
 - 2026-09-19T15:06:05.995Z - task-attempt: T16: started (attempt 1) — 271-T16 merge main #606
+- 2026-09-19T15:09:03.043Z - task-done: T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach
+- 2026-09-19T15:09Z - orchestrator: 271-T16 returned DONE. Merge commit 611bb16a (merge, not rebase; PRs are squash-merged).
+  - Conflict: one hunk in tui-shell.ts `/clear`/`/new`. Kept the lease guard `if (!startNewSession()) return;` and replaced the hand-built ref with #606's `bindSlateToLiveSession()`.
+  - `/resume` order: leased switch, then (refusal returns early) rebind, then sidebar refresh.
+  - The onLost listener reads the live `slateSession`, so it always detaches the currently bound ref.
+  - Two composition tests added. Targeted runs: 237 pass. tsc and eslint clean.
+  - Worker concern: #606 leaves the old slate ref undetached after a successful `/resume`, so a running turn could write to it. Not reachable: `/resume` is not in the busy allowlist (`classifyBusyDispatch` has no match, so it is deferred), so it only runs when no turn or `/goal` loop is running. Accepted.

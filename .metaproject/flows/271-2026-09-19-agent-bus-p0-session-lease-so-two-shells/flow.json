@@ -9,7 +9,7 @@
   "title": "Agent bus P0: session lease so two shells never share one session",
   "status": "in-progress",
   "createdAt": "2026-09-19T13:06:03.981Z",
-  "updatedAt": "2026-09-19T15:06:05.995Z",
+  "updatedAt": "2026-09-19T15:09:03.043Z",
   "source": {
     "type": "description",
     "ref": null
@@ -335,7 +335,7 @@
       "id": "T16",
       "title": "Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -349,7 +349,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -565,6 +566,11 @@
       "at": "2026-09-19T15:06:05.995Z",
       "event": "task-attempt",
       "detail": "T16: started (attempt 1) — 271-T16 merge main #606"
+    },
+    {
+      "at": "2026-09-19T15:09:03.043Z",
+      "event": "task-done",
+      "detail": "T16: Merge origin/main (PR #606 /resume slate rebind) and compose it with the session lease switch, liveSlateSession gating and slate detach"
     }
   ]
 }
