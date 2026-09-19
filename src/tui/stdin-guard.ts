@@ -18,7 +18,63 @@
 //     (`kill -USR2 <pid>` from another terminal un-sticks a dead shell) and from
 //     the `--debug` watcher when it sees the stall.
 
+import { openSync, readlinkSync } from "node:fs";
+import tty from "node:tty";
 import { callerStack, debugEvent, isDebugEnabled, summarizeInputChunk } from "./debug-log";
+
+/** A stream, or a getter for whichever stream is current (input can be reopened). */
+export type StdinSource = StdinLike | (() => StdinLike);
+
+const resolveStdin = (source: StdinSource): StdinLike => (typeof source === "function" ? source() : source);
+
+/** True once the stream can never deliver data again (it ended or was destroyed). */
+export function stdinIsDead(stdin: StdinLike): boolean {
+  return stdin.destroyed === true || stdin.readableEnded === true;
+}
+
+/**
+ * Open a fresh read stream on the controlling terminal, in raw mode.
+ *
+ * Why this exists: in the reproduced freeze (debug run 2026-09-19T15-26, keryx
+ * 0.2.122) `process.stdin` emitted `end` on a raw-mode tty right after a key,
+ * and the stream destroyed itself. A destroyed stream cannot be resumed —
+ * pause/resume cycles were logged doing nothing for minutes — but the terminal
+ * itself was fine: a new descriptor on the same pts reads normally. So the only
+ * recovery is a new stream. The path is the one fd 0 points at (so a shell under
+ * herdr/tmux reopens its own pane), falling back to `/dev/tty`.
+ *
+ * The EOF itself comes from termios: with VMIN=0 a raw-mode read that finds no
+ * data returns 0 bytes, which a stream can only read as end-of-file. Setting
+ * `stty min 0` on the shell's pty from outside reproduces the freeze exactly.
+ */
+export function openTerminalInput(): (StdinLike & { fd?: number }) | undefined {
+  let target = "/dev/tty";
+  if (process.platform === "linux") {
+    try {
+      const link = readlinkSync("/proc/self/fd/0");
+      if (link.startsWith("/dev/pts/") || link.startsWith("/dev/tty")) {
+        target = link;
+      }
+    } catch {
+      // keep /dev/tty
+    }
+  }
+  try {
+    const fd = openSync(target, "r");
+    const stream = new tty.ReadStream(fd);
+    // Off, then on: a plain setRawMode(true) on a fresh stream leaves termios
+    // untouched when the runtime already believes the tty is raw, so a VMIN of 0
+    // someone else set survives and the new stream EOFs at once. Toggling
+    // re-applies raw mode with VMIN=1 (verified against Bun 1.3).
+    stream.setRawMode(false);
+    stream.setRawMode(true);
+    debugEvent("stdin.reopened", { path: target, fd });
+    return stream as unknown as StdinLike & { fd?: number };
+  } catch (error) {
+    debugEvent("stdin.reopen-failed", { path: target, error: error instanceof Error ? error.message : String(error) });
+    return undefined;
+  }
+}
 
 /** The subset of `process.stdin` this module touches. */
 export interface StdinLike {
@@ -186,26 +242,29 @@ export function instrumentStdin(stdin: StdinLike): () => void {
  * stalled, log that loudly and try to recover once per `cooldownMs`.
  */
 export function startStdinHeartbeat(
-  stdin: StdinLike,
+  source: StdinSource,
   opts: {
     intervalMs?: number;
     cooldownMs?: number;
     extra?: () => Record<string, unknown>;
     /** False while input is stopped on purpose (renderer suspended/destroyed). */
     shouldRecover?: () => boolean;
+    /** How to recover; defaults to {@link recoverStdin} on the current stream. */
+    recover?: () => string[];
   } = {},
 ): () => void {
   const intervalMs = opts.intervalMs ?? 1000;
   const cooldownMs = opts.cooldownMs ?? 10_000;
   let lastRecovery = 0;
   const timer = setInterval(() => {
+    const stdin = resolveStdin(source);
     const state = stdinSnapshot(stdin);
     const stalled = stdinLooksStalled(state);
     debugEvent("heartbeat", { stdin: state, stalled, ...(opts.extra?.() ?? {}) });
     if (stalled && (opts.shouldRecover?.() ?? true) && Date.now() - lastRecovery > cooldownMs) {
       lastRecovery = Date.now();
-      const actions = recoverStdin(stdin, { cycle: true });
-      debugEvent("stdin.stall.recovered-in-process", { before: state, actions, after: stdinSnapshot(stdin) });
+      const actions = opts.recover?.() ?? recoverStdin(stdin, { cycle: true });
+      debugEvent("stdin.stall.recovered-in-process", { before: state, actions, after: stdinSnapshot(resolveStdin(source)) });
     }
   }, intervalMs);
   (timer as { unref?: () => void }).unref?.();
@@ -218,21 +277,23 @@ export function startStdinHeartbeat(
  * way short of killing it. `onRecovered` lets the caller repaint/refocus.
  */
 export function installInputRecoverySignal(
-  stdin: StdinLike,
+  source: StdinSource,
   onRecovered?: (actions: string[]) => void,
   shouldRecover: () => boolean = () => true,
+  recover?: () => string[],
 ): () => void {
   if (process.platform === "win32") {
     return () => {};
   }
   const handler = (): void => {
+    const stdin = resolveStdin(source);
     if (!shouldRecover()) {
       debugEvent("signal.SIGUSR2.skipped", { reason: "renderer suspended or destroyed", stdin: stdinSnapshot(stdin) });
       return;
     }
     const before = stdinSnapshot(stdin);
-    const actions = recoverStdin(stdin, { cycle: true });
-    const after = stdinSnapshot(stdin);
+    const actions = recover?.() ?? recoverStdin(stdin, { cycle: true });
+    const after = stdinSnapshot(resolveStdin(source));
     debugEvent("signal.SIGUSR2.recover", { before, actions, after, debug: isDebugEnabled() });
     try {
       onRecovered?.(actions);

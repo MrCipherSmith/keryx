@@ -9,6 +9,7 @@ import {
   instrumentStdin,
   recoverStdin,
   registerRendererInputListener,
+  stdinIsDead,
   stdinLooksStalled,
   stdinSnapshot,
   type StdinLike,
@@ -162,5 +163,15 @@ describe("instrumentStdin", () => {
     expect(stdin.pause).not.toBe(original);
     undo();
     expect(stdin.pause).toBe(original);
+  });
+});
+
+describe("stdinIsDead", () => {
+  test("ended or destroyed streams are dead; a paused one is not", () => {
+    const paused = new FakeStdin();
+    paused.paused = true;
+    expect(stdinIsDead(paused)).toBe(false);
+    expect(stdinIsDead(Object.assign(new FakeStdin(), { readableEnded: true }))).toBe(true);
+    expect(stdinIsDead(Object.assign(new FakeStdin(), { destroyed: true }))).toBe(true);
   });
 });

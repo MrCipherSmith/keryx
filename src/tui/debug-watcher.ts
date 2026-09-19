@@ -153,25 +153,101 @@ function threads(pid: number): { tid: string; comm: string; wchan: string; state
   });
 }
 
+/** Every process with `ttyPath` open, and what it is. */
+export function ttyHolders(ttyPath: string): { pid: number; ppid?: string; cmd: string; fds: number[] }[] {
+  const out: { pid: number; ppid?: string; cmd: string; fds: number[] }[] = [];
+  let pids: string[];
+  try {
+    pids = readdirSync("/proc").filter((name) => /^\d+$/.test(name));
+  } catch {
+    return out;
+  }
+  for (const pid of pids) {
+    let fdNames: string[];
+    try {
+      fdNames = readdirSync(`/proc/${pid}/fd`);
+    } catch {
+      continue;
+    }
+    const fds: number[] = [];
+    for (const fd of fdNames) {
+      try {
+        if (readlinkSync(`/proc/${pid}/fd/${fd}`) === ttyPath) fds.push(Number(fd));
+      } catch {
+        // raced with a close
+      }
+    }
+    if (fds.length === 0) continue;
+    const cmd = (readText(`/proc/${pid}/cmdline`) ?? "").split("\0").join(" ").trim().slice(0, 300);
+    const ppid = /\)\s+\S\s+(\d+)/.exec(readText(`/proc/${pid}/stat`) ?? "")?.[1];
+    out.push({ pid: Number(pid), ...(ppid !== undefined ? { ppid } : {}), cmd, fds });
+  }
+  return out;
+}
+
 type PendingReader = (fd: number) => number | undefined;
 
-/** FIONREAD through libc (bun:ffi). `undefined` wherever that is unavailable. */
-async function makePendingReader(): Promise<PendingReader> {
+/** The termios fields that decide whether a raw-mode read can return EOF. */
+export interface TermiosSummary {
+  iflag: number;
+  lflag: number;
+  /** VMIN: 0 makes a read with no data return 0 bytes — which a stream reads as EOF. */
+  vmin: number;
+  vtime: number;
+  icanon: boolean;
+  echo: boolean;
+}
+
+type TermiosReader = (fd: number) => TermiosSummary | undefined;
+
+// Linux glibc `struct termios`: four 32-bit flag words, c_line, c_cc[32], two speeds.
+const TERMIOS_SIZE = 60;
+const CC_OFFSET = 17;
+const VTIME = 5;
+const VMIN = 6;
+const ICANON = 0o2;
+const ECHO = 0o10;
+
+/** Decode the fields of a raw `struct termios` buffer the watcher cares about. */
+export function decodeTermios(buf: Uint8Array): TermiosSummary {
+  const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const iflag = view.getUint32(0, true);
+  const lflag = view.getUint32(12, true);
+  return {
+    iflag,
+    lflag,
+    vmin: buf[CC_OFFSET + VMIN] ?? 0,
+    vtime: buf[CC_OFFSET + VTIME] ?? 0,
+    icanon: (lflag & ICANON) !== 0,
+    echo: (lflag & ECHO) !== 0,
+  };
+}
+
+/** FIONREAD and tcgetattr through libc (bun:ffi). `undefined` wherever unavailable. */
+async function makeTtyProbes(): Promise<{ pending: PendingReader; termios: TermiosReader }> {
+  const none = { pending: () => undefined, termios: () => undefined };
   if (process.platform !== "linux") {
-    return () => undefined;
+    return none;
   }
   try {
     const ffi = await import("bun:ffi");
     const libc = ffi.dlopen("libc.so.6", {
       ioctl: { args: [ffi.FFIType.i32, ffi.FFIType.u64, ffi.FFIType.ptr], returns: ffi.FFIType.i32 },
+      tcgetattr: { args: [ffi.FFIType.i32, ffi.FFIType.ptr], returns: ffi.FFIType.i32 },
     });
-    return (fd) => {
-      const out = new Int32Array(1);
-      const rc = libc.symbols.ioctl(fd, FIONREAD, ffi.ptr(out));
-      return rc === 0 ? (out[0] ?? 0) : undefined;
+    return {
+      pending: (fd) => {
+        const out = new Int32Array(1);
+        const rc = libc.symbols.ioctl(fd, FIONREAD, ffi.ptr(out));
+        return rc === 0 ? (out[0] ?? 0) : undefined;
+      },
+      termios: (fd) => {
+        const buf = new Uint8Array(TERMIOS_SIZE);
+        return libc.symbols.tcgetattr(fd, ffi.ptr(buf)) === 0 ? decodeTermios(buf) : undefined;
+      },
     };
   } catch {
-    return () => undefined;
+    return none;
   }
 }
 
@@ -219,7 +295,8 @@ export async function runDebugWatcher(argv: readonly string[]): Promise<void> {
     }
   };
   const linux = process.platform === "linux" && isAlive(pid) && readText(`/proc/${pid}/stat`) !== undefined;
-  const pendingOf = await makePendingReader();
+  const probes = await makeTtyProbes();
+  const pendingOf = probes.pending;
 
   let ttyPath: string | undefined;
   let ttyFd: number | undefined;
@@ -237,6 +314,7 @@ export async function runDebugWatcher(argv: readonly string[]): Promise<void> {
 
   const history: WatchSample[] = [];
   let lastLogged = "";
+  let lastTermios = "";
   let lastPeriodic = 0;
   let lastSignal = 0;
 
@@ -309,10 +387,32 @@ export async function runDebugWatcher(argv: readonly string[]): Promise<void> {
     return true;
   };
 
+  // termios is polled much faster than the rest: a VMIN of 0 or canonical mode,
+  // even for a few milliseconds, is how a raw-mode tty read becomes an EOF, and
+  // whoever set it may restore it well inside a one-second sample.
+  const termiosTimer =
+    ttyFd === undefined
+      ? undefined
+      : setInterval(() => {
+          const termios = probes.termios(ttyFd as number);
+          const key = JSON.stringify(termios);
+          if (termios !== undefined && key !== lastTermios) {
+            const suspicious = termios.vmin === 0 || termios.icanon;
+            // Who could have done it: every process holding this terminal open,
+            // captured while a short-lived culprit is most likely still alive.
+            log("termios", {
+              ...termios,
+              suspicious,
+              ...(suspicious && lastTermios !== "" && ttyPath !== undefined ? { ttyHolders: ttyHolders(ttyPath) } : {}),
+            });
+            lastTermios = key;
+          }
+        }, 50);
   await new Promise<void>((resolve) => {
     const timer = setInterval(() => {
       if (!tick()) {
         clearInterval(timer);
+        if (termiosTimer !== undefined) clearInterval(termiosTimer);
         resolve();
       }
     }, 1000);

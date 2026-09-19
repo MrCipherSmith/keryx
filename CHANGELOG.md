@@ -3,6 +3,31 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.123] — 2026-09-19
+
+### Fixed
+
+- **The shell no longer freezes when its terminal input hits end-of-file.**
+  Reproduced with `keryx shell --debug` (0.2.122): while subagents ran, the
+  first key typed was followed by an `end` on `stdin` — the tty's termios had
+  been switched to `VMIN=0`, where a raw-mode read with no data returns 0 bytes
+  and the runtime reads that as EOF. The stream destroyed itself, and the
+  0.2.122 SIGUSR2 recovery (pause/resume) could not revive a destroyed stream.
+  Every TUI session now watches `stdin` for `end`/`close` and reopens the
+  terminal as a new raw-mode stream (re-applying raw mode, which restores
+  `VMIN=1`), hands it to the renderer, and keeps going; at most five reopens a
+  minute. `kill -USR2` reopens a dead stream the same way. Setting
+  `stty min 0` on the pane from outside reproduces the freeze and is recovered
+  from immediately.
+
+### Added
+
+- **`--debug` records who changes the terminal.** The watcher samples termios
+  every 50 ms and logs every change (VMIN, VTIME, canonical/echo); a suspicious
+  one (VMIN 0 or canonical mode) also lists every process holding the terminal
+  open. The shell logs kernel-side facts (termios, foreground group) when input
+  ends.
+
 ## [0.2.122] — 2026-09-19
 
 ### Fixed
