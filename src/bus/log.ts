@@ -540,11 +540,13 @@ export async function cursorAtStart(root: string): Promise<BusCursor> {
 /**
  * Events from `origin` with a timestamp in the last `sinceMs`, counted over the
  * current segment and the newest rotated one (a minute of messages cannot span
- * more than one rotation at the D-12 rates). Used for the rate limits.
+ * more than one rotation at the D-12 rates). Used for the rate limits: the
+ * clone-wide CLI limit (no `instanceId`) and the per-instance operator limit
+ * (`instanceId` set to the sender's own id).
  */
 export async function countRecent(
   root: string,
-  options: { origin: BusOrigin; sinceMs: number; now?: () => number },
+  options: { origin: BusOrigin; sinceMs: number; now?: () => number; instanceId?: string },
 ): Promise<number> {
   const since = (options.now ?? Date.now)() - options.sinceMs;
   const rotated = await listRotatedSegments(root);
@@ -554,7 +556,13 @@ export async function countRecent(
   for (const file of files) {
     const read = await readSegment(file, 0);
     for (const event of read?.events ?? []) {
-      if (event.from.origin === options.origin && Date.parse(event.ts) >= since) count += 1;
+      if (
+        event.from.origin === options.origin &&
+        (options.instanceId === undefined || event.from.instanceId === options.instanceId) &&
+        Date.parse(event.ts) >= since
+      ) {
+        count += 1;
+      }
     }
   }
   return count;

@@ -7,6 +7,7 @@ export type BusRefusalCode =
   | "invalid-id"
   | "invalid-name"
   | "reserved-name"
+  | "name-taken"
   | "invalid-event"
   | "invalid-presence"
   | "body-too-large"

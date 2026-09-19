@@ -13,6 +13,7 @@
 // A disabled bus (`KERYX_BUS=off`, shell config `bus.enabled: false`, CI)
 // refuses `send` and `prune` with `bus-disabled`; `list` and `log` still read.
 
+import { displaySafe } from "../bus/display";
 import { busEnabled } from "../bus/enabled";
 import { BusRefusal, isBusRefusal } from "../bus/errors";
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
@@ -274,28 +275,8 @@ async function log(
   return 0;
 }
 
-/**
- * Text written by peers, made safe for a terminal (review r1 F5): ANSI/VT
- * escape sequences (CSI, OSC, and any other ESC-introduced sequence) are
- * removed, every remaining C0/C1 control character and DEL becomes a space,
- * and runs of whitespace collapse to one. `--json` output is never passed
- * through this: it is data, and JSON escapes control characters itself.
- */
-export function displaySafe(text: string): string {
-  return (
-    text
-      // eslint-disable-next-line no-control-regex -- matching control characters is the point
-      .replace(/\u001b\[[0-?]*[ -/]*[@-~]/g, "")
-      // eslint-disable-next-line no-control-regex -- OSC ... BEL or ST
-      .replace(/\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)?/g, "")
-      // eslint-disable-next-line no-control-regex -- any other ESC sequence (ESC + one char)
-      .replace(/\u001b[\s\S]?/g, "")
-      // eslint-disable-next-line no-control-regex -- C1 CSI/OSC introducers and the rest of C0/C1, DEL
-      .replace(/[\u0000-\u001f\u007f-\u009f]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-}
+/** Re-exported for callers that imported it from here before it moved to `../bus/display`. */
+export { displaySafe } from "../bus/display";
 
 function formatAge(ms: number): string {
   if (!Number.isFinite(ms) || ms < 0) return "-";
