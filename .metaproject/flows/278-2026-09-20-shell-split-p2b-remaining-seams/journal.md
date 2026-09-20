@@ -17,3 +17,7 @@
 - 2026-09-20T10:57:29.863Z - ac-confirmed: AC8: manifest regenerated from the live scan: 12 files / 34 sites; shell-source-audits.test.ts green
 - 2026-09-20T10:57:30.096Z - ac-confirmed: AC9: decideJoinAdoption row corrected from 4 tests to 1, with why; the other 3 need the separate buildBusJoinOptions/attemptBusJoin seam
 - 2026-09-20T10:57:30.354Z - ac-confirmed: AC10: the 'seam each one waits on' section is kept; approval-wiring recorded as needing one owner across both god-files
+- 2026-09-20T10:58:19.328Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/631 (warning: PR is not a draft) (base: main)
+- 2026-09-20T11:33:05.837Z - ac-confirmed: AC11: gh pr view 631 statusCheckRollup: all checks SUCCESS (typecheck-and-tests, client matrix x4, standard-baseline, standard-pr, opentui native x4, macOS/linux sandbox legs, dependency-audit, metrics-contract, vscode-extension); only 'deploy to GitHub Pages' SKIPPED (unrelated). PR head verified via gh pr view --json.
+- 2026-09-20T11:36:50.457Z - completing
+- 2026-09-20T11:36:54.945Z - done: all gates passed
