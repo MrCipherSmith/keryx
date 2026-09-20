@@ -3,7 +3,9 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.2.127] — 2026-09-20
+`web_search` works on a fresh install: DuckDuckGo Lite is the default, with no
+API key and no local search engine (PR #626).
 
 ### Added
 
