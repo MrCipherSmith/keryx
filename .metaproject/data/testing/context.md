@@ -1,6 +1,6 @@
 # Testing Context
 
-generatedAt: 2026-09-16T15:28:11.091Z
+generatedAt: 2026-09-20T12:46:26.198Z
 status: complete
 
 ## Frameworks
@@ -13,11 +13,11 @@ status: complete
 - `check:core`: `bun run lint && bun run typecheck && bun run typecheck:scripts && bun run test:core`
 - `test`: `bun test`
 - `test:client`: `bun run test:client:terminal && bun run test:client:streaming && bun run test:client:cancel-resume && bun run test:client:runtime`
-- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/commands/sessions`
+- `test:client:cancel-resume`: `bun test src/harness/run/ src/harness/resume/ src/harness/session/ src/session/ src/bus/ src/commands/sessions`
 - `test:client:runtime`: `bun test src/harness/ src/mcp-client/ src/mcp-servers/ src/agents/ src/commands/agent src/commands/harness src/commands/providers`
 - `test:client:streaming`: `bun test src/harness/provider/`
 - `test:client:terminal`: `bun test src/tui/ src/commands/shell`
-- `test:core`: `bun test src/cli src/core src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/`
+- `test:core`: `bun test src/cli src/core src/shell-source-audits.test.ts src/assets/ src/capability/ src/commands/ src/contracts/ src/ctx/ src/eval/ src/flow/ src/forgetting/ src/gdgraph/ src/gdskills/ src/health/ src/job/ src/lib/ src/mcp/ src/memory/ src/metrics/ src/retention/ src/review/ src/sac/ src/security/ src/standard/ src/sync/ src/testing/ src/wiki/`
 - `test:guards`: `bun test src/lib/config-dir.ast.test.ts src/lib/config-dir.readers.test.ts src/lib/production-graph.test.ts src/harness/policy/profiles.test.ts src/lib/serve-server.test.ts src/gdskills/agent-catalogue-xref.test.ts src/gdskills/enforcement-claims.test.ts`
 
 ## Configs
@@ -52,6 +52,25 @@ status: complete
 - src/assets/command.test.ts
 - src/assets/resolver.test.ts
 - src/assets/seed.test.ts
+- src/bus/ac10-child-env.test.ts
+- src/bus/agent-tools.test.ts
+- src/bus/client-ack.test.ts
+- src/bus/client.test.ts
+- src/bus/delivery.integration.test.ts
+- src/bus/display.test.ts
+- src/bus/enabled.test.ts
+- src/bus/flow-isolation.test.ts
+- src/bus/inbox.test.ts
+- src/bus/leases.test.ts
+- src/bus/log.process.test.ts
+- src/bus/log.test.ts
+- src/bus/paths.test.ts
+- src/bus/pause.test.ts
+- src/bus/peer-notification.test.ts
+- src/bus/presence.test.ts
+- src/bus/prune.test.ts
+- src/bus/schema.test.ts
+- src/bus/send.test.ts
 - src/capability/external-agents.test.ts
 - src/capability/golden-rule.test.ts
 - src/capability/no-optional-imports.test.ts
@@ -64,6 +83,7 @@ status: complete
 - src/commands/agent-approval-binding.test.ts
 - src/commands/agent-approval-context-p0.test.ts
 - src/commands/agent-approval-context.test.ts
+- src/commands/agent-bus-notification.test.ts
 - src/commands/agent-commands.confusable.test.ts
 - src/commands/agent-commands.test.ts
 - src/commands/agent-destructive-gate.test.ts
@@ -71,10 +91,13 @@ status: complete
 - src/commands/agent-permission-mode.test.ts
 - src/commands/agent-task-notification.test.ts
 - src/commands/agent-tool-call-budget.test.ts
+- src/commands/agent.context-guard.test.ts
+- src/commands/agent.error-hint.test.ts
 - src/commands/agent.test.ts
 - src/commands/agents-external.test.ts
 - src/commands/agents.monitor.test.ts
 - src/commands/auth.test.ts
+- src/commands/bus.test.ts
 - src/commands/ctx.rg-argv.test.ts
 - src/commands/ctx.test.ts
 - src/commands/dashboard.test.ts
@@ -86,31 +109,8 @@ status: complete
 - src/commands/harness-exec-restricted.smoke.test.ts
 - src/commands/harness-exec.smoke.test.ts
 - src/commands/harness-network-posture.test.ts
-- src/commands/harness.replay.test.ts
-- src/commands/harness.test.ts
-- src/commands/health-gate-exit.test.ts
-- src/commands/health-incomplete.test.ts
-- src/commands/health-status.test.ts
-- src/commands/init-mcp-offer.test.ts
-- src/commands/init-mcp-runtimes.test.ts
-- src/commands/init.escape.test.ts
-- src/commands/init.no-git.test.ts
-- src/commands/init.test.ts
-- src/commands/install-lifecycle.test.ts
-- src/commands/interactive-agent-tools.test.ts
-- src/commands/mcp-auth-decisions.test.ts
-- src/commands/mcp-auth-flow.test.ts
-- src/commands/mcp-auth-secrecy.test.ts
-- src/commands/mcp-help.test.ts
-- src/commands/mcp-install.test.ts
-- src/commands/mcp-naming.test.ts
-- src/commands/mcp-serve-root.test.ts
-- src/commands/mcp-servers.argv.test.ts
-- src/commands/mcp-servers.test.ts
-- src/commands/mcp-tool-surface.test.ts
-- src/commands/mcp-untrusted.test.ts
 
-- ... 689 more
+- ... 762 more
 
 ## CI
 
