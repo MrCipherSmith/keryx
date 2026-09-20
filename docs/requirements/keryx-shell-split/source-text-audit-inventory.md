@@ -14,7 +14,17 @@ read sites. Rescanned at flow 275 (agent bus P4), against the
 `feat/agent-bus-p4-pause-leases` branch, after P4's T8 held-turn wiring added
 four audit blocks to `commands/shell.test.ts` and its own
 `tui/tui-hold.test.ts` — see [audits-commands.md](audits-commands.md) and
-[audits-tui-other.md](audits-tui-other.md). **17 test files, 51 read sites.**
+[audits-tui-other.md](audits-tui-other.md). 17 test files, 51 read sites.
+
+**P2 is converting these. Current: 14 test files, 43 read sites** — the
+manifest at the bottom is the live count, checked by
+`src/shell-source-audits.test.ts`, and it is the progress signal. Converted so
+far: `/goal`, `/plan` and `/reasoning` (including T26's configDir threading)
+now drive the real `runAgentRepl`; the flow-173 F-003 deny-list tests import
+the exported Set; and `theme-picker`, `subagent-inspector` and `session-info`
+have dropped to zero read sites because their structural audits now scan
+`src/tui/**` instead of one file, which is what lets them survive P3 rather
+than be broken by it.
 
 ## The detail
 
@@ -225,17 +235,14 @@ commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 12
+commands/shell.test.ts | commands/shell.ts | 10
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 mcp-servers/invariants.test.ts | commands/shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
 tui/next-step-suggestion.reasoning-guard.test.ts | tui/tui-shell.ts | 1
-tui/session-info.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
-tui/subagent-inspector.test.ts | tui/tui-shell.ts | 1
-tui/theme-picker.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 14
+tui/tui-shell.test.ts | tui/tui-shell.ts | 13
 ```
