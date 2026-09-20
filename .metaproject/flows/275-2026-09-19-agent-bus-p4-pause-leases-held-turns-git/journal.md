@@ -28,3 +28,5 @@
 - 2026-09-19T23:14:09.149Z - task-attempt: T10: started (attempt 1) — 275-T10 docs + backlog entry (haiku)
 - 2026-09-19T23:18:30.004Z - task-done: T10: Docs: P4 status and pause docs (haiku)
 - 2026-09-19T23:34:59.277Z - task-done: T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)
+- 2026-09-19T23:38:54.998Z - task-done: T11: Verification: CI on the PR head green
+- 2026-09-19T23:48:27.914Z - task-attempt: T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)

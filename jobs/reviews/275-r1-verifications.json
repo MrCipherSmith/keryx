@@ -1,0 +1,47 @@
+{
+  "verifier": "orchestrator",
+  "verifications": [
+    {
+      "finding": "F-001",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "The readline hint and the TUI title now carry publishLeaseDetail; shell-approval.test.ts and tui-shell.test.ts assert the holder and reason appear in the rendered text. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    {
+      "finding": "F-002",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified by temporarily restoring the turns-only lookup: agent-permission-mode.test.ts:916 fails (1 fail / 29 pass), and passes once the scope-aware appliesToMeLease is restored (30 pass). Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    {
+      "finding": "F-003",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "The completion-wake branch in runAgentRepl is gated on isHeld() before the auto-wake cap (shell.ts:2380), so a held completion starts no turn and spends no budget. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    {
+      "finding": "F-004",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "All five publish rules match the subcommand by membership; command-risk.test.ts covers gh -R o/r release create, gh --repo o/r release create, npm -w pkg publish, npm --loglevel warn publish and gh -R o/r pr merge, 8 pass. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    {
+      "finding": "F-005",
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "The --ttl error text now reads 'must look like 30m or 2h (minimum 1 minute)' and no longer advertises 45s (src/commands/bus.ts). Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    {
+      "finding": "F-006",
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "createPauseLease filters the holder out of targets before the recipient-is-self check; pause.test.ts covers a multi-instance @name resolving to holder plus peer and storing only the peer. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    }
+  ]
+}

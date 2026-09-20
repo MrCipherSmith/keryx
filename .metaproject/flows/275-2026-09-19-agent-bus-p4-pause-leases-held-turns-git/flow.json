@@ -9,7 +9,7 @@
   "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
   "status": "in-progress",
   "createdAt": "2026-09-19T21:39:31.218Z",
-  "updatedAt": "2026-09-19T23:34:59.277Z",
+  "updatedAt": "2026-09-19T23:48:27.914Z",
   "source": {
     "type": "description",
     "ref": null
@@ -79,8 +79,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:48:27.914Z",
+            "outcome": "started",
+            "detail": "r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -216,7 +222,7 @@
       "id": "T11",
       "title": "Verification: CI on the PR head green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -224,7 +230,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T12",
@@ -386,6 +393,16 @@
       "at": "2026-09-19T23:34:59.277Z",
       "event": "task-done",
       "detail": "T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:38:54.998Z",
+      "event": "task-done",
+      "detail": "T11: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T23:48:27.914Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)"
     }
   ]
 }
