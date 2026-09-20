@@ -1863,10 +1863,10 @@ type SearchProviderStep2Result = { kind: "back" } | ({ kind: "done" } & SearchPr
 
 /**
  * Step 2 (AC5): `descriptor.fields` in order, then a credential prompt (only
- * when `credentialSchema.required` — the 3 remote providers, 0 fields, skip
- * straight to it), then the active-provider toggle. Esc at any sub-step goes
- * back one; off the front sub-step it reports `back` (up to step 1) rather
- * than closing the modal.
+ * when `credentialSchema.required` — keyed remotes skip straight to it;
+ * DuckDuckGo has no fields and no key), then the active-provider toggle.
+ * Esc at any sub-step goes back one; off the front sub-step it reports
+ * `back` (up to step 1) rather than closing the modal.
  */
 async function runSearchProviderFieldsStep(
   otui: OpenTui,

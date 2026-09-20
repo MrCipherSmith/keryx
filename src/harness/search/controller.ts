@@ -1,5 +1,5 @@
-import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig } from "../../lib/search-config";
-import type { SearchConnectionResult, SearchProviderDescriptor, SearchProviderId } from "./types";
+import { loadSearchConfig, readSearchCredential, saveSearchConfig, saveSearchCredential, type SearchConfig, type StoredSearchProvider } from "../../lib/search-config";
+import { DEFAULT_SEARCH_PROVIDER_ID, type SearchConnectionResult, type SearchProviderDescriptor, type SearchProviderId, type SearchResponse } from "./types";
 import { SearchProviderRegistry } from "./registry";
 
 export type SearchSelectionResult = { ok: true } | { ok: false; reason: "not-configured" | "not-connected" };
@@ -18,12 +18,18 @@ export class SearchProviderController {
 
   selectable(): SearchProviderDescriptor[] {
     const config = this.config();
-    return this.registry.descriptors.filter((descriptor) => config.providers?.[descriptor.id]?.status === "connected");
+    return this.registry.descriptors.filter((descriptor) => (
+      descriptor.id === DEFAULT_SEARCH_PROVIDER_ID
+      || config.providers?.[descriptor.id]?.status === "connected"
+    ));
   }
 
   active(): SearchProviderDescriptor | undefined {
-    const active = this.config().activeProviderId;
-    return active ? this.selectable().find((descriptor) => descriptor.id === active) : undefined;
+    const active = this.config().activeProviderId as SearchProviderId | undefined;
+    if (active === undefined || active === DEFAULT_SEARCH_PROVIDER_ID) {
+      return this.registry.get(DEFAULT_SEARCH_PROVIDER_ID);
+    }
+    return this.selectable().find((descriptor) => descriptor.id === active);
   }
 
   configure(providerId: SearchProviderId, fields: Record<string, string>, credential?: string): void {
@@ -51,6 +57,19 @@ export class SearchProviderController {
 
   async select(providerId: SearchProviderId): Promise<SearchSelectionResult> {
     const config = this.config();
+    if (providerId === DEFAULT_SEARCH_PROVIDER_ID) {
+      const stored = config.providers?.[providerId];
+      const providers = {
+        ...(config.providers ?? {}),
+        [DEFAULT_SEARCH_PROVIDER_ID]: {
+          fields: { ...(stored?.fields ?? {}) },
+          status: "connected" as const,
+          ...(stored?.lastTestedAt ? { lastTestedAt: stored.lastTestedAt } : {}),
+        },
+      };
+      saveSearchConfig({ ...config, providers, activeProviderId: DEFAULT_SEARCH_PROVIDER_ID }, this.configDir);
+      return { ok: true };
+    }
     const stored = config.providers?.[providerId];
     if (!stored) return { ok: false, reason: "not-configured" };
     if (stored.status !== "connected") return { ok: false, reason: "not-connected" };
@@ -62,21 +81,36 @@ export class SearchProviderController {
     return readSearchCredential(providerId, this.configDir);
   }
 
-  /** Run only the explicitly selected, still-connected provider. No fallback. */
+  /**
+   * Run the explicitly selected, still-connected provider.
+   * DuckDuckGo is the default when nothing is selected — never a fallback after
+   * another provider fails.
+   */
   async search(query: string, signal?: AbortSignal) {
     const config = this.config();
     const activeProviderId = config.activeProviderId as SearchProviderId | undefined;
-    if (!activeProviderId) return { ok: false as const, reason: "no-active-provider" as const };
+    if (activeProviderId === undefined || activeProviderId === DEFAULT_SEARCH_PROVIDER_ID) {
+      return this.runProvider(DEFAULT_SEARCH_PROVIDER_ID, config.providers?.[DEFAULT_SEARCH_PROVIDER_ID], query, signal);
+    }
     const stored = config.providers?.[activeProviderId];
     if (!stored || stored.status !== "connected") {
       return { ok: false as const, reason: "provider-disconnected" as const };
     }
-    const descriptor = this.registry.get(activeProviderId);
-    if (!descriptor) return { ok: false as const, reason: "provider-disconnected" as const };
+    return this.runProvider(activeProviderId, stored, query, signal);
+  }
+
+  private async runProvider(
+    providerId: SearchProviderId,
+    stored: StoredSearchProvider | undefined,
+    query: string,
+    signal?: AbortSignal,
+  ): Promise<{ ok: true; value: SearchResponse } | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed" }> {
+    const descriptor = this.registry.get(providerId);
+    if (!descriptor) return { ok: false, reason: "no-active-provider" };
     try {
-      return { ok: true as const, value: await descriptor.search(stored.fields, query, signal) };
+      return { ok: true, value: await descriptor.search(stored?.fields ?? {}, query, signal) };
     } catch {
-      return { ok: false as const, reason: "search-failed" as const };
+      return { ok: false, reason: "search-failed" };
     }
   }
 

@@ -2,7 +2,8 @@
 
 Keryx can use a SearXNG instance that you operate yourself. It is an explicit
 search-provider option, not a general permission for the agent to access your
-local network.
+local network. The default `web_search` engine is DuckDuckGo and needs no
+instance; see [Agent web search](web-search.md).
 
 ## Start SearXNG
 
@@ -27,8 +28,9 @@ In agent mode:
 4. Run `/search-connect` and select SearXNG. That list intentionally includes
    only providers with a successful connection test.
 
-Then the agent can call `web_search`. When no provider is active, it returns
-setup guidance rather than silently choosing another service.
+Then the agent uses SearXNG for `web_search` instead of DuckDuckGo. If SearXNG
+later fails its connection test, keryx does not silently switch back to
+DuckDuckGo — reconnect or `/search-connect duckduckgo` explicitly.
 
 ## Troubleshooting
 

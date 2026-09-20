@@ -1,12 +1,19 @@
 import { expect, test } from "bun:test";
 import { webSearchTool } from "./web-search-tool";
 
-test("web_search gives setup guidance without an active connected provider", async () => {
-  const tool = webSearchTool({ search: async () => ({ ok: false, reason: "no-active-provider" }) });
+test("web_search tells the agent to reconnect a disconnected selected provider", async () => {
+  const tool = webSearchTool({ search: async () => ({ ok: false, reason: "provider-disconnected" }) });
   const result = await tool.invoke({ query: "keryx" });
   expect(result.isError).toBe(true);
   expect(result.output).toContain("/search-provider");
   expect(result.output).not.toContain("fallback");
+});
+
+test("web_search does not ask the model to switch engines after a failed search", async () => {
+  const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed" }) });
+  const result = await tool.invoke({ query: "keryx" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("do not switch providers");
 });
 
 test("web_search provenance-labels and redacts normalized results", async () => {

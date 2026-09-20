@@ -15,4 +15,5 @@ export type {
   SearchProviderId,
   SearchResponse,
 } from "./types";
+export { DEFAULT_SEARCH_PROVIDER_ID } from "./types";
 export type { SearchSelectionResult } from "./controller";
