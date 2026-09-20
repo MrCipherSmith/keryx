@@ -84,9 +84,13 @@ change. Both are mechanical now that the audits are behavioural.
    Cause and prevention are recorded in the memory note about pre-creating flow
    packages in a PR branch: the ids were taken on `main` while the branches
    were open.
-3. **Agent bus P5 review.** Flow 279's review round was not run — it was
-   stopped for budget. The PR is documentation only and its checks are green,
-   but the flow's completion gate wants an ingested round. Run one against the
+3. **Agent bus P5 review — flow 279 is left `in-progress`, deliberately.**
+   The round was not run: it was stopped for budget, and PR #634 was merged
+   without it (documentation only, 18 CI checks green, the acceptance criteria
+   confirmed and the external comments collected). The completion gate refuses
+   to close a flow with no ingested round, which is the correct refusal — a
+   flow with no recorded review has not been reviewed cleanly, it has not been
+   reviewed at all. Nothing was faked to get past it. Run one against the
    merged head with `keryx review ingest --target pr --ref 634 --flow 279
    --reviewers <name> --report <markdown> --verifications <json>`, then
    `keryx review complete <package> --finding <id> --disposition …`.

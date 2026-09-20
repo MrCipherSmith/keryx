@@ -22,10 +22,12 @@ fields and scope enforcement), [§4.4](../specification.md#44-publish-floor-in-t
 (the publish floor), [decisions.md D-09](../decisions.md#d-09-presence-liveness-is-a-heartbeat-first-the-pid-second)
 (liveness), [D-12](../decisions.md#d-12-bounds-on-every-sender) (rate limits,
 lease bounds) and [D-13](../decisions.md#d-13-the-agent-cannot-use-the-cli-to-bypass-its-own-tools)
-(why the CLI refuses inside a tool call). Most of this evidence drives the
-`/bus` slash commands, so that the operator surface exercised is the one
-D-05/D-13 describe; scenario 2's delivery step sends from the `keryx bus` CLI
-instead, deliberately, so that the `cli` origin is covered too.
+(why the CLI refuses inside a tool call). All of this evidence drives the
+`/bus` slash commands from inside real running shells, so the operator
+surface exercised throughout is the one D-05/D-13 describe (`origin:
+"operator"` on every event); the `keryx bus` CLI's own `cli` origin is not
+separately exercised here — see each scenario's "What was NOT exercised"
+section.
 
 ## How this was produced
 
@@ -54,16 +56,21 @@ prompt, and neither was available in this sandbox:
    `src/commands/shell-pause.process.test.ts` makes for its own AC11
    coverage of this exact case. Stated inline in that file, not left to be
    inferred.
-2. **A live agent's turn actually completing, so a bus message can reach one
-   of `runAgentTurn`'s three drain sites and be pushed into history with
-   `provenance: "tool"`, and a live agent authoring a reply via `bus_send`.**
-   Scenario 2 attempted this directly (typed an operator line into the
-   target shell to start a real turn) and observed it fail before reaching
-   any drain site, because both shells run `--provider deepseek --model
-   unused` with no credentials configured, which resolves to the offline,
-   transcript-less `FakeProvider` (`src/harness/provider/make-provider.ts`).
-   That failure, and what it does and does not prove, is recorded verbatim in
-   that file rather than smoothed over.
+2. **A live agent authoring a reply via `bus_send`.** A first pass ran B on
+   `--provider deepseek --model unused` with no credentials, which resolves
+   to the offline, transcript-less `FakeProvider`
+   (`src/harness/provider/make-provider.ts`) and errors before any drain
+   site — that failure was recorded, then closed: B was re-run against a
+   real local model (Ollama, `llama3.1:latest`, running on this machine),
+   and the message *was* placed in B's real agent history with
+   `provenance: "tool"`, with the resulting `ack` written 92 ms later — both
+   proven live, on disk, in
+   [scenario-2-ask-and-reply.md](scenario-2-ask-and-reply.md). What remains
+   unreached is narrower: that local model would not reliably call
+   `bus_send` itself, even when told the exact arguments twice, so the reply
+   A receives is operator-issued. That is a property of the specific local
+   model used, not of the harness's delivery path, which ran to completion
+   before the model produced a token.
 
 Neither substitution is presented as if it were the real thing: every claim
 in both scenario files that rests on a driver script, an offline function
@@ -74,12 +81,19 @@ and each file's closing section lists everything not exercised and why.
 
 None. Both mechanisms specification §4.3/§4.4 describe (the `git-publish`
 floor, live/resume transitions) behaved exactly as documented when driven for
-real. The one gap found — bus-message delivery into agent history has no
-path reachable from the readline surface without a completing model turn —
-is not a defect: it is the documented design (§5.3: readline "has no idle
-wake in v1"; delivery happens only at a completed turn's drain sites), and
-this dispatch's contribution is confirming that by direct observation rather
-than leaving it as an assumption.
+real, and so did the delivery path in specification §5.3/§4.2/D-10 once it
+was driven against a real, completing model turn: the peer message landed in
+B's real agent history with `provenance: "tool"`, wrapped in exactly one
+`<peer-message>` block, and the `ack` followed 92 ms later — never before the
+push, never duplicated across the turn's later rounds. The one limitation
+found — the specific local model used (`llama3.1:latest` via Ollama) would
+not reliably call `bus_send` even when told the exact arguments twice — is a
+property of that model's instruction-following, not of the harness: the
+harness correctly detected each narrated-but-not-invoked attempt as "no tool
+call" and correctly never fabricated a `reply` event for it. The readline
+surface's lack of an idle auto-wake (§5.3) remains documented design, not a
+defect, and is now the one PRD-scenario mechanic this dispatch did not drive
+live end-to-end — see scenario 2's "What was NOT exercised" section for why.
 
 ## Reproducing this
 
