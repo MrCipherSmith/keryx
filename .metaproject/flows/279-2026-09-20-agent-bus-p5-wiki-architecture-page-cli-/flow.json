@@ -9,7 +9,7 @@
   "title": "Agent bus P5: wiki architecture page, cli-reference, and end-to-end evidence of both motivating scenarios",
   "status": "in-progress",
   "createdAt": "2026-09-20T11:34:13.508Z",
-  "updatedAt": "2026-09-20T12:04:27.712Z",
+  "updatedAt": "2026-09-20T12:06:53.152Z",
   "source": {
     "type": "description",
     "ref": null
@@ -106,7 +106,7 @@
       "id": "T6",
       "title": "Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -120,7 +120,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
@@ -252,6 +253,11 @@
       "at": "2026-09-20T12:04:27.712Z",
       "event": "task-done",
       "detail": "T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:06:53.152Z",
+      "event": "task-done",
+      "detail": "T6: Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)"
     }
   ]
 }
