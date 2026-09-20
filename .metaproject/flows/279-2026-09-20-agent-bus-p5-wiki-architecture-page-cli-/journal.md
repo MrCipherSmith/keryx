@@ -16,3 +16,19 @@
 - 2026-09-20T12:04:27.621Z - task-done: T7: cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)
 - 2026-09-20T12:04:27.712Z - task-done: T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)
 - 2026-09-20T12:06:53.152Z - task-done: T6: Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)
+- 2026-09-20T12:13:13.406Z - ac-confirmed: AC1
+- 2026-09-20T12:13:13.480Z - ac-confirmed: AC2
+- 2026-09-20T12:13:13.574Z - ac-confirmed: AC3
+- 2026-09-20T12:13:13.654Z - ac-confirmed: AC4
+- 2026-09-20T12:13:13.736Z - ac-confirmed: AC5
+- 2026-09-20T12:13:13.814Z - ac-confirmed: AC6
+- 2026-09-20T12:13:13.892Z - ac-confirmed: AC7
+- 2026-09-20T12:13:13.973Z - ac-confirmed: AC8
+- 2026-09-20T12:13:14.051Z - task-done: T9: Verification: CI on the PR head green
+- 2026-09-20T12:13:16.644Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/634 (warning: PR is not a draft)
+- 2026-09-20T12:13:16.736Z - completing
+- 2026-09-20T12:13:24.269Z - completion-failed: tasks: not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 279 T1 --disposition skipped --reason "<why this flow did not need it>") | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/279-2026-09-20-agent-bus-p5-wiki-architecture-page-cli-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#634 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__634.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 634 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from
+- 2026-09-20T12:13:37.626Z - task-done: T1: Collect remaining context
+- 2026-09-20T12:13:37.704Z - task-done: T2: Implement per plan
+- 2026-09-20T12:13:37.781Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-20T12:13:37.859Z - task-done: T4: Self-review and prepare draft PR

@@ -9,15 +9,40 @@
   "title": "Agent bus P5: wiki architecture page, cli-reference, and end-to-end evidence of both motivating scenarios",
   "status": "in-progress",
   "createdAt": "2026-09-20T11:34:13.508Z",
-  "updatedAt": "2026-09-20T12:06:53.152Z",
+  "updatedAt": "2026-09-20T12:13:37.859Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:7ab0239c7889bccc627be1c3b565d747847f51a25e80df734e4a27f2694037b0",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-20T12:13:13.405Z"
+    },
+    "AC2": {
+      "at": "2026-09-20T12:13:13.480Z"
+    },
+    "AC3": {
+      "at": "2026-09-20T12:13:13.574Z"
+    },
+    "AC4": {
+      "at": "2026-09-20T12:13:13.654Z"
+    },
+    "AC5": {
+      "at": "2026-09-20T12:13:13.736Z"
+    },
+    "AC6": {
+      "at": "2026-09-20T12:13:13.814Z"
+    },
+    "AC7": {
+      "at": "2026-09-20T12:13:13.892Z"
+    },
+    "AC8": {
+      "at": "2026-09-20T12:13:13.973Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/634"
   },
   "baseBranch": "main",
   "tasks": [
@@ -26,7 +51,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +59,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "flow-init boilerplate: this phase is documentation only and its work was tracked as T5-T9"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,14 +76,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "flow-init boilerplate: this phase is documentation only and its work was tracked as T5-T9"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -64,14 +93,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "flow-init boilerplate: this phase is documentation only and its work was tracked as T5-T9"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,7 +110,9 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "flow-init boilerplate: this phase is documentation only and its work was tracked as T5-T9"
     },
     {
       "id": "T5",
@@ -169,7 +202,7 @@
       "id": "T9",
       "title": "Verification: CI on the PR head green",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -177,7 +210,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -258,6 +292,85 @@
       "at": "2026-09-20T12:06:53.152Z",
       "event": "task-done",
       "detail": "T6: Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)"
+    },
+    {
+      "at": "2026-09-20T12:13:13.406Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-20T12:13:13.480Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-20T12:13:13.574Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-20T12:13:13.654Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-20T12:13:13.736Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-20T12:13:13.814Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-20T12:13:13.892Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-20T12:13:13.973Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-20T12:13:14.051Z",
+      "event": "task-done",
+      "detail": "T9: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-20T12:13:16.644Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/634 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-20T12:13:16.736Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-20T12:13:24.269Z",
+      "event": "completion-failed",
+      "detail": "tasks: not done: T1, T2, T3, T4; never started since `flow init` generated them: T1, T2, T3, T4 (nothing closes these on a timer — close each with a stated reason: keryx flow task done 279 T1 --disposition skipped --reason \"<why this flow did not need it>\") | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/279-2026-09-20-agent-bus-p5-wiki-architecture-page-cli-/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#634 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__634.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 634 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-20T12:13:37.626Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-20T12:13:37.704Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-20T12:13:37.781Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-20T12:13:37.859Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
     }
   ]
 }
