@@ -79,7 +79,7 @@ function summarizeReviewItem(item: CatchUpItem): string {
     case "unbound-candidate":
       return `${item.sessionId} — ${item.summary}`;
     case "unknown":
-      return `${item.sessionId} — last seen ${item.lastSeenAt}`;
+      return `${item.sessionId} — ${unknownReasonLabel(item.reason)} (last seen ${item.lastSeenAt})`;
   }
 }
 
@@ -91,6 +91,34 @@ export function formatReviewListLines(items: readonly CatchUpItem[], selected: n
     const mark = index === selected ? ">" : " ";
     return `${mark} ${TYPE_LABEL[item.type].padEnd(8)} ${summarizeReviewItem(item)}`;
   });
+}
+
+/** Row label for the reason - see CatchUpUnknownReason in sac/catch-up.ts. */
+function unknownReasonLabel(reason: "wrap-up-failed" | "slate-unreadable" | "no-resolution-recorded"): string {
+  switch (reason) {
+    case "wrap-up-failed":
+      return "wrap-up failed";
+    case "slate-unreadable":
+      return "slate.json unreadable";
+    case "no-resolution-recorded":
+      return "no resolution recorded";
+  }
+}
+
+/**
+ * Detail-pane sentence for the same reason. A damaged record says so: the three
+ * cases were indistinguishable in this pane, and the middle one is the case a
+ * person must actually go look at.
+ */
+function unknownReasonDetail(reason: "wrap-up-failed" | "slate-unreadable" | "no-resolution-recorded"): string {
+  switch (reason) {
+    case "wrap-up-failed":
+      return "a wrap-up dispatch ran and every group failed - the per-kind reasons are above where recorded; re-run wrap-up after fixing them.";
+    case "slate-unreadable":
+      return "this session's slate.json exists but could not be read. Its record is DAMAGED, not absent: inspect the file before assuming nothing happened.";
+    case "no-resolution-recorded":
+      return "Slate engagement with no proposal, terminal state, unbound-candidate or wrap-up-outcome artifact recorded.";
+  }
 }
 
 function describeReviewItem(item: CatchUpItem): string[] {
@@ -136,7 +164,7 @@ function describeReviewItem(item: CatchUpItem): string[] {
         : [
             `Session    ${item.sessionId}${item.workspaceId !== undefined ? `  (workspace ${item.workspaceId})` : ""}`,
             `Last seen  ${item.lastSeenAt}`,
-            "No proposal, terminal state, or unbound-candidate artifact recorded.",
+            "Why unknown: " + unknownReasonDetail(item.reason),
             "",
             `Investigate: keryx sessions list / keryx shell -r ${item.sessionId}`,
           ];

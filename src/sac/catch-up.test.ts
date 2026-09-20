@@ -14,7 +14,7 @@
 //     proposals: Array<{ type: "proposal"; workspaceId: string; proposalId: string; fresh: boolean }>;
 //     blocked: Array<{ type: "blocked"; sessionId: string; workspaceId?: string; terminalState: TerminalState }>;
 //     unboundCandidates: Array<{ type: "unbound-candidate"; sessionId: string; evidencePath: string; summary: string }>;
-//     unknown: Array<{ type: "unknown"; sessionId: string; workspaceId?: string; lastSeenAt: string }>;
+//     unknown: Array<{ type: "unknown"; sessionId: string; workspaceId?: string; lastSeenAt: string; reason: "wrap-up-failed" | "slate-unreadable" | "no-resolution-recorded" }>;
 //   };
 // Four fields ALWAYS present as arrays (AC2), never merged/interleaved.
 // Session-derived categories (blocked/unbound-candidate/unknown) are mutually
@@ -593,6 +593,8 @@ test("flow 173 (a): a session with a wrap-up-outcome artifact where every group 
   expect(item?.wrapUpOutcome).toBeDefined();
   expect(item?.wrapUpOutcome?.trigger).toBe("explicit");
   expect(item?.wrapUpOutcome?.generatedAt).toBe("2026-08-19T00:00:00.000Z");
+  // A failed dispatch is its own reason, not just "unknown".
+  expect(item?.reason).toBe("wrap-up-failed");
   expect(item?.wrapUpOutcome?.groups).toEqual([
     { kind: "decision", outcome: "error", message: "model provider unavailable" },
     { kind: "risk", outcome: "no_credential" },
@@ -925,4 +927,29 @@ test("dismissUnboundCandidate is idempotent — dismissing a missing artifact st
   expect(again.receipt).toBeDefined();
   const after = await buildCatchUp({ cwd });
   expect(after.unboundCandidates.find((i) => i.sessionId === unbound.sessionId)).toBeUndefined();
+});
+
+// --- unknown items name WHY they are unknown -------------------------------------
+//
+// Reported friction: a broken session record surfaced as the same opaque
+// "unknown" item as an ordinary unrecorded one. The classifier now carries the
+// distinction it already computed internally (a slate.json that is present but
+// unreadable, versus absent) into the item.
+
+test("a session with slate engagement and nothing else reports reason 'no-resolution-recorded'", async () => {
+  const cwd = await tempCwd("keryx-catchup-reason-plain-");
+  const handle = await makeUnknownSession(cwd, "reason probe");
+  const report = await buildCatchUp({ cwd });
+  const item = report.unknown.find((entry) => entry.sessionId === handle.sessionId);
+  expect(item?.reason).toBe("no-resolution-recorded");
+});
+
+test("a session whose slate.json exists but cannot be parsed reports reason 'slate-unreadable' - a BROKEN record, not an unrecorded session", async () => {
+  const cwd = await tempCwd("keryx-catchup-reason-broken-");
+  const handle = await makeUnknownSession(cwd, "corrupt slate");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(handle.dir + "/slate.json", "{ this is not json", "utf8");
+  const report = await buildCatchUp({ cwd });
+  const item = report.unknown.find((entry) => entry.sessionId === handle.sessionId);
+  expect(item?.reason).toBe("slate-unreadable");
 });

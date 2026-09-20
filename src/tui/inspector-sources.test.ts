@@ -172,7 +172,7 @@ test("catchUpItems concatenates proposals, blocked, unbound-candidates, unknown 
     proposals: [PROPOSAL],
     blocked: [BLOCKED],
     unboundCandidates: [{ type: "unbound-candidate", sessionId: "sess-2", evidencePath: "/tmp/e.json", summary: "1 seed" }],
-    unknown: [{ type: "unknown", sessionId: "sess-3", lastSeenAt: "2026-08-16T00:00:00.000Z" }],
+    unknown: [{ type: "unknown", sessionId: "sess-3", lastSeenAt: "2026-08-16T00:00:00.000Z", reason: "no-resolution-recorded" }],
     lifecycleFlags: [
       { kind: "workspace", ref: "ws-2", missingComponent: "src/gone.ts", flaggedAt: "2026-08-16T00:00:00.000Z" },
     ],

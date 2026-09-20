@@ -3,6 +3,40 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.131] — 2026-09-20
+Two SAC friction points fixed: a workspace reference no longer needs a "./"
+prefix to be accepted, and an "unknown" review item says why it is unknown.
+
+### Fixed
+
+- **A workspace reference is normalized instead of refused with schema codes.**
+  `workspace_create`, `sac.workspaceCreate` and `keryx workspace
+  create/add-resource` passed a caller's raw string straight into the contract,
+  so the natural spelling `src/harness/search` was rejected with
+  `schema_pattern` + `unsafe_workspace_reference` — two codes that name
+  nothing a caller can act on — while only `./src/harness/search` worked. All
+  four surfaces now normalize through one shared helper
+  (`src/sac/workspace-reference.ts`), and refuse what must never reach disk
+  (an absolute path, a URL, a Windows path, a `..` segment) in a sentence.
+- **A LEADING `..` segment is refused by the contract itself.** Found while
+  writing the normalizer's round-trip test: the shared pattern's `..` lookahead
+  anchored on `^`, which cannot match after the `./` it had already consumed,
+  so `./../escape` was `ACCEPTED` — exactly the traversal the lookahead exists
+  to forbid. A `..` further along (`./src/../x`) *was* caught, which is why it
+  went unnoticed. The pattern now anchors on segments, and the two remaining
+  private copies (`fwk-service.ts`, `policy-experiment.ts`) import it instead
+  of repeating it.
+
+### Added
+
+- **An `unknown` review item says WHY it is unknown.** `keryx workspace
+  catch-up`, the TUI review inspector and its detail pane rendered one sentence
+  for every case — false for a wrap-up that ran and failed, and misleading for
+  the worst one: a session whose `slate.json` exists but cannot be parsed is a
+  BROKEN record, not an unrecorded session. Items now carry
+  `reason: "wrap-up-failed" | "slate-unreadable" | "no-resolution-recorded"`,
+  shown on both surfaces.
+
 ## [0.2.130] — 2026-09-20
 DuckDuckGo's rate limiting is reported as a rate limit, waited out, and told
 apart from a broken network.

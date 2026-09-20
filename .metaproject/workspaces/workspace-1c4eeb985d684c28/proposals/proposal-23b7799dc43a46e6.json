@@ -1,0 +1,47 @@
+{
+  "schemaVersion": "1.0",
+  "recordType": "proposal-created",
+  "id": "proposal-23b7799dc43a46e6",
+  "proposalRevision": "1",
+  "correlationId": "a440c242-567a-4c73-837a-c5df2a0a6f0e",
+  "workspaceId": "workspace-1c4eeb985d684c28",
+  "kind": "follow-up",
+  "status": "proposed",
+  "summary": "trusted wrap-up reference",
+  "evidence": [
+    {
+      "kind": "wrap-up",
+      "uri": "./.metaproject/workspaces/workspace-1c4eeb985d684c28/session-evidence/e32878a9-238e-4933-8b7a-207580f5c285.wrap-up.md",
+      "revision": "2f1da2421150dd837c136ebe78d8b9e723ab98db338cce73ff46487c553af1c5",
+      "observedAt": "2026-09-20T13:35:53.315Z"
+    },
+    {
+      "kind": "diff",
+      "uri": "./.metaproject/workspaces/workspace-1c4eeb985d684c28/session-evidence/e32878a9-238e-4933-8b7a-207580f5c285.diff.txt",
+      "revision": "89cfca5c0c1a059733255890ad34063c4bd62a9945f9b0e5cdf1d006af96994e",
+      "observedAt": "2026-09-20T13:35:53.315Z"
+    },
+    {
+      "kind": "session",
+      "uri": "./.metaproject/workspaces/workspace-1c4eeb985d684c28/session-evidence/e32878a9-238e-4933-8b7a-207580f5c285.md",
+      "revision": "8adfc64e974f0bdfacbf3005321862b994e2e92b0bf565ffcd1e66fecc0352a9",
+      "observedAt": "2026-09-20T13:35:53.315Z"
+    }
+  ],
+  "wrapUp": {
+    "id": "wrapup-a64a9a9f32e04cac",
+    "source": "session",
+    "sourceRef": "./.metaproject/workspaces/workspace-1c4eeb985d684c28/session-evidence/e32878a9-238e-4933-8b7a-207580f5c285.md",
+    "sourceRevision": "2026-09-20T13:35:48.511Z",
+    "issuedAt": "2026-09-20T13:35:53.315Z",
+    "expiresAt": "2026-09-20T14:35:53.315Z"
+  },
+  "author": "user:local-1000",
+  "security": {
+    "gate": "needs-approval",
+    "redacted": true,
+    "policyRef": "./security/policy/local",
+    "policyRevision": "local-offline-v1"
+  },
+  "createdAt": "2026-09-20T13:35:53.315Z"
+}

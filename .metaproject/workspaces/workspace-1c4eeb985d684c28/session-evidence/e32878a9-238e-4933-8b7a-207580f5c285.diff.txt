@@ -1,0 +1,29 @@
+diff --git a/.metaproject/context-operations/access-receipts.checkpoint.json b/.metaproject/context-operations/access-receipts.checkpoint.json
+index 1ddcd86f..7af2a39f 100644
+--- a/.metaproject/context-operations/access-receipts.checkpoint.json
++++ b/.metaproject/context-operations/access-receipts.checkpoint.json
+@@ -1 +1 @@
+-{"schemaVersion":"1.1","ledgerBytes":4930,"recordCount":7,"headHash":"20bbfa34977757556c3916c2ffb55d37c9e85d68fa60276fb3930eb255571cd3","tailOffset":4235,"contentDigest":"f61487a4c208966496473f0f99d53e846af08bf5c7c8fb341f9c6732a9a4c0b5","integrity":{"checkpointHash":"21d4f1eddd247fca0ce352ca13c447c4e4684e1a253764ea00b98ebdb6caca2b"}}
++{"schemaVersion":"1.1","ledgerBytes":5626,"recordCount":8,"headHash":"f544df21c1d41c1944165c68a40e0252535074e159f85b0f9c289a6655c05c85","tailOffset":4930,"contentDigest":"060facd3af43c2715435c49f675f1d7ede71a5736f085213201f51ef6d79cf3a","integrity":{"checkpointHash":"9dc0912532bc2e3609a0b90a7f19f33ae0ab679ab8d671dfff46860cc9018d07"}}
+diff --git a/.metaproject/context-operations/access-receipts.jsonl b/.metaproject/context-operations/access-receipts.jsonl
+index 2b0b8bd5..0bdb4241 100644
+--- a/.metaproject/context-operations/access-receipts.jsonl
++++ b/.metaproject/context-operations/access-receipts.jsonl
+@@ -5,3 +5,4 @@
+ {"schemaVersion":"1.0","id":"receipt-477711b0baa04cfa","workspaceId":"workspace-40d74ad8d6424328","actor":"user:local-502","action":"overview","decision":"allowed","recordedAt":"2026-08-22T09:11:49.402Z","cost":{"tokens":0,"toolCalls":1,"elapsedMs":0},"contextAssembly":{"traceRef":"./.metaproject/context-operations/traces/a25026ad6cce3a359aee7f91.json","configurationRevision":"context-operations-v1","selected":[],"omittedOptional":[]},"policy":{"ref":"./security/policy/local","revision":"local-offline-v1"},"integrity":{"previousRecordHash":"d0d3b387051e669787f4d04f7e494765890fc01fe670e5afc5c73d83ecb32ba3","recordHash":"0d99bdb1e64723b9ce1a421bb6d2d838c586c98bda9b223fb6cbb07c671ad29b"}}
+ {"schemaVersion":"1.0","id":"receipt-596945bac2f44f04","workspaceId":"workspace-457031e141284899","actor":"user:local-502","action":"overview","decision":"allowed","recordedAt":"2026-08-22T09:17:01.680Z","cost":{"tokens":0,"toolCalls":1,"elapsedMs":0},"contextAssembly":{"traceRef":"./.metaproject/context-operations/traces/625b17168950235b177d5bc3.json","configurationRevision":"context-operations-v1","selected":[],"omittedOptional":[]},"policy":{"ref":"./security/policy/local","revision":"local-offline-v1"},"integrity":{"previousRecordHash":"0d99bdb1e64723b9ce1a421bb6d2d838c586c98bda9b223fb6cbb07c671ad29b","recordHash":"dfee684bfbbc82a87c8af6c6224c4cd501e7b8067e8334d38d59ec169d2712f0"}}
+ {"schemaVersion":"1.0","id":"receipt-59eb7e9f73b74a90","workspaceId":"workspace-9ccc87f7bee44689","actor":"user:local-502","action":"overview","decision":"allowed","recordedAt":"2026-09-15T13:39:08.499Z","cost":{"tokens":0,"toolCalls":1,"elapsedMs":0},"contextAssembly":{"traceRef":"./.metaproject/context-operations/traces/e8f5211d69a2ae841216b8d7.json","configurationRevision":"context-operations-v1","selected":[],"omittedOptional":[]},"policy":{"ref":"./security/policy/local","revision":"local-offline-v1"},"integrity":{"previousRecordHash":"dfee684bfbbc82a87c8af6c6224c4cd501e7b8067e8334d38d59ec169d2712f0","recordHash":"20bbfa34977757556c3916c2ffb55d37c9e85d68fa60276fb3930eb255571cd3"}}
++{"schemaVersion":"1.0","id":"receipt-3984cacd66914f05","workspaceId":"workspace-86f1eb7d089b4f1a","actor":"user:local-1000","action":"overview","decision":"allowed","recordedAt":"2026-09-20T13:31:38.892Z","cost":{"tokens":0,"toolCalls":1,"elapsedMs":0},"contextAssembly":{"traceRef":"./.metaproject/context-operations/traces/df991477ac49533395cdabaf.json","configurationRevision":"context-operations-v1","selected":[],"omittedOptional":[]},"policy":{"ref":"./security/policy/local","revision":"local-offline-v1"},"integrity":{"previousRecordHash":"20bbfa34977757556c3916c2ffb55d37c9e85d68fa60276fb3930eb255571cd3","recordHash":"f544df21c1d41c1944165c68a40e0252535074e159f85b0f9c289a6655c05c85"}}
+diff --git a/.metaproject/data/gdgraph/.provenance.json b/.metaproject/data/gdgraph/.provenance.json
+index 5d8214c7..53a976fc 100644
+--- a/.metaproject/data/gdgraph/.provenance.json
++++ b/.metaproject/data/gdgraph/.provenance.json
+@@ -1,5 +1,5 @@
+ {
+-  "commit": "2e7bf29634c7f3d2a43bd671cc89e033355e5a06",
+-  "branch": "HEAD",
+-  "builtAt": "2026-09-20T13:12:36.382Z"
++  "commit": "868d0d18cdd32a30be9d211853f944e6dec941fd",
++  "branch": "main",
++  "builtAt": "2026-09-20T13:16:47.533Z"
+ }

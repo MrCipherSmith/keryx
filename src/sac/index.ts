@@ -2,6 +2,7 @@ import { access, readFile, realpath } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { WORKSPACE_REFERENCE_PATTERN } from "./workspace-reference";
 
 /**
  * Phase 0 Shared Agent Context contracts.  This module deliberately has no
@@ -25,7 +26,7 @@ const idPattern = /^[a-z][a-z0-9-]{2,63}$/;
 const subjectPattern = /^(?:user|team|service|agent):[a-z0-9][a-z0-9._-]{0,127}$/;
 const revisionPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/;
 const correlationPattern = /^[A-Za-z0-9][A-Za-z0-9._:-]{15,255}$/;
-const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+const workspacePathPattern = WORKSPACE_REFERENCE_PATTERN;
 const receiptHashPattern = /^[a-f0-9]{64}$/;
 const utcPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?Z$/;
 const forbiddenPayloadKeys = new Set(["prompt", "transcript", "hiddenReasoning", "secret", "secrets", "rawContent"]);

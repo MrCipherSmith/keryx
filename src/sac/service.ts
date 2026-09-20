@@ -98,3 +98,7 @@ export { resolveOrCreateWorkspace, type ResolveOrCreateInput, type ResolveOrCrea
 // in this file: one stable facade `src/mcp/tools.ts` is allowed to reach
 // through.
 export { redactSensitiveText } from "../security/redact";
+// Same boundary reasoning as `redactSensitiveText` above: `sac.workspaceCreate`
+// normalizes its `component` with this, and `src/mcp/` may only reach module
+// internals through this facade (M-3, `mcp/boundary.test.ts`).
+export { normalizeWorkspaceReference, requireWorkspaceReference } from "./workspace-reference";

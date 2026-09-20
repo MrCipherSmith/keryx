@@ -20,7 +20,7 @@ import { runValidate } from "../standard/service";
 import { readFile, writeFile } from "node:fs/promises";
 import type { SecuritySource } from "../security/types";
 import { toMcpTools } from "./metaproject-tools";
-import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
+import { createLocalFwkReadService, normalizeFwkResult, createHarnessProposalLifecycleService, normalizeProposalLifecycleResult, createLocalCollaborationService, normalizeCollaborationResult, sessionEvidenceRef, proposalNotePath, findSession, WorkspaceService, localWorkspaceAuthorizationServer, newWorkspaceId, listWorkspaceViews, lookupWorkspace, type WorkspaceLookup, closeExternalSlate, readExternalSlate, reclaimStaleExternalSlates, writeExternalSlate, resolveOrCreateWorkspace, isSlateSeedKind, SEED_TEXT_MAX_LENGTH, redactSensitiveText, requireWorkspaceReference, type ExternalSlate, type SlateSeed, type SlateSeedKind, type ResolveOrCreateResult } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import type { JsonSchema, ToolEntry } from "./types";
 
@@ -364,7 +364,10 @@ export function buildToolRegistry(): ToolEntry[] {
         if (context?.transport === "http") return { code: "sac_transport_denied" as const };
         const title = stringParam(params, "title")?.trim() ?? "";
         if (title.length === 0) throw new Error("sac.workspaceCreate requires a non-empty 'title'");
-        const component = stringParam(params, "component");
+        const rawComponent = stringParam(params, "component");
+        // Same normalization the agent tool and the CLI apply: the stored form
+        // is "./"-prefixed, and a caller should not have to know that.
+        const component = rawComponent === undefined ? undefined : requireWorkspaceReference(rawComponent);
         const workspace = await sacWorkspaceService(cwd).create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
         return workspace;
       },

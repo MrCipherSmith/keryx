@@ -35,6 +35,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHarnessProposalLifecycleService, listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, normalizeProposalLifecycleResult, proposalNotePath, sessionEvidenceRef, WorkspaceService } from "../../../sac/harness-facade";
 import { writeSlate } from "../../../session/slate";
+import { normalizeWorkspaceReference } from "../../../sac/service";
 import { findSession } from "../../../session/store";
 import type { InteractiveTool } from "./interactive-tools";
 import { guardOutput, prepareOutputForPersistence } from "../../../security/guard";
@@ -72,7 +73,15 @@ export function workspaceCreateTool(cwd: string, getSessionDir?: () => string | 
     invoke: async (input) => {
       const title = typeof input.title === "string" ? input.title.trim() : "";
       if (title.length === 0) return { output: "workspace_create requires a non-empty 'title'", isError: true };
-      const component = typeof input.component === "string" && input.component.length > 0 ? input.component : undefined;
+      const rawComponent = typeof input.component === "string" && input.component.length > 0 ? input.component : undefined;
+      // Normalized at the boundary that accepts a caller's spelling, so
+      // "src/harness/search" works and anything genuinely unsafe is refused
+      // with a sentence instead of two schema codes.
+      const normalizedComponent = rawComponent === undefined ? undefined : normalizeWorkspaceReference(rawComponent);
+      if (normalizedComponent !== undefined && !normalizedComponent.ok) {
+        return { output: "workspace_create: " + normalizedComponent.reason, isError: true };
+      }
+      const component = normalizedComponent?.ok === true ? normalizedComponent.uri : undefined;
       try {
         const workspace = await service(cwd).create({
           request: undefined,

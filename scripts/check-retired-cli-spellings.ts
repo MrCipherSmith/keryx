@@ -62,9 +62,16 @@ const PATTERNS = [
 //            searches that look for these very spellings.
 //   flows/ — per-flow append-only records of work already completed, written
 //            by `keryx flow`, describing what was run at the time.
-// Both are whole roles, not named files, so new logs and new flows stay
-// covered by the same reasoning without anyone editing this list.
-const EXCLUDED_ROOTS = [".metaproject/data/", ".metaproject/flows/"];
+//   workspaces/ — SAC session evidence (a session's own transcript and diff,
+//            quoted verbatim from whatever was read during it) plus workspace
+//            manifests. Evidence is a RECORD of a session, exactly like a
+//            flow, and it is not prose a reader follows: this gate reported
+//            two violations inside one session-evidence file, both of them
+//            quotes of a README the session had read, which is the same shape
+//            as the transcripts under data/ it already excluded.
+// All three are whole roles, not named files, so new logs, new flows and new
+// evidence stay covered by the same reasoning without anyone editing this list.
+const EXCLUDED_ROOTS = [".metaproject/data/", ".metaproject/flows/", ".metaproject/workspaces/"];
 
 const RETIRED = /keryx mcp (serve|install|uninstall)\b/g;
 const MARKER =

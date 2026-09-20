@@ -1,4 +1,5 @@
 import { createHash, createHmac } from "node:crypto";
+import { WORKSPACE_REFERENCE_PATTERN } from "./workspace-reference";
 import type { SandboxProfile } from "../harness/process/sandbox/profile";
 import {
   verifyAccessReceiptLedger,
@@ -40,7 +41,10 @@ const pseudonym = (key: string, value: string): string =>
 
 const outcomeIdPattern = /^[a-z][a-z0-9-]{2,127}$/;
 const subjectPattern = /^(?:user|team|service|agent):[a-z0-9][a-z0-9._-]{0,127}$/;
-const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+// One definition, shared with the contract and the caller-facing normalization:
+// the local copy this replaced carried the leading-".." hole documented in
+// workspace-reference.ts.
+const workspacePathPattern = WORKSPACE_REFERENCE_PATTERN;
 const strictUtcPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {

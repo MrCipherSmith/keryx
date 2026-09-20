@@ -38,12 +38,14 @@ const UNKNOWN_NO_OUTCOME: CatchUpUnknownItem = {
   type: "unknown",
   sessionId: "sess-unknown-1",
   lastSeenAt: "2026-08-19T00:00:00.000Z",
+  reason: "no-resolution-recorded",
 };
 
 const UNKNOWN_WITH_OUTCOME: CatchUpUnknownItem = {
   type: "unknown",
   sessionId: "sess-unknown-2",
   lastSeenAt: "2026-08-19T00:05:00.000Z",
+  reason: "wrap-up-failed",
   wrapUpOutcome: {
     trigger: "explicit",
     generatedAt: "2026-08-19T00:04:00.000Z",
@@ -108,7 +110,7 @@ test("flow 173: 'unknown' detail without wrapUpOutcome shows exactly today's unc
   expect(lines).toEqual([
     "Session    sess-unknown-1",
     "Last seen  2026-08-19T00:00:00.000Z",
-    "No proposal, terminal state, or unbound-candidate artifact recorded.",
+    "Why unknown: Slate engagement with no proposal, terminal state, unbound-candidate or wrap-up-outcome artifact recorded.",
     "",
     "Investigate: keryx sessions list / keryx shell -r sess-unknown-1",
   ]);
@@ -134,12 +136,15 @@ test("flow 173: 'unknown' detail shows the workspace suffix regardless of wrapUp
   expect(lines[0]).toBe("Session    sess-unknown-2  (workspace ws-unknown)");
 });
 
-test("flow 173/AC8: 'unknown' list-row text is unchanged regardless of wrapUpOutcome presence", () => {
+test("an 'unknown' row names its reason, so two different unknowns are told apart at a glance", () => {
+  // This row used to be byte-identical for both fixtures ("— last seen <ts>"),
+  // which is exactly the opacity the reason field removes: a wrap-up that ran
+  // and FAILED and a session that recorded nothing looked the same here.
   const linesWithout = formatReviewListLines([UNKNOWN_NO_OUTCOME], 0);
-  expect(linesWithout[0]).toBe("> UNKNOWN  sess-unknown-1 — last seen 2026-08-19T00:00:00.000Z");
+  expect(linesWithout[0]).toBe("> UNKNOWN  sess-unknown-1 — no resolution recorded (last seen 2026-08-19T00:00:00.000Z)");
 
   const linesWith = formatReviewListLines([UNKNOWN_WITH_OUTCOME], 0);
-  expect(linesWith[0]).toBe("> UNKNOWN  sess-unknown-2 — last seen 2026-08-19T00:05:00.000Z");
+  expect(linesWith[0]).toBe("> UNKNOWN  sess-unknown-2 — wrap-up failed (last seen 2026-08-19T00:05:00.000Z)");
 });
 
 test("detail reflects armed / running / done accept status", () => {

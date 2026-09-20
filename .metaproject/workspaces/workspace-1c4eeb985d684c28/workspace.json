@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0",
+  "id": "workspace-1c4eeb985d684c28",
+  "title": "web search DuckDuckGo rate limiting and the 0.2.130 fix",
+  "status": "active",
+  "members": [
+    {
+      "subject": "user:local-1000",
+      "role": "owner"
+    }
+  ],
+  "resources": [],
+  "createdAt": "2026-09-20T13:31:49.521Z",
+  "updatedAt": "2026-09-20T13:31:49.521Z"
+}

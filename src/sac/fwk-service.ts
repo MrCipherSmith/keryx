@@ -1,4 +1,5 @@
 import { createHash, randomUUID, type Hash } from "node:crypto";
+import { WORKSPACE_REFERENCE_PATTERN } from "./workspace-reference";
 import { appendFile, mkdir, open, readFile, rename, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { assembleAndRecordContext, recordNoContentContext, type ContextAssembly, type ContextCandidate, type ContextOverflow } from "../ctx/assembly";
@@ -62,7 +63,10 @@ const metadataOnly = (value: unknown): boolean => {
 const nowIso = (now: () => Date) => now().toISOString();
 const reportHashPattern = /^[a-f0-9]{64}$/;
 const immutableVersionPattern = /(?:^|[-_.:])(?:latest|next|head|main|develop)(?:$|[-_.:])/i;
-const workspacePathPattern = /^\.\/(?!.*(?:^|\/)\.\.(?:\/|$))(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/;
+// One definition, shared with the contract and the caller-facing normalization:
+// the local copy this replaced carried the leading-".." hole documented in
+// workspace-reference.ts.
+const workspacePathPattern = WORKSPACE_REFERENCE_PATTERN;
 const policyExperimentConfigPath = [".metaproject", "context-operations", "policy-experiment", "config.json"] as const;
 const stableValue = (value: unknown): unknown => {
   if (Array.isArray(value)) return value.map(stableValue);

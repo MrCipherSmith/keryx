@@ -1,4 +1,5 @@
 import { optionValue } from "../lib/args";
+import { requireWorkspaceReference } from "../sac/service";
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import { listWorkspaceViews, localWorkspaceAuthorizationServer, lookupWorkspace, newWorkspaceId, WorkspaceService, type WorkspaceResource } from "../sac/workspace-service";
@@ -9,7 +10,7 @@ import { createLocalCollaborationService } from "../sac/collaboration-service";
 import { sessionEvidenceRef } from "../sac/session-wrap-up";
 import { proposalNotePath } from "../sac/proposal-evidence";
 import { mintConfirmToken } from "../sac/review-confirm-token";
-import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport } from "../sac/catch-up";
+import { buildCatchUp, dismissUnboundByTarget, type CatchUpReport, type CatchUpUnknownItem } from "../sac/catch-up";
 import { findSession } from "../session/store";
 import { guardOutput, prepareOutputForPersistence } from "../security/guard";
 
@@ -32,7 +33,8 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     if (subcommand === "create") {
       rejectUnknownOptions(args.slice(1), new Set(["--title", "--component"]));
       const title = optionValue(args, "--title");
-      const component = optionValue(args, "--component");
+      const rawComponent = optionValue(args, "--component");
+      const component = rawComponent === undefined ? undefined : requireWorkspaceReference(rawComponent);
       if (!title) throw new Error("Usage: keryx workspace create --title <title> [--component <workspace-relative-ref>]");
       const workspace = await service().create({ request: undefined, requestCorrelationId: randomUUID(), id: newWorkspaceId(), title, ...(component ? { component: { kind: "component" as const, uri: component } } : {}) });
       console.log(JSON.stringify(workspace, null, 2)); return;
@@ -61,9 +63,10 @@ export async function workspaceCommand(args: string[]): Promise<void> {
     }
     if (subcommand === "add-resource") {
       rejectUnknownOptions(args.slice(2), new Set(["--kind", "--uri", "--revision"]));
-      const workspaceId = args[1]; const kind = optionValue(args, "--kind") as WorkspaceResource["kind"] | undefined; const uri = optionValue(args, "--uri"); const revision = optionValue(args, "--revision");
-      if (!workspaceId || !kind || !uri) throw new Error("Usage: keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]");
-      console.log(JSON.stringify(await service().addResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, resource: { kind, uri, ...(revision ? { revision } : {}) } }), null, 2)); return;
+      const workspaceId = args[1]; const kind = optionValue(args, "--kind") as WorkspaceResource["kind"] | undefined; const rawUri = optionValue(args, "--uri"); const revision = optionValue(args, "--revision");
+      if (!workspaceId || !kind || !rawUri) throw new Error("Usage: keryx workspace add-resource <workspace-id> --kind <kind> --uri <workspace-relative-ref> [--revision <revision>]");
+      // Same normalization as create --component: --uri is the same kind of reference.
+      console.log(JSON.stringify(await service().addResource({ request: undefined, requestCorrelationId: randomUUID(), workspaceId, resource: { kind, uri: requireWorkspaceReference(rawUri), ...(revision ? { revision } : {}) } }), null, 2)); return;
     }
     if (subcommand === "archive") {
       rejectUnknownOptions(args.slice(2), new Set());
@@ -380,7 +383,7 @@ function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): str
     `- Session ${item.sessionId} produced untriaged seeds with no workspace bound (${item.summary}). Bind to a workspace and propose, or discard? ` +
     `Recommendation: pick a workspace, then \`keryx workspace propose <workspace-id> --kind <kind> --session ${item.sessionId}\` (evidence: ${item.evidencePath}).`));
   sections.push(renderSection("Unknown (no resolution recorded)", report.unknown, (item) =>
-    `- Session ${item.sessionId} was last seen ${item.lastSeenAt} with no proposal, terminal state, or unbound-candidate artifact recorded. Investigate, or ignore? ` +
+    `- Session ${item.sessionId} was last seen ${item.lastSeenAt}: ${describeUnknownReason(item)}. Investigate, or ignore? ` +
     `Recommendation: \`keryx sessions list\` / \`keryx shell -r ${item.sessionId}\` to see what happened.`));
   sections.push(renderSection("Unreviewed SAC-owned changes (no proposal on record)", report.unreviewedPaths, (item) =>
     `- Session ${item.sessionId} changed ${item.owner} path \`${item.path}\`${item.status !== undefined ? ` (Status: ${item.status})` : ""} at ${item.changedAt} with NO SAC proposal/receipt behind it — this looks like it bypassed review. Was this reviewed some other way, or should it be? ` +
@@ -392,6 +395,26 @@ function renderCatchUp(report: CatchUpReport, includeLifecycleFlags = true): str
       `Recommendation: this is report-only — nothing was archived/edited/removed automatically; ${item.kind === "workspace" ? "\`keryx workspace archive " + item.ref + "\`" : item.kind === "memory-entry" ? "\`keryx memory supersede\` or edit the entry directly" : "edit or remove the wiki page directly"} if you decide it's actually stale.`));
   }
   return sections.join("\n\n");
+}
+
+/**
+ * WHY an unknown item is unknown, in one clause.
+ *
+ * Every one of these used to render as the same sentence (no proposal,
+ * terminal state, or unbound-candidate artifact recorded), which is false for a
+ * wrap-up that ran and failed, and false in the most misleading way for a
+ * session whose slate.json exists but cannot be parsed: that one is a BROKEN
+ * record, not an unrecorded session.
+ */
+function describeUnknownReason(item: CatchUpUnknownItem): string {
+  switch (item.reason) {
+    case "wrap-up-failed":
+      return "a wrap-up dispatch ran and every group failed (re-run it after fixing credentials/conflicts)";
+    case "slate-unreadable":
+      return "its slate.json is present but could not be read - the session's own record is damaged, not merely unrecorded";
+    case "no-resolution-recorded":
+      return "it has Slate engagement but no proposal, terminal state, unbound-candidate or wrap-up-outcome artifact";
+  }
 }
 
 function renderSection<T>(title: string, items: readonly T[], describe: (item: T) => string): string {

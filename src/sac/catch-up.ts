@@ -87,11 +87,29 @@ export type CatchUpUnboundCandidateItem = {
   evidencePath: string;
   summary: string;
 };
+/**
+ * Why a session ended up with no resolution recorded. This item used to say
+ * only "no proposal, terminal state, or unbound-candidate artifact" for every
+ * case, which is true of two very different situations: a wrap-up that ran and
+ * FAILED (whose per-group reasons are attached as `wrapUpOutcome`), and a
+ * session whose Slate engagement left nothing to read at all. A genuinely
+ * broken item — a `slate.json` present but unparseable — looked identical to
+ * both, which is the opacity this field removes.
+ */
+export type CatchUpUnknownReason =
+  /** A wrap-up dispatch ran and every group failed; `wrapUpOutcome` carries the reasons. */
+  | "wrap-up-failed"
+  /** Slate engagement exists, but its `slate.json` cannot be read (corrupt or unreadable). */
+  | "slate-unreadable"
+  /** Slate engagement with no proposal, terminal state, unbound-candidate or outcome artifact. */
+  | "no-resolution-recorded";
+
 export type CatchUpUnknownItem = {
   type: "unknown";
   sessionId: string;
   workspaceId?: string;
   lastSeenAt: string;
+  reason: CatchUpUnknownReason;
   // flow 173 (SAC durable wrap-up dispatch outcome recording): populated when
   // a `runWrapUp` dispatch attempt for this session left behind a durable
   // `*-wrap-up-outcome.json` artifact whose every group is a failure outcome
@@ -289,6 +307,7 @@ async function classifySession(session: SessionSummary): Promise<ClassifiedSessi
         sessionId: session.id,
         ...(workspaceId !== undefined ? { workspaceId } : {}),
         lastSeenAt: session.updatedAt,
+        reason: "wrap-up-failed",
         wrapUpOutcome: { trigger: wrapUpOutcome.trigger, generatedAt: wrapUpOutcome.generatedAt, groups: wrapUpOutcome.groups },
       },
     };
@@ -299,8 +318,22 @@ async function classifySession(session: SessionSummary): Promise<ClassifiedSessi
   // at all is silently excluded, never surfaced as "unknown" noise.
   if (!(await isSlateEngaged(dir))) return undefined;
 
-  const workspaceId = (await safeReadSlate(dir))?.workspaceId;
-  return { kind: "unknown", item: { type: "unknown", sessionId: session.id, ...(workspaceId !== undefined ? { workspaceId } : {}), lastSeenAt: session.updatedAt } };
+  const slateRead = await readSlateState(dir);
+  const workspaceId = slateRead.state === "ok" ? slateRead.slate.workspaceId : undefined;
+  return {
+    kind: "unknown",
+    item: {
+      type: "unknown",
+      sessionId: session.id,
+      ...(workspaceId !== undefined ? { workspaceId } : {}),
+      lastSeenAt: session.updatedAt,
+      // A slate.json that EXISTS but cannot be parsed is its own answer: this
+      // session is not "resolved elsewhere", its record is damaged. The module
+      // wide policy stays "never throw", but silence about WHICH case it was is
+      // what made a broken item indistinguishable from an unremarkable one.
+      reason: slateRead.state === "unreadable" ? "slate-unreadable" : "no-resolution-recorded",
+    },
+  };
 }
 
 /**
@@ -669,6 +702,26 @@ async function isSlateEngaged(dir: string): Promise<boolean> {
  * proposal/blocked/unbound-candidate/unknown item. `undefined` on any read
  * failure, same posture as `readSlate`'s own ENOENT case.
  */
+type SlateReadState = { state: "ok"; slate: Slate } | { state: "absent" } | { state: "unreadable" };
+
+/** `safeReadSlate`'s distinction-preserving twin: same never-throw posture,
+ * but it reports whether the failure was "there is no file" or "the file is
+ * there and could not be read", which `unknown` items now carry as a reason. */
+async function readSlateState(dir: string): Promise<SlateReadState> {
+  try {
+    // readSlate resolves undefined for a directory with no slate.json, and
+    // throws for one it cannot parse — those are the two cases this split.
+    const slate = await readSlate(dir);
+    return slate === undefined ? { state: "absent" } : { state: "ok", slate };
+  } catch (error) {
+    return isNotFound(error) ? { state: "absent" } : { state: "unreadable" };
+  }
+}
+
+function isNotFound(error: unknown): boolean {
+  return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "ENOENT";
+}
+
 async function safeReadSlate(dir: string): Promise<Slate | undefined> {
   try {
     return await readSlate(dir);
