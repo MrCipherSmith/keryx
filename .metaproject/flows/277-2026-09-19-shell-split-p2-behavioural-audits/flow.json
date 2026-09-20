@@ -7,9 +7,9 @@
   "id": "277",
   "slug": "shell-split-p2-behavioural-audits",
   "title": "Shell god-files P2: convert the source-text audits into behavioural tests, with seams where behaviour is not observable",
-  "status": "blocked",
+  "status": "initializing",
   "createdAt": "2026-09-19T23:52:23.299Z",
-  "updatedAt": "2026-09-20T00:02:20.945Z",
+  "updatedAt": "2026-09-20T00:56:37.262Z",
   "source": {
     "type": "description",
     "ref": null
@@ -90,7 +90,11 @@
       "at": "2026-09-20T00:02:20.945Z",
       "event": "blocked",
       "detail": "Stopped by the user on 2026-09-19: the shell god-file split is halted. Two seams landed on the branch (export runAgentRepl, rich.write) plus nine behavioural tests; nothing pushed, no PR, no audits removed."
+    },
+    {
+      "at": "2026-09-20T00:56:37.262Z",
+      "event": "unblocked",
+      "detail": "resumed as initializing"
     }
-  ],
-  "previousStatus": "initializing"
+  ]
 }
