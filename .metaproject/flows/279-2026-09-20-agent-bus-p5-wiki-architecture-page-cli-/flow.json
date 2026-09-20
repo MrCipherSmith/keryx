@@ -1,0 +1,263 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "279",
+  "slug": "agent-bus-p5-wiki-architecture-page-cli-",
+  "title": "Agent bus P5: wiki architecture page, cli-reference, and end-to-end evidence of both motivating scenarios",
+  "status": "in-progress",
+  "createdAt": "2026-09-20T11:34:13.508Z",
+  "updatedAt": "2026-09-20T12:06:53.152Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:7ab0239c7889bccc627be1c3b565d747847f51a25e80df734e4a27f2694037b0",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T11:35:26.437Z",
+            "outcome": "started",
+            "detail": "279-T5 end-to-end evidence, two worktrees (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.084Z",
+            "outcome": "started",
+            "detail": "wiki page (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.271Z",
+            "outcome": "started",
+            "detail": "cli-reference (haiku)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.391Z",
+            "outcome": "started",
+            "detail": "status docs (haiku)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-20T11:34:13.508Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-20T11:35:13.619Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-20T11:35:13.692Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-20T11:35:20.712Z",
+      "event": "task-added",
+      "detail": "T5: Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)"
+    },
+    {
+      "at": "2026-09-20T11:35:20.790Z",
+      "event": "task-added",
+      "detail": "T6: Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)"
+    },
+    {
+      "at": "2026-09-20T11:35:20.868Z",
+      "event": "task-added",
+      "detail": "T7: cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)"
+    },
+    {
+      "at": "2026-09-20T11:35:20.947Z",
+      "event": "task-added",
+      "detail": "T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)"
+    },
+    {
+      "at": "2026-09-20T11:35:21.023Z",
+      "event": "task-added",
+      "detail": "T9: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-20T11:35:26.437Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 279-T5 end-to-end evidence, two worktrees (sonnet)"
+    },
+    {
+      "at": "2026-09-20T11:59:06.591Z",
+      "event": "task-done",
+      "detail": "T5: Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.085Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — wiki page (sonnet)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.272Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — cli-reference (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.391Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — status docs (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:04:27.621Z",
+      "event": "task-done",
+      "detail": "T7: cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:04:27.712Z",
+      "event": "task-done",
+      "detail": "T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:06:53.152Z",
+      "event": "task-done",
+      "detail": "T6: Wiki page architecture/agent-bus.md, cross-referencing RP-08 (sonnet)"
+    }
+  ]
+}
