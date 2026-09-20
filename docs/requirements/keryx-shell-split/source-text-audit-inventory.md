@@ -26,6 +26,24 @@ have dropped to zero read sites because their structural audits now scan
 `src/tui/**` instead of one file, which is what lets them survive P3 rather
 than be broken by it.
 
+### What the count does and does not measure
+
+The manifest counts **files coupled to the two paths**, not assertions coupled
+to their text. Those are different, and the exit-sequence work (flow 277) is
+the case that shows it.
+
+Extracting `performSlateExit` / `leaveBusThenRelease`
+(`src/tui/shell-exit.ts`) moved six audits across three files off character
+offsets and multi-line sequences and onto a single symbol, and moved the
+property they stood for — the order the steps actually run in, and that each
+async step is awaited — into `shell-exit.test.ts`, where it runs against the
+real function. The count did not move at all: those files still open
+`tui-shell.ts`, they just ask it something far more stable.
+
+So read the count as "how much is still pinned to this file", and the detail
+files for whether what remains is a sequence, an offset comparison, or one
+symbol. A split breaks the first two; the third survives it.
+
 ## The detail
 
 | file | covers |

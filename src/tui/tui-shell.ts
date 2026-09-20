@@ -263,6 +263,7 @@ import {
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
+import { leaveBusThenRelease, performSlateExit } from "./shell-exit";
 import { openBus } from "./bus-panel";
 // Flow 275 (agent bus P4, T7; specification §4.3, §7.2): pause leases — held
 // turns, the status-bar banner, and `/bus pause|resume|override`.
@@ -3173,8 +3174,10 @@ export async function launchTuiAgentShell(opts: {
         // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
         // session lease — specification §5.4's order — synchronously, before
         // anything that may block.
-        liveBus?.leave(); // idempotent, synchronous-safe
-        sessionLease.release();
+        leaveBusThenRelease({
+          leaveBus: () => liveBus?.leave(), // idempotent, synchronous-safe
+          releaseLease: () => sessionLease.release(),
+        });
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -5978,13 +5981,17 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.cancel("shell exit");
             foregroundOperation.dispose();
             void (async () => {
-              await closeSlateSession(slateSession, mintTimestampAttemptId);
-              await deps.sweepBackgroundJobs?.();
-              jobs.removeAll();
-              liveBus?.leave(); // flow 273/271 (review r1 F9): leave the bus before releasing the lease
-              sessionLease.release(); // flow 271 (AC7): after the slate close wrote its last file
-              r.off("theme_mode", onThemeMode);
-              r.destroy();
+              await performSlateExit({
+                closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
+                sweepJobs: async () => {
+                  await deps.sweepBackgroundJobs?.();
+                },
+                purgeJobList: () => jobs.removeAll(),
+                leaveBus: () => liveBus?.leave(),
+                releaseLease: () => sessionLease.release(),
+                detachRenderer: () => r.off("theme_mode", onThemeMode),
+                destroyRenderer: () => r.destroy(),
+              });
             })();
             return;
           }
@@ -6205,12 +6212,17 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/exit") {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
-            await closeSlateSession(slateSession, mintTimestampAttemptId);
-            await deps.sweepBackgroundJobs?.();
-            jobs.removeAll(); // F-002: purge the sidebar/store list too, not just the OS-level registry
-            liveBus?.leave(); sessionLease.release(); // flow 271/273
-            r.off("theme_mode", onThemeMode);
-            r.destroy();
+            await performSlateExit({
+              closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
+              sweepJobs: async () => {
+                await deps.sweepBackgroundJobs?.();
+              },
+              purgeJobList: () => jobs.removeAll(),
+              leaveBus: () => liveBus?.leave(),
+              releaseLease: () => sessionLease.release(),
+              detachRenderer: () => r.off("theme_mode", onThemeMode),
+              destroyRenderer: () => r.destroy(),
+            });
           })();
           return;
         }
@@ -7076,8 +7088,10 @@ export async function launchTuiAgentShell(opts: {
     // review r1 F9: leave the bus before releasing the lease (specification
     // §5.4's order) — idempotent either way, the exit paths above usually
     // did both already.
-    liveBus?.leave();
-    sessionLease.release();
+    leaveBusThenRelease({
+      leaveBus: () => liveBus?.leave(),
+      releaseLease: () => sessionLease.release(),
+    });
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
     try {
       renderer?.destroy();

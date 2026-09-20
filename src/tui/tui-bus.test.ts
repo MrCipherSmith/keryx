@@ -453,36 +453,37 @@ describe("/bus modal tab content builders (specification §7.2)", () => {
 
 describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot reach these)", () => {
   // review r1 F9: specification §5.4 orders a clean exit as "leave the bus,
-  // THEN release the session lease" — every real exit path is checked for
-  // that exact order below, not just that both calls are present.
-  test("onDestroy (Ctrl+C) leaves the bus BEFORE releasing the session lease", () => {
-    const start = source.indexOf("onDestroy: () => {");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const body = source.slice(start, source.indexOf("void (async () => {", start));
-    const leaveIdx = body.indexOf("liveBus?.leave();");
-    const releaseIdx = body.indexOf("sessionLease.release();");
-    expect(leaveIdx).toBeGreaterThanOrEqual(0);
-    expect(releaseIdx).toBeGreaterThan(leaveIdx);
+  // THEN release the session lease".
+  //
+  // Flow 277 (P2): that order was pinned here, and again in
+  // `tui-session-lease.test.ts`, and again in `tui-shell.test.ts` — three
+  // files each slicing a window out of `tui-shell.ts` and comparing character
+  // offsets, once per exit path. Four hand-maintained copies of the sequence
+  // is what made three copies of the audit necessary.
+  //
+  // The order now lives in `leaveBusThenRelease` (`src/tui/shell-exit.ts`) and
+  // is asserted against the real function in `shell-exit.test.ts`, including
+  // the case production actually passes (`() => liveBus?.leave()` on a session
+  // that never joined). What stays here is this file's own concern: that the
+  // BUS is left on every exit path rather than left advertising a dead shell.
+  test("every exit path leaves the bus through the shared helper, so none can release the lease first", () => {
+    const sites = source.split("leaveBusThenRelease({").length - 1;
+    const sequences = source.split("await performSlateExit({").length - 1;
+    // onDestroy + the outer finally go through the bare ordering helper; the
+    // two command-driven exits go through the full sequence, which calls it.
+    expect({ sites, sequences }).toEqual({ sites: 2, sequences: 2 });
   });
-
-  test("/exit and the busy-menu exit leave the bus before releasing the session lease, before destroying the renderer", () => {
-    for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
-      const start = source.indexOf(marker);
-      expect(start).toBeGreaterThanOrEqual(0);
-      const block = source.slice(start, source.indexOf("r.destroy();", start));
-      const leaveIdx = block.indexOf("liveBus?.leave();");
-      const releaseIdx = block.indexOf("sessionLease.release();");
-      expect(leaveIdx).toBeGreaterThanOrEqual(0);
-      expect(releaseIdx).toBeGreaterThan(leaveIdx);
-    }
+  test("and each of those four sites hands it this session's own bus and lease", () => {
+    // The helper cannot protect anything if a call site passes something
+    // else, and that is not visible from the count above.
+    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(4);
+    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(4);
   });
-
-  test("the outer finally leaves the bus before releasing the session lease", () => {
-    const tail = source.slice(source.lastIndexOf("} finally {"));
-    const leaveIdx = tail.indexOf("liveBus?.leave();");
-    const releaseIdx = tail.indexOf("sessionLease.release();");
-    expect(leaveIdx).toBeGreaterThanOrEqual(0);
-    expect(releaseIdx).toBeGreaterThan(leaveIdx);
+  test("BOUNDARY — no exit path still leaves the bus or releases the lease on its own", () => {
+    // The whole point of routing all four through one helper: a fifth path,
+    // or a regression in one of the four, shows up as a bare call again.
+    expect(source).not.toContain("liveBus?.leave();");
+    expect(source).not.toContain("sessionLease.release();");
   });
 
   test("applyOpened (startup picker, fork/view/cancel, /resume) updates presence.sessionId, caught (review r1 F10)", () => {

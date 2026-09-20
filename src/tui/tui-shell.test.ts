@@ -2663,32 +2663,40 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
     }
   });
 
-  test("the non-busy /exit branch sweeps AND purges background jobs, right after closing the slate session", () => {
+  // Flow 277 (P2): the ORDER these two branches run their steps in used to be
+  // asserted here by comparing character offsets inside a 500-character
+  // window. Both branches now call the extracted `performSlateExit`
+  // (`src/tui/shell-exit.ts`), and `shell-exit.test.ts` asserts the order
+  // against the real function — including that each async step is AWAITED,
+  // which no offset comparison could express. What is left here is the
+  // wiring: that both exit paths go through it, with this session's own
+  // slate, jobs, bus and lease.
+  test("the non-busy /exit branch exits through performSlateExit, with this session's slate, jobs, bus and lease", () => {
     const exitIdx = tuiSourceAc7.indexOf('if (command.name === "/exit") {');
     expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 500);
-    const closeIdx = exitBlock.indexOf("await closeSlateSession(slateSession, mintTimestampAttemptId);");
-    const sweepIdx = exitBlock.indexOf(sweepCall);
-    const removeIdx = exitBlock.indexOf(removeAllCall);
-    const destroyIdx = exitBlock.indexOf("r.destroy();");
-    expect(closeIdx).toBeGreaterThanOrEqual(0);
-    expect(sweepIdx).toBeGreaterThan(closeIdx);
-    expect(removeIdx).toBeGreaterThan(sweepIdx);
-    expect(destroyIdx).toBeGreaterThan(removeIdx);
+    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
+    expect(exitBlock).toContain("await performSlateExit({");
+    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
+    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
+    expect(exitBlock).toContain("jobs.removeAll()");
+    expect(exitBlock).toContain("liveBus?.leave()");
+    expect(exitBlock).toContain("sessionLease.release()");
   });
-
-  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') ALSO sweeps AND purges background jobs — this is the SECOND real exit path that was previously missing it entirely", () => {
+  test("F-002: the busy-dispatch /exit branch (classifyBusyDispatch === 'exit') exits through the SAME helper — the second real exit path, once missing the sweep entirely", () => {
     const exitIdx = tuiSourceAc7.indexOf('case "exit": {');
     expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 500);
-    const closeIdx = exitBlock.indexOf("await closeSlateSession(slateSession, mintTimestampAttemptId);");
-    const sweepIdx = exitBlock.indexOf(sweepCall);
-    const removeIdx = exitBlock.indexOf(removeAllCall);
-    expect(closeIdx).toBeGreaterThanOrEqual(0);
-    expect(sweepIdx).toBeGreaterThan(closeIdx);
-    expect(removeIdx).toBeGreaterThan(sweepIdx);
+    const exitBlock = tuiSourceAc7.slice(exitIdx, exitIdx + 900);
+    expect(exitBlock).toContain("await performSlateExit({");
+    expect(exitBlock).toContain("closeSlateSession(slateSession, mintTimestampAttemptId)");
+    expect(exitBlock).toContain("deps.sweepBackgroundJobs?.()");
+    expect(exitBlock).toContain("jobs.removeAll()");
   });
-
+  test("BOUNDARY — performSlateExit is wired at exactly those two paths, not sprinkled", () => {
+    // The point of the helper is that the two command-driven exits share ONE
+    // sequence. A third call site would be a third exit path nobody reviewed;
+    // zero would mean the two tests above are asserting nothing.
+    expect(tuiSourceAc7.split("await performSlateExit({").length - 1).toBe(2);
+  });
   test("F-002: onDestroy (Ctrl+C) ALSO sweeps AND purges background jobs, and defers resolveDone() until the sweep settles — the THIRD real exit path that was previously missing it entirely", () => {
     const onDestroyIdx = tuiSourceAc7.indexOf("onDestroy: () => {");
     expect(onDestroyIdx).toBeGreaterThanOrEqual(0);
@@ -2726,7 +2734,12 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
   });
 
   test("jobs.removeAll() (store-level purge) is called at exactly the three real exit paths: non-busy /exit, busy /exit, onDestroy", () => {
-    const plainOccurrences = tuiSourceAc7.split(removeAllCall).length - 1;
+    // Flow 277: the two command-driven purges are now `purgeJobList: () =>
+    // jobs.removeAll()` inside the `performSlateExit` steps, so they carry no
+    // trailing semicolon. onDestroy's own `liveJobs?.removeAll()` does not
+    // contain this substring (capital J, optional chaining), so it is counted
+    // separately below rather than subtracted here.
+    const plainOccurrences = tuiSourceAc7.split("jobs.removeAll()").length - 1;
     expect(plainOccurrences).toBe(2); // non-busy /exit + busy /exit
     const onDestroyOccurrences = tuiSourceAc7.split(onDestroyRemoveAllCall).length - 1;
     expect(onDestroyOccurrences).toBe(1); // onDestroy (reads the TDZ-safe `liveJobs` ref, not `jobs` directly)
@@ -3429,8 +3442,12 @@ describe("flow 219 — foreground operation lifecycle wiring (source-text audit)
     const busyExit = source.slice(source.indexOf('case "exit": {'), source.indexOf('case "exit": {') + 1_200);
     const onDestroy = source.slice(source.indexOf("onDestroy: () => {"), source.indexOf("onDestroy: () => {") + 1_200);
     expect(busyExit).toMatch(/foregroundOperation\.cancel\(/);
+    // Flow 277: the teardown itself is now one call (`performSlateExit`, in
+    // `shell-exit.ts`), so that is the anchor. The property is unchanged —
+    // cancel/dispose run synchronously BEFORE the async teardown starts, so
+    // nothing queued can drain into a session that is already closing.
     expect(busyExit.indexOf("foregroundOperation.cancel(")).toBeLessThan(
-      busyExit.indexOf("await closeSlateSession("),
+      busyExit.indexOf("await performSlateExit({"),
     );
     expect(onDestroy).toMatch(/foregroundOperation\.cancel\(/);
     expect(onDestroy).toMatch(/foregroundOperation\.dispose\(\)|foregroundOperation\.destroy\(\)/);
