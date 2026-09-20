@@ -1401,6 +1401,9 @@
     "src/session/store.test.ts",
     "src/session/store.ts"
   ],
+  "shell-source-audits.test.ts": [
+    "src/shell-source-audits.test.ts"
+  ],
   "standard": [
     "src/standard/baseline.test.ts",
     "src/standard/baseline.ts",
