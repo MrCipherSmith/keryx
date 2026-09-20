@@ -8,7 +8,11 @@ export interface StoredSearchProvider {
   lastTestedAt?: string;
 }
 
+/** Bumped when DuckDuckGo became the default engine. */
+export const SEARCH_CONFIG_SCHEMA = 2;
+
 export interface SearchConfig {
+  schemaVersion?: number;
   activeProviderId?: string;
   providers?: Record<string, StoredSearchProvider>;
 }
@@ -38,17 +42,46 @@ function readJson(file: string): unknown | undefined {
 
 export function loadSearchConfig(dir?: string): SearchConfig {
   const value = readJson(searchConfigPath(dir));
-  return value !== null && typeof value === "object" ? value as SearchConfig : {};
+  if (value === null || value === undefined || typeof value !== "object") return {};
+  const config = value as SearchConfig;
+  if (config.schemaVersion === SEARCH_CONFIG_SCHEMA) return config;
+  return persistMigratedSearchConfig(migrateSearchConfig(config), dir);
 }
 
 export function saveSearchConfig(patch: SearchConfig, dir?: string): void {
   try {
-    ensureKeryxConfigDir(dir);
-    const current = loadSearchConfig(dir);
-    writeOwnerOnlyFile(searchConfigPath(dir), `${JSON.stringify({ ...current, ...patch }, null, 2)}\n`);
+    persistMigratedSearchConfig({ ...loadSearchConfig(dir), ...patch }, dir);
   } catch {
     // Configuration is best effort; callers surface connection failures separately.
   }
+}
+
+/**
+ * Pre-2 configs treated a leftover local SearXNG as the active engine forever.
+ * DuckDuckGo is now the default; a stale `searxng` selection is dropped so
+ * `web_search` works after upgrade. Brave/Tavily/Exa selections are kept.
+ * The user can `/search-connect searxng` again after this one-time migrate.
+ */
+export function migrateSearchConfig(config: SearchConfig): SearchConfig {
+  const migrated: SearchConfig = {
+    schemaVersion: SEARCH_CONFIG_SCHEMA,
+    ...(config.providers ? { providers: config.providers } : {}),
+  };
+  if (typeof config.activeProviderId === "string" && config.activeProviderId !== "searxng") {
+    migrated.activeProviderId = config.activeProviderId;
+  }
+  return migrated;
+}
+
+function persistMigratedSearchConfig(config: SearchConfig, dir?: string): SearchConfig {
+  const next: SearchConfig = { ...config, schemaVersion: SEARCH_CONFIG_SCHEMA };
+  try {
+    ensureKeryxConfigDir(dir);
+    writeOwnerOnlyFile(searchConfigPath(dir), `${JSON.stringify(next, null, 2)}\n`);
+  } catch {
+    // Same best-effort rule as saveSearchConfig.
+  }
+  return next;
 }
 
 function loadCredentialStore(dir?: string): SearchCredentialStore {

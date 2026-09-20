@@ -50,6 +50,7 @@ describe("DuckDuckGo Lite parser", () => {
     expect(response.ok).toBe(true);
     if (!response.ok) return;
     expect(response.value.query).toBe("keryx");
+    expect(response.value.providerId).toBe("duckduckgo");
     expect(response.value.results).toHaveLength(2);
     expect(response.value.results[0]).toMatchObject({
       providerId: "duckduckgo",

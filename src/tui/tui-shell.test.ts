@@ -2873,7 +2873,7 @@ const SEARXNG_DESCRIPTOR: SearchProviderDescriptor = {
   documentationUrl: "https://docs.searxng.org/admin/installation.html",
   capabilities: { localLoopback: true, supportsPublicationDate: true },
   testConnection: async () => ({ ok: true }),
-  search: async () => ({ query: "", results: [] }),
+  search: async () => ({ query: "", providerId: "searxng", results: [] }),
 };
 
 // Stands in for keyed zero-field remote providers (brave/tavily/exa
@@ -2889,7 +2889,7 @@ const BRAVE_DESCRIPTOR: SearchProviderDescriptor = {
   documentationUrl: "https://api.search.brave.com/app/documentation",
   capabilities: { localLoopback: false, supportsPublicationDate: false },
   testConnection: async () => ({ ok: true }),
-  search: async () => ({ query: "", results: [] }),
+  search: async () => ({ query: "", providerId: "brave", results: [] }),
 };
 
 type SearchControllerCall =

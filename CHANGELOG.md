@@ -3,6 +3,17 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Fixed
+
+- **`web_search` no longer stays stuck on a leftover local SearXNG.** A
+  pre-DuckDuckGo `search-providers.json` that still had `activeProviderId:
+  "searxng"` kept sending queries to a stale localhost instance. Upgrade now
+  drops that selection (Brave/Tavily/Exa stay) so DuckDuckGo is the default;
+  `/search-connect searxng` still re-selects it. Result headers name the
+  `Provider:`. The agent is told it cannot switch engines itself.
+
 ## [0.2.127] — 2026-09-20
 `web_search` works on a fresh install: DuckDuckGo Lite is the default, with no
 API key and no local search engine (PR #626).

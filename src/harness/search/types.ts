@@ -80,6 +80,7 @@ export interface NormalizedSearchResult {
 
 export interface SearchResponse {
   query: string;
+  providerId: SearchProviderId;
   results: NormalizedSearchResult[];
 }
 
