@@ -202,7 +202,7 @@ turn, produce the documented shape").
 | TOOL-11 | `shell_exec` (+ `shell_task_output`/`shell_task_wait`/`shell_task_kill`) | A long-running command | The call returns within the bounded yield with `{task_id, pid, status, output}` and the turn continues; `shell_task_output` reads from an explicit cursor; `shell_task_wait` waits for `any`/`all`; `shell_task_kill` stops the process group. When the task ends its outcome arrives on its own, with no read call — TUI sidebar "Background Jobs N" panel (TUI-only visual, see §11) |
 | TOOL-12 | `apply_patch` | A real, approved (via `/mode trust`) file edit | File on disk actually changes; classifier (`classifyPatchRisk`) escalates correctly for a destructive-looking target |
 | TOOL-13 | `spawn_subagent` | Single + parallel-batch dispatch | *(confirmed live both ways — denied under `ask`/headless, real parallel execution under `trust`)* |
-| TOOL-14 | `web_fetch`, `web_search` | A real external question (needs `/search-provider`/`/search-connect` configured first) | Real result, or a clear "no provider configured" refusal |
+| TOOL-14 | `web_fetch`, `web_search` | A real external question (`web_search` uses DuckDuckGo unless another provider is selected) | Real result, or a clear reconnect/failure message — not a silent engine switch |
 
 ## 6. `/goal` — one-shot and `--auto`
 

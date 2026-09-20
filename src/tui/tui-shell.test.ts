@@ -2876,8 +2876,9 @@ const SEARXNG_DESCRIPTOR: SearchProviderDescriptor = {
   search: async () => ({ query: "", results: [] }),
 };
 
-// Stands in for any of the 3 zero-field remote providers (brave/tavily/exa
-// in the real registry): 0 fields, a required credential.
+// Stands in for keyed zero-field remote providers (brave/tavily/exa
+// in the real registry): 0 fields, a required credential. DuckDuckGo is also
+// zero-field but has no credential.
 const BRAVE_DESCRIPTOR: SearchProviderDescriptor = {
   id: "brave",
   displayName: "Brave Search API",

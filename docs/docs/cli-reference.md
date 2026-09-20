@@ -236,14 +236,14 @@ Refusals print their code and exit non-zero:
   a click on `[ Apply ]` — Esc/close leaves the current theme untouched.
   `/theme <name>` still applies immediately without opening the picker.
   Readline / `--no-tui` supports only the immediate-apply form.
-- `/search-provider` configures and tests web search providers for `web_search`:
-  run with no arguments to open a 3-step interactive wizard (select provider →
-  enter fields/credential/active-toggle → test connection); pass `provider id`
-  plus `key=<value>` (for keyed providers) to configure and validate one
-  directly, unchanged.
-- `/search-connect` selects which configured and tested web search provider is
-  active: run with no arguments to open a picker over already-connected
-  providers, or pass an ID to switch directly, unchanged.
+- `/search-provider` configures and tests web search providers for `web_search`
+  (DuckDuckGo is the default and needs no setup): run with no arguments to open
+  a wizard (select provider → enter fields/credential when required →
+  active-toggle → test); pass `provider id` plus `key=<value>` (for keyed
+  providers) to configure and validate one directly.
+- `/search-connect` selects the active search provider: run with no arguments to
+  open a picker over DuckDuckGo plus any tested providers, or pass an ID to
+  switch directly. `duckduckgo` can be selected without a prior test.
 - `/delegate <agent> <task>` hands a bounded read-only task to a vendor coding
   CLI hosted as a child agent (`keryx agents external list` for the ids). It is
   refused with a named reason when the capability is off — which is the default.

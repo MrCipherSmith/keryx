@@ -1,3 +1,10 @@
+import {
+  DUCKDUCKGO_HEALTHCHECK_QUERY,
+  duckduckgoLiteUrl,
+  duckduckgoSearchResponse,
+  isDuckDuckGoAnomaly,
+  maybeDelayDuckDuckGoSearch,
+} from "./duckduckgo";
 import type {
   CredentialInjection,
   NormalizedSearchResult,
@@ -116,6 +123,47 @@ export function connectedProviderIds(states: readonly SearchProviderConnectionSt
 }
 
 export function createSearchProviderRegistry(transport: SandboxedWebTransport, resolveCredential: SearchCredentialResolver = () => undefined): SearchProviderRegistry {
+  const duckduckgo: SearchProviderDescriptor = {
+    id: "duckduckgo",
+    displayName: "DuckDuckGo",
+    kind: "remote",
+    fields: [],
+    defaults: {},
+    credentialSchema: { required: false, secret: true },
+    documentationUrl: "https://duckduckgo.com/duckduckgo-help-pages/",
+    capabilities: { localLoopback: false, supportsPublicationDate: false },
+    async testConnection() {
+      const response = await transport.request({
+        providerId: "duckduckgo",
+        capability: "public-search",
+        url: duckduckgoLiteUrl(DUCKDUCKGO_HEALTHCHECK_QUERY),
+        method: "GET",
+        query: DUCKDUCKGO_HEALTHCHECK_QUERY,
+      });
+      if (isDuckDuckGoAnomaly(response.status, response.text)) return { ok: false, reason: "transport-failed" };
+      if (!response.ok || response.status < 200 || response.status >= 300) return requestFailure(response);
+      const parsed = duckduckgoSearchResponse(DUCKDUCKGO_HEALTHCHECK_QUERY, response.text);
+      return parsed.ok ? { ok: true } : { ok: false, reason: "transport-failed" };
+    },
+    async search(_fields, query, signal) {
+      await maybeDelayDuckDuckGoSearch(signal);
+      const response = await transport.request({
+        providerId: "duckduckgo",
+        capability: "public-search",
+        url: duckduckgoLiteUrl(query),
+        method: "GET",
+        query,
+        ...(signal ? { signal } : {}),
+      });
+      if (isDuckDuckGoAnomaly(response.status, response.text)) {
+        throw new Error("DuckDuckGo rate-limited this machine");
+      }
+      const parsed = duckduckgoSearchResponse(query, response.text);
+      if (!parsed.ok) throw new Error("DuckDuckGo rate-limited this machine");
+      return parsed.value;
+    },
+  };
+
   const searxng: SearchProviderDescriptor = {
     id: "searxng",
     displayName: "SearXNG",
@@ -145,7 +193,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
   const apiKeyLabel = (displayName: string): string =>
     /\bAPI$/.test(displayName) ? `${displayName} key` : `${displayName} API key`;
 
-  const remote = (id: Exclude<SearchProviderId, "searxng">, displayName: string, endpoint: string, injection: CredentialInjection["injection"], name: string, mapping: { title: string; url: string; snippet: string; date?: string }): SearchProviderDescriptor => ({
+  const remote = (id: Exclude<SearchProviderId, "searxng" | "duckduckgo">, displayName: string, endpoint: string, injection: CredentialInjection["injection"], name: string, mapping: { title: string; url: string; snippet: string; date?: string }): SearchProviderDescriptor => ({
     id,
     displayName,
     kind: "remote",
@@ -174,6 +222,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
   });
 
   return new SearchProviderRegistry([
+    duckduckgo,
     searxng,
     remote("brave", "Brave Search API", "https://api.search.brave.com/res/v1/web/search", "header", "X-Subscription-Token", { title: "title", url: "url", snippet: "description" }),
     remote("tavily", "Tavily", "https://api.tavily.com/search", "json-body", "api_key", { title: "title", url: "url", snippet: "content", date: "published_date" }),
@@ -181,7 +230,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
   ]);
 }
 
-function remoteRequest(providerId: Exclude<SearchProviderId, "searxng">, endpoint: string, query: string, key: CredentialInjection): SandboxedWebRequest {
+function remoteRequest(providerId: Exclude<SearchProviderId, "searxng" | "duckduckgo">, endpoint: string, query: string, key: CredentialInjection): SandboxedWebRequest {
   if (providerId === "brave") {
     return { providerId, capability: "public-search", url: `${endpoint}?q=${encodeURIComponent(query)}`, method: "GET", query, credential: key };
   }

@@ -3,6 +3,15 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [Unreleased]
+
+### Added
+
+- **`web_search` uses DuckDuckGo by default.** No API key and no local SearXNG
+  instance are required. `/search-provider` still configures Brave, Tavily, Exa,
+  or a loopback SearXNG instance; a selected provider that fails is not silently
+  replaced by DuckDuckGo.
+
 ## [0.2.126] — 2026-09-19
 
 ### Fixed

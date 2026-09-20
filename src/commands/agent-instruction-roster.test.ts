@@ -41,6 +41,13 @@ test("read_file is described as paging by start_line, never as unable to", () =>
   }
 });
 
+test("web_search is described as DuckDuckGo by default, never as a missing-provider setup loop", () => {
+  const text = buildAgentSystemInstruction(undefined, { toolNames: PLAIN_REPO_ROSTER });
+  expect(text).toContain("DuckDuckGo by default");
+  expect(text).toContain("Never switch providers yourself");
+  expect(text).not.toContain("when an active connected search provider is configured");
+});
+
 test("without a roster, the instruction still names every metaproject tool, as it always did", () => {
   const text = buildAgentSystemInstruction(undefined);
   for (const present of ["graph_symbol", "graph_affected", "memory_search", "read_wiki", "repomap"]) {

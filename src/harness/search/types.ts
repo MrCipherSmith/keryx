@@ -35,7 +35,8 @@ export interface SandboxedWebResponse {
   error?: "cancelled" | "timeout" | "policy-denied" | "transport-failed" | "malformed-response";
 }
 
-export type SearchProviderId = "searxng" | "brave" | "tavily" | "exa";
+export type SearchProviderId = "duckduckgo" | "searxng" | "brave" | "tavily" | "exa";
+export const DEFAULT_SEARCH_PROVIDER_ID: SearchProviderId = "duckduckgo";
 export type SearchProviderKind = "local" | "remote";
 
 export interface SearchFieldDescriptor {

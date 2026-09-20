@@ -78,6 +78,7 @@ nav:
       - Give an agent context: guides/give-an-agent-context.md
       - Choose an approval mode (ask, trust, auto): guides/permission-modes.md
       - Run an agent without giving it your machine: guides/contain-an-agent.md
+      - Agent web search: guides/web-search.md
       - Use local SearXNG for web search: guides/use-local-searxng.md
       - Drive keryx from a bot: guides/drive-keryx-remotely.md
       - Review with a durable record: guides/review-with-a-record.md
