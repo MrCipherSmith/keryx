@@ -40,6 +40,7 @@ import {
   searchProviderWizardInTui,
   selectSearchProviderAndReport,
   shortenCwd,
+  SIDE_WORKER_DENIED_TOOL_NAMES,
   type BlockSink,
 } from "./tui-shell";
 import {
@@ -71,6 +72,12 @@ import type {
   SearchSelectionResult,
 } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
+// Shell-split P2: the four STRUCTURAL audits in this file ("this module tree
+// must never do X") scan every production file under src/tui/ through this
+// already-exported helper (also used by src/lib/import-policy.ts's own tests)
+// instead of just tui-shell.ts, so they keep covering the code once the
+// god-file is split into src/tui/shell/*.ts.
+import { listSourceFiles } from "../lib/import-policy";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -2439,9 +2446,23 @@ describe("SLATE-15 — tui-shell.ts /goal wiring (source-text audit)", () => {
   const fnStart2 = tuiSource2.indexOf("export async function launchTuiAgentShell(opts: {");
   const fnBody2 = tuiSource2.slice(fnStart2);
 
-  test("runGoalCommand is imported from ../commands/goal-command", () => {
-    expect(tuiSource2).toMatch(/from ["'](\.\.\/commands\/)?goal-command["']/);
-    expect(tuiSource2).toContain("runGoalCommand");
+  // STRUCTURAL (kept as a text audit — shell-split P2). `/goal` must dispatch
+  // to the SHARED `runGoalCommand` core (proven for real against its own
+  // behaviour in `../commands/goal-command.test.ts`) rather than a TUI-local
+  // reimplementation — an import-boundary fact about source structure, not a
+  // runtime behaviour this file can drive directly. Scans every production
+  // file under src/tui/ (not just tui-shell.ts), and tolerates any relative
+  // import depth, so it keeps passing once the importing file moves during
+  // the god-file split.
+  test("runGoalCommand is imported from commands/goal-command somewhere under src/tui/", () => {
+    const tuiFiles = listSourceFiles(join(import.meta.dir));
+    expect(tuiFiles.length).toBeGreaterThan(0);
+    const importPattern = /from ["'](?:\.\.\/)*(?:commands\/)?goal-command["']/;
+    const importingFiles = tuiFiles.filter((file) => {
+      const src = readFileSync(file, "utf8");
+      return importPattern.test(src) && src.includes("runGoalCommand");
+    });
+    expect(importingFiles.length).toBeGreaterThan(0);
   });
 
   test("the command switch has a /goal branch calling runGoalCommand", () => {
@@ -2542,12 +2563,35 @@ describe("flow 265 — tui-shell.ts /plan wiring (source-text audit)", () => {
 // precedent this file already sets above (SLATE-2a/SLATE-3a audits):
 // `launchTuiAgentShell` has no headless injection seam, so this is proven by
 // reading the real source rather than driving the OpenTUI REPL end-to-end.
-describe("flow 163 AC8 — tui-shell.ts's OpenTUI REPL never triggers the wrap-up composer (source-text audit)", () => {
-  const tuiSourceAc8 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+// STRUCTURAL (kept as a text audit — shell-split P2, per
+// docs/requirements/keryx-shell-split/audits-tui-shell.md). "This module tree
+// must never call the wrap-up composer" is a fact about source structure, not
+// an observable runtime behaviour of any one function, so there is no seam to
+// extract. Rewritten to scan every production file under src/tui/ (not just
+// tui-shell.ts) so the guard survives the god-file being split into
+// src/tui/shell/*.ts — a check pinned to the single filename would silently
+// stop covering the code the moment it moves.
+//
+// Narrowed from the original single-file version while widening scope: this
+// only forbids the literal `runWrapUp` (the composer's actual entry point —
+// `src/sac/machine-wrap-up.ts`'s `export async function runWrapUp`). A
+// whole-module path check (`/machine-wrap-up/`) was safe when only
+// tui-shell.ts was scanned (it has no legitimate reason to reference that
+// module at all), but a directory-wide scan hits `review-inspector.ts`, which
+// legitimately imports the `WrapUpGroupOutcome` *type* to render an
+// already-completed wrap-up's outcome — that is not triggering the composer.
+// `runWrapUp` alone still catches an actual trigger call regardless of import
+// style: a named import states it verbatim, and even a namespace import
+// (`import * as w from ".../machine-wrap-up"`) requires writing `w.runWrapUp(`
+// to invoke it, which still contains the literal substring.
+describe("flow 163 AC8 — the TUI module tree never triggers the wrap-up composer (source-structure audit)", () => {
+  const tuiFiles = listSourceFiles(join(import.meta.dir));
 
-  test("tui-shell.ts never imports or calls the Track B wrap-up composer", () => {
-    expect(tuiSourceAc8).not.toContain("runWrapUp");
-    expect(tuiSourceAc8).not.toMatch(/machine-wrap-up/);
+  test("no production file under src/tui/ imports or calls the Track B wrap-up composer (runWrapUp)", () => {
+    expect(tuiFiles.length).toBeGreaterThan(0);
+    for (const file of tuiFiles) {
+      expect(readFileSync(file, "utf8")).not.toContain("runWrapUp");
+    }
   });
 });
 
@@ -2603,8 +2647,20 @@ describe("flow 173 F-002/AC7/AC9 — background-job sweep fires at every real ex
   const onDestroySweepCall = "await liveDeps?.sweepBackgroundJobs?.();";
   const onDestroyRemoveAllCall = "liveJobs?.removeAll();";
 
-  test("no process-level SIGINT/SIGTERM handler exists — /exit and onDestroy (Ctrl+C) are the real graceful-exit triggers this audit targets", () => {
-    expect(tuiSourceAc7).not.toMatch(/process\.on\(\s*["'](SIGINT|SIGTERM)["']/);
+  // STRUCTURAL (kept as a text audit — shell-split P2). This is a
+  // precondition-documenting guard for the rest of this block, not itself the
+  // behaviour under test: it establishes that /exit and onDestroy are
+  // EXHAUSTIVE as graceful-exit triggers, so testing just those two is
+  // complete. Its failure mode (someone adds a signal handler) is exactly
+  // when a human should revisit this whole block's coverage. Scans every
+  // production file under src/tui/ (not just tui-shell.ts) so a handler added
+  // to a NEW file after the god-file split still trips this guard.
+  test("no process-level SIGINT/SIGTERM handler exists anywhere under src/tui/ — /exit and onDestroy (Ctrl+C) are the real graceful-exit triggers this audit targets", () => {
+    const tuiFiles = listSourceFiles(join(import.meta.dir));
+    expect(tuiFiles.length).toBeGreaterThan(0);
+    for (const file of tuiFiles) {
+      expect(readFileSync(file, "utf8")).not.toMatch(/process\.on\(\s*["'](SIGINT|SIGTERM)["']/);
+    }
   });
 
   test("the non-busy /exit branch sweeps AND purges background jobs, right after closing the slate session", () => {
@@ -2697,8 +2753,21 @@ describe("flow 173 F-008 — paintJobs skips repaint on 'output' hints, mirrorin
     expect(tuiSourceF008).toContain("jobs.subscribe(paintJobs);");
   });
 
-  test("BackgroundJobStoreHint is imported from background-job-session", () => {
-    expect(tuiSourceF008).toMatch(/import\s*\{\s*BackgroundJobStore,\s*type BackgroundJobStoreHint\s*\}\s*from\s*"\.\/background-job-session";/);
+  // STRUCTURAL (kept as a text audit — shell-split P2). This only proves an
+  // import statement's shape exists somewhere, which the TypeScript compiler
+  // already guarantees is necessary for `paintJobs`'s
+  // `hint?: BackgroundJobStoreHint` signature to compile at all — but it is
+  // named in the inventory as one of the four to keep, so it is rewritten
+  // rather than deleted. Scans every production file under src/tui/ (not just
+  // tui-shell.ts), and tolerates any relative import depth
+  // (`./background-job-session`, `../background-job-session`, ...) so it
+  // keeps passing once the importing file moves during the god-file split.
+  test("BackgroundJobStoreHint is imported from background-job-session somewhere under src/tui/", () => {
+    const tuiFiles = listSourceFiles(join(import.meta.dir));
+    expect(tuiFiles.length).toBeGreaterThan(0);
+    const importPattern = /import\s*\{\s*BackgroundJobStore,\s*type BackgroundJobStoreHint\s*\}\s*from\s*["'](?:\.\.?\/)+background-job-session["']/;
+    const importingFiles = tuiFiles.filter((file) => importPattern.test(readFileSync(file, "utf8")));
+    expect(importingFiles.length).toBeGreaterThan(0);
   });
 });
 
@@ -2708,29 +2777,32 @@ describe("flow 173 F-008 — paintJobs skips repaint on 'output' hints, mirrorin
 describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by name, keeps shell_job_output", () => {
   const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
 
+  // Flow 173 F-003 P2 conversion: `SIDE_WORKER_DENIED_TOOL_NAMES` is already
+  // exported (tui-shell.ts:314) specifically so callers like
+  // `shell-task-tools.test.ts` can read it directly — this test used to
+  // re-derive the same fact by re-parsing the source text. Reading the real
+  // `Set` is immune to reformatting the literal array (a real historical
+  // fragility here, since flow 266 already widened the array once).
   test("a module-level deny-list constant names shell_job_kill (not a risk-level change — AC6 is frozen)", () => {
-    // Flow 266 widened this list, so the audit can no longer pin the literal
-    // one-element Set it was written against. What it protects is unchanged and
-    // is what is asserted here: a MODULE-LEVEL constant that denies tools BY
-    // NAME — not a risk-level change, which AC6 freezes.
-    expect(tuiSourceF003).toContain("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
-    expect(tuiSourceF003).toContain('"shell_job_kill"');
+    expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("shell_job_kill")).toBe(true);
+    // BOUNDARY: distinguishes a real deny-list from an always-true stub —
+    // shell_task_output is deliberately NOT denied (its explicit `since`
+    // cursor and "side" observer copy make it genuinely safe; see below).
+    expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("shell_task_output")).toBe(false);
   });
 
+  // Flow 266: the three additions are the reason a side worker cannot end a
+  // main-session task, block on one, or consume output the main session has
+  // not seen — and the one omission is deliberate, because `shell_task_output`
+  // takes an explicit cursor and its side-worker copy never marks a task
+  // delivered.
   test("flow 266: the deny-list also covers kill/wait and the implicit-cursor read, but NOT shell_task_output", () => {
-    // The executed proof lives in `shell-task-tools.test.ts`, which reads the
-    // exported Set. This audit exists for the file itself: the three additions
-    // are the reason a side worker cannot end a main-session task, block on one,
-    // or consume output the main session has not seen — and the one omission is
-    // deliberate, because `shell_task_output` takes an explicit cursor and its
-    // side-worker copy never marks a task delivered.
-    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
-    expect(declIdx).toBeGreaterThanOrEqual(0);
-    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
     for (const name of ["shell_job_kill", "shell_task_kill", "shell_task_wait", "shell_job_output"]) {
-      expect(declBlock).toContain(`"${name}"`);
+      expect(SIDE_WORKER_DENIED_TOOL_NAMES.has(name)).toBe(true);
     }
-    expect(declBlock).not.toContain('"shell_task_output"');
+    // BOUNDARY: a stub that denied everything would pass the loop above but
+    // fail here — shell_task_output must stay allowed.
+    expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("shell_task_output")).toBe(false);
   });
 
   test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
@@ -2747,10 +2819,10 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
   // this, a side worker's `risk === "read"` filter would happily hand it
   // `bus_send` and let it speak on the main session's bus identity.
   test("bus_send is denied by name; bus_list stays available (genuinely read-only)", () => {
-    const declIdx = tuiSourceF003.indexOf("const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([");
-    const declBlock = tuiSourceF003.slice(declIdx, tuiSourceF003.indexOf("]);", declIdx));
-    expect(declBlock).toContain('"bus_send"');
-    expect(declBlock).not.toContain('"bus_list"');
+    expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("bus_send")).toBe(true);
+    // BOUNDARY: bus_list must stay usable — an over-broad deny-list would
+    // silently take away a genuinely read-only tool.
+    expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("bus_list")).toBe(false);
   });
 });
 

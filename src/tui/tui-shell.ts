@@ -308,8 +308,13 @@ const SESSION_PREVIEW_MESSAGE_COUNT = 200;
  * additionally excludes any tool named here — a small, explicit deny-list
  * (not a second risk tier) so a future read-risk-but-actually-mutating tool
  * has to be added here on purpose rather than silently inheriting
- * side-worker access via `risk === "read"` alone. `shell_job_output` stays
- * available — it is genuinely read-only in effect.
+ * side-worker access via `risk === "read"` alone.
+ *
+ * This paragraph used to end "`shell_job_output` stays available — it is
+ * genuinely read-only in effect." Flow 266 then added `shell_job_output` to
+ * the list below, for the reason stated there: its cursor is implicit shared
+ * state, so a side worker reading it consumes output the main session has not
+ * seen. The sentence contradicted the list six lines under it until flow 277.
  */
 export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   "shell_job_kill",

@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -71,10 +71,25 @@ async function* linesFrom(...lines: string[]): AsyncIterable<string> {
   for (const line of lines) yield line;
 }
 
-/** Drives the real REPL over `lines` and returns everything it rendered. */
+/**
+ * Drives the real REPL over `lines` and returns everything it rendered.
+ *
+ * `configDir` ALWAYS defaults to a directory inside this test's temp root,
+ * never to `undefined`. `undefined` means "the operator's real config dir"
+ * (`keryxConfigDir()` -> `~/.local/share/keryx/auth.json`), and `/reasoning`
+ * persists through `saveShellConfig`, so a test that omitted it would read —
+ * and write — the machine's own settings. That is not hypothetical: the first
+ * draft of these tests reported `Reasoning effort: high (global)` because it
+ * was resolving against shared state.
+ */
 async function repl(
   lines: string[],
-  opts: { deps?: AgentDeps; port?: MetaprojectPort; session?: Partial<ShellSessionOpts> } = {},
+  opts: {
+    deps?: AgentDeps;
+    port?: MetaprojectPort;
+    session?: Partial<ShellSessionOpts>;
+    configDir?: string;
+  } = {},
 ): Promise<string> {
   const out: string[] = [];
   await runAgentRepl(
@@ -85,6 +100,10 @@ async function repl(
     // `enabled: false` skips session persistence — the documented test default
     // on `ShellSessionOpts`.
     { cwd, enabled: false, ...opts.session },
+    undefined,
+    undefined,
+    undefined,
+    opts.configDir ?? path.join(root, "config"),
   );
   return out.join("");
 }
@@ -196,6 +215,80 @@ describe("/plan toggles read-only mode (flow 265, was a source-text audit)", () 
     // check it was still executed as a command.
     const output = await repl(["/plan on", "/plan", "/exit"]);
     expect(output).toContain("Read-only mode: on");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// /reasoning — replaces the flow 268 T16 and T26 source-text audits.
+//
+// T16 checked for the literals `describeReasoningEffortSource(`,
+// `isReasoningEffortLevel(wanted)`, `deps.reasoningEffort = wanted` and
+// `saveShellConfig({ reasoningEffort: wanted }, configDir)` inside a
+// 2,400-character window. T26 checked that `configDir` appeared at every
+// `loadShellConfig`/`saveShellConfig` call in that window — the bug being that
+// a session started with a non-default cache dir would persist reasoning
+// effort to a DIFFERENT file than the rest of the session reads, so
+// `/reasoning` silently does nothing from the operator's point of view.
+//
+// Both are now checked where it counts: the file on disk.
+// ---------------------------------------------------------------------------
+
+describe("/reasoning (flow 268 T16/T26, was a source-text audit)", () => {
+  test("with no argument it reports the effort AND where that effort came from", async () => {
+    const output = await repl(["/reasoning", "/exit"]);
+    expect(output).toContain("Reasoning effort: off (default)");
+  });
+
+  test("the reported SOURCE changes once the session overrides it", async () => {
+    // `describeReasoningEffortSource` is the thing the audit pinned by name.
+    // Its actual job is to distinguish where the value came from, so the test
+    // is two runs that must disagree on exactly that.
+    const before = await repl(["/reasoning", "/exit"]);
+    const after = await repl(["/reasoning high", "/reasoning", "/exit"]);
+    expect(before).toContain("(default)");
+    expect(after).toContain("Reasoning effort: high (session)");
+    expect(after).not.toContain("(default)");
+  });
+
+  test("an invalid level is refused BY NAME and changes nothing", async () => {
+    const output = await repl(["/reasoning nonsense", "/reasoning", "/exit"]);
+    expect(output).toContain("Unknown reasoning effort 'nonsense'");
+    // The refusal must not have half-applied: the effort is still the default.
+    expect(output).toContain("Reasoning effort: off (default)");
+  });
+
+  test("BOUNDARY — a valid level and an invalid one take different paths", async () => {
+    const valid = await repl(["/reasoning high", "/exit"]);
+    const invalid = await repl(["/reasoning nonsense", "/exit"]);
+    expect(valid).toContain("Reasoning effort: high");
+    expect(invalid).not.toContain("Reasoning effort: high");
+  });
+
+  test("T26 — the level is persisted into the configDir THIS session was given", async () => {
+    // The whole point of T26. `saveShellConfig` writes `auth.json` in the
+    // directory it is handed; handing it the wrong one is invisible in the
+    // source but obvious here.
+    const configDir = path.join(root, "cfg");
+    await repl(["/reasoning high", "/exit"], { configDir });
+
+    const persisted = JSON.parse(readFileSync(path.join(configDir, "auth.json"), "utf8")) as {
+      reasoningEffort?: string;
+    };
+    expect(persisted.reasoningEffort).toBe("high");
+  });
+
+  test("T26 BOUNDARY — and nothing is written there when no level is set", async () => {
+    // Without this, a `saveShellConfig` that wrote `high` unconditionally —
+    // or a test pointed at a directory something else populates — would pass
+    // the test above.
+    const configDir = path.join(root, "cfg-untouched");
+    await repl(["/reasoning", "/exit"], { configDir });
+
+    const file = path.join(configDir, "auth.json");
+    const persisted = existsSync(file)
+      ? (JSON.parse(readFileSync(file, "utf8")) as { reasoningEffort?: string })
+      : {};
+    expect(persisted.reasoningEffort).toBeUndefined();
   });
 });
 
