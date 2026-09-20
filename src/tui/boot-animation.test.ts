@@ -1,10 +1,16 @@
 // Flow 266 P1 — headless coverage for the boot animation, against the real
 // `@opentui/core` test renderer (mirrors `shell-chrome.test.ts`'s harness),
 // not a replica of its layout math.
-import { expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { DEFAULT_BOOT_DURATION_MS, mountEmptyTranscriptSplash, playBootAnimation, SPLASH_HINT } from "./boot-animation";
+import {
+  createSplashLifecycle,
+  DEFAULT_BOOT_DURATION_MS,
+  mountEmptyTranscriptSplash,
+  playBootAnimation,
+  SPLASH_HINT,
+} from "./boot-animation";
 import { onKeypress } from "./tui-shell";
 
 async function loadOpenTui(): Promise<
@@ -150,16 +156,57 @@ otuiTest("the empty-transcript wordmark stays until removed, centred, and removi
   setup.renderer.destroy();
 });
 
-test("the shell mounts the wordmark only for an empty session and removes it on the first operator line or a session with history", () => {
+// Flow 277 (shell god-file split, P2): `tui-shell.ts` used to hold a bare
+// `let removeSplash` toggled at three call sites, pinned only by the
+// source-text audit this replaces (see the git history of this file for the
+// old version) — a 1400-char magic window anchored on `runLine`'s
+// declaration, fragile to any code inserted between the anchor and the
+// `removeSplash?.()` call it was hunting for. The mount decision and the
+// "removed at most once" contract are now `createSplashLifecycle`, proven
+// directly below with a fake `mount` — no renderer, no source text.
+describe("createSplashLifecycle (flow 270 AC10; flow 277 P2)", () => {
+  function fakeMount(log: string[]): () => () => void {
+    return () => {
+      log.push("mount");
+      let removed = false;
+      return () => {
+        if (removed) return;
+        removed = true;
+        log.push("remove");
+      };
+    };
+  }
+
+  test("a genuinely empty session (history.length === 0) mounts immediately", () => {
+    const log: string[] = [];
+    createSplashLifecycle({ mount: fakeMount(log), initialHistoryLength: 0 });
+    expect(log).toEqual(["mount"]);
+  });
+
+  test("BOUNDARY — a session with existing history never mounts at all", () => {
+    // Distinguishes a real length check from a stub that always mounts.
+    const log: string[] = [];
+    const lifecycle = createSplashLifecycle({ mount: fakeMount(log), initialHistoryLength: 5 });
+    expect(log).toEqual([]);
+    lifecycle.removeIfShown(); // still a safe no-op — nothing was ever mounted
+    expect(log).toEqual([]);
+  });
+
+  test("removeIfShown tears down a mounted splash exactly once, even called twice", () => {
+    const log: string[] = [];
+    const lifecycle = createSplashLifecycle({ mount: fakeMount(log), initialHistoryLength: 0 });
+    lifecycle.removeIfShown();
+    lifecycle.removeIfShown();
+    expect(log).toEqual(["mount", "remove"]);
+  });
+});
+
+test("the shell wires createSplashLifecycle at startup, opened-with-history, and the first operator line", () => {
+  // Flow 277 (P2): anchored on the extracted symbol's name rather than the
+  // three call sites' surrounding statements, so reformatting any of them no
+  // longer breaks this — the mount/remove CONTRACT itself is proven above,
+  // against the real function, not by reading tui-shell.ts.
   const source = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  expect(source).toContain("if (history.length === 0) {\n      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);");
-  expect(source).toMatch(/if \(opened\.history\.length > 0\) \{\n\s+removeSplash\?\.\(\);/);
-  // Flow 274 reformatted `runLine`'s signature onto several lines (adding the
-  // "bus-message" origin), so a plain indexOf on the single-line signature
-  // no longer matches — anchor on just the declaration instead.
-  const runLineMatch = source.match(/const runLine = \(/);
-  const runLineStart = runLineMatch ? runLineMatch.index! : -1;
-  const operatorBlock = source.slice(runLineStart, runLineStart + 1400);
-  expect(operatorBlock).toContain("consecutiveAutoWakes = 0;");
-  expect(operatorBlock).toContain("removeSplash?.();");
+  expect(source).toContain("splash = createSplashLifecycle({");
+  expect((source.match(/splash\??\.removeIfShown\(\);/g) ?? []).length).toBeGreaterThanOrEqual(3);
 });

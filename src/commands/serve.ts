@@ -272,8 +272,18 @@ async function runServe(args: string[]): Promise<void> {
         resolve();
       });
     };
-    process.once("SIGINT", finish);
-    process.once("SIGTERM", finish);
+    // `on`, not `once` (matches `commands/mcp-servers.ts`'s own teardown
+    // handlers, and the ban `mcp-servers/invariants.test.ts` enforces
+    // repo-wide): `once` unregisters itself after the first signal, so a
+    // SECOND Ctrl-C mid-drain would fall through to Node's default SIGINT/
+    // SIGTERM disposition instead of this handler — killing the process
+    // before "stopped" ever prints, rather than the idempotent no-op
+    // `draining` already guards for. Found by widening that test's file scan
+    // from a hardcoded two-file list to every file under `src/commands/`
+    // (flow 277 P2b) — this file registered the exact pattern the test bans,
+    // undetected until the scan actually reached it.
+    process.on("SIGINT", finish);
+    process.on("SIGTERM", finish);
   });
 }
 

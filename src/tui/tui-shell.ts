@@ -67,7 +67,7 @@ import packageJson from "../../package.json" with { type: "json" };
 import { isFlowsCommand, openFlows } from "./flow-inspector";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { debugEvent } from "./debug-log";
-import { mountEmptyTranscriptSplash, playBootAnimation } from "./boot-animation";
+import { createSplashLifecycle, mountEmptyTranscriptSplash, playBootAnimation, type SplashLifecycle } from "./boot-animation";
 import {
   catchUpItems,
   loadInspectorCatchUp,
@@ -239,8 +239,8 @@ import type { VersionCheckResult } from "../lib/version-check";
 // Flow 273 (agent bus P2, T7): join/heartbeat/poll/leave all live in the
 // surface-independent client; this file only wires status/activity in and
 // renders what it hands back (specification §5.1, §5.2, §7.2).
-import { joinBus, type BusClient, type BusPeer } from "../bus/client";
-import { formatBusEventLine, makeBusErrorReporter } from "../bus/display";
+import { joinBus, type BusClient } from "../bus/client";
+import { makeBusErrorReporter } from "../bus/display";
 import { listPresence } from "../bus/presence";
 // Flow 274 (agent bus P3, T7; specification §5.3): delivery to the agent.
 // `createBusInbox` and its drain contract are T5's (`../bus/inbox.ts`); this
@@ -249,6 +249,7 @@ import { listPresence } from "../bus/presence";
 // pure `decideBusWake`), decides whether to start a turn for it.
 import { createBusInbox, type BusInbox } from "../bus/inbox";
 import {
+  BUS_WAKE_CAPPED_NOTICE,
   busInboxFullNotice,
   createBusDropNotifier,
   createBusWakeController,
@@ -263,6 +264,9 @@ import {
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
+// Flow 277 (P2): the join-adoption decision and onEvent/onPeers callbacks,
+// extracted so they're unit-testable without a renderer (see `./bus-join.ts`).
+import { buildBusJoinCallbacks, decideJoinAdoption } from "./bus-join";
 import { leaveBusThenRelease, performSlateExit } from "./shell-exit";
 import { openBus } from "./bus-panel";
 // Flow 275 (agent bus P4, T7; specification §4.3, §7.2): pause leases — held
@@ -351,6 +355,21 @@ export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   // that ever change.
   "bus_send",
 ]);
+
+/**
+ * Flow 173 F-003 (P2 conversion, flow 277): the side-worker tools filter's
+ * own predicate — `risk === "read"` AND not on {@link SIDE_WORKER_DENIED_TOOL_NAMES}
+ * — extracted from `spawnSideWorker`'s inline `base.tools.filter(...)` so the
+ * rule is a plain, unit-testable function instead of a source-text audit
+ * reading the filter's call site (`tui-shell.test.ts`'s flow 173 F-003
+ * block). Takes a narrow structural type — mirroring `InteractiveTool`'s
+ * `definition.risk`/`definition.name` (`../commands/agent.ts`,
+ * `../harness/tool/builtin/interactive-tools.ts`) — so this module stays free
+ * of importing those types just for this one check.
+ */
+export function isToolAvailableToSideWorker(tool: { definition: { risk?: string; name: string } }): boolean {
+  return tool.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(tool.definition.name);
+}
 
 /** Parse a GitHub remote URL into `owner/repo` (if possible). */
 function parseGitHubRemote(remote: string): string | undefined {
@@ -4425,11 +4444,14 @@ export async function launchTuiAgentShell(opts: {
     liveDeps = deps;
 
     /**
-     * Removes the empty-transcript wordmark (flow 270 AC10). Set once the
-     * startup session turns out to be empty; cleared by the first operator
-     * message, or by opening a session that already has messages.
+     * The empty-transcript wordmark's lifecycle (flow 270 AC10; flow 277 P2:
+     * `createSplashLifecycle`, `./boot-animation.ts`). Assigned once, right
+     * after the startup session's history length is known (below); every
+     * call to `applyOpened` above that point (during startup) is a safe
+     * no-op through the optional chain, exactly as the bare
+     * `removeSplash?.()` this replaced was before its own assignment.
      */
-    let removeSplash: (() => void) | undefined;
+    let splash: SplashLifecycle | undefined = undefined;
 
     const applyOpened = (
       opened: {
@@ -4441,8 +4463,7 @@ export async function launchTuiAgentShell(opts: {
       previewHistory?: boolean,
     ): void => {
       if (opened.history.length > 0) {
-        removeSplash?.();
-        removeSplash = undefined;
+        splash?.removeIfShown();
       }
       liveSession = opened.handle;
       history = previewHistory === true ? opened.history.slice(-SESSION_PREVIEW_MESSAGE_COUNT) : opened.history;
@@ -4639,13 +4660,13 @@ export async function launchTuiAgentShell(opts: {
       return true;
     }
     bindSlateToLiveSession();
-    if (history.length === 0) {
-      removeSplash = mountEmptyTranscriptSplash(otui, r, transcript);
-    }
+    splash = createSplashLifecycle({
+      mount: () => mountEmptyTranscriptSplash(otui, r, transcript),
+      initialHistoryLength: history.length,
+    });
     if (viewedReadOnly) {
       // The wordmark would sit under the read-only view it just rendered.
-      removeSplash?.();
-      removeSplash = undefined;
+      splash.removeIfShown();
     }
     void refreshWorkspaceSidebar(); // resumed session may already have a bound workspace
     void refreshReviewSidebar(); // project-wide, independent of this session's own workspace
@@ -4657,6 +4678,36 @@ export async function launchTuiAgentShell(opts: {
     // that, e.g. resolving the bus root).
     void (async () => {
       try {
+        // Flow 277 (P2): the onEvent/onPeers bodies used to be inline here,
+        // pinned by `tui-bus.test.ts` slicing this file's text into windows
+        // and comparing character offsets (see
+        // docs/requirements/keryx-shell-split/audits-tui-other.md, "flow 274
+        // T7 — TUI bus delivery wiring"). `buildBusJoinCallbacks`
+        // (`./bus-join.ts`) is that logic, unit-tested directly in
+        // `bus-join.test.ts` against fake deps — every field below is a
+        // function so the callbacks still read the CURRENT value of each
+        // mutable local (e.g. `busWakeController`, assigned only much later
+        // in this closure) exactly as the inline version did.
+        const { onEvent, onPeers } = buildBusJoinCallbacks({
+          isDestroyed: () => destroyed,
+          onSystemLine: (line) => io.onSystem?.(line),
+          pushToInbox: (event) => busInbox.push(event),
+          markDelivered: () => {
+            busPollDeliveredEvent = true;
+          },
+          setFleetPeers: (peers) => {
+            busFleetPeers = peers;
+          },
+          paintFleet,
+          onInboxSizeObserved: () => busDropNotifier.onInboxSizeObserved(busInbox.size),
+          paintHoldBanner,
+          onLeaseHoldPoll: () => leaseHoldController?.onPoll(),
+          onBusWakePoll: (delivered) => busWakeController?.onPoll(delivered),
+          getDelivered: () => busPollDeliveredEvent,
+          resetDelivered: () => {
+            busPollDeliveredEvent = false;
+          },
+        });
         const joined = await joinBus({
           cwd: sessionCwd,
           sessionId: liveSession.summary.id,
@@ -4675,58 +4726,19 @@ export async function launchTuiAgentShell(opts: {
             activity: lastMainAgentDetail ?? liveSession.summary.title,
           }),
           onError: makeBusErrorReporter((line) => io.onSystem?.(`${line}\n`)),
-          onEvent: (event) => {
-            if (destroyed) return; // review r1 F6: never paint after Ctrl+C
-            io.onSystem?.(`${formatBusEventLine(event)}\n`);
-            // Flow 274 (agent bus P3, T7; specification §4.2, §5.3): every
-            // event `onEvent` sees is already NOT `ack`/`override`/
-            // `lease-expired` (`BusClient`'s own `isRenderable` filter), so
-            // every one of them is a candidate for agent delivery. `body` is
-            // optional only on the TYPE (pre-flow-274 fixtures); the real
-            // poll path always sets it — `?? ""` just satisfies `BusInboxEvent`.
-            busInbox.push({ ...event, body: event.body ?? "" });
-            busPollDeliveredEvent = true; // review r1 F1: this poll delivered something
-          },
-          onPeers: (peers: BusPeer[]) => {
-            if (destroyed) return; // review r1 F6: never paint after Ctrl+C
-            busFleetPeers = peers.map((peer) => ({
-              name: peer.record.name,
-              state: peer.state,
-              status: peer.record.status,
-              activity: peer.record.activity,
-            }));
-            paintFleet();
-            // review r1 F10: the inbox may have drained to empty since the
-            // last overflow notice — let the NEXT overflow episode print its
-            // own notice.
-            busDropNotifier.onInboxSizeObserved(busInbox.size);
-            // Flow 275 (agent bus P4, T7; specification §5.2 step 5): leases
-            // are re-listed as part of THIS SAME poll (`BusClient.doPoll`
-            // refreshes `leaseView()` before calling `onPeers` — see
-            // `../bus/client.ts`), so repainting the banner and checking for
-            // a hold release here, right alongside the other once-per-poll
-            // bookkeeping, is always looking at this poll's fresh state.
-            paintHoldBanner();
-            leaseHoldController?.onPoll();
-            // Flow 274 T7 (specification §5.3): "on the poll, when busInbox
-            // receives a wake-eligible kind" — `onPeers` fires exactly once
-            // per poll, AFTER every event of that poll was already routed to
-            // `onEvent` above (`BusClient`'s `doPoll`), so this is the poll's
-            // natural "events settled" point. review r1 F1: tell the
-            // controller whether THIS poll actually delivered anything, then
-            // reset the flag for the next poll cycle.
-            busWakeController?.onPoll(busPollDeliveredEvent);
-            busPollDeliveredEvent = false;
-          },
+          onEvent,
+          onPeers,
         });
         if ("disabled" in joined) {
           io.onSystem?.(`bus: off (${joined.disabled})\n`);
           return;
         }
-        if (destroyed) {
-          // review r1 F6: Ctrl+C landed while this join was still in flight —
-          // leave immediately rather than adopting a client for a renderer
-          // that is already gone.
+        // review r1 F6: `decideJoinAdoption` (`./bus-join.ts`) is the pure
+        // decision — Ctrl+C landing while this join was still in flight must
+        // leave the resolved client immediately rather than adopt it for a
+        // renderer that is already gone. The `disabled` branch above already
+        // returned, so `disabled: false` here always reflects that.
+        if (decideJoinAdoption({ destroyed, disabled: false }) === "leave") {
           joined.leave();
           return;
         }
@@ -5830,10 +5842,8 @@ export async function launchTuiAgentShell(opts: {
             // is excluded by name (`SIDE_WORKER_DENIED_TOOL_NAMES`) even though it
             // is `risk: "read"` — see that list's own doc comment.
             // F-003: `risk === "read"` alone is not enough — see
-            // `SIDE_WORKER_DENIED_TOOL_NAMES`'s doc comment above.
-            const tools = base.tools.filter(
-              (t) => t.definition.risk === "read" && !SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name),
-            );
+            // `isToolAvailableToSideWorker`'s doc comment above.
+            const tools = base.tools.filter(isToolAvailableToSideWorker);
             const sideDeps: AgentDeps = {
               ...base,
               tools,
@@ -5933,8 +5943,7 @@ export async function launchTuiAgentShell(opts: {
         // A human is here: the auto-wake budget starts over.
         consecutiveAutoWakes = 0;
         // ...and the first thing they send replaces the wordmark (AC10).
-        removeSplash?.();
-        removeSplash = undefined;
+        splash?.removeIfShown();
       }
       const displayLine = summarizeSubmittedLine(line);
 
@@ -7035,9 +7044,7 @@ export async function launchTuiAgentShell(opts: {
       cap: () => resolveMaxAutoWake(),
       runWake: () => runLine("", "bus-message"),
       printCapped: () => {
-        io.onSystem?.(
-          "◇ a peer message arrived; automatic wakes are capped, so it will be delivered with your next message.\n",
-        );
+        io.onSystem?.(BUS_WAKE_CAPPED_NOTICE);
       },
       hasBusDeps: () => deps.busInbox !== undefined,
     });

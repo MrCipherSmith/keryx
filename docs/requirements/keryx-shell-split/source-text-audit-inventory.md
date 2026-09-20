@@ -16,7 +16,7 @@ four audit blocks to `commands/shell.test.ts` and its own
 `tui/tui-hold.test.ts` — see [audits-commands.md](audits-commands.md) and
 [audits-tui-other.md](audits-tui-other.md). 17 test files, 51 read sites.
 
-**P2 is converting these. Current: 13 test files, 42 read sites** — the
+**P2 is converting these. Current: 12 test files, 34 read sites** — the
 manifest at the bottom is the live count, checked by
 `src/shell-source-audits.test.ts`, and it is the progress signal. Converted so
 far: `/goal`, `/plan` and `/reasoning` (including T26's configDir threading)
@@ -266,7 +266,7 @@ where two `describe` blocks hold ~28 tests):
 
 | seam | shape | unlocks |
 |---|---|---|
-| `decideJoinAdoption({ destroyed, disabled })` | pure, mirrors `decideBusWake` | 4 tests: destroyed-join leaves, client resync, `busInbox`/`busAck` merged only on success, `selAtJoin` capture |
+| `decideJoinAdoption({ destroyed, disabled })` | pure, mirrors `decideBusWake` | 1 test: a destroyed join leaves rather than adopting. **This row originally claimed four.** The other three — client resync, `busInbox`/`busAck` merged only on success, `selAtJoin` capture — need the separate `buildBusJoinOptions`/`attemptBusJoin` seam listed below, not this one. Corrected in flow 278 after the extraction showed what it actually reached. |
 | `buildBusJoinCallbacks(deps)` → `{ onEvent, onPeers, onError }` | factory | 3 tests: bail-out when destroyed, inbox push, poll delivery reported to the wake controller |
 | `buildBusJoinOptions(deps)` + `attemptBusJoin(deps)` | pure + async | 2 tests: join passes `surface: "tui"`, a join error never escapes |
 | `buildBusWakeOptions(deps)` | pure over the closure's locals | 2 tests: the wake controller shares the idle test, and never treats a destroyed session as idle |
@@ -308,13 +308,12 @@ commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 10
+commands/shell.test.ts | commands/shell.ts | 5
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
-mcp-servers/invariants.test.ts | commands/shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 13
+tui/tui-shell.test.ts | tui/tui-shell.ts | 12
 ```

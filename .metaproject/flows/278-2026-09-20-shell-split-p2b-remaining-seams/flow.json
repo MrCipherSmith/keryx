@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "278",
+  "slug": "shell-split-p2b-remaining-seams",
+  "title": "Shell god-files P2b: the remaining seams — bus wiring, splash lifecycle, side-worker predicate, and the two audits that need deciding",
+  "status": "in-progress",
+  "createdAt": "2026-09-20T09:05:38.537Z",
+  "updatedAt": "2026-09-20T10:57:30.354Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:02aab2cb38c499ccf1442934b4b1882353f24d0cd9ff825a52d18083f79fe2da",
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-20T10:57:29.246Z",
+      "note": "invariants.test.ts now scans listSourceFiles over src/commands/ + src/mcp-servers/; non-vacuity check retained"
+    },
+    "AC2": {
+      "at": "2026-09-20T10:57:29.342Z",
+      "note": "serve.ts:275-276 process.once to process.on; finish() guards with 'if (draining) return' set before any work, verified by reading the closure"
+    },
+    "AC3": {
+      "at": "2026-09-20T10:57:29.428Z",
+      "note": "read every production diff myself: shell-approval.ts optional dir pass-through, shell.ts spread-not-undefined fix, tui-shell/bus-wake/boot-animation call-site rewires, new bus-join.ts"
+    },
+    "AC4": {
+      "at": "2026-09-20T10:57:29.514Z",
+      "note": "BUS_WAKE_CAPPED_NOTICE exported from bus-wake.ts; the audit is a constant comparison in bus-wake.test.ts"
+    },
+    "AC5": {
+      "at": "2026-09-20T10:57:29.597Z",
+      "note": "BusJoinCallbackDeps is all functions (isDestroyed, getDelivered, onLeaseHoldPoll, onBusWakePoll); verified by reading the interface — captured values would read undefined forever"
+    },
+    "AC6": {
+      "at": "2026-09-20T10:57:29.682Z",
+      "note": "createSplashLifecycle wired at all 3 tui-shell.ts call sites; isToolAvailableToSideWorker called directly by the last flow-173 F-003 test"
+    },
+    "AC7": {
+      "at": "2026-09-20T10:57:29.770Z",
+      "note": "allowShellPattern(pattern, dir?) already existed at shell-permissions.ts:328; the diff stat for src/lib is empty"
+    },
+    "AC8": {
+      "at": "2026-09-20T10:57:29.863Z",
+      "note": "manifest regenerated from the live scan: 12 files / 34 sites; shell-source-audits.test.ts green"
+    },
+    "AC9": {
+      "at": "2026-09-20T10:57:30.096Z",
+      "note": "decideJoinAdoption row corrected from 4 tests to 1, with why; the other 3 need the separate buildBusJoinOptions/attemptBusJoin seam"
+    },
+    "AC10": {
+      "at": "2026-09-20T10:57:30.354Z",
+      "note": "the 'seam each one waits on' section is kept; approval-wiring recorded as needing one owner across both god-files"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-20T09:05:38.537Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-20T10:57:03.252Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-20T10:57:03.338Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-20T10:57:28.849Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-20T10:57:28.931Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-20T10:57:29.016Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-20T10:57:29.116Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-20T10:57:29.246Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: invariants.test.ts now scans listSourceFiles over src/commands/ + src/mcp-servers/; non-vacuity check retained"
+    },
+    {
+      "at": "2026-09-20T10:57:29.342Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: serve.ts:275-276 process.once to process.on; finish() guards with 'if (draining) return' set before any work, verified by reading the closure"
+    },
+    {
+      "at": "2026-09-20T10:57:29.428Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: read every production diff myself: shell-approval.ts optional dir pass-through, shell.ts spread-not-undefined fix, tui-shell/bus-wake/boot-animation call-site rewires, new bus-join.ts"
+    },
+    {
+      "at": "2026-09-20T10:57:29.514Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: BUS_WAKE_CAPPED_NOTICE exported from bus-wake.ts; the audit is a constant comparison in bus-wake.test.ts"
+    },
+    {
+      "at": "2026-09-20T10:57:29.597Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: BusJoinCallbackDeps is all functions (isDestroyed, getDelivered, onLeaseHoldPoll, onBusWakePoll); verified by reading the interface — captured values would read undefined forever"
+    },
+    {
+      "at": "2026-09-20T10:57:29.682Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: createSplashLifecycle wired at all 3 tui-shell.ts call sites; isToolAvailableToSideWorker called directly by the last flow-173 F-003 test"
+    },
+    {
+      "at": "2026-09-20T10:57:29.770Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: allowShellPattern(pattern, dir?) already existed at shell-permissions.ts:328; the diff stat for src/lib is empty"
+    },
+    {
+      "at": "2026-09-20T10:57:29.863Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: manifest regenerated from the live scan: 12 files / 34 sites; shell-source-audits.test.ts green"
+    },
+    {
+      "at": "2026-09-20T10:57:30.096Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: decideJoinAdoption row corrected from 4 tests to 1, with why; the other 3 need the separate buildBusJoinOptions/attemptBusJoin seam"
+    },
+    {
+      "at": "2026-09-20T10:57:30.354Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: the 'seam each one waits on' section is kept; approval-wiring recorded as needing one owner across both god-files"
+    }
+  ]
+}

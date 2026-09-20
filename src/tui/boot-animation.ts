@@ -138,3 +138,37 @@ export function mountEmptyTranscriptSplash(otui: OpenTui, r: Renderer, transcrip
     transcript.remove(box);
   };
 }
+
+/**
+ * Flow 277 (shell god-file split, P2): `tui-shell.ts` used to hold a bare
+ * `let removeSplash: (() => void) | undefined` and toggle it at three call
+ * sites (the initial mount decision, `applyOpened`'s history-length teardown,
+ * and `runLine`'s first-operator-line teardown) — each pinned only by a
+ * source-text audit (`boot-animation.test.ts`) slicing `tui-shell.ts`'s text
+ * into windows, because none of those three call sites were reachable from a
+ * test without a renderer. This is that state, extracted so the mount
+ * decision and the "removed at most once" contract are unit-testable with a
+ * fake `mount`.
+ */
+export interface SplashLifecycleOptions {
+  /** `() => mountEmptyTranscriptSplash(otui, r, transcript)` — called at most once, only when the session opens empty. */
+  mount: () => () => void;
+  /** `history.length` at startup (flow 270 AC10): the splash only ever mounts for a genuinely empty session. */
+  initialHistoryLength: number;
+}
+
+export interface SplashLifecycle {
+  /** Remove the splash if it is currently shown. A safe no-op when it was never mounted (history.length > 0) or already removed. */
+  removeIfShown(): void;
+}
+
+/** Build a {@link SplashLifecycle} — see its own and {@link SplashLifecycleOptions}'s doc comments. */
+export function createSplashLifecycle(opts: SplashLifecycleOptions): SplashLifecycle {
+  let remove: (() => void) | undefined = opts.initialHistoryLength === 0 ? opts.mount() : undefined;
+  return {
+    removeIfShown() {
+      remove?.();
+      remove = undefined;
+    },
+  };
+}

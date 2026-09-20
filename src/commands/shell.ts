@@ -1554,11 +1554,13 @@ function formatUsage(usage: NormalizedUsage | undefined): string {
  * ~1,080 lines of `shellCommand` (see
  * `docs/requirements/keryx-shell-split/source-text-audit-inventory.md`).
  *
- * Two dependencies are still real, not injected, so a test that reaches them
- * touches the operator's machine: `loadShellPermissions()` /
- * `shellPermissionsFingerprint()` read the real permissions file with no
- * directory parameter, and the spinner consults TTY state. Nothing converted
- * so far needs either.
+ * One dependency is still real, not injected: the spinner consults TTY
+ * state. `loadShellPermissions()`/`shellPermissionsFingerprint()`/
+ * `rememberExactShellGrant()` now thread this function's own `configDir`
+ * through (flow 277 P2b) — `undefined` in production today, reproducing the
+ * exact pre-existing default-directory behaviour, but a test that passes a
+ * real `configDir` can observe what gets persisted without touching the
+ * operator's actual permissions file.
  */
 export async function runAgentRepl(
   lines: AsyncIterable<string>,
@@ -1657,8 +1659,13 @@ export async function runAgentRepl(
     }
   };
   const searchProviderController = createDefaultSearchProviderController();
-  const sessionShellAllow = new Set<string>(loadShellPermissions().allow);
-  let fingerprintAtStart = shellPermissionsFingerprint();
+  // flow 277 P2b: threaded through `configDir` (undefined in production
+  // today, reproducing the exact pre-existing default-directory behaviour —
+  // see `rememberExactShellGrant`'s own doc comment) so a hermetic test can
+  // prove what gets persisted without touching the operator's real
+  // `~/.local/share/keryx/permissions.json`.
+  const sessionShellAllow = new Set<string>(loadShellPermissions(configDir).allow);
+  let fingerprintAtStart = shellPermissionsFingerprint(configDir);
   let permissionMigrationShown = false;
   let permissionTamperShown = false;
 
@@ -1950,9 +1957,13 @@ export async function runAgentRepl(
       if (always && approved) {
         const stored = rememberExactShellGrant(evaled.command, sessionShellAllow, {
           publishLease: evaled.publishLease,
+          // Spread, not `dir: configDir`: under `exactOptionalPropertyTypes`
+          // an explicit `undefined` is not the same as an absent field, and
+          // absent is what reproduces the default-directory behaviour.
+          ...(configDir !== undefined ? { dir: configDir } : {}),
         });
         if (stored.length > 0) {
-          fingerprintAtStart = shellPermissionsFingerprint();
+          fingerprintAtStart = shellPermissionsFingerprint(configDir);
         }
         out(
           stored.length > 0
