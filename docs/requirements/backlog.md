@@ -167,6 +167,13 @@ Two of those assertions are wrong today, not merely fragile:
   Moving the registration at `shell.ts:3588`/`:3593` into a submodule does not
   fail it — it silently stops covering it.
 
+Two of them cost a review round each during the agent bus flows, which is what
+the cost looks like when nobody is trying to split anything: flow 274 broke
+`tui/boot-animation.test.ts` by wrapping a function signature onto several
+lines and `tui/tui-session-lease.test.ts` by adding one more `makeAgentDeps`
+call, and flow 275 had to widen two character windows and rename a parameter in
+four audits. Both breakages were caught only by CI.
+
 **Why not then:** found while scoping the split itself, and the fix is the
 split's own first step rather than a rider on it.
 
@@ -230,32 +237,6 @@ also owes an honest update to the bundled-eval layer status, which still
 describes layers two and three as not built.
 
 Depends on 257 and 258, both merged.
-
-## Shell layout
-
-### 11. Split the shell god-files, and convert their source-text audits first
-
-**Found:** 2026-09-19/20, while implementing the agent bus (flows 271–275).
-
-**Measurement.** `src/tui/tui-shell.ts` is 7069 lines and `src/commands/shell.ts` is 4076. Every bus phase had to reach into both, and P4 alone added roughly 240 lines to each.
-
-**Why it is not just size.** About 25 test files read these two files **as text**: they assert exact substrings, count call sites, and slice fixed character windows (for example "the first 500 characters after the `/exit` branch"). That makes the files hard to change for reasons that have nothing to do with behaviour:
-
-- Flow 274 broke `boot-animation.test.ts` by reformatting a function signature onto several lines, and `tui-session-lease.test.ts` by adding one more `makeAgentDeps` call. Both were caught only by CI, costing a round.
-- Flow 275 had to widen two character windows and rename a parameter in four audits.
-
-A split done before those audits are converted would simply relocate the brittleness.
-
-**Planned order (one PR each):**
-
-1. **Inventory.** List every test that reads `tui-shell.ts` or `shell.ts` as text (`keryx ctx rg -l "tui-shell.ts|shell.ts" src --glob "*.test.ts"`), and record for each what behaviour it is really protecting.
-2. **Convert audits to behavioural tests.** No code moves in this step. Where a behaviour cannot be observed, add a seam (an injected dependency or a small pure helper), as `bus-wake.ts` and `bus-command.ts` already do. The result is a green suite that does not depend on the file's layout.
-3. **Split `src/tui/tui-shell.ts`** into a `src/tui/shell/` folder: launch and wiring, input and queue, panels and chrome, lifecycle and exit, session switching. `tui-shell.ts` stays as the public entry point, so callers do not change.
-4. **Split `src/commands/shell.ts`** the same way: flag parsing, the readline chat loop, the agent loop, approval, and the bus and lease wiring.
-
-Steps 3 and 4 are mechanical once step 2 is done, and each should be reviewable as pure movement with no behaviour change.
-
-**Why not then:** it would have to land inside a feature flow, where review cannot separate moved code from new behaviour. It is queued after the agent bus P5.
 
 ## Command classification
 
