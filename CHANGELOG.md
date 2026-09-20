@@ -3,6 +3,37 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.130] — 2026-09-20
+DuckDuckGo's rate limiting is reported as a rate limit, waited out, and told
+apart from a broken network.
+
+### Fixed
+
+- **`web_search` says why DuckDuckGo failed.** The Lite endpoint's bot-check
+  page (HTTP 202, or a 200 carrying the anomaly markers) was reported as
+  `transport-failed`, which both operator surfaces printed as "connection
+  validation failed" — indistinguishable from a dead network, and it sent the
+  operator to retry the one failure that retrying cannot clear. It now carries
+  its own `rate-limited` reason, and the provider's own refusal reaches
+  `web_search`'s output instead of being collapsed into "search failed".
+- **Searches survive a shallow rate limit instead of failing instantly.** The
+  gap between searches goes from 500–2000 ms to 4000–8000 ms, and an anomaly is
+  retried once after 5 s and once after 20 s before the search gives up.
+  Measured on a rate-limited address: a lone request after a quiet period
+  returns results, so one bounded retry is the difference between "no results"
+  and ten results. When the ladder runs out, the message says what to do —
+  "Do not retry or rephrase; wait a few minutes or fetch a known URL directly".
+
+### Added
+
+- **Search requests look like a browser.** DuckDuckGo answers a browser and
+  bot-checks everything else, and keryx sent no User-Agent at all.
+  `public-search` requests now carry a rotating real User-Agent,
+  `Accept-Language`, the `Sec-Fetch-*` set and `accept-encoding: identity`
+  (the worker reads bodies as text and decodes nothing). `web_fetch` is
+  unchanged: a page the operator named by URL is not requested as if a browser
+  were loading it.
+
 ## [0.2.128] — 2026-09-20
 A leftover local SearXNG no longer blocks the DuckDuckGo default after upgrade
 (PR #629).

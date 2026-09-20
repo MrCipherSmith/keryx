@@ -292,7 +292,7 @@ where two `describe` blocks hold ~28 tests):
   operator's permission file — but the approval callback lives inside
   `runAgentRepl`, so proving it needs a fake permission store injected there.
 
-### Added by the DuckDuckGo rate-limit work (0.2.129)
+### Added by the DuckDuckGo rate-limit work (0.2.130)
 
 One audit landed here rather than being counted silently, because the rule
 above is that a new one has to be written down.
