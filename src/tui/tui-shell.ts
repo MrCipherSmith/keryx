@@ -47,7 +47,7 @@ import {
   runAgentTurn,
 } from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
-import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
+import { buildNextStepPrompt, NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
@@ -263,6 +263,7 @@ import {
 import { holderLivenessFrom, listActiveLeases } from "../bus/leases";
 import { cursorAtStart, readEvents } from "../bus/log";
 import { parseBusCommand } from "./bus-command";
+import { leaveBusThenRelease, performSlateExit } from "./shell-exit";
 import { openBus } from "./bus-panel";
 // Flow 275 (agent bus P4, T7; specification §4.3, §7.2): pause leases — held
 // turns, the status-bar banner, and `/bus pause|resume|override`.
@@ -308,8 +309,13 @@ const SESSION_PREVIEW_MESSAGE_COUNT = 200;
  * additionally excludes any tool named here — a small, explicit deny-list
  * (not a second risk tier) so a future read-risk-but-actually-mutating tool
  * has to be added here on purpose rather than silently inheriting
- * side-worker access via `risk === "read"` alone. `shell_job_output` stays
- * available — it is genuinely read-only in effect.
+ * side-worker access via `risk === "read"` alone.
+ *
+ * This paragraph used to end "`shell_job_output` stays available — it is
+ * genuinely read-only in effect." Flow 266 then added `shell_job_output` to
+ * the list below, for the reason stated there: its cursor is implicit shared
+ * state, so a side worker reading it consumes output the main session has not
+ * seen. The sentence contradicted the list six lines under it until flow 277.
  */
 export const SIDE_WORKER_DENIED_TOOL_NAMES: ReadonlySet<string> = new Set([
   "shell_job_kill",
@@ -3168,8 +3174,10 @@ export async function launchTuiAgentShell(opts: {
         // Flow 271/273 (AC7; review r1 F9): leave the bus BEFORE releasing the
         // session lease — specification §5.4's order — synchronously, before
         // anything that may block.
-        liveBus?.leave(); // idempotent, synchronous-safe
-        sessionLease.release();
+        leaveBusThenRelease({
+          leaveBus: () => liveBus?.leave(), // idempotent, synchronous-safe
+          releaseLease: () => sessionLease.release(),
+        });
         mountedChrome?.destroy(); // stops the live spinner if a turn is mid-flight
         setAskUserHost(undefined);
         setSubagentFleetListener(undefined);
@@ -5973,13 +5981,17 @@ export async function launchTuiAgentShell(opts: {
             foregroundOperation.cancel("shell exit");
             foregroundOperation.dispose();
             void (async () => {
-              await closeSlateSession(slateSession, mintTimestampAttemptId);
-              await deps.sweepBackgroundJobs?.();
-              jobs.removeAll();
-              liveBus?.leave(); // flow 273/271 (review r1 F9): leave the bus before releasing the lease
-              sessionLease.release(); // flow 271 (AC7): after the slate close wrote its last file
-              r.off("theme_mode", onThemeMode);
-              r.destroy();
+              await performSlateExit({
+                closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
+                sweepJobs: async () => {
+                  await deps.sweepBackgroundJobs?.();
+                },
+                purgeJobList: () => jobs.removeAll(),
+                leaveBus: () => liveBus?.leave(),
+                releaseLease: () => sessionLease.release(),
+                detachRenderer: () => r.off("theme_mode", onThemeMode),
+                destroyRenderer: () => r.destroy(),
+              });
             })();
             return;
           }
@@ -6200,12 +6212,17 @@ export async function launchTuiAgentShell(opts: {
         if (command.name === "/exit") {
           // SLATE-5 close trigger: shell exit (explicit command).
           void (async () => {
-            await closeSlateSession(slateSession, mintTimestampAttemptId);
-            await deps.sweepBackgroundJobs?.();
-            jobs.removeAll(); // F-002: purge the sidebar/store list too, not just the OS-level registry
-            liveBus?.leave(); sessionLease.release(); // flow 271/273
-            r.off("theme_mode", onThemeMode);
-            r.destroy();
+            await performSlateExit({
+              closeSlate: () => closeSlateSession(slateSession, mintTimestampAttemptId),
+              sweepJobs: async () => {
+                await deps.sweepBackgroundJobs?.();
+              },
+              purgeJobList: () => jobs.removeAll(),
+              leaveBus: () => liveBus?.leave(),
+              releaseLease: () => sessionLease.release(),
+              detachRenderer: () => r.off("theme_mode", onThemeMode),
+              destroyRenderer: () => r.destroy(),
+            });
           })();
           return;
         }
@@ -6864,17 +6881,18 @@ export async function launchTuiAgentShell(opts: {
       const suggestNextStep = async (): Promise<void> => {
         const { signal, isCurrent } = suggestionGate.start();
         try {
-          const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
-          const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
-          const tail = lastAssistant.slice(-3000);
+          // Flow 268 T18 (AC12): the advisor must never see reasoning text.
+          // `buildNextStepPrompt` reads `role` and `content` and nothing else,
+          // so that guarantee is now a property of a tested function rather
+          // than of this closure's current text (flow 277).
+          const prompt = buildNextStepPrompt(history);
           const result = await runModelTurn({
             // AC14: the CURRENT selection — `/connect`/`/model` may have
             // rebuilt `currentSel` since this turn started.
             provider: currentSel.provider,
             model: currentSel.model,
-            system:
-              "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .",
-            user: `User: ${lastUser.slice(-800)}\n\nAssistant reply (tail):\n${tail}`,
+            system: prompt.system,
+            user: prompt.user,
             maxOutputTokens: 40,
             requestId: `suggest-next-step-${Date.now()}`,
             signal,
@@ -7071,8 +7089,10 @@ export async function launchTuiAgentShell(opts: {
     // review r1 F9: leave the bus before releasing the lease (specification
     // §5.4's order) — idempotent either way, the exit paths above usually
     // did both already.
-    liveBus?.leave();
-    sessionLease.release();
+    leaveBusThenRelease({
+      leaveBus: () => liveBus?.leave(),
+      releaseLease: () => sessionLease.release(),
+    });
     await herdr.release(); // hand the pane back to herdr (no-op outside herdr)
     try {
       renderer?.destroy();

@@ -14,7 +14,35 @@ read sites. Rescanned at flow 275 (agent bus P4), against the
 `feat/agent-bus-p4-pause-leases` branch, after P4's T8 held-turn wiring added
 four audit blocks to `commands/shell.test.ts` and its own
 `tui/tui-hold.test.ts` — see [audits-commands.md](audits-commands.md) and
-[audits-tui-other.md](audits-tui-other.md). **17 test files, 51 read sites.**
+[audits-tui-other.md](audits-tui-other.md). 17 test files, 51 read sites.
+
+**P2 is converting these. Current: 13 test files, 42 read sites** — the
+manifest at the bottom is the live count, checked by
+`src/shell-source-audits.test.ts`, and it is the progress signal. Converted so
+far: `/goal`, `/plan` and `/reasoning` (including T26's configDir threading)
+now drive the real `runAgentRepl`; the flow-173 F-003 deny-list tests import
+the exported Set; and `theme-picker`, `subagent-inspector` and `session-info`
+have dropped to zero read sites because their structural audits now scan
+`src/tui/**` instead of one file, which is what lets them survive P3 rather
+than be broken by it.
+
+### What the count does and does not measure
+
+The manifest counts **files coupled to the two paths**, not assertions coupled
+to their text. Those are different, and the exit-sequence work (flow 277) is
+the case that shows it.
+
+Extracting `performSlateExit` / `leaveBusThenRelease`
+(`src/tui/shell-exit.ts`) moved six audits across three files off character
+offsets and multi-line sequences and onto a single symbol, and moved the
+property they stood for — the order the steps actually run in, and that each
+async step is awaited — into `shell-exit.test.ts`, where it runs against the
+real function. The count did not move at all: those files still open
+`tui-shell.ts`, they just ask it something far more stable.
+
+So read the count as "how much is still pinned to this file", and the detail
+files for whether what remains is a sequence, an offset comparison, or one
+symbol. A split breaks the first two; the third survives it.
 
 ## The detail
 
@@ -209,6 +237,61 @@ Recorded because they were believed during this flow and are wrong:
   regex against the wrong file. It is not: `expect(tui).toMatch(hostImport)`
   reads the `tui-shell.ts` source, which is correct. No bug there.
 
+## What P2 left, and the seam each one waits on
+
+Flow 277 converted what its seams reached and stopped there. This is the list
+the next flow starts from, so nobody has to re-read the files to rebuild it.
+
+### Done in flow 277
+
+| seam | where | unlocked |
+|---|---|---|
+| `export runAgentRepl` + `rich.write` | `src/commands/shell.ts` | `/goal`, `/plan`, `/reasoning`, configDir threading |
+| `leaveBusThenRelease`, `performSlateExit` | `src/tui/shell-exit.ts` | the §5.4 exit ordering, pinned in three separate files |
+| `buildNextStepPrompt` | `src/tui/next-step-suggestion.ts` | flow 268 AC12 (reasoning never reaches the advisor) |
+
+### Still needed
+
+The big one first, because most of the rest hangs off it.
+
+**An injection point for `launchTuiAgentShell`.** It is one ~4,700-line
+closure over roughly two dozen mutable locals, and nothing inside it is
+reachable from a test. Every per-command audit in `tui-shell.test.ts` — the
+`/goal`, `/plan`, `/reasoning`, `/think` and `/search-connect` wiring blocks —
+waits on this, as does the `boot-animation` splash lifecycle. This is a flow of
+its own, not a step in one.
+
+Named, self-contained seams (from the flow 277 sweep of `tui-bus.test.ts`,
+where two `describe` blocks hold ~28 tests):
+
+| seam | shape | unlocks |
+|---|---|---|
+| `decideJoinAdoption({ destroyed, disabled })` | pure, mirrors `decideBusWake` | 4 tests: destroyed-join leaves, client resync, `busInbox`/`busAck` merged only on success, `selAtJoin` capture |
+| `buildBusJoinCallbacks(deps)` → `{ onEvent, onPeers, onError }` | factory | 3 tests: bail-out when destroyed, inbox push, poll delivery reported to the wake controller |
+| `buildBusJoinOptions(deps)` + `attemptBusJoin(deps)` | pure + async | 2 tests: join passes `surface: "tui"`, a join error never escapes |
+| `buildBusWakeOptions(deps)` | pure over the closure's locals | 2 tests: the wake controller shares the idle test, and never treats a destroyed session as idle |
+| `applySessionOpen(opened, { liveBus })` | shared helper | 3 tests: `applyOpened`, `startNewSession` and `resumeSessionInteractive` all sync `presence.sessionId` |
+| `BUS_WAKE_CAPPED_NOTICE` exported constant | constant in `bus-wake.ts` | 1 test, outright — it stops reading `tui-shell.ts` at all |
+| `buildDestroyHandler({ setDestroyed, … })` | factory | 1 test: `onDestroy` sets the destroyed flag |
+| `onTurnSettled(next, deps)` | extracted | 1 test: turn settle triggers `onSettle` |
+| `createBusClientRef(getLiveBus)` | one-line factory | 1 test: the ref is a live getter, not a captured value |
+| `createSplashLifecycle` | `boot-animation.ts` | the splash mount/removal audit |
+| `isToolAvailableToSideWorker(tool)` | pure predicate | the fourth flow-173 F-003 test (the other three are converted) |
+
+### Two that need deciding, not just extracting
+
+- **`mcp-servers/invariants.test.ts:114`** bans `process.once` for teardown
+  handlers across a **hardcoded** file list naming `../commands/shell.ts`.
+  Moving the registration at `:3588`/`:3593` into a submodule does not fail it
+  — it silently stops covering it. Give it the directory-scan treatment the
+  other structural audits got (`listSourceFiles`), and it stops being a
+  hazard. **This one must land before P4 moves anything.**
+- **`approval-wiring.test.ts:45`** compares character offsets in *both*
+  files. The property is real — an MCP tool call must never reach
+  `rememberExactShellGrant` and write a model-supplied grant pattern to the
+  operator's permission file — but the approval callback lives inside
+  `runAgentRepl`, so proving it needs a fake permission store injected there.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -225,17 +308,13 @@ commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 14
+commands/shell.test.ts | commands/shell.ts | 10
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 mcp-servers/invariants.test.ts | commands/shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
-tui/next-step-suggestion.reasoning-guard.test.ts | tui/tui-shell.ts | 1
-tui/session-info.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
-tui/subagent-inspector.test.ts | tui/tui-shell.ts | 1
-tui/theme-picker.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
-tui/tui-shell.test.ts | tui/tui-shell.ts | 14
+tui/tui-shell.test.ts | tui/tui-shell.ts | 13
 ```

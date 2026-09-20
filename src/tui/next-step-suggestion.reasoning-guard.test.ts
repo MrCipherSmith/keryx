@@ -26,9 +26,7 @@
 //      function body.
 
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { sanitizeNextStepSuggestion } from "./next-step-suggestion";
+import { buildNextStepPrompt, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 
 const REASONING_MARKER = "REASONING-MARKER-268";
 
@@ -43,26 +41,68 @@ describe("flow 268 T18: next-step suggestion never surfaces reasoning text (AC12
     expect(sanitizeNextStepSuggestion(short)).toBe(short);
   });
 
-  test("source audit: suggestNextStep builds its prompt from history .content only, never .reasoning", () => {
-    const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
-    const start = source.indexOf("const suggestNextStep = async (): Promise<void> => {");
-    expect(start).toBeGreaterThan(-1);
-    // Bound the audit to the closure body, up to its own closing brace +
-    // trailing `};` (matches the next top-level statement,
-    // `const foregroundIo = ...`, which is the line right after in the
-    // source at the time this test was written).
-    const end = source.indexOf("const foregroundIo = createForegroundAgentIoFacade", start);
-    expect(end).toBeGreaterThan(start);
-    const body = source.slice(start, end);
+  // Flow 277 (P2): this was a source-text audit. It sliced `suggestNextStep`
+  // out of `tui-shell.ts` and asserted the body did not match /\.reasoning\b/.
+  //
+  // That could only ever say a string was absent from a region of a file. It
+  // could not say that reasoning cannot REACH the model — a caller that
+  // passed reasoning through under another field name, or a prompt built from
+  // the whole message object, would both have passed it.
+  //
+  // `buildNextStepPrompt` now reads `role` and `content` and nothing else, so
+  // the guarantee is a property of a function and can be exercised: hand it
+  // messages that carry reasoning and check the prompt for it.
+  test("AC12: reasoning carried on a history message never reaches the prompt", () => {
+    const prompt = buildNextStepPrompt([
+      { role: "user", content: "add a login flow" },
+      {
+        role: "assistant",
+        content: "Done.",
+        // A richer message than the type asks for — exactly what a future
+        // caller would pass if the history gained reasoning.
+        reasoning: `secret chain of thought ${REASONING_MARKER}`,
+      } as unknown as Parameters<typeof buildNextStepPrompt>[0][number],
+    ]);
+    expect(prompt.user).toContain("add a login flow");
+    expect(prompt.user).toContain("Done.");
+    expect(prompt.user).not.toContain(REASONING_MARKER);
+    expect(prompt.system).not.toContain(REASONING_MARKER);
+  });
 
-    // The two history reads that feed the model prompt.
-    expect(body).toContain("history].reverse().find((m) => m.role === \"user\")?.content");
-    expect(body).toContain("history].reverse().find((m) => m.role === \"assistant\")?.content");
+  test("BOUNDARY — the prompt really is built from the history it was given", () => {
+    // Without this, a `buildNextStepPrompt` that returned a constant string
+    // would satisfy the test above: it contains no marker either.
+    const a = buildNextStepPrompt([
+      { role: "user", content: "alpha request" },
+      { role: "assistant", content: "alpha reply" },
+    ]);
+    const b = buildNextStepPrompt([
+      { role: "user", content: "beta request" },
+      { role: "assistant", content: "beta reply" },
+    ]);
+    expect(a.user).toContain("alpha request");
+    expect(b.user).toContain("beta request");
+    expect(a.user).not.toEqual(b.user);
+  });
 
-    // The load-bearing negative: no reasoning field is ever read inside this
-    // closure — if a future edit starts pulling `.reasoning` into the prompt
-    // (e.g. to give the advisor "more context"), this fails loudly.
-    expect(body).not.toMatch(/\.reasoning\b/);
-    expect(body).not.toContain(REASONING_MARKER);
+  test("the LAST user and assistant messages are the ones sent, not the first", () => {
+    // The closure reversed the history to find them. That is behaviour, and
+    // it was never asserted — the audit only checked the `.reverse()` call
+    // was present in the text.
+    const prompt = buildNextStepPrompt([
+      { role: "user", content: "stale question" },
+      { role: "assistant", content: "stale answer" },
+      { role: "user", content: "current question" },
+      { role: "assistant", content: "current answer" },
+    ]);
+    expect(prompt.user).toContain("current question");
+    expect(prompt.user).toContain("current answer");
+    expect(prompt.user).not.toContain("stale question");
+    expect(prompt.user).not.toContain("stale answer");
+  });
+
+  test("an empty history produces a prompt rather than throwing", () => {
+    // `?? ""` in the original. A turn can settle with nothing to summarise.
+    expect(() => buildNextStepPrompt([])).not.toThrow();
   });
 });

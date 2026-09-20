@@ -22,6 +22,46 @@ export const NEXT_STEP_SUGGESTION_TIMEOUT_MS = 8000;
  * or containing `<`/`>` (never let raw model text near anything that could be
  * read as markup in a terminal-UI placeholder).
  */
+/** The slice of a history message this prompt is allowed to read. */
+export interface NextStepHistoryMessage {
+  role: string;
+  content: string;
+}
+
+/** How much of each side is sent — the tail, because the end of a turn is what a follow-up follows. */
+export const NEXT_STEP_USER_TAIL = 800;
+export const NEXT_STEP_ASSISTANT_TAIL = 3000;
+
+export const NEXT_STEP_SYSTEM_PROMPT =
+  "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .";
+
+/**
+ * Build the next-step advisor's prompt from the turn history.
+ *
+ * Flow 268 T18 (AC12): the advisor must never see reasoning text. That was
+ * previously guaranteed by a source-text audit asserting the closure in
+ * `tui-shell.ts` contained no `.reasoning` — which could only ever say that
+ * the string was absent from a region of a file, not that reasoning cannot
+ * reach the model. The guarantee lives here instead: this function reads
+ * `role` and `content` and nothing else, so a caller cannot leak a field by
+ * passing a richer message object.
+ *
+ * Extracted from `tui-shell.ts`'s `suggestNextStep` closure in flow 277.
+ */
+export function buildNextStepPrompt(history: readonly NextStepHistoryMessage[]): {
+  system: string;
+  user: string;
+} {
+  const lastOf = (role: string): string =>
+    [...history].reverse().find((m) => m.role === role)?.content ?? "";
+  const lastUser = lastOf("user");
+  const tail = lastOf("assistant").slice(-NEXT_STEP_ASSISTANT_TAIL);
+  return {
+    system: NEXT_STEP_SYSTEM_PROMPT,
+    user: `User: ${lastUser.slice(-NEXT_STEP_USER_TAIL)}\n\nAssistant reply (tail):\n${tail}`,
+  };
+}
+
 export function sanitizeNextStepSuggestion(rawText: string): string | undefined {
   const words = rawText
     .trim()

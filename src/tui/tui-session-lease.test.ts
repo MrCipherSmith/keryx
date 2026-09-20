@@ -442,29 +442,46 @@ describe("AC7 (TUI) — the lease is released on every exit path", () => {
     expect(holder.current).toBeUndefined();
   });
 
-  // Source-text audit, the style `tui-shell.test.ts` uses for exit paths: the
-  // TUI's `onDestroy` and `/exit` cannot run without a real terminal.
+  // Flow 277 (P2): these were four source-text audits, one per exit path, each
+  // looking for `sessionLease.release();` inside a window. They could see the
+  // call; they could not see that the bus is left FIRST (specification §5.4),
+  // which is the property that matters — releasing the lease first opens a
+  // window where another shell adopts the session while this one is still
+  // advertised on the bus as its holder.
+  //
+  // That ordering is now `leaveBusThenRelease` in `src/tui/shell-exit.ts` and
+  // is asserted against the real function in `shell-exit.test.ts`. What stays
+  // here is the wiring: every exit path goes through it, and there are still
+  // exactly four of them.
   const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
-
-  test("onDestroy (Ctrl+C) releases the lease synchronously", () => {
+  test("onDestroy (Ctrl+C) leaves the bus and releases the lease synchronously, before the deferred sweep", () => {
     const start = source.indexOf("onDestroy: () => {");
     expect(start).toBeGreaterThanOrEqual(0);
-    const body = source.slice(start, source.indexOf("void (async () => {", start));
-    expect(body).toContain("sessionLease.release();");
+    // Everything before the async IIFE is the synchronous part: `onDestroy`
+    // is typed `() => void` and @opentui/core never awaits it.
+    const synchronousPart = source.slice(start, source.indexOf("void (async () => {", start));
+    expect(synchronousPart).toContain("leaveBusThenRelease({");
   });
-
-  test("/exit and the busy-menu exit release the lease before destroying the renderer", () => {
+  test("/exit and the busy-menu exit both go through the shared exit sequence", () => {
     for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
       const start = source.indexOf(marker);
-      expect(start).toBeGreaterThanOrEqual(0);
-      const block = source.slice(start, source.indexOf("r.destroy();", start));
-      expect(block).toContain("sessionLease.release();");
+      expect({ marker, found: start >= 0 }).toEqual({ marker, found: true });
+      expect(source.slice(start, start + 900)).toContain("await performSlateExit({");
     }
   });
-
-  test("the outer finally releases the lease", () => {
+  test("the outer finally leaves the bus and releases the lease", () => {
     const tail = source.slice(source.lastIndexOf("} finally {"));
-    expect(tail).toContain("sessionLease.release();");
+    expect(tail).toContain("leaveBusThenRelease({");
+  });
+  test("BOUNDARY — four exit paths, and no fifth that releases the lease on its own", () => {
+    // The audits this replaced could each only see their own window, so a new
+    // exit path that released the lease without leaving the bus would have
+    // been invisible to all of them. Counting the two helpers makes a fifth
+    // path fail here instead.
+    expect(source.split("leaveBusThenRelease({").length - 1).toBe(2);
+    expect(source.split("await performSlateExit({").length - 1).toBe(2);
+    // And nothing calls the raw release outside those helpers' step objects.
+    expect(source).not.toContain("sessionLease.release();");
   });
 
   test("no startup open bypasses the lease", () => {

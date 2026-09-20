@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createShellChrome, type ShellChrome, type ShellChromeOptions } from "./shell-chrome";
 import { commandsForMode } from "../commands/agent-commands";
@@ -113,10 +113,48 @@ test("Esc/close without Enter does not apply the highlighted theme", () => {
   expect(applied).toEqual([]);
 });
 
-test("tui-shell routes /theme through the picker and not a composer Select", () => {
-  const tui = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-  expect(tui).toMatch(/openThemePicker/);
-  expect(tui).not.toMatch(/title:\s*"Theme"/);
+/**
+ * Structural-guard helper (docs/requirements/keryx-shell-split): concatenates
+ * every non-test `.ts` source file under this module directory, recursively,
+ * so a module-boundary check keeps covering the code once `tui-shell.ts` is
+ * split into `src/tui/shell/*.ts` instead of breaking outright because the
+ * call site it used to read moved to a different file. `exclude` names files
+ * whose own identifier DEFINITIONS would make a presence check vacuous (e.g.
+ * the file that defines the symbol a sibling call site is expected to use).
+ */
+function readTuiModuleSources(exclude: readonly string[] = []): string {
+  const dir = import.meta.dir;
+  const excluded = new Set(exclude);
+  const collect = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) return collect(full);
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) return [];
+      if (excluded.has(entry.name)) return [];
+      return [full];
+    });
+  return collect(dir)
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+}
+
+// Structural (module-boundary), not behavioural — kept as a text audit on
+// purpose (see docs/requirements/keryx-shell-split/audits-tui-other.md's
+// Notes). Two independent rules live here:
+//  (1) SOMEWHERE in the module — not necessarily tui-shell.ts once it's
+//      split — `/theme` must dispatch to the dedicated `openThemePicker`,
+//      never fall back to a generic composer `Select` titled "Theme".
+//      Scanning the whole module directory (excluding theme-picker.ts, which
+//      DEFINES `openThemePicker` and would make the presence check vacuous)
+//      survives that split.
+//  (2) `theme-picker.ts` itself must stay a `modal-host` consumer and never
+//      import `@opentui/core` directly. This file is small and is not part
+//      of the god-file split, so reading it directly (not via the module
+//      scan) is fine.
+test("structural: /theme routes through the picker (module-wide) and theme-picker.ts never forks its own overlay", () => {
+  const moduleSource = readTuiModuleSources(["theme-picker.ts"]);
+  expect(moduleSource).toMatch(/openThemePicker/);
+  expect(moduleSource).not.toMatch(/title:\s*"Theme"/);
   const local = readFileSync(join(import.meta.dir, "theme-picker.ts"), "utf8");
   expect(local).toMatch(/from\s*["']\.\/modal-host["']/);
   expect(local).not.toMatch(/\bimport\b[^()]*?\bfrom\s*['"]@opentui\/core['"]/s);

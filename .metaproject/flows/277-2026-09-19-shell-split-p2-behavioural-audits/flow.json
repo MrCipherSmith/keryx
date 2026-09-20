@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "277",
+  "slug": "shell-split-p2-behavioural-audits",
+  "title": "Shell god-files P2: convert the source-text audits into behavioural tests, with seams where behaviour is not observable",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T23:52:23.299Z",
+  "updatedAt": "2026-09-20T08:58:50.726Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:65f42a487c741f3ff9e5a721fc00da26a500eb7e485d2e0f62dc9024b2b08ad9",
+  "acConfirmed": {
+    "AC2": {
+      "at": "2026-09-20T08:58:49.896Z",
+      "note": "runAgentRepl exported at shell.ts; rich.write defaults to process.stdout; driven by src/commands/shell-agent-repl.test.ts (21 tests)"
+    },
+    "AC3": {
+      "at": "2026-09-20T08:58:49.982Z",
+      "note": "/goal: two args, two different parseGoalArgs refusals; /plan: state read back on a later line; /reasoning T26: auth.json read back out of the given configDir"
+    },
+    "AC4": {
+      "at": "2026-09-20T08:58:50.071Z",
+      "note": "repl() defaults configDir to path.join(root,'config'); reason stated in the harness doc comment; ~/.local/share/keryx/auth.json verified: reasoningEffort undefined, keys unchanged"
+    },
+    "AC5": {
+      "at": "2026-09-20T08:58:50.165Z",
+      "note": "src/tui/shell-exit.ts; 4 call sites (2x performSlateExit, 2x leaveBusThenRelease); shell-exit.test.ts pins order, the await-per-step property and throw-stops-the-sequence"
+    },
+    "AC6": {
+      "at": "2026-09-20T08:58:50.255Z",
+      "note": "buildNextStepPrompt reads role/content only; the test passes messages carrying reasoning and asserts the marker is absent from prompt.user and prompt.system"
+    },
+    "AC7": {
+      "at": "2026-09-20T08:58:50.382Z",
+      "note": "wrap-up composer ban, SIGINT/SIGTERM precondition, BackgroundJobStoreHint and runGoalCommand import checks, theme-picker/subagent-inspector/session-info modal-host checks — all scan src/tui/** via listSourceFiles"
+    },
+    "AC8": {
+      "at": "2026-09-20T08:58:50.533Z",
+      "note": "manifest regenerated from the live scan: 13 files / 42 sites, from 17 / 51; src/shell-source-audits.test.ts 3 pass"
+    },
+    "AC9": {
+      "at": "2026-09-20T08:58:50.640Z",
+      "note": "inventory section 'What the count does and does not measure' names the exit-sequence case: six audits moved off offsets onto one symbol with no change in the count"
+    },
+    "AC10": {
+      "at": "2026-09-20T08:58:50.726Z",
+      "note": "inventory section 'What P2 left, and the seam each one waits on': 11 named seams in a table, plus the two that need deciding (invariants hardcoded list, approval-wiring offsets)"
+    }
+  },
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed",
+      "dispositionReason": "self-review done; PR prepared"
+    },
+    {
+      "id": "T5",
+      "title": "Record remaining seams in the inventory",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T23:52:23.299Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-20T00:02:20.945Z",
+      "event": "blocked",
+      "detail": "Stopped by the user on 2026-09-19: the shell god-file split is halted. Two seams landed on the branch (export runAgentRepl, rich.write) plus nine behavioural tests; nothing pushed, no PR, no audits removed."
+    },
+    {
+      "at": "2026-09-20T00:56:37.262Z",
+      "event": "unblocked",
+      "detail": "resumed as initializing"
+    },
+    {
+      "at": "2026-09-20T08:58:10.458Z",
+      "event": "task-added",
+      "detail": "T5: Record remaining seams in the inventory"
+    },
+    {
+      "at": "2026-09-20T08:58:10.570Z",
+      "event": "frozen",
+      "detail": "11 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-20T08:58:10.680Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-20T08:58:21.473Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-20T08:58:21.566Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-20T08:58:21.653Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-20T08:58:21.738Z",
+      "event": "task-done",
+      "detail": "T5: Record remaining seams in the inventory"
+    },
+    {
+      "at": "2026-09-20T08:58:21.824Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-20T08:58:49.896Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: runAgentRepl exported at shell.ts; rich.write defaults to process.stdout; driven by src/commands/shell-agent-repl.test.ts (21 tests)"
+    },
+    {
+      "at": "2026-09-20T08:58:49.982Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: /goal: two args, two different parseGoalArgs refusals; /plan: state read back on a later line; /reasoning T26: auth.json read back out of the given configDir"
+    },
+    {
+      "at": "2026-09-20T08:58:50.071Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: repl() defaults configDir to path.join(root,'config'); reason stated in the harness doc comment; ~/.local/share/keryx/auth.json verified: reasoningEffort undefined, keys unchanged"
+    },
+    {
+      "at": "2026-09-20T08:58:50.165Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: src/tui/shell-exit.ts; 4 call sites (2x performSlateExit, 2x leaveBusThenRelease); shell-exit.test.ts pins order, the await-per-step property and throw-stops-the-sequence"
+    },
+    {
+      "at": "2026-09-20T08:58:50.255Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: buildNextStepPrompt reads role/content only; the test passes messages carrying reasoning and asserts the marker is absent from prompt.user and prompt.system"
+    },
+    {
+      "at": "2026-09-20T08:58:50.382Z",
+      "event": "ac-confirmed",
+      "detail": "AC7: wrap-up composer ban, SIGINT/SIGTERM precondition, BackgroundJobStoreHint and runGoalCommand import checks, theme-picker/subagent-inspector/session-info modal-host checks — all scan src/tui/** via listSourceFiles"
+    },
+    {
+      "at": "2026-09-20T08:58:50.533Z",
+      "event": "ac-confirmed",
+      "detail": "AC8: manifest regenerated from the live scan: 13 files / 42 sites, from 17 / 51; src/shell-source-audits.test.ts 3 pass"
+    },
+    {
+      "at": "2026-09-20T08:58:50.640Z",
+      "event": "ac-confirmed",
+      "detail": "AC9: inventory section 'What the count does and does not measure' names the exit-sequence case: six audits moved off offsets onto one symbol with no change in the count"
+    },
+    {
+      "at": "2026-09-20T08:58:50.726Z",
+      "event": "ac-confirmed",
+      "detail": "AC10: inventory section 'What P2 left, and the seam each one waits on': 11 named seams in a table, plus the two that need deciding (invariants hardcoded list, approval-wiring offsets)"
+    }
+  ]
+}

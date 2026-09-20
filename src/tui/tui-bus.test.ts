@@ -4,7 +4,7 @@
 // wiring points a renderer-less test cannot reach (join, leave, setSession) —
 // same style `tui-session-lease.test.ts` uses for `sessionLease.release()`.
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { classifyBusyDispatch } from "./busy-dispatch";
 import { formatBusLeasesLines, formatBusLogLines, formatBusPeersLines } from "./bus-panel";
@@ -29,6 +29,32 @@ function renderedEvent(overrides: Partial<RenderedBusEvent> = {}): RenderedBusEv
 }
 
 const source = readFileSync(path.join(import.meta.dir, "tui-shell.ts"), "utf8");
+
+/**
+ * Structural-guard helper (docs/requirements/keryx-shell-split): concatenates
+ * every non-test `.ts` source file under this module directory, recursively,
+ * so a module-boundary check keeps covering the code once `tui-shell.ts` is
+ * split into `src/tui/shell/*.ts` instead of breaking outright because the
+ * call site it used to read moved to a different file. `exclude` names files
+ * whose own identifier DEFINITIONS would make a presence check vacuous (e.g.
+ * `bus-wake.ts` itself, which defines `createBusWakeController` without
+ * importing it).
+ */
+function readTuiModuleSources(exclude: readonly string[] = []): string {
+  const dir = import.meta.dir;
+  const excluded = new Set(exclude);
+  const collect = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((entry) => {
+      const full = path.join(d, entry.name);
+      if (entry.isDirectory()) return collect(full);
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) return [];
+      if (excluded.has(entry.name)) return [];
+      return [full];
+    });
+  return collect(dir)
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+}
 
 function presence(overrides: Partial<PresenceRecord> = {}): PresenceRecord {
   return {
@@ -427,36 +453,37 @@ describe("/bus modal tab content builders (specification §7.2)", () => {
 
 describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot reach these)", () => {
   // review r1 F9: specification §5.4 orders a clean exit as "leave the bus,
-  // THEN release the session lease" — every real exit path is checked for
-  // that exact order below, not just that both calls are present.
-  test("onDestroy (Ctrl+C) leaves the bus BEFORE releasing the session lease", () => {
-    const start = source.indexOf("onDestroy: () => {");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const body = source.slice(start, source.indexOf("void (async () => {", start));
-    const leaveIdx = body.indexOf("liveBus?.leave();");
-    const releaseIdx = body.indexOf("sessionLease.release();");
-    expect(leaveIdx).toBeGreaterThanOrEqual(0);
-    expect(releaseIdx).toBeGreaterThan(leaveIdx);
+  // THEN release the session lease".
+  //
+  // Flow 277 (P2): that order was pinned here, and again in
+  // `tui-session-lease.test.ts`, and again in `tui-shell.test.ts` — three
+  // files each slicing a window out of `tui-shell.ts` and comparing character
+  // offsets, once per exit path. Four hand-maintained copies of the sequence
+  // is what made three copies of the audit necessary.
+  //
+  // The order now lives in `leaveBusThenRelease` (`src/tui/shell-exit.ts`) and
+  // is asserted against the real function in `shell-exit.test.ts`, including
+  // the case production actually passes (`() => liveBus?.leave()` on a session
+  // that never joined). What stays here is this file's own concern: that the
+  // BUS is left on every exit path rather than left advertising a dead shell.
+  test("every exit path leaves the bus through the shared helper, so none can release the lease first", () => {
+    const sites = source.split("leaveBusThenRelease({").length - 1;
+    const sequences = source.split("await performSlateExit({").length - 1;
+    // onDestroy + the outer finally go through the bare ordering helper; the
+    // two command-driven exits go through the full sequence, which calls it.
+    expect({ sites, sequences }).toEqual({ sites: 2, sequences: 2 });
   });
-
-  test("/exit and the busy-menu exit leave the bus before releasing the session lease, before destroying the renderer", () => {
-    for (const marker of ['if (command.name === "/exit") {', 'case "exit": {']) {
-      const start = source.indexOf(marker);
-      expect(start).toBeGreaterThanOrEqual(0);
-      const block = source.slice(start, source.indexOf("r.destroy();", start));
-      const leaveIdx = block.indexOf("liveBus?.leave();");
-      const releaseIdx = block.indexOf("sessionLease.release();");
-      expect(leaveIdx).toBeGreaterThanOrEqual(0);
-      expect(releaseIdx).toBeGreaterThan(leaveIdx);
-    }
+  test("and each of those four sites hands it this session's own bus and lease", () => {
+    // The helper cannot protect anything if a call site passes something
+    // else, and that is not visible from the count above.
+    expect(source.split("leaveBus: () => liveBus?.leave()").length - 1).toBe(4);
+    expect(source.split("releaseLease: () => sessionLease.release()").length - 1).toBe(4);
   });
-
-  test("the outer finally leaves the bus before releasing the session lease", () => {
-    const tail = source.slice(source.lastIndexOf("} finally {"));
-    const leaveIdx = tail.indexOf("liveBus?.leave();");
-    const releaseIdx = tail.indexOf("sessionLease.release();");
-    expect(leaveIdx).toBeGreaterThanOrEqual(0);
-    expect(releaseIdx).toBeGreaterThan(leaveIdx);
+  test("BOUNDARY — no exit path still leaves the bus or releases the lease on its own", () => {
+    // The whole point of routing all four through one helper: a fifth path,
+    // or a regression in one of the four, shows up as a bare call again.
+    expect(source).not.toContain("liveBus?.leave();");
+    expect(source).not.toContain("sessionLease.release();");
   });
 
   test("applyOpened (startup picker, fork/view/cancel, /resume) updates presence.sessionId, caught (review r1 F10)", () => {
@@ -548,8 +575,23 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
 
   // review r1 F4: `/bus reply <ref>` goes through the client's own
   // `resolveRef`/`reply` (`../bus/client`) instead of a local id→name map.
+  //
+  // The absence half is structural (no file in the module reimplements the
+  // old, buggy "recently seen senders" map) and is scanned module-wide so it
+  // keeps working wherever the `/bus reply` dispatch ends up after
+  // tui-shell.ts is split — a plain `!source.includes(...)` on a single file
+  // would silently stop covering the code the moment that code moves.
+  //
+  // The dispatch-block check (that a parsed `reply` actually calls
+  // `client.reply(...)`) still needs a seam — SEAM REQUEST: extract a
+  // `dispatchBusCommand(parsed: ParsedBusCommand, deps): Promise<...>`
+  // (parallel to `parseBusCommand` in `./bus-command.ts`) so a headless test
+  // can call it directly with a fake `client` and assert `.reply(id, text)`
+  // was invoked — see docs/requirements/keryx-shell-split/audits-tui-other.md.
+  // Left anchored on `tui-shell.ts` alone (Priority 3: report, do not force)
+  // until that seam lands.
   test("/bus reply goes through client.reply, no local recentBusSenders map", () => {
-    expect(source).not.toContain("recentBusSenders");
+    expect(readTuiModuleSources()).not.toContain("recentBusSenders");
     const replyIdx = source.indexOf('if (parsed.kind === "reply") {');
     expect(replyIdx).toBeGreaterThanOrEqual(0);
     const block = source.slice(replyIdx, source.indexOf("return;", replyIdx));
@@ -611,12 +653,29 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     expect(peersBody).toContain("busDropNotifier.onInboxSizeObserved(busInbox.size);");
   });
 
-  test("createBusWakeController is imported and used to build the bus-wake controller (review r1 F11)", () => {
-    const importBlock = source.slice(source.indexOf("import {\n  busInboxFullNotice,"), source.indexOf('} from "./bus-wake";') + 20);
-    expect(importBlock).toContain("createBusWakeController,");
-    expect(importBlock).toContain("type BusDropNotifier,");
-    expect(importBlock).toContain("type BusWakeController,");
-    expect(source).toContain("busWakeController = createBusWakeController({");
+  // Structural (module-boundary), not behavioural — see audits-tui-other.md's
+  // Notes: TypeScript already guarantees SOME `createBusWakeController` is in
+  // scope wherever it's called; what this test adds over the compiler is
+  // proving it's the REAL export from `./bus-wake`, not a locally-redefined,
+  // same-named function — genuinely hard to fully replace with behaviour, so
+  // it stays textual. Two fixes over the old version: (1) the import-name
+  // check now matches the names inside `import { ... } from "./bus-wake"`
+  // via a capture group instead of an exact multi-line literal, so
+  // reordering/reformatting the named imports (or a comment landing between
+  // two of them, as one already does at tui-shell.ts:255-257) no longer
+  // breaks it; (2) both checks scan the whole module directory (excluding
+  // `bus-wake.ts` itself, which defines the symbols) rather than reading
+  // `tui-shell.ts` alone, so the guard survives the call site moving to
+  // `src/tui/shell/*.ts`.
+  test("createBusWakeController is imported (not a locally-redefined same-named function) and used to build the bus-wake controller (review r1 F11)", () => {
+    const moduleSource = readTuiModuleSources(["bus-wake.ts"]);
+    const importMatch = /import\s*\{([^}]*)\}\s*from\s*["']\.\/bus-wake["']/.exec(moduleSource);
+    expect(importMatch).not.toBeNull();
+    const importedNames = importMatch?.[1] ?? "";
+    expect(importedNames).toMatch(/\bcreateBusWakeController\b/);
+    expect(importedNames).toMatch(/\btype\s+BusDropNotifier\b/);
+    expect(importedNames).toMatch(/\btype\s+BusWakeController\b/);
+    expect(moduleSource).toMatch(/=\s*createBusWakeController\(\{/);
   });
 
   test("the bus-wake controller is built from the SAME idle test, inbox, consecutiveAutoWakes/resolveMaxAutoWake, and runLine as the task-notification wake", () => {

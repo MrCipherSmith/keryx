@@ -1,7 +1,7 @@
 // Flow 155 — session-info inspector (AC3–AC8). Pure snapshot + text dump +
 // command tokens. TUI chrome is asserted only as an openModal call shape.
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { MODAL_PANEL_INNER_WIDTH, formatModalFooter } from "./modal-host";
 import {
@@ -189,15 +189,59 @@ test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", (
   expect(formatModalFooter(SESSION_INFO_FOOTER).length).toBeLessThanOrEqual(MODAL_PANEL_INNER_WIDTH);
 });
 
+/**
+ * Structural-guard helper (docs/requirements/keryx-shell-split): concatenates
+ * every non-test `.ts` source file under this module directory, recursively,
+ * so a module-boundary check keeps covering the code once `tui-shell.ts` is
+ * split into `src/tui/shell/*.ts` instead of breaking outright because the
+ * call site it used to read moved to a different file. `exclude` names files
+ * whose own identifier DEFINITIONS would make a presence check vacuous (e.g.
+ * the file that defines the symbol a sibling call site is expected to use),
+ * or a SEPARATE surface that must be checked independently (see below).
+ */
+function readTuiModuleSources(exclude: readonly string[] = []): string {
+  const dir = import.meta.dir;
+  const excluded = new Set(exclude);
+  const collect = (d: string): string[] =>
+    readdirSync(d, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(d, entry.name);
+      if (entry.isDirectory()) return collect(full);
+      if (!entry.name.endsWith(".ts") || entry.name.endsWith(".test.ts")) return [];
+      if (excluded.has(entry.name)) return [];
+      return [full];
+    });
+  return collect(dir)
+    .map((file) => readFileSync(file, "utf8"))
+    .join("\n");
+}
+
+// Structural (module-boundary), not behavioural — kept as a text audit on
+// purpose (see audits-tui-other.md's Notes: session-info.ts is small and
+// stable, unlike the 6853-line tui-shell.ts).
+//
+// This test used to check `` `${tui}\n${chat}` `` as ONE concatenated blob
+// for `/openSessionInfo/`. That combined check cannot tell "both surfaces
+// wire it" from "only one does" — a real coverage gap (flagged in
+// audits-tui-other.md's "Corrections" notes), not a deliberate design
+// choice: both `tui-shell.ts` (:4970) and `chat-shell.ts` (:547) currently
+// call `openSessionInfo` independently, in their own `/status` handlers, so
+// splitting this into two per-file assertions costs nothing today and would
+// have caught a regression that dropped only one of the two wire-ups. The
+// tui-shell.ts side is scanned across the whole module directory (excluding
+// session-info.ts, which DEFINES `openSessionInfo` and would make the
+// presence check vacuous, and chat-shell.ts, kept as its own independent
+// assertion) so it survives tui-shell.ts being split; chat-shell.ts itself
+// (683 lines) is not part of that split, so it is read directly.
 test("AC2: TUI call sites import openModal from the host and do not fork overlayBox", () => {
   const hostImport = /openModal[\s\S]*from\s*["']\.\/modal-host["']|from\s*["']\.\/modal-host["'][\s\S]*openModal/;
-  const tui = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
+  const tuiModuleSource = readTuiModuleSources(["session-info.ts", "chat-shell.ts"]);
   const chat = readFileSync(join(import.meta.dir, "chat-shell.ts"), "utf8");
   const local = readFileSync(join(import.meta.dir, "session-info.ts"), "utf8");
   expect(local).toMatch(hostImport);
-  expect(`${tui}\n${chat}`).toMatch(/openSessionInfo/);
+  expect(tuiModuleSource).toMatch(/openSessionInfo/);
+  expect(chat).toMatch(/openSessionInfo/);
   expect(local).not.toMatch(/overlayBox/);
-  expect(tui).not.toMatch(/overlayBox\([^)]*session-info/);
+  expect(tuiModuleSource).not.toMatch(/overlayBox\([^)]*session-info/);
 });
 
 test("Context tab is always present; Workspaces and Flow only when linked", () => {
