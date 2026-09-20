@@ -9,3 +9,7 @@
 - 2026-09-20T11:35:20.947Z - task-added: T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)
 - 2026-09-20T11:35:21.023Z - task-added: T9: Verification: CI on the PR head green
 - 2026-09-20T11:35:26.437Z - task-attempt: T5: started (attempt 1) — 279-T5 end-to-end evidence, two worktrees (sonnet)
+- 2026-09-20T11:59:06.591Z - task-done: T5: Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)
+- 2026-09-20T12:00:04.085Z - task-attempt: T6: started (attempt 1) — wiki page (sonnet)
+- 2026-09-20T12:00:04.272Z - task-attempt: T7: started (attempt 1) — cli-reference (haiku)
+- 2026-09-20T12:00:04.391Z - task-attempt: T8: started (attempt 1) — status docs (haiku)

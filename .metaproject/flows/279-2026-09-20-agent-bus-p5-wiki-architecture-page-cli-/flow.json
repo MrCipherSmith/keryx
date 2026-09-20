@@ -9,7 +9,7 @@
   "title": "Agent bus P5: wiki architecture page, cli-reference, and end-to-end evidence of both motivating scenarios",
   "status": "in-progress",
   "createdAt": "2026-09-20T11:34:13.508Z",
-  "updatedAt": "2026-09-20T11:35:26.437Z",
+  "updatedAt": "2026-09-20T12:00:04.391Z",
   "source": {
     "type": "description",
     "ref": null
@@ -85,7 +85,7 @@
       "id": "T5",
       "title": "Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)",
       "kind": "test",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -99,7 +99,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
@@ -108,8 +109,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.084Z",
+            "outcome": "started",
+            "detail": "wiki page (sonnet)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -122,8 +129,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.271Z",
+            "outcome": "started",
+            "detail": "cli-reference (haiku)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -136,8 +149,14 @@
       "status": "todo",
       "dependsOn": [],
       "attempts": {
-        "count": 0,
-        "log": []
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-20T12:00:04.391Z",
+            "outcome": "started",
+            "detail": "status docs (haiku)"
+          }
+        ]
       },
       "acRefs": [],
       "evidenceRefs": [],
@@ -201,6 +220,26 @@
       "at": "2026-09-20T11:35:26.437Z",
       "event": "task-attempt",
       "detail": "T5: started (attempt 1) — 279-T5 end-to-end evidence, two worktrees (sonnet)"
+    },
+    {
+      "at": "2026-09-20T11:59:06.591Z",
+      "event": "task-done",
+      "detail": "T5: Evidence: both PRD scenarios end to end on a real clone with two worktrees (sonnet)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.085Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — wiki page (sonnet)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.272Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — cli-reference (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:00:04.391Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — status docs (haiku)"
     }
   ]
 }
