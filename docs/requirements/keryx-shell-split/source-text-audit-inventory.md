@@ -292,6 +292,25 @@ where two `describe` blocks hold ~28 tests):
   operator's permission file — but the approval callback lives inside
   `runAgentRepl`, so proving it needs a fake permission store injected there.
 
+### Added by the DuckDuckGo rate-limit work (0.2.129)
+
+One audit landed here rather than being counted silently, because the rule
+above is that a new one has to be written down.
+
+`harness/search/connection-message.test.ts` reads both god-files to count how
+many call sites route a failed search through `describeConnectionFailure`: the
+`/search-provider` wizard and the args-given branch in `tui-shell.ts`, and the
+agent REPL in `commands/shell.ts`. The behaviour it protects is that a provider
+rate limit is never reported as a generic "connection validation failed" on any
+operator surface — the failure mode that sent an operator to retry the one
+thing retrying cannot clear.
+
+The `tui-shell.ts` half is ALSO covered behaviourally: `tui-shell.test.ts`
+drives the real wizard and asserts the rate-limited frame, so that half can go
+when the `launchTuiAgentShell` seam this document already names lands. The
+`commands/shell.ts` half cannot — the REPL's `/search-provider` output has no
+injection point, which is the same missing seam.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -309,6 +328,7 @@ commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
 commands/shell.test.ts | commands/shell.ts | 5
+harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
