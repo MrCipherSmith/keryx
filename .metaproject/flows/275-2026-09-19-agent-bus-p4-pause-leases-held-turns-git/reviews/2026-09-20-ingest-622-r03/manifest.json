@@ -1,20 +1,20 @@
 {
   "schemaVersion": 1,
-  "reviewId": "2026-09-20-ingest-622-r02",
+  "reviewId": "2026-09-20-ingest-622-r03",
   "mode": "ingest",
   "status": "closed",
   "target": {
     "kind": "pr",
     "ref": "622",
-    "head": "13659445a326aa39d2de19b3d87ac9fe1accd827"
+    "head": "bb8e24bb8be1fc172ea51a331d7b8d477d87b9a5"
   },
   "artifacts": {
-    "scope": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/scope.md",
-    "coverage": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/coverage.md",
-    "report": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/report.md",
-    "findings": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/findings.json",
-    "learning": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/learning.md",
-    "decisions": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r02/decisions.md"
+    "scope": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/scope.md",
+    "coverage": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/coverage.md",
+    "report": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/report.md",
+    "findings": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/findings.json",
+    "learning": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/learning.md",
+    "decisions": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git/reviews/2026-09-20-ingest-622-r03/decisions.md"
   },
   "coverage": [
     {
@@ -53,8 +53,8 @@
       }
     ]
   },
-  "createdAt": "2026-09-20T00:17:59.287Z",
-  "updatedAt": "2026-09-20T00:18:27.035Z",
+  "createdAt": "2026-09-20T00:55:30.959Z",
+  "updatedAt": "2026-09-20T00:55:38.100Z",
   "flow": {
     "id": "275",
     "path": ".metaproject/flows/275-2026-09-19-agent-bus-p4-pause-leases-held-turns-git"

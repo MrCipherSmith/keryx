@@ -7,17 +7,57 @@
   "id": "275",
   "slug": "agent-bus-p4-pause-leases-held-turns-git",
   "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-19T21:39:31.218Z",
-  "updatedAt": "2026-09-19T23:48:27.914Z",
+  "updatedAt": "2026-09-20T00:58:30.846Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:f0af47bf4e9d8d418c9d6d6c529524f0bb11157f301b5c17963f5c4f867f18c7",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-20T00:58:02.677Z"
+    },
+    "AC2": {
+      "at": "2026-09-20T00:58:02.767Z"
+    },
+    "AC3": {
+      "at": "2026-09-20T00:58:02.853Z"
+    },
+    "AC4": {
+      "at": "2026-09-20T00:58:02.940Z"
+    },
+    "AC5": {
+      "at": "2026-09-20T00:58:03.042Z"
+    },
+    "AC6": {
+      "at": "2026-09-20T00:58:03.137Z"
+    },
+    "AC7": {
+      "at": "2026-09-20T00:58:03.226Z"
+    },
+    "AC8": {
+      "at": "2026-09-20T00:58:03.315Z"
+    },
+    "AC9": {
+      "at": "2026-09-20T00:58:03.406Z"
+    },
+    "AC10": {
+      "at": "2026-09-20T00:58:03.502Z"
+    },
+    "AC11": {
+      "at": "2026-09-20T00:58:03.599Z"
+    },
+    "AC12": {
+      "at": "2026-09-20T00:58:03.686Z"
+    },
+    "AC13": {
+      "at": "2026-09-20T00:58:03.773Z"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/622"
   },
   "baseBranch": "main",
   "tasks": [
@@ -76,7 +116,7 @@
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -90,7 +130,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T5",
@@ -403,6 +444,104 @@
       "at": "2026-09-19T23:48:27.914Z",
       "event": "task-attempt",
       "detail": "T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)"
+    },
+    {
+      "at": "2026-09-20T00:58:02.593Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-20T00:58:02.677Z",
+      "event": "ac-confirmed",
+      "detail": "AC1"
+    },
+    {
+      "at": "2026-09-20T00:58:02.767Z",
+      "event": "ac-confirmed",
+      "detail": "AC2"
+    },
+    {
+      "at": "2026-09-20T00:58:02.853Z",
+      "event": "ac-confirmed",
+      "detail": "AC3"
+    },
+    {
+      "at": "2026-09-20T00:58:02.940Z",
+      "event": "ac-confirmed",
+      "detail": "AC4"
+    },
+    {
+      "at": "2026-09-20T00:58:03.043Z",
+      "event": "ac-confirmed",
+      "detail": "AC5"
+    },
+    {
+      "at": "2026-09-20T00:58:03.137Z",
+      "event": "ac-confirmed",
+      "detail": "AC6"
+    },
+    {
+      "at": "2026-09-20T00:58:03.226Z",
+      "event": "ac-confirmed",
+      "detail": "AC7"
+    },
+    {
+      "at": "2026-09-20T00:58:03.315Z",
+      "event": "ac-confirmed",
+      "detail": "AC8"
+    },
+    {
+      "at": "2026-09-20T00:58:03.406Z",
+      "event": "ac-confirmed",
+      "detail": "AC9"
+    },
+    {
+      "at": "2026-09-20T00:58:03.502Z",
+      "event": "ac-confirmed",
+      "detail": "AC10"
+    },
+    {
+      "at": "2026-09-20T00:58:03.599Z",
+      "event": "ac-confirmed",
+      "detail": "AC11"
+    },
+    {
+      "at": "2026-09-20T00:58:03.686Z",
+      "event": "ac-confirmed",
+      "detail": "AC12"
+    },
+    {
+      "at": "2026-09-20T00:58:03.773Z",
+      "event": "ac-confirmed",
+      "detail": "AC13"
+    },
+    {
+      "at": "2026-09-20T00:58:06.330Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/622 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-20T00:58:06.434Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-20T00:58:13.823Z",
+      "event": "completion-failed",
+      "detail": "review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-20-ingest-622#F-005 (minor, round 2026-09-20-ingest-622): no disposition recorded | 2026-09-20-ingest-622#F-006 (minor, round 2026-09-20-ingest-622): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes."
+    },
+    {
+      "at": "2026-09-20T00:58:23.413Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/622 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-20T00:58:23.513Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-20T00:58:30.846Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
   ]
 }
