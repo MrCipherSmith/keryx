@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadSearchConfig } from "../../lib/search-config";
+import { loadSearchConfig, searchConfigPath } from "../../lib/search-config";
 import { duckduckgoLiteUrl, resetDuckDuckGoRateLimitForTests } from "./duckduckgo";
 import {
   createSearchProviderRegistry,
@@ -135,6 +135,7 @@ describe("search provider registry", () => {
     expect(transport.requests[0]).toMatchObject({ providerId: "searxng", capability: "local-search", url: "http://localhost:9090/search?q=keryx%20sandbox&format=json" });
     expect(result).toEqual({
       query: "keryx sandbox",
+      providerId: "searxng",
       results: [{
         title: "Local result",
         canonicalUrl: "https://example.test/local",
@@ -186,6 +187,27 @@ describe("search provider registry", () => {
       const searched = await controller.search("after-select");
       expect(searched.ok).toBe(true);
       if (searched.ok) expect(searched.value.results[0]?.providerId).toBe("searxng");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("uses DuckDuckGo when a leftover searxng selection is in the on-disk config", async () => {
+    resetDuckDuckGoRateLimitForTests();
+    const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-stale-searxng-"));
+    try {
+      writeFileSync(searchConfigPath(dir), `${JSON.stringify({
+        activeProviderId: "searxng",
+        providers: { searxng: { fields: { baseUrl: "http://localhost", port: "8080" }, status: "connected", lastTestedAt: "2026-08-22T23:50:00.000Z" } },
+      })}\n`);
+      const transport = new FakeTransport();
+      const controller = new SearchProviderController(createSearchProviderRegistry(transport), dir);
+      expect(controller.active()?.id).toBe("duckduckgo");
+      const result = await controller.search("TypeScript 7 release");
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.value.providerId).toBe("duckduckgo");
+      expect(transport.requests[0]?.providerId).toBe("duckduckgo");
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

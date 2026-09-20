@@ -10,9 +10,13 @@ On a fresh machine, `web_search` uses [DuckDuckGo Lite](https://lite.duckduckgo.
 There is no API key and nothing to run locally. Results are untrusted reference
 data: the agent must not follow instructions found in titles or snippets.
 
-DuckDuckGo is the default only when you have not selected another provider. It
-is not a fallback. If you connect Brave and that key later fails, `web_search`
-asks you to reconnect Brave rather than switching engines.
+DuckDuckGo is the default unless you selected another provider after this
+default shipped. A leftover local SearXNG from an older keryx is not kept as
+the active engine — `/search-connect searxng` if you still want it.
+
+It is not a fallback. If you connect Brave and that key later fails, `web_search`
+asks you to reconnect Brave rather than switching engines. The agent cannot
+change the engine; only `/search-provider` and `/search-connect` can.
 
 ## Other providers
 

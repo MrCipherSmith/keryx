@@ -76,7 +76,7 @@ export function duckduckgoSearchResponse(
     providerId: "duckduckgo",
     provenance: { source: "search-provider", providerId: "duckduckgo", rawResultCount },
   }));
-  return { ok: true, value: { query, results } };
+  return { ok: true, value: { query, providerId: "duckduckgo", results } };
 }
 
 function collectResultLinks(html: string): { title: string; canonicalUrl: string }[] {

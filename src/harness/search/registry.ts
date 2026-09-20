@@ -70,6 +70,7 @@ function toNormalized(providerId: SearchProviderId, raw: unknown, mapping: { tit
 function normalize(providerId: SearchProviderId, query: string, rawResults: unknown[], mapping: { title: string; url: string; snippet: string; date?: string }): SearchResponse {
   return {
     query,
+    providerId,
     results: rawResults
       .map((result) => toNormalized(providerId, result, mapping, rawResults.length))
       .filter((result): result is NormalizedSearchResult => result !== undefined)
@@ -213,7 +214,7 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
     },
     async search(_fields, query, signal) {
       const key = credential(id, resolveCredential, injection, name);
-      if (!key) return { query, results: [] };
+      if (!key) return { query, providerId: id, results: [] };
       const response = await transport.request({ ...remoteRequest(id, endpoint, query, key), ...(signal ? { signal } : {}) });
       const parsed = parseResponse(response);
       const results = id === "brave" && parsed && typeof parsed === "object" ? resultsFrom((parsed as { web?: unknown }).web) : resultsFrom(parsed);

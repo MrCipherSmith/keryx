@@ -44,7 +44,8 @@ test("read_file is described as paging by start_line, never as unable to", () =>
 test("web_search is described as DuckDuckGo by default, never as a missing-provider setup loop", () => {
   const text = buildAgentSystemInstruction(undefined, { toolNames: PLAIN_REPO_ROSTER });
   expect(text).toContain("DuckDuckGo by default");
-  expect(text).toContain("Never switch providers yourself");
+  expect(text).toContain("You cannot switch providers");
+  expect(text).toContain("/search-connect duckduckgo");
   expect(text).not.toContain("when an active connected search provider is configured");
 });
 

@@ -196,7 +196,7 @@ const BRAVE: SearchProviderDescriptor = {
   documentationUrl: "https://api.search.brave.com/app/documentation",
   capabilities: { localLoopback: false, supportsPublicationDate: false },
   testConnection: async () => ({ ok: true }),
-  search: async () => ({ query: "", results: [] }),
+  search: async () => ({ query: "", providerId: "brave", results: [] }),
 };
 
 function fakeController(): { controller: SearchProviderController; calls: string[] } {
