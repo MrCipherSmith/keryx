@@ -3570,8 +3570,12 @@ describe("flow 268 T8/AC14 — next-step suggestion abort/cancel/sanitize wiring
     const showIndex = nextStepSource.indexOf("chrome.showSuggestion(", start);
     const guardBlock = nextStepSource.slice(start, showIndex);
     expect(guardBlock).toContain("sanitizeNextStepSuggestion(result.text)");
-    expect(nextStepSource).toContain(
-      'import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";',
+    // Flow 277: this used to pin the ENTIRE import statement, character for
+    // character. Adding `buildNextStepPrompt` to the same import broke it —
+    // an assertion about where the sanitizer comes from, failed by a symbol
+    // it does not mention. Match the binding, not the line.
+    expect(nextStepSource).toMatch(
+      /import \{[^}]*\bsanitizeNextStepSuggestion\b[^}]*\} from "\.\/next-step-suggestion";/,
     );
   });
 

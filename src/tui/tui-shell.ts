@@ -47,7 +47,7 @@ import {
   runAgentTurn,
 } from "../commands/agent";
 import { runModelTurn } from "../harness/provider/single-turn";
-import { NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
+import { buildNextStepPrompt, NextStepSuggestionGate, sanitizeNextStepSuggestion } from "./next-step-suggestion";
 import { buildApprovalContext } from "../commands/agent-approval-context";
 import {
   closeSlateSession,
@@ -6881,17 +6881,18 @@ export async function launchTuiAgentShell(opts: {
       const suggestNextStep = async (): Promise<void> => {
         const { signal, isCurrent } = suggestionGate.start();
         try {
-          const lastUser = [...history].reverse().find((m) => m.role === "user")?.content ?? "";
-          const lastAssistant = [...history].reverse().find((m) => m.role === "assistant")?.content ?? "";
-          const tail = lastAssistant.slice(-3000);
+          // Flow 268 T18 (AC12): the advisor must never see reasoning text.
+          // `buildNextStepPrompt` reads `role` and `content` and nothing else,
+          // so that guarantee is now a property of a tested function rather
+          // than of this closure's current text (flow 277).
+          const prompt = buildNextStepPrompt(history);
           const result = await runModelTurn({
             // AC14: the CURRENT selection — `/connect`/`/model` may have
             // rebuilt `currentSel` since this turn started.
             provider: currentSel.provider,
             model: currentSel.model,
-            system:
-              "You are the next-step advisor of a coding assistant terminal. Based on the user's last request and the assistant's final reply, propose ONE short follow-up the user could do next: imperative, no quotes, no markdown, at most 80 characters. If nothing useful exists, reply with exactly one dot: .",
-            user: `User: ${lastUser.slice(-800)}\n\nAssistant reply (tail):\n${tail}`,
+            system: prompt.system,
+            user: prompt.user,
             maxOutputTokens: 40,
             requestId: `suggest-next-step-${Date.now()}`,
             signal,
