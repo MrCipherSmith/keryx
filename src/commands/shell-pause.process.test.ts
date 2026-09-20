@@ -59,6 +59,8 @@ const SHELL_ARGS = ["shell", "--provider", "deepseek", "--model", "unused", "--n
 const WAIT_MS = 15_000;
 /** Fast poll so a pause/resume/override propagates to the other shell quickly. */
 const POLL_ENV = { KERYX_BUS_POLL_MS: "250" };
+/** One {@link nudgeUntil} Enter per poll interval: a fresh drain attempt each time the lease view can have moved. */
+const NUDGE_MS = Number(POLL_ENV.KERYX_BUS_POLL_MS);
 /**
  * D-09's 15 s presence window, shortened so a SIGKILLed holder's lease can be
  * classified inactive without a real wait — gated exactly like
@@ -183,6 +185,48 @@ async function waitFor<T>(
   }
 }
 
+/**
+ * Bare-Enter nudges, one per poll interval, until `ready` holds — the drain
+ * equivalent of {@link waitFor}, and bounded the same way.
+ *
+ * readline has no idle wake of its own (`shell.ts`'s own comment on
+ * `heldQueue`): a queued line runs only when the REPL comes back around to
+ * the top of its loop and calls `drainHeldQueue()` again, and a bare Enter is
+ * what makes it do that. The empty line takes its OWN early-continue branch
+ * (`shell.ts`: `if (line.trim().length === 0)`), so a nudge starts no turn of
+ * its own and costs nothing but a reprinted prompt when the queue is not
+ * drainable yet.
+ *
+ * ONE Enter is not enough, which is the whole reason this helper exists.
+ * Printing a release and acting on it are two different moments in the same
+ * poll tick: `client.ts`'s `doPoll` renders every addressed event through
+ * `onEvent` (that is the `resume:` line this file waits on), THEN advances
+ * the cursor, THEN awaits `listPresence`, and only THEN awaits
+ * `leaseViewInstance.refresh()` — so for two more filesystem round-trips
+ * after B prints the release, B's own `isHeld()` still answers true. A single
+ * Enter landing in that window drains nothing, and because nothing else ever
+ * wakes readline, the queued line would then never run AT ALL. That is a
+ * hang, not a slow pass: the one-shot nudge this replaces failed as a 15 s
+ * `waitFor` timeout (never an assertion), about one run in three when the
+ * whole terminal leg was competing for the CPU. Retrying the nudge is what
+ * makes the drain independent of where that refresh lands — waiting longer
+ * before a single Enter would not, since the window is not bounded by
+ * anything this test can observe.
+ */
+async function nudgeUntil(shell: Shell, what: string, ready: () => boolean): Promise<void> {
+  const deadline = Date.now() + WAIT_MS;
+  for (;;) {
+    if (ready()) return;
+    await writeLine(shell, "");
+    const nextNudge = Date.now() + NUDGE_MS;
+    do {
+      await Bun.sleep(25);
+      if (ready()) return;
+    } while (Date.now() < nextNudge);
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}\n${shell.output()}`);
+  }
+}
+
 function kill(shell: Shell, signal: NodeJS.Signals | number = "SIGKILL"): void {
   try {
     process.kill(shell.pid, signal);
@@ -272,16 +316,11 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
       /⇄ \[#\d+\] @alpha resume:/.test(b.output()) ? true : undefined,
     );
 
-    // readline has no idle wake of its own (`shell.ts`'s own comment on
-    // `heldQueue`): the drain happens "at the next prompt or poll" — nudge
-    // with a bare Enter, which loops back to the top of the REPL (the empty
-    // line takes its OWN early-continue branch, so it starts no turn of its
-    // own) and lets `drainHeldQueue()` run again.
+    // The drain happens "at the next prompt or poll" — nudged until it does,
+    // because B printing the release does not yet mean B's own `isHeld()`
+    // has seen it (see `nudgeUntil`).
     const beforeRunLen = b.output().length;
-    await writeLine(b, "");
-    await waitFor(`the held line runs\n${b.output()}`, () =>
-      TURN_STARTED.test(b.output().slice(beforeRunLen)) ? true : undefined,
-    );
+    await nudgeUntil(b, "the held line to run", () => TURN_STARTED.test(b.output().slice(beforeRunLen)));
   }, 45_000);
 
   test("override: B's own `/bus override` releases only B while A's lease stays active for other targets", async () => {
@@ -387,11 +426,16 @@ describe.skipIf(process.platform === "win32")("readline pause leases across proc
     expect(expired).toHaveLength(1);
     expect(await listLeases(root)).toHaveLength(0);
 
-    // B is no longer held: the same "next prompt" nudge drains its queue.
+    // B is no longer held: the same "next prompt" nudge drains its queue —
+    // retried, and here for a second reason on top of the one `nudgeUntil`
+    // documents. Everything above about this lease was observed from OTHER
+    // processes (`bus list --json`, `bus prune`, the store and the log
+    // directly); B learns the holder is gone only from its own next poll, so
+    // when the first nudge goes out B may not have polled since the kill at
+    // all.
     const beforeRunLen = b.output().length;
-    await writeLine(b, "");
-    await waitFor(`the queued line runs once the holder is gone\n${b.output()}`, () =>
-      TURN_STARTED.test(b.output().slice(beforeRunLen)) ? true : undefined,
+    await nudgeUntil(b, "the queued line to run once the holder is gone", () =>
+      TURN_STARTED.test(b.output().slice(beforeRunLen)),
     );
   }, 45_000);
 
