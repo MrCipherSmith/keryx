@@ -21,8 +21,27 @@ import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { classTableProblems } from "./class-table";
+import { listSourceFiles } from "../lib/import-policy";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Flow 277 (shell god-file split, P2b): every non-test production file under
+ * `src/mcp-servers/` AND `src/commands/`, recursively — not a hardcoded
+ * two-entry list naming `commands/mcp-servers.ts` and `commands/shell.ts` by
+ * path. The signal-handler registration this describe polices used to live at
+ * a fixed line in `commands/shell.ts`; once the god-file split moves it into
+ * a submodule under `src/commands/**`, a hardcoded list stops seeing it —
+ * silently, since `expect(offenders).toEqual([])` reads "nothing found" the
+ * same whether nothing is wrong or nothing was looked at. `listSourceFiles`
+ * (`../lib/import-policy`, already used this way by several `src/tui/**`
+ * audits) re-derives the file list from the tree on every run, so wherever
+ * the registration moves TO, as long as it is still under one of these two
+ * directories, it stays in scope.
+ */
+function signalHandlerScanFiles(): string[] {
+  return [...listSourceFiles(HERE), ...listSourceFiles(path.join(HERE, "..", "commands"))];
+}
 
 function productionFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true })
@@ -116,26 +135,28 @@ describe("every signal handler survives the signal arriving twice", () => {
     // disposition and killed the parent mid-teardown, orphaning the child.
     // Two seconds of apparent silence is exactly when someone presses it
     // again. `shell.ts` already used `on` for the same scenario.
+    //
+    // Flow 277 P2b: scanned as a DIRECTORY (`signalHandlerScanFiles`), not a
+    // hardcoded two-file list — see that helper's doc comment for why the old
+    // hardcoded form was dangerous rather than merely fragile: it did not
+    // fail when the registration moved, it stopped looking.
     const offenders: string[] = [];
-    for (const file of [
-      ...productionFiles(HERE),
-      path.join(HERE, "..", "commands", "mcp-servers.ts"),
-      path.join(HERE, "..", "commands", "shell.ts"),
-    ]) {
+    for (const file of signalHandlerScanFiles()) {
       const body = code(readFileSync(file, "utf8"), true);
-      if (/process\s*\.\s*once\s*\(\s*["']SIG/.test(body)) offenders.push(path.basename(file));
+      if (/process\s*\.\s*once\s*\(\s*["']SIG/.test(body)) offenders.push(path.relative(path.join(HERE, ".."), file));
     }
     expect(offenders).toEqual([]);
   });
 
   test("the handlers that exist are registered with process.on", () => {
-    // Non-vacuity for the rule above: a module with no handlers would pass
-    // it, and the point is that these two HAVE handlers and register them
-    // the durable way.
-    for (const file of ["../commands/mcp-servers.ts", "../commands/shell.ts"]) {
-      const body = code(readFileSync(path.join(HERE, file), "utf8"), true);
-      expect({ file, on: /process\s*\.\s*on\s*\(\s*["']SIG/.test(body) }).toEqual({ file, on: true });
-    }
+    // Non-vacuity for the rule above: a directory with no handlers at all
+    // would pass it, and the point is that this tree really does register
+    // durable (`on`, not `once`) SIGINT/SIGTERM handlers SOMEWHERE in it —
+    // wherever the split leaves them, not at two named paths.
+    const withHandlers = signalHandlerScanFiles().filter((file) =>
+      /process\s*\.\s*on\s*\(\s*["']SIG/.test(code(readFileSync(file, "utf8"), true)),
+    );
+    expect(withHandlers.length).toBeGreaterThan(0);
   });
 
   test("a repeated signal is idempotent, not a second teardown", () => {

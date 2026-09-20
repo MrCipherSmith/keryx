@@ -88,17 +88,16 @@ describe("held turns: banner (specification §4.3, AC4)", () => {
     expect(body).toContain('banner === undefined ? "" :');
   });
 
-  test("the banner repaints on every poll, alongside the lease-hold controller's own poll check", () => {
-    const peersIdx = source.indexOf("onPeers: (peers: BusPeer[]) => {");
-    expect(peersIdx).toBeGreaterThan(0);
-    const block = source.slice(peersIdx, source.indexOf("busWakeController?.onPoll(busPollDeliveredEvent);", peersIdx));
-    expect(block).toContain("paintHoldBanner();");
-    expect(block).toContain("leaseHoldController?.onPoll();");
-    // The banner/hold check must run before the bus-wake decision, matching
-    // specification §5.2's step ordering ("5. Leases" before delivery is
-    // re-evaluated at the poll's end).
-    expect(block.indexOf("paintHoldBanner();")).toBeLessThan(block.indexOf("leaseHoldController?.onPoll();"));
-  });
+  // Flow 277 (P2): `onPeers`'s body (which used to be inline here) moved to
+  // `buildBusJoinCallbacks` (`./bus-join.ts`) — this exact ordering
+  // (paintHoldBanner, then the lease-hold controller's own poll check, before
+  // the bus-wake decision; specification §5.2 step 5) is now proven directly
+  // against the real function in `bus-join.test.ts` ("onPeers: paints the
+  // fleet BEFORE reporting delivery to the wake controller..."), which
+  // exercises `onLeaseHoldPoll`/`paintHoldBanner` in that same call-order
+  // assertion. `tui-shell.ts` only wires `paintHoldBanner`/
+  // `leaseHoldController?.onPoll()` as deps now; there is no inline body left
+  // for a text audit to anchor on.
 
   test("the banner repaints immediately after a local /bus pause|resume|override, not just on the next poll", () => {
     for (const marker of ['if (parsed.kind === "pause") {', 'if (parsed.kind === "resume") {', 'if (parsed.kind === "override") {']) {

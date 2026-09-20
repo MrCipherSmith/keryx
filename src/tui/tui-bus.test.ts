@@ -540,29 +540,37 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
       expect(body).toContain("destroyed = true;");
     });
 
-    test("onEvent and onPeers bail out before painting when destroyed", () => {
-      const joinStart = source.indexOf("await joinBus({");
-      const eventIdx = source.indexOf("onEvent: (event) => {", joinStart);
-      const peersIdx = source.indexOf("onPeers: (peers: BusPeer[]) => {", joinStart);
-      expect(eventIdx).toBeGreaterThan(joinStart);
-      expect(peersIdx).toBeGreaterThan(joinStart);
-      const eventBody = source.slice(eventIdx, source.indexOf("},", eventIdx));
-      const peersBody = source.slice(peersIdx, source.indexOf("paintFleet();", peersIdx));
-      expect(eventBody).toContain("if (destroyed) return;");
-      expect(peersBody).toContain("if (destroyed) return;");
-    });
+    // Flow 277 (P2): `onEvent`/`onPeers` are no longer inline bodies here —
+    // `buildBusJoinCallbacks` (`./bus-join.ts`) builds both, and this exact
+    // guarantee ("bail out before touching anything once destroyed") is
+    // proven directly against the real function in `bus-join.test.ts`
+    // ("onEvent bails out...", "onPeers bails out..."), with a BOUNDARY test
+    // proving the non-destroyed case still fires. Nothing here can reach
+    // that closure without a renderer, so there is no replacement audit.
 
-    test("once resolved, a destroyed join leaves immediately instead of adopting the client", () => {
+    // review r1 F6: the join-resolution decision itself (leave a destroyed
+    // join immediately vs. adopt it) is now `decideJoinAdoption`
+    // (`./bus-join.ts`), a pure function whose 4 input combinations are
+    // proven directly in `bus-join.test.ts`. What stays here is this file's
+    // own concern — that the real call site actually reaches for that
+    // decision, in the right order relative to `joined.leave()`/
+    // `liveBus = joined` — anchored on the extracted function's name instead
+    // of the `if (destroyed) {` literal it replaced, so a reformat of the
+    // branch body no longer breaks it.
+    test("once resolved, decideJoinAdoption gates whether the client leaves or is adopted", () => {
       const joinEnd = source.indexOf("});", source.indexOf("await joinBus({"));
       const disabledIdx = source.indexOf('if ("disabled" in joined) {', joinEnd);
       expect(disabledIdx).toBeGreaterThan(joinEnd);
-      const tail = source.slice(disabledIdx, disabledIdx + 500);
-      const destroyedIdx = tail.indexOf("if (destroyed) {");
+      // End-anchored on `liveBus = joined;` itself, rather than a fixed byte
+      // count — the doc comment between the decision and the assignment is
+      // free to grow without this window falling short.
+      const assignIdx = source.indexOf("liveBus = joined;", disabledIdx);
+      expect(assignIdx).toBeGreaterThan(disabledIdx);
+      const tail = source.slice(disabledIdx, assignIdx);
+      const decisionIdx = tail.indexOf("decideJoinAdoption(");
       const joinedLeaveIdx = tail.indexOf("joined.leave();");
-      const assignIdx = tail.indexOf("liveBus = joined;");
-      expect(destroyedIdx).toBeGreaterThanOrEqual(0);
-      expect(joinedLeaveIdx).toBeGreaterThan(destroyedIdx);
-      expect(assignIdx).toBeGreaterThan(joinedLeaveIdx);
+      expect(decisionIdx).toBeGreaterThanOrEqual(0);
+      expect(joinedLeaveIdx).toBeGreaterThan(decisionIdx);
     });
 
     test("once assigned, the client resyncs to whatever session is live by then, caught (review r1 F10)", () => {
@@ -626,32 +634,15 @@ describe("tui-shell.ts wiring (source-text audit — a renderer-less test cannot
 // through the real `createBusWakeController` factory in `bus-wake.test.ts`
 // and `../bus/delivery.integration.test.ts`.
 describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
-  test("onEvent pushes the rendered event into busInbox, body defaulted, and marks the poll as having delivered something (review r1 F1)", () => {
-    const joinIndex = source.indexOf("await joinBus({");
-    expect(joinIndex).toBeGreaterThanOrEqual(0);
-    const eventIdx = source.indexOf("onEvent: (event) => {", joinIndex);
-    expect(eventIdx).toBeGreaterThan(joinIndex);
-    const eventBody = source.slice(eventIdx, source.indexOf("},", eventIdx));
-    expect(eventBody).toContain("busInbox.push({ ...event, body: event.body ?? \"\" });");
-    expect(eventBody).toContain("busPollDeliveredEvent = true;");
-  });
-
-  test("onPeers reports this poll's delivery to the wake controller once per poll, after painting the fleet, and resets for the next poll", () => {
-    const joinIndex = source.indexOf("await joinBus({");
-    const peersIdx = source.indexOf("onPeers: (peers: BusPeer[]) => {", joinIndex);
-    expect(peersIdx).toBeGreaterThan(joinIndex);
-    const peersBody = source.slice(peersIdx, source.indexOf("},", source.indexOf("paintFleet();", peersIdx)));
-    expect(peersBody).toContain("paintFleet();");
-    expect(peersBody.indexOf("busWakeController?.onPoll(busPollDeliveredEvent);")).toBeGreaterThan(
-      peersBody.indexOf("paintFleet();"),
-    );
-    // review r1 F1: reset AFTER reporting, so the next poll starts fresh.
-    expect(peersBody.indexOf("busPollDeliveredEvent = false;")).toBeGreaterThan(
-      peersBody.indexOf("busWakeController?.onPoll(busPollDeliveredEvent);"),
-    );
-    // review r1 F10: the drop notifier is also re-armed once the inbox empties.
-    expect(peersBody).toContain("busDropNotifier.onInboxSizeObserved(busInbox.size);");
-  });
+  // Flow 277 (P2): `onEvent`/`onPeers`'s bodies moved to `buildBusJoinCallbacks`
+  // (`./bus-join.ts`) — the event-push/delivered-flag guarantee and the
+  // onPeers ordering guarantee (paint fleet, THEN report delivery to the wake
+  // controller, THEN reset the flag; drop-notifier re-armed every poll) are
+  // now proven directly against the real function in `bus-join.test.ts`
+  // ("onEvent pushes...", "onPeers: paints the fleet BEFORE reporting
+  // delivery..."), with dedicated ordering/BOUNDARY assertions instead of
+  // character-window scraping. `tui-shell.ts` only wires `deps` (below) and
+  // passes the built `onEvent`/`onPeers` straight through to `joinBus`.
 
   // Structural (module-boundary), not behavioural — see audits-tui-other.md's
   // Notes: TypeScript already guarantees SOME `createBusWakeController` is in
@@ -714,11 +705,10 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     expect(block).toContain("!chrome.isBusy() &&");
   });
 
-  test("the capped bus-wake message mirrors the task-notification cap wording", () => {
-    expect(source).toContain(
-      "a peer message arrived; automatic wakes are capped, so it will be delivered with your next message",
-    );
-  });
+  // Flow 277 (P2): moved to `BUS_WAKE_CAPPED_NOTICE` (`./bus-wake.ts`),
+  // exported and used directly at `printCapped`'s call site — the audit is
+  // now a plain constant comparison in `bus-wake.test.ts`, which no longer
+  // reads `tui-shell.ts`'s source text at all.
 
   test("turn settle also triggers the bus-wake controller's onSettle, only when no queued operator item ran instead", () => {
     const nextIdx = source.lastIndexOf("const next = forceHandoff.takeNext() ?? mainQueue.shift();");

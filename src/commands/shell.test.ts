@@ -954,7 +954,27 @@ test("shellCommand's makeAgentDeps threads a supplied getSessionDir through to s
 // not driven end-to-end here, so the wiring is proven by asserting the
 // required literals exist, in the required order, in the real source file —
 // not yet true until T9 lands this shape.
-describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", () => {
+// SLATE-3a, remaining rows (flow 277 P2b): the box-threading and
+// subagent-budget-reset rows genuinely INSIDE `runAgentRepl` are converted —
+// see `shell-agent-repl.test.ts`'s "SLATE-3a — the readline turn loop resets
+// the subagent budget at the start of every turn" describe (two real turns,
+// a spy counting resets before each `.stream()` call, distinguishing "once
+// ever" from "every turn"). The box-SYNC row ("every slateSession
+// reassignment... syncs the box") still needs a real, `enabled: true`
+// session to observe `slateSessionBox.current` change across a `/new` —
+// left here, unconverted, pending that seam (see the SLATE-5 note below,
+// same blocker).
+//
+// The four rows below are NOT about `runAgentRepl` at all: they pin
+// `shellCommand`'s agent-mode branch — the CLI setup code that declares
+// `slateSessionBox`, builds `buildInteractiveAgentTools`, and calls
+// `runAgentRepl(sharedLines, …)` — which runs BEFORE `runAgentRepl` is ever
+// invoked (shell.ts:3705-3861-ish, per the source-text-audit-inventory's own
+// scope note). `repl()`/`runningRepl()` call `runAgentRepl` directly, so
+// they cannot exercise this code at all; reaching it needs `shellCommand`'s
+// own injection points (`ShellCommandRuntime`), not `runAgentRepl`'s. Left
+// as source-text audits, out of this dispatch's reach.
+describe("SLATE-3a — shellCommand's agent-mode branch (source-text audit; NOT runAgentRepl — out of reach via repl())", () => {
   const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
   // The branch, ended at its own `} else {` rather than at a fixed character
@@ -969,8 +989,6 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
     agentModeBranchStart,
     agentModeBranchEnd === -1 ? agentModeBranchStart + 3600 : agentModeBranchEnd,
   );
-  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
-  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
 
   test("a shared slateSessionBox is declared before the readline buildInteractiveAgentTools call", () => {
     const boxIndex = agentModeBranch.indexOf(
@@ -994,16 +1012,6 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
     expect(replCallBlock).toContain("slateSessionBox");
   });
 
-  test("every slateSession reassignment inside runAgentRepl syncs the box immediately after", () => {
-    const reassignments = ["slateSession = live !== undefined ? { dir: live.dir, cwd: sessionCwd, opened: false } : undefined;", "slateSession = { dir: live.dir, cwd: sessionCwd, opened: false };"];
-    for (const assignment of reassignments) {
-      const idx = replBody.indexOf(assignment);
-      expect(idx).toBeGreaterThanOrEqual(0);
-      const after = replBody.slice(idx + assignment.length, idx + assignment.length + 200);
-      expect(after).toContain("slateSessionBox.current = slateSession;");
-    }
-  });
-
   // Review finding (code review of PR #313): the readline agent REPL built
   // its own `createSpawnSubagentTool`/`agentDeps` without `onLedgerReady`/
   // `resetSubagentBudget` at all, so the per-turn child-budget reset only
@@ -1019,10 +1027,6 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
       "...(resetSubagentBudget !== undefined ? { resetSubagentBudget } : {}),",
     );
     expect(depsIdx).toBeGreaterThan(captureIdx);
-  });
-
-  test("the readline turn loop resets the subagent budget at the start of every turn", () => {
-    expect(replBody).toContain("deps.resetSubagentBudget?.();");
   });
 });
 
@@ -1138,6 +1142,28 @@ describe("expandedToolOutput (readline /expand, AC10)", () => {
 // "AC4 — src/cli.ts registers the harness command (source-text audit)" for
 // wiring this codebase already treats as impractical to drive through a
 // real, side-effecting REPL loop end-to-end.
+// Flow 277 P2b: NOT converted — left as a source-text audit, genuinely
+// blocked on a seam, not merely inconvenient. Every row here is inside
+// `runAgentRepl` (reachable via `repl()`/`runningRepl()` in
+// `shell-agent-repl.test.ts` in principle), but proving any of them needs a
+// slate that was ACTUALLY opened first (`ensureSlateOpened`, only reached
+// from a real action-intent turn), and `closeSlateSession`/
+// `mintTimestampAttemptId` are imported directly from
+// `../session/slate-lifecycle` with no injection point — there is no way to
+// spy on "was this called" without either (a) a new optional parameter on
+// `runAgentRepl` (a real seam, not attempted here: it touches the exit paths
+// this dispatch was told to leave production-behaviour-identical, and combining
+// it correctly with the real session/lease plumbing established for the
+// bus tests above was judged too large an addition for this pass), or (b)
+// `bun:test`'s `mock.module` on `../session/slate-lifecycle` — rejected
+// because `shell.ts` is already imported (and its bindings resolved) at this
+// test file's top level before any test body runs, making a module-registry
+// swap's effect on an ALREADY-bound import uncertain, and a mistake here
+// risks corrupting every other test in this file, not just these ones.
+// The `slateSessionBox` external seam (used for the box-threading rows left
+// in the SLATE-3a describe above) narrows the gap but does not close it: the
+// box mirrors `slateSession`, but `.opened` only flips meaningfully once a
+// real slate-open cycle has run, which these six rows are about either way.
 describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text audit)", () => {
   const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const bodyStart = shellSource.indexOf("async function runAgentRepl(");
@@ -1204,6 +1230,13 @@ describe("SLATE-5 — shell.ts runAgentRepl close-trigger wiring (source-text au
 // this file already sets for its own SLATE-3a/SLATE-15 wiring proofs above
 // (`readFileSync` the real source, assert on literals — `runAgentRepl` has
 // no injection seam to drive this through end-to-end).
+// Flow 277 P2b: left as-is, deliberately. This is a whole-file, unbounded
+// absence check (no window at all) — the inventory's own read on it stands:
+// "about as close to behavioural as a text audit gets", since a negative
+// "never contains X anywhere" check has no fragile boundary to break, and a
+// converted version would need a spy on the wrap-up composer's entry point
+// wired through several unrelated layers for very little extra assurance.
+// Structural, not a seam gap.
 describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (source-text audit)", () => {
   const shellSourceAc8 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
 
@@ -1261,7 +1294,17 @@ describe("flow 163 AC8 — shell.ts's REPL never triggers the wrap-up composer (
 //      `/new`/`/clear`, must NOT gain this call — a background job survives
 //      `/new`/`/clear` by design (AC9); only real process/session exit
 //      sweeps it.
-describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sweep wiring (source-text audit)", () => {
+// Flow 277 P2b: the "runAgentRepl sweeps... exactly the two real session-exit
+// points" row is converted — see `shell-agent-repl.test.ts`'s "flow 173 AC7
+// — runAgentRepl sweeps background jobs on real session exit, not
+// /new|/clear" describe (EOF, `/exit`, and a `/new`-then-`/exit` boundary,
+// each counting real calls to a `deps.sweepBackgroundJobs` spy). The three
+// rows kept below are `shellCommand`'s CLI setup code (declaring the
+// registry, threading it into `buildInteractiveAgentTools`, building the
+// `sweepBackgroundJobs` field) — all BEFORE `runAgentRepl` is ever called,
+// same as SLATE-3a's equivalent rows above, and equally out of `repl()`'s
+// reach.
+describe("flow 173 AC7 — shellCommand's readline jobRegistry session-scope wiring (source-text audit; NOT runAgentRepl — out of reach via repl())", () => {
   const shellSourceAc7 = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const agentModeBranchStartAc7 = shellSourceAc7.indexOf("if (agentMode) {");
   // Widened from 4200 (flow 173) to 4600 to fit T23's `maxOutputTokens`
@@ -1273,8 +1316,6 @@ describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sw
   // `sweepBackgroundJobs` in the same `agentDepsBase` object — still just
   // past that field, well short of the next declaration.
   const agentModeBranchAc7 = shellSourceAc7.slice(agentModeBranchStartAc7, agentModeBranchStartAc7 + 6000);
-  const replBodyStartAc7 = shellSourceAc7.indexOf("async function runAgentRepl(");
-  const replBodyAc7 = shellSourceAc7.slice(replBodyStartAc7, agentModeBranchStartAc7);
 
   test("imports createJobRegistry from the background-job-registry module", () => {
     expect(shellSourceAc7).toContain(
@@ -1298,53 +1339,6 @@ describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sw
   test("agentDeps exposes a sweepBackgroundJobs hook bound to the SAME jobRegistry instance", () => {
     const sweepFieldIndex = agentModeBranchAc7.indexOf("sweepBackgroundJobs: () => jobRegistry.sweepAll(),");
     expect(sweepFieldIndex).toBeGreaterThanOrEqual(0);
-  });
-
-  test("runAgentRepl sweeps background jobs at exactly the two real session-exit points (EOF, /exit|/quit) — not /new|/clear", () => {
-    const sweepCall = "await deps.sweepBackgroundJobs?.();";
-    const occurrences = replBodyAc7.split(sweepCall).length - 1;
-    expect(occurrences).toBe(2);
-
-    const eofBlock = replBodyAc7.slice(
-      replBodyAc7.indexOf("if (line === undefined) {"),
-      replBodyAc7.indexOf("return; // end of input") + 1,
-    );
-    expect(eofBlock).toContain(sweepCall);
-
-    const exitIdx = replBodyAc7.indexOf('command === "/exit" || command === "/quit"');
-    expect(exitIdx).toBeGreaterThanOrEqual(0);
-    const exitBlock = replBodyAc7.slice(exitIdx, exitIdx + 300);
-    expect(exitBlock).toContain(sweepCall);
-
-    // AC9: a background job must survive /new|/clear — the sweep call must
-    // NOT appear in that close-trigger's block.
-    //
-    // F-011 fixes:
-    //  - `indexOf` here previously had no `-1` guard (unlike its TUI sibling
-    //    in `tui-shell.test.ts`, which correctly asserts
-    //    `toBeGreaterThanOrEqual(0)`): if the `/new`|`/clear` marker literal
-    //    ever drifted, `newBlockStart` would silently become `-1` and
-    //    `.slice(-1, -1 + N)` would slice from the string's LAST character
-    //    instead of throwing — a false pass on exactly the regression this
-    //    test exists to catch.
-    //  - the slice window was a hardcoded magic-number char count (900) with
-    //    no guarantee it actually covers the whole `/new`|`/clear` block;
-    //    widened to a structural boundary (the next top-level `else if`
-    //    branch, `/compact`) instead.
-    //  - `removeAll` gets the SAME negative guard as `sweepBackgroundJobs`:
-    //    `shell.ts`'s readline surface has no `BackgroundJobStore` at all
-    //    (out of scope by design — description.md: readline gets the
-    //    harness/tool layer, no visual panel/sidebar/store), so this
-    //    assertion is currently vacuous, but it is cheap and guards against
-    //    a `BackgroundJobStore`/`.removeAll()` ever being wired into this
-    //    `/new`|`/clear` block later — mirrors the TUI-side guard exactly.
-    const newBlockStart = replBodyAc7.indexOf('command === "/new" || command === "/clear"');
-    expect(newBlockStart).toBeGreaterThanOrEqual(0);
-    const newBlockEnd = replBodyAc7.indexOf('command === "/compact"', newBlockStart);
-    expect(newBlockEnd).toBeGreaterThan(newBlockStart);
-    const newBlock = replBodyAc7.slice(newBlockStart, newBlockEnd);
-    expect(newBlock).not.toContain(sweepCall);
-    expect(newBlock).not.toContain("removeAll");
   });
 });
 
@@ -1372,6 +1366,12 @@ describe("flow 173 AC7 — shell.ts readline jobRegistry session-scope + exit-sw
 //      OUTER closed-over `jobRegistry`, not a fresh one per call.
 //   3. `makeAgentDeps`'s returned `AgentDeps` gains
 //      `sweepBackgroundJobs: () => jobRegistry.sweepAll(),`.
+// Flow 277 P2b: left as-is. Entirely about `shellCommand`'s TUI branch
+// (`if (surface !== "readline")`) and `makeAgentDeps` — never about
+// `runAgentRepl`, and not reachable through it. The inventory's own "still
+// needed" list names the real blocker: an injection point for
+// `launchTuiAgentShell` (a ~4,700-line closure with nothing inside it
+// reachable from a test today) — a flow of its own, not a step in this one.
 describe("flow 173 AC7 — shell.ts TUI makeAgentDeps jobRegistry session-scope (source-text audit)", () => {
   const shellSourceAc7Tui = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
   const tuiBranchStart = shellSourceAc7Tui.indexOf('if (surface !== "readline") {');
@@ -1406,6 +1406,11 @@ describe("flow 173 AC7 — shell.ts TUI makeAgentDeps jobRegistry session-scope 
 // (source-text audit) — the type contract both wiring audits above assign
 // into. Mirrors the existing (untested-by-name, but structurally identical)
 // `resetSubagentBudget?: () => void;` optional-hook field.
+// Flow 277 P2b: left as-is — structural. A TypeScript field declaration has
+// no runtime existence to drive a test through; the type checker already
+// enforces this contract at every call site (`shell-agent-repl.test.ts`'s
+// sweep tests above pass a `sweepBackgroundJobs` override that would not
+// typecheck if this field disappeared or changed shape).
 describe("flow 173 AC7 — agent.ts AgentDeps.sweepBackgroundJobs field (source-text audit)", () => {
   const agentSource = readFileSync(path.join(import.meta.dir, "agent.ts"), "utf8");
 
@@ -1459,52 +1464,62 @@ describe("--deny-tools", () => {
   });
 });
 
-// --- flow 265 AC7/AC8 — readline completion wake (source-text audit) -----
+// --- flow 265 AC7/AC8, flow 275 T8/F3 — converted to behavioural tests
+// (flow 277 P2b) -----------------------------------------------------------
 //
-// RED: none of this wiring exists yet. `runAgentRepl` is explicitly "NOT
-// unit-tested" (its own doc comment) and has no injection seam for its single
-// line consumer, so this follows the exact precedent the flow-163/flow-173
-// audits above already set in this file: `readFileSync` the real source and
-// assert on literals. These are SOURCE-TEXT claims, not behavioural ones — an
-// audit cannot see a rule deleted from between the lines it matches, so the
-// exactly-once and message-shape guarantees are proven by execution in
-// `background-job-registry.test.ts` and `agent-task-notification.test.ts`
-// instead. What is audited here is only what has no other seam: that the
-// single line consumer races completions, and that the wake cap exists.
+// Five describes used to live here, all under the same "no injection seam"
+// banner: flow 265's completion wake, flow 275 T8's held-turn wiring, F3's
+// completion-wake held gate, T8's busLeases join-success rebuild, and T8's
+// no-always-allow-under-publishLease. `runAgentRepl` has had that seam since
+// flow 277 (it is exported, and `deps.busLeases`/`deps.jobRegistry` were
+// already plain injectable `AgentDeps` fields even before that) — what these
+// needed on top was a REAL joined `BusClient` for `isHeld()`, since that
+// reads `bus?.leaseView().held()` and `bus` only ever comes from a genuine
+// `joinBus()` call with no injection point of its own. `runningRepl` in
+// `shell-agent-repl.test.ts` drives the real `runAgentRepl` over a
+// push-based queue instead of `repl()`'s fixed array (so the test can act —
+// create/refresh/release a real pause lease — WHILE the REPL is mid-session)
+// and reads the joined client back through `sessionOpts.busBox`, a seam
+// production already has for the CLI's own `/bus` handling.
 //
-// PINNED SHAPE (task-implementer builds exactly this):
-//   1. The session-scoped `jobRegistry` (already declared in the agent-mode
-//      branch for the exit sweep) gains a `.onCompletion(...)` subscription.
-//   2. `readLine` becomes a race between the next input line and the next
-//      completion, so an idle REPL starts a turn without a keystroke.
-//   3. A completion-started turn passes `origin: "task-notification"` in
-//      `runAgentTurn`'s options; an operator line does not.
-//   4. Consecutive completion-started turns are capped by `resolveMaxAutoWake`
-//      and the counter is reset to 0 by any operator line.
-describe("flow 265 AC7/AC8 — readline wakes on a task completion (source-text audit)", () => {
-  const shellSourceAc7Wake = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-
-  test("the session-scoped registry gets a completion subscription", () => {
-    expect(shellSourceAc7Wake).toContain(".onCompletion(");
-  });
-
-  test("the single line consumer races the next input line against the next completion", () => {
-    const start = shellSourceAc7Wake.indexOf("const readLine = async (");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const block = shellSourceAc7Wake.slice(start, start + 1_400);
-    expect(block).toContain("Promise.race");
-  });
-
-  test("a completion-started turn is marked with origin: 'task-notification'", () => {
-    expect(shellSourceAc7Wake).toMatch(/origin:\s*"task-notification"/);
-  });
-
-  test("consecutive auto-wakes are capped and the counter is reset by operator input", () => {
-    expect(shellSourceAc7Wake).toContain("resolveMaxAutoWake");
-    // A counter that is only ever incremented is not a cap: pin the reset too.
-    expect(shellSourceAc7Wake).toMatch(/[Aa]utoWake[A-Za-z]*\s*=\s*0/);
-  });
-});
+// Where each one landed:
+//   - flow 265 AC7/AC8 (completion wake, origin marking, the auto-wake cap
+//     and its reset): "flow 265 AC7/AC8 — readline wakes on a task
+//     completion" — no bus needed here (`KERYX_BUS=off`); `deps.jobRegistry`
+//     alone is the completion source, fired directly, no real background
+//     process required. Building this test surfaced a genuine footgun in
+//     the FAKE, not production: a `drainUndelivered()` that keeps returning
+//     the same completion (instead of `[]` after the first drain, like the
+//     real registry) fed a self-sustaining loop of task-notification
+//     rounds — documented on `fakeJobRegistry` as a reason its contract
+//     matters, not just its call shape.
+//   - flow 275 T8 held-turn wiring (queue while held, drain via the same
+//     `runOperatorLine` path on release): NOT re-driven here — it is
+//     already proven, more rigorously (real cross-process shells, a real
+//     pause lease, `SIGKILL`/override/resume edge cases this file never
+//     covered), by `shell-pause.process.test.ts`'s "readline pause leases
+//     across processes" describe. That test predates this dispatch; the
+//     source-text duplicate here added nothing beyond it and inherited the
+//     file's broken wide-`replBody` window besides, so it was deleted
+//     outright rather than re-implemented.
+//   - flow 275 F3 (completion held gate, budget not spent while held): "flow
+//     275 T8/F3 — held-turn wiring, the completion-wake held gate, and
+//     busLeases" — "F3 — a task-completion wake is gated by isHeld() BEFORE
+//     the auto-wake cap" plus its release boundary.
+//   - flow 275 T8 busLeases (the adapter, and the join-success rebuild): the
+//     SAME describe — "busLeasesFromClient adapts..." (the adapter needs no
+//     REPL, just a fake `BusClient`) and "a real bus join threads busLeases
+//     onto deps..." (a REAL `git-publish` lease from a fabricated peer,
+//     changing what a live approval prompt shows) plus its no-lease
+//     boundary.
+//   - flow 275 T8 no-always-allow-under-publishLease: "flow 275 T8 — no
+//     always-allow offer under a publishLease" — no bus needed (`deps.
+//     busLeases` set directly); needed `rememberExactShellGrant`'s new
+//     `dir` parameter (this dispatch), threaded from `runAgentRepl`'s
+//     `configDir` — undefined in production today, so a real operator sees
+//     no behaviour change, while the test reads the actual permission file
+//     back from a throwaway directory instead of grepping for the literal
+//     that writes it.
 
 // --- /reasoning wiring: converted to behavioural tests (flow 277) ---------
 //
@@ -1522,158 +1537,6 @@ describe("flow 265 AC7/AC8 — readline wakes on a task completion (source-text 
 // unaffected — every rebuild spreads the previous `deps` — but the effect is
 // not observable on the object the caller passed, which is exactly the kind
 // of thing `toContain("deps.reasoningEffort = wanted")` cannot tell you.
-describe("flow 275 T8 — runAgentRepl held-turn wiring (specification §4.3, AC5, source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const replStart = shellSource.indexOf("async function runAgentRepl(");
-  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
-  const replBody = shellSource.slice(replStart, agentModeBranchStart);
-
-  test("isHeld/heldQueue/drainHeldQueue are defined before the loop, and the loop drains before every read", () => {
-    const isHeldIndex = replBody.indexOf("const isHeld = (): boolean => bus?.leaseView().held() ?? false;");
-    const drainDefIndex = replBody.indexOf("const drainHeldQueue = async (): Promise<void> => {");
-    const loopIndex = replBody.indexOf("for (;;) {");
-    expect(isHeldIndex).toBeGreaterThan(0);
-    expect(drainDefIndex).toBeGreaterThan(isHeldIndex);
-    expect(loopIndex).toBeGreaterThan(drainDefIndex);
-    const loopOpening = replBody.slice(loopIndex, loopIndex + 200);
-    expect(loopOpening).toContain("await drainHeldQueue();");
-    expect(loopOpening.indexOf("await drainHeldQueue();")).toBeLessThan(loopOpening.indexOf("readLineOrCompletion()"));
-  });
-
-  test("an operator line is queued instead of started when isHeld() is true, and the notice is printed", () => {
-    // Flow 275 F3 added a SECOND `if (isHeld()) {` — the completion-wake gate,
-    // earlier in the loop body — so anchor past it via a marker that exists
-    // only after the operator line has been read (NOT the `let
-    // consecutiveAutoWakes = 0;` declaration, which is even earlier still).
-    const heldCheckIndex = replBody.indexOf(
-      "if (isHeld()) {",
-      replBody.indexOf("An operator line means a human is here"),
-    );
-    expect(heldCheckIndex).toBeGreaterThan(0);
-    const heldBlock = replBody.slice(heldCheckIndex, heldCheckIndex + 300);
-    expect(heldBlock).toContain("heldQueue.push(line);");
-    expect(heldBlock).toContain("agentIo.onSystem?.(heldNotice());");
-    expect(heldBlock).toContain("continue;");
-    // No `runOperatorLine`/turn start inside the held branch itself.
-    const heldBranch = heldBlock.slice(0, heldBlock.indexOf("continue;"));
-    expect(heldBranch).not.toContain("runOperatorLine(");
-  });
-
-  test("the held notice names the holder, reason and remaining TTL via the shared lease-view banner", () => {
-    const noticeIndex = replBody.indexOf("const heldNotice = (): string =>");
-    expect(noticeIndex).toBeGreaterThan(0);
-    const noticeBlock = replBody.slice(noticeIndex, noticeIndex + 300);
-    expect(noticeBlock).toContain("bus?.leaseView().banner()");
-  });
-
-  test("drainHeldQueue re-checks isHeld() and runs queued lines through the same runOperatorLine turn path", () => {
-    const drainIndex = replBody.indexOf("const drainHeldQueue = async (): Promise<void> => {");
-    const drainBlock = replBody.slice(drainIndex, drainIndex + 400);
-    expect(drainBlock).toContain("while (heldQueue.length > 0 && !isHeld())");
-    expect(drainBlock).toContain("await runOperatorLine(queued);");
-    expect(drainBlock).toContain("printPromptWithBusNotice();");
-  });
-
-  test("the direct (not-held) operator-line path still runs the very next line through runOperatorLine", () => {
-    const heldCheckIndex = replBody.indexOf(
-      "if (isHeld()) {",
-      replBody.indexOf("An operator line means a human is here"),
-    );
-    const afterHeld = replBody.slice(heldCheckIndex, heldCheckIndex + 500);
-    expect(afterHeld).toContain("await runOperatorLine(line);");
-  });
-});
-
-// Flow 275 F3 (specification §4.3, `turns` scope): the completion-wake branch
-// — reached when a background task finishes while nobody is typing — must be
-// gated by the SAME `isHeld()` the operator-line path uses, checked BEFORE
-// the auto-wake cap so a held completion never spends that budget. Two
-// previous review rounds lost coverage to `shell.ts`/`tui-shell.ts` being
-// read as text elsewhere in this file, so this audit is deliberately anchored
-// on markers unique to the completion branch.
-describe("flow 275 F3 — completion-wake held gate (specification §4.3, source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const replStart = shellSource.indexOf("async function runAgentRepl(");
-  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
-  const replBody = shellSource.slice(replStart, agentModeBranchStart);
-
-  test("the completion branch checks isHeld() before the auto-wake cap, and does not start a turn", () => {
-    const completionIndex = replBody.indexOf('if (input.kind === "completion") {');
-    expect(completionIndex).toBeGreaterThan(0);
-    const capIndex = replBody.indexOf("consecutiveAutoWakes >= resolveMaxAutoWake()");
-    expect(capIndex).toBeGreaterThan(completionIndex);
-    const heldGateIndex = replBody.indexOf("if (isHeld()) {", completionIndex);
-    expect(heldGateIndex).toBeGreaterThan(completionIndex);
-    expect(heldGateIndex).toBeLessThan(capIndex);
-    const heldBlock = replBody.slice(heldGateIndex, capIndex);
-    expect(heldBlock).toContain("agentIo.onSystem?.(heldCompletionNotice());");
-    expect(heldBlock).toContain("printPromptWithBusNotice();");
-    expect(heldBlock).toContain("continue;");
-    expect(heldBlock).not.toContain("consecutiveAutoWakes += 1");
-    expect(heldBlock).not.toContain("runAgentTurn(");
-  });
-
-  test("heldCompletionNotice reuses the shared lease-view banner, like heldNotice", () => {
-    const noticeIndex = replBody.indexOf("const heldCompletionNotice = (): string =>");
-    expect(noticeIndex).toBeGreaterThan(0);
-    const noticeBlock = replBody.slice(noticeIndex, noticeIndex + 300);
-    expect(noticeBlock).toContain("bus?.leaseView().banner()");
-  });
-});
-
-// Flow 275 T8 (specification §4.4): the shell branch of `executeCall` reads
-// `AgentDeps.busLeases` (T6) to compute the `git-publish` approval floor; this
-// proves the readline surface actually threads its own `BusClient.leaseView()`
-// into it once the join succeeds — the same join-success rebuild the flow 274
-// T7 audits above already cover for `busInbox`/`busAck`/`tools`.
-describe("flow 275 T8 — runAgentRepl busLeases wiring (specification §4.4, source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const replStart = shellSource.indexOf("async function runAgentRepl(");
-  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
-  const replBody = shellSource.slice(replStart, agentModeBranchStart);
-
-  test("busLeasesFromClient adapts PauseLeaseView.heldBy() (a full PauseLease) down to {name, reason}", () => {
-    const adapterIndex = shellSource.indexOf("function busLeasesFromClient(bus: BusClient)");
-    expect(adapterIndex).toBeGreaterThan(0);
-    const adapterBody = shellSource.slice(adapterIndex, adapterIndex + 500);
-    expect(adapterBody).toContain("appliesToMe: (scope) => bus.leaseView().appliesToMe(scope)");
-    expect(adapterBody).toContain("lease.holder.name");
-    expect(adapterBody).toContain("lease.reason");
-  });
-
-  test("the join-success rebuild folds busLeases: busLeasesFromClient(joined) onto deps, alongside busInbox/busAck", () => {
-    const successIdx = replBody.indexOf("bus = joined;");
-    expect(successIdx).toBeGreaterThan(0);
-    const successBlock = replBody.slice(successIdx, successIdx + 1900);
-    expect(successBlock).toContain("busLeases: busLeasesFromClient(joined),");
-  });
-});
-
-// Flow 275 T8 (specification §4.4): the `publishLease` floor must never be
-// remembered — mirrors the existing `destructive`/`credentials`/
-// `sacReviewConfirmation` exclusions this same prompt already enforces. The
-// underlying `evaluateShellApproval`/`rememberExactShellGrant` exclusion is
-// unit-tested directly in `shell-approval.test.ts` (flow 275 T5); this proves
-// the readline prompt built ON TOP of them actually wires it through, since
-// that prompt itself has no injection seam (same limitation as the rest of
-// `runAgentRepl` — see the audits above).
-describe("flow 275 T8 — no always-allow offer under publishLease (specification §4.4, source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-
-  test("rememberable excludes evaled.publishLease, alongside destructive/credentials/sacReviewConfirmation", () => {
-    const index = shellSource.indexOf("const rememberable =");
-    expect(index).toBeGreaterThan(0);
-    const statement = shellSource.slice(index, shellSource.indexOf(";", index));
-    expect(statement).toContain("!evaled.destructive");
-    expect(statement).toContain("!evaled.credentials");
-    expect(statement).toContain("!evaled.sacReviewConfirmation");
-    expect(statement).toContain("!evaled.publishLease");
-  });
-
-  test("rememberExactShellGrant is called with { publishLease: evaled.publishLease } (defense in depth)", () => {
-    const callIndex = shellSource.indexOf("rememberExactShellGrant(evaled.command, sessionShellAllow,");
-    expect(callIndex).toBeGreaterThan(0);
-    const call = shellSource.slice(callIndex, shellSource.indexOf(");", callIndex) + 2);
-    expect(call).toContain("publishLease: evaled.publishLease");
-  });
-});
+// (See the comment block above: all five describes formerly here now live in
+// `shell-agent-repl.test.ts`, or — for held-turn wiring — in the pre-existing
+// `shell-pause.process.test.ts`.)

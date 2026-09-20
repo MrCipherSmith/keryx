@@ -41,6 +41,7 @@ import {
   selectSearchProviderAndReport,
   shortenCwd,
   SIDE_WORKER_DENIED_TOOL_NAMES,
+  isToolAvailableToSideWorker,
   type BlockSink,
 } from "./tui-shell";
 import {
@@ -2785,11 +2786,11 @@ describe("flow 173 F-008 — paintJobs skips repaint on 'output' hints, mirrorin
 });
 
 // --- F-003: the side-worker deps builder filters tools by risk==="read" AND
-// excludes shell_job_kill by name (source-text audit — `spawnSideWorker` is a
-// closure with no injection seam, same precedent as above) -----------------
+// excludes shell_job_kill by name. Flow 277 (P2): all four tests in this
+// block now drive real exports (`SIDE_WORKER_DENIED_TOOL_NAMES`,
+// `isToolAvailableToSideWorker`) directly — no more `readFileSync` of
+// `tui-shell.ts` in this file. --------------------------------------------
 describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by name, keeps shell_job_output", () => {
-  const tuiSourceF003 = readFileSync(join(import.meta.dir, "tui-shell.ts"), "utf8");
-
   // Flow 173 F-003 P2 conversion: `SIDE_WORKER_DENIED_TOOL_NAMES` is already
   // exported (tui-shell.ts:314) specifically so callers like
   // `shell-task-tools.test.ts` can read it directly — this test used to
@@ -2818,12 +2819,20 @@ describe("flow 173 F-003 — side-worker tool filter excludes shell_job_kill by 
     expect(SIDE_WORKER_DENIED_TOOL_NAMES.has("shell_task_output")).toBe(false);
   });
 
-  test("the side-worker tools filter checks BOTH risk==='read' and the deny-list, not risk alone", () => {
-    const filterIdx = tuiSourceF003.indexOf("const tools = base.tools.filter(");
-    expect(filterIdx).toBeGreaterThanOrEqual(0);
-    const filterBlock = tuiSourceF003.slice(filterIdx, filterIdx + 300);
-    expect(filterBlock).toContain('t.definition.risk === "read"');
-    expect(filterBlock).toContain("SIDE_WORKER_DENIED_TOOL_NAMES.has(t.definition.name)");
+  // Flow 277 (P2): the filter's predicate is now the exported
+  // `isToolAvailableToSideWorker` (`tui-shell.ts`, beside
+  // `SIDE_WORKER_DENIED_TOOL_NAMES`) — driven directly instead of reading the
+  // filter call site's source text. This was the fourth and last flow-173
+  // F-003 test still coupled to `tui-shell.ts`'s text; the other three above
+  // already import `SIDE_WORKER_DENIED_TOOL_NAMES` directly.
+  test("isToolAvailableToSideWorker checks BOTH risk==='read' and the deny-list, not risk alone", () => {
+    expect(isToolAvailableToSideWorker({ definition: { risk: "read", name: "read_file" } })).toBe(true);
+    // BOUNDARY: risk alone is not the boundary — a denied, read-risk tool
+    // must still be excluded (this is F-003's whole point: `shell_job_kill`
+    // is risk:"read" but must never reach a side worker).
+    expect(isToolAvailableToSideWorker({ definition: { risk: "read", name: "shell_job_kill" } })).toBe(false);
+    // And a non-read-risk tool is excluded regardless of the deny-list.
+    expect(isToolAvailableToSideWorker({ definition: { risk: "write", name: "read_file" } })).toBe(false);
   });
 
   // Flow 274 (agent bus P3, T7): `bus_send` is ALSO `risk: "read"`

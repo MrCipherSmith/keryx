@@ -10,6 +10,7 @@
 import { describe, expect, test } from "bun:test";
 import { createBusInbox, type BusInboxEvent } from "../bus/inbox";
 import {
+  BUS_WAKE_CAPPED_NOTICE,
   busInboxFullNotice,
   createBusDropNotifier,
   createBusWakeController,
@@ -235,6 +236,28 @@ describe("createBusDropNotifier (review r1 F10)", () => {
 
   test("busInboxFullNotice formats the exact operator line review r1 F10 asks for", () => {
     expect(busInboxFullNotice(7)).toBe("bus: inbox full — 7 older message(s) dropped\n");
+  });
+});
+
+// Flow 277 (P2): `tui-bus.test.ts`'s "the capped bus-wake message mirrors the
+// task-notification cap wording" used to read `tui-shell.ts`'s source text
+// for this literal. Now that `printCapped`'s call site is wired to the
+// exported constant (see `BUS_WAKE_CAPPED_NOTICE`'s own doc comment), the
+// audit is a plain constant comparison, colocated with the constant instead
+// of reading tui-shell.ts at all.
+describe("BUS_WAKE_CAPPED_NOTICE (specification: mirrors the task-notification cap wording)", () => {
+  test("wording", () => {
+    expect(BUS_WAKE_CAPPED_NOTICE).toBe(
+      "◇ a peer message arrived; automatic wakes are capped, so it will be delivered with your next message.\n",
+    );
+  });
+
+  // BOUNDARY: distinguishes this from the task-notification wake's OWN capped
+  // message, which shares the shape but not the subject/verb — a stub that
+  // returned either message unconditionally would fail one of the two halves.
+  test("BOUNDARY — distinct from the task-notification wake's own capped wording", () => {
+    expect(BUS_WAKE_CAPPED_NOTICE).toContain("a peer message arrived");
+    expect(BUS_WAKE_CAPPED_NOTICE).not.toContain("a shell task finished");
   });
 });
 

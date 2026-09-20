@@ -101,11 +101,19 @@ export function evaluateShellApproval(input: {
  * allow" must not be offered (§4.4) and, defensively, must not persist even if
  * a caller offered it anyway. Optional so the existing two-argument call sites
  * (which predate the publish-lease floor) still compile unchanged.
+ *
+ * `dir` is the SAME directory concept `runAgentRepl`'s own `configDir`
+ * threads into `loadShellPermissions`/`shellPermissionsFingerprint` at its
+ * call site — undefined (the default) reproduces the pre-flow-277 behaviour
+ * of always writing the operator's real, default permissions file. Added so
+ * a hermetic test can prove "no grant was persisted" against a throwaway
+ * directory instead of either skipping the property or writing to
+ * `~/.local/share/keryx/permissions.json`.
  */
 export function rememberExactShellGrant(
   command: string,
   sessionAllow: Set<string>,
-  options?: { publishLease?: boolean },
+  options?: { publishLease?: boolean; dir?: string },
 ): string {
   if (options?.publishLease === true) {
     return "";
@@ -114,7 +122,7 @@ export function rememberExactShellGrant(
   if (!offerExact) {
     return "";
   }
-  const stored = allowShellPattern(exact);
+  const stored = allowShellPattern(exact, options?.dir);
   if (stored.length > 0) {
     sessionAllow.add(stored);
   }

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "F-001",
+    "reviewer": "sonnet-5-review-p2b",
+    "severity": "info",
+    "problem": "The comment filter in `pathsNamedOn` (src/shell-source-audits.test.ts:70-72) only recognises a comment when the trimmed line itself starts with `//`, `*` or `/*`. It does not filter a trailing same-line comment (false positive, safe direction) and cannot see a path literal split across two lines by string concatenation (false negative, the unsafe direction for a guard whose entire purpose is to prevent silently missing a text-dependency on the two god-files).",
+    "impact": "No behavioural risk today: reading every file the scanner already flags plus the other test files in src/, none builds a god-file path via cross-line string concatenation. If one ever did, it would silently miss the manifest, and a later phase (P2/P3) could remove or move that audit's covered code without this guard noticing the drop.",
+    "suggested_fix": "Either collapse each test file's source to a single string with newlines preserved before matching so a literal spanning two physical lines is still one logical match, or add a boundary test asserting a synthetic fixture with a concatenated literal is still caught. Not blocking for P1, which is a documentation-only flow.",
+    "evidence": "src/shell-source-audits.test.ts:70-72 (`function pathsNamedOn`, the comment-prefix filter); src/shell-source-audits.test.ts:42 (`const LITERAL = /[\"'`]([^\"'`\\n]+)[\"'`]/g`, anchored to `[^\\n]` so it cannot match across a line break).",
+    "confidence": "medium",
+    "global_id": "2026-09-20-ingest-623#F-001"
+  }
+]

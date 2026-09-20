@@ -196,6 +196,19 @@ export function busInboxFullNotice(droppedTotal: number): string {
   return `bus: inbox full — ${droppedTotal} older message(s) dropped\n`;
 }
 
+/**
+ * Flow 277 (P2): the bus-wake capped notice, printed by `createBusWakeController`'s
+ * `printCapped` at the real call site (`tui-shell.ts`). Exported as a constant
+ * — rather than left as a literal inline at that call site — specifically so
+ * `tui-bus.test.ts`'s "mirrors the task-notification cap wording" audit can
+ * compare against it directly instead of reading `tui-shell.ts`'s source
+ * text. Wording deliberately mirrors the pre-existing task-notification wake's
+ * own capped message (`tui-shell.ts`'s task-notification `printCapped`) —
+ * same shape, different subject and verb.
+ */
+export const BUS_WAKE_CAPPED_NOTICE =
+  "◇ a peer message arrived; automatic wakes are capped, so it will be delivered with your next message.\n";
+
 // ---------------------------------------------------------------------------
 // Flow 275 (agent bus P4, T7; specification §4.3, §5.2, AC4): pause-lease
 // held turns. The GATE at each entry point (an operator line, `/queue force`,
