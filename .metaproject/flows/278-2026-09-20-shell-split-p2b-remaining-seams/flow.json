@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "278",
+  "slug": "shell-split-p2b-remaining-seams",
+  "title": "Shell god-files P2b: the remaining seams — bus wiring, splash lifecycle, side-worker predicate, and the two audits that need deciding",
+  "status": "initializing",
+  "createdAt": "2026-09-20T09:05:38.537Z",
+  "updatedAt": "2026-09-20T09:05:38.537Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-20T09:05:38.537Z",
+      "event": "created"
+    }
+  ]
+}

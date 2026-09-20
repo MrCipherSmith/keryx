@@ -9,7 +9,7 @@
   "title": "Shell god-files P2: convert the source-text audits into behavioural tests, with seams where behaviour is not observable",
   "status": "in-progress",
   "createdAt": "2026-09-19T23:52:23.299Z",
-  "updatedAt": "2026-09-20T08:58:50.726Z",
+  "updatedAt": "2026-09-20T09:06:02.235Z",
   "source": {
     "type": "description",
     "ref": null
@@ -51,10 +51,18 @@
     "AC10": {
       "at": "2026-09-20T08:58:50.726Z",
       "note": "inventory section 'What P2 left, and the seam each one waits on': 11 named seams in a table, plus the two that need deciding (invariants hardcoded list, approval-wiring offsets)"
+    },
+    "AC1": {
+      "at": "2026-09-20T09:05:56.834Z",
+      "note": "PR #625: 18/18 CI checks pass; production diff is export + optional rich.write defaulting to process.stdout + code moved behind performSlateExit/leaveBusThenRelease/buildNextStepPrompt + comments"
+    },
+    "AC11": {
+      "at": "2026-09-20T09:05:56.949Z",
+      "note": "PR #625 all 18 checks pass (typecheck-and-tests 3m40s, four client-matrix legs, mkdocs strict, wiki gate, sandbox smokes, opentui native x4); deploy to Pages skipped by design"
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/625"
   },
   "tasks": [
     {
@@ -236,6 +244,41 @@
       "at": "2026-09-20T08:58:50.726Z",
       "event": "ac-confirmed",
       "detail": "AC10: inventory section 'What P2 left, and the seam each one waits on': 11 named seams in a table, plus the two that need deciding (invariants hardcoded list, approval-wiring offsets)"
+    },
+    {
+      "at": "2026-09-20T09:01:11.464Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/625 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-20T09:05:45.494Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-20T09:05:50.611Z",
+      "event": "completion-failed",
+      "detail": "acceptance-criteria: unconfirmed: AC1, AC11 | review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/277-2026-09-19-shell-split-p2-behavioural-audits/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#625 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__625.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 625 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
+    },
+    {
+      "at": "2026-09-20T09:05:56.834Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: PR #625: 18/18 CI checks pass; production diff is export + optional rich.write defaulting to process.stdout + code moved behind performSlateExit/leaveBusThenRelease/buildNextStepPrompt + comments"
+    },
+    {
+      "at": "2026-09-20T09:05:56.950Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: PR #625 all 18 checks pass (typecheck-and-tests 3m40s, four client-matrix legs, mkdocs strict, wiki gate, sandbox smokes, opentui native x4); deploy to Pages skipped by design"
+    },
+    {
+      "at": "2026-09-20T09:05:57.050Z",
+      "event": "completing",
+      "detail": "merged commit: a97d6629"
+    },
+    {
+      "at": "2026-09-20T09:06:02.235Z",
+      "event": "completion-failed",
+      "detail": "review: 5 of 5 conditions failed — ingested-round (unobserved): no managed review package exists under `.metaproject/flows/277-2026-09-19-shell-split-p2-behavioural-audits/reviews/`. A flow with no recorded review has not been reviewed cleanly; it has not been reviewed. | terminal-dispositions (unobserved): no ingested round to read findings from | head-commit (unobserved): no ingested round to compare against the PR head | external-comments (unobserved): the external-comment collection did not run: nothing records whether anyone commented on MrCipherSmith/keryx#625 (`.metaproject/reviews/pr-comments/MrCipherSmith__keryx__625.json` does not exist). Zero collected comments and no collection at all are different facts, and only one of them is clean. Run `keryx review comments collect --repo MrCipherSmith/keryx --pr 625 --sha <pr-head>`, or inject `FlowServiceDeps.externalCommentsGate` with a collector of your own. | verifier-stats (unobserved): no ingested round to read verification stats from"
     }
-  ]
+  ],
+  "baseBranch": "main"
 }
