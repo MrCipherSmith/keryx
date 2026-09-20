@@ -3,7 +3,9 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [Unreleased]
+## [0.2.128] — 2026-09-20
+A leftover local SearXNG no longer blocks the DuckDuckGo default after upgrade
+(PR #629).
 
 ### Fixed
 
