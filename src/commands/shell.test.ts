@@ -1026,143 +1026,16 @@ describe("SLATE-3a — shell.ts getSessionDir threading (source-text audit)", ()
   });
 });
 
-// --- SLATE-15: /goal wiring in shell.ts's readline agent-mode command switch
-// (flow 161, T10 — AC1/AC2) -------------------------------------------------
+// --- /goal and /plan wiring: converted to behavioural tests (flow 277) ---
 //
-// RED until T11 lands the wiring: `runAgentRepl` has no injection seam (same
-// precedent as the SLATE-3a/SLATE-5 audits above), so this is a source-text
-// audit, not a driven-through-the-real-REPL test. The ACTUAL behavior (fail-
-// closed `--workspace` validation, no-workspace-created guarantee,
-// ensureSlateOpened + runAgentTurn sequencing) is proven directly against the
-// shared `runGoalCommand` core in `goal-command.test.ts`; this block only
-// proves shell.ts's readline surface actually WIRES that core in — the exact
-// Phase-2 cross-surface-gap lesson this flow's dispatch briefs call out
-// explicitly ("verify both surfaces by grep, do not assume symmetry").
-//
-// PINNED SHAPE (T11 implements exactly this — see subagent-result): a new
-// `else if (command === "/goal")` branch inside `runAgentRepl`'s existing
-// `if (line.startsWith("/"))` switch (alongside `/search-connect` etc.,
-// before the final unconditional `else`), calling:
-//   await runGoalCommand({
-//     raw: rest,                       // already-computed `parts.slice(1).join(" ").trim()`
-//     cwd: sessionCwd,
-//     io: agentIo,
-//     deps,
-//     history,
-//     slateSession,
-//     mintAttemptId: mintTimestampAttemptId,
-//   });
-// `runGoalCommand` mutates `slateSession.opened` IN PLACE (same object
-// `slateSessionBox.current` already points to via the SLATE-3a wiring above),
-// so no extra `slateSessionBox.current = slateSession;` sync is needed for
-// this branch specifically — it is not a REASSIGNMENT of the `slateSession`
-// variable itself, unlike `/new`'s branch.
-describe("SLATE-15 — /goal wiring in shell.ts's readline agent-mode command switch (source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const replBodyStart2 = shellSource.indexOf("async function runAgentRepl(");
-  const agentModeBranchStart2 = shellSource.indexOf("if (agentMode) {");
-  const replBody2 = shellSource.slice(replBodyStart2, agentModeBranchStart2);
-
-  test("runGoalCommand is imported from ./goal-command", () => {
-    expect(shellSource).toMatch(/from ["']\.\/goal-command["']/);
-    expect(shellSource).toContain("runGoalCommand");
-  });
-
-  test("the readline command switch has a /goal branch calling runGoalCommand", () => {
-    const branchIndex = replBody2.indexOf('command === "/goal"');
-    expect(branchIndex).toBeGreaterThanOrEqual(0);
-    const branchBlock = replBody2.slice(branchIndex, branchIndex + 400);
-    expect(branchBlock).toContain("runGoalCommand(");
-  });
-
-  test("the /goal branch passes rest, sessionCwd, agentIo, deps, history, slateSession, and mintTimestampAttemptId", () => {
-    const branchIndex = replBody2.indexOf('command === "/goal"');
-    const branchBlock = replBody2.slice(branchIndex, branchIndex + 500);
-    expect(branchBlock).toContain("rest");
-    expect(branchBlock).toContain("sessionCwd");
-    expect(branchBlock).toContain("agentIo");
-    expect(branchBlock).toContain("history");
-    expect(branchBlock).toContain("slateSession");
-    expect(branchBlock).toContain("mintTimestampAttemptId");
-  });
-
-  test("/goal appears in the readline agent REPL's own advertised command list (READLINE_AGENT_COMMANDS)", () => {
-    const start = shellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const end = shellSource.indexOf("];", start);
-    const block = shellSource.slice(start, end);
-    expect(block).toContain('"/goal"');
-  });
-});
-
-// --- flow 265 T2 — /plan (read-only toggle) wiring in shell.ts --------------
-//
-// `runAgentRepl` is NOT unit-tested directly (see the doc comment above its
-// definition), so — same as SLATE-15's `/goal` block above — this is a
-// source-text audit: it asserts the actual branch/closure shape exists,
-// rather than driving the REPL end-to-end.
-
-describe("flow 265 — /plan (read-only toggle) wiring in shell.ts (source-text audit)", () => {
-  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
-  const replBodyStart = shellSource.indexOf("async function runAgentRepl(");
-  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
-  const replBody = shellSource.slice(replBodyStart, agentModeBranchStart);
-
-  test("runAgentRepl declares its own `readOnly` let, independent of `permissionMode`", () => {
-    expect(replBody).toMatch(/let\s+readOnly\s*=\s*false;/);
-  });
-
-  test("agentIo.readOnly is wired to the closure, mirroring agentIo.permissionMode", () => {
-    expect(replBody).toContain("agentIo.readOnly = () => readOnly;");
-    expect(replBody).toContain("agentIo.permissionMode = () => permissionMode;");
-  });
-
-  test("the readline command switch has a /plan branch", () => {
-    const branchIndex = replBody.indexOf('command === "/plan"');
-    expect(branchIndex).toBeGreaterThanOrEqual(0);
-  });
-
-  test("/plan no-arg reports the current state", () => {
-    const branchIndex = replBody.indexOf('command === "/plan"');
-    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
-    expect(branchBlock).toContain("Read-only mode:");
-  });
-
-  test("/plan on sets readOnly = true, /plan off sets readOnly = false", () => {
-    const branchIndex = replBody.indexOf('command === "/plan"');
-    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
-    expect(branchBlock).toContain('"on"');
-    expect(branchBlock).toContain("readOnly = true;");
-    expect(branchBlock).toContain('"off"');
-    expect(branchBlock).toContain("readOnly = false;");
-  });
-
-  test("an unrecognized /plan argument gets a usage message, not a silent no-op", () => {
-    const branchIndex = replBody.indexOf('command === "/plan"');
-    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
-    expect(branchBlock).toContain("Usage: /plan [on|off]");
-  });
-
-  test("/plan does NOT gate itself behind a confirmation prompt (unlike /mode auto)", () => {
-    const branchIndex = replBody.indexOf('command === "/plan"');
-    const modeBranchIndex = replBody.indexOf('command === "/mode"');
-    const branchBlock = replBody.slice(branchIndex, branchIndex + 900);
-    // The /mode branch (which DOES confirm before `auto`, via `readLine()`)
-    // comes before /plan in source order.
-    expect(modeBranchIndex).toBeGreaterThanOrEqual(0);
-    expect(modeBranchIndex).toBeLessThan(branchIndex);
-    expect(branchBlock).not.toContain("readLine()");
-  });
-
-  test("/plan appears in the readline agent REPL's own advertised command list (READLINE_AGENT_COMMANDS)", () => {
-    const start = shellSource.indexOf("const READLINE_AGENT_COMMANDS: readonly string[] = [");
-    expect(start).toBeGreaterThanOrEqual(0);
-    const end = shellSource.indexOf("];", start);
-    const block = shellSource.slice(start, end);
-    expect(block).toContain('"/plan"');
-  });
-});
-
+// SLATE-15's `/goal` block and flow 265's `/plan` block both used to live
+// here as source-text audits, each explaining that `runAgentRepl` "has no
+// injection seam" and so could only be checked by reading this file's text.
+// It has one now — it is exported, and takes its writer through `rich.write`
+// — so both are driven through the real REPL in
+// `src/commands/shell-agent-repl.test.ts`, which reads the toggle state back
+// across lines and distinguishes two arguments by their two different
+// refusals. Neither of those is expressible as a substring.
 // --- flow 109 / AC10: readline `/expand` parity with the TUI transcript -----
 
 describe("expandedToolOutput (readline /expand, AC10)", () => {

@@ -143,6 +143,63 @@ describe("/goal reaches runGoalCommand (SLATE-15, was a source-text audit)", () 
 });
 
 // ---------------------------------------------------------------------------
+// /plan — replaces the flow 265 source-text audit in `shell.test.ts`.
+//
+// That audit looked for `let readOnly = false;`, `agentIo.readOnly = () =>
+// readOnly;` and the literals `"on"` / `readOnly = true;` inside a 900-character
+// window after `command === "/plan"`. None of that can tell whether the toggle
+// actually holds its state across two lines, which is the whole point of a
+// toggle. These tests read the state back.
+// ---------------------------------------------------------------------------
+
+describe("/plan toggles read-only mode (flow 265, was a source-text audit)", () => {
+  test("starts off, and says so", async () => {
+    expect(await repl(["/plan", "/exit"])).toContain("Read-only mode: off");
+  });
+
+  test("/plan on turns it on, and the state survives to the NEXT line", async () => {
+    // The audit could see `readOnly = true;` in the source. It could not see
+    // whether the assignment outlived the line that made it — a `/plan` branch
+    // that set a local and dropped it would have passed.
+    const output = await repl(["/plan on", "/plan", "/exit"]);
+    expect(output).toContain("Read-only mode: on");
+    expect(output).not.toContain("Read-only mode: off");
+  });
+
+  test("/plan off turns it back off", async () => {
+    const output = await repl(["/plan on", "/plan off", "/plan", "/exit"]);
+    expect(output).toContain("Read-only mode: off");
+  });
+
+  test("an unrecognised argument gets usage AND leaves the state alone", async () => {
+    // Two facts in one run, because the interesting failure is a `/plan
+    // bogus` that prints usage and silently resets the toggle.
+    const output = await repl(["/plan on", "/plan bogus", "/plan", "/exit"]);
+    expect(output).toContain("Usage: /plan [on|off]");
+    expect(output).not.toContain("Read-only mode: off");
+  });
+
+  test("BOUNDARY — the two states really are distinguishable", async () => {
+    // Without this, a `/plan` that always printed "Read-only mode: on" would
+    // satisfy the on-test, and one that always printed "off" would satisfy
+    // the off-test. Neither can satisfy both.
+    const on = await repl(["/plan on", "/plan", "/exit"]);
+    const off = await repl(["/plan off", "/plan", "/exit"]);
+    expect(on).not.toEqual(off);
+  });
+
+  test("/plan does not gate itself behind a confirmation prompt, unlike /mode auto", async () => {
+    // The audit asserted this by comparing SOURCE OFFSETS of `command ===
+    // "/mode"` and `command === "/plan"` and checking the window held no
+    // `readLine()`. What it was really protecting: `/plan on` must not eat the
+    // following input line as a yes/no answer. So — feed a following line and
+    // check it was still executed as a command.
+    const output = await repl(["/plan on", "/plan", "/exit"]);
+    expect(output).toContain("Read-only mode: on");
+  });
+});
+
+// ---------------------------------------------------------------------------
 // The advertised command list.
 //
 // Several audits reached into the source for `const READLINE_AGENT_COMMANDS:

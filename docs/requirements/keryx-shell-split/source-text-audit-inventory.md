@@ -225,7 +225,7 @@ commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 14
+commands/shell.test.ts | commands/shell.ts | 12
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 mcp-servers/invariants.test.ts | commands/shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
