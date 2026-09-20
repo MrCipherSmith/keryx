@@ -106,7 +106,7 @@ import {
   openSessionInfo,
 } from "./session-info";
 import { openModal, type ModalChrome, type ModalFooterAction } from "./modal-host";
-import { createDefaultSearchProviderController } from "../harness/search";
+import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderController, SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import type { SearchFieldDescriptor } from "../harness/search/types";
 import {
@@ -2001,7 +2001,7 @@ function runSearchProviderTestStep(
       }
       if (!tested.ok) {
         settled = "failure";
-        const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+        const reason = describeConnectionFailure(tested.reason);
         status.content = otui.t`${otui.red("✗")} ${otui.bold(`'${provider.id}' test failed: ${reason}`)} ${otui.dim("(Esc to go back and retry)")}`;
         return;
       }
@@ -6342,7 +6342,7 @@ export async function launchTuiAgentShell(opts: {
             );
             const tested = await searchProviderController.test(providerId);
             if (!tested.ok) {
-              const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+              const reason = describeConnectionFailure(tested.reason);
               io.onSystem?.(
                 `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
               );

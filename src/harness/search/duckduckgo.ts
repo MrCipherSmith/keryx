@@ -10,8 +10,21 @@ const ANOMALY_MARKERS = [
   "Unfortunately, bots use DuckDuckGo too",
 ] as const;
 
-const MIN_GAP_MS = 500;
-const MAX_GAP_MS = 2000;
+// Measured from this machine: two lite requests seconds apart get the anomaly
+// page, so the gap is seconds (not the 500-2000 ms it was) and an anomaly is
+// waited out below instead of being reported as an immediate failure.
+const MIN_GAP_MS = 4_000;
+const MAX_GAP_MS = 8_000;
+
+/** Waits tried after an anomaly page, before a search is reported as refused. */
+export const DUCKDUCKGO_ANOMALY_BACKOFF_MS: readonly number[] = [5_000, 20_000];
+
+/** Live timings, replaceable by tests so no test spends seconds asleep. */
+let timing: { minGapMs: number; maxGapMs: number; backoffMs: readonly number[] } = {
+  minGapMs: MIN_GAP_MS,
+  maxGapMs: MAX_GAP_MS,
+  backoffMs: DUCKDUCKGO_ANOMALY_BACKOFF_MS,
+};
 
 let lastSearchAt = 0;
 
@@ -24,9 +37,29 @@ export function isDuckDuckGoAnomaly(status: number, body: string): boolean {
   return ANOMALY_MARKERS.some((marker) => body.includes(marker));
 }
 
-/** Test seam: consecutive searches in one process otherwise wait 500–2000 ms. */
+/** Test seam: consecutive searches in one process otherwise wait 4000–8000 ms. */
 export function resetDuckDuckGoRateLimitForTests(): void {
   lastSearchAt = 0;
+}
+
+/**
+ * Test seam: collapse the inter-search gap and the anomaly ladder.
+ *
+ * A test that drives a real search must not spend seconds asleep.
+ */
+export function setDuckDuckGoTimingForTests(next: {
+  minGapMs?: number;
+  maxGapMs?: number;
+  backoffMs?: readonly number[];
+}): void {
+  lastSearchAt = 0;
+  timing = { ...timing, ...next };
+}
+
+/** Restore the measured production timings. */
+export function resetDuckDuckGoTimingForTests(): void {
+  lastSearchAt = 0;
+  timing = { minGapMs: MIN_GAP_MS, maxGapMs: MAX_GAP_MS, backoffMs: DUCKDUCKGO_ANOMALY_BACKOFF_MS };
 }
 
 export async function maybeDelayDuckDuckGoSearch(signal?: AbortSignal): Promise<void> {
@@ -35,7 +68,8 @@ export async function maybeDelayDuckDuckGoSearch(signal?: AbortSignal): Promise<
     lastSearchAt = now;
     return;
   }
-  const gap = MIN_GAP_MS + Math.floor(Math.random() * (MAX_GAP_MS - MIN_GAP_MS + 1));
+  const { minGapMs, maxGapMs } = timing;
+  const gap = minGapMs + Math.floor(Math.random() * Math.max(0, maxGapMs - minGapMs + 1));
   const wait = gap - (now - lastSearchAt);
   if (wait > 0) await sleep(wait, signal);
   lastSearchAt = Date.now();
@@ -169,4 +203,15 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     };
     signal?.addEventListener("abort", onAbort, { once: true });
   });
+}
+
+/**
+ * Wait out the anomaly that followed `attempt` (0-based), or report that the
+ * ladder is spent: `false` means the caller should stop retrying.
+ */
+export async function waitDuckDuckGoBackoff(attempt: number, signal?: AbortSignal): Promise<boolean> {
+  const wait = timing.backoffMs[attempt];
+  if (wait === undefined) return false;
+  if (wait > 0) await sleep(wait, signal);
+  return true;
 }

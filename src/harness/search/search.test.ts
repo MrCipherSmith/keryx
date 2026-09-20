@@ -1,9 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { loadSearchConfig, searchConfigPath } from "../../lib/search-config";
-import { duckduckgoLiteUrl, resetDuckDuckGoRateLimitForTests } from "./duckduckgo";
+import { duckduckgoLiteUrl, resetDuckDuckGoRateLimitForTests, setDuckDuckGoTimingForTests } from "./duckduckgo";
 import {
   createSearchProviderRegistry,
   connectedProviderIds,
@@ -20,15 +20,20 @@ class FakeTransport implements SandboxedWebTransport {
   duckduckgoStatus = 200;
   duckduckgoBody = liteHtml;
 
+  /** Staged per-call answers; empty falls back to status/body above. */
+  readonly duckduckgoQueue: { status: number; body: string }[] = [];
+
   async request(request: SandboxedWebRequest) {
     this.requests.push(request);
     if (request.providerId === "duckduckgo") {
+      const staged = this.duckduckgoQueue.shift();
+      const status = staged?.status ?? this.duckduckgoStatus;
       return {
-        ok: this.duckduckgoStatus >= 200 && this.duckduckgoStatus < 300,
-        status: this.duckduckgoStatus,
+        ok: status >= 200 && status < 300,
+        status,
         url: request.url,
         contentType: "text/html; charset=utf-8",
-        text: this.duckduckgoBody,
+        text: staged?.body ?? this.duckduckgoBody,
       };
     }
     if (request.providerId === "searxng") {
@@ -69,6 +74,11 @@ class FakeTransport implements SandboxedWebTransport {
 }
 
 describe("search provider registry", () => {
+  // The measured DuckDuckGo timings (4-8 s between searches, a 5 s + 20 s retry
+  // ladder) would otherwise be spent asleep; the tests that exercise the ladder
+  // set their own (zero-length) rungs below.
+  beforeEach(() => setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [] }));
+
   test("describes DuckDuckGo first, then SearXNG, Brave, Tavily and Exa", () => {
     const registry = createSearchProviderRegistry(new FakeTransport());
 
@@ -114,15 +124,15 @@ describe("search provider registry", () => {
     });
   });
 
-  test("treats DuckDuckGo anomaly pages as a failed connection, not an empty SERP", async () => {
+  test("treats DuckDuckGo anomaly pages as rate limiting, not a transport failure or an empty SERP", async () => {
     const transport = new FakeTransport();
     transport.duckduckgoStatus = 202;
     transport.duckduckgoBody = anomalyHtml;
     const registry = createSearchProviderRegistry(transport);
-    expect(await registry.get("duckduckgo")!.testConnection({})).toEqual({ ok: false, reason: "transport-failed" });
+    expect(await registry.get("duckduckgo")!.testConnection({})).toEqual({ ok: false, reason: "rate-limited" });
 
     transport.duckduckgoStatus = 200;
-    expect(await registry.get("duckduckgo")!.testConnection({})).toEqual({ ok: false, reason: "transport-failed" });
+    expect(await registry.get("duckduckgo")!.testConnection({})).toEqual({ ok: false, reason: "rate-limited" });
   });
 
   test("uses only the injected sandboxed transport and returns the common normalized result", async () => {
@@ -252,17 +262,32 @@ describe("search provider registry", () => {
     }
   });
 
-  test("DuckDuckGo search anomalies surface as search-failed, not empty hits", async () => {
-    resetDuckDuckGoRateLimitForTests();
+  test("DuckDuckGo anomalies exhaust the retry ladder, then say what happened", async () => {
+    setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [0, 0] });
     const dir = mkdtempSync(path.join(os.tmpdir(), "keryx-search-anomaly-"));
     try {
       const transport = new FakeTransport();
       transport.duckduckgoBody = anomalyHtml;
       const controller = new SearchProviderController(createSearchProviderRegistry(transport), dir);
-      expect(await controller.search("keryx sandbox")).toEqual({ ok: false, reason: "search-failed" });
+      const result = await controller.search("keryx sandbox");
+      expect(result).toMatchObject({ ok: false, reason: "search-failed" });
+      // The provider's own refusal reaches the caller: "search failed" alone is
+      // what sent an operator (and an agent) to retry a rate limit immediately.
+      expect(result.ok ? undefined : result.detail).toContain("rate limited");
+      expect(transport.requests).toHaveLength(3); // one attempt + two rungs
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  test("DuckDuckGo retries an anomaly and returns the results once it answers", async () => {
+    setDuckDuckGoTimingForTests({ minGapMs: 0, maxGapMs: 0, backoffMs: [0, 0] });
+    const transport = new FakeTransport();
+    transport.duckduckgoQueue.push({ status: 202, body: anomalyHtml }, { status: 202, body: anomalyHtml });
+    const registry = createSearchProviderRegistry(transport);
+    const result = await registry.get("duckduckgo")!.search({}, "keryx sandbox");
+    expect(transport.requests).toHaveLength(3);
+    expect(result.results[0]).toMatchObject({ providerId: "duckduckgo" });
   });
 
   test("remote providers reject successful JSON error payloads during connection tests", async () => {

@@ -86,7 +86,7 @@ export interface SearchResponse {
 
 export interface SearchConnectionResult {
   ok: boolean;
-  reason?: "missing-credential" | "transport-failed" | "incompatible-response";
+  reason?: "missing-credential" | "transport-failed" | "incompatible-response" | "rate-limited";
 }
 
 export interface SearchProviderConnectionState {

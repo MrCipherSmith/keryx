@@ -11,6 +11,88 @@ const MAX_WORKER_OUTPUT_BYTES = 192_000;
 
 // This source intentionally uses built-in modules only. It is passed with
 // `bun --eval`, so the child never imports code from the project worktree.
+/**
+ * Real browser User-Agent strings, rotated per search request.
+ *
+ * DuckDuckGo's Lite endpoint answers a request that looks like a browser and
+ * serves its bot-check page to one that does not — and keryx sent NO
+ * User-Agent at all. Rotating a small set of current browsers rather than
+ * pinning one string is what the one other agent that scrapes this same
+ * endpoint does (`crush/internal/agent/tools/search.go`), and it keeps a
+ * single frozen UA from becoming a signature of its own. This repo already
+ * sets a client-shaped User-Agent where a server requires one
+ * (`src/lib/oauth/catalog.ts` explains why GitHub forces it), so this is a
+ * deliberate exception of the same kind, not an accident of the transport.
+ */
+export const BROWSER_USER_AGENTS: readonly string[] = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:133.0) Gecko/20100101 Firefox/133.0",
+  "Mozilla/5.0 (X11; Linux x86_64; rv:132.0) Gecko/20100101 Firefox/132.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36 Edg/131.0.0.0",
+];
+
+/** Locale preferences a browser would send; rotated with the User-Agent. */
+export const BROWSER_ACCEPT_LANGUAGES: readonly string[] = [
+  "en-US,en;q=0.9",
+  "en-US,en;q=0.9,ru;q=0.8",
+  "en-GB,en;q=0.9,en-US;q=0.8",
+  "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+  "en-CA,en;q=0.9,en-US;q=0.8",
+];
+
+/** The `accept` a browser sends for a top-level navigation. */
+export const BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8";
+
+/**
+ * The rest of a browser's navigation fingerprint.
+ *
+ * `accept-encoding: identity` is deliberate: the worker does not decode
+ * compression, so it must not claim it does — advertising gzip and reading the
+ * compressed bytes as text would corrupt every result.
+ */
+export const BROWSER_STATIC_HEADERS: Readonly<Record<string, string>> = {
+  "accept-encoding": "identity",
+  connection: "keep-alive",
+  "upgrade-insecure-requests": "1",
+  "sec-fetch-dest": "document",
+  "sec-fetch-mode": "navigate",
+  "sec-fetch-site": "none",
+  "sec-fetch-user": "?1",
+  "cache-control": "max-age=0",
+};
+
+/**
+ * The header builder as JavaScript SOURCE, shipped verbatim into the sandboxed
+ * worker (which is evaluated with `bun --eval` and cannot import project code).
+ *
+ * Emitted from the exported constants above rather than written out a second
+ * time, so the lists a test asserts and the lists the worker sends cannot
+ * drift apart. Tests assert the emitted text contains exactly those lists.
+ */
+export const BROWSER_HEADERS_SOURCE = [
+  "(function (random) {",
+  "  var userAgents = " + JSON.stringify(BROWSER_USER_AGENTS) + ";",
+  "  var acceptLanguages = " + JSON.stringify(BROWSER_ACCEPT_LANGUAGES) + ";",
+  "  var staticHeaders = " + JSON.stringify(BROWSER_STATIC_HEADERS) + ";",
+  "  var pick = function (list) {",
+  "    var value = list[Math.floor(random() * list.length)];",
+  "    return value === undefined ? list[0] : value;",
+  "  };",
+  "  var headers = {",
+  "    accept: " + JSON.stringify(BROWSER_ACCEPT) + ",",
+  '    "accept-language": pick(acceptLanguages),',
+  '    "user-agent": pick(userAgents),',
+  "  };",
+  "  for (var name in staticHeaders) { headers[name] = staticHeaders[name]; }",
+  '  if (random() < 0.5) headers.dnt = "1";',
+  "  return headers;",
+  "})",
+].join("\n");
+
 const WORKER_SOURCE = String.raw`
 const { request: httpsRequest } = await import("node:https");
 const { request: httpRequest } = await import("node:http");
@@ -19,7 +101,10 @@ const input = JSON.parse(await Bun.stdin.text());
 const fail = () => process.stdout.write(JSON.stringify({ ok: false, reason: "request failed or timed out" }));
 try {
   const timer = setTimeout(() => req.destroy(new Error("timeout")), input.timeoutMs);
-  const headers = { accept: "text/html, text/plain, application/json, application/xml, application/xhtml+xml" };
+  const browserHeaders = ${BROWSER_HEADERS_SOURCE};
+  const headers = input.browserHeaders
+    ? browserHeaders(Math.random)
+    : { accept: "text/html, text/plain, application/json, application/xml, application/xhtml+xml" };
   const payload = input.body && typeof input.body === "object" ? { ...input.body } : undefined;
   if (input.credential && input.credential.injection === "header") headers[input.credential.name] = input.credential.value;
   if (input.credential && input.credential.injection === "json-body") {

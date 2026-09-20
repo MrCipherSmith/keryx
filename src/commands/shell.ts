@@ -50,7 +50,7 @@ import { buildInteractiveAgentTools, interactiveAgentToolNames } from "./interac
 import { createFileEventSink, type ShellEvent, type ShellEventSink } from "./shell-events";
 import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 import { catalogResolver, isMcpToolCall, promptUseToolApproval } from "../mcp-servers/approval-render";
-import { createDefaultSearchProviderController } from "../harness/search";
+import { createDefaultSearchProviderController, describeConnectionFailure } from "../harness/search";
 import type { SearchProviderDescriptor, SearchProviderId } from "../harness/search";
 import { createSpawnSubagentTool } from "../harness/tool/builtin/spawn-subagent-tool";
 import { createLazyRunExternal } from "../harness/run-external-factory";
@@ -2712,7 +2712,7 @@ export async function runAgentRepl(
         searchProviderController.configure(providerId, { ...descriptor.defaults, ...args.fields }, args.credential);
         const tested = await searchProviderController.test(providerId);
         if (!tested.ok) {
-          const reason = tested.reason === "missing-credential" ? "missing credential" : "connection validation failed";
+          const reason = describeConnectionFailure(tested.reason);
           agentIo.onSystem?.(
             `Configured '${providerId}' but it is not connected yet: ${reason}. Run /search-provider ${providerId} key=<value> to re-test.\n`,
           );
