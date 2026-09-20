@@ -30,3 +30,23 @@
 - 2026-09-19T23:34:59.277Z - task-done: T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)
 - 2026-09-19T23:38:54.998Z - task-done: T11: Verification: CI on the PR head green
 - 2026-09-19T23:48:27.914Z - task-attempt: T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)
+- 2026-09-20T00:58:02.593Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-20T00:58:02.677Z - ac-confirmed: AC1
+- 2026-09-20T00:58:02.767Z - ac-confirmed: AC2
+- 2026-09-20T00:58:02.853Z - ac-confirmed: AC3
+- 2026-09-20T00:58:02.940Z - ac-confirmed: AC4
+- 2026-09-20T00:58:03.043Z - ac-confirmed: AC5
+- 2026-09-20T00:58:03.137Z - ac-confirmed: AC6
+- 2026-09-20T00:58:03.226Z - ac-confirmed: AC7
+- 2026-09-20T00:58:03.315Z - ac-confirmed: AC8
+- 2026-09-20T00:58:03.406Z - ac-confirmed: AC9
+- 2026-09-20T00:58:03.502Z - ac-confirmed: AC10
+- 2026-09-20T00:58:03.599Z - ac-confirmed: AC11
+- 2026-09-20T00:58:03.686Z - ac-confirmed: AC12
+- 2026-09-20T00:58:03.773Z - ac-confirmed: AC13
+- 2026-09-20T00:58:06.330Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/622 (warning: PR is not a draft)
+- 2026-09-20T00:58:06.434Z - completing
+- 2026-09-20T00:58:13.823Z - completion-failed: review: 1 of 5 conditions failed — terminal-dispositions (violated): 2 finding(s) at or above `minor` are not terminal: 2026-09-20-ingest-622#F-005 (minor, round 2026-09-20-ingest-622): no disposition recorded | 2026-09-20-ingest-622#F-006 (minor, round 2026-09-20-ingest-622): no disposition recorded The round cap (3) is reached with the gate unsatisfied: the flow stays in-progress and the decision is the operator's. Completing here would reintroduce the leak this gate closes.
+- 2026-09-20T00:58:23.413Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/622 (warning: PR is not a draft)
+- 2026-09-20T00:58:23.513Z - completing
+- 2026-09-20T00:58:30.846Z - done: all gates passed

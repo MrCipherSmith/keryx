@@ -18,7 +18,17 @@
       ],
       "enumeration_method": "`keryx ctx rg \\\"publishLeaseDetail\\\" src docs --all` (complete, 8 matches) to find every reference, then `keryx ctx rg \\\"rememberExactShellGrant|formatShellApprovalHints|evaluateShellApproval|publishLease\\\" src/tui src/commands/shell.ts --glob '!*.test.ts' --all` (complete, 21 matches) to enumerate every approver that renders a shell approval prompt. Both surfaces (TUI `pickShellApproval`, readline `[y/N]` prompt) are the complete set of shell approvers for the interactive agent; the MCP dispatch path is explicitly out of scope per permission-mode.ts's header."
     },
-    "global_id": "2026-09-20-ingest-622#F-001"
+    "global_id": "2026-09-20-ingest-622-r03#F-001",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "The readline hint and the TUI title now carry publishLeaseDetail; shell-approval.test.ts and tui-shell.test.ts assert the holder and reason appear in the rendered text. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   },
   {
     "id": "F-002",
@@ -37,7 +47,17 @@
       ],
       "enumeration_method": "`keryx ctx rg \\\"busLeases\\\" src --glob '!*.test.ts'` (19 matches across 4 files) enumerated every production reference to the `AgentDeps.busLeases` shape; exactly two adapters construct it (shell.ts readline, tui-shell.ts TUI) and exactly one call site reads `heldBy()` (agent.ts's shell branch). Cross-checked with `keryx ctx rg \\\"leaseView|held\\\\(\\\\)|heldNotice|isHeld\\\" src/tui/tui-shell.ts src/tui/bus-wake.ts src/tui/bus-command.ts src/commands/shell.ts --all` (complete, 34 matches) to confirm no third adapter exists."
     },
-    "global_id": "2026-09-20-ingest-622#F-002"
+    "global_id": "2026-09-20-ingest-622-r03#F-002",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "Verified by temporarily restoring the turns-only lookup: agent-permission-mode.test.ts:916 fails (1 fail / 29 pass), and passes once the scope-aware appliesToMeLease is restored (30 pass). Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   },
   {
     "id": "F-003",
@@ -54,12 +74,22 @@
       ],
       "enumeration_method": "`keryx ctx rg \\\"runAgentTurn\\\\(\\\" src/commands/shell.ts src/tui/tui-shell.ts --all` returned the complete set of 4 main/side-agent turn starts on the two interactive surfaces: shell.ts:2315 (operator line, gated at :2773), shell.ts:2383 (completion wake \\u2014 UNGATED, this finding), tui-shell.ts:5852 (side worker, gated at :6126), tui-shell.ts:6883 (main turn inside `runLine`, gated at :6610). Cross-checked the TUI entry points with `keryx ctx rg \\\"runLine\\\\(\\\" src/tui/tui-shell.ts --all` (complete, 7 call sites: 5634 forceMainQueue \\u2014 gated at :5621; 6808 and 6929 turn-settle drains \\u2014 re-enter `runLine`'s own gate at :6610; 6968 task-notification wake \\u2014 gated at :6957; 7004 bus wake \\u2014 gated at :6992-6997; 7025 lease-release drain \\u2014 only fires on release; 7049 composer submit \\u2014 gated at :6610). readline has no bus wake at all (documented at src/commands/shell.ts:2243-2249), so the completion wake is the only ungated source on either surface."
     },
-    "global_id": "2026-09-20-ingest-622#F-003"
+    "global_id": "2026-09-20-ingest-622-r03#F-003",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "The completion-wake branch in runAgentRepl is gated on isHeld() before the auto-wake cap (shell.ts:2380), so a held completion starts no turn and spends no budget. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   },
   {
     "id": "F-004",
     "reviewer": "opus-r1",
-    "severity": "blocker",
+    "severity": "minor",
     "problem": "Three of the five publish rules match the subcommand by POSITION (`positionals[0] === \"release\"` / `\"publish\"`), while the other two match by MEMBERSHIP (`positionals.includes(\"push\")` / `.includes(\"merge\")`). A global flag that takes a SEPARATE value before the subcommand therefore shifts `positionals[0]` onto the flag's value and the rule misses: `gh -R owner/repo release create v1`, `gh --repo owner/repo release create v1`, `npm -w pkg publish`, `npm --loglevel warn publish`. `--flag=value` forms are unaffected (they are filtered as flags).",
     "impact": "AC6 requires `isPublishCommand` to match \"gh release, gh pr merge, npm publish and bun publish\" without qualifying the form, and specification §4.3's `git-publish` row lists the same five unqualified. `gh -R` and `npm -w` are ordinary spellings in a multi-repo / workspace checkout, so a real publish can skip the lease floor and run unattended under `auto`. This is an escalation-only classifier (ADR-0009), so it is a missed prompt, not a bypassed deny — hence minor, not a blocker — but the inconsistency with the two rules that already got it right looks like an oversight rather than a decision.",
     "suggested_fix": "Use membership for all five, matching `isGitPushSegment`/`isGhPrMergeSegment`: `v.positionals.includes(\"release\")` for `gh`, `v.positionals.includes(\"publish\")` for `npm`/`bun`. Cost is a false positive on e.g. `npm run publish-docs` (a single extra prompt, which is the direction ADR-0009 says to fail). Add `gh -R o/r release create v1` and `npm -w pkg publish` to the `PUBLISHES` table in src/lib/command-risk.test.ts.",
@@ -73,28 +103,58 @@
       ],
       "enumeration_method": "Read every member of `PUBLISH_RULES` (src/lib/command-risk.ts:292-298) \\u2014 the complete rule set consulted by `isPublishCommand` \\u2014 and classified each by whether it indexes `positionals` or searches it. Chain/quoting coverage checked separately against `splitSegments`/`splitWords`/`stripAssignments` (src/lib/shell-syntax.ts:113-228): `&&`, `;`, `|`, newline and `VAR=1 git push` are correctly covered; `env X=1 git push`, `(git push)` and `bash -c \\\"git push\\\"` are not, but the specification does not claim them and ADR-0009 explicitly disclaims completeness, so they are not reported."
     },
-    "global_id": "2026-09-20-ingest-622#F-004"
+    "global_id": "2026-09-20-ingest-622-r03#F-004",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "All five publish rules match the subcommand by membership; command-risk.test.ts covers gh -R o/r release create, gh --repo o/r release create, npm -w pkg publish, npm --loglevel warn publish and gh -R o/r pr merge, 8 pass. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   },
   {
     "id": "F-005",
     "reviewer": "opus-r1",
-    "severity": "minor",
-    "problem": "nit: `keryx bus pause --ttl`'s own error message advertises a form the command then refuses: `parseLeaseTtl` accepts a `s` suffix and the usage text says \"--ttl must look like 30m, 2h or 45s\", but `createPauseLease` refuses anything below `MIN_LEASE_TTL_MS` (1 minute) with `ttl-out-of-range`. `--ttl 45s` is therefore always rejected, by a different error than the one that suggested it.",
+    "severity": "info",
+    "problem": "`keryx bus pause --ttl`'s own error message advertises a form the command then refuses: `parseLeaseTtl` accepts a `s` suffix and the usage text says \"--ttl must look like 30m, 2h or 45s\", but `createPauseLease` refuses anything below `MIN_LEASE_TTL_MS` (1 minute) with `ttl-out-of-range`. `--ttl 45s` is therefore always rejected, by a different error than the one that suggested it.",
     "impact": "A confusing two-step refusal for an operator following the tool's own hint. No behavioural risk.",
     "suggested_fix": "Either drop `45s` from the usage string (and keep `s` parsing for a value like `90s`), or state the 1-minute floor in `PAUSE_USAGE` / the `--ttl` error text.",
     "evidence": "src/commands/bus.ts:196-203 (`parseLeaseTtl`) and :224 (the error text naming `45s`); src/bus/pause.ts:40 (`MIN_LEASE_TTL_MS = 60 * 1000`) and :116-121 (the `ttl-out-of-range` refusal).",
     "confidence": "high",
-    "global_id": "2026-09-20-ingest-622#F-005"
+    "global_id": "2026-09-20-ingest-622-r03#F-005",
+    "verification": {
+      "verdict": "refuted",
+      "method": "site-check",
+      "evidence": "The --ttl error text now reads 'must look like 30m or 2h (minimum 1 minute)' and no longer advertises 45s (src/commands/bus.ts). Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   },
   {
     "id": "F-006",
     "reviewer": "opus-r1",
-    "severity": "minor",
-    "problem": "nit: AC1's \"targets never including the holder\" is enforced only for the single-target case. `createPauseLease` calls `resolveRecipients`, which does not exclude the caller, and then refuses `recipient-is-self` only when `targets.length === 1 && targets[0] === holder.instanceId`. If a live `@name` were held by more than one instance, one of them the holder, the stored lease's `targets` would contain the holder's own id.",
+    "severity": "info",
+    "problem": "AC1's \"targets never including the holder\" is enforced only for the single-target case. `createPauseLease` calls `resolveRecipients`, which does not exclude the caller, and then refuses `recipient-is-self` only when `targets.length === 1 && targets[0] === holder.instanceId`. If a live `@name` were held by more than one instance, one of them the holder, the stored lease's `targets` would contain the holder's own id.",
     "impact": "No runtime effect: `createLeaseView`'s `isOverridable` independently excludes the holder (`lease.holder.instanceId !== options.instanceId`), so a holder is never held by its own lease whatever the file says. Probably unreachable anyway, since join uniquifies names (`nameWasTaken`). Reported only because AC1 states the invariant about the stored lease, not about the view.",
     "suggested_fix": "Filter the holder out of `targets` in `createPauseLease` before the `recipient-is-self` check, and refuse when the filtered list is empty. One line, and it makes the stored file match the AC's wording.",
     "evidence": "src/bus/pause.ts:124-127 (the single-target-only self check); src/bus/send.ts:103-122 (`resolveRecipients` never removes the caller); src/bus/pause.ts:325-328 (`isOverridable`, which is what actually holds the invariant today). Test coverage stops at the single-target case: src/bus/pause.test.ts:164 \"the holder is never a target: an explicit @name resolving only to the holder is refused recipient-is-self\".",
     "confidence": "medium",
-    "global_id": "2026-09-20-ingest-622#F-006"
+    "global_id": "2026-09-20-ingest-622-r03#F-006",
+    "verification": {
+      "verdict": "refuted",
+      "method": "execution",
+      "evidence": "createPauseLease filters the holder out of targets before the recipient-is-self check; pause.test.ts covers a multi-instance @name resolving to holder plus peer and storing only the peer. Fixed in 13659445.",
+      "verifier": "orchestrator"
+    },
+    "disposition": {
+      "state": "acted-on",
+      "evidence": "13659445"
+    }
   }
 ]
