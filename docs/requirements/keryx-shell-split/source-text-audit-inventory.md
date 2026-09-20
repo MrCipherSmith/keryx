@@ -237,6 +237,61 @@ Recorded because they were believed during this flow and are wrong:
   regex against the wrong file. It is not: `expect(tui).toMatch(hostImport)`
   reads the `tui-shell.ts` source, which is correct. No bug there.
 
+## What P2 left, and the seam each one waits on
+
+Flow 277 converted what its seams reached and stopped there. This is the list
+the next flow starts from, so nobody has to re-read the files to rebuild it.
+
+### Done in flow 277
+
+| seam | where | unlocked |
+|---|---|---|
+| `export runAgentRepl` + `rich.write` | `src/commands/shell.ts` | `/goal`, `/plan`, `/reasoning`, configDir threading |
+| `leaveBusThenRelease`, `performSlateExit` | `src/tui/shell-exit.ts` | the §5.4 exit ordering, pinned in three separate files |
+| `buildNextStepPrompt` | `src/tui/next-step-suggestion.ts` | flow 268 AC12 (reasoning never reaches the advisor) |
+
+### Still needed
+
+The big one first, because most of the rest hangs off it.
+
+**An injection point for `launchTuiAgentShell`.** It is one ~4,700-line
+closure over roughly two dozen mutable locals, and nothing inside it is
+reachable from a test. Every per-command audit in `tui-shell.test.ts` — the
+`/goal`, `/plan`, `/reasoning`, `/think` and `/search-connect` wiring blocks —
+waits on this, as does the `boot-animation` splash lifecycle. This is a flow of
+its own, not a step in one.
+
+Named, self-contained seams (from the flow 277 sweep of `tui-bus.test.ts`,
+where two `describe` blocks hold ~28 tests):
+
+| seam | shape | unlocks |
+|---|---|---|
+| `decideJoinAdoption({ destroyed, disabled })` | pure, mirrors `decideBusWake` | 4 tests: destroyed-join leaves, client resync, `busInbox`/`busAck` merged only on success, `selAtJoin` capture |
+| `buildBusJoinCallbacks(deps)` → `{ onEvent, onPeers, onError }` | factory | 3 tests: bail-out when destroyed, inbox push, poll delivery reported to the wake controller |
+| `buildBusJoinOptions(deps)` + `attemptBusJoin(deps)` | pure + async | 2 tests: join passes `surface: "tui"`, a join error never escapes |
+| `buildBusWakeOptions(deps)` | pure over the closure's locals | 2 tests: the wake controller shares the idle test, and never treats a destroyed session as idle |
+| `applySessionOpen(opened, { liveBus })` | shared helper | 3 tests: `applyOpened`, `startNewSession` and `resumeSessionInteractive` all sync `presence.sessionId` |
+| `BUS_WAKE_CAPPED_NOTICE` exported constant | constant in `bus-wake.ts` | 1 test, outright — it stops reading `tui-shell.ts` at all |
+| `buildDestroyHandler({ setDestroyed, … })` | factory | 1 test: `onDestroy` sets the destroyed flag |
+| `onTurnSettled(next, deps)` | extracted | 1 test: turn settle triggers `onSettle` |
+| `createBusClientRef(getLiveBus)` | one-line factory | 1 test: the ref is a live getter, not a captured value |
+| `createSplashLifecycle` | `boot-animation.ts` | the splash mount/removal audit |
+| `isToolAvailableToSideWorker(tool)` | pure predicate | the fourth flow-173 F-003 test (the other three are converted) |
+
+### Two that need deciding, not just extracting
+
+- **`mcp-servers/invariants.test.ts:114`** bans `process.once` for teardown
+  handlers across a **hardcoded** file list naming `../commands/shell.ts`.
+  Moving the registration at `:3588`/`:3593` into a submodule does not fail it
+  — it silently stops covering it. Give it the directory-scan treatment the
+  other structural audits got (`listSourceFiles`), and it stops being a
+  hazard. **This one must land before P4 moves anything.**
+- **`approval-wiring.test.ts:45`** compares character offsets in *both*
+  files. The property is real — an MCP tool call must never reach
+  `rememberExactShellGrant` and write a model-supplied grant pattern to the
+  operator's permission file — but the approval callback lives inside
+  `runAgentRepl`, so proving it needs a fake permission store injected there.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this

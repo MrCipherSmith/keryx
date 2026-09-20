@@ -3,3 +3,20 @@
 - 2026-09-19T23:52:23.299Z - flow created
 - 2026-09-20T00:02:20.945Z - blocked: Stopped by the user on 2026-09-19: the shell god-file split is halted. Two seams landed on the branch (export runAgentRepl, rich.write) plus nine behavioural tests; nothing pushed, no PR, no audits removed.
 - 2026-09-20T00:56:37.262Z - unblocked: resumed as initializing
+- 2026-09-20T08:58:10.458Z - task-added: T5: Record remaining seams in the inventory
+- 2026-09-20T08:58:10.570Z - frozen: 11 criteria; checksum recorded
+- 2026-09-20T08:58:10.680Z - started
+- 2026-09-20T08:58:21.473Z - task-done: T1: Collect remaining context
+- 2026-09-20T08:58:21.566Z - task-done: T2: Implement per plan
+- 2026-09-20T08:58:21.653Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-20T08:58:21.738Z - task-done: T5: Record remaining seams in the inventory
+- 2026-09-20T08:58:21.824Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-20T08:58:49.896Z - ac-confirmed: AC2: runAgentRepl exported at shell.ts; rich.write defaults to process.stdout; driven by src/commands/shell-agent-repl.test.ts (21 tests)
+- 2026-09-20T08:58:49.982Z - ac-confirmed: AC3: /goal: two args, two different parseGoalArgs refusals; /plan: state read back on a later line; /reasoning T26: auth.json read back out of the given configDir
+- 2026-09-20T08:58:50.071Z - ac-confirmed: AC4: repl() defaults configDir to path.join(root,'config'); reason stated in the harness doc comment; ~/.local/share/keryx/auth.json verified: reasoningEffort undefined, keys unchanged
+- 2026-09-20T08:58:50.165Z - ac-confirmed: AC5: src/tui/shell-exit.ts; 4 call sites (2x performSlateExit, 2x leaveBusThenRelease); shell-exit.test.ts pins order, the await-per-step property and throw-stops-the-sequence
+- 2026-09-20T08:58:50.255Z - ac-confirmed: AC6: buildNextStepPrompt reads role/content only; the test passes messages carrying reasoning and asserts the marker is absent from prompt.user and prompt.system
+- 2026-09-20T08:58:50.382Z - ac-confirmed: AC7: wrap-up composer ban, SIGINT/SIGTERM precondition, BackgroundJobStoreHint and runGoalCommand import checks, theme-picker/subagent-inspector/session-info modal-host checks — all scan src/tui/** via listSourceFiles
+- 2026-09-20T08:58:50.533Z - ac-confirmed: AC8: manifest regenerated from the live scan: 13 files / 42 sites, from 17 / 51; src/shell-source-audits.test.ts 3 pass
+- 2026-09-20T08:58:50.640Z - ac-confirmed: AC9: inventory section 'What the count does and does not measure' names the exit-sequence case: six audits moved off offsets onto one symbol with no change in the count
+- 2026-09-20T08:58:50.726Z - ac-confirmed: AC10: inventory section 'What P2 left, and the seam each one waits on': 11 named seams in a table, plus the two that need deciding (invariants hardcoded list, approval-wiring offsets)
