@@ -13,3 +13,5 @@
 - 2026-09-20T12:00:04.085Z - task-attempt: T6: started (attempt 1) — wiki page (sonnet)
 - 2026-09-20T12:00:04.272Z - task-attempt: T7: started (attempt 1) — cli-reference (haiku)
 - 2026-09-20T12:00:04.391Z - task-attempt: T8: started (attempt 1) — status docs (haiku)
+- 2026-09-20T12:04:27.621Z - task-done: T7: cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)
+- 2026-09-20T12:04:27.712Z - task-done: T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)

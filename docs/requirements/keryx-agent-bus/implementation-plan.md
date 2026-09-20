@@ -1,10 +1,11 @@
 # Implementation Plan: Keryx Agent Bus
-Version: 0.7.0
+Version: 0.7.1
 
 ## Status
 
 P0 is implemented (flow 271, PR #607). P1 is implemented (flow 272, PR #611).
-P2 is implemented (flow 273, PR #615). P3–P5 are planned and not implemented.
+P2 is implemented (flow 273, PR #615). P3 is implemented (flow 274, PR #620).
+P4 is implemented (flow 275, PR #622). P5 is implemented (flow 279).
 Known P0 limitations: a brand-new session is created a moment before it is
 leased; an unreadable owner record reads as unknown rather than lost; cross-host
 clock skew is documented only.
@@ -28,7 +29,7 @@ every task boundary. Acceptance criteria refer to
 | **P2 Shell integration** (implemented: flow 273, PR #615) | Scope:<br>• `joinBus` and leave in both shell surfaces<br>• the heartbeat, which also refreshes the session lease and its name<br>• the poller<br>• `--name` and `bus.name`<br>• operator rendering of inbound events<br>• the Peers group in the fleet sidebar<br>• the `/bus` modal and non-pause subcommands<br>• `bus` in `classifyBusyDispatch` | AC3b, AC4, AC17, AC18, AC20 | P1 |
 | **P3 Agent delivery and tools** (implemented: flow 274, PR #620) | Scope:<br>• `busInbox` with `drainUndelivered`<br>• `buildPeerMessageNotification` and `quarantinePeerMessage`<br>• drains at all three sites in `runAgentTurn` (turn start for `bus-message`, round boundary, post-answer)<br>• the wake trigger on poll and on settle, sharing the auto-wake cap<br>• `ack` writes<br>• `bus_list` and `bus_send` with rate limits<br>• the protocol text from [agent-protocol.md](agent-protocol.md) in the system prompt and tool descriptions<br><br>Decisions:<br>• `bus_send` is denied to side workers; the agent limit of 10/min is enforced in the tool. | AC5, AC6, AC7, AC8, AC13, AC14 (send refusals) | P2 |
 | **P4 Pause leases** (implemented: flow 275, PR #622) | Scope:<br>• lease files and the §4.3 active rule (a stale holder keeps its lease; a lease never applies to its holder)<br>• `pause-request`, `resume`, `override`, and `lease-expired` exactly once under the lock<br>• held turns in `runLine` covering the main agent, side workers, `/queue force` and wakes, with the status-bar banner<br>• `isPublishCommand` and the `publishLease` gate floor<br>• the tool-specific `write` escalation in `executeCall`<br>• `bus_pause`<br>• `keryx bus pause\|resume` and `/bus pause\|resume\|override`<br><br>Decisions:<br>• a stale holder keeps its lease, and only a gone holder loses it;<br>• the `publishLease` floor sits after the `readOnly` deny and never denies on its own;<br>• the `write` branch's escalation is tool-specific. | AC9, AC10, AC11, AC12, AC14 (pause refusals), AC21 (pause/resume) | P3 |
-| **P5 Docs** | Wiki architecture page `architecture/agent-bus.md`, cli-reference, a roadmap status update, and the end-to-end evidence of the two motivating scenarios on a real two-worktree clone. | PRD success criteria | P4 |
+| **P5 Docs** (implemented: flow 279) | Wiki architecture page `architecture/agent-bus.md`, cli-reference, a roadmap status update, and the end-to-end evidence of the two motivating scenarios on a real two-worktree clone. | PRD success criteria | P4 |
 
 P0 is useful on its own and can ship alone, because it fixes silent session
 overwrites.

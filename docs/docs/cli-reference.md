@@ -184,12 +184,12 @@ keryx bus prune [--json]
 |---|---|
 | `list` | Live and stale peers — name, state, status, heartbeat age, branch, checkout and activity — and the active pause leases. Gone peers are hidden. `--json` prints both as JSON. |
 | `log` | The retained events, oldest first. `--since <seq>` shows only events after that sequence number, `--limit N` only the last `N`, `--json` prints them as JSON. |
-| `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind reply` needs `--reply-to <id>` (`reply-without-replyTo`). The body is redacted before it is written and refused with `body-too-large` above 2048 bytes. `--json` prints `{ seq, id, resolvedTo }`. |
-| `pause` | Create a pause lease held by `cli` against a live `@name` or `@all` (`--reason` is required). `--scope` is `turns` (hold new main-agent turns, the default), `git-publish` (escalate publish commands like `git push` to an approval prompt even in `auto` mode) or `advisory` (delivered like a notice). `--ttl` is `30m`/`2h`/`45s`-style, defaulting to 30 minutes and capped at 4 hours (`ttl-out-of-range` beyond that). The `cli` holder has no presence, so the lease's own TTL is what bounds it; at most one CLI-origin lease can be active in the clone at a time (`lease-already-held`). `--json` prints `{ leaseId, scope, targets, expiresAt }`. |
-| `resume` | End any lease by id, as `cli` — the operator's escape hatch from a terminal, regardless of who holds it. Resuming an id that is already gone (expired, already resumed, pruned) is a silent no-op. `--json` prints `{ leaseId }`. |
-| `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the bound (two kept, none older than 7 days). Live and stale peers are never touched. `--json` prints what was removed. |
+| `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind` (default: `notice`) accepts `notice`, `question`, `handoff`, or `reply`; `--kind reply` requires `--reply-to <id>`. `--json` prints `{ seq, id, resolvedTo }`. |
+| `pause` | Create a pause lease held by `cli` against a live `@name` or `@all` (`--reason` is required). `--scope` (default: `turns`) is `turns` (hold new main-agent turns), `git-publish` (escalate publish commands to an approval prompt), or `advisory` (delivered like a notice). `--ttl` (default: `30m`) is `30m`/`2h`/`45s`-style, with a minimum of 1 minute and maximum of 4 hours. The `cli` holder has no presence, so the lease's own TTL bounds it; at most one CLI-origin lease can be active in the clone. `--json` prints `{ leaseId, scope, targets, expiresAt }`. |
+| `resume` | End any lease by id, as `cli` — the operator's escape hatch from a terminal, regardless of who holds it. Resuming an id that is already gone is a silent no-op. `--json` prints `{ leaseId }`. |
+| `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the retention bound. Live and stale peers are never touched. `--json` prints what was removed. |
 
-Refusals print their code and exit non-zero:
+Refusals print their code and exit non-zero (except where noted):
 
 - **`use-agent-tool`** (exit `2`): `send`, `pause` or `resume` run inside a
   keryx tool call, where `KERYX_TOOL_CALL=1` is set on every `shell_exec`
@@ -199,10 +199,25 @@ Refusals print their code and exit non-zero:
 - **`bus-disabled`**: `send`, `pause`, `resume` and `prune` when the bus is
   off — `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI
   environment. The reason is named. `list` and `log` still read.
-- **`lease-already-held`**: `pause` when a CLI-origin lease is already active
-  anywhere in the clone.
-- **`rate-limited`**: more than 30 CLI messages in one minute across the whole
-  clone.
+- **`unknown-recipient`**: `send` or `pause` when `@name` does not match a live
+  instance, or when the address is malformed.
+- **`recipient-not-live`**: `send` or `pause` when `@name` is held only by stale
+  or gone instances.
+- **`recipient-is-self`**: `send` or `pause` when the message or lease targets
+  resolve only to this instance.
+- **`lease-already-held`**: `pause` when the holder already has an active lease,
+  or when a CLI-origin lease is already active anywhere in the clone and this
+  request is also CLI-origin.
+- **`ttl-out-of-range`**: `pause` when `--ttl` is less than 1 minute or greater
+  than 4 hours.
+- **`not-lease-holder`**: `resume` when the lease holder is not `cli` and not
+  this instance.
+- **`reply-without-replyTo`**: `send` when `--kind reply` is used without
+  `--reply-to <id>`.
+- **`invalid-id`**: `send` when `--reply-to` is not a valid UUID, or `resume`
+  when the lease id is not a valid UUID.
+- **`rate-limited`**: `send` when the clone-wide CLI message rate exceeds 30 per
+  minute.
 
 ## shell behavior
 

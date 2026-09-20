@@ -9,7 +9,7 @@
   "title": "Agent bus P5: wiki architecture page, cli-reference, and end-to-end evidence of both motivating scenarios",
   "status": "in-progress",
   "createdAt": "2026-09-20T11:34:13.508Z",
-  "updatedAt": "2026-09-20T12:00:04.391Z",
+  "updatedAt": "2026-09-20T12:04:27.712Z",
   "source": {
     "type": "description",
     "ref": null
@@ -126,7 +126,7 @@
       "id": "T7",
       "title": "cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -140,13 +140,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)",
       "kind": "docs",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -160,7 +161,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T9",
@@ -240,6 +242,16 @@
       "at": "2026-09-20T12:00:04.391Z",
       "event": "task-attempt",
       "detail": "T8: started (attempt 1) — status docs (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:04:27.621Z",
+      "event": "task-done",
+      "detail": "T7: cli-reference: every keryx bus subcommand, flags, refusals by name, rate limit (haiku)"
+    },
+    {
+      "at": "2026-09-20T12:04:27.712Z",
+      "event": "task-done",
+      "detail": "T8: Status: package README, implementation-plan and roadmap to P0-P5 implemented (haiku)"
     }
   ]
 }

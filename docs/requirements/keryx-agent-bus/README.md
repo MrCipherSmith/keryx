@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.7.0
+Version: 0.7.1
 
 ## Purpose
 
@@ -13,7 +13,7 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**P0–P4 implemented. P5 specification ready, not implemented.**
+**P0–P5 implemented.**
 
 - **P0 session lease: implemented** in flow 271, PR
   [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
@@ -43,8 +43,14 @@ the same session and silently overwrite each other's turns.
   `turns`, `git-publish` and `advisory` scopes, held turns with a status-bar
   banner, the `publishLease` approval floor, `bus_pause`, and `/bus pause|resume|override`
   and `keryx bus pause|resume` commands.
-- **P5: not implemented.** Wiki architecture page and end-to-end scenario
-  evidence do not exist yet.
+- **P5 wiki and evidence: implemented** in flow 279. A wiki architecture page
+  links the bus to RP-08. End-to-end evidence of both PRD motivating scenarios
+  on a real two-worktree clone is in the `evidence/` directory. One PRD success
+criterion is not proven there and says so: a reply authored by a model through
+`bus_send`. The delivery path itself was driven on a live local model — the
+message enters the agent's history with `provenance: "tool"`, and the ack
+follows the history push — but that model would not emit a well-formed tool
+call, so the reply in the evidence is operator-issued.
 
 ## Document index
 
