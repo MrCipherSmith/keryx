@@ -1,14 +1,22 @@
 // The interactive agent's own bus tools (specification §7.1; decisions D-05,
-// D-12, D-13; flow 274 T6).
+// D-12, D-13; flow 274 T6, flow 275 T6).
 //
-// Two tools, both `risk: "read"` (D-05 — a tool's risk is static, read once in
-// `executeCall`): `bus_list` and `bus_send`. `bus_pause` (`risk: "write"`) is
-// P4 and not built here.
+// Three tools: `bus_list` and `bus_send`, both `risk: "read"`, and `bus_pause`
+// (`risk: "write"`, flow 275/P4), because a tool's risk is static (D-05, read
+// once in `executeCall`). `bus_pause` writes through `client.pause`/
+// `client.resume` (`./client.ts`), which mint `holder.origin`/`by.origin:
+// "agent"` — distinguishing the model's own tool call from the operator's
+// `/bus pause`/`keryx bus pause` — and share `createPauseLease`/
+// `resumePauseLease`'s refusals (`./pause.ts`).
 //
 // Offered ONLY to the interactive main agent (`buildInteractiveAgentTools`,
 // `../commands/interactive-agent-tools.ts`) — never to a subagent or an
 // external child (§7.1: "None of these tools is offered to subagents or
-// external children in v1."). Neither tool set is built from this factory.
+// external children in v1."), and never to a side worker (`bus_pause`'s
+// `risk: "write"` alone already excludes it from the side-worker roster,
+// which is filtered to `risk === "read"`; see `tui-shell.ts`'s
+// `SIDE_WORKER_DENIED_TOOL_NAMES`). Neither tool set is built from this
+// factory.
 //
 // `bus_send` writes through `client.sendAsAgent`/`client.replyAsAgent`
 // (`./client.ts`), which mint `from.origin: "agent"` and are counted against
@@ -32,6 +40,7 @@ import { displaySafe } from "./display";
 import { isBusRefusal, type BusRefusalCode } from "./errors";
 import { listActiveLeases } from "./leases";
 import type { PresenceLiveness } from "./presence";
+import { LEASE_SCOPES, type LeaseScope } from "./schema";
 import { AGENT_RATE_LIMIT_PER_MINUTE, SENDABLE_KINDS, type SendableKind } from "./send";
 
 export { AGENT_RATE_LIMIT_PER_MINUTE };
@@ -82,6 +91,22 @@ const BUS_LIST_DESCRIPTION =
   "(live and stale instances other than you: name, state, status, activity, checkout, branch), " +
   "and leases (active pause leases that apply to you or that you hold). " +
   "Refuses with bus-disabled when the bus is not joined in this session.";
+
+/** Default scope for `bus_pause` when the model omits one (specification §4.3). */
+const DEFAULT_PAUSE_SCOPE: LeaseScope = "turns";
+
+const BUS_PAUSE_DESCRIPTION =
+  "Ask peers on the agent bus to pause, or end a pause you hold. Input: " +
+  "{ action: 'pause'|'resume', to?, scope?, ttlMinutes?, reason?, leaseId? }. " +
+  "For action 'pause': to ('@name'|'@all') and reason are required; scope defaults to 'turns'. " +
+  "Scopes: 'turns' (peers start no new turn until you resume — use before a risky shared-branch " +
+  "step), 'git-publish' (peers may keep working but must not push/tag/merge/publish until you " +
+  "resume — use before your own release/publish/force-push), 'advisory' (peers are informed, " +
+  "nothing is enforced). ttlMinutes defaults to 30, maximum 240 (4h). For action 'resume': " +
+  "leaseId (a lease this instance holds) is required. Always resume a git-publish lease as soon " +
+  "as you are done, including when the operation fails. Refusals: bus-disabled, " +
+  "unknown-recipient, recipient-not-live, recipient-is-self, lease-already-held, " +
+  "ttl-out-of-range, not-lease-holder. On success returns { seq, leaseId }.";
 
 const BUS_SEND_DESCRIPTION =
   "Send a message on the agent bus to another joined keryx instance. Input: " +
@@ -201,5 +226,83 @@ export function buildBusTools(getClient: () => BusClient | undefined, options: B
     },
   };
 
-  return [busList, busSend];
+  const busPause: InteractiveTool = {
+    definition: {
+      name: "bus_pause",
+      description: BUS_PAUSE_DESCRIPTION,
+      inputSchema: {
+        type: "object",
+        properties: {
+          action: { type: "string", enum: ["pause", "resume"] },
+          to: { type: "string" },
+          scope: { type: "string", enum: [...LEASE_SCOPES] },
+          ttlMinutes: { type: "number" },
+          reason: { type: "string" },
+          leaseId: { type: "string" },
+        },
+        required: ["action"],
+        additionalProperties: false,
+      },
+      // D-05: risk is static per tool. `bus_pause` mutates every OTHER
+      // instance's turn/publish behavior, unlike `bus_send`'s read-risk
+      // notices — it goes through `resolveApprovalDecision` like any other
+      // write (`executeCall`'s write branch, `../commands/agent.ts`), with no
+      // escalation dimension of its own (specification §7.1).
+      risk: "write",
+    },
+    invoke: async (input): Promise<InteractiveToolResult> => {
+      const client = getClient();
+      if (client === undefined) {
+        return refusal("bus_pause", "bus-disabled", "the bus is not joined in this session");
+      }
+      const action = typeof input.action === "string" ? input.action : "";
+
+      if (action === "pause") {
+        const to = typeof input.to === "string" ? input.to : "";
+        const reason = typeof input.reason === "string" ? input.reason : "";
+        if (to.length === 0) {
+          return { output: 'bus_pause: "to" is required for action "pause"', isError: true };
+        }
+        if (reason.length === 0) {
+          return { output: 'bus_pause: "reason" is required for action "pause"', isError: true };
+        }
+        const scopeRaw = typeof input.scope === "string" && input.scope.length > 0 ? input.scope : DEFAULT_PAUSE_SCOPE;
+        if (!(LEASE_SCOPES as readonly string[]).includes(scopeRaw)) {
+          return { output: `bus_pause: scope must be one of ${LEASE_SCOPES.join(", ")}`, isError: true };
+        }
+        const scope = scopeRaw as LeaseScope;
+        const ttlMinutes = typeof input.ttlMinutes === "number" ? input.ttlMinutes : undefined;
+        const ttlMs = ttlMinutes === undefined ? undefined : ttlMinutes * 60_000;
+        try {
+          const lease = await client.pause(to, scope, reason, ttlMs, "agent");
+          return { output: JSON.stringify({ seq: lease.requestEventSeq, leaseId: lease.leaseId }), isError: false };
+        } catch (error) {
+          if (isBusRefusal(error)) {
+            return refusalFromError("bus_pause", error);
+          }
+          throw error;
+        }
+      }
+
+      if (action === "resume") {
+        const leaseId = typeof input.leaseId === "string" ? input.leaseId : "";
+        if (leaseId.length === 0) {
+          return { output: 'bus_pause: "leaseId" is required for action "resume"', isError: true };
+        }
+        try {
+          await client.resume(leaseId, "agent");
+          return { output: JSON.stringify({ leaseId }), isError: false };
+        } catch (error) {
+          if (isBusRefusal(error)) {
+            return refusalFromError("bus_pause", error);
+          }
+          throw error;
+        }
+      }
+
+      return { output: 'bus_pause: action must be "pause" or "resume"', isError: true };
+    },
+  };
+
+  return [busList, busSend, busPause];
 }

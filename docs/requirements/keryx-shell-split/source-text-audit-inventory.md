@@ -9,8 +9,12 @@ four-PR shape). It is not a summary: P2's job is to turn each row in the detail
 files into a behavioural test, and where the behaviour is not observable, to
 add the seam that makes it observable.
 
-Scanned at flow 276, against `origin/main` at `398acb4a`. **16 test files, 46
-read sites.**
+Scanned at flow 276, against `origin/main` at `398acb4a`: 16 test files, 46
+read sites. Rescanned at flow 275 (agent bus P4), against the
+`feat/agent-bus-p4-pause-leases` branch, after P4's T8 held-turn wiring added
+four audit blocks to `commands/shell.test.ts` and its own
+`tui/tui-hold.test.ts` — see [audits-commands.md](audits-commands.md) and
+[audits-tui-other.md](audits-tui-other.md). **17 test files, 51 read sites.**
 
 ## The detail
 
@@ -221,7 +225,7 @@ commands/shell-bus.test.ts | commands/shell.ts | 2
 commands/shell-grant-refresh.test.ts | commands/shell.ts | 1
 commands/shell-lease.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 commands/shell-task-registry-wiring.test.ts | commands/shell.ts | 1
-commands/shell.test.ts | commands/shell.ts | 10
+commands/shell.test.ts | commands/shell.ts | 14
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 mcp-servers/invariants.test.ts | commands/shell.ts | 2
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
@@ -231,6 +235,7 @@ tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/subagent-inspector.test.ts | tui/tui-shell.ts | 1
 tui/theme-picker.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
+tui/tui-hold.test.ts | tui/tui-shell.ts | 1
 tui/tui-session-lease.test.ts | tui/tui-shell.ts | 3
 tui/tui-shell.test.ts | tui/tui-shell.ts | 14
 ```

@@ -335,3 +335,56 @@ test("ADR-0010: an ordinary modify-only patch does NOT escalate", async () => {
   );
   expect(seen).toEqual([{ destructive: false }]);
 });
+
+// --- flow 275 T6 (specification §7.1, AC7): `classifyPatchRisk` applies ONLY
+// to `apply_patch` — a DIFFERENT write-risk tool (e.g. `bus_pause`) must get
+// NO escalation at all, even given the exact same delete-shaped patch input
+// that makes `apply_patch` escalate above. A tool must EARN escalation by
+// name, never inherit apply_patch's by sharing its `risk: "write"` value.
+
+test("flow 275 T6: a write-risk tool that is not apply_patch never escalates, even with a delete-shaped patch input", async () => {
+  const { tool } = fakeWriteTool("bus_pause");
+  const seen: { destructive: boolean; credentials: boolean }[] = [];
+  const io: AgentIO = {
+    write: () => {},
+    requestApproval: async (_t, _i, meta) => {
+      seen.push({ destructive: meta?.destructive === true, credentials: meta?.credentials === true });
+      return true;
+    },
+  };
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", DELETE_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    [],
+    "go",
+  );
+  expect(seen).toEqual([{ destructive: false, credentials: false }]);
+});
+
+test("flow 275 T6: bus_pause (write) is gated by approval, not rejected outright, and DEFAULT-DENIES without an approver", async () => {
+  const { tool, ran } = fakeWriteTool("bus_pause");
+  const history: NormalizedMessage[] = [];
+  const io: AgentIO = { write: () => {} }; // no approver
+  await runAgentTurn(
+    io,
+    {
+      provider: scriptedProvider(callScript("bus_pause", BENIGN_PATCH)),
+      providerId: "s",
+      modelId: "m",
+      tools: [tool],
+      systemInstruction: "sys",
+      idSeq,
+    },
+    history,
+    "go",
+  );
+  expect(ran()).toBe(false);
+  expect(history.find((m) => m.role === "tool")?.content).toMatch(/not approved/);
+});

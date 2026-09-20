@@ -195,3 +195,54 @@ export function createBusDropNotifier(print: (droppedTotal: number) => void): Bu
 export function busInboxFullNotice(droppedTotal: number): string {
   return `bus: inbox full — ${droppedTotal} older message(s) dropped\n`;
 }
+
+// ---------------------------------------------------------------------------
+// Flow 275 (agent bus P4, T7; specification §4.3, §5.2, AC4): pause-lease
+// held turns. The GATE at each entry point (an operator line, `/queue force`,
+// a side-worker dispatch for a busy line) is a plain `leaseView.held()`
+// check made right at the call site in `tui-shell.ts` — there is no
+// meaningful decision table to extract there, only "hold or proceed", and a
+// dedicated pure function for that would just restate the boolean.
+//
+// The one genuinely stateful, bug-prone piece — same shape problem review r1
+// F1 already solved for the bus-wake capped notice — is RELEASE: nothing in
+// `tui-shell.ts` otherwise notices the moment a `turns` lease stops applying
+// (`BusClient` refreshes `leaseView()` every poll, but reading a fresh
+// boolean each time tells you the CURRENT state, never the TRANSITION into
+// it), so the queue built up while held would sit forever unless something
+// explicitly drains it right when the hold lifts (specification §5.2 step 5:
+// "release the hold... " and AC4: "when the lease ends the held lines run").
+// `createLeaseHoldController` is that something, following the exact
+// held/wasHeld edge-detection shape `createBusWakeController` already uses
+// for its own once-per-batch capped notice.
+export interface LeaseHoldControllerOptions {
+  /** `() => leaseView()?.held() === true` (specification §4.3) — read fresh on every poll, never cached. */
+  isHeld: () => boolean;
+  /**
+   * Called exactly once, the poll where `isHeld()` flips from true to false —
+   * never on a poll that was already released, and never merely because
+   * nothing is currently held (that is simply "never true", not a release).
+   * The caller drains its queue here exactly as a turn-settle would (FIFO
+   * head, or a pending forced item first).
+   */
+  onRelease: () => void;
+}
+
+export interface LeaseHoldController {
+  /** Call on every poll settle — same call site as `BusWakeController.onPoll`. */
+  onPoll(): void;
+}
+
+/** Build a {@link LeaseHoldController} — see its own and {@link LeaseHoldControllerOptions}'s doc comments. */
+export function createLeaseHoldController(opts: LeaseHoldControllerOptions): LeaseHoldController {
+  let wasHeld = false;
+  return {
+    onPoll() {
+      const held = opts.isHeld();
+      if (wasHeld && !held) {
+        opts.onRelease();
+      }
+      wasHeld = held;
+    },
+  };
+}

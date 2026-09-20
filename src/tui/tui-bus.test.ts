@@ -172,8 +172,54 @@ describe("parseBusCommand (specification §7.2: /bus subcommand parsing and refu
     expect(parseBusCommand("/bus ask @release").kind).toBe("error");
     expect(parseBusCommand("/bus reply abc").kind).toBe("error");
     expect(parseBusCommand("/bus name").kind).toBe("error");
-    expect(parseBusCommand("/bus pause @all --scope turns reason").kind).toBe("error"); // P4, not wired here
     expect(parseBusCommand("/bus nonsense")).toEqual({ kind: "error", reason: 'unknown /bus subcommand "nonsense"' });
+  });
+});
+
+// Flow 275 (agent bus P4, T7; specification §4.3, §7.2): /bus pause|resume|override parsing.
+describe("parseBusCommand: pause/resume/override (specification §4.3, §7.2)", () => {
+  test("pause with no address/flags defaults to @all and scope turns", () => {
+    expect(parseBusCommand("/bus pause cutting the release")).toEqual({
+      kind: "pause",
+      toLabel: "@all",
+      scope: "turns",
+      ttlMs: undefined,
+      reason: "cutting the release",
+    });
+  });
+
+  test("pause with an explicit @name, --scope and --ttl (either flag order)", () => {
+    expect(parseBusCommand("/bus pause @release --scope git-publish --ttl 30m tagging a release")).toEqual({
+      kind: "pause",
+      toLabel: "@release",
+      scope: "git-publish",
+      ttlMs: 30 * 60 * 1000,
+      reason: "tagging a release",
+    });
+    expect(parseBusCommand("/bus pause @release --ttl 1h --scope advisory heads up")).toEqual({
+      kind: "pause",
+      toLabel: "@release",
+      scope: "advisory",
+      ttlMs: 60 * 60 * 1000,
+      reason: "heads up",
+    });
+  });
+
+  test("pause refusals: missing reason, unknown scope, unparseable ttl", () => {
+    expect(parseBusCommand("/bus pause @all --scope turns").kind).toBe("error");
+    expect(parseBusCommand("/bus pause --scope nonsense reason").kind).toBe("error");
+    expect(parseBusCommand("/bus pause --ttl five-minutes reason").kind).toBe("error");
+    expect(parseBusCommand("/bus pause --ttl 45 reason").kind).toBe("error"); // unit-less: refused, not guessed
+  });
+
+  test("resume: bare defaults to no leaseId (caller resolves its own lease)", () => {
+    expect(parseBusCommand("/bus resume")).toEqual({ kind: "resume", leaseId: undefined });
+    expect(parseBusCommand("/bus resume abc-123")).toEqual({ kind: "resume", leaseId: "abc-123" });
+  });
+
+  test("override: bare defaults to no leaseId (caller resolves the lease holding it)", () => {
+    expect(parseBusCommand("/bus override")).toEqual({ kind: "override", leaseId: undefined });
+    expect(parseBusCommand("/bus override abc-123")).toEqual({ kind: "override", leaseId: "abc-123" });
   });
 });
 
@@ -238,6 +284,59 @@ describe("/bus modal tab content builders (specification §7.2)", () => {
 
   test("Leases: none active says so", () => {
     expect(formatBusLeasesLines([])).toEqual(["No active leases."]);
+  });
+
+  // Flow 275 (agent bus P4, T7): `selfInstanceId` marks leases that target
+  // this instance (specification §4.3: `["*"]` targets everyone but the
+  // holder — D-03), so the operator can tell at a glance which apply to them.
+  test("Leases: selfInstanceId marks a lease that targets this instance (@all)", () => {
+    const lease: PauseLease = {
+      schemaVersion: 1,
+      leaseId: "00000000-0000-4000-8000-000000000002",
+      holder: { instanceId: "00000000-0000-4000-8000-000000000001", name: "release", origin: "operator" },
+      targets: ["*"],
+      scope: "turns",
+      reason: "cutting the release branch",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-01-01T01:00:00.000Z",
+      requestEventSeq: 1,
+    };
+    const [mine] = formatBusLeasesLines([lease], "00000000-0000-4000-8000-000000000099");
+    expect(mine).toContain("→ you");
+    const [notMine] = formatBusLeasesLines([lease]);
+    expect(notMine).not.toContain("→ you");
+  });
+
+  test("Leases: selfInstanceId never marks the lease's own holder (D-03)", () => {
+    const lease: PauseLease = {
+      schemaVersion: 1,
+      leaseId: "00000000-0000-4000-8000-000000000002",
+      holder: { instanceId: "00000000-0000-4000-8000-000000000001", name: "release", origin: "operator" },
+      targets: ["*"],
+      scope: "turns",
+      reason: "cutting the release branch",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-01-01T01:00:00.000Z",
+      requestEventSeq: 1,
+    };
+    const [line] = formatBusLeasesLines([lease], "00000000-0000-4000-8000-000000000001");
+    expect(line).not.toContain("→ you");
+  });
+
+  test("Leases: selfInstanceId does not mark a lease that names other concrete instances only", () => {
+    const lease: PauseLease = {
+      schemaVersion: 1,
+      leaseId: "00000000-0000-4000-8000-000000000002",
+      holder: { instanceId: "00000000-0000-4000-8000-000000000001", name: "release", origin: "operator" },
+      targets: ["00000000-0000-4000-8000-000000000003"],
+      scope: "turns",
+      reason: "cutting the release branch",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      expiresAt: "2026-01-01T01:00:00.000Z",
+      requestEventSeq: 1,
+    };
+    const [line] = formatBusLeasesLines([lease], "00000000-0000-4000-8000-000000000099");
+    expect(line).not.toContain("→ you");
   });
 
   // review r1 F3: `reason` and the holder's `name` are peer-supplied free
@@ -513,14 +612,22 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
   });
 
   test("createBusWakeController is imported and used to build the bus-wake controller (review r1 F11)", () => {
-    expect(source).toContain('createBusWakeController,\n  type BusDropNotifier,\n  type BusWakeController,\n} from "./bus-wake";');
+    const importBlock = source.slice(source.indexOf("import {\n  busInboxFullNotice,"), source.indexOf('} from "./bus-wake";') + 20);
+    expect(importBlock).toContain("createBusWakeController,");
+    expect(importBlock).toContain("type BusDropNotifier,");
+    expect(importBlock).toContain("type BusWakeController,");
     expect(source).toContain("busWakeController = createBusWakeController({");
   });
 
   test("the bus-wake controller is built from the SAME idle test, inbox, consecutiveAutoWakes/resolveMaxAutoWake, and runLine as the task-notification wake", () => {
     const start = source.indexOf("busWakeController = createBusWakeController({");
     expect(start).toBeGreaterThanOrEqual(0);
-    const block = source.slice(start, start + 900);
+    // End-anchored on the call's own closing `});` rather than a fixed byte
+    // count — flow 275 T7 widened `isIdle` (a `leaseView()?.held()` clause)
+    // enough to push a fixed-size window short.
+    const end = source.indexOf("\n    });", start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
     expect(block).toContain("chrome.isBusy()");
     expect(block).toContain("foregroundOperation.isActive");
     expect(block).toContain("mainQueue.length === 0");
@@ -533,12 +640,19 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     // Never a second, bus-only counter — the SAME variable the task
     // notification wake increments/resets.
     expect(block).not.toMatch(/consecutiveBusWakes|busWakeCount/);
+    // Flow 275 T7 (specification §4.3, AC4): a `turns` lease holding this
+    // instance is a third "not idle" reason, alongside busy/foreground/queue.
+    expect(block).toContain("leaseView()?.held() !== true");
   });
 
   test("the bus-wake controller never treats the session as idle once the destroyed guard is set (review r1 F6 pattern)", () => {
     const start = source.indexOf("busWakeController = createBusWakeController({");
-    const block = source.slice(start, start + 300);
-    expect(block).toContain("isIdle: () => !destroyed && !chrome.isBusy()");
+    const end = source.indexOf("inbox: busInbox,", start);
+    expect(end).toBeGreaterThan(start);
+    const block = source.slice(start, end);
+    expect(block).toContain("isIdle: () =>");
+    expect(block).toContain("!destroyed &&");
+    expect(block).toContain("!chrome.isBusy() &&");
   });
 
   test("the capped bus-wake message mirrors the task-notification cap wording", () => {

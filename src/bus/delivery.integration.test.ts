@@ -266,6 +266,23 @@ async function makePeer(root: string, instanceId: string, name: string): Promise
         PENDING_ACKS.push(write);
       }
     },
+    async pause() {
+      throw new Error("not used by this test double");
+    },
+    async resume() {},
+    async override() {},
+    leaseView() {
+      return {
+        refresh: async () => {},
+        appliesToMe: () => false,
+        held: () => false,
+        heldBy: () => undefined,
+        appliesToMeLease: () => undefined,
+        banner: () => undefined,
+        override: async () => {},
+        myLeases: () => [],
+      };
+    },
     leave() {},
   };
 

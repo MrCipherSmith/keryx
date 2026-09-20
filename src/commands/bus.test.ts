@@ -2,7 +2,8 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { appendEvent } from "../bus/log";
+import { appendEvent, cursorAtStart, readEvents } from "../bus/log";
+import { listLeases, readLease } from "../bus/leases";
 import { eventsPath, leasePath, leasesDir, resolveBusRoot } from "../bus/paths";
 import { writePresence } from "../bus/presence";
 import type { PauseLease, PresenceRecord } from "../bus/schema";
@@ -237,6 +238,109 @@ describe("keryx bus send", () => {
   });
 });
 
+// Flow 275 (agent bus P4, T8; specification §7.3): `keryx bus pause` and
+// `keryx bus resume`.
+describe("keryx bus pause", () => {
+  test("creates a lease held by cli, default scope turns and default ttl 30m, targeting @all as [\"*\"]", async () => {
+    const root = await seededRoot();
+    const result = await run(["pause", "@all", "--reason", "cutting a release"], { root });
+    expect(result.code).toBe(0);
+    expect(result.out[0]).toMatch(/^paused turns for @all — lease [0-9a-f]{8} expires/);
+
+    const leases = await listLeases(root);
+    // seededRoot() already seeded one lease (ID.lease, held by "release"); this is the new one.
+    const created = leases.find((l) => l.leaseId !== ID.lease);
+    expect(created?.holder).toEqual(expect.objectContaining({ name: "cli", origin: "cli" }));
+    expect(created?.targets).toEqual(["*"]);
+    expect(created?.scope).toBe("turns");
+    expect(created?.reason).toBe("cutting a release");
+    const ttlMs = Date.parse(created?.expiresAt ?? "") - Date.parse(created?.createdAt ?? "");
+    expect(ttlMs).toBe(30 * 60 * 1000);
+  });
+
+  test("--scope, --ttl and --json are honoured", async () => {
+    const root = await seededRoot();
+    const result = await run(["pause", "@release", "--reason", "hold your turn", "--scope", "git-publish", "--ttl", "5m", "--json"], {
+      root,
+    });
+    expect(result.code).toBe(0);
+    const parsed = JSON.parse(result.out.join("\n")) as { leaseId: string; scope: string; targets: string[]; expiresAt: string };
+    expect(parsed.scope).toBe("git-publish");
+    expect(parsed.targets).toEqual([ID.release]);
+    const lease = await readLease(root, parsed.leaseId);
+    expect(lease).toBeDefined();
+    const ttlMs = Date.parse(lease?.expiresAt ?? "") - Date.parse(lease?.createdAt ?? "");
+    expect(ttlMs).toBe(5 * 60 * 1000);
+  });
+
+  test("refusals: no --reason, an unknown --scope, an unparseable --ttl, and a second CLI-origin lease", async () => {
+    const root = await seededRoot();
+    const cases: [string[], RegExp][] = [
+      [["pause", "@all"], /invalid-event: usage: keryx bus pause/],
+      [["pause", "@all", "--reason", "x", "--scope", "nope"], /--scope must be one of/],
+      [["pause", "@all", "--reason", "x", "--ttl", "nope"], /--ttl must look like/],
+    ];
+    for (const [args, pattern] of cases) {
+      const result = await run(args, { root });
+      expect(result.code).toBe(1);
+      expect(result.err.join("\n")).toMatch(pattern);
+    }
+    // D-12: at most one active CLI-origin lease per clone.
+    expect((await run(["pause", "@all", "--reason", "first"], { root })).code).toBe(0);
+    const second = await run(["pause", "@release", "--reason", "second"], { root });
+    expect(second.code).toBe(1);
+    expect(second.err.join("\n")).toMatch(/lease-already-held/);
+  });
+
+  test("D-13: refused with use-agent-tool (exit 2) inside a tool call", async () => {
+    const root = await seededRoot();
+    const env = { NODE_ENV: "test", KERYX_TOOL_CALL: "1" };
+    const refused = await run(["pause", "@all", "--reason", "hi"], { root, env });
+    expect(refused.code).toBe(USE_AGENT_TOOL_EXIT);
+    expect(refused.err.join("\n")).toMatch(/use-agent-tool/);
+    expect(await listLeases(root)).toHaveLength(1); // only the seeded one — nothing created
+  });
+});
+
+describe("keryx bus resume", () => {
+  test("ends any lease by id, as cli, regardless of who holds it", async () => {
+    const root = await seededRoot();
+    const result = await run(["resume", ID.lease], { root });
+    expect(result.code).toBe(0);
+    expect(result.out[0]).toBe(`resumed lease ${ID.lease.slice(0, 8)}`);
+    expect(await readLease(root, ID.lease)).toBeUndefined();
+
+    const { events } = await readEvents(root, await cursorAtStart(root));
+    const resumeEvent = events.find((e) => e.kind === "resume");
+    expect(resumeEvent?.from).toEqual(expect.objectContaining({ name: "cli", origin: "cli" }));
+  });
+
+  test("--json prints { leaseId }; resuming an id that is already gone is a silent no-op", async () => {
+    const root = await seededRoot();
+    const result = await run(["resume", ID.lease, "--json"], { root });
+    expect(JSON.parse(result.out.join("\n"))).toEqual({ schemaVersion: 1, leaseId: ID.lease });
+
+    const again = await run(["resume", ID.lease], { root });
+    expect(again.code).toBe(0);
+  });
+
+  test("usage error with no leaseId", async () => {
+    const root = await seededRoot();
+    const result = await run(["resume"], { root });
+    expect(result.code).toBe(1);
+    expect(result.err.join("\n")).toMatch(/invalid-event: usage: keryx bus resume/);
+  });
+
+  test("D-13: refused with use-agent-tool (exit 2) inside a tool call", async () => {
+    const root = await seededRoot();
+    const env = { NODE_ENV: "test", KERYX_TOOL_CALL: "1" };
+    const refused = await run(["resume", ID.lease], { root, env });
+    expect(refused.code).toBe(USE_AGENT_TOOL_EXIT);
+    expect(refused.err.join("\n")).toMatch(/use-agent-tool/);
+    expect(await readLease(root, ID.lease)).toBeDefined(); // untouched
+  });
+});
+
 describe("bus-disabled", () => {
   const disabled: [string, Partial<BusCommandDeps>, RegExp][] = [
     ["KERYX_BUS=off", { env: { NODE_ENV: "test", KERYX_BUS: "off" } }, /bus-disabled: KERYX_BUS=off/],
@@ -245,9 +349,9 @@ describe("bus-disabled", () => {
   ];
 
   for (const [label, deps, pattern] of disabled) {
-    test(`${label}: send and prune refuse with the reason; list and log still read`, async () => {
+    test(`${label}: send, pause, resume and prune refuse with the reason; list and log still read`, async () => {
       const root = await seededRoot();
-      for (const sub of [["send", "@all", "hi"], ["prune"]]) {
+      for (const sub of [["send", "@all", "hi"], ["pause", "@all", "--reason", "x"], ["resume", ID.lease], ["prune"]]) {
         const result = await run(sub, { root, ...deps });
         expect(result.code).toBe(1);
         expect(result.err.join("\n")).toMatch(pattern);

@@ -16,6 +16,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, wr
 import { hostname, tmpdir } from "node:os";
 import path from "node:path";
 import type { BusClient } from "../bus/client";
+import { listLeases } from "../bus/leases";
 import { presenceDir, presencePath, resolveBusRoot } from "../bus/paths";
 import { listPresence, readPresence, writePresence } from "../bus/presence";
 import { readEvents, cursorAtStart } from "../bus/log";
@@ -298,6 +299,154 @@ describe("runShell bus events and /bus (AC3, AC4, readline chat loop)", () => {
       shellDeps({ cwd }),
     );
     expect(output.join("")).toContain("bus: not joined for this session");
+  });
+});
+
+// Flow 275 (agent bus P4, T8; specification §4.3, §7.2): `/bus
+// pause|resume|override` — shared by both readline REPLs through
+// `runBusSlashCommand`/`parseBusSlashCommand`, so `runShell` (which HAS an
+// injection seam, unlike `runAgentRepl`) is enough to exercise the parsing
+// and dispatch for real, against a real `joinBus`/`createPauseLease`.
+describe("runShell /bus pause|resume|override (flow 275 T8)", () => {
+  // `leave()` (on the normal `/exit` return) resumes every lease this
+  // instance holds (specification §5.4) — so the lease is inspected FROM
+  // INSIDE the running shell, before `/exit` is yielded, never after.
+  test("/bus pause <reason> with no address or flags defaults to @all, scope turns, ttl 30m", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const output: string[] = [];
+    let busRoot = "";
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          busRoot = bus.root;
+          yield "/bus pause everyone stand down";
+          const leases = await listLeases(busRoot);
+          expect(leases).toHaveLength(1);
+          expect(leases[0]?.targets).toEqual(["*"]);
+          expect(leases[0]?.scope).toBe("turns");
+          expect(leases[0]?.reason).toBe("everyone stand down");
+          const ttlMs = Date.parse(leases[0]?.expiresAt ?? "") - Date.parse(leases[0]?.createdAt ?? "");
+          expect(ttlMs).toBe(30 * 60 * 1000);
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    expect(output.join("")).toMatch(/bus: paused turns for @all \(lease [0-9a-f]{8}, expires/);
+  });
+
+  test("/bus pause @name --scope git-publish --ttl 5m <reason> respects the address and flags", async () => {
+    const { root: busRoot } = await resolveBusRoot(cwd);
+    const peer = peerRecord({ name: "release" });
+    await writePresence(busRoot, peer);
+
+    const output: string[] = [];
+    await runShell(
+      {
+        lines: (async function* () {
+          yield "/bus pause @release --scope git-publish --ttl 5m cutting a release";
+          const leases = await listLeases(busRoot);
+          expect(leases).toHaveLength(1);
+          expect(leases[0]?.targets).toEqual([peer.instanceId]);
+          expect(leases[0]?.scope).toBe("git-publish");
+          expect(leases[0]?.reason).toBe("cutting a release");
+          const ttlMs = Date.parse(leases[0]?.expiresAt ?? "") - Date.parse(leases[0]?.createdAt ?? "");
+          expect(ttlMs).toBe(5 * 60 * 1000);
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd }),
+    );
+    expect(output.join("")).toContain("bus: paused git-publish for @release");
+  });
+
+  test("/bus pause with no reason, an unknown --scope, or an unparseable --ttl is refused with usage", async () => {
+    const cases = ["/bus pause @all", "/bus pause --scope nope reason", "/bus pause --ttl nope reason"];
+    for (const line of cases) {
+      const output: string[] = [];
+      await runShell({ lines: linesFrom(line, "/exit"), write: (s) => output.push(s) }, shellDeps({ cwd }));
+      const text = output.join("");
+      expect(text).toMatch(/usage: \/bus pause|--scope must be one of|--ttl must look like/);
+    }
+  });
+
+  test("/bus resume with no active lease says so", async () => {
+    const output: string[] = [];
+    await runShell(
+      { lines: linesFrom("/bus resume", "/exit"), write: (s) => output.push(s) },
+      shellDeps({ cwd }),
+    );
+    expect(output.join("")).toContain("bus: you hold no active pause lease.");
+  });
+
+  test("/bus resume with no id ends this instance's own lease", async () => {
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const output: string[] = [];
+    let busRoot = "";
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          busRoot = bus.root;
+          yield "/bus pause @all holding";
+          yield "/bus resume";
+          expect(await listLeases(busRoot)).toHaveLength(0);
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    expect(output.join("")).toMatch(/bus: resumed lease [0-9a-f]{8}/);
+  });
+
+  test("/bus override with no lease held says so", async () => {
+    const output: string[] = [];
+    await runShell(
+      { lines: linesFrom("/bus override", "/exit"), write: (s) => output.push(s) },
+      shellDeps({ cwd }),
+    );
+    expect(output.join("")).toContain("bus: no lease is currently held against you.");
+  });
+
+  test("/bus override with no id releases this instance from the turns lease holding it, leaving it active for others", async () => {
+    const { root: busRoot } = await resolveBusRoot(cwd);
+    // A peer holds a turns lease targeting @all, which includes this shell.
+    const peer = peerRecord({ name: "release" });
+    await writePresence(busRoot, peer);
+    const { createPauseLease } = await import("../bus/pause");
+    const lease = await createPauseLease(busRoot, {
+      holder: { instanceId: peer.instanceId, name: peer.name, origin: "operator" },
+      toLabel: "@all",
+      scope: "turns",
+      reason: "peer pause",
+      now: Date.now,
+    });
+
+    const busBox: { current: BusClient | undefined } = { current: undefined };
+    const output: string[] = [];
+    await runShell(
+      {
+        lines: (async function* () {
+          const bus = busBox.current;
+          if (bus === undefined) throw new Error("expected a joined bus");
+          await bus.pollNow();
+          yield "/bus override";
+          yield "/exit";
+        })(),
+        write: (s) => output.push(s),
+      },
+      shellDeps({ cwd, busBox }),
+    );
+    expect(output.join("")).toContain(`bus: overrode lease ${lease.leaseId.slice(0, 8)}`);
+    // The lease itself is untouched (override targets ONE instance, D-03) —
+    // still there, still active, for the next instance that joins.
+    expect(await listLeases(busRoot)).toHaveLength(1);
   });
 });
 
@@ -597,7 +746,11 @@ describe("runAgentRepl bus wiring (source-text audit)", () => {
     const notificationBlock = replBody.slice(notificationIndex - 300, notificationIndex);
     expect(notificationBlock).toContain("busWorking = true;");
 
-    const turnIndex = replBody.indexOf("await runAgentTurn(agentIo, deps, history, line,");
+    // Flow 275 T8: the operator turn now runs through the extracted
+    // `runOperatorLine` helper (so it can also be called from the held-queue
+    // drain path) — same `busWorking = true;` just before it, parameter
+    // renamed from `line` to `operatorLine`.
+    const turnIndex = replBody.indexOf("await runAgentTurn(agentIo, deps, history, operatorLine,");
     const turnBlock = replBody.slice(turnIndex - 300, turnIndex);
     expect(turnBlock).toContain("busWorking = true;");
   });
@@ -640,8 +793,9 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
 
   test("the join success rebuild folds in busJoined: true for the system instruction", () => {
     const successIdx = replBody.indexOf("bus = joined;");
-    // Widened for review r1 F2's tools-rebuild comment/code ahead of these fields.
-    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    // Widened for review r1 F2's tools-rebuild comment/code ahead of these
+    // fields, and again for flow 275 T8's busLeases: busLeasesFromClient(...) line.
+    const successBlock = replBody.slice(successIdx, successIdx + 2200);
     expect(successBlock).toContain("systemInstruction: buildAgentSystemInstruction(orient, {");
     expect(successBlock).toContain("busJoined: true,");
   });
@@ -652,7 +806,7 @@ describe("runAgentRepl bus delivery wiring (flow 274 T7, source-text audit)", ()
   // ever grows them here, once, right after a real join succeeds.
   test("the join success rebuild splices bus_list/bus_send into deps.tools via buildBusTools(() => bus)", () => {
     const successIdx = replBody.indexOf("bus = joined;");
-    const successBlock = replBody.slice(successIdx, successIdx + 1900);
+    const successBlock = replBody.slice(successIdx, successIdx + 2200);
     expect(successBlock).toContain("const rebuiltTools = [...deps.tools, ...buildBusTools(() => bus)];");
     expect(successBlock).toContain("tools: rebuiltTools,");
     expect(successBlock).toContain("toolNames: interactiveAgentToolNames(rebuiltTools),");

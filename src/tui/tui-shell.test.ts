@@ -1983,6 +1983,90 @@ otuiTest("clicking the Deny row resolves the approval — options are mouse-clic
   h.renderer.destroy();
 });
 
+// Flow 275 (agent bus P4, T7; specification §4.4): the publish-lease floor
+// never offers "always allow" — handed over from T5's `ApprovalMeta.publishLease`
+// / `evaluateShellApproval` (`../commands/shell-approval.ts`), which this
+// surface's own call site reads as `ev.publishLease` and threads through as
+// `pickShellApproval`'s new trailing `publishLease` argument.
+otuiTest("publishLease: true offers neither always-exact nor always-prefix, even for an otherwise ordinary command", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "git push origin main"; // ordinary — suggestShellPatterns would offer both grants on its own
+
+  const choice = pickShellApproval(
+    otui.core,
+    h.renderer,
+    h.dock,
+    command,
+    async () => "",
+    false,
+    false,
+    {},
+    true, // publishLease
+  );
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("a peer's git-publish lease applies");
+  expect(frame).not.toContain("Always allow");
+  expect(frame).toContain("Allow once");
+  expect(frame).toContain("Deny");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
+// Flow 275 F1 (specification §4.4): "The prompt names the lease, its holder
+// and its reason." When `ApprovalMeta.publishLeaseDetail` was resolved, the
+// title must name it instead of the generic "a peer's ... applies" line.
+otuiTest("publishLeaseDetail, when present, names the holder and reason in the title", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "git push origin main";
+
+  const choice = pickShellApproval(
+    otui.core,
+    h.renderer,
+    h.dock,
+    command,
+    async () => "",
+    false,
+    false,
+    {},
+    true, // publishLease
+    'held by @alice — "cutting the release"', // publishLeaseDetail
+  );
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("git-publish lease");
+  expect(frame).toContain("@alice");
+  expect(frame).toContain("cutting the release");
+  expect(frame).not.toContain("a peer's git-publish lease applies");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
+otuiTest("publishLease: false (the default) still offers the exact/prefix grants for the same command", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "git push origin main";
+
+  const choice = pickShellApproval(otui.core, h.renderer, h.dock, command, async () => "");
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("Always allow");
+  expect(frame).not.toContain("a peer's git-publish lease applies");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
 otuiTest("a long multi-line command is no longer cut at 120 chars — it renders in full, up to the box", async () => {
   const otui = requireOtui();
   const h = await mountApprovalDock(otui, { height: 24 });

@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { evaluateShellApproval, formatShellApprovalHints } from "./shell-approval";
+import { evaluateShellApproval, formatShellApprovalHints, rememberExactShellGrant } from "./shell-approval";
 
 const cleanIo = {
   loadAudit: () => ({ permissions: { allow: ["git status"] }, rejected: [] as const }),
@@ -43,6 +43,73 @@ test("evaluateShellApproval never auto-approves credential-touching commands", (
   expect(ev.autoApprove).toBe(false);
   expect(ev.credentials).toBe(true);
   expect(formatShellApprovalHints(ev).join(" ")).toMatch(/credentials/);
+});
+
+// --- publishLease (specification §4.4, flow 275 T5) ------------------------
+
+test("evaluateShellApproval never auto-approves a command a git-publish lease applies to, even a saved allowlist match", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git status" }), // command shape irrelevant; io says it's allowlisted
+    meta: { fingerprint: "fp", destructive: false, publishLease: true },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo, // allowlists "git status" — would otherwise auto-approve
+  });
+  expect(ev.autoApprove).toBe(false);
+  expect(ev.publishLease).toBe(true);
+  expect(formatShellApprovalHints(ev).join(" ")).toMatch(/publish/);
+});
+
+test("evaluateShellApproval without publishLease is unaffected (regression guard)", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git status" }),
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.publishLease).toBe(false);
+  expect(ev.autoApprove).toBe(true);
+});
+
+// Flow 275 F1 (specification §4.4): "The prompt names the lease, its holder
+// and its reason." `ApprovalMeta.publishLeaseDetail` must reach the readline
+// hint line, not just `ShellApprovalEval.publishLease`'s boolean.
+test("evaluateShellApproval carries publishLeaseDetail through, and the readline hint names the holder and reason", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git push origin main" }),
+    meta: {
+      fingerprint: "fp",
+      destructive: false,
+      publishLease: true,
+      publishLeaseDetail: 'held by @alice — "cutting the release"',
+    },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.publishLeaseDetail).toBe('held by @alice — "cutting the release"');
+  const hints = formatShellApprovalHints(ev).join(" ");
+  expect(hints).toContain("@alice");
+  expect(hints).toContain("cutting the release");
+});
+
+test("evaluateShellApproval falls back to the generic hint when publishLeaseDetail is absent", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git push origin main" }),
+    meta: { fingerprint: "fp", destructive: false, publishLease: true },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.publishLeaseDetail).toBeUndefined();
+  expect(formatShellApprovalHints(ev).join(" ")).toMatch(/a peer's git-publish lease applies/);
+});
+
+test("rememberExactShellGrant refuses to remember anything while publishLease is set", () => {
+  const sessionAllow = new Set<string>();
+  const stored = rememberExactShellGrant("git push origin main", sessionAllow, { publishLease: true });
+  expect(stored).toBe("");
+  expect(sessionAllow.size).toBe(0);
 });
 
 test("evaluateShellApproval reports tamper but still auto-approves a matching grant", () => {

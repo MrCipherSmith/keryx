@@ -59,11 +59,31 @@ export function formatBusPeersLines(peers: readonly BusPeer[]): string[] {
 }
 
 /**
+ * A lease's `targets` names this instance (specification §4.3: `["*"]` reads
+ * as "every instance but the holder" — D-03, a lease never targets its own
+ * holder). Flow 275 (agent bus P4) T7: the Leases tab's own "applies to
+ * you" marker. Deliberately does NOT account for a local `override` — that
+ * state lives inside `PauseLeaseView` (`../bus/pause.ts`), which exposes no
+ * per-lease query for it, only the aggregate `appliesToMe(scope)`/`heldBy()`
+ * the hold/banner logic already uses; a read-only tab marking a just-
+ * overridden lease as still "applying" for one more poll is a display nit,
+ * never a functional one (the actual hold is governed by `leaseView.held()`,
+ * not by this marker).
+ */
+function leaseTargetsInstance(lease: PauseLease, instanceId: string): boolean {
+  if (lease.holder.instanceId === instanceId) return false;
+  return lease.targets.includes(instanceId) || (lease.targets.length === 1 && lease.targets[0] === "*");
+}
+
+/**
  * Leases tab: active pause leases only (`listActiveLeases`), read-only.
  * `reason` and the holder's `name` are peer-supplied free text — `displaySafe`d
- * before they reach the operator's terminal (review r1 F3).
+ * before they reach the operator's terminal (review r1 F3). `selfInstanceId`
+ * (flow 275 T7), when given, marks each lease that targets this instance
+ * (`leaseTargetsInstance` above) so the operator can tell at a glance which
+ * leases actually bind them.
  */
-export function formatBusLeasesLines(leases: readonly PauseLease[]): string[] {
+export function formatBusLeasesLines(leases: readonly PauseLease[], selfInstanceId?: string): string[] {
   if (leases.length === 0) {
     return ["No active leases."];
   }
@@ -71,7 +91,9 @@ export function formatBusLeasesLines(leases: readonly PauseLease[]): string[] {
     const targets = lease.targets.length === 1 && lease.targets[0] === "*" ? "@all" : lease.targets.join(",");
     const holderName = displaySafe(lease.holder.name);
     const reason = displaySafe(lease.reason);
-    return `${lease.scope}  @${holderName} → ${targets}  "${reason}"  until ${lease.expiresAt}`;
+    const mine = selfInstanceId !== undefined && leaseTargetsInstance(lease, selfInstanceId);
+    const marker = mine ? "→ you  " : "";
+    return `${marker}${lease.scope}  @${holderName} → ${targets}  "${reason}"  until ${lease.expiresAt}`;
   });
 }
 
@@ -133,6 +155,8 @@ export type PresentBusOptions = {
   leases: readonly PauseLease[];
   events: readonly BusEvent[];
   renderer?: unknown;
+  /** Flow 275 T7: this instance's id, so the Leases tab can mark which leases apply to it. */
+  selfInstanceId?: string;
 };
 
 export function presentBus(openModalFn: OpenModalFn, otui: unknown, chrome: unknown, options: PresentBusOptions): ModalHandle | undefined {
@@ -153,7 +177,7 @@ export function presentBus(openModalFn: OpenModalFn, otui: unknown, chrome: unkn
         return;
       }
       if (tabId === "leases") {
-        paintContent(otui, renderer, body, formatBusLeasesLines(options.leases).join("\n"), width);
+        paintContent(otui, renderer, body, formatBusLeasesLines(options.leases, options.selfInstanceId).join("\n"), width);
         return;
       }
       paintContent(otui, renderer, body, formatBusLogLines(options.events).join("\n"), width);

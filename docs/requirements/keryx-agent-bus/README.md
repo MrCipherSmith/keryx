@@ -1,5 +1,5 @@
 # Keryx Agent Bus
-Version: 0.6.0
+Version: 0.7.0
 
 ## Purpose
 
@@ -13,7 +13,7 @@ the same session and silently overwrite each other's turns.
 
 ## Status
 
-**P0–P3 implemented. P4–P5 specification ready, not implemented.**
+**P0–P4 implemented. P5 specification ready, not implemented.**
 
 - **P0 session lease: implemented** in flow 271, PR
   [#607](https://github.com/MrCipherSmith/keryx/pull/607). Opening a session
@@ -38,8 +38,13 @@ the same session and silently overwrite each other's turns.
   reply, handoff or name-addressed notice, capped by the auto-wake limit. The
   agent has `bus_list` and `bus_send` tools, with rate limits and a conduct
   block. Ack writes record delivery.
-- **P4–P5: not implemented.** Pause leases and wiki/scenario documentation do
-  not exist yet.
+- **P4 pause leases: implemented** in flow 275, PR
+  [#622](https://github.com/MrCipherSmith/keryx/pull/622). Pause leases with
+  `turns`, `git-publish` and `advisory` scopes, held turns with a status-bar
+  banner, the `publishLease` approval floor, `bus_pause`, and `/bus pause|resume|override`
+  and `keryx bus pause|resume` commands.
+- **P5: not implemented.** Wiki architecture page and end-to-end scenario
+  evidence do not exist yet.
 
 ## Document index
 

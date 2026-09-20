@@ -126,7 +126,9 @@ keryx shell [-c|--continue] [-r|--resume [id]] [--fork|--take-over]
 The renderer falls back to readline gracefully when the TUI cannot start, and
 off a TTY the shell is non-interactive by default.
 
-An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ [#<seq>] @from kind: preview` — the sequence number and the message's short id (its first 8 characters). The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <#seq|id-prefix> <text>`, and `name <new>` (rename this shell). `/bus reply` resolves its first argument against the last 200 rendered events — a bare or `#`-prefixed sequence number, or a unique prefix (at least 8 characters) of a message's id — and always replies to that sender's underlying instance, so it still reaches them even if they renamed since; an argument matching no rendered message is refused with one line. The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
+An interactive shell joins the agent bus at start, printing `bus: joined as @<name> · <n> peers`. Inbound messages appear as `⇄ [#<seq>] @from kind: preview` — the sequence number and the message's short id (its first 8 characters). The `/bus` slash command offers `list` (show peers), `send @x` or `@x text` (send a message), `ask`, `reply <#seq|id-prefix> <text>`, `name <new>` (rename this shell), `pause [@name|@all] [--scope turns|git-publish|advisory] [--ttl 30m] <reason…>` (create a pause lease held by this shell; target and scope default to `@all` and `turns`), `resume [leaseId]` (end a lease this shell holds — the id defaults to its own), and `override [leaseId]` (release just this shell from a lease that targets it — the id defaults to whichever `turns` lease currently holds it). `/bus reply` resolves its first argument against the last 200 rendered events — a bare or `#`-prefixed sequence number, or a unique prefix (at least 8 characters) of a message's id — and always replies to that sender's underlying instance, so it still reaches them even if they renamed since; an argument matching no rendered message is refused with one line. The bus stays off when `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI environment is detected, printing `bus: off (<reason>)`.
+
+While a `turns` pause lease applies to this shell, an operator line at the readline prompt does not start a main-agent turn: it prints one line naming the holder, the reason and the remaining TTL, keeps the line, and runs it once the lease is resumed, overridden with `/bus override`, or expires. `/bus` and `/exit` still work while held.
 
 When the bus is joined, peer messages also reach the agent as tool-provenance context. An idle agent is woken by a question, reply, handoff or name-addressed notice, with the wake capped by the same auto-wake limit as task notifications; readline shows `bus: N message(s) pending` and delivers them on the next turn. The agent has two tools: `bus_list` (read peer names and message log) and `bus_send` (send a message to a peer or broadcast).
 
@@ -173,6 +175,8 @@ never writes flow state.
 keryx bus list [--json]
 keryx bus log [--since <seq>] [--limit N] [--json]
 keryx bus send <@name|@all> [--kind notice|question|handoff|reply] [--reply-to <id>] [--json] <text…>
+keryx bus pause <@name|@all> --reason <text> [--scope turns|git-publish|advisory] [--ttl 30m] [--json]
+keryx bus resume <leaseId> [--json]
 keryx bus prune [--json]
 ```
 
@@ -181,17 +185,22 @@ keryx bus prune [--json]
 | `list` | Live and stale peers — name, state, status, heartbeat age, branch, checkout and activity — and the active pause leases. Gone peers are hidden. `--json` prints both as JSON. |
 | `log` | The retained events, oldest first. `--since <seq>` shows only events after that sequence number, `--limit N` only the last `N`, `--json` prints them as JSON. |
 | `send` | Send a message as `cli` with a fresh sender id. `@name` must name a live instance: a name nobody holds is refused with `unknown-recipient`, one held only by stale or gone instances with `recipient-not-live`. `@all` is every instance. `--kind reply` needs `--reply-to <id>` (`reply-without-replyTo`). The body is redacted before it is written and refused with `body-too-large` above 2048 bytes. `--json` prints `{ seq, id, resolvedTo }`. |
+| `pause` | Create a pause lease held by `cli` against a live `@name` or `@all` (`--reason` is required). `--scope` is `turns` (hold new main-agent turns, the default), `git-publish` (escalate publish commands like `git push` to an approval prompt even in `auto` mode) or `advisory` (delivered like a notice). `--ttl` is `30m`/`2h`/`45s`-style, defaulting to 30 minutes and capped at 4 hours (`ttl-out-of-range` beyond that). The `cli` holder has no presence, so the lease's own TTL is what bounds it; at most one CLI-origin lease can be active in the clone at a time (`lease-already-held`). `--json` prints `{ leaseId, scope, targets, expiresAt }`. |
+| `resume` | End any lease by id, as `cli` — the operator's escape hatch from a terminal, regardless of who holds it. Resuming an id that is already gone (expired, already resumed, pruned) is a silent no-op. `--json` prints `{ leaseId }`. |
 | `prune` | Remove presence records gone for more than 24 hours, inactive pause leases (each gets one `lease-expired` event), and rotated log segments beyond the bound (two kept, none older than 7 days). Live and stale peers are never touched. `--json` prints what was removed. |
 
 Refusals print their code and exit non-zero:
 
-- **`use-agent-tool`** (exit `2`): `send` run inside a keryx tool call, where
-  `KERYX_TOOL_CALL=1` is set on every `shell_exec` child. An agent uses its bus
-  tools instead. `list`, `log` and `prune` still work there. `KERYX_SESSION_*`
-  variables alone do not trigger this.
-- **`bus-disabled`**: `send` and `prune` when the bus is off — `KERYX_BUS=off`,
-  shell config `bus.enabled: false`, or a CI environment. The reason is named.
-  `list` and `log` still read.
+- **`use-agent-tool`** (exit `2`): `send`, `pause` or `resume` run inside a
+  keryx tool call, where `KERYX_TOOL_CALL=1` is set on every `shell_exec`
+  child. An agent uses its bus tools instead (`bus_send`, `bus_pause`).
+  `list`, `log` and `prune` still work there. `KERYX_SESSION_*` variables
+  alone do not trigger this.
+- **`bus-disabled`**: `send`, `pause`, `resume` and `prune` when the bus is
+  off — `KERYX_BUS=off`, shell config `bus.enabled: false`, or a CI
+  environment. The reason is named. `list` and `log` still read.
+- **`lease-already-held`**: `pause` when a CLI-origin lease is already active
+  anywhere in the clone.
 - **`rate-limited`**: more than 30 CLI messages in one minute across the whole
   clone.
 

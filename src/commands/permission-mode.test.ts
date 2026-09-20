@@ -301,6 +301,65 @@ test("readOnly still auto-approves read risk", () => {
   }
 });
 
+// --- publishLease (specification §4.4, flow 275 T5) — a third hard floor,
+// alongside credentials/sacReviewConfirmation, that never denies on its own.
+
+test("publishLease is a hard floor no mode lifts, including auto — never denies on its own", () => {
+  for (const mode of PERMISSION_MODES) {
+    for (const risk of ["shell", "destructive", "delegate", "write"] as const) {
+      expect(
+        resolveApprovalDecision({
+          mode,
+          risk,
+          destructive: false,
+          credentials: false,
+          sacReviewConfirmation: false,
+          readOnly: false,
+          publishLease: true,
+        }),
+      ).toBe("ask");
+    }
+  }
+});
+
+test("publishLease: false (or omitted) does not change anything — trust/auto still auto-approve a benign action", () => {
+  expect(
+    resolveApprovalDecision({
+      mode: "trust",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+      readOnly: false,
+      publishLease: false,
+    }),
+  ).toBe("auto");
+  expect(
+    resolveApprovalDecision({
+      mode: "auto",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+      readOnly: false,
+    }),
+  ).toBe("auto");
+});
+
+test("readOnly still denies even when publishLease is also set (deny wins)", () => {
+  expect(
+    resolveApprovalDecision({
+      mode: "auto",
+      risk: "shell",
+      destructive: false,
+      credentials: false,
+      sacReviewConfirmation: false,
+      readOnly: true,
+      publishLease: true,
+    }),
+  ).toBe("deny");
+});
+
 test("readOnly: false reproduces existing (pre-readOnly) behavior unchanged — trust/auto still auto-approve benign non-read actions", () => {
   expect(
     resolveApprovalDecision({

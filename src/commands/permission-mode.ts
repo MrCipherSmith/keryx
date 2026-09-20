@@ -68,6 +68,19 @@ export interface ApprovalGateInput {
    * `/plan` command; always `false` unless a caller opts in.
    */
   readOnly: boolean;
+  /**
+   * A `git-publish` pause lease (agent bus, specification §4.3, §4.4) applies
+   * to this shell_exec command: `isPublishCommand(command) &&
+   * busLeases.appliesToMe("git-publish")`, computed at the `executeCall`
+   * shell-branch call site (`src/commands/agent.ts`), never here. A third hard
+   * floor alongside {@link credentials} and {@link sacReviewConfirmation}: it
+   * forces `ask` in every mode, `auto` included, and never denies on its own
+   * (ADR-0009 — a classifier miss never counts as a grant, only ever escalates
+   * to a prompt). Optional so every existing `ApprovalGateInput` literal
+   * (agent.ts's three call sites, `supervise-mcp.ts`) still compiles
+   * unchanged; `undefined` behaves exactly like `false`.
+   */
+  publishLease?: boolean;
 }
 
 export type ApprovalGateDecision = "auto" | "ask" | "deny";
@@ -84,13 +97,14 @@ export type ApprovalGateDecision = "auto" | "ask" | "deny";
  * this" shape `credentials`/`sacReviewConfirmation` already use, just for a
  * different (session-scoped, user-toggled) reason.
  *
- * `credentials` and `sacReviewConfirmation` are hard floors that no mode
- * lifts — `ApprovalMeta`'s own docstring already commits to this for the
- * existing shell "remember" path ("never auto-approved and never
+ * `credentials`, `sacReviewConfirmation` and `publishLease` are hard floors
+ * that no mode lifts — `ApprovalMeta`'s own docstring already commits to this
+ * for the existing shell "remember" path ("never auto-approved and never
  * remembered, whatever the user picks"); an action that can hand the agent
- * authority it did not have, or that exists specifically to prove a human
- * is present, gets the same floor here, including under `auto`. Every other
- * axis follows the mode:
+ * authority it did not have, that exists specifically to prove a human is
+ * present, or that a peer has asked this shell to hold off on publishing,
+ * gets the same floor here, including under `auto`. Every other axis follows
+ * the mode:
  *
  *   - `ask`   — unchanged today's behavior; only `read` skips the prompt.
  *   - `trust` — auto-approve unless the action is `destructive` (static risk
@@ -103,7 +117,7 @@ export type ApprovalGateDecision = "auto" | "ask" | "deny";
  *     any action is skipped under it.
  */
 export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateDecision {
-  const { mode, risk, destructive, credentials, sacReviewConfirmation, readOnly } = input;
+  const { mode, risk, destructive, credentials, sacReviewConfirmation, readOnly, publishLease } = input;
 
   if (risk === "read") {
     return "auto";
@@ -113,7 +127,7 @@ export function resolveApprovalDecision(input: ApprovalGateInput): ApprovalGateD
     return "deny";
   }
 
-  if (credentials || sacReviewConfirmation) {
+  if (credentials || sacReviewConfirmation || publishLease) {
     return "ask";
   }
 

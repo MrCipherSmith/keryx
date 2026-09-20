@@ -1,0 +1,32 @@
+# Flow Journal
+
+- 2026-09-19T21:39:31.218Z - flow created
+- 2026-09-19T21:42:49.567Z - task-added: T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)
+- 2026-09-19T21:42:49.654Z - task-added: T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)
+- 2026-09-19T21:42:49.744Z - task-added: T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)
+- 2026-09-19T21:42:49.829Z - task-added: T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)
+- 2026-09-19T21:42:49.926Z - task-added: T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)
+- 2026-09-19T21:42:50.013Z - task-added: T10: Docs: P4 status and pause docs (haiku)
+- 2026-09-19T21:42:50.106Z - task-added: T11: Verification: CI on the PR head green
+- 2026-09-19T21:42:50.190Z - task-done: T1: Collect remaining context
+- 2026-09-19T21:42:50.275Z - task-done: T2: Implement per plan
+- 2026-09-19T21:42:50.364Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-19T21:42:50.457Z - frozen: 13 criteria; checksum recorded
+- 2026-09-19T21:42:50.554Z - started
+- 2026-09-19T21:42:51.640Z - task-attempt: T5: started (attempt 1) — 275-T5 lease lib + gate (sonnet)
+- 2026-09-19T22:32:49.602Z - task-done: T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)
+- 2026-09-19T22:32:49.684Z - task-attempt: T6: started (attempt 1) — 275-T6 lane (sonnet), parallel
+- 2026-09-19T22:32:49.763Z - task-attempt: T7: started (attempt 1) — 275-T7 lane (sonnet), parallel
+- 2026-09-19T22:32:49.848Z - task-attempt: T8: started (attempt 1) — 275-T8 lane (sonnet), parallel
+- 2026-09-19T22:53:10.022Z - task-done: T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)
+- 2026-09-19T23:06:20.758Z - task-done: T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)
+- 2026-09-19T23:06:49.104Z - task-done: T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)
+- 2026-09-19T23:08:08.206Z - task-added: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
+- 2026-09-19T23:08:08.292Z - task-attempt: T12: started (attempt 1) — 275-T12 merge main #618 (sonnet)
+- 2026-09-19T23:13:32.529Z - task-done: T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes
+- 2026-09-19T23:14:09.062Z - task-attempt: T9: started (attempt 1) — 275-T9 process tests (sonnet)
+- 2026-09-19T23:14:09.149Z - task-attempt: T10: started (attempt 1) — 275-T10 docs + backlog entry (haiku)
+- 2026-09-19T23:18:30.004Z - task-done: T10: Docs: P4 status and pause docs (haiku)
+- 2026-09-19T23:34:59.277Z - task-done: T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)
+- 2026-09-19T23:38:54.998Z - task-done: T11: Verification: CI on the PR head green
+- 2026-09-19T23:48:27.914Z - task-attempt: T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)

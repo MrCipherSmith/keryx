@@ -1758,6 +1758,33 @@ test("AC10: buildAgentSystemInstruction includes the bus conduct block only when
   expect(joined).toMatch(/never run `keryx bus send\|pause\|resume` via shell_exec/i);
 });
 
+// flow 275 T6 (specification §4.4, agent-protocol.md §2, AC10): the conduct
+// block also teaches pause-lease behavior now that `bus_pause` exists — but
+// ONLY when the bus is joined, exactly like §1/§3 above.
+test("AC10: the bus conduct block includes agent-protocol §2 pause-lease guidance only when joined", () => {
+  const notJoined = buildAgentSystemInstruction(undefined);
+  expect(notJoined).not.toMatch(/pause-request/i);
+  expect(notJoined).not.toContain("bus_pause");
+
+  const joined = buildAgentSystemInstruction(undefined, { busJoined: true });
+  // turns: finish safely, no new side-effecting work, end the turn.
+  expect(joined).toMatch(/scope `turns`/);
+  expect(joined).toMatch(/no new side-effecting work/i);
+  expect(joined).toMatch(/end the turn with a/i);
+  // git-publish: keep working, never push/tag/merge/publish, never ask around the lease.
+  expect(joined).toMatch(/scope `git-publish`/);
+  expect(joined).toMatch(/do not push, tag, merge or publish/i);
+  expect(joined).toMatch(/do not ask the operator to approve a push just to get past the lease/i);
+  // advisory: informational only.
+  expect(joined).toMatch(/scope `advisory`/);
+  expect(joined).toMatch(/no action is forced/i);
+  // resume/expiry: re-check the remote before a deferred push.
+  expect(joined).toMatch(/`resume` or `lease-expired`/);
+  expect(joined).toMatch(/git fetch/i);
+  // bus_pause itself is named.
+  expect(joined).toContain("bus_pause");
+});
+
 test("flow 200: buildAgentSystemInstruction teaches explicit seed-writing rules (when/what kind/operational tasks)", () => {
   const instr = buildAgentSystemInstruction(undefined);
   // "when" — concrete triggers for writing a Seed.

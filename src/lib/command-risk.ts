@@ -265,6 +265,66 @@ const CREDENTIAL_MARKERS: readonly string[] = [
 ];
 
 /**
+ * Command words a publishing lease (specification §4.3 `git-publish` scope, §4.4)
+ * must catch. Pure string analysis, same posture as the rest of this module:
+ * incomplete by construction, meant to widen a prompt, never to grant one.
+ */
+function isGitPushSegment(v: SegmentView): boolean {
+  return v.cmd === "git" && v.positionals.includes("push");
+}
+
+function isGhReleaseSegment(v: SegmentView): boolean {
+  return v.cmd === "gh" && v.positionals.includes("release");
+}
+
+function isGhPrMergeSegment(v: SegmentView): boolean {
+  return v.cmd === "gh" && v.positionals.includes("pr") && v.positionals.includes("merge");
+}
+
+function isNpmPublishSegment(v: SegmentView): boolean {
+  return v.cmd === "npm" && v.positionals.includes("publish");
+}
+
+function isBunPublishSegment(v: SegmentView): boolean {
+  return v.cmd === "bun" && v.positionals.includes("publish");
+}
+
+const PUBLISH_RULES: readonly Rule[] = [
+  isGitPushSegment,
+  isGhReleaseSegment,
+  isGhPrMergeSegment,
+  isNpmPublishSegment,
+  isBunPublishSegment,
+];
+
+/**
+ * True when `command` contains a segment that publishes something: `git push`
+ * (any form, including `git -C <dir> push` and a `git tag … && git push …`
+ * chain — each simple command in the chain is checked independently, exactly
+ * like {@link classifyCommand}), `gh release`, `gh pr merge`, `npm publish` or
+ * `bun publish`. `git pull`, `git status` and a quoted string that merely
+ * mentions "git push" (e.g. `echo "git push"`, where the whole quoted text is
+ * one argument to `echo`, never a command word) do not match. Pure and
+ * deterministic; a sibling classifier to {@link isDestructiveCommand}, and,
+ * like it, not a security boundary — it only decides when the publish-lease
+ * floor (specification §4.4) escalates to a prompt.
+ */
+export function isPublishCommand(command: string): boolean {
+  if (command.trim().length === 0) return false;
+  const segments = splitSegments(command);
+  return segments.some((seg) => {
+    const view: SegmentView = {
+      raw: seg.raw,
+      cmd: head(seg.words),
+      args: args(seg.words),
+      positionals: positionals(seg.words),
+      words: seg.words,
+    };
+    return PUBLISH_RULES.some((rule) => rule(view));
+  });
+}
+
+/**
  * True when `command` mentions the agent's own permission/credential state.
  *
  * Deliberately over-broad: it matches the file name anywhere in the command,

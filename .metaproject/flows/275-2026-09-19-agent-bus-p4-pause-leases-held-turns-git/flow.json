@@ -1,0 +1,408 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "275",
+  "slug": "agent-bus-p4-pause-leases-held-turns-git",
+  "title": "Agent bus P4: pause leases — held turns, git-publish floor, bus_pause, override",
+  "status": "in-progress",
+  "createdAt": "2026-09-19T21:39:31.218Z",
+  "updatedAt": "2026-09-19T23:48:27.914Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:f0af47bf4e9d8d418c9d6d6c529524f0bb11157f301b5c17963f5c4f867f18c7",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Superseded by per-area implement tasks T5-T8"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "Tests ship with each task; process proofs are T9; full suite is T11 (CI)"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:48:27.914Z",
+            "outcome": "started",
+            "detail": "r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T21:42:51.640Z",
+            "outcome": "started",
+            "detail": "275-T5 lease lib + gate (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.684Z",
+            "outcome": "started",
+            "detail": "275-T6 lane (sonnet), parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.763Z",
+            "outcome": "started",
+            "detail": "275-T7 lane (sonnet), parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T22:32:49.848Z",
+            "outcome": "started",
+            "detail": "275-T8 lane (sonnet), parallel"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:14:09.062Z",
+            "outcome": "started",
+            "detail": "275-T9 process tests (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Docs: P4 status and pause docs (haiku)",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:14:09.149Z",
+            "outcome": "started",
+            "detail": "275-T10 docs + backlog entry (haiku)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T11",
+      "title": "Verification: CI on the PR head green",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T12",
+      "title": "Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-19T23:08:08.292Z",
+            "outcome": "started",
+            "detail": "275-T12 merge main #618 (sonnet)"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-19T21:39:31.218Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-19T21:42:49.567Z",
+      "event": "task-added",
+      "detail": "T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.654Z",
+      "event": "task-added",
+      "detail": "T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.744Z",
+      "event": "task-added",
+      "detail": "T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.829Z",
+      "event": "task-added",
+      "detail": "T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:49.926Z",
+      "event": "task-added",
+      "detail": "T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)"
+    },
+    {
+      "at": "2026-09-19T21:42:50.013Z",
+      "event": "task-added",
+      "detail": "T10: Docs: P4 status and pause docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T21:42:50.106Z",
+      "event": "task-added",
+      "detail": "T11: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T21:42:50.190Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-19T21:42:50.275Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-19T21:42:50.364Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-19T21:42:50.457Z",
+      "event": "frozen",
+      "detail": "13 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-19T21:42:50.554Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-19T21:42:51.640Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 275-T5 lease lib + gate (sonnet)"
+    },
+    {
+      "at": "2026-09-19T22:32:49.602Z",
+      "event": "task-done",
+      "detail": "T5: Lease library and gate: pause.ts create/resume/override/leaseView, isPublishCommand, publishLease floor, ApprovalMeta + evaluateShellApproval exclusion, client wrappers and resume on leave (sonnet)"
+    },
+    {
+      "at": "2026-09-19T22:32:49.684Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 275-T6 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:32:49.763Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 275-T7 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:32:49.848Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 275-T8 lane (sonnet), parallel"
+    },
+    {
+      "at": "2026-09-19T22:53:10.022Z",
+      "event": "task-done",
+      "detail": "T6: Agent side: bus_pause (write), tool-specific write escalation, publishLease in executeCall shell branch, agent-protocol §2 conduct (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:06:20.758Z",
+      "event": "task-done",
+      "detail": "T7: TUI: held turns across all dispatch paths, banner, release drains queue, /bus pause|resume|override, wake not when held (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:06:49.104Z",
+      "event": "task-done",
+      "detail": "T8: Readline and CLI: held notice and deferred line, /bus pause|resume|override, keryx bus pause|resume with D-13 and registry/docs (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:08:08.206Z",
+      "event": "task-added",
+      "detail": "T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes"
+    },
+    {
+      "at": "2026-09-19T23:08:08.292Z",
+      "event": "task-attempt",
+      "detail": "T12: started (attempt 1) — 275-T12 merge main #618 (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:13:32.529Z",
+      "event": "task-done",
+      "detail": "T12: Merge origin/main (PR #618 presence exit-hook fix) into the P4 branch; compose it with the pause-lease client changes"
+    },
+    {
+      "at": "2026-09-19T23:14:09.062Z",
+      "event": "task-attempt",
+      "detail": "T9: started (attempt 1) — 275-T9 process tests (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:14:09.149Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — 275-T10 docs + backlog entry (haiku)"
+    },
+    {
+      "at": "2026-09-19T23:18:30.004Z",
+      "event": "task-done",
+      "detail": "T10: Docs: P4 status and pause docs (haiku)"
+    },
+    {
+      "at": "2026-09-19T23:34:59.277Z",
+      "event": "task-done",
+      "detail": "T9: Process tests: turns hold and resume/override across two shells, SIGKILL lease-expired once, git-publish prompts under auto (sonnet)"
+    },
+    {
+      "at": "2026-09-19T23:38:54.998Z",
+      "event": "task-done",
+      "detail": "T11: Verification: CI on the PR head green"
+    },
+    {
+      "at": "2026-09-19T23:48:27.914Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — r1 fixes: F1/F2/F3/F6 (sonnet lane A), F4/F5 (haiku lane B) + gh pr merge positional and backlog entry 12 (orchestrator)"
+    }
+  ]
+}
