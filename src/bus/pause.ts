@@ -121,8 +121,16 @@ export async function createPauseLease(root: string, input: CreatePauseLeaseInpu
   }
 
   const resolveOptions: PresenceClassifyOptions = { ...input.liveness, now: now() };
-  const targets = await resolveRecipients(root, input.toLabel, resolveOptions);
-  if (targets.length === 1 && targets[0] === input.holder.instanceId) {
+  const resolved = await resolveRecipients(root, input.toLabel, resolveOptions);
+  // Flow 275 F6 (AC1): targets must never include the holder.
+  // `resolveRecipients` does not exclude the caller, so a live `@name` held
+  // by more than one instance — one of them the holder — would otherwise
+  // store the holder's own id in `targets`. Filter it out (a no-op for
+  // `@all`'s literal `["*"]`, since `"*" !== instanceId`) BEFORE the
+  // self-check, so the check — and the stored lease — cover every case, not
+  // just the single-target one.
+  const targets = resolved.filter((id) => id !== input.holder.instanceId);
+  if (targets.length === 0) {
     throw new BusRefusal("recipient-is-self", `${input.toLabel} resolves only to this instance`);
   }
 
@@ -296,6 +304,14 @@ export interface PauseLeaseView {
   held(): boolean;
   /** The `turns` lease currently held against this instance, if any. */
   heldBy(): PauseLease | undefined;
+  /**
+   * The lease of `scope` that makes `appliesToMe(scope)` true for this
+   * instance right now, if any — the scope-aware counterpart of `appliesToMe`
+   * for callers (flow 275 T6/T8's `busLeasesFromClient` adapters) that need
+   * the holder/reason of the SPECIFIC lease that applies to a given floor,
+   * not just the `turns` one `heldBy()` answers.
+   */
+  appliesToMeLease(scope: LeaseScope): PauseLease | undefined;
   /** A display-ready banner for the held lease, or undefined when not held. */
   banner(): string | undefined;
   /** Release THIS instance from `leaseId`: records the override locally and in the log. */
@@ -341,7 +357,10 @@ export function createLeaseView(options: LeaseViewOptions): PauseLeaseView {
       return this.appliesToMe("turns");
     },
     heldBy() {
-      return active.find((lease) => lease.scope === "turns" && isOverridable(lease));
+      return this.appliesToMeLease("turns");
+    },
+    appliesToMeLease(scope) {
+      return active.find((lease) => lease.scope === scope && isOverridable(lease));
     },
     banner() {
       const lease = this.heldBy();

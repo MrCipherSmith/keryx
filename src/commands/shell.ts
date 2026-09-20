@@ -280,13 +280,17 @@ function busErrorLine(error: unknown): string {
  * narrower `AgentDeps.busLeases` shape (flow 275 T6/T8 contract,
  * specification §4.4): `heldBy` there returns just `{name, reason}`, not the
  * full `PauseLease`, so `executeCall`'s publish-lease floor never needs to
- * import the lease schema itself.
+ * import the lease schema itself. Flow 275 F2: `heldBy` reads
+ * `appliesToMeLease(scope)` — the SAME scope the caller just passed to
+ * `appliesToMe` — never the `turns`-only `heldBy()` accessor, so a
+ * `git-publish` floor never gets back an unrelated `turns` lease's
+ * holder/reason (or nothing at all when only a `git-publish` lease applies).
  */
-function busLeasesFromClient(bus: BusClient): NonNullable<AgentDeps["busLeases"]> {
+export function busLeasesFromClient(bus: BusClient): NonNullable<AgentDeps["busLeases"]> {
   return {
     appliesToMe: (scope) => bus.leaseView().appliesToMe(scope),
-    heldBy: () => {
-      const lease = bus.leaseView().heldBy();
+    heldBy: (scope) => {
+      const lease = bus.leaseView().appliesToMeLease(scope);
       return lease === undefined ? undefined : { name: lease.holder.name, reason: lease.reason };
     },
   };
@@ -2352,6 +2356,8 @@ async function runAgentRepl(
   const heldQueue: string[] = [];
   const heldNotice = (): string =>
     `${bus?.leaseView().banner() ?? "bus: turns held."} Your line is queued and will run once released.\n`;
+  const heldCompletionNotice = (): string =>
+    `${bus?.leaseView().banner() ?? "bus: turns held."} The finished task will be reported once the lease ends.\n`;
   const drainHeldQueue = async (): Promise<void> => {
     while (heldQueue.length > 0 && !isHeld()) {
       const queued = heldQueue.shift() as string;
@@ -2366,6 +2372,16 @@ async function runAgentRepl(
     await drainHeldQueue();
     const input = await readLineOrCompletion();
     if (input.kind === "completion") {
+      // Flow 275 T8 (AC5): a `turns` lease holds this instance the same way
+      // it holds an operator line — a task-notification wake is one of the
+      // sources specification §4.3 lists explicitly. Checked before the
+      // auto-wake cap so a held completion does not spend that budget; it
+      // will surface again (still gated) once the lease releases.
+      if (isHeld()) {
+        agentIo.onSystem?.(heldCompletionNotice());
+        printPromptWithBusNotice();
+        continue;
+      }
       // A task finished while nobody was typing. The cap is what keeps a chain
       // of task-starts-task from running the machine unattended; an operator
       // line resets it below.

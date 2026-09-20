@@ -274,19 +274,19 @@ function isGitPushSegment(v: SegmentView): boolean {
 }
 
 function isGhReleaseSegment(v: SegmentView): boolean {
-  return v.cmd === "gh" && v.positionals[0] === "release";
+  return v.cmd === "gh" && v.positionals.includes("release");
 }
 
 function isGhPrMergeSegment(v: SegmentView): boolean {
-  return v.cmd === "gh" && v.positionals[0] === "pr" && v.positionals.includes("merge");
+  return v.cmd === "gh" && v.positionals.includes("pr") && v.positionals.includes("merge");
 }
 
 function isNpmPublishSegment(v: SegmentView): boolean {
-  return v.cmd === "npm" && v.positionals[0] === "publish";
+  return v.cmd === "npm" && v.positionals.includes("publish");
 }
 
 function isBunPublishSegment(v: SegmentView): boolean {
-  return v.cmd === "bun" && v.positionals[0] === "publish";
+  return v.cmd === "bun" && v.positionals.includes("publish");
 }
 
 const PUBLISH_RULES: readonly Rule[] = [

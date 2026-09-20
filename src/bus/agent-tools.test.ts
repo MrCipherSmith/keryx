@@ -87,6 +87,7 @@ function fakeClient(overrides: Partial<BusClient> = {}): BusClient {
       appliesToMe: () => false,
       held: () => false,
       heldBy: () => undefined,
+      appliesToMeLease: () => undefined,
       banner: () => undefined,
       override: async () => {},
       myLeases: () => [],

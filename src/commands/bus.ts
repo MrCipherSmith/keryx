@@ -221,7 +221,7 @@ async function pause(
   if (ttlRaw !== undefined) {
     const parsed = parseLeaseTtl(ttlRaw);
     if (parsed === undefined) {
-      throw new BusRefusal("invalid-event", `--ttl must look like 30m, 2h or 45s\n${PAUSE_USAGE}`);
+      throw new BusRefusal("invalid-event", `--ttl must look like 30m or 2h (minimum 1 minute)\n${PAUSE_USAGE}`);
     }
     ttlMs = parsed;
   }

@@ -2017,6 +2017,39 @@ otuiTest("publishLease: true offers neither always-exact nor always-prefix, even
   h.renderer.destroy();
 });
 
+// Flow 275 F1 (specification §4.4): "The prompt names the lease, its holder
+// and its reason." When `ApprovalMeta.publishLeaseDetail` was resolved, the
+// title must name it instead of the generic "a peer's ... applies" line.
+otuiTest("publishLeaseDetail, when present, names the holder and reason in the title", async () => {
+  const otui = requireOtui();
+  const h = await mountApprovalDock(otui);
+  const command = "git push origin main";
+
+  const choice = pickShellApproval(
+    otui.core,
+    h.renderer,
+    h.dock,
+    command,
+    async () => "",
+    false,
+    false,
+    {},
+    true, // publishLease
+    'held by @alice — "cutting the release"', // publishLeaseDetail
+  );
+  await h.flush();
+
+  const frame = h.captureCharFrame();
+  expect(frame).toContain("git-publish lease");
+  expect(frame).toContain("@alice");
+  expect(frame).toContain("cutting the release");
+  expect(frame).not.toContain("a peer's git-publish lease applies");
+
+  await pressEscapeAndSettle(h);
+  expect(await choice).toBe("deny");
+  h.renderer.destroy();
+});
+
 otuiTest("publishLease: false (the default) still offers the exact/prefix grants for the same command", async () => {
   const otui = requireOtui();
   const h = await mountApprovalDock(otui);

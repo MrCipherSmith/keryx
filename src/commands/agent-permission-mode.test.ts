@@ -3,10 +3,16 @@
 // integration contract through the real `runAgentTurn` driver, not just the
 // pure decision function (already covered by `permission-mode.test.ts`).
 
-import { expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { runAgentTurn } from "./agent";
-import type { AgentIO } from "./agent";
+import type { AgentDeps, AgentIO } from "./agent";
 import type { PermissionMode } from "./permission-mode";
+import { busLeasesFromClient } from "./shell";
+import type { BusClient } from "../bus/client";
+import { createLeaseView, createPauseLease } from "../bus/pause";
 import type { InteractiveTool } from "../harness/tool/builtin/interactive-tools";
 import type { ToolRisk } from "../harness/tool/types";
 import { shellExecTool } from "../harness/tool/builtin/shell-exec-tool";
@@ -20,6 +26,37 @@ import type {
   ProviderDescription,
   ProviderPort,
 } from "../harness/provider/types";
+
+// Flow 275 F2 regression: `AgentDeps.busLeases` built from the REAL adapter
+// (`busLeasesFromClient`, `./shell.ts`) over a REAL `createLeaseView`
+// (`../bus/pause.ts`) holding only a `git-publish` lease — never a
+// hand-written `{ appliesToMe, heldBy }` stub that could hard-code the right
+// answer independently of the adapter's own scope handling. Before the F2
+// fix, `heldBy()` was hard-scoped to `turns`, so with no `turns` lease active
+// it returned `undefined` here even though `appliesToMe("git-publish")` was
+// true — exactly the bug this replaces a masking stub to catch.
+const LEASE_ROOTS: string[] = [];
+afterAll(async () => {
+  await Promise.all(LEASE_ROOTS.map((root) => rm(root, { recursive: true, force: true })));
+});
+
+async function realGitPublishBusLeases(
+  instanceId: string,
+  detail: { name: string; reason: string },
+): Promise<NonNullable<AgentDeps["busLeases"]>> {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-agent-permission-mode-"));
+  LEASE_ROOTS.push(dir);
+  const root = path.join(dir, "bus");
+  await createPauseLease(root, {
+    holder: { instanceId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", name: detail.name, origin: "cli" },
+    toLabel: "@all",
+    scope: "git-publish",
+    reason: detail.reason,
+  });
+  const view = createLeaseView({ root, instanceId });
+  await view.refresh();
+  return busLeasesFromClient({ leaseView: () => view } as unknown as BusClient);
+}
 
 const DESCRIPTION: ProviderDescription = {
   capabilities: {
@@ -887,6 +924,10 @@ test("AC6: a git-publish lease forces ask for git push even under auto mode, and
     },
     permissionMode: () => "auto",
   };
+  const busLeases = await realGitPublishBusLeases("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", {
+    name: "alice",
+    reason: "cutting the release",
+  });
   await runAgentTurn(
     io,
     {
@@ -896,10 +937,7 @@ test("AC6: a git-publish lease forces ask for git push even under auto mode, and
       tools: [tool],
       systemInstruction: "sys",
       idSeq,
-      busLeases: {
-        appliesToMe: (scope) => scope === "git-publish",
-        heldBy: () => ({ name: "alice", reason: "cutting the release" }),
-      },
+      busLeases,
     },
     [],
     "go",
@@ -1012,6 +1050,14 @@ test("AC6: publishLease still asks even when heldBy() has no detail to offer", a
     },
     permissionMode: () => "auto",
   };
+  // The REAL adapter's `appliesToMe`, over a REAL git-publish lease — but a
+  // caller that implements only `appliesToMe` and omits the optional
+  // `heldBy` entirely (`AgentDeps.busLeases.heldBy` is `heldBy?()`), not a
+  // hand-faked disconnect between the two.
+  const { appliesToMe } = await realGitPublishBusLeases("cccccccc-cccc-4ccc-8ccc-cccccccccccc", {
+    name: "alice",
+    reason: "cutting the release",
+  });
   await runAgentTurn(
     io,
     {
@@ -1021,10 +1067,7 @@ test("AC6: publishLease still asks even when heldBy() has no detail to offer", a
       tools: [tool],
       systemInstruction: "sys",
       idSeq,
-      busLeases: {
-        appliesToMe: (scope) => scope === "git-publish",
-        // no heldBy() at all
-      },
+      busLeases: { appliesToMe },
     },
     [],
     "go",

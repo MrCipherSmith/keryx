@@ -223,3 +223,33 @@ A split done before those audits are converted would simply relocate the brittle
 Steps 3 and 4 are mechanical once step 2 is done, and each should be reviewable as pure movement with no behaviour change.
 
 **Why not then:** it would have to land inside a feature flow, where review cannot separate moved code from new behaviour. It is queued after the agent bus P5.
+
+## Command classification
+
+### 12. `env VAR=x <cmd>` and `bash -c "<cmd>"` hide a command from every risk rule
+
+**Found:** 2026-09-20, while reviewing the `git-publish` approval floor (flow 275).
+
+**Measurement.** `isPublishCommand` (`src/lib/command-risk.ts`) returns `false`
+for `env GH_TOKEN=x git push` and for `bash -c "git push"`, while `GH_TOKEN=x git
+push`, `git -C dir push` and `echo ok && git push` all return `true`. The cause is
+shared: `head()` and `positionals()` (`command-risk.ts:34-44`) take the segment's
+command word after `stripAssignments`, so a bare assignment prefix is handled but
+an `env` wrapper is not, and a command inside a quoted `-c` argument is never a
+segment at all.
+
+This is not specific to publishing. The same two helpers feed the destructive
+classifier, so `env FOO=1 rm -rf ~` is quiet for the same reason.
+
+**Why not then:** the fix is in the shared segment parsing, which every risk rule
+reads, so it changes how existing commands classify — outside a flow whose scope
+was pause leases, and it deserves its own review with the destructive cases
+enumerated. The module's own docstring already says it is "incomplete by
+construction, meant to widen a prompt, never to grant one", so the misses fail in
+the safe direction: the default-deny approval gate still asks.
+
+**Shape of the fix:** unwrap a leading `env` and its assignments in the segment
+view, and decide deliberately whether `sh -c` / `bash -c` payloads are re-parsed
+as segments or left alone with the limit written down. Either way, extend
+`src/lib/command-risk.test.ts` with the destructive cases as well as the publish
+ones.

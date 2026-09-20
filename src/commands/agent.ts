@@ -407,14 +407,17 @@ export interface AgentDeps {
      */
     appliesToMe(scope: "turns" | "git-publish" | "advisory"): boolean;
     /**
-     * The holder name and reason of the lease that made the LAST
-     * `appliesToMe` call return true — meaningful only right after such a
-     * call (today, only the `git-publish` check in the shell branch below).
-     * Optional, and may itself return `undefined` when no such detail is
-     * available; either way `ApprovalMeta.publishLease` is still set from
-     * `appliesToMe` alone, so the floor never depends on this succeeding.
+     * The holder name and reason of the active lease of `scope` that applies
+     * to this instance right now, if any — flow 275 F2: scope-aware so a
+     * caller checking `git-publish` never gets back an unrelated `turns`
+     * lease's holder/reason (or vice versa). Pass the SAME scope just given
+     * to `appliesToMe` (today, only the `git-publish` check in the shell
+     * branch below). Optional, and may itself return `undefined` when no
+     * such detail is available; either way `ApprovalMeta.publishLease` is
+     * still set from `appliesToMe` alone, so the floor never depends on this
+     * succeeding.
      */
-    heldBy?(): { name: string; reason: string } | undefined;
+    heldBy?(scope: "turns" | "git-publish" | "advisory"): { name: string; reason: string } | undefined;
   };
   /**
    * Flow 265: how a finished task reaches this session.
@@ -3252,7 +3255,7 @@ async function executeCall(
     // ONLY here — `isPublishCommand` knows nothing about the bus, and
     // `busLeases` is consulted nowhere else in this function.
     const publishLease = isPublishCommand(command) && (busLeases?.appliesToMe("git-publish") ?? false);
-    const publishLeaseHolder = publishLease ? busLeases?.heldBy?.() : undefined;
+    const publishLeaseHolder = publishLease ? busLeases?.heldBy?.("git-publish") : undefined;
     const decision = resolveApprovalDecision({
       mode,
       risk,

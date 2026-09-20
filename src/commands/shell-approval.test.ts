@@ -71,6 +71,40 @@ test("evaluateShellApproval without publishLease is unaffected (regression guard
   expect(ev.autoApprove).toBe(true);
 });
 
+// Flow 275 F1 (specification §4.4): "The prompt names the lease, its holder
+// and its reason." `ApprovalMeta.publishLeaseDetail` must reach the readline
+// hint line, not just `ShellApprovalEval.publishLease`'s boolean.
+test("evaluateShellApproval carries publishLeaseDetail through, and the readline hint names the holder and reason", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git push origin main" }),
+    meta: {
+      fingerprint: "fp",
+      destructive: false,
+      publishLease: true,
+      publishLeaseDetail: 'held by @alice — "cutting the release"',
+    },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.publishLeaseDetail).toBe('held by @alice — "cutting the release"');
+  const hints = formatShellApprovalHints(ev).join(" ");
+  expect(hints).toContain("@alice");
+  expect(hints).toContain("cutting the release");
+});
+
+test("evaluateShellApproval falls back to the generic hint when publishLeaseDetail is absent", () => {
+  const ev = evaluateShellApproval({
+    inputJson: JSON.stringify({ command: "git push origin main" }),
+    meta: { fingerprint: "fp", destructive: false, publishLease: true },
+    sessionAllow: new Set(),
+    fingerprintAtStart: "start",
+    io: cleanIo,
+  });
+  expect(ev.publishLeaseDetail).toBeUndefined();
+  expect(formatShellApprovalHints(ev).join(" ")).toMatch(/a peer's git-publish lease applies/);
+});
+
 test("rememberExactShellGrant refuses to remember anything while publishLease is set", () => {
   const sessionAllow = new Set<string>();
   const stored = rememberExactShellGrant("git push origin main", sessionAllow, { publishLease: true });

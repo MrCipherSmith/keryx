@@ -277,6 +277,7 @@ async function makePeer(root: string, instanceId: string, name: string): Promise
         appliesToMe: () => false,
         held: () => false,
         heldBy: () => undefined,
+        appliesToMeLease: () => undefined,
         banner: () => undefined,
         override: async () => {},
         myLeases: () => [],

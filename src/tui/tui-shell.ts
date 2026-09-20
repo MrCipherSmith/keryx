@@ -1218,6 +1218,11 @@ export async function pickShellApproval(
   // `destructive`/`credentials` above it, so every existing call site (this
   // file's own headless tests included) keeps compiling unchanged.
   publishLease = false,
+  // Flow 275 F1 (specification §4.4): `ShellApprovalEval.publishLeaseDetail`
+  // carried through unchanged — "held by @name — \"reason\"" — so the title
+  // can name the lease instead of just flagging that one applies. Optional
+  // and trailing like `publishLease`, so existing call sites keep compiling.
+  publishLeaseDetail?: string,
 ): Promise<ShellApprovalChoice> {
   let context: Promise<string> | undefined;
   try {
@@ -1273,7 +1278,9 @@ export async function pickShellApproval(
     title: credentials
       ? "⚠ touches keryx's OWN permissions/credentials — allow?"
       : publishLease
-        ? "⚠ a peer's git-publish lease applies — allow?"
+        ? publishLeaseDetail !== undefined
+          ? `⚠ git-publish lease ${publishLeaseDetail} — allow?`
+          : "⚠ a peer's git-publish lease applies — allow?"
         : destructive
           ? "⚠ DESTRUCTIVE command — allow?"
           : "Allow shell command?",
@@ -3131,12 +3138,17 @@ export async function launchTuiAgentShell(opts: {
    * specification §4.4) — same shape as `commands/shell.ts`'s own
    * `busLeasesFromClient` (T8's readline surface): `heldBy` there returns
    * just `{name, reason}`, not the full `PauseLease`, so `executeCall`'s
-   * publish-lease floor never needs to import the lease schema itself.
+   * publish-lease floor never needs to import the lease schema itself. Flow
+   * 275 F2: `heldBy` reads `appliesToMeLease(scope)` — the SAME scope the
+   * caller just passed to `appliesToMe` — never the `turns`-only `heldBy()`
+   * accessor, so a `git-publish` floor never gets back an unrelated `turns`
+   * lease's holder/reason (or nothing at all when only a `git-publish` lease
+   * applies).
    */
   const busLeasesFromClient = (bus: BusClient): NonNullable<AgentDeps["busLeases"]> => ({
     appliesToMe: (scope) => bus.leaseView().appliesToMe(scope),
-    heldBy: () => {
-      const lease = bus.leaseView().heldBy();
+    heldBy: (scope) => {
+      const lease = bus.leaseView().appliesToMeLease(scope);
       return lease === undefined ? undefined : { name: lease.holder.name, reason: lease.reason };
     },
   });
@@ -4191,6 +4203,8 @@ export async function launchTuiAgentShell(opts: {
           // Flow 275 T7 (specification §4.4): never offer to remember while a
           // peer's `git-publish` lease applies to this command.
           ev.publishLease,
+          // Flow 275 F1: name the lease's holder/reason in the title when resolved.
+          ev.publishLeaseDetail,
         ),
       );
       input.focus();

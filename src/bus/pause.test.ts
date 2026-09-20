@@ -169,6 +169,22 @@ describe("createPauseLease", () => {
     ).toBe("recipient-is-self");
   });
 
+  test("F6 (AC1): a multi-instance @name that resolves to the holder AND another live instance drops the holder from `targets` instead of storing it", async () => {
+    const root = await busRoot();
+    await writePresence(root, presence(ID.holder, "release", NOW, 100));
+    await writePresence(root, presence(ID.other, "release", NOW, 100));
+    const lease = await createPauseLease(root, {
+      holder: HOLDER,
+      toLabel: "@release",
+      scope: "turns",
+      reason: "x",
+      ...clock,
+      liveness,
+    });
+    expect(lease.targets).not.toContain(ID.holder);
+    expect(lease.targets).toEqual([ID.other]);
+  });
+
   test("an unknown or non-live @name is refused exactly like `resolveRecipients` refuses it", async () => {
     const root = await busRoot();
     expect(

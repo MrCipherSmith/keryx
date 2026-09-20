@@ -33,6 +33,15 @@ export type ShellApprovalEval = {
    * allow" while this is set (see `formatShellApprovalHints`).
    */
   publishLease: boolean;
+  /**
+   * Flow 275 T6/F1 (specification §4.4): `ApprovalMeta.publishLeaseDetail`
+   * carried through unchanged — a display-ready `held by @name — "reason"`
+   * string, present only when {@link publishLease} is true and the holder was
+   * resolved. Escalation-only, like `publishLease` itself: it never changes
+   * `autoApprove`, only what the prompt says once `publishLease` already
+   * forced `ask`.
+   */
+  publishLeaseDetail?: string;
   autoApprove: boolean;
   rejected: readonly PatternRejection[];
   tampered: boolean;
@@ -61,6 +70,7 @@ export function evaluateShellApproval(input: {
   const credentials = input.meta?.credentials === true;
   const sacReviewConfirmation = touchesSacConfirmReview(command);
   const publishLease = input.meta?.publishLease === true;
+  const publishLeaseDetail = input.meta?.publishLeaseDetail;
   const audit = io.loadAudit();
   for (const pattern of audit.permissions.allow) {
     input.sessionAllow.add(pattern);
@@ -78,6 +88,7 @@ export function evaluateShellApproval(input: {
     credentials,
     sacReviewConfirmation,
     publishLease,
+    ...(publishLeaseDetail !== undefined ? { publishLeaseDetail } : {}),
     autoApprove,
     rejected: audit.rejected,
     tampered,
@@ -122,7 +133,14 @@ export function formatShellApprovalHints(evaled: ShellApprovalEval): string[] {
     lines.push("SAC proposal review/confirm-token — will not be remembered");
   }
   if (evaled.publishLease) {
-    lines.push("a peer's git-publish lease applies — will not be remembered");
+    // Flow 275 F1 (specification §4.4): name the lease's holder and reason
+    // when they were resolved — "The prompt names the lease, its holder and
+    // its reason." Falls back to the generic line when the detail is absent.
+    lines.push(
+      evaled.publishLeaseDetail !== undefined
+        ? `a git-publish lease applies — ${evaled.publishLeaseDetail} — will not be remembered`
+        : "a peer's git-publish lease applies — will not be remembered",
+    );
   }
   return lines;
 }

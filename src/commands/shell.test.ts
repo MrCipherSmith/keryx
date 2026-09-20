@@ -1770,7 +1770,14 @@ describe("flow 275 T8 — runAgentRepl held-turn wiring (specification §4.3, AC
   });
 
   test("an operator line is queued instead of started when isHeld() is true, and the notice is printed", () => {
-    const heldCheckIndex = replBody.indexOf("if (isHeld()) {");
+    // Flow 275 F3 added a SECOND `if (isHeld()) {` — the completion-wake gate,
+    // earlier in the loop body — so anchor past it via a marker that exists
+    // only after the operator line has been read (NOT the `let
+    // consecutiveAutoWakes = 0;` declaration, which is even earlier still).
+    const heldCheckIndex = replBody.indexOf(
+      "if (isHeld()) {",
+      replBody.indexOf("An operator line means a human is here"),
+    );
     expect(heldCheckIndex).toBeGreaterThan(0);
     const heldBlock = replBody.slice(heldCheckIndex, heldCheckIndex + 300);
     expect(heldBlock).toContain("heldQueue.push(line);");
@@ -1797,9 +1804,49 @@ describe("flow 275 T8 — runAgentRepl held-turn wiring (specification §4.3, AC
   });
 
   test("the direct (not-held) operator-line path still runs the very next line through runOperatorLine", () => {
-    const heldCheckIndex = replBody.indexOf("if (isHeld()) {");
+    const heldCheckIndex = replBody.indexOf(
+      "if (isHeld()) {",
+      replBody.indexOf("An operator line means a human is here"),
+    );
     const afterHeld = replBody.slice(heldCheckIndex, heldCheckIndex + 500);
     expect(afterHeld).toContain("await runOperatorLine(line);");
+  });
+});
+
+// Flow 275 F3 (specification §4.3, `turns` scope): the completion-wake branch
+// — reached when a background task finishes while nobody is typing — must be
+// gated by the SAME `isHeld()` the operator-line path uses, checked BEFORE
+// the auto-wake cap so a held completion never spends that budget. Two
+// previous review rounds lost coverage to `shell.ts`/`tui-shell.ts` being
+// read as text elsewhere in this file, so this audit is deliberately anchored
+// on markers unique to the completion branch.
+describe("flow 275 F3 — completion-wake held gate (specification §4.3, source-text audit)", () => {
+  const shellSource = readFileSync(path.join(import.meta.dir, "shell.ts"), "utf8");
+  const replStart = shellSource.indexOf("async function runAgentRepl(");
+  const agentModeBranchStart = shellSource.indexOf("if (agentMode) {");
+  const replBody = shellSource.slice(replStart, agentModeBranchStart);
+
+  test("the completion branch checks isHeld() before the auto-wake cap, and does not start a turn", () => {
+    const completionIndex = replBody.indexOf('if (input.kind === "completion") {');
+    expect(completionIndex).toBeGreaterThan(0);
+    const capIndex = replBody.indexOf("consecutiveAutoWakes >= resolveMaxAutoWake()");
+    expect(capIndex).toBeGreaterThan(completionIndex);
+    const heldGateIndex = replBody.indexOf("if (isHeld()) {", completionIndex);
+    expect(heldGateIndex).toBeGreaterThan(completionIndex);
+    expect(heldGateIndex).toBeLessThan(capIndex);
+    const heldBlock = replBody.slice(heldGateIndex, capIndex);
+    expect(heldBlock).toContain("agentIo.onSystem?.(heldCompletionNotice());");
+    expect(heldBlock).toContain("printPromptWithBusNotice();");
+    expect(heldBlock).toContain("continue;");
+    expect(heldBlock).not.toContain("consecutiveAutoWakes += 1");
+    expect(heldBlock).not.toContain("runAgentTurn(");
+  });
+
+  test("heldCompletionNotice reuses the shared lease-view banner, like heldNotice", () => {
+    const noticeIndex = replBody.indexOf("const heldCompletionNotice = (): string =>");
+    expect(noticeIndex).toBeGreaterThan(0);
+    const noticeBlock = replBody.slice(noticeIndex, noticeIndex + 300);
+    expect(noticeBlock).toContain("bus?.leaseView().banner()");
   });
 });
 

@@ -163,9 +163,13 @@ describe("busLeases threaded into AgentDeps (flow 275 T6/T8 contract, specificat
   test("busLeasesFromClient adapts BusClient.leaseView() to {appliesToMe, heldBy}, mirroring commands/shell.ts's own adapter", () => {
     const start = source.indexOf("const busLeasesFromClient = (bus: BusClient)");
     expect(start).toBeGreaterThan(0);
-    const block = source.slice(start, start + 500);
+    const block = source.slice(start, start + 550);
     expect(block).toContain("appliesToMe: (scope) => bus.leaseView().appliesToMe(scope)");
-    expect(block).toContain("bus.leaseView().heldBy()");
+    // Flow 275 F2: scope-aware — reads the SAME scope just passed to
+    // `appliesToMe`, never the `turns`-only `heldBy()` accessor, so a
+    // `git-publish` floor never gets back an unrelated `turns` lease.
+    expect(block).toContain("heldBy: (scope) => {");
+    expect(block).toContain("bus.leaseView().appliesToMeLease(scope)");
     expect(block).toContain("{ name: lease.holder.name, reason: lease.reason }");
   });
 

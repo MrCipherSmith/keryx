@@ -106,9 +106,15 @@ const PUBLISHES: [string, string][] = [
   ["git tag v1.2.3 && git push --tags", "tag then push chain"],
   ["echo hi; git push", "push after an unrelated segment"],
   ["gh release create v1.2.3", "gh release"],
+  ["gh -R owner/repo release create v1", "gh -R flag before subcommand"],
+  ["gh --repo owner/repo release create v1", "gh --repo flag before subcommand"],
   ["gh pr merge 42", "gh pr merge"],
+  ["gh -R owner/repo pr merge 42", "gh -R flag before pr merge"],
+  ["npm run publish", "npm run publish — an accepted false positive, see the note below"],
   ["npm publish", "npm publish"],
   ["npm publish --tag next", "npm publish with flags"],
+  ["npm -w pkg publish", "npm -w flag before subcommand"],
+  ["npm --loglevel warn publish", "npm --loglevel flag before subcommand"],
   ["bun publish", "bun publish"],
 ];
 
@@ -117,11 +123,25 @@ const NOT_PUBLISHES: [string, string][] = [
   ["git status", "read-only git"],
   ['echo "git push"', "a quoted string mentioning git push is not a command"],
   ["gh pr view 42", "gh pr view is not gh pr merge"],
+  ["npm run publish-docs", "a script name merely starting with publish is not npm publish"],
   ["gh issue list", "unrelated gh subcommand"],
   ["npm install", "unrelated npm subcommand"],
   ["bun install", "unrelated bun subcommand"],
   ["", "empty"],
 ];
+
+// F4 note: every rule matches its subcommand by MEMBERSHIP, not by position, so
+// a global flag taking a separate value (`gh -R owner/repo release create`,
+// `npm -w pkg publish`) cannot shift the subcommand out of position 0 and slip
+// past the floor. The cost is a false positive where the same word appears as an
+// unrelated positional — `npm run publish` is the realistic one. That direction
+// is the one ADR-0009 requires: one extra approval prompt, never a silent grant.
+//
+// Known and deliberately NOT covered, because it would mean changing the shared
+// segment parsing that the destructive classifier also uses: `env VAR=x git push`
+// (the command word is `env`) and `bash -c "git push"` (the push is inside a
+// quoted argument). See docs/requirements/backlog.md. A bare `VAR=x git push`
+// assignment prefix IS covered, via stripAssignments.
 
 test("isPublishCommand: publishing commands", () => {
   for (const [cmd, why] of PUBLISHES) {
