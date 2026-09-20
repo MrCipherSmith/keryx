@@ -7,9 +7,9 @@
   "id": "278",
   "slug": "shell-split-p2b-remaining-seams",
   "title": "Shell god-files P2b: the remaining seams — bus wiring, splash lifecycle, side-worker predicate, and the two audits that need deciding",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-20T09:05:38.537Z",
-  "updatedAt": "2026-09-20T10:57:30.354Z",
+  "updatedAt": "2026-09-20T11:36:54.945Z",
   "source": {
     "type": "description",
     "ref": null
@@ -55,10 +55,14 @@
     "AC10": {
       "at": "2026-09-20T10:57:30.354Z",
       "note": "the 'seam each one waits on' section is kept; approval-wiring recorded as needing one owner across both god-files"
+    },
+    "AC11": {
+      "at": "2026-09-20T11:33:05.837Z",
+      "note": "gh pr view 631 statusCheckRollup: all checks SUCCESS (typecheck-and-tests, client matrix x4, standard-baseline, standard-pr, opentui native x4, macOS/linux sandbox legs, dependency-audit, metrics-contract, vscode-extension); only 'deploy to GitHub Pages' SKIPPED (unrelated). PR head verified via gh pr view --json."
     }
   },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/631"
   },
   "tasks": [
     {
@@ -209,6 +213,31 @@
       "at": "2026-09-20T10:57:30.354Z",
       "event": "ac-confirmed",
       "detail": "AC10: the 'seam each one waits on' section is kept; approval-wiring recorded as needing one owner across both god-files"
+    },
+    {
+      "at": "2026-09-20T10:58:19.328Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/631 (warning: PR is not a draft) (base: main)"
+    },
+    {
+      "at": "2026-09-20T11:33:05.837Z",
+      "event": "ac-confirmed",
+      "detail": "AC11: gh pr view 631 statusCheckRollup: all checks SUCCESS (typecheck-and-tests, client matrix x4, standard-baseline, standard-pr, opentui native x4, macOS/linux sandbox legs, dependency-audit, metrics-contract, vscode-extension); only 'deploy to GitHub Pages' SKIPPED (unrelated). PR head verified via gh pr view --json."
+    },
+    {
+      "at": "2026-09-20T11:36:50.457Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-20T11:36:54.945Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "baseBranch": "main",
+  "merged": {
+    "commit": "7fbfa861",
+    "ref": "origin/main",
+    "at": "2026-09-20T11:36:54.945Z"
+  }
 }
