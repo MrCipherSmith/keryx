@@ -63,3 +63,22 @@ test("local-search capability is restricted to exact loopback endpoints", async 
   expect(accepted.ok).toBe(true);
   expect(calls).toBe(1);
 });
+
+test("search requests ask for browser-shaped headers; a fetched page does not", async () => {
+  const received: Record<string, unknown>[] = [];
+  const runner: WebWorkerRunner = {
+    run: async (request) => {
+      received.push(request as unknown as Record<string, unknown>);
+      return { ok: true, value: { status: 200, contentType: "text/html", body: "hello" } };
+    },
+  };
+  const transport = new SandboxedWebTransport({ lookup: async () => [{ address: publicAddress }], runner });
+
+  await transport.request({ providerId: "duckduckgo", capability: "public-search", url: "https://example.com/lite/?q=x", method: "GET" });
+  await transport.fetchPage({ url: "https://example.com/docs", providerId: "web_fetch" });
+
+  expect(received[0]).toMatchObject({ browserHeaders: true });
+  // web_fetch keeps the transport's plain request: a page the operator asked
+  // for by URL must not be requested as if a browser were loading it.
+  expect(received[1]).not.toHaveProperty("browserHeaders");
+});

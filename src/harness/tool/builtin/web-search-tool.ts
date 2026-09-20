@@ -5,7 +5,7 @@ import type { InteractiveTool } from "./interactive-tools";
 
 export type SearchToolResult =
   | { ok: true; value: SearchResponse }
-  | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed" };
+  | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string };
 
 export interface SearchToolService {
   search(query: string, signal?: AbortSignal): Promise<SearchToolResult>;
@@ -48,7 +48,7 @@ export function webSearchTool(service: SearchToolService): InteractiveTool {
           output: response.reason === "no-active-provider"
             ? "web_search: no active connected provider. Use /search-provider to configure one, test it, then use /search-connect to select it."
             : response.reason === "search-failed"
-              ? "web_search: search failed. Retry later; do not switch providers yourself."
+              ? `web_search: search failed${response.detail !== undefined && response.detail.length > 0 ? ` (${response.detail})` : ""}. Wait a few minutes before trying again, and do not switch providers yourself.`
             : "web_search: active provider is unavailable; reconnect it with /search-provider before retrying.",
           isError: true,
         };

@@ -3152,6 +3152,51 @@ describe("flow 179 — /search-provider bare-arg wizard", () => {
       renderer.destroy();
     },
   );
+
+  otuiTest(
+    "AC6: a rate-limited provider says so — the one failure kind whose retry hint must not read as advice to retry",
+    async () => {
+      const otui = requireOtui();
+      const { renderer, mockInput, flush, waitForFrame } = await otui.testing.createTestRenderer({ width: 100, height: 30 });
+      const { controller } = fakeSearchProviderController({
+        providers: [SEARXNG_DESCRIPTOR],
+        testResult: () => ({ ok: false, reason: "rate-limited" }),
+      });
+
+      const done = searchProviderWizardInTui(otui.core, renderer, controller);
+      await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      mockInput.pressEnter(); // searxng is the only option
+      await flush();
+      await waitForFrame((frame) => frame.includes("Base URL"));
+      mockInput.pressEnter(); // accept the default baseUrl
+      await flush();
+      await waitForFrame((frame) => frame.includes("Port"));
+      mockInput.pressEnter(); // accept the default port
+      await flush();
+      await waitForFrame((frame) => frame.includes("Set as active provider"));
+      mockInput.pressArrow("down"); // "No": this test is only about the wording
+      mockInput.pressEnter();
+      await flush();
+
+      const failureFrame = await waitForFrame((frame) => frame.includes("test failed"));
+      expect(failureFrame).toContain("rate limited");
+      // The generic string is exactly what made a flagged egress address look
+      // like a network fault, so this reason must not print it.
+      expect(failureFrame).not.toContain("connection validation failed");
+
+      // Back out cleanly: Esc on the failure screen retries (step 2's first
+      // sub-step), Esc there returns to step 1, Esc at step 1 cancels.
+      await pressEscapeAndSettle({ mockInput, flush });
+      await waitForFrame((frame) => frame.includes("Base URL"));
+      await pressEscapeAndSettle({ mockInput, flush });
+      await waitForFrame((frame) => frame.includes("searxng (SearXNG)"));
+      await pressEscapeAndSettle({ mockInput, flush });
+      await done;
+
+      renderer.destroy();
+    },
+  );
+
 });
 
 // --- flow 180 — tui-shell.ts bare `/search-connect` interactive picker

@@ -4,7 +4,9 @@ import {
   duckduckgoSearchResponse,
   isDuckDuckGoAnomaly,
   maybeDelayDuckDuckGoSearch,
+  waitDuckDuckGoBackoff,
 } from "./duckduckgo";
+import { RATE_LIMITED_SEARCH_ERROR } from "./connection-message";
 import type {
   CredentialInjection,
   NormalizedSearchResult,
@@ -141,27 +143,43 @@ export function createSearchProviderRegistry(transport: SandboxedWebTransport, r
         method: "GET",
         query: DUCKDUCKGO_HEALTHCHECK_QUERY,
       });
-      if (isDuckDuckGoAnomaly(response.status, response.text)) return { ok: false, reason: "transport-failed" };
+      // An anomaly page (HTTP 202, or a 200 carrying the anomaly markers) is
+      // DuckDuckGo REFUSING this machine, not a broken transport: the request
+      // arrived and was answered. It gets its own reason so the operator
+      // surfaces can say "rate limited" instead of recommending a retry that a
+      // flagged egress address makes useless.
+      if (isDuckDuckGoAnomaly(response.status, response.text)) return { ok: false, reason: "rate-limited" };
       if (!response.ok || response.status < 200 || response.status >= 300) return requestFailure(response);
       const parsed = duckduckgoSearchResponse(DUCKDUCKGO_HEALTHCHECK_QUERY, response.text);
-      return parsed.ok ? { ok: true } : { ok: false, reason: "transport-failed" };
+      // `duckduckgoSearchResponse` fails ONLY on those same anomaly markers, so
+      // this branch is that same refusal, never a transport fault.
+      return parsed.ok ? { ok: true } : { ok: false, reason: "rate-limited" };
     },
     async search(_fields, query, signal) {
-      await maybeDelayDuckDuckGoSearch(signal);
-      const response = await transport.request({
-        providerId: "duckduckgo",
-        capability: "public-search",
-        url: duckduckgoLiteUrl(query),
-        method: "GET",
-        query,
-        ...(signal ? { signal } : {}),
-      });
-      if (isDuckDuckGoAnomaly(response.status, response.text)) {
-        throw new Error("DuckDuckGo rate-limited this machine");
+      for (let attempt = 0; ; attempt += 1) {
+        await maybeDelayDuckDuckGoSearch(signal);
+        const response = await transport.request({
+          providerId: "duckduckgo",
+          capability: "public-search",
+          url: duckduckgoLiteUrl(query),
+          method: "GET",
+          query,
+          ...(signal ? { signal } : {}),
+        });
+        const parsed = duckduckgoSearchResponse(query, response.text);
+        // An anomaly page is a REFUSAL (rate limit or bot page), never an empty
+        // SERP, and it is the one failure worth waiting out: a lone request
+        // after a quiet period is answered normally.
+        if (!isDuckDuckGoAnomaly(response.status, response.text) && parsed.ok) {
+          return parsed.value;
+        }
+        // Out of ladder: report what happened. "search failed" alone sent the
+        // operator and this agent to retry a rate limit immediately, which is
+        // the one response that cannot clear it.
+        if (!(await waitDuckDuckGoBackoff(attempt, signal))) {
+          throw new Error(RATE_LIMITED_SEARCH_ERROR);
+        }
       }
-      const parsed = duckduckgoSearchResponse(query, response.text);
-      if (!parsed.ok) throw new Error("DuckDuckGo rate-limited this machine");
-      return parsed.value;
     },
   };
 

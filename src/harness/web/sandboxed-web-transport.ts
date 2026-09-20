@@ -21,6 +21,14 @@ export interface WebWorkerRequest {
   method: "GET" | "POST";
   body?: Record<string, unknown>;
   credential?: { injection: "header" | "json-body"; name: string; value: string };
+  /**
+   * Send the browser-shaped header set instead of the bare `accept` list.
+   *
+   * Set for SEARCH providers only: they answer a browser and bot-check
+   * anything else, while a page `web_fetch` retrieves must not be requested
+   * as if a browser were loading it.
+   */
+  browserHeaders?: boolean;
 }
 
 export interface WebWorkerResponse {
@@ -93,6 +101,7 @@ export class SandboxedWebTransport {
       ...(request.credential !== undefined ? { credential: request.credential } : {}),
       ...(request.signal !== undefined ? { signal: request.signal } : {}),
       localOnly: request.capability === "local-search",
+      browserHeaders: request.capability === "public-search",
     });
     if (!raw.ok) {
       return {
@@ -120,6 +129,7 @@ export class SandboxedWebTransport {
     credential?: { injection: "header" | "json-body"; name: string; value: string };
     signal?: AbortSignal;
     localOnly?: boolean;
+    browserHeaders?: boolean;
   }): Promise<WebPolicyResult<{ url: string; response: WebWorkerResponse }>> {
     let parsed = parsePublicHttpsUrl(request.url);
     if (request.localOnly === true) {
@@ -149,6 +159,7 @@ export class SandboxedWebTransport {
           method: request.method,
           ...(request.body !== undefined ? { body: request.body } : {}),
           ...(request.credential !== undefined ? { credential: request.credential } : {}),
+          ...(request.browserHeaders === true ? { browserHeaders: true } : {}),
         }, request.signal,
       );
       if (!worker.ok) return worker;

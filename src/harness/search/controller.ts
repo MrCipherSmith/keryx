@@ -104,13 +104,21 @@ export class SearchProviderController {
     stored: StoredSearchProvider | undefined,
     query: string,
     signal?: AbortSignal,
-  ): Promise<{ ok: true; value: SearchResponse } | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed" }> {
+  ): Promise<{ ok: true; value: SearchResponse } | { ok: false; reason: "no-active-provider" | "provider-disconnected" | "search-failed"; detail?: string }> {
     const descriptor = this.registry.get(providerId);
     if (!descriptor) return { ok: false, reason: "no-active-provider" };
     try {
       return { ok: true, value: await descriptor.search(stored?.fields ?? {}, query, signal) };
-    } catch {
-      return { ok: false, reason: "search-failed" };
+    } catch (error) {
+      // The provider's own refusal is the only thing that says WHY;
+      // collapsing it into a bare `search-failed` is what delivered a
+      // DuckDuckGo rate limit to the agent as "search failed. Retry later"
+      // - advice that cannot work, because that limit is why it failed.
+      return {
+        ok: false,
+        reason: "search-failed",
+        ...(error instanceof Error && error.message.length > 0 ? { detail: error.message } : {}),
+      };
     }
   }
 

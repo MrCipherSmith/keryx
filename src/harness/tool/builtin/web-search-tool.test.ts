@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { webSearchTool } from "./web-search-tool";
+import { RATE_LIMITED_SEARCH_ERROR } from "../../search/connection-message";
 
 test("web_search tells the agent to reconnect a disconnected selected provider", async () => {
   const tool = webSearchTool({ search: async () => ({ ok: false, reason: "provider-disconnected" }) });
@@ -45,4 +46,23 @@ test("web_search blocks indirect tool-invocation instructions in results", async
     } }),
   });
   expect((await tool.invoke({ query: "test" })).isError).toBe(true);
+});
+
+test("web_search passes the provider's own refusal through, not just 'search failed'", async () => {
+  const tool = webSearchTool({
+    search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }),
+  });
+  const result = await tool.invoke({ query: "keryx" });
+  expect(result.isError).toBe(true);
+  expect(result.output).toContain("rate limited");
+  expect(result.output).toContain("do not switch providers");
+  expect(result.output).toContain("Wait a few minutes before trying again");
+  // The old tail said "Retry later", which contradicts the detail it follows.
+  expect(result.output).not.toContain("Retry later");
+});
+
+test("web_search tells the agent not to retry a rate-limited search", async () => {
+  const tool = webSearchTool({ search: async () => ({ ok: false, reason: "search-failed", detail: RATE_LIMITED_SEARCH_ERROR }) });
+  const result = await tool.invoke({ query: "keryx" });
+  expect(result.output).toContain("Do not retry or rephrase");
 });
