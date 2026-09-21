@@ -27,3 +27,12 @@
 - 2026-09-21T21:53:51.313Z - task-done: T7: Fix static review findings for execution plan lifecycle
 - 2026-09-21T21:53:51.792Z - task-attempt: T4: started (attempt 3) — 284-T4 static re-review after fixes
 - 2026-09-21T21:56:43.610Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-21T22:00:22.359Z - task-attempt: T5: failed (attempt 3) — GitHub CI failed: tool roster snapshot and obsolete Slate TDZ source audit
+- 2026-09-21T22:00:22.616Z - task-added: T8: Update shell contract tests for execution plan tools and TDZ fix
+- 2026-09-21T22:00:22.854Z - task-depends-set: T8: dependsOn T7 (was empty) — CI contracts must match reviewed execution-plan behavior
+- 2026-09-21T22:00:23.098Z - task-depends-set: T5: dependsOn T8 (was T7) — GitHub CI reruns after contract test fixes
+- 2026-09-21T22:00:23.342Z - task-attempt: T8: started (attempt 1) — 284-T8 fix GitHub CI contract failures
+- 2026-09-21T22:02:25.367Z - task-done: T8: Update shell contract tests for execution plan tools and TDZ fix
+- 2026-09-21T22:15:08.971Z - task-done: T5: Verify live TUI plan lifecycle and session resume
+- 2026-09-21T22:15:44.016Z - task-done: T6: Write implementation change report and operator notes
+- 2026-09-21T22:15:58.667Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/641
