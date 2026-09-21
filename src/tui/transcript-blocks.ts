@@ -992,6 +992,8 @@ export interface UserEchoOptions {
   borderColor?: string;
   /** Rows of separation from whatever precedes it (default 1). */
   marginTop?: number;
+  /** Stretch the operator prompt across the transcript as a one-row surface. */
+  fullWidth?: boolean;
 }
 
 /**
@@ -1011,18 +1013,25 @@ export function appendUserEcho(
   options: UserEchoOptions,
 ): Box {
   const text = `${options.marker ?? "❯"} ${options.line}`;
+  const fullWidth = options.fullWidth === true;
   const box = new otui.BoxRenderable(renderer, {
     id: options.id,
-    borderStyle: "rounded",
-    border: true,
-    borderColor: options.borderColor ?? frameColor(),
+    borderStyle: fullWidth ? "single" : "rounded",
+    border: fullWidth ? ["left"] : true,
+    borderColor: options.borderColor ?? (fullWidth ? getTheme().user : frameColor()),
+    ...(fullWidth ? { width: "100%", backgroundColor: getTheme().panel } : { maxWidth: hugWidth(text, FRAME_CHROME) }),
     paddingLeft: 1,
     paddingRight: 1,
     marginTop: options.marginTop ?? 1,
     flexShrink: 0,
-    maxWidth: hugWidth(text, FRAME_CHROME),
   });
-  box.add(new otui.TextRenderable(renderer, { id: `${options.id}-t`, content: otui.t`${otui.dim(text)}` }));
+  box.add(
+    new otui.TextRenderable(renderer, {
+      id: `${options.id}-t`,
+      content: fullWidth ? text : otui.t`${otui.dim(text)}`,
+      ...(fullWidth ? { fg: getTheme().user, wrapMode: "word" as const } : {}),
+    }),
+  );
   parent.add(box);
   return box;
 }

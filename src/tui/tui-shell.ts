@@ -6697,7 +6697,12 @@ export async function launchTuiAgentShell(opts: {
         }
         return;
       }
-      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });
+      const userEcho = appendUserEcho(otui, r, transcript, {
+        id: `ub${uid++}`,
+        line: displayLine,
+        fullWidth: true,
+      });
+      chrome.registerUserPrompt(userEcho, displayLine);
       transcript.add(
         new otui.TextRenderable(r, {
           id: `h${uid++}`,

@@ -410,7 +410,15 @@ export async function mountChatShell(
   const bridge = createChatBridge({
     onAccepted: (line) => {
       const displayLine = line.startsWith("/") ? line : summarizeSubmittedLine(line);
-      appendUserEcho(otui, r, transcript, { id: `ub${uid++}`, line: displayLine });
+      const isCommand = line.startsWith("/");
+      const userEcho = appendUserEcho(otui, r, transcript, {
+        id: `ub${uid++}`,
+        line: displayLine,
+        fullWidth: !isCommand,
+      });
+      if (!isCommand) {
+        chrome.registerUserPrompt(userEcho, displayLine);
+      }
       if (!line.startsWith("/")) {
         seen.push({ content: line });
         paintContext();

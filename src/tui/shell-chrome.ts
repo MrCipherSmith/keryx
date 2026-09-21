@@ -336,6 +336,8 @@ export interface ShellChrome {
    */
   readonly sidebarScroll: ScrollBox;
   readonly header: Box;
+  /** Compact context strip shown when the active operator prompt scrolls above the viewport. */
+  readonly promptPin: Box;
   readonly scroll: ScrollBox;
   /** The scrollbox content the IO renders into. */
   readonly transcript: Box;
@@ -353,6 +355,10 @@ export interface ShellChrome {
   readonly textarea: Textarea;
   readonly footer: Box;
   readonly input: ComposerInput;
+  /** Track a main-turn operator prompt so it can become the scroll context pin. */
+  registerUserPrompt(box: Box, line: string): void;
+  /** The prompt currently pinned above the transcript, if any. */
+  pinnedUserPrompt(): string | undefined;
 
   focusComposer(): void;
   blurComposer(): void;
@@ -632,6 +638,32 @@ export async function createShellChrome(
   };
   paintDim(headerRight, opts.headerMeta ?? "");
 
+  // --- active prompt pin --------------------------------------------------
+  // OpenTUI has sticky scrolling for viewport edges, but no CSS-like sticky
+  // child. Keep the source prompt in transcript history and mirror only the
+  // active one into this compact strip once its source row crosses the top.
+  const promptPin = new otui.BoxRenderable(r, {
+    id: "prompt-pin",
+    flexShrink: 0,
+    width: "100%",
+    height: 1,
+    visible: false,
+    border: ["left"],
+    borderColor: getTheme().user,
+    backgroundColor: getTheme().highlight,
+    paddingLeft: 1,
+    paddingRight: 1,
+  });
+  const promptPinText = new otui.TextRenderable(r, {
+    id: "prompt-pin-text",
+    content: "",
+    fg: getTheme().user,
+    wrapMode: "none",
+    truncate: true,
+  });
+  promptPin.add(promptPinText);
+  main.add(promptPin);
+
   // --- transcript ---------------------------------------------------------
   // Scrollable and sticky-to-bottom so long conversations auto-follow; the IO
   // renders into `.content`.
@@ -651,6 +683,35 @@ export async function createShellChrome(
   });
   main.add(scroll);
   const transcript = scroll.content;
+  const userPrompts: { box: Box; line: string }[] = [];
+  let pinnedPrompt: { box: Box; line: string } | undefined;
+  const syncPromptPin = (): void => {
+    let active: { box: Box; line: string } | undefined;
+    for (let i = userPrompts.length - 1; i >= 0; i -= 1) {
+      const candidate = userPrompts[i];
+      if (candidate === undefined) continue;
+      if ((candidate.box as { parent?: unknown }).parent !== transcript) {
+        userPrompts.splice(i, 1);
+        continue;
+      }
+      // Subtracting the translated content position yields the prompt's stable
+      // logical row. It avoids feedback when this pin reduces the viewport.
+      const logicalTop = candidate.box.y - transcript.y;
+      if (logicalTop < scroll.scrollTop) {
+        active = candidate;
+        break;
+      }
+    }
+    if (active?.box === pinnedPrompt?.box) return;
+    pinnedPrompt = active;
+    promptPin.visible = active !== undefined;
+    promptPinText.content = active === undefined ? "" : `↥ ❯ ${active.line}`;
+  };
+  const registerUserPrompt = (box: Box, line: string): void => {
+    if (line.length === 0 || userPrompts.some((item) => item.box === box)) return;
+    userPrompts.push({ box, line });
+  };
+  r.on(otui.CliRenderEvents.FRAME, syncPromptPin);
 
   /** In-transcript live status line; re-pinned to the END of the transcript on every add. */
   let liveStatus: Text | undefined;
@@ -1243,6 +1304,9 @@ export async function createShellChrome(
     sidebar.borderColor = theme.border;
     sidebar.backgroundColor = theme.panel;
     header.backgroundColor = theme.bg;
+    promptPin.borderColor = theme.user;
+    promptPin.backgroundColor = theme.highlight;
+    promptPinText.fg = theme.user;
     footer.backgroundColor = theme.bg;
     dock.backgroundColor = theme.panel;
     dock.borderColor = theme.border;
@@ -1291,6 +1355,7 @@ export async function createShellChrome(
     sidebarTop,
     sidebarScroll: sidebarTopScroll,
     header,
+    promptPin,
     scroll,
     transcript,
     dock,
@@ -1300,6 +1365,8 @@ export async function createShellChrome(
     textarea,
     footer,
     input,
+    registerUserPrompt,
+    pinnedUserPrompt: () => pinnedPrompt?.line,
 
     focusComposer: () => {
       textarea.focus();
@@ -1370,6 +1437,11 @@ export async function createShellChrome(
       }
       try {
         r.off(otui.CliRenderEvents.SELECTION, onSelection);
+      } catch {
+        // best-effort teardown
+      }
+      try {
+        r.off(otui.CliRenderEvents.FRAME, syncPromptPin);
       } catch {
         // best-effort teardown
       }

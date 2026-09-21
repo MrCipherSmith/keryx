@@ -228,6 +228,60 @@ otuiTest("AC1: mounting the chrome renders header, transcript, composer and foot
   h.destroy();
 });
 
+otuiTest("full-width operator prompts become a replacing sticky context strip while scrolling", async () => {
+  const otui = requireOtui();
+  const h = await mountChrome(otui, { width: 90, height: 14 });
+  const firstLine = "find merged branches";
+  const secondLine = "remove their worktrees";
+  const first = appendUserEcho(otui.core, h.renderer, h.chrome.transcript, {
+    id: "prompt-1",
+    line: firstLine,
+    fullWidth: true,
+  });
+  h.chrome.registerUserPrompt(first, firstLine);
+  for (let i = 0; i < 16; i += 1) {
+    h.chrome.transcript.add(
+      new otui.core.TextRenderable(h.renderer, { id: `answer-1-${i}`, content: `first answer ${i}` }),
+    );
+  }
+  const second = appendUserEcho(otui.core, h.renderer, h.chrome.transcript, {
+    id: "prompt-2",
+    line: secondLine,
+    fullWidth: true,
+  });
+  h.chrome.registerUserPrompt(second, secondLine);
+  for (let i = 0; i < 16; i += 1) {
+    h.chrome.transcript.add(
+      new otui.core.TextRenderable(h.renderer, { id: `answer-2-${i}`, content: `second answer ${i}` }),
+    );
+  }
+  await h.flush();
+  await h.flush();
+  expect(first.width).toBeGreaterThanOrEqual(h.chrome.transcript.width - 2);
+  expect(first.height).toBe(1);
+
+  h.chrome.scroll.scrollTop = 0;
+  await h.flush();
+  expect(h.chrome.promptPin.visible).toBe(false);
+  expect(h.chrome.pinnedUserPrompt()).toBeUndefined();
+
+  const firstTop = first.y - h.chrome.transcript.y;
+  h.chrome.scroll.scrollTop = firstTop + 1;
+  await h.flush();
+  await h.flush();
+  expect(h.chrome.promptPin.visible).toBe(true);
+  expect(h.chrome.pinnedUserPrompt()).toBe(firstLine);
+  expect(h.captureCharFrame()).toContain(`↥ ❯ ${firstLine}`);
+
+  const secondTop = second.y - h.chrome.transcript.y;
+  h.chrome.scroll.scrollTop = secondTop + 1;
+  await h.flush();
+  await h.flush();
+  expect(h.chrome.pinnedUserPrompt()).toBe(secondLine);
+  expect(h.captureCharFrame()).toContain(`↥ ❯ ${secondLine}`);
+  h.destroy();
+});
+
 otuiTest("flow 142 AC4: shared chrome paints a persistent nonmodal update notice", async () => {
   const otui = requireOtui();
   let resolveCheck: (result: VersionCheckResult) => void = () => {};
@@ -957,6 +1011,7 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
     expect(themeColorToHex(h.chrome.composer.borderColor)).toBe(resolveTheme("groknight").border);
     expect(themeColorToHex(h.chrome.header.backgroundColor)).toBe(resolveTheme("groknight").bg);
     expect(themeColorToHex(h.chrome.footer.backgroundColor)).toBe(resolveTheme("groknight").bg);
+    expect(themeColorToHex(h.chrome.promptPin.backgroundColor)).toBe(resolveTheme("groknight").highlight);
 
     // Content painted at creation with the CURRENT palette: a user echo frame,
     // an assistant code-segment frame and a red-toned tool block header.
@@ -1033,6 +1088,7 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
     expect(themeColorToHex(h.chrome.composer.borderColor)).toBe(resolveTheme("grokday").border);
     expect(themeColorToHex(h.chrome.header.backgroundColor)).toBe(resolveTheme("grokday").bg);
     expect(themeColorToHex(h.chrome.footer.backgroundColor)).toBe(resolveTheme("grokday").bg);
+    expect(themeColorToHex(h.chrome.promptPin.backgroundColor)).toBe(resolveTheme("grokday").highlight);
 
     const after: string[] = [];
     collect(h.chrome.transcript, after);
