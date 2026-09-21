@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "280",
+  "slug": "graph-provenance-stall",
+  "title": "gdgraph provenance never advances after a metaproject-only commit, so the wiki baseline can never be recorded",
+  "status": "initializing",
+  "createdAt": "2026-09-21T06:30:04.347Z",
+  "updatedAt": "2026-09-21T06:30:44.681Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Reproduce the stall on a temporary repository and record what each command does to provenance",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Decide the owner: diff stage, gdgraph build, or the wiki baseline gate",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Implement the fix with tests, including the metaproject-only-commit case",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Regression tests: code-change commit still rebuilds; untracked code still refuses the baseline",
+      "kind": "test",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T9",
+      "title": "Full verification: bun run check and keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-21T06:30:04.347Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-21T06:30:43.738Z",
+      "event": "task-added",
+      "detail": "T5: Reproduce the stall on a temporary repository and record what each command does to provenance"
+    },
+    {
+      "at": "2026-09-21T06:30:43.972Z",
+      "event": "task-added",
+      "detail": "T6: Decide the owner: diff stage, gdgraph build, or the wiki baseline gate"
+    },
+    {
+      "at": "2026-09-21T06:30:44.216Z",
+      "event": "task-added",
+      "detail": "T7: Implement the fix with tests, including the metaproject-only-commit case"
+    },
+    {
+      "at": "2026-09-21T06:30:44.438Z",
+      "event": "task-added",
+      "detail": "T8: Regression tests: code-change commit still rebuilds; untracked code still refuses the baseline"
+    },
+    {
+      "at": "2026-09-21T06:30:44.681Z",
+      "event": "task-added",
+      "detail": "T9: Full verification: bun run check and keryx health run"
+    }
+  ]
+}
