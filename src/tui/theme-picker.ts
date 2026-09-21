@@ -295,6 +295,7 @@ export function presentThemePicker(
     tabs: [{ id: "picker", label: "Theme" }],
     initialTab: "picker",
     footer: THEME_PICKER_FOOTER,
+    contentRows: 22,
     renderTab: (_tabId, body) => {
       if (core === undefined || body === undefined || body === null) {
         return;

@@ -351,10 +351,10 @@ describe("AC4 (TUI) — picker and Session Switcher mark held rows", () => {
   test("the Session Switcher labels live/stale rows and leaves mine/free unmarked", () => {
     const rows = sessionPickerOptions(["a", "b", "c", "d"].map(summary), lookup);
     expect(rows.map((row) => row.label)).toEqual([
-      "a · title a",
-      "b · title b",
-      "c · title c  ● live",
-      "d · title d  ◌ stale",
+      "title a  ·  a",
+      "title b  ·  b",
+      "title c  ·  c  ● live",
+      "title d  ·  d  ◌ stale",
     ]);
   });
 

@@ -67,6 +67,7 @@ export type OpenModalInput = {
   tabs: readonly ModalTab[];
   initialTab?: string;
   footer?: readonly { key: string; label: string }[];
+  contentRows?: number;
   renderTab: (tabId: string, body: unknown, ctx?: { width: number }) => void | (() => void);
   onClose?: () => void;
 };
@@ -341,11 +342,19 @@ export function presentSessionInfo(
     }
   };
   let unsubscribeKey: (() => void) | undefined;
+  const contextRows = Math.max(1, formatContextUsageText(snapshot.context).trimEnd().split("\n").length);
+  const contentRows = Math.max(
+    snapshot.sessionRows.length + snapshot.usageRows.length,
+    contextRows,
+    snapshot.workspaceLines.length,
+    snapshot.flowLines.length,
+  );
   const handle = openModal(otui, chrome, {
     title: "/status",
     tabs: statusModalTabs(snapshot),
     initialTab: "status",
     footer: SESSION_INFO_FOOTER,
+    contentRows,
     renderTab: (tabId, body, ctx) => {
       const renderer =
         options.renderer ?? (chrome as { renderer?: unknown } | undefined)?.renderer;

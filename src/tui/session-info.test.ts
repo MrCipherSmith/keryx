@@ -177,10 +177,16 @@ test("AC2: presentSessionInfo calls host openModal with Session + Usage tabs", (
   };
   presentSessionInfo(openModal, {}, {}, { snapshot: snap, copyText: () => {}, toast: () => {} });
   expect(calls).toHaveLength(1);
-  const input = calls[0] as { title: string; tabs: { id: string; label: string }[]; initialTab?: string };
+  const input = calls[0] as {
+    title: string;
+    tabs: { id: string; label: string }[];
+    initialTab?: string;
+    contentRows?: number;
+  };
   expect(input.title).toBe("/status");
   expect(input.tabs.map((t) => t.id)).toEqual(["status", "context"]);
   expect(input.initialTab).toBe("status");
+  expect(input.contentRows).toBe(snap.sessionRows.length + snap.usageRows.length);
   expect((input as { footer?: { key: string; label: string }[] }).footer?.map((item) => item.key)).toEqual([
     "c",
     "←/→",
@@ -311,4 +317,3 @@ test("provider-reported window and rate limit appear; missing stays em-dash", ()
   expect(missing.usageRows.some((r) => r.label === "Rate limit")).toBe(false);
   expect(missing.usageRows.some((r) => r.label === "Balance")).toBe(false);
 });
-

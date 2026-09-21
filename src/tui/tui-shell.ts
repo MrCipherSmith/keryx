@@ -2809,7 +2809,7 @@ function formatSessionDate(iso: string): string {
 }
 
 /**
- * In-TUI session picker with TYPE-TO-FILTER. Shows id / project / title / created / updated
+ * In-TUI session picker with TYPE-TO-FILTER. Shows title / id / activity
  * in one list, and resolves the selected session id, or `undefined` on Esc / no match.
  * Given the shell chrome it opens in ModalHost (flow 269 AC4); given a bare renderer, as a
  * full-screen overlay.
@@ -2827,11 +2827,12 @@ export function sessionPickerOptions(
     const updated = formatSessionDate(s.updatedAt);
     const short = shortSessionId(s.id);
     const title = s.title.length > 52 ? `${s.title.slice(0, 49)}…` : s.title;
-    const label = withLeaseMarker(`${short} · ${title}`, leaseState(s.id));
+    const label = withLeaseMarker(`${title}  ·  ${short}`, leaseState(s.id));
+    const messages = `${s.messageCount} ${s.messageCount === 1 ? "message" : "messages"}`;
     return {
       value: s.id,
       label,
-      description: `${s.projectPath} · created ${created} · updated ${updated}`,
+      description: `updated ${updated} · created ${created} · ${messages}`,
       search: `${s.id} ${label} ${s.projectPath} ${s.title} ${created} ${updated}`.toLowerCase(),
     };
   });
@@ -2896,7 +2897,7 @@ export function pickSessionInTui(
         renderTab: (_tabId, body, ctx) => {
           const list = mountFilterList(otui, r, body as Box, {
             ...listSpec,
-            idleHint: "type to filter by id, title, project, created, updated",
+            idleHint: "type to filter · title, id, date",
             width: "100%",
             height: adaptiveSelectHeight(all.length, Math.max(1, ctx.height - 1), ROWS_PER_SESSION),
             onPick: (row) => {
@@ -4347,6 +4348,27 @@ export async function launchTuiAgentShell(opts: {
     const helpText = (): string => {
       const mainWidth = chrome.main.width > 0 ? chrome.main.width : r.width - SIDEBAR_WIDTH;
       return renderCommandHelp("agent", undefined, Math.max(HELP_MIN_COLS, mainWidth - TRANSCRIPT_CHROME_COLS));
+    };
+    const openHelp = (): void => {
+      const content = helpText().trimEnd();
+      openModal(otui, chrome, {
+        title: "/help",
+        tabs: [{ id: "commands", label: "Commands" }],
+        initialTab: "commands",
+        footer: [
+          { key: "↑/↓", label: "scroll" },
+          { key: "esc", label: "close" },
+        ],
+        contentRows: Math.max(1, content.split("\n").length),
+        renderTab: (_tabId, body) => {
+          (body as Box).add(
+            new otui.TextRenderable(r, {
+              id: `help-${uid++}`,
+              content,
+            }),
+          );
+        },
+      });
     };
 
     // --- Per-project session (isolated by git root / cwd) --------------------
@@ -6648,7 +6670,7 @@ export async function launchTuiAgentShell(opts: {
           })();
           return;
         }
-        io.onSystem?.(helpText()); // /help
+        openHelp(); // /help
         return;
       }
       if (line.startsWith("/")) {

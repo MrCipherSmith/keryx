@@ -43,8 +43,13 @@ test("preview sample includes markdown and a code fence body", () => {
   expect(THEME_PREVIEW_CODE).toContain("export function greet");
 });
 
-test("presentThemePicker opens a 1-tab modal and applies only on Enter", () => {
-  const calls: { title: string; tabs: readonly { id: string }[]; footer?: readonly { key: string }[] }[] = [];
+test("presentThemePicker opens a compact 1-tab modal and applies only on Enter", () => {
+  const calls: {
+    title: string;
+    tabs: readonly { id: string }[];
+    footer?: readonly { key: string }[];
+    contentRows?: number;
+  }[] = [];
   const applied: string[] = [];
   let keyHandler: ((key: { name: string; sequence: string }) => void) | undefined;
   let closed = false;
@@ -77,6 +82,7 @@ test("presentThemePicker opens a 1-tab modal and applies only on Enter", () => {
   expect(calls[0]?.title).toBe("/theme");
   expect(calls[0]?.tabs.map((tab) => tab.id)).toEqual(["picker"]);
   expect(calls[0]?.footer?.map((item) => item.key)).toEqual(THEME_PICKER_FOOTER.map((item) => item.key));
+  expect(calls[0]?.contentRows).toBe(22);
   expect(THEME_IDS[0]).toBe("auto");
 
   keyHandler?.({ name: "down", sequence: "" });

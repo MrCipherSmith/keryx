@@ -496,7 +496,7 @@ export async function createShellChrome(
   let appliedTheme: Theme = getTheme();
 
   // --- layout skeleton ----------------------------------------------------
-  // opencode-style: a main chat column on the left + a right status sidebar.
+  // Keryx workspace: a calm transcript canvas with a persistent telemetry rail.
   const rootRow = new otui.BoxRenderable(r, { id: "root-row", flexGrow: 1, flexDirection: "row" });
   r.root.add(rootRow);
   const main = new otui.BoxRenderable(r, { id: "main", flexGrow: 1, minWidth: 0, flexDirection: "column" });
@@ -508,6 +508,7 @@ export async function createShellChrome(
     flexDirection: "column",
     border: ["left"],
     borderColor: getTheme().highlight,
+    backgroundColor: getTheme().panel,
     paddingLeft: SIDEBAR_PADDING_LEFT,
     paddingRight: SIDEBAR_PADDING_RIGHT,
     paddingTop: 1,
@@ -604,10 +605,14 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "row",
     justifyContent: "space-between",
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
   });
-  const headerLeft = new otui.TextRenderable(r, { id: "header-left", content: otui.t`${otui.dim(opts.title)}` });
+  const headerLeft = new otui.TextRenderable(r, {
+    id: "header-left",
+    content: otui.t`${otui.bold(`◆ ${opts.title}`)}`,
+  });
   header.add(headerLeft);
   const headerRight = new otui.TextRenderable(r, { id: "header-right", content: "" });
   header.add(headerRight);
@@ -763,7 +768,8 @@ export async function createShellChrome(
     flexDirection: "column",
     borderStyle: "rounded",
     border: true,
-    borderColor: getTheme().border,
+    borderColor: getTheme().highlight,
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -897,6 +903,7 @@ export async function createShellChrome(
     flexShrink: 0,
     flexDirection: "row",
     justifyContent: "space-between",
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
   });
@@ -1219,11 +1226,15 @@ export async function createShellChrome(
       // renderer may not expose the setter in tests
     }
     sidebar.borderColor = theme.highlight;
+    sidebar.backgroundColor = theme.panel;
+    header.backgroundColor = theme.panel;
+    footer.backgroundColor = theme.panel;
     dock.backgroundColor = theme.panel;
     dock.borderColor = theme.border;
     queueDock.backgroundColor = theme.panel;
     queueDock.borderColor = theme.border;
-    composer.borderColor = theme.border;
+    composer.borderColor = theme.highlight;
+    composer.backgroundColor = theme.panel;
     menu.backgroundColor = theme.panel;
     menu.focusedBackgroundColor = theme.panel;
     menu.selectedBackgroundColor = theme.highlight;
