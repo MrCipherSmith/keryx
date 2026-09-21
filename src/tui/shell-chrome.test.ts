@@ -32,8 +32,10 @@ import {
   type VersionCheckResult,
 } from "../lib/version-check";
 import { applyThemeId, getThemeId, resolveTheme } from "./theme";
+import * as themeModule from "./theme";
 import { themeColorToHex } from "./shell-chrome";
 import { appendUserEcho, createBlockView, createSegmentView } from "./transcript-blocks";
+import * as shellChromeModule from "./shell-chrome";
 
 async function loadOpenTui(): Promise<{
   core: typeof import("@opentui/core");
@@ -1111,6 +1113,40 @@ otuiTest("a theme switch repaints every theme-colored renderable in place, not j
     applyThemeId(previous);
     h?.destroy();
   }
+});
+
+test("theme repaint updates existing styled prose, syntax, diff backgrounds, and table-cell chunks in place", () => {
+  const from = resolveTheme("groknight");
+  const to = resolveTheme("grokday");
+  const derive = (theme: typeof from) => (themeModule as unknown as {
+    deriveTranscriptPalette(value: typeof from): {
+      prose: string;
+      codeKeyword: string;
+      diffAdd: string;
+      diffAddBackground: string;
+      tableHeader: string;
+    };
+  }).deriveTranscriptPalette(theme);
+  const oldPalette = derive(from);
+  const nextPalette = derive(to);
+  const proseChunk = { text: "prose", fg: oldPalette.prose };
+  const keywordChunk = { text: "const", fg: oldPalette.codeKeyword };
+  const diffChunk = { text: "+added", fg: oldPalette.diffAdd, bg: oldPalette.diffAddBackground };
+  const tableChunk = { text: "Header", fg: oldPalette.tableHeader };
+  const prose = { content: { chunks: [proseChunk, keywordChunk, diffChunk] } };
+  const tableCell = { content: { chunks: [tableChunk] } };
+  const table = { getChildren: () => [tableCell] };
+  const root = { getChildren: () => [prose, table] };
+
+  (shellChromeModule as unknown as {
+    recolorThemeTree(node: unknown, fromTheme: typeof from, toTheme: typeof to): void;
+  }).recolorThemeTree(root, from, to);
+
+  expect(root.getChildren()[0]).toBe(prose);
+  expect(proseChunk.fg).toBe(nextPalette.prose);
+  expect(keywordChunk.fg).toBe(nextPalette.codeKeyword);
+  expect(diffChunk).toMatchObject({ fg: nextPalette.diffAdd, bg: nextPalette.diffAddBackground });
+  expect(tableChunk.fg).toBe(nextPalette.tableHeader);
 });
 
 otuiTest("next-step suggestion: shows in the composer placeholder while empty, and clears on input", async () => {

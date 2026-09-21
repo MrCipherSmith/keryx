@@ -4,7 +4,11 @@ import {
   clearTranscriptChildren,
   createBlockNavController,
   createBlockRegistry,
+  createSegmentView,
   createStreamSegmenter,
+  diffChunks,
+  markdownToChunks,
+  payloadChunks,
   revealScrollTop,
   EVICTED_BLOCK_TEXT,
   TRUNCATED_BLOCK_NOTICE,
@@ -32,6 +36,153 @@ function block(n: number, overrides: Partial<BlockInput> = {}): BlockInput {
     ...overrides,
   };
 }
+
+type FakeChunk = { text: string; fg?: string; bg?: string; bold?: boolean; dim?: boolean };
+const transcriptPalette = {
+  prose: "#d0d0d0",
+  heading: "#aabbd0",
+  emphasis: "#d8d8d8",
+  inlineCode: "#c0c8d0",
+  inlineCodeBackground: "#20252a",
+  blockMeta: "#777777",
+  tableHeader: "#c0c8d0",
+  tableBorder: "#667788",
+  codePlain: "#c8c8c8",
+  codeComment: "#7f8790",
+  codeString: "#9fbd91",
+  codeNumber: "#c4aa7a",
+  codeKeyword: "#91a9c4",
+  diffContext: "#c8c8c8",
+  diffMeta: "#7f8790",
+  diffHunk: "#91a9c4",
+  diffAdd: "#9fbd91",
+  diffDelete: "#c69a9f",
+  diffAddBackground: "#17251b",
+  diffDeleteBackground: "#29191c",
+};
+
+function fakeStyle(textOrChunk: string | FakeChunk, patch: Omit<FakeChunk, "text">): FakeChunk {
+  const chunk = typeof textOrChunk === "string" ? { text: textOrChunk } : textOrChunk;
+  return { ...chunk, ...patch };
+}
+
+class FakeStyledText {
+  constructor(readonly chunks: FakeChunk[]) {}
+}
+
+class FakeTextRenderable {
+  content: unknown;
+  constructor(_renderer: unknown, readonly options: { content?: unknown }) {
+    this.content = options.content;
+  }
+  destroyRecursively(): void {}
+}
+
+class FakeTextTableRenderable {
+  constructor(_renderer: unknown, readonly options: Record<string, unknown>) {}
+  destroyRecursively(): void {}
+}
+
+function fakeOtui(): Record<string, unknown> {
+  return {
+    stringToStyledText: (text: string) => new FakeStyledText([{ text }]),
+    StyledText: FakeStyledText,
+    TextRenderable: FakeTextRenderable,
+    TextTableRenderable: FakeTextTableRenderable,
+    bold: (value: string | FakeChunk) => fakeStyle(value, { bold: true }),
+    dim: (value: string | FakeChunk) => fakeStyle(value, { dim: true }),
+    cyan: (value: string | FakeChunk) => fakeStyle(value, { fg: "#00ffff" }),
+    green: (value: string | FakeChunk) => fakeStyle(value, { fg: "#00ff00" }),
+    yellow: (value: string | FakeChunk) => fakeStyle(value, { fg: "#ffff00" }),
+    red: (value: string | FakeChunk) => fakeStyle(value, { fg: "#ff0000" }),
+  };
+}
+
+function fakeChunks(chunks: unknown[]): FakeChunk[] {
+  return chunks as FakeChunk[];
+}
+
+describe("theme-aware transcript chunks", () => {
+  test("prose, headings, emphasis, and inline code use semantic palette roles", () => {
+    const chunks = fakeChunks(markdownToChunks(
+      fakeOtui() as never,
+      "# Heading\nplain **strong** and `inline`",
+      transcriptPalette as never,
+    ));
+    expect(chunks.find((chunk) => chunk.text === "Heading")?.fg).toBe(transcriptPalette.heading);
+    expect(chunks.find((chunk) => chunk.text === "plain ")?.fg).toBe(transcriptPalette.prose);
+    expect(chunks.find((chunk) => chunk.text === "strong")?.fg).toBe(transcriptPalette.emphasis);
+    expect(chunks.find((chunk) => chunk.text === "inline")).toMatchObject({
+      fg: transcriptPalette.inlineCode,
+      bg: transcriptPalette.inlineCodeBackground,
+    });
+  });
+
+  test("code tokens use restrained semantic roles instead of fixed ANSI colors", () => {
+    const chunks = fakeChunks(payloadChunks(
+      fakeOtui() as never,
+      "const answer = 42; // note",
+      "ts",
+      transcriptPalette as never,
+    ));
+    expect(chunks.find((chunk) => chunk.text === "const")?.fg).toBe(transcriptPalette.codeKeyword);
+    expect(chunks.find((chunk) => chunk.text === "42")?.fg).toBe(transcriptPalette.codeNumber);
+    expect(chunks.find((chunk) => chunk.text.includes("// note"))?.fg).toBe(transcriptPalette.codeComment);
+    expect(chunks.every((chunk) => !["#00ffff", "#00ff00", "#ffff00"].includes(chunk.fg ?? ""))).toBe(true);
+  });
+
+  test("diff styling keeps visible prefixes and adds semantic foreground and soft background cues", () => {
+    const chunks = fakeChunks(diffChunks(
+      fakeOtui() as never,
+      "--- a/file.ts\n+++ b/file.ts\n@@ -1 +1 @@\n-old\n+new\n context",
+      transcriptPalette as never,
+    ));
+    expect(chunks.map((chunk) => chunk.text).join("")).toContain("@@ -1 +1 @@\n-old\n+new");
+    expect(chunks.find((chunk) => chunk.text === "+new")).toMatchObject({
+      fg: transcriptPalette.diffAdd,
+      bg: transcriptPalette.diffAddBackground,
+    });
+    expect(chunks.find((chunk) => chunk.text === "-old")).toMatchObject({
+      fg: transcriptPalette.diffDelete,
+      bg: transcriptPalette.diffDeleteBackground,
+    });
+    expect(chunks.find((chunk) => chunk.text.startsWith("@@"))?.fg).toBe(transcriptPalette.diffHunk);
+  });
+
+  test("text fences preserve whitespace and Markdown punctuation verbatim", () => {
+    const source = "  # literal heading\n\t* literal bullet\n  `literal code`";
+    const rendered = fakeChunks(payloadChunks(
+      fakeOtui() as never,
+      source,
+      "text",
+      transcriptPalette as never,
+    )).map((chunk) => chunk.text).join("");
+    expect(rendered).toBe(source);
+  });
+});
+
+test("Markdown tables mount a TextTableRenderable while surrounding prose remains text", () => {
+  const otui = fakeOtui();
+  const children: unknown[] = [];
+  const parent = {
+    width: 28,
+    add: (child: unknown) => children.push(child),
+    remove: (child: unknown) => {
+      const index = children.indexOf(child);
+      if (index >= 0) children.splice(index, 1);
+    },
+  };
+  const view = createSegmentView(
+    otui as never,
+    {} as never,
+    parent as never,
+    { kind: "text", text: "Before\n\n| Name | Value |\n| --- | ---: |\n| alpha beta gamma | 42 |\n\nAfter" },
+  );
+  expect(children.some((child) => child instanceof FakeTextTableRenderable)).toBe(true);
+  expect(children.filter((child) => child instanceof FakeTextRenderable).length).toBeGreaterThanOrEqual(2);
+  view.destroy();
+  expect(children).toEqual([]);
+});
 
 // --- registration & per-block collapse (AC2) -------------------------------
 
