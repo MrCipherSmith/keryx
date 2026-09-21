@@ -727,8 +727,14 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
     expect(assignIdx).toBeGreaterThan(disabledIdx);
     const disabledBlock = source.slice(disabledIdx, assignIdx);
     expect(disabledBlock).not.toContain("busInbox");
-    // Widened for review r1 F7's `selAtJoin`/comment ahead of these fields.
-    const successBlock = source.slice(assignIdx, assignIdx + 2600);
+    // Bounded by the rebuild's own END (`liveDeps = deps;`) instead of a byte
+    // count. This was a fixed 2600-character window, so ANY comment inserted
+    // between the anchor and the fields asserted below silently pushed them out
+    // of view — which is exactly what an unrelated edit (the splash status
+    // notice) did to it. A structural end anchor cannot drift that way.
+    const endIdx = source.indexOf("liveDeps = deps;", assignIdx);
+    expect(endIdx).toBeGreaterThan(assignIdx);
+    const successBlock = source.slice(assignIdx, endIdx);
     expect(successBlock).toContain("busInbox,");
     expect(successBlock).toContain("busAck: (events) => joined.ack(events),");
   });
@@ -737,7 +743,10 @@ describe("flow 274 T7 — TUI bus delivery wiring (source-text audit)", () => {
   // this rebuild finishing later with a stale `currentSel`.
   test("the join-success rebuild captures currentSel as selAtJoin before its own await and only merges bus fields when a switch landed meanwhile", () => {
     const assignIdx = source.indexOf("liveBus = joined;");
-    const block = source.slice(assignIdx, assignIdx + 2600);
+    // Same structural end anchor as the test above — see its comment.
+    const endIdx = source.indexOf("liveDeps = deps;", assignIdx);
+    expect(endIdx).toBeGreaterThan(assignIdx);
+    const block = source.slice(assignIdx, endIdx);
     expect(block).toContain("const selAtJoin = currentSel;");
     expect(block).toContain("opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef)");
     expect(block).toContain("currentSel === selAtJoin");

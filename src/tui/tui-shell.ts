@@ -4664,6 +4664,23 @@ export async function launchTuiAgentShell(opts: {
       mount: () => mountEmptyTranscriptSplash(otui, r, transcript),
       initialHistoryLength: history.length,
     });
+    /**
+     * A STARTUP notice that belongs to the splash while one is up.
+     *
+     * On a genuinely empty transcript a system line added to the transcript is
+     * full-width by construction, so it can never be centred there and lands
+     * flush left under the wordmark — the reported defect. `addStatusIfShown`
+     * paints it inside the splash instead, and reports `false` when there is no
+     * splash (the session opened with history, or the first operator line
+     * already tore it down), in which case the ordinary transcript line IS the
+     * right home for it. Used for the startup notices only: a mid-session
+     * message has a transcript to belong to.
+     */
+    const announceStartupNotice = (text: string): void => {
+      if (splash?.addStatusIfShown(text) !== true) {
+        io.onSystem?.(`${text}\n`);
+      }
+    };
     if (viewedReadOnly) {
       // The wordmark would sit under the read-only view it just rendered.
       splash.removeIfShown();
@@ -4730,7 +4747,7 @@ export async function launchTuiAgentShell(opts: {
           onPeers,
         });
         if ("disabled" in joined) {
-          io.onSystem?.(`bus: off (${joined.disabled})\n`);
+          announceStartupNotice(`bus: off (${joined.disabled})`);
           return;
         }
         // review r1 F6: `decideJoinAdoption` (`./bus-join.ts`) is the pure
@@ -4751,7 +4768,9 @@ export async function launchTuiAgentShell(opts: {
         // `liveBus` is finally assigned, so the switch history lands.
         void joined.setSession(liveSession.summary.id).catch(() => {});
         const renamedNote = joined.nameWasTaken ? " (requested name was taken; renamed)" : "";
-        io.onSystem?.(`bus: joined as @${joined.name} · ${joined.peers().length} peers${renamedNote}\n`);
+        // See `announceStartupNotice`: on an empty transcript this lands inside
+        // the splash, centred with the wordmark.
+        announceStartupNotice(`bus: joined as @${joined.name} · ${joined.peers().length} peers${renamedNote}`);
         // Flow 274 (agent bus P3, T6/T7 contract): the FIRST `makeAgentDeps`
         // call (well above) necessarily ran before this join settled, so its
         // `busClientRef.client()` read `undefined` and its `systemInstruction`/
@@ -4797,7 +4816,7 @@ export async function launchTuiAgentShell(opts: {
               };
         liveDeps = deps;
       } catch (error) {
-        io.onSystem?.(`bus: off (${error instanceof Error ? error.message : String(error)})\n`);
+        announceStartupNotice(`bus: off (${error instanceof Error ? error.message : String(error)}`);
       }
     })();
 

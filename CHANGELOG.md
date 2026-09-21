@@ -3,6 +3,24 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.134] — 2026-09-21
+The startup screen stops squeezing its last line: the wordmark, the hint and the
+bus notice are broken to the pane width and centred row by row.
+
+### Fixed
+
+- **A line wider than the transcript pane wrapped flush left instead of staying
+  centred.** `alignItems: "center"` centres a *child*, not its text, so a line
+  wider than the pane had no centring to receive — the renderer wrapped it and
+  every row after the first landed against the left edge. OpenTUI offers no
+  alternative: `TextBufferOptions` has only `wrapMode`/`truncate`, there is no
+  `textAlign`, and `Box`'s `titleAlignment` styles a border title. The splash now
+  breaks every line to the pane width itself, mounts one row per renderable, and
+  repaints on resize and once after the first frame.
+- **The `bus: joined as …` notice is painted inside the splash** while the
+  transcript is empty, and falls back to an ordinary transcript line once the
+  splash is gone; `bus: off (…)` follows the same rule.
+
 ## [0.2.133] — 2026-09-21
 `keryx gdgraph build` records the freshness of what it just built, in a
 scaffolded project too.
