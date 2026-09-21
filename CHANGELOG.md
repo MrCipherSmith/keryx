@@ -3,6 +3,35 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.135] — 2026-09-21
+The agent view of the flow registry marks a duplicated flow id, the way `keryx
+flow list` has since flow 120.
+
+### Fixed
+
+- **`flow_status` (the agent tool) marks a duplicated flow id and names the
+  repair directories.** Two flows sharing one number arrived as two
+  ordinary-looking rows: nothing said the id was unusable, while every bare-id
+  command refuses it as ambiguous and `keryx flow list` has printed
+  `✗ duplicate id` since flow 120. The flag is now computed where the registry
+  is owned — `flow.list()` through `duplicateFlowIds`, both members of a
+  collision — carried through `MetaprojectPort.flowStatus` as an optional
+  field, and rendered as the marker plus a note naming the DIRECTORIES: `keryx
+  flow renumber` takes a directory and refuses a bare ambiguous id, so a note
+  that only said `<dir>` would leave the caller holding a reference the repair
+  command will not accept. The flag is deliberately not computed in the
+  renderer: that would import `src/flow/store` from `src/harness`, one more
+  facade bypass against `import-policy.live.test.ts`.
+
+### Changed
+
+- **Two colliding flow packages were renumbered** (`265` → `282`, `266` →
+  `283`) and the references to them across `docs/` were re-pointed, so
+  `keryx flow check` reports no duplicate ids. The moved packages' review
+  artifacts still name the pre-move directories on purpose: that is what those
+  rounds actually scanned, and rewriting it would make the record claim a path
+  that did not exist then.
+
 ## [0.2.134] — 2026-09-21
 The startup screen stops squeezing its last line: the wordmark, the hint and the
 bus notice are broken to the pane width and centred row by row.
