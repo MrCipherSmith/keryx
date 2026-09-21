@@ -2280,25 +2280,21 @@ test("SLATE-2a: applyRuntimeSwitchToSlate is idempotent — switching to the SAM
 
 // --- SLATE-3a: tui-shell.ts getSessionDir threading (flow 161, AC5) ------
 //
-// `launchTuiAgentShell` builds `deps = await opts.makeAgentDeps(sel)` at its
-// FIRST call site (before session/`slateSession` setup runs later in the
-// same function — see the `slateSession` declaration further down) and
-// rebuilds `deps` at two more call sites (`/model`/`/connect` switch, and a
-// read-only side-worker deps rebuild). `slate_read`/`slate_write_seed` need
-// the CURRENT session dir at TOOL-INVOKE time, not whatever was true when
-// `deps.tools` was last built — a plain static dir threaded once cannot
-// track a session opened/reassigned later.
+// `launchTuiAgentShell` declares `slateSession` before it first builds
+// `deps = await opts.makeAgentDeps(sel)`, avoiding a temporal-dead-zone
+// hazard when constructing the live getter. It rebuilds `deps` at two more
+// call sites (`/model`/`/connect` switch, and a read-only side-worker deps
+// rebuild). `slate_read`/`slate_write_seed` need the CURRENT session dir at
+// TOOL-INVOKE time, not whatever was true when `deps.tools` was last built —
+// a plain static dir threaded once cannot track a session opened/reassigned
+// later.
 //
 // Chosen shape (T8, for T9 to build exactly this): `opts.makeAgentDeps`'s
 // type gains a second parameter, `getSessionDir: () => string | undefined`,
 // and EVERY real call site passes `() => slateSession?.dir` — a closure
 // reading `launchTuiAgentShell`'s own `let slateSession` variable BY
-// REFERENCE. This is safe even at the FIRST call site (textually before
-// `let slateSession` is declared): the closure is only CREATED there, never
-// INVOKED until a turn actually runs a tool call, by which point
-// `slateSession`'s `let` has long since executed further down in the same
-// linear async function body — TDZ is a call-time concern, not a
-// closure-creation-time one.
+// REFERENCE. The declaration precedes the first dependency build, so the
+// getter is created only after its captured binding has been initialized.
 //
 // Like the SLATE-2a `/model` audit above, `launchTuiAgentShell` itself is
 // never imported/invoked in this file (no headless harness for the full
@@ -2330,11 +2326,12 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
     );
   });
 
-  test("the FIRST opts.makeAgentDeps call site (before slateSession is declared) passes a live getter, not a snapshot", () => {
+  test("slateSession is declared before the FIRST opts.makeAgentDeps call, which passes a live getter", () => {
     const callIndex = fnBody.indexOf("let deps = await opts.makeAgentDeps(");
     expect(callIndex).toBeGreaterThanOrEqual(0);
     const declIndex = fnBody.indexOf("let slateSession: SlateSessionRef | undefined;");
-    expect(declIndex).toBeGreaterThan(callIndex); // confirms the TDZ-shaped ordering this audit is about
+    expect(declIndex).toBeGreaterThanOrEqual(0);
+    expect(declIndex).toBeLessThan(callIndex); // declaration must initialize the binding before the live getter is created
     const call = fnBody.slice(callIndex, callIndex + 200);
     // Flow 271 review r2 N1: the live getter is `liveSlateSession`, which reads
     // `slateSession` at call time through the lease gate. Flow 274 T7 adds a
