@@ -7,17 +7,42 @@
   "id": "281",
   "slug": "gdgraph-template-provenance",
   "title": "manual gdgraph build never records provenance: the command delegates to the copied template runner, which has no recordProvenance",
-  "status": "in-progress",
+  "status": "done",
   "createdAt": "2026-09-21T07:05:06.205Z",
-  "updatedAt": "2026-09-21T07:56:41.609Z",
+  "updatedAt": "2026-09-21T08:22:20.516Z",
   "source": {
     "type": "description",
     "ref": null
   },
   "acChecksum": "sha256:74b4b786e79f6d8190926dfc70c88ef93171c93520e22e95d1bf2b3ada307f87",
-  "acConfirmed": {},
+  "acConfirmed": {
+    "AC1": {
+      "at": "2026-09-21T08:22:13.705Z",
+      "note": "context.md T5 reproduction: a worktree at the pre-fix commit shows gdgraph build writing artifacts and no .provenance.json in a scaffolded project, while sync --apply creates it"
+    },
+    "AC2": {
+      "at": "2026-09-21T08:22:13.964Z",
+      "note": "gdgraph.test.ts flow-281 block: a delegated build records provenance naming HEAD; a second build with no commits in between keeps the same commit"
+    },
+    "AC3": {
+      "at": "2026-09-21T08:22:14.163Z",
+      "note": "gdgraph.test.ts regression: with no copied runner the in-process path records provenance unchanged"
+    },
+    "AC4": {
+      "at": "2026-09-21T08:22:14.414Z",
+      "note": "gdgraph.test.ts: a repository with no commits writes no provenance file; on a detached HEAD the recorded commit is the checked-out one and git cat-file -e confirms it exists"
+    },
+    "AC5": {
+      "at": "2026-09-21T08:22:14.635Z",
+      "note": "journal.md records the decision (fix in gdgraphCommand after delegation, so existing projects are fixed on the next keryx upgrade without keryx update); templates.ts and gdgraph.ts carry comments for the rejected candidates"
+    },
+    "AC6": {
+      "at": "2026-09-21T08:22:14.862Z",
+      "note": "PR 638 CI green (18 checks, including typecheck-and-tests over the full suite); keryx health run: PASS"
+    }
+  },
   "pr": {
-    "url": null
+    "url": "https://github.com/MrCipherSmith/keryx/pull/638"
   },
   "baseBranch": "main",
   "tasks": [
@@ -26,7 +51,7 @@
       "title": "Collect remaining context",
       "kind": "context",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -34,14 +59,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T2",
       "title": "Implement per plan",
       "kind": "implement",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -49,14 +75,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T8"
     },
     {
       "id": "T3",
       "title": "Add/adjust tests and make them pass",
       "kind": "test",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -64,14 +92,16 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests written inside T7"
     },
     {
       "id": "T4",
       "title": "Self-review and prepare draft PR",
       "kind": "review",
       "origin": "scaffold",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 0,
@@ -79,13 +109,15 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "review ran as a dispatched round recorded in the managed review package"
     },
     {
       "id": "T5",
       "title": "Reproduce on a scaffolded project: build via the copied runner leaves no provenance",
       "kind": "context",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [],
       "attempts": {
         "count": 1,
@@ -99,13 +131,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T6",
       "title": "Decide where the repair belongs: template, gdgraphCommand after delegation, or drop the delegation",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T5"
       ],
@@ -121,13 +154,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T7",
       "title": "Implement the repair with tests, including the no-commit and detached-HEAD cases",
       "kind": "implement",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T6"
       ],
@@ -143,13 +177,14 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     },
     {
       "id": "T8",
       "title": "Full verification: bun run check and keryx health run",
       "kind": "verify",
-      "status": "todo",
+      "status": "done",
       "dependsOn": [
         "T7"
       ],
@@ -159,7 +194,8 @@
       },
       "acRefs": [],
       "evidenceRefs": [],
-      "budget": {}
+      "budget": {},
+      "disposition": "completed"
     }
   ],
   "history": [
@@ -210,6 +246,95 @@
       "at": "2026-09-21T07:56:41.609Z",
       "event": "task-attempt",
       "detail": "T7: started (attempt 1) — 281-T7 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T08:15:58.643Z",
+      "event": "task-done",
+      "detail": "T5: Reproduce on a scaffolded project: build via the copied runner leaves no provenance"
+    },
+    {
+      "at": "2026-09-21T08:15:58.748Z",
+      "event": "task-done",
+      "detail": "T6: Decide where the repair belongs: template, gdgraphCommand after delegation, or drop the delegation"
+    },
+    {
+      "at": "2026-09-21T08:15:58.851Z",
+      "event": "task-done",
+      "detail": "T7: Implement the repair with tests, including the no-commit and detached-HEAD cases"
+    },
+    {
+      "at": "2026-09-21T08:22:13.500Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/638 (warning: PR is not a draft)"
+    },
+    {
+      "at": "2026-09-21T08:22:13.705Z",
+      "event": "ac-confirmed",
+      "detail": "AC1: context.md T5 reproduction: a worktree at the pre-fix commit shows gdgraph build writing artifacts and no .provenance.json in a scaffolded project, while sync --apply creates it"
+    },
+    {
+      "at": "2026-09-21T08:22:13.965Z",
+      "event": "ac-confirmed",
+      "detail": "AC2: gdgraph.test.ts flow-281 block: a delegated build records provenance naming HEAD; a second build with no commits in between keeps the same commit"
+    },
+    {
+      "at": "2026-09-21T08:22:14.163Z",
+      "event": "ac-confirmed",
+      "detail": "AC3: gdgraph.test.ts regression: with no copied runner the in-process path records provenance unchanged"
+    },
+    {
+      "at": "2026-09-21T08:22:14.415Z",
+      "event": "ac-confirmed",
+      "detail": "AC4: gdgraph.test.ts: a repository with no commits writes no provenance file; on a detached HEAD the recorded commit is the checked-out one and git cat-file -e confirms it exists"
+    },
+    {
+      "at": "2026-09-21T08:22:14.636Z",
+      "event": "ac-confirmed",
+      "detail": "AC5: journal.md records the decision (fix in gdgraphCommand after delegation, so existing projects are fixed on the next keryx upgrade without keryx update); templates.ts and gdgraph.ts carry comments for the rejected candidates"
+    },
+    {
+      "at": "2026-09-21T08:22:14.862Z",
+      "event": "ac-confirmed",
+      "detail": "AC6: PR 638 CI green (18 checks, including typecheck-and-tests over the full suite); keryx health run: PASS"
+    },
+    {
+      "at": "2026-09-21T08:22:15.076Z",
+      "event": "task-done",
+      "detail": "T8: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-21T08:22:15.310Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-21T08:22:15.573Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-21T08:22:15.839Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-21T08:22:16.075Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-21T08:22:16.300Z",
+      "event": "completing"
+    },
+    {
+      "at": "2026-09-21T08:22:20.516Z",
+      "event": "done",
+      "detail": "all gates passed"
     }
-  ]
+  ],
+  "merged": {
+    "commit": "5aeff45a",
+    "ref": "origin/main",
+    "at": "2026-09-21T08:22:20.516Z"
+  }
 }
