@@ -3,6 +3,19 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
+## [0.2.137] — 2026-09-21
+The shell workspace now has visible breathing room and clearer surface edges,
+especially in the Tokyo Night palette.
+
+### Fixed
+- **The transcript and composer no longer sit against the terminal edge.** A
+  workspace gutter, transcript inset and top spacing give messages and the
+  input surface a consistent visual margin at every supported terminal size.
+- **Borders remain visible on tinted panel backgrounds.** The sidebar divider
+  and composer now use the theme's dedicated border color instead of the much
+  subtler highlight color; the header and footer return to the canvas color so
+  the panel surfaces no longer merge into one blue sheet.
+
 ## [0.2.136] — 2026-09-21
 The interactive shell has a clearer Keryx identity and keeps its command
 surfaces compact across both full-screen and short terminal layouts.
