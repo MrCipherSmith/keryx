@@ -36,3 +36,30 @@ test("isCodeFile recognizes common source extensions", () => {
   expect(isCodeFile("notes.md")).toBe(false);
   expect(isCodeFile("data.json")).toBe(false);
 });
+
+// Flow 280 finding 2 (review of ce309d58): before ce309d58, an extension
+// `CODE_EXT` did not recognize only made an artifact stay stale (the ordinary
+// per-module rebuild path never fires, but nothing ELSE happens either). Since
+// ce309d58, `codeOnly(diff)` feeds `syncCommand`'s `totalChanges(code) === 0`
+// fast path (`../commands/sync.ts`), so a missing extension now makes that
+// path assert "no code changed" and advance provenance for a commit that DID
+// change code — the opposite of stale. `.mts`/`.cts` (TypeScript's ESM/CJS
+// module-scoped variants, real source, same syntax as `.ts`) were missing.
+test("isCodeFile recognizes .mts and .cts (TypeScript module variants)", () => {
+  expect(isCodeFile("src/x.mts")).toBe(true);
+  expect(isCodeFile("src/x.cts")).toBe(true);
+});
+
+test("codeOnly treats a commit touching only a .mts file as a code change (flow 280 finding 2)", () => {
+  const diff = parseNameStatus("A\tsrc/util.mts");
+  const code = codeOnly(diff);
+  expect(totalChanges(code)).toBe(1);
+  expect(code.added).toEqual(["src/util.mts"]);
+});
+
+test("codeOnly treats a commit touching only a .cts file as a code change (flow 280 finding 2)", () => {
+  const diff = parseNameStatus("M\tsrc/util.cts");
+  const code = codeOnly(diff);
+  expect(totalChanges(code)).toBe(1);
+  expect(code.modified).toEqual(["src/util.cts"]);
+});

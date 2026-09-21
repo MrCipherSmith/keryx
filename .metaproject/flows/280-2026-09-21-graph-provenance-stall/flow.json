@@ -1,0 +1,329 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "280",
+  "slug": "graph-provenance-stall",
+  "title": "gdgraph provenance never advances after a metaproject-only commit, so the wiki baseline can never be recorded",
+  "status": "in-progress",
+  "createdAt": "2026-09-21T06:30:04.347Z",
+  "updatedAt": "2026-09-21T07:10:29.547Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:4ced5886fc4979b72f43e6bd069cd21da0345d8818832152569341479c6b7e8d",
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "superseded by T5-T9"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "skipped",
+      "dispositionReason": "tests written inside T7 and T8"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Reproduce the stall on a temporary repository and record what each command does to provenance",
+      "kind": "context",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.095Z",
+            "outcome": "started",
+            "detail": "280-T5 sonnet implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Decide the owner: diff stage, gdgraph build, or the wiki baseline gate",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.198Z",
+            "outcome": "started",
+            "detail": "280-T6 sonnet implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Implement the fix with tests, including the metaproject-only-commit case",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.303Z",
+            "outcome": "started",
+            "detail": "280-T7 sonnet implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Regression tests: code-change commit still rebuilds; untracked code still refuses the baseline",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T06:37:08.404Z",
+            "outcome": "started",
+            "detail": "280-T8 sonnet implementer"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T9",
+      "title": "Full verification: bun run check and keryx health run",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T10",
+      "title": "Review fixes: honour the wiki gate in the fast path; widen the code-extension set",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T9"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T07:10:29.547Z",
+            "outcome": "started",
+            "detail": "review round 1 fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-21T06:30:04.347Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-21T06:30:43.738Z",
+      "event": "task-added",
+      "detail": "T5: Reproduce the stall on a temporary repository and record what each command does to provenance"
+    },
+    {
+      "at": "2026-09-21T06:30:43.972Z",
+      "event": "task-added",
+      "detail": "T6: Decide the owner: diff stage, gdgraph build, or the wiki baseline gate"
+    },
+    {
+      "at": "2026-09-21T06:30:44.216Z",
+      "event": "task-added",
+      "detail": "T7: Implement the fix with tests, including the metaproject-only-commit case"
+    },
+    {
+      "at": "2026-09-21T06:30:44.438Z",
+      "event": "task-added",
+      "detail": "T8: Regression tests: code-change commit still rebuilds; untracked code still refuses the baseline"
+    },
+    {
+      "at": "2026-09-21T06:30:44.681Z",
+      "event": "task-added",
+      "detail": "T9: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-21T06:37:07.882Z",
+      "event": "frozen",
+      "detail": "6 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-21T06:37:07.987Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-21T06:37:08.095Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 280-T5 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.198Z",
+      "event": "task-attempt",
+      "detail": "T6: started (attempt 1) — 280-T6 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.303Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 280-T7 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T06:37:08.404Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 280-T8 sonnet implementer"
+    },
+    {
+      "at": "2026-09-21T07:00:05.275Z",
+      "event": "task-done",
+      "detail": "T5: Reproduce the stall on a temporary repository and record what each command does to provenance"
+    },
+    {
+      "at": "2026-09-21T07:00:05.383Z",
+      "event": "task-done",
+      "detail": "T6: Decide the owner: diff stage, gdgraph build, or the wiki baseline gate"
+    },
+    {
+      "at": "2026-09-21T07:00:05.491Z",
+      "event": "task-done",
+      "detail": "T7: Implement the fix with tests, including the metaproject-only-commit case"
+    },
+    {
+      "at": "2026-09-21T07:00:05.597Z",
+      "event": "task-done",
+      "detail": "T8: Regression tests: code-change commit still rebuilds; untracked code still refuses the baseline"
+    },
+    {
+      "at": "2026-09-21T07:00:09.568Z",
+      "event": "task-done",
+      "detail": "T9: Full verification: bun run check and keryx health run"
+    },
+    {
+      "at": "2026-09-21T07:00:09.671Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-21T07:00:09.775Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-21T07:00:09.882Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-21T07:10:29.442Z",
+      "event": "task-added",
+      "detail": "T10: Review fixes: honour the wiki gate in the fast path; widen the code-extension set"
+    },
+    {
+      "at": "2026-09-21T07:10:29.547Z",
+      "event": "task-attempt",
+      "detail": "T10: started (attempt 1) — review round 1 fixes"
+    }
+  ]
+}

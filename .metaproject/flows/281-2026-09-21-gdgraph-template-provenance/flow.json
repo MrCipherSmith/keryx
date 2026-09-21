@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "281",
+  "slug": "gdgraph-template-provenance",
+  "title": "manual gdgraph build never records provenance: the command delegates to the copied template runner, which has no recordProvenance",
+  "status": "initializing",
+  "createdAt": "2026-09-21T07:05:06.205Z",
+  "updatedAt": "2026-09-21T07:05:49.499Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": null,
+  "acConfirmed": {},
+  "pr": {
+    "url": null
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T5",
+      "title": "Reproduce on a scaffolded project: build via the copied runner leaves no provenance",
+      "kind": "context",
+      "status": "todo",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T6",
+      "title": "Decide where the repair belongs: template, gdgraphCommand after delegation, or drop the delegation",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T7",
+      "title": "Implement the repair with tests, including the no-commit and detached-HEAD cases",
+      "kind": "implement",
+      "status": "todo",
+      "dependsOn": [
+        "T6"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    },
+    {
+      "id": "T8",
+      "title": "Full verification: bun run check and keryx health run",
+      "kind": "verify",
+      "status": "todo",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {}
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-21T07:05:06.205Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-21T07:05:49.180Z",
+      "event": "task-added",
+      "detail": "T5: Reproduce on a scaffolded project: build via the copied runner leaves no provenance"
+    },
+    {
+      "at": "2026-09-21T07:05:49.287Z",
+      "event": "task-added",
+      "detail": "T6: Decide where the repair belongs: template, gdgraphCommand after delegation, or drop the delegation"
+    },
+    {
+      "at": "2026-09-21T07:05:49.396Z",
+      "event": "task-added",
+      "detail": "T7: Implement the repair with tests, including the no-commit and detached-HEAD cases"
+    },
+    {
+      "at": "2026-09-21T07:05:49.499Z",
+      "event": "task-added",
+      "detail": "T8: Full verification: bun run check and keryx health run"
+    }
+  ]
+}

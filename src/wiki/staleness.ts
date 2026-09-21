@@ -218,6 +218,29 @@ export interface WikiSourceGate {
  * failure is `unknown` and not "fresh", and a boolean throws that distinction
  * away one call before the decision that needs it.
  */
+// Flow 280 (the graph-provenance stall): this gate is not the fix, and stays
+// as written. Its refusal — "provenance NOT recorded (baseline) — the code
+// graph is stale: HEAD moved since the graph was built" — was CORRECT given
+// what `checkGraphStaleness` told it: gdgraph's provenance really did name a
+// commit older than HEAD, because nothing had ever advanced it after a
+// `.metaproject/`-only commit. Relaxing this gate to accept "built at an
+// older commit whose code is identical" would mean this module re-deriving
+// (or blindly trusting an unstated claim of) code-identity between two
+// commits — a diff `../sync/diff.ts` already computes and that belongs to
+// the stage that reads it, not to a gate whose whole job is to trust the
+// tri-state check it is handed and refuse when that check is not "fresh".
+// The fix is upstream, in `../commands/sync.ts`'s per-module loop: whenever a
+// module's own diff against its recorded provenance is code-empty, that loop
+// now advances the module's provenance to HEAD itself — every entry in
+// `SYNCED_MODULES` (gdgraph, gdwiki, memory), not gdgraph alone. For gdwiki
+// specifically, that same loop re-checks THIS gate before advancing (finding
+// 1 of the same review, `../commands/sync.ts`), because a code-empty diff
+// only proves the TRACKED file set is unchanged and this gate additionally
+// cares about the untracked-file signal `checkGraphStaleness` carries via
+// `git status`, which that diff cannot see. So gdgraph's provenance advancing
+// upstream is what lets THIS gate observe a genuinely fresh
+// `checkGraphStaleness` result and needs no change here to accept it — the
+// gate itself never advances anything and never gained new logic.
 export async function resolveWikiSourceGate(
   cwd: string,
   head: WikiHeadInput,

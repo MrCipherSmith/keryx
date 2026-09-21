@@ -112,7 +112,95 @@ export async function syncCommand(args: string[]): Promise<void> {
 
     const code = codeOnly(diff);
     if (totalChanges(code) === 0) {
-      console.log(`  up to date (built at ${provenance.commit.slice(0, 8)})`);
+      // Flow 280 (the graph-provenance stall): a commit that touches no code
+      // file — a `.metaproject/`-only bookkeeping commit is the case that
+      // exposed this, but any non-code commit qualifies — leaves the derived
+      // artifact just as valid at the NEW HEAD as it was at the old one: the
+      // diff that would trigger a rebuild is empty. Before this, provenance
+      // stayed pinned to the old commit forever (nothing here ever advanced
+      // it, and there is no other path that does for a report/apply that
+      // finds nothing to rebuild), while `checkGraphStaleness`
+      // (`../gdgraph/staleness.ts`) independently compares that SAME
+      // provenance commit against current HEAD and — correctly, given what it
+      // was told — reports "HEAD moved since the graph was built". The two
+      // mechanisms disagreed forever: this stage said "nothing to rebuild",
+      // the staleness check said "stale", and no command ever moved the
+      // record that would resolve it. `resolveWikiSourceGate`
+      // (`../wiki/staleness.ts`) then refused the gdwiki baseline on exactly
+      // that "stale" verdict.
+      //
+      // The fix belongs here, not in `checkGraphStaleness`/the wiki gate: the
+      // diff stage is the one place that already computed the fact that
+      // settles it — the TRACKED code file set is IDENTICAL between the old
+      // provenance commit and HEAD — so advancing provenance to HEAD here
+      // asserts nothing the check above did not just establish. Doing it in
+      // `checkGraphStaleness` instead would mean re-deriving (or trusting a
+      // second, undiffed signal for) the same fact the diff stage already
+      // has, in a module that has no notion of "since provenance was
+      // recorded" today. Gated on `apply`, matching every other mutating
+      // branch in this loop: a plain `keryx sync` report never writes.
+      //
+      // Finding 1 (review of ce309d58): "the tracked code file set is
+      // identical" is NOT the same fact as "the working tree the collector
+      // would read is identical" — `diffSince` is a committed-history diff
+      // and cannot see an untracked file. That gap matters for every module
+      // this branch advances, but only gdwiki turns it into an over-claim:
+      // gdwiki is the one module with an external "reflects the code as of X"
+      // promise (`resolveWikiSourceGate`), so gdwiki re-checks that gate
+      // below before advancing here. gdgraph and memory advance unconditionally
+      // — see the comment on that branch for why neither needs the same gate.
+      if (apply && provenance.commit !== head.commit) {
+        // Flow 280 finding 1 (review of ce309d58): this branch used to call
+        // `recordProvenance` unconditionally for every module, gdwiki
+        // included. `applyModule` below is the only OTHER place that stamps
+        // gdwiki's provenance, and it always consults `resolveWikiSourceGate`
+        // first (AFC-08, flow 236) — the gate that exists precisely so gdwiki
+        // never claims to reflect a tree the collector did not actually read.
+        // This fast path bypassed that gate entirely: `diffSince` is a `git
+        // diff --name-status <base>` and cannot see an UNTRACKED file, while
+        // `resolveWikiSourceGate` (via `checkGraphStaleness`'s git-status
+        // check) can. A code-empty diff here therefore does not mean the
+        // WORKING TREE the wiki would read from is unchanged — an untracked
+        // file added since `provenance.commit` is invisible to this diff and
+        // visible to that gate, so stamping gdwiki here asserted exactly the
+        // freshness claim the gate exists to withhold.
+        //
+        // gdgraph and memory need no equivalent check here: neither publishes
+        // a "reflects the code as of X" claim the way gdwiki does. gdgraph's
+        // own apply step (`gdgraph build`, in `applyModule` below) always
+        // makes itself the fresh ground truth by construction, and — the
+        // reviewer's finding — `checkGraphStaleness` carries its own
+        // untracked-file signal via `git status --porcelain`, independent of
+        // ANY provenance commit; that signal still fires for any OTHER
+        // consumer of graph staleness regardless of what this fast path
+        // stamps here. memory's apply step similarly asserts no source-
+        // freshness claim at all — `memory index` reindexes human/agent-
+        // authored Markdown, not a derivative of the code tree — so advancing
+        // its bookkeeping provenance a cycle early has no downstream claim to
+        // falsify.
+        if (module === "gdwiki") {
+          const gate = await resolveWikiSourceGate(cwd, HEAD_NOT_REQUESTED);
+          if (gate.status !== "fresh") {
+            printApplyOutcome(
+              { recorded: false, gate },
+              "", // unreachable: outcome.recorded is always false here
+              `  up to date (built at ${provenance.commit.slice(0, 8)}); HEAD moved to ${head.commit.slice(0, 8)} with no code changes, but provenance NOT advanced`,
+            );
+            console.log("");
+            continue;
+          }
+        }
+        await recordProvenance(cwd, module, at);
+        console.log(
+          `  up to date (built at ${provenance.commit.slice(0, 8)}); no code changed — provenance advanced to ${head.commit.slice(0, 8)}`,
+        );
+      } else if (provenance.commit !== head.commit) {
+        console.log(
+          `  up to date (built at ${provenance.commit.slice(0, 8)}); HEAD moved to ${head.commit.slice(0, 8)} with no code changes — run \`keryx sync --apply\` to advance provenance`,
+        );
+      } else {
+        console.log(`  up to date (built at ${provenance.commit.slice(0, 8)})`);
+      }
       console.log("");
       continue;
     }
