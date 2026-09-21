@@ -12,7 +12,7 @@ deadline is replaced by an idle timeout (pulled forward from P1), terminal
 statuses are `completed`/`failed`/`killed` with a `killReason`, and the TUI
 lists a task only once it is in the background.
 
-P1 (2026-09-16, keryx flow 265): a finished task is **reported to the agent
+P1 (2026-09-16, keryx flow 282, was 265): a finished task is **reported to the agent
 exactly once**. The registry records what has been delivered (`observed`,
 `drainUndelivered`, `onCompletion`); the agent loop drains at the round boundary
 and injects one `<task-notification>` per task as a tool-provenance user
@@ -22,7 +22,7 @@ expires (leftovers are then killed with `killReason: "hold-timeout"`); and both
 shells wake an idle session on completion, behind a consecutive-auto-wake cap
 that operator input resets.
 
-P2 (2026-09-16, keryx flow 266): the task tools and the rules around them.
+P2 (2026-09-16, keryx flow 283, was 266): the task tools and the rules around them.
 `shell_task_output` reads from an EXPLICIT cursor (so a second reader cannot
 steal the first one's output), `shell_task_wait` waits for `any`/`all` of a set
 under a clamped bound and never kills, and `shell_task_kill` is idempotent. Tool

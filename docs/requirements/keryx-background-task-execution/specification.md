@@ -1,8 +1,8 @@
 # Keryx Background Task Execution — Specification
 Version: 1.1.0
 
-Status: **fully implemented** — P0, P1 and P2 (2026-09-16, keryx flows 263, 265
-and 266, released in 0.2.108–0.2.110) and P3, the documentation sweep
+Status: **fully implemented** — P0, P1 and P2 (2026-09-16, keryx flows 263, 282 (was 265)
+and 283 (was 266), released in 0.2.108–0.2.110) and P3, the documentation sweep
 (keryx flow 267). No section of this document is `planned` any more; the one
 criterion the package deliberately does NOT meet is named in §7.
 
@@ -18,7 +18,7 @@ from the START.
 What P1 shipped: exactly-once completion delivery (`observed`, `drainUndelivered`,
 `onCompletion` on the registry), the round-boundary notification, the hold for a
 session nobody can wake, and the capped auto-wake in both REPLs. Deviations,
-recorded in the flow 265 journal: delivery mode defaults to `hold` only when the
+recorded in the flow 282 (was 265) journal: delivery mode defaults to `hold` only when the
 session is unattended and to `wake` otherwise, rather than being a single global
 default; the notification enters history as a `user` message with
 `provenance: "tool"` and a fixed banner, so no new role was introduced; and
@@ -28,7 +28,7 @@ either mechanism off outright.
 
 What P2 shipped: the three task tools of §4.2, the invocation context of §4.3
 (`invoke(input, ctx)`, with `executeCall` passing the turn's signal), operator
-demote, and the side-worker rules of D-16. Deviations, recorded in the flow 266
+demote, and the side-worker rules of D-16. Deviations, recorded in the flow 283 (was 266)
 journal: `shell_task_output` takes an ABSOLUTE cursor rather than a buffer index
 — the registry now counts bytes ever dropped, because `readCursor` is rebased by
 truncation and a cursor handed out as an index would silently change meaning;

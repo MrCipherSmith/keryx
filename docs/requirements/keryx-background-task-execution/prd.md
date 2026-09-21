@@ -145,7 +145,7 @@ Adopt the supervised-task model and keep everything else. Specifically:
 
 | Gap | Impact | Tracked |
 |---|---|---|
-| ~~P3 is not implemented: the documentation sweep.~~ Closed in flow 267: the wiki page, the wiki index entry and the test catalogue now describe the supervised-task model. | — | P0 shipped in flow 263, P1 in flow 265, P2 in flow 266, P3 in flow 267. |
+| ~~P3 is not implemented: the documentation sweep.~~ Closed in flow 267: the wiki page, the wiki index entry and the test catalogue now describe the supervised-task model. | — | P0 shipped in flow 263, P1 in flow 282 (was 265), P2 in flow 283 (was 266), P3 in flow 267. |
 | S4 / M7 closed as out of scope (owner's decision, 2026-09-16). | An operator who types while a turn is blocked in `shell_task_wait` is still queued behind it. The levers that work are the turn's abort — which releases the wait and leaves the task running — and `/demote`. Not a gap left by accident: a second interrupt mechanism was judged to buy one keystroke at the cost of two paths to one outcome. | metrics M7 and M15. |
 | Closed in P1: the completion-wake channel now exists — `drainUndelivered`/`onCompletion` on the registry, a round-boundary drain and a hold in `src/commands/agent.ts`, and a subscription in both REPLs. | It was the largest new mechanism in this package; it is now the one with the most test weight behind it. | brainstorm.md D-02; metrics M5, M6, M11, M16. |
 | Streaming `monitor` and recurring scheduling are not specified here. | Long-lived event streams and periodic checks stay manual. | brainstorm.md D-08; follow-on packages. |

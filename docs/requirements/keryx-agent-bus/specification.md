@@ -293,7 +293,7 @@ lease is taken regardless.
 
 ### 5.3 Delivery to the agent
 
-This mirrors how task notifications are delivered (flow 265, `src/commands/agent.ts`).
+This mirrors how task notifications are delivered (flow 282, was 265, `src/commands/agent.ts`).
 
 `busInbox.drainUndelivered()` is called at every point where
 `drainUndelivered()` is called for tasks:
