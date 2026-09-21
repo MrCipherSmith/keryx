@@ -39,7 +39,7 @@ coverage, and Unicode-safe terminal truncation. The final review verdict was
 ## Verification
 
 - GitHub Actions run `35661308501`: passed.
-- Core gate: 6,923 passing tests and 8 intentional skips.
+- Core gate: all tests passed; the documented environment-only skips remained intentional.
 - Typecheck, lint, documentation links, security gate, dependency audit,
   client matrices, native OpenTUI matrices, Linux sandbox smoke, macOS real-host
   smoke, VS Code extension, wiki validation, and strict MkDocs build passed.
