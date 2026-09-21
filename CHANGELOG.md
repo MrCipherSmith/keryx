@@ -3,7 +3,7 @@
 All notable changes to `keryx` are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/); versions follow semver.
 
-## [0.2.142] — 2026-09-22
+## [0.2.143] — 2026-09-22
 Long-running shell work now keeps its execution plan visible and persistent,
 while assistant output follows the selected theme across prose, Markdown,
 code, diffs, and tables.

@@ -519,9 +519,9 @@ function flatDimChunks(
   const out: Chunk[] = [];
   for (const [index, line] of splitLines(text).entries()) {
     if (index > 0) {
-      out.push(themedChunk(otui, "\n", palette.blockMeta));
+      out.push(otui.dim(themedChunk(otui, "\n", palette.blockMeta)));
     }
-    out.push(themedChunk(otui, line, palette.blockMeta));
+    out.push(otui.dim(themedChunk(otui, line, palette.blockMeta)));
   }
   return out;
 }

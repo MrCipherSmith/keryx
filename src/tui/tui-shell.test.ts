@@ -1145,7 +1145,7 @@ otuiTest("entering nav mode and moving focus repaint the highlight WITHOUT rebui
   await h.flush();
   expect(h.captureCharFrame()).toContain("+new line one"); // both bodies really are expanded
   const mounted = { ...counts };
-  expect(mounted.greens).toBeGreaterThan(0); // the diff payload was colourised once
+  expect(mounted.texts).toBeGreaterThan(0); // the expanded payloads were mounted once
 
   // Ctrl+O paints every block (the focus highlight has to appear somewhere) —
   // headers only: no renderable is built and no body is re-parsed.
@@ -1334,15 +1334,14 @@ otuiTest("AC7: diff add/del/hunk lines get distinct span colors and a bullet lis
     throw new Error("diff lines were not rendered");
   }
 
-  // Green dominates an addition, red a deletion, and the hunk header is cyan
-  // (low red, high green+blue). Asserted on the actual foreground color, not on
-  // a substring: a plain-text check would pass even with no styling at all.
+  // Green dominates an addition and red a deletion. The hunk color is derived
+  // from the current theme, so its contract is semantic separation rather than
+  // a fixed cyan channel ordering. Asserted on the actual foreground color,
+  // not on a substring: a plain-text check would pass with no styling at all.
   expect(add[1]).toBeGreaterThan(add[0]);
   expect(add[1]).toBeGreaterThan(add[2]);
   expect(del[0]).toBeGreaterThan(del[1]);
   expect(del[0]).toBeGreaterThan(del[2]);
-  expect(hunk[0]).toBeLessThan(hunk[1]);
-  expect(hunk[0]).toBeLessThan(hunk[2]);
   expect(add).not.toEqual(del);
   expect(add).not.toEqual(hunk);
   expect(del).not.toEqual(hunk);
