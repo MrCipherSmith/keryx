@@ -2446,6 +2446,41 @@ keryx_health_post_commit
 `;
 }
 
+// Flow 281 (gdgraph-template-provenance): this template deliberately does NOT
+// grow a `recordProvenance` call, even though its "build" branch is exactly
+// the code path that used to leave `.provenance.json` unwritten whenever
+// `src/commands/gdgraph.ts`'s `delegateToLocalRunner` handed `build` off to a
+// project's copy of this file. Two reasons, together decisive:
+//
+//   1. Duplication with no shared source of truth. The copied runner only
+//      ever gets `GDGRAPH_CORE_SOURCES` (`build.ts`, `query.ts`, `target.ts`,
+//      `types.ts`) plus this templated `cli.ts` — never `src/sync/
+//      provenance.ts`, which owns HEAD resolution (`gitHead`/`resolveGitHead`,
+//      with their unborn-repo / detached-HEAD / git-failure handling) and the
+//      provenance file format. Recording provenance here would mean either
+//      re-implementing that logic a second time inside a template string (a
+//      second copy the AC4 edge cases would need re-proving against), or
+//      adding `provenance.ts` to `GDGRAPH_CORE_SOURCES` so the template could
+//      import it — which pulls a package-internal module into the
+//      intentionally minimal, standalone-invocable copied runner.
+//   2. It would not fix a single existing project. This function is a
+//      *template* — it only changes what the NEXT `keryx init`/`keryx update`
+//      writes to `.metaproject/core/gdgraph/cli.ts`. Every project already
+//      scaffolded (which is every project that has ever run `keryx init`,
+//      since this file's "build" branch has never called `recordProvenance`)
+//      would keep silently skipping provenance until it happened to run
+//      `keryx update` — which nothing prompts it to do for this specific gap.
+//
+// The chosen fix instead lives in `src/commands/gdgraph.ts`'s
+// `gdgraphCommand`: it records provenance itself, in the PACKAGE process,
+// right after `delegateToLocalRunner` reports the delegated child exited
+// successfully. That code ships with the installed keryx binary/package, so
+// it takes effect for every scaffolded project — old or new — the next time
+// that project's keryx is upgraded, with no `keryx update` (which only
+// touches files inside the project's own `.metaproject/`) required at all.
+// See the comment on `gdgraphCommand`'s delegation branch for the full
+// decision and the third candidate (dropping the delegation for `build`
+// entirely) that was also considered and rejected.
 export function renderGdgraphCoreCli(): string {
   return `#!/usr/bin/env bun
 

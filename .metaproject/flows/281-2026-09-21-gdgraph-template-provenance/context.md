@@ -60,4 +60,42 @@ Use `keryx gdgraph affected <file>` for blast radius.
 
 ## Agent Findings
 
-_(flow-init skill appends here)_
+### T5 — reproduction (implementer, dispatch 281-T5-T7)
+
+Reproduced against the pre-fix code (a `git worktree add <scratch> HEAD` off
+this branch's tip `1a834f41`, i.e. this flow's starting point, node_modules
+symlinked from the main checkout — never `git stash`), driving
+`bun <worktree>/src/cli.ts`, never the installed `keryx` binary, against a
+scratch git repo under the scratchpad directory:
+
+1. `git init` a scratch repo, one committed file (`src/a.ts`).
+2. `bun <worktree>/src/cli.ts init --yes` — scaffolds `.metaproject/`,
+   including `.metaproject/core/gdgraph/cli.ts` (confirms this project is the
+   defect's precondition: "any project scaffolded by `keryx init`").
+3. Committed the scaffold. HEAD `46a42539`.
+4. `bun <worktree>/src/cli.ts gdgraph build` → printed
+   `gdgraph build complete: 1 nodes, 0 edges` and wrote the artifacts under
+   `.metaproject/data/gdgraph/{artifacts,storage,summaries,queries}` — but
+   `.metaproject/data/gdgraph/.provenance.json` **does not exist** afterward.
+   Confirms AC1 exactly: a scaffolded project's `gdgraph build` leaves no
+   provenance file at all.
+5. `bun <worktree>/src/cli.ts sync --apply` on the same repo (still
+   pre-fix code) → reported `## gdgraph … → built + provenance recorded
+   (baseline)`, and `.metaproject/data/gdgraph/.provenance.json` **now
+   exists**. Confirms the flow description's claim that `keryx sync --apply`
+   is unaffected — it records provenance itself, unconditionally, right
+   after `applyModule`'s `gdgraphCommand(["build"])` returns.
+
+Then verified the fix (this session's working tree, uncommitted at the time)
+on a second, fresh scratch repo, driving `bun /home/altsay/keryx/src/cli.ts`:
+
+6. `init --yes`, commit, `gdgraph build` → `.provenance.json` is created on
+   the FIRST build now, naming that commit
+   (`{"commit":"fb00dc96...","branch":"master","builtAt":"...T08:03:22Z"}`).
+7. A second `gdgraph build` with no commits in between → `.provenance.json`
+   still names the SAME commit (`fb00dc96...`), only `builtAt` advances
+   (`...T08:03:32Z`). Matches AC2's "same build, same commit" clause exactly.
+
+Scratch artifacts (worktree + both scratch repos) live under this session's
+scratchpad directory and are not part of the repository; the git worktree
+added for this reproduction is removed once T5–T7 are done.
