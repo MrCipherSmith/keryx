@@ -2383,7 +2383,13 @@ describe("SLATE-3a — tui-shell.ts getSessionDir threading (source-text audit)"
   test("the join-success rebuild captures currentSel as selAtJoin before its own await (review r1 F7)", () => {
     const joinedIdx = fnBody.indexOf("liveBus = joined;");
     expect(joinedIdx).toBeGreaterThanOrEqual(0);
-    const joinBlock = fnBody.slice(joinedIdx, joinedIdx + 2600);
+    // Bounded by the rebuild's own END (`liveDeps = deps;`) instead of a fixed
+    // 2600-character window: that count silently stops covering the fields
+    // asserted below as soon as any comment is added between the anchor and
+    // them, which an unrelated edit did.
+    const joinEnd = fnBody.indexOf("liveDeps = deps;", joinedIdx);
+    expect(joinEnd).toBeGreaterThan(joinedIdx);
+    const joinBlock = fnBody.slice(joinedIdx, joinEnd);
     expect(joinBlock).toContain("const selAtJoin = currentSel;");
     expect(joinBlock).toContain("opts.makeAgentDeps(selAtJoin, liveSlateSession, busClientRef)");
     expect(joinBlock).toContain("currentSel === selAtJoin");

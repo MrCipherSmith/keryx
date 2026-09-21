@@ -175,7 +175,11 @@ describe("busLeases threaded into AgentDeps (flow 275 T6/T8 contract, specificat
   test("both makeAgentDeps fold-in sites (join-success, /model /connect rebuild) attach busLeases", () => {
     const assignIdx = source.indexOf("liveBus = joined;");
     expect(assignIdx).toBeGreaterThan(0);
-    const joinBlock = source.slice(assignIdx, assignIdx + 3200);
+    // End-anchored on the rebuild's own close (`liveDeps = deps;`), not a byte
+    // count — see the same change in tui-bus.test.ts.
+    const joinEnd = source.indexOf("liveDeps = deps;", assignIdx);
+    expect(joinEnd).toBeGreaterThan(assignIdx);
+    const joinBlock = source.slice(assignIdx, joinEnd);
     expect(joinBlock).toContain("busLeases: busLeasesFromClient(joined),");
 
     const switchIdx = source.indexOf("const switchTo = async (ns: TuiSelection): Promise<void> => {");
