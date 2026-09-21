@@ -311,6 +311,14 @@ when the `launchTuiAgentShell` seam this document already names lands. The
 `commands/shell.ts` half cannot — the REPL's `/search-provider` output has no
 injection point, which is the same missing seam.
 
+### Added by the persistent execution-plan panel
+
+`tui/execution-plan-panel.test.ts` reads `tui-shell.ts` once to protect the
+layout contract that the conditional Plan panel is mounted immediately before
+Background Jobs. The projection itself is covered behaviorally in the same
+test file; this source audit only pins the integration order until the shell
+layout has an injectable or queryable composition seam.
+
 ## Manifest
 
 Checked by `src/shell-source-audits.test.ts`, which re-runs the scan this
@@ -331,6 +339,7 @@ commands/shell.test.ts | commands/shell.ts | 5
 harness/search/connection-message.test.ts | commands/shell.ts, tui/tui-shell.ts | 2
 mcp-servers/approval-wiring.test.ts | commands/shell.ts, tui/tui-shell.ts | 3
 tui/boot-animation.test.ts | tui/tui-shell.ts | 1
+tui/execution-plan-panel.test.ts | tui/tui-shell.ts | 1
 tui/shell-fallback.test.ts | tui/tui-shell.ts | 1
 tui/tui-bus.test.ts | tui/tui-shell.ts | 1
 tui/tui-hold.test.ts | tui/tui-shell.ts | 1
