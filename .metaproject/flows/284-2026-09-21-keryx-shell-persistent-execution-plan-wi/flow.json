@@ -1,0 +1,400 @@
+{
+  "schemaVersion": 2,
+  "gates": {
+    "tasks": true,
+    "review": true
+  },
+  "id": "284",
+  "slug": "keryx-shell-persistent-execution-plan-wi",
+  "title": "Keryx Shell persistent execution plan with agent-followed sidebar progress",
+  "status": "implemented",
+  "createdAt": "2026-09-21T21:01:22.900Z",
+  "updatedAt": "2026-09-21T22:15:58.667Z",
+  "source": {
+    "type": "description",
+    "ref": null
+  },
+  "acChecksum": "sha256:07887e7acf05b5f63d056745fe7e4a1f76bc2ba018e03afa504115939c4e7278",
+  "acConfirmed": {},
+  "pr": {
+    "url": "https://github.com/MrCipherSmith/keryx/pull/641"
+  },
+  "baseBranch": "main",
+  "tasks": [
+    {
+      "id": "T1",
+      "title": "Collect remaining context",
+      "kind": "context",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T2",
+      "title": "Implement per plan",
+      "kind": "implement",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T3"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:20:17.147Z",
+            "outcome": "started",
+            "detail": "284-T2 task-implementer GREEN phase"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T3",
+      "title": "Add/adjust tests and make them pass",
+      "kind": "test",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T1"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:11:33.326Z",
+            "outcome": "started",
+            "detail": "284-T3 tests-creator RED phase"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T4",
+      "title": "Self-review and prepare draft PR",
+      "kind": "review",
+      "origin": "scaffold",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-21T21:35:29.395Z",
+            "outcome": "started",
+            "detail": "284-T4 review-orchestrator"
+          },
+          {
+            "at": "2026-09-21T21:43:12.250Z",
+            "outcome": "failed",
+            "detail": "Static review found 4 major and 2 minor findings; fix task required"
+          },
+          {
+            "at": "2026-09-21T21:53:51.792Z",
+            "outcome": "started",
+            "detail": "284-T4 static re-review after fixes"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T5",
+      "title": "Verify live TUI plan lifecycle and session resume",
+      "kind": "verify",
+      "status": "done",
+      "dependsOn": [
+        "T8"
+      ],
+      "attempts": {
+        "count": 3,
+        "log": [
+          {
+            "at": "2026-09-21T21:35:29.639Z",
+            "outcome": "started",
+            "detail": "284-T5 code-verifier and live TUI verification"
+          },
+          {
+            "at": "2026-09-21T21:43:12.490Z",
+            "outcome": "blocked",
+            "detail": "Operator deferred executable verification to GitHub CI"
+          },
+          {
+            "at": "2026-09-21T22:00:22.358Z",
+            "outcome": "failed",
+            "detail": "GitHub CI failed: tool roster snapshot and obsolete Slate TDZ source audit"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T6",
+      "title": "Write implementation change report and operator notes",
+      "kind": "docs",
+      "status": "done",
+      "dependsOn": [
+        "T4",
+        "T5"
+      ],
+      "attempts": {
+        "count": 0,
+        "log": []
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T7",
+      "title": "Fix static review findings for execution plan lifecycle",
+      "kind": "implement",
+      "status": "done",
+      "dependsOn": [
+        "T2"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T21:43:19.100Z",
+            "outcome": "started",
+            "detail": "284-T7 fix 4 major and 2 minor static findings"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    },
+    {
+      "id": "T8",
+      "title": "Update shell contract tests for execution plan tools and TDZ fix",
+      "kind": "test",
+      "status": "done",
+      "dependsOn": [
+        "T7"
+      ],
+      "attempts": {
+        "count": 1,
+        "log": [
+          {
+            "at": "2026-09-21T22:00:23.342Z",
+            "outcome": "started",
+            "detail": "284-T8 fix GitHub CI contract failures"
+          }
+        ]
+      },
+      "acRefs": [],
+      "evidenceRefs": [],
+      "budget": {},
+      "disposition": "completed"
+    }
+  ],
+  "history": [
+    {
+      "at": "2026-09-21T21:01:22.900Z",
+      "event": "created"
+    },
+    {
+      "at": "2026-09-21T21:07:17.758Z",
+      "event": "task-added",
+      "detail": "T5: Verify live TUI plan lifecycle and session resume"
+    },
+    {
+      "at": "2026-09-21T21:07:18.020Z",
+      "event": "task-added",
+      "detail": "T6: Write implementation change report and operator notes"
+    },
+    {
+      "at": "2026-09-21T21:07:18.257Z",
+      "event": "task-depends-set",
+      "detail": "T3: dependsOn T1 (was empty) — Tests require collected architecture context"
+    },
+    {
+      "at": "2026-09-21T21:07:18.483Z",
+      "event": "task-depends-set",
+      "detail": "T2: dependsOn T3 (was empty) — TDD requires failing plan tests before implementation"
+    },
+    {
+      "at": "2026-09-21T21:07:18.715Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T2 (was empty) — Review follows implementation"
+    },
+    {
+      "at": "2026-09-21T21:07:18.950Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T2 (was empty) — Live verification requires implementation"
+    },
+    {
+      "at": "2026-09-21T21:07:19.167Z",
+      "event": "task-depends-set",
+      "detail": "T6: dependsOn T4, T5 (was empty) — Change report records reviewed and verified behavior"
+    },
+    {
+      "at": "2026-09-21T21:11:21.240Z",
+      "event": "task-done",
+      "detail": "T1: Collect remaining context"
+    },
+    {
+      "at": "2026-09-21T21:11:21.495Z",
+      "event": "frozen",
+      "detail": "8 criteria; checksum recorded"
+    },
+    {
+      "at": "2026-09-21T21:11:21.743Z",
+      "event": "started"
+    },
+    {
+      "at": "2026-09-21T21:11:33.326Z",
+      "event": "task-attempt",
+      "detail": "T3: started (attempt 1) — 284-T3 tests-creator RED phase"
+    },
+    {
+      "at": "2026-09-21T21:20:15.937Z",
+      "event": "task-done",
+      "detail": "T3: Add/adjust tests and make them pass"
+    },
+    {
+      "at": "2026-09-21T21:20:17.147Z",
+      "event": "task-attempt",
+      "detail": "T2: started (attempt 1) — 284-T2 task-implementer GREEN phase"
+    },
+    {
+      "at": "2026-09-21T21:35:28.663Z",
+      "event": "task-done",
+      "detail": "T2: Implement per plan"
+    },
+    {
+      "at": "2026-09-21T21:35:29.395Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 1) — 284-T4 review-orchestrator"
+    },
+    {
+      "at": "2026-09-21T21:35:29.640Z",
+      "event": "task-attempt",
+      "detail": "T5: started (attempt 1) — 284-T5 code-verifier and live TUI verification"
+    },
+    {
+      "at": "2026-09-21T21:43:12.250Z",
+      "event": "task-attempt",
+      "detail": "T4: failed (attempt 2) — Static review found 4 major and 2 minor findings; fix task required"
+    },
+    {
+      "at": "2026-09-21T21:43:12.490Z",
+      "event": "task-attempt",
+      "detail": "T5: blocked (attempt 2) — Operator deferred executable verification to GitHub CI"
+    },
+    {
+      "at": "2026-09-21T21:43:12.722Z",
+      "event": "task-added",
+      "detail": "T7: Fix static review findings for execution plan lifecycle"
+    },
+    {
+      "at": "2026-09-21T21:43:12.954Z",
+      "event": "task-depends-set",
+      "detail": "T7: dependsOn T2 (was empty) — Fixes apply to the initial implementation"
+    },
+    {
+      "at": "2026-09-21T21:43:13.194Z",
+      "event": "task-depends-set",
+      "detail": "T4: dependsOn T7 (was T2) — Review must rerun after static findings are fixed"
+    },
+    {
+      "at": "2026-09-21T21:43:13.441Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T7 (was T2) — GitHub CI must verify the reviewed fix revision"
+    },
+    {
+      "at": "2026-09-21T21:43:19.100Z",
+      "event": "task-attempt",
+      "detail": "T7: started (attempt 1) — 284-T7 fix 4 major and 2 minor static findings"
+    },
+    {
+      "at": "2026-09-21T21:53:51.313Z",
+      "event": "task-done",
+      "detail": "T7: Fix static review findings for execution plan lifecycle"
+    },
+    {
+      "at": "2026-09-21T21:53:51.792Z",
+      "event": "task-attempt",
+      "detail": "T4: started (attempt 3) — 284-T4 static re-review after fixes"
+    },
+    {
+      "at": "2026-09-21T21:56:43.610Z",
+      "event": "task-done",
+      "detail": "T4: Self-review and prepare draft PR"
+    },
+    {
+      "at": "2026-09-21T22:00:22.359Z",
+      "event": "task-attempt",
+      "detail": "T5: failed (attempt 3) — GitHub CI failed: tool roster snapshot and obsolete Slate TDZ source audit"
+    },
+    {
+      "at": "2026-09-21T22:00:22.616Z",
+      "event": "task-added",
+      "detail": "T8: Update shell contract tests for execution plan tools and TDZ fix"
+    },
+    {
+      "at": "2026-09-21T22:00:22.854Z",
+      "event": "task-depends-set",
+      "detail": "T8: dependsOn T7 (was empty) — CI contracts must match reviewed execution-plan behavior"
+    },
+    {
+      "at": "2026-09-21T22:00:23.098Z",
+      "event": "task-depends-set",
+      "detail": "T5: dependsOn T8 (was T7) — GitHub CI reruns after contract test fixes"
+    },
+    {
+      "at": "2026-09-21T22:00:23.342Z",
+      "event": "task-attempt",
+      "detail": "T8: started (attempt 1) — 284-T8 fix GitHub CI contract failures"
+    },
+    {
+      "at": "2026-09-21T22:02:25.367Z",
+      "event": "task-done",
+      "detail": "T8: Update shell contract tests for execution plan tools and TDZ fix"
+    },
+    {
+      "at": "2026-09-21T22:15:08.971Z",
+      "event": "task-done",
+      "detail": "T5: Verify live TUI plan lifecycle and session resume"
+    },
+    {
+      "at": "2026-09-21T22:15:44.016Z",
+      "event": "task-done",
+      "detail": "T6: Write implementation change report and operator notes"
+    },
+    {
+      "at": "2026-09-21T22:15:58.667Z",
+      "event": "implemented",
+      "detail": "draft PR: https://github.com/MrCipherSmith/keryx/pull/641"
+    }
+  ]
+}

@@ -233,6 +233,7 @@ import { attachExternalOperator, type ExternalOperator } from "./external-operat
 import { openExternalInspector } from "./external-inspector";
 import { setBackgroundJobListener } from "./job-bridge";
 import { openJobInspector, paintBackgroundJobSidebar } from "./background-job-inspector";
+import { mountExecutionPlanPanel } from "./execution-plan-panel";
 import { BackgroundJobStore, type BackgroundJobStoreHint } from "./background-job-session";
 import { formatFleetSidebarWithPeers, MAIN_AGENT_ID, shortWorkerLabel, WorkerFleet, type FleetPeer } from "./worker-fleet";
 import type { VersionCheckResult } from "../lib/version-check";
@@ -3096,6 +3097,7 @@ export async function launchTuiAgentShell(opts: {
   // that early — no JobRegistry/BackgroundJobStore exists yet either).
   let liveDeps: AgentDeps | undefined;
   let liveJobs: BackgroundJobStore | undefined;
+  let disposeExecutionPlanPanel: (() => void) | undefined;
   // Flow 176 T18: same nullable-ref/TDZ idiom as `liveJobs` above — `onDestroy`
   // is installed before the operator exists, and leaving the module-level
   // external bridge pointing at a destroyed shell would let a still-settling
@@ -3187,7 +3189,8 @@ export async function launchTuiAgentShell(opts: {
     // Stable non-nullable handle for the closures below (the outer `renderer`
     // stays `Renderer | undefined` for the `finally` teardown).
     const r = (renderer = await createShellRenderer(otui, {
-      onDestroy: () => {
+    onDestroy: () => {
+        disposeExecutionPlanPanel?.();
         destroyed = true; // review r1 F6: the in-flight join (if any) must leave(), not paint
         foregroundOperation.cancel("renderer destroyed");
         foregroundOperation.dispose();
@@ -3263,12 +3266,10 @@ export async function launchTuiAgentShell(opts: {
     // either way a late reply can never reach `chrome.showSuggestion`. See
     // `suggestNextStep` and `next-step-suggestion.ts`.
     const suggestionGate = new NextStepSuggestionGate();
-    // SLATE-3a (flow 161, AC5): the session-tracking variable this closure
-    // reads is declared further down in this same function body. The getter
-    // only runs once a turn actually executes a tool call, well after that
-    // declaration has run, so referencing it here (textually earlier) is
-    // safe — TDZ is a call-time concern for a closure, not a
-    // closure-creation-time one.
+    // Declare the session ref before any consumer can call the getter. The
+    // execution-plan panel refreshes immediately when mounted, before the live
+    // session is bound, and must observe `undefined` rather than hit the TDZ.
+    let slateSession: SlateSessionRef | undefined;
     // Finding 1 fix: pass the FULL live `slateSession` ref through, not just
     // `.dir` — `makeAgentDeps`'s widened contract (see `opts.makeAgentDeps`
     // doc comment above) needs it to wire `createSpawnSubagentTool`'s new
@@ -3514,6 +3515,18 @@ export async function launchTuiAgentShell(opts: {
       marginTop: 1,
     });
     sidebar.add(sbSubagents);
+    const sbPlan = new otui.BoxRenderable(r, {
+      id: "sb-plan",
+      flexDirection: "column",
+      flexShrink: 0,
+    });
+    sidebar.add(sbPlan);
+    const executionPlanPanel = mountExecutionPlanPanel(otui, r, sbPlan, {
+      getSessionDir: () => liveSlateSession()?.dir,
+      width: SIDEBAR_TEXT_WIDTH,
+      maxRows: 7,
+    });
+    disposeExecutionPlanPanel = executionPlanPanel.dispose;
     // Flow 173 (AC8): Background Jobs panel, same hug-content-box idiom as
     // sbSubagents above (a growing viewport would cover the Model/Tools
     // labels on a real pty — shell-pty-launch O-6).
@@ -4428,9 +4441,9 @@ export async function launchTuiAgentShell(opts: {
      * The TUI always has a live session (no sessions-off path here, unlike the
      * REPL), so this is unconditional once `liveSession` is set below.
      */
-    let slateSession: SlateSessionRef | undefined;
     const bindSlateToLiveSession = (): void => {
       slateSession = freshSlateSessionRef(liveSession.dir, sessionCwd);
+      void executionPlanPanel.refresh();
     };
 
     /**

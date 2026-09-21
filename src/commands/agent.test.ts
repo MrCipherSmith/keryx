@@ -35,6 +35,7 @@ import type {
   ProviderDescription,
 } from "../harness/provider/types";
 import { readSlate, writeSlate } from "../session/slate";
+import { setExecutionPlan } from "../session/execution-plan";
 import { closeSlateSession, detachSlateSession, openSlate } from "../session/slate-lifecycle";
 import type { SlateSessionRef } from "../session/slate-lifecycle";
 import { createAskUserTool } from "../harness/tool/builtin/ask-user-tool";
@@ -295,6 +296,45 @@ test("runAgentTurn executes a tool call and feeds its output back into the next 
   expect((requests[0]?.tools ?? []).map((t) => t.name).sort()).toEqual(["get_cwd", "list_dir", "read_file"]);
   // History ends alternating with a tool message present.
   expect(history.some((m) => m.role === "tool")).toBe(true);
+});
+
+test("runAgentTurn injects the current plan and allows at most one follow-through after a premature final reply", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "keryx-plan-follow-through-"));
+  await writeSlate(dir, () => ({ anchors: { root: dir, touched: [] }, course: {}, seeds: [] }));
+  await setExecutionPlan(dir, {
+    expectedRevision: 0,
+    items: [
+      { id: "implement", title: "Implement it", status: "in_progress" },
+      { id: "verify", title: "Verify it", status: "pending" },
+    ],
+  });
+  const { provider, requests } = scriptedProvider([
+    [{ kind: "text_delta", text: "I have started." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "I am stopping again." }, { kind: "model_end" }],
+    [{ kind: "text_delta", text: "This third round must not run." }, { kind: "model_end" }],
+  ]);
+  const deps: AgentDeps = {
+    provider,
+    providerId: "scripted",
+    modelId: "m",
+    tools: [],
+    systemInstruction: "sys",
+    idSeq: fixedIdSeq(),
+    maxRounds: 5,
+  };
+  const history: NormalizedMessage[] = [];
+  const slateSession: SlateSessionRef = { dir, cwd: dir, opened: true };
+
+  const collected = collectingIo();
+  await runAgentTurn(collected.io, deps, history, "hello", { slateSession });
+
+  expect(requests).toHaveLength(2);
+  expect(requests[0]?.systemInstruction).toContain("Current execution plan (revision 1)");
+  expect(requests[0]?.systemInstruction).toContain("implement [in_progress]");
+  expect(history.some((message) => message.provenance === "project" && message.content.includes("actionable items remain"))).toBe(true);
+  expect(collected.system.join("")).toContain("Actionable items remain after the single follow-through");
+  expect(collected.system.join("")).toContain("implement [in_progress]");
+  expect(collected.system.join("")).toContain("verify [pending]");
 });
 
 test("runAgentTurn: a main-turn round's request budget defaults to DEFAULT_MAX_OUTPUT_TOKENS", async () => {

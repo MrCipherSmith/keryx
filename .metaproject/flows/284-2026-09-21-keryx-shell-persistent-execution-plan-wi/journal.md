@@ -1,0 +1,38 @@
+# Flow Journal
+
+- 2026-09-21T21:01:22.900Z - flow created
+- 2026-09-21T21:07:17.758Z - task-added: T5: Verify live TUI plan lifecycle and session resume
+- 2026-09-21T21:07:18.020Z - task-added: T6: Write implementation change report and operator notes
+- 2026-09-21T21:07:18.257Z - task-depends-set: T3: dependsOn T1 (was empty) — Tests require collected architecture context
+- 2026-09-21T21:07:18.483Z - task-depends-set: T2: dependsOn T3 (was empty) — TDD requires failing plan tests before implementation
+- 2026-09-21T21:07:18.715Z - task-depends-set: T4: dependsOn T2 (was empty) — Review follows implementation
+- 2026-09-21T21:07:18.950Z - task-depends-set: T5: dependsOn T2 (was empty) — Live verification requires implementation
+- 2026-09-21T21:07:19.167Z - task-depends-set: T6: dependsOn T4, T5 (was empty) — Change report records reviewed and verified behavior
+- 2026-09-21T21:11:21.240Z - task-done: T1: Collect remaining context
+- 2026-09-21T21:11:21.495Z - frozen: 8 criteria; checksum recorded
+- 2026-09-21T21:11:21.743Z - started
+- 2026-09-21T21:11:33.326Z - task-attempt: T3: started (attempt 1) — 284-T3 tests-creator RED phase
+- 2026-09-21T21:20:15.937Z - task-done: T3: Add/adjust tests and make them pass
+- 2026-09-21T21:20:17.147Z - task-attempt: T2: started (attempt 1) — 284-T2 task-implementer GREEN phase
+- 2026-09-21T21:35:28.663Z - task-done: T2: Implement per plan
+- 2026-09-21T21:35:29.395Z - task-attempt: T4: started (attempt 1) — 284-T4 review-orchestrator
+- 2026-09-21T21:35:29.640Z - task-attempt: T5: started (attempt 1) — 284-T5 code-verifier and live TUI verification
+- 2026-09-21T21:43:12.250Z - task-attempt: T4: failed (attempt 2) — Static review found 4 major and 2 minor findings; fix task required
+- 2026-09-21T21:43:12.490Z - task-attempt: T5: blocked (attempt 2) — Operator deferred executable verification to GitHub CI
+- 2026-09-21T21:43:12.722Z - task-added: T7: Fix static review findings for execution plan lifecycle
+- 2026-09-21T21:43:12.954Z - task-depends-set: T7: dependsOn T2 (was empty) — Fixes apply to the initial implementation
+- 2026-09-21T21:43:13.194Z - task-depends-set: T4: dependsOn T7 (was T2) — Review must rerun after static findings are fixed
+- 2026-09-21T21:43:13.441Z - task-depends-set: T5: dependsOn T7 (was T2) — GitHub CI must verify the reviewed fix revision
+- 2026-09-21T21:43:19.100Z - task-attempt: T7: started (attempt 1) — 284-T7 fix 4 major and 2 minor static findings
+- 2026-09-21T21:53:51.313Z - task-done: T7: Fix static review findings for execution plan lifecycle
+- 2026-09-21T21:53:51.792Z - task-attempt: T4: started (attempt 3) — 284-T4 static re-review after fixes
+- 2026-09-21T21:56:43.610Z - task-done: T4: Self-review and prepare draft PR
+- 2026-09-21T22:00:22.359Z - task-attempt: T5: failed (attempt 3) — GitHub CI failed: tool roster snapshot and obsolete Slate TDZ source audit
+- 2026-09-21T22:00:22.616Z - task-added: T8: Update shell contract tests for execution plan tools and TDZ fix
+- 2026-09-21T22:00:22.854Z - task-depends-set: T8: dependsOn T7 (was empty) — CI contracts must match reviewed execution-plan behavior
+- 2026-09-21T22:00:23.098Z - task-depends-set: T5: dependsOn T8 (was T7) — GitHub CI reruns after contract test fixes
+- 2026-09-21T22:00:23.342Z - task-attempt: T8: started (attempt 1) — 284-T8 fix GitHub CI contract failures
+- 2026-09-21T22:02:25.367Z - task-done: T8: Update shell contract tests for execution plan tools and TDZ fix
+- 2026-09-21T22:15:08.971Z - task-done: T5: Verify live TUI plan lifecycle and session resume
+- 2026-09-21T22:15:44.016Z - task-done: T6: Write implementation change report and operator notes
+- 2026-09-21T22:15:58.667Z - implemented: draft PR: https://github.com/MrCipherSmith/keryx/pull/641
