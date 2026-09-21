@@ -41,6 +41,99 @@ export type Theme = {
   ok: string;
 };
 
+/** Semantic colours used inside transcript content. */
+export type TranscriptPalette = {
+  prose: string;
+  heading: string;
+  emphasis: string;
+  inlineCode: string;
+  inlineCodeBackground: string;
+  blockMeta: string;
+  tableHeader: string;
+  tableBorder: string;
+  codePlain: string;
+  codeComment: string;
+  codeString: string;
+  codeNumber: string;
+  codeKeyword: string;
+  diffContext: string;
+  diffMeta: string;
+  diffHunk: string;
+  diffAdd: string;
+  diffDelete: string;
+  diffAddBackground: string;
+  diffDeleteBackground: string;
+};
+
+function hexChannels(hex: string): [number, number, number] {
+  return [1, 3, 5].map((offset) => Number.parseInt(hex.slice(offset, offset + 2), 16)) as [number, number, number];
+}
+
+function mixHex(base: string, accent: string, accentWeight: number): string {
+  const a = hexChannels(base);
+  const b = hexChannels(accent);
+  const channel = (index: number): string =>
+    Math.round((a[index] ?? 0) * (1 - accentWeight) + (b[index] ?? 0) * accentWeight)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(0)}${channel(1)}${channel(2)}`;
+}
+
+function relativeLuminance(hex: string): number {
+  const linear = hexChannels(hex).map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * (linear[0] ?? 0) + 0.7152 * (linear[1] ?? 0) + 0.0722 * (linear[2] ?? 0);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const [light, dark] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
+}
+
+/** Pull an accent toward normal text until it is calm and readable. */
+function transcriptAccent(theme: Theme, accent: string): string {
+  for (let weight = 0.5; weight >= 0; weight -= 0.05) {
+    const candidate = mixHex(theme.text, accent, weight);
+    if (contrastRatio(candidate, theme.bg) >= 3 && contrastRatio(candidate, theme.panel) >= 3) {
+      return candidate;
+    }
+  }
+  return theme.text;
+}
+
+/** Derive transcript roles from a theme without duplicating colours in every palette. */
+export function deriveTranscriptPalette(theme: Theme): TranscriptPalette {
+  const heading = transcriptAccent(theme, theme.assistant);
+  const muted = transcriptAccent(theme, theme.muted);
+  const positive = transcriptAccent(theme, theme.ok);
+  const negative = transcriptAccent(theme, theme.error);
+  const focus = transcriptAccent(theme, theme.focus);
+  return {
+    prose: theme.text,
+    heading,
+    emphasis: theme.text,
+    inlineCode: focus,
+    inlineCodeBackground: theme.highlight,
+    blockMeta: theme.muted,
+    tableHeader: heading,
+    tableBorder: theme.border,
+    codePlain: theme.text,
+    codeComment: muted,
+    codeString: positive,
+    codeNumber: focus,
+    codeKeyword: heading,
+    diffContext: theme.text,
+    diffMeta: muted,
+    diffHunk: heading,
+    diffAdd: positive,
+    diffDelete: negative,
+    diffAddBackground: mixHex(theme.panel, theme.ok, 0.12),
+    diffDeleteBackground: mixHex(theme.panel, theme.error, 0.12),
+  };
+}
+
 export const THEME_NAMES: readonly ThemeName[] = [
   "groknight",
   "tokyonight",

@@ -23,6 +23,7 @@ import {
   fenceInfo,
   hugWidth,
   looksLikeUnifiedDiff,
+  parseMarkdownTables,
   payloadKind,
   segmentMarkdown,
   splitLines,
@@ -30,7 +31,7 @@ import {
   tokenizeCodeLine,
   type MdSegment,
 } from "../lib/md-blocks";
-import { getTheme } from "./theme";
+import { deriveTranscriptPalette, getTheme, type TranscriptPalette } from "./theme";
 
 // --- registry (pure) -------------------------------------------------------
 
@@ -413,11 +414,20 @@ function clipBody(text: string, maxLines = MAX_BODY_LINES): string {
  * unavailable headless) and renders through a plain `TextRenderable`.
  * Moved out of `tui-shell.ts` in flow 109 so it is directly testable.
  */
-export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
+function themedChunk(otui: OpenTui, text: string, fg: string, bg?: string): Chunk {
+  const foreground = otui.fg(fg)(text);
+  return bg === undefined ? foreground : otui.bg(bg)(foreground);
+}
+
+export function markdownToChunks(
+  otui: OpenTui,
+  md: string,
+  palette: TranscriptPalette = deriveTranscriptPalette(getTheme()),
+): Chunk[] {
   const out: Chunk[] = [];
   const plain = (s: string): void => {
     if (s.length > 0) {
-      out.push(...otui.stringToStyledText(s).chunks);
+      out.push(themedChunk(otui, s, palette.prose));
     }
   };
   const inline = (text: string): void => {
@@ -427,9 +437,9 @@ export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
     while ((m = re.exec(text)) !== null) {
       plain(text.slice(last, m.index));
       if (m[1] !== undefined) {
-        out.push(otui.dim(m[1].slice(1, -1))); // `code` → dim
+        out.push(themedChunk(otui, m[1].slice(1, -1), palette.inlineCode, palette.inlineCodeBackground));
       } else if (m[2] !== undefined) {
-        out.push(otui.bold(m[2].slice(2, -2))); // **bold**
+        out.push(otui.bold(themedChunk(otui, m[2].slice(2, -2), palette.emphasis)));
       }
       last = m.index + m[0].length;
     }
@@ -449,12 +459,12 @@ export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
       plain("\n");
     }
     if (inCode) {
-      out.push(otui.dim(line));
+      out.push(themedChunk(otui, line, palette.codePlain));
       continue;
     }
     const heading = /^#{1,6}\s+(.*)$/.exec(line);
     if (heading !== null) {
-      out.push(otui.cyan(otui.bold(heading[1] ?? "")));
+      out.push(otui.bold(themedChunk(otui, heading[1] ?? "", palette.heading)));
       continue;
     }
     const bullet = /^(\s*)[-*]\s+(.*)$/.exec(line);
@@ -468,42 +478,50 @@ export function markdownToChunks(otui: OpenTui, md: string): Chunk[] {
   return out;
 }
 
-/** Unified diff → chunks: green add, red del, cyan hunk, dim file headers. */
-export function diffChunks(otui: OpenTui, text: string): Chunk[] {
+/** Unified diff → theme-aware chunks with both colour and textual line cues. */
+export function diffChunks(
+  otui: OpenTui,
+  text: string,
+  palette: TranscriptPalette = deriveTranscriptPalette(getTheme()),
+): Chunk[] {
   const out: Chunk[] = [];
   const lines = splitLines(text);
   for (const [index, line] of lines.entries()) {
     if (index > 0) {
-      out.push(...otui.stringToStyledText("\n").chunks);
+      out.push(themedChunk(otui, "\n", palette.diffContext));
     }
     switch (classifyDiffLine(line)) {
       case "add":
-        out.push(otui.green(line));
+        out.push(themedChunk(otui, line, palette.diffAdd, palette.diffAddBackground));
         break;
       case "del":
-        out.push(otui.red(line));
+        out.push(themedChunk(otui, line, palette.diffDelete, palette.diffDeleteBackground));
         break;
       case "hunk":
-        out.push(otui.cyan(line));
+        out.push(themedChunk(otui, line, palette.diffHunk));
         break;
       case "meta":
-        out.push(otui.dim(line));
+        out.push(themedChunk(otui, line, palette.diffMeta));
         break;
       default:
-        out.push(...otui.stringToStyledText(line).chunks);
+        out.push(themedChunk(otui, line, palette.diffContext));
     }
   }
   return out;
 }
 
-/** Flat dim body, one chunk per line — no language, so nothing to tokenize. */
-function flatDimChunks(otui: OpenTui, text: string): Chunk[] {
+/** Flat secondary body, one chunk per line — no language, so nothing to tokenize. */
+function flatDimChunks(
+  otui: OpenTui,
+  text: string,
+  palette: TranscriptPalette = deriveTranscriptPalette(getTheme()),
+): Chunk[] {
   const out: Chunk[] = [];
   for (const [index, line] of splitLines(text).entries()) {
     if (index > 0) {
-      out.push(...otui.stringToStyledText("\n").chunks);
+      out.push(themedChunk(otui, "\n", palette.blockMeta));
     }
-    out.push(otui.dim(line));
+    out.push(themedChunk(otui, line, palette.blockMeta));
   }
   return out;
 }
@@ -511,31 +529,31 @@ function flatDimChunks(otui: OpenTui, text: string): Chunk[] {
 /**
  * Code payload, lightly highlighted by `tokenizeCodeLine` — a plain string
  * scan, not the native `CodeRenderable`'s tree-sitter worker (D-2 keeps this
- * worker-free and network-free). Comments dim, strings green, numbers yellow,
- * keywords cyan; everything else keeps the surrounding text color.
+ * worker-free and network-free). Token classes use the active transcript
+ * palette; everything else uses its normal code foreground.
  */
-function codeChunks(otui: OpenTui, text: string, lang: string): Chunk[] {
+function codeChunks(otui: OpenTui, text: string, lang: string, palette: TranscriptPalette): Chunk[] {
   const out: Chunk[] = [];
   for (const [index, line] of splitLines(text).entries()) {
     if (index > 0) {
-      out.push(...otui.stringToStyledText("\n").chunks);
+      out.push(themedChunk(otui, "\n", palette.codePlain));
     }
     for (const token of tokenizeCodeLine(line, lang)) {
       switch (token.kind) {
         case "comment":
-          out.push(otui.dim(token.text));
+          out.push(themedChunk(otui, token.text, palette.codeComment));
           break;
         case "string":
-          out.push(otui.green(token.text));
+          out.push(themedChunk(otui, token.text, palette.codeString));
           break;
         case "number":
-          out.push(otui.yellow(token.text));
+          out.push(themedChunk(otui, token.text, palette.codeNumber));
           break;
         case "keyword":
-          out.push(otui.cyan(token.text));
+          out.push(themedChunk(otui, token.text, palette.codeKeyword));
           break;
         default:
-          out.push(...otui.stringToStyledText(token.text).chunks);
+          out.push(themedChunk(otui, token.text, palette.codePlain));
       }
     }
   }
@@ -547,15 +565,20 @@ function codeChunks(otui: OpenTui, text: string, lang: string): Chunk[] {
  * body) is colorized, markdown-ish payloads go through `markdownToChunks`, and
  * anything else renders as flat dim code.
  */
-export function payloadChunks(otui: OpenTui, text: string, lang = ""): Chunk[] {
+export function payloadChunks(
+  otui: OpenTui,
+  text: string,
+  lang = "",
+  palette: TranscriptPalette = deriveTranscriptPalette(getTheme()),
+): Chunk[] {
   const kind = payloadKind(lang, lineCountOf(text));
   if (kind === "diff" || looksLikeUnifiedDiff(text)) {
-    return diffChunks(otui, text);
+    return diffChunks(otui, text, palette);
   }
   if (kind === "markdown" || lang.length === 0) {
-    return markdownToChunks(otui, text);
+    return markdownToChunks(otui, text, palette);
   }
-  return codeChunks(otui, text, lang);
+  return codeChunks(otui, text, lang, palette);
 }
 
 /** One rendered `MdSegment` of an assistant message. */
@@ -577,32 +600,80 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
   viewSeq += 1;
   const id = `seg${viewSeq}`;
   if (segment.kind === "text") {
-    const text = new otui.TextRenderable(renderer, {
-      id,
-      content: new otui.StyledText(markdownToChunks(otui, segment.text)),
-    });
-    parent.add(text);
+    type Mounted = { destroyRecursively(): void };
+    let mounted: Mounted[] = [];
+    const paint = (source: string): void => {
+      for (const child of mounted) {
+        try {
+          parent.remove(child as never);
+          child.destroyRecursively();
+        } catch {
+          // best-effort teardown
+        }
+      }
+      mounted = [];
+      const palette = deriveTranscriptPalette(getTheme());
+      for (const [index, part] of parseMarkdownTables(source).entries()) {
+        if (part.kind === "prose") {
+          const text = new otui.TextRenderable(renderer, {
+            id: `${id}-prose-${index}`,
+            content: new otui.StyledText(markdownToChunks(otui, part.text, palette)),
+          });
+          parent.add(text);
+          mounted.push(text);
+          continue;
+        }
+        const header = part.table.headers.map((cell) =>
+          [otui.bold(themedChunk(otui, cell, palette.tableHeader))],
+        );
+        const rows = part.table.rows.map((row) =>
+          row.map((cell) => markdownToChunks(otui, cell, palette)),
+        );
+        const table = new otui.TextTableRenderable(renderer, {
+          id: `${id}-table-${index}`,
+          content: [header, ...rows],
+          width: "100%",
+          wrapMode: "word",
+          columnWidthMode: "full",
+          columnFitter: "balanced",
+          cellPaddingX: 1,
+          cellPaddingY: 0,
+          showBorders: true,
+          outerBorder: true,
+          borderStyle: "rounded",
+          borderColor: palette.tableBorder,
+          fg: palette.prose,
+          backgroundColor: getTheme().panel,
+        });
+        parent.add(table);
+        mounted.push(table);
+      }
+    };
+    paint(segment.text);
     return {
       kind: "text",
       update: (next) => {
         if (next.kind === "text") {
-          text.content = new otui.StyledText(markdownToChunks(otui, next.text));
+          paint(next.text);
         }
       },
       destroy: () => {
-        try {
-          parent.remove(text);
-          text.destroyRecursively();
-        } catch {
-          // best-effort teardown
+        for (const child of mounted) {
+          try {
+            parent.remove(child as never);
+            child.destroyRecursively();
+          } catch {
+            // best-effort teardown
+          }
         }
+        mounted = [];
       },
     };
   }
 
   const tag = (lang: string, body: string): string => {
     const n = lineCountOf(body);
-    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"} · y copy`;
+    return `${lang.length > 0 ? lang : "text"} · ${n} ${n === 1 ? "line" : "lines"} · ctrl+o then y copy`;
   };
   const frameWidth = (lang: string, body: string): number =>
     Math.max(hugWidth(body, FRAME_CHROME), hugWidth(tag(lang, body), FRAME_CHROME));
@@ -614,12 +685,15 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
     borderStyle: "rounded",
     border: true,
     borderColor: frameColor(),
+    backgroundColor: getTheme().panel,
     paddingLeft: 1,
     paddingRight: 1,
   });
   const header = new otui.TextRenderable(renderer, {
     id: `${id}-tag`,
-    content: otui.t`${otui.dim(tag(segment.lang, segment.body))}`,
+    content: new otui.StyledText([
+      themedChunk(otui, tag(segment.lang, segment.body), deriveTranscriptPalette(getTheme()).blockMeta),
+    ]),
   });
   const body = new otui.TextRenderable(renderer, {
     id: `${id}-body`,
@@ -634,7 +708,9 @@ export function createSegmentView(otui: OpenTui, renderer: Renderer, parent: Box
       if (next.kind !== "code") {
         return;
       }
-      header.content = otui.t`${otui.dim(tag(next.lang, next.body))}`;
+      header.content = new otui.StyledText([
+        themedChunk(otui, tag(next.lang, next.body), deriveTranscriptPalette(getTheme()).blockMeta),
+      ]);
       body.content = new otui.StyledText(payloadChunks(otui, next.body, next.lang));
       // A streamed fence grows line by line; the hug width grows with it.
       frame.maxWidth = frameWidth(next.lang, next.body);

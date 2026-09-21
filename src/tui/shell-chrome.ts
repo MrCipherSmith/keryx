@@ -43,7 +43,7 @@
 // text, so the forbidden form must not appear in a comment either).
 import type { SlashCommandOption } from "../commands/agent-commands";
 import { formatVersionUpdateAdvisory, type VersionCheckResult } from "../lib/version-check";
-import { getTheme, onThemeChange, type Theme } from "./theme";
+import { deriveTranscriptPalette, getTheme, onThemeChange, type Theme } from "./theme";
 import { destroyModalHost } from "./modal-host";
 import { currentDebugRun, debugEvent } from "./debug-log";
 import { attachRendererGuards } from "./renderer-debug";
@@ -180,11 +180,10 @@ export function themeColorToHex(value: unknown): string | undefined {
  * switch repaints every renderable the shell painted with the OLD palette —
  * not just the chrome's own surfaces listed in `applyTheme` below.
  *
- * Why value matching is safe: the shell writes theme slot hexes into
- * renderable `borderColor` / `backgroundColor` / `fg` props and nothing else
- * (OpenTUI's dim/bold/cyan/green/red styling lives inside styled CHUNKS of
- * `content`, which the walk deliberately leaves alone), so a prop whose hex
- * equals an old slot value is by construction a theme-painted element.
+ * Why value matching is safe: the shell writes theme and derived transcript
+ * colours into renderable props and styled chunks. Values matching the old
+ * palette are therefore theme-painted elements and can move to the equivalent
+ * role in the new palette.
  */
 function themeColorRemap(from: Theme, to: Theme): Map<string, string> {
   const remap = new Map<string, string>();
@@ -198,6 +197,15 @@ function themeColorRemap(from: Theme, to: Theme): Map<string, string> {
       remap.set(oldColor, newColor);
     }
   }
+  const fromTranscript = deriveTranscriptPalette(from);
+  const toTranscript = deriveTranscriptPalette(to);
+  for (const slot of Object.keys(fromTranscript) as ReadonlyArray<keyof typeof fromTranscript>) {
+    const oldColor = fromTranscript[slot];
+    const newColor = toTranscript[slot];
+    if (oldColor !== newColor) {
+      remap.set(oldColor, newColor);
+    }
+  }
   return remap;
 }
 
@@ -205,26 +213,63 @@ type ThemePainted = {
   borderColor?: unknown;
   backgroundColor?: unknown;
   fg?: unknown;
+  content?: unknown;
   getChildren?: () => readonly unknown[];
 };
 
+type ChunkColorFactory = (hex: string) => unknown;
+
+function recolorContent(value: unknown, remap: Map<string, string>, color: ChunkColorFactory): boolean {
+  if (Array.isArray(value)) {
+    let changed = false;
+    for (const item of value) {
+      changed = recolorContent(item, remap, color) || changed;
+    }
+    return changed;
+  }
+  if (value === null || typeof value !== "object") {
+    return false;
+  }
+  const target = value as { chunks?: unknown; text?: unknown; fg?: unknown; bg?: unknown };
+  let changed = false;
+  if (typeof target.text === "string") {
+    for (const prop of ["fg", "bg"] as const) {
+      const hex = themeColorToHex(target[prop]);
+      const next = hex === undefined ? undefined : remap.get(hex);
+      if (next !== undefined) {
+        target[prop] = color(next);
+        changed = true;
+      }
+    }
+  }
+  if (target.chunks !== undefined) {
+    changed = recolorContent(target.chunks, remap, color) || changed;
+  }
+  return changed;
+}
+
 /**
- * Recolor one renderable and its descendants from the old→new slot map: any
- * `borderColor` / `backgroundColor` / `fg` whose color equals an old slot
- * value becomes the new slot's hex (written as a string — the renderable's
- * setter parses it), then recurse into children. Idempotent — a second pass
- * with the same map finds nothing, so overlapping container walks (a box
- * walked both directly and through a parent) are harmless.
+ * Recolor one renderable and its descendants from the old to the new theme.
+ * Props go through OpenTUI setters; styled chunks are replaced with parsed RGBA
+ * values in production and their owning content is reassigned to rebuild the
+ * backing text buffer. A second pass finds no old values, so overlapping walks
+ * are harmless.
  *
  * Covers what `applyTheme`'s explicit list cannot know: transcript frames
  * (user echoes, code segments, block bodies, side-worker boxes), tone-colored
  * block headers (`theme.error` / `theme.tool`), dock/queue-dock buttons and
  * sidebar panels painted with `getTheme()` at creation time.
  */
-function recolorThemeTree(node: unknown, remap: Map<string, string>): void {
+export function recolorThemeTree(
+  node: unknown,
+  fromTheme: Theme,
+  toTheme: Theme,
+  color: ChunkColorFactory = (hex) => hex,
+): void {
   if (node === null || node === undefined) {
     return;
   }
+  const remap = themeColorRemap(fromTheme, toTheme);
   const target = node as ThemePainted;
   for (const prop of ["borderColor", "backgroundColor", "fg"] as const) {
     const hex = themeColorToHex(target[prop]);
@@ -235,9 +280,13 @@ function recolorThemeTree(node: unknown, remap: Map<string, string>): void {
       }
     }
   }
+  if (target.content !== undefined && recolorContent(target.content, remap, color)) {
+    // Reassign through OpenTUI's setter so its backing text buffer is rebuilt.
+    target.content = target.content;
+  }
   if (typeof target.getChildren === "function") {
     for (const child of target.getChildren()) {
-      recolorThemeTree(child, remap);
+      recolorThemeTree(child, fromTheme, toTheme, color);
     }
   }
 }
@@ -1295,7 +1344,6 @@ export async function createShellChrome(
     // sidebar panels — carried the OLD palette's hex into `borderColor` /
     // `backgroundColor` / `fg` and is moved to the new palette by the tree
     // walk below (value-matching old slot hexes, see `themeColorRemap`).
-    const remap = themeColorRemap(appliedTheme, theme);
     try {
       r.setBackgroundColor(theme.bg);
     } catch {
@@ -1325,14 +1373,15 @@ export async function createShellChrome(
     // Walk the content containers by direct reference rather than trusting a
     // parent chain (ScrollBox children semantics vary): each walk is
     // idempotent, so overlapping trees cost nothing.
-    recolorThemeTree(transcript, remap);
-    recolorThemeTree(dock, remap);
-    recolorThemeTree(queueDock, remap);
-    recolorThemeTree(sidebarTop, remap);
-    recolorThemeTree(menu, remap);
-    recolorThemeTree(composer, remap);
-    recolorThemeTree(header, remap);
-    recolorThemeTree(footer, remap);
+    const chunkColor: ChunkColorFactory = (hex) => otui.RGBA.fromHex(hex);
+    recolorThemeTree(transcript, appliedTheme, theme, chunkColor);
+    recolorThemeTree(dock, appliedTheme, theme, chunkColor);
+    recolorThemeTree(queueDock, appliedTheme, theme, chunkColor);
+    recolorThemeTree(sidebarTop, appliedTheme, theme, chunkColor);
+    recolorThemeTree(menu, appliedTheme, theme, chunkColor);
+    recolorThemeTree(composer, appliedTheme, theme, chunkColor);
+    recolorThemeTree(header, appliedTheme, theme, chunkColor);
+    recolorThemeTree(footer, appliedTheme, theme, chunkColor);
     appliedTheme = theme;
   };
   const unsubTheme = onThemeChange((theme) => applyTheme(theme));

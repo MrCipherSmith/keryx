@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { MdSegment } from "./md-blocks";
+import * as mdBlocks from "./md-blocks";
 import {
   blockLabel,
   classifyDiffLine,
@@ -13,6 +14,23 @@ import {
   summarizeSubmittedLine,
   visualWidth,
 } from "./md-blocks";
+
+type MarkdownTable = {
+  headers: string[];
+  alignments: Array<"left" | "center" | "right">;
+  rows: string[][];
+};
+type MarkdownPart = { kind: "prose"; text: string } | { kind: "table"; table: MarkdownTable };
+
+function parseMarkdownTables(text: string): MarkdownPart[] {
+  return (mdBlocks as unknown as { parseMarkdownTables(text: string): MarkdownPart[] }).parseMarkdownTables(text);
+}
+
+function tableColumnWidths(table: MarkdownTable, availableWidth: number): number[] {
+  return (mdBlocks as unknown as {
+    tableColumnWidths(table: MarkdownTable, availableWidth: number): number[];
+  }).tableColumnWidths(table, availableWidth);
+}
 
 // flow 109 / T2 — RED phase. `src/lib/md-blocks.ts` does not exist yet.
 // These tests pin the pure L1 surface described in plan.md L1.
@@ -118,6 +136,64 @@ describe("segmentMarkdown", () => {
   test("a fence indented four or more spaces is NOT a fence (indented code block)", () => {
     const md = "prose\n    ```ts\n    x\n    ```";
     expect(segmentMarkdown(md)).toEqual([{ kind: "text", text: md }]);
+  });
+});
+
+describe("parseMarkdownTables", () => {
+  test("parses a valid GFM table and preserves column alignment", () => {
+    expect(parseMarkdownTables("| Name | Result |\n| :--- | ---: |\n| alpha | 42 |" )).toEqual([
+      {
+        kind: "table",
+        table: {
+          headers: ["Name", "Result"],
+          alignments: ["left", "right"],
+          rows: [["alpha", "42"]],
+        },
+      },
+    ]);
+  });
+
+  test("keeps ordinary pipe prose when no valid delimiter row follows", () => {
+    const text = "Use a | b in this sentence.\nThis | is still prose.";
+    expect(parseMarkdownTables(text)).toEqual([{ kind: "prose", text }]);
+  });
+
+  test("does not split escaped pipes or pipes inside inline code", () => {
+    const [part] = parseMarkdownTables(
+      "| Expression | Meaning |\n| --- | --- |\n| `left | right` | escaped \\| pipe |",
+    );
+    expect(part).toEqual({
+      kind: "table",
+      table: {
+        headers: ["Expression", "Meaning"],
+        alignments: ["left", "left"],
+        rows: [["`left | right`", "escaped | pipe"]],
+      },
+    });
+  });
+
+  test("returns prose before and after a table without losing blank lines", () => {
+    const parts = parseMarkdownTables("Before\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n\nAfter");
+    expect(parts).toEqual([
+      { kind: "prose", text: "Before\n" },
+      {
+        kind: "table",
+        table: { headers: ["A", "B"], alignments: ["left", "left"], rows: [["1", "2"]] },
+      },
+      { kind: "prose", text: "\nAfter" },
+    ]);
+  });
+
+  test("fits table columns inside a narrow viewport while keeping every column usable", () => {
+    const [part] = parseMarkdownTables(
+      "| Very long heading | Another long heading |\n| --- | --- |\n| alpha beta gamma | delta epsilon zeta |",
+    );
+    if (part?.kind !== "table") throw new Error("expected a table");
+    const widths = tableColumnWidths(part.table, 28);
+    expect(widths).toHaveLength(2);
+    expect(widths.every((width) => width >= 3)).toBe(true);
+    expect(widths.reduce((sum, width) => sum + width, 0) + 3).toBeLessThanOrEqual(28);
+    expect(Math.abs((widths[0] ?? 0) - (widths[1] ?? 0))).toBeLessThanOrEqual(2);
   });
 });
 
@@ -282,9 +358,14 @@ describe("looksLikeUnifiedDiff", () => {
 
 describe("payloadKind", () => {
   test("markdown-ish languages map to the markdown payload", () => {
-    for (const lang of ["md", "markdown", "prompt", "txt", "text"]) {
+    for (const lang of ["md", "markdown", "prompt"]) {
       expect(payloadKind(lang, 3)).toBe("markdown");
     }
+  });
+
+  test("plain-text fences stay literal instead of being reinterpreted as Markdown", () => {
+    expect(payloadKind("txt", 3)).toBe("code");
+    expect(payloadKind("text", 3)).toBe("code");
   });
 
   test("diff-ish languages map to the diff payload", () => {

@@ -1,6 +1,7 @@
 node_modules/
 dist/
 coverage/
+.feature-spec.md
 .site/
 .DS_Store
 .tmp-*/
